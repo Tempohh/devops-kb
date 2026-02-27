@@ -1,0 +1,247 @@
+/* ============================================
+   DevOps Knowledge Base — Custom Styles
+   Animazioni semplici, ricorrenti, poco impegnative
+   ============================================ */
+
+/* --- Smooth Page Transitions --- */
+.md-content {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Sidebar Links Hover --- */
+.md-nav__link {
+  transition: color 0.2s ease, padding-left 0.2s ease;
+}
+
+.md-nav__link:hover {
+  padding-left: 4px;
+}
+
+/* --- Admonition Smooth Open --- */
+details {
+  transition: all 0.3s ease;
+}
+
+details[open] summary ~ * {
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Code Block Hover Effect --- */
+.highlight {
+  transition: box-shadow 0.2s ease;
+  border-radius: 6px;
+}
+
+.highlight:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* --- Tag Pills --- */
+.md-tag {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.md-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* --- Table Row Hover --- */
+.md-typeset table:not([class]) tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.md-typeset table:not([class]) tbody tr:hover {
+  background-color: var(--md-code-bg-color);
+}
+
+/* --- Header Separator --- */
+.md-typeset h2 {
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  padding-bottom: 0.4em;
+}
+
+/* --- Diagram Container --- */
+.diagram-container {
+  text-align: center;
+  margin: 1.5em 0;
+  padding: 1em;
+  border-radius: 8px;
+  background: var(--md-code-bg-color);
+  transition: box-shadow 0.2s ease;
+}
+
+.diagram-container:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.diagram-container img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* --- Smooth Scroll --- */
+html {
+  scroll-behavior: smooth;
+}
+
+/* --- Search Bar Focus --- */
+.md-search__input {
+  transition: box-shadow 0.2s ease;
+}
+
+.md-search__input:focus {
+  box-shadow: 0 0 0 3px rgba(68, 138, 255, 0.3);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Nav: categories pushed to the right of the tab bar
+   ────────────────────────────────────────────────────────────────────────── */
+
+.md-tabs__item--category-start {
+  margin-left: auto;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   kbdrop — Mega-menu appended to <body> with position:fixed.
+   Always uses .kbdrop--mega layout: every top-level child becomes a section
+   header. Children with sub-pages also get a grid of links below the header.
+   This guarantees identical styling across all categories.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.kbdrop {
+  position: fixed;
+  display: none;
+  background: var(--md-default-bg-color);
+  border-top: 2px solid var(--md-accent-fg-color);
+  border-radius: 0 0 0.25rem 0.25rem;
+  /* Material Design 8dp elevation */
+  box-shadow:
+    0 5px  5px -3px rgba(0, 0, 0, .20),
+    0 8px 10px  1px rgba(0, 0, 0, .14),
+    0 3px 14px  2px rgba(0, 0, 0, .12);
+  z-index: 9999;
+  margin: 0;
+}
+
+.kbdrop--visible {
+  display: block;
+  animation: kbDropDown 0.12s ease;
+}
+
+@keyframes kbDropDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Flat list mode ─────────────────────────────────────────────────────── */
+
+.kbdrop__list {
+  list-style: none;
+  padding: 0.3rem 0;
+  margin: 0;
+  min-width: 200px;
+}
+
+.kbdrop__item {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kbdrop__item > a {
+  display: block;
+  padding: 0.55rem 1.1rem;
+  color: var(--md-default-fg-color);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  opacity: 0.7;
+  transition: color 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+
+.kbdrop__item > a:hover {
+  color: var(--md-accent-fg-color);
+  background: var(--md-code-bg-color);
+  opacity: 1;
+}
+
+/* ── Mega-menu mode ─────────────────────────────────────────────────────── */
+
+.kbdrop--mega {
+  padding: 1rem 1.25rem 1.1rem;
+  /* Max width adapts: up to 640px or 90% of the viewport width */
+  max-width: min(640px, 90vw);
+  /* Scrollable when the content exceeds the available viewport height.
+     max-height is set dynamically by nav-enhance.js on each show. */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* One section per top-level child (e.g. "Apache Kafka") */
+.kbdrop__section {
+  margin-bottom: 1.1rem;
+}
+
+.kbdrop__section:last-child {
+  margin-bottom: 0;
+}
+
+/* Section header — styled like a category label */
+.kbdrop__section-header {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--md-accent-fg-color);
+  text-decoration: none;
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.55rem;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  transition: opacity 0.15s ease;
+}
+
+.kbdrop__section-header:hover {
+  opacity: 0.75;
+}
+
+/* Sub-items grid — fills available width, columns at least 150px */
+.kbdrop__section-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0;
+}
+
+.kbdrop__section-items li a {
+  display: block;
+  padding: 0.28rem 0.45rem;
+  color: var(--md-default-fg-color);
+  font-size: 0.72rem;
+  text-decoration: none;
+  opacity: 0.72;
+  border-radius: 0.15rem;
+  transition: color 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+
+.kbdrop__section-items li a:hover {
+  color: var(--md-accent-fg-color);
+  background: var(--md-code-bg-color);
+  opacity: 1;
+}

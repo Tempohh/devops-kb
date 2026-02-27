@@ -250,10 +250,11 @@ docs/
 | # | Data | Criticità | Correzione Applicata | File Impattati | Stato |
 |---|------|-----------|---------------------|----------------|-------|
 | 1 | 2025-02-23 | Progetto inizializzato | N/A | N/A | ✅ Chiuso |
+| 2 | 2026-02-23 | Sequenze di escape letterali (es. `\n`) nei diagrammi/schemi renderizzate come testo invece che come caratteri di controllo | Aggiunto pattern da evitare; usare sempre newline reali o attributi XML appropriati nei file `.drawio.svg` | CLAUDE.md | ✅ Chiuso |
 
 ### Pattern da Evitare
-<!-- Aggiungere qui pattern ricorrenti di errore -->
-<!-- Formato: - **[PATTERN]**: Descrizione → Comportamento corretto -->
+
+- **[ESCAPE LETTERALI NEI DIAGRAMMI]**: Quando si generano file `.drawio.svg` o altri formati schema, non usare mai sequenze di escape testuali come `\n`, `\t`, `\r` all'interno dei valori delle celle/label. Questi vengono renderizzati letteralmente come stringa invece che essere interpretati come caratteri di controllo. → Usare newline XML reali (`&#xa;`) per i ritorni a capo nelle label Draw.io, oppure suddividere il testo su più elementi distinti.
 
 ### Miglioramenti al CLAUDE.md
 <!-- Aggiungere qui migliorie proposte o applicate a questo file -->
