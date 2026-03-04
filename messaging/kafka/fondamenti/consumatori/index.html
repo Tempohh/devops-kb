@@ -2291,12 +2291,19 @@
   <span class="md-ellipsis">
     
   
-    Pipeline fundamentals
+    Jenkins Pipeline — Fondamentali
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -2319,12 +2326,19 @@
   <span class="md-ellipsis">
     
   
-    Shared libraries
+    Jenkins Shared Libraries
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -13422,12 +13436,19 @@
   <span class="md-ellipsis">
     
   
-    Quarkus kafka
+    Quarkus e Kafka — SmallRye Reactive Messaging
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -17347,49 +17368,49 @@
       
       
       
-        <a href="../../../../tags/#tag:commit" class="md-tag">commit</a>
+        <span class="md-tag">commit</span>
       
     
       
       
       
       
-        <a href="../../../../tags/#tag:consumer" class="md-tag">consumer</a>
+        <span class="md-tag">consumer</span>
       
     
       
       
       
       
-        <a href="../../../../tags/#tag:deserializzazione" class="md-tag">deserializzazione</a>
+        <span class="md-tag">deserializzazione</span>
       
     
       
       
       
       
-        <a href="../../../../tags/#tag:heartbeat" class="md-tag">heartbeat</a>
+        <span class="md-tag">heartbeat</span>
       
     
       
       
       
       
-        <a href="../../../../tags/#tag:kafka" class="md-tag">kafka</a>
+        <span class="md-tag">kafka</span>
       
     
       
       
       
       
-        <a href="../../../../tags/#tag:offset" class="md-tag">offset</a>
+        <span class="md-tag">offset</span>
       
     
       
       
       
       
-        <a href="../../../../tags/#tag:poll" class="md-tag">poll</a>
+        <span class="md-tag">poll</span>
       
     
   </nav>
@@ -17402,8 +17423,8 @@
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <h3 id="poll-loop">Poll Loop<a class="headerlink" href="#poll-loop" title="Permanent link">&para;</a></h3>
 <p>Il cuore di un consumer Kafka è il <strong>poll loop</strong>: un ciclo infinito che chiama periodicamente <code>consumer.poll(Duration)</code> per ottenere un batch di record dal broker. Il metodo <code>poll()</code> serve anche a:
-- Inviare <strong>heartbeat</strong> al Group Coordinator (indica che il consumer è vivo)
-- Eseguire eventuali <strong>rebalancing</strong> del consumer group
+- Inviare <strong>heartbeat</strong> al <strong>Group Coordinator</strong> — il broker designato a gestire l'iscrizione al consumer group, tracking degli offset committati e orchestrazione dei rebalancing (indica che il consumer è vivo)
+- Eseguire eventuali <strong>rebalancing</strong> — il processo con cui Kafka redistribuisce l'assegnazione delle partizioni tra i consumer del gruppo quando un membro si unisce, se ne va o viene considerato morto
 - Processare il commit degli offset schedulati (auto-commit)</p>
 <p>Se <code>poll()</code> non viene chiamato entro <code>max.poll.interval.ms</code>, il consumer viene considerato morto e viene avviato un rebalancing.</p>
 <h3 id="fetch-e-deserializzazione">Fetch e Deserializzazione<a class="headerlink" href="#fetch-e-deserializzazione" title="Permanent link">&para;</a></h3>
@@ -17446,12 +17467,12 @@
 </table>
 <p>I record ricevuti vengono <strong>deserializzati</strong> usando i deserializzatori configurati (speculari ai serializzatori del producer). È fondamentale che il deserializzatore corrisponda al serializzatore usato dal producer.</p>
 <h3 id="commit-degli-offset">Commit degli Offset<a class="headerlink" href="#commit-degli-offset" title="Permanent link">&para;</a></h3>
-<p>Dopo aver processato i record, il consumer deve <strong>commettere l'offset</strong> per registrare la posizione. Esistono due modalità:</p>
+<p>Dopo aver processato i record, il consumer deve <strong>fare il commit dell'offset</strong> — registrare la propria posizione nel topic, in modo da riprendere da lì in caso di riavvio. Esistono due modalità:</p>
 <h4 id="auto-commit-default">Auto-Commit (default)<a class="headerlink" href="#auto-commit-default" title="Permanent link">&para;</a></h4>
 <div class="language-properties highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="na">enable.auto.commit</span><span class="o">=</span><span class="s">true</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="na">auto.commit.interval.ms</span><span class="o">=</span><span class="s">5000  # commit ogni 5 secondi</span>
 </span></code></pre></div>
-<p>Il consumer commette automaticamente l'offset più alto restituito da <code>poll()</code> ogni <code>auto.commit.interval.ms</code>. <strong>Rischio:</strong> se il consumer cade dopo la <code>poll()</code> ma prima di processare completamente i record, quegli offset vengono già commessi → perdita di messaggi.</p>
+<p>Il consumer fa automaticamente il commit dell'offset più alto restituito da <code>poll()</code> ogni <code>auto.commit.interval.ms</code>. <strong>Rischio:</strong> se il consumer cade dopo la <code>poll()</code> ma prima di processare completamente i record, il commit di quegli offset è già avvenuto → al restart non li rilegge → perdita di messaggi.</p>
 <h4 id="manual-commit">Manual Commit<a class="headerlink" href="#manual-commit" title="Permanent link">&para;</a></h4>
 <div class="language-properties highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="na">enable.auto.commit</span><span class="o">=</span><span class="s">false</span>
 </span></code></pre></div>

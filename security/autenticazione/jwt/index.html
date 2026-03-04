@@ -2291,12 +2291,19 @@
   <span class="md-ellipsis">
     
   
-    Pipeline fundamentals
+    Jenkins Pipeline — Fondamentali
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -2319,12 +2326,19 @@
   <span class="md-ellipsis">
     
   
-    Shared libraries
+    Jenkins Shared Libraries
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -13057,12 +13071,19 @@
   <span class="md-ellipsis">
     
   
-    Quarkus kafka
+    Quarkus e Kafka — SmallRye Reactive Messaging
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -17129,49 +17150,49 @@
       
       
       
-        <a href="../../../tags/#tag:es256" class="md-tag">es256</a>
+        <span class="md-tag">es256</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:firma" class="md-tag">firma</a>
+        <span class="md-tag">firma</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:json-web-token" class="md-tag">json-web-token</a>
+        <span class="md-tag">json-web-token</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:jwt" class="md-tag">jwt</a>
+        <span class="md-tag">jwt</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:rs256" class="md-tag">rs256</a>
+        <span class="md-tag">rs256</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:sicurezza-token" class="md-tag">sicurezza-token</a>
+        <span class="md-tag">sicurezza-token</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:validazione" class="md-tag">validazione</a>
+        <span class="md-tag">validazione</span>
       
     
   </nav>
@@ -17204,7 +17225,7 @@
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">&quot;kid&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;rsa-2024-01&quot;</span><span class="w">         </span><span class="c1">// key ID → permette al server di scegliere la chiave giusta dal JWKS</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="p">}</span>
 </span></code></pre></div>
-<p>Il <code>kid</code> è fondamentale per la <strong>key rotation</strong>: quando l'IdP ruota le chiavi di firma, emette nuovi JWT con un nuovo <code>kid</code>. Il resource server recupera le JWKS e trova la chiave corrispondente — zero downtime durante la rotazione.</p>
+<p>Il <code>kid</code> è fondamentale per la <strong>key rotation</strong>: quando l'IdP (Identity Provider — il sistema che autentica gli utenti ed emette i token) ruota le chiavi di firma, emette nuovi JWT con un nuovo <code>kid</code>. Il resource server recupera le JWKS (JSON Web Key Set — il documento pubblico che contiene le chiavi di firma del provider) e trova la chiave corrispondente — zero downtime durante la rotazione.</p>
 <h3 id="payload-i-claims">Payload — I Claims<a class="headerlink" href="#payload-i-claims" title="Permanent link">&para;</a></h3>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="c1">// ─── Registered Claims (RFC 7519) ───────────────────────────────────────</span>
@@ -17427,7 +17448,7 @@
 </span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>   IdP mantiene una lista di jti revocati (in Redis con TTL = exp - now)
 </span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>   Il resource server consulta Redis per ogni richiesta
 </span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>   Pro: revoca immediata
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>   Contro: latenza + Redis diventa un SPOF + dataset cresce con i token attivi
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>   Contro: latenza + Redis diventa un SPOF (Single Point of Failure — nodo la cui interruzione causa un&#39;interruzione del servizio intero) + dataset cresce con i token attivi
 </span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>   Uso: solo per scenari critici (logout forzato, account compromesso)
 </span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>
 </span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a>4. Token Introspection (RFC 7662)
@@ -17467,7 +17488,7 @@
 </span></code></pre></div>
 <p><strong>Quando usare JWE:</strong>
 - Il token passa attraverso sistemi non fidati (es. in un URL parameter → NO, ma se obbligato)
-- Il payload contiene informazioni riservate che non devono essere visibili (es. informazioni mediche in contesti HIPAA)
+- Il payload contiene informazioni riservate che non devono essere visibili (es. informazioni mediche in contesti HIPAA — Health Insurance Portability and Accountability Act, normativa USA sulla privacy dei dati sanitari)
 - In genere: preferire <strong>non mettere dati sensibili nel JWT</strong> invece di cifrarlo — più semplice e meno rischi</p>
 <hr />
 <h2 id="best-practices-riassuntive">Best Practices Riassuntive<a class="headerlink" href="#best-practices-riassuntive" title="Permanent link">&para;</a></h2>

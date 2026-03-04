@@ -2291,12 +2291,19 @@
   <span class="md-ellipsis">
     
   
-    Pipeline fundamentals
+    Jenkins Pipeline — Fondamentali
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -2319,12 +2326,19 @@
   <span class="md-ellipsis">
     
   
-    Shared libraries
+    Jenkins Shared Libraries
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -13057,12 +13071,19 @@
   <span class="md-ellipsis">
     
   
-    Quarkus kafka
+    Quarkus e Kafka — SmallRye Reactive Messaging
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -17166,42 +17187,42 @@
       
       
       
-        <a href="../../../tags/#tag:control-plane" class="md-tag">control-plane</a>
+        <span class="md-tag">control-plane</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:data-plane" class="md-tag">data-plane</a>
+        <span class="md-tag">data-plane</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:mtls" class="md-tag">mtls</a>
+        <span class="md-tag">mtls</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:observability" class="md-tag">observability</a>
+        <span class="md-tag">observability</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:service-mesh" class="md-tag">service-mesh</a>
+        <span class="md-tag">service-mesh</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:sidecar" class="md-tag">sidecar</a>
+        <span class="md-tag">sidecar</span>
       
     
   </nav>
@@ -17210,7 +17231,7 @@
 
 <h1 id="service-mesh-concetti-base">Service Mesh — Concetti Base<a class="headerlink" href="#service-mesh-concetti-base" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>In un'architettura a microservizi, ogni servizio deve gestire retry, timeout, circuit breaking, mTLS e distributed tracing. Implementare queste logiche in ogni singolo servizio — potenzialmente scritto in linguaggi diversi — e' costoso, error-prone e difficile da manutenere uniformemente.</p>
+<p>In un'architettura a microservizi, ogni servizio deve gestire retry, timeout, <strong>circuit breaking</strong> (meccanismo che interrompe le chiamate a un servizio degradato per evitare effetti a cascata — come un interruttore elettrico), mTLS (mutual TLS) e distributed tracing. Implementare queste logiche in ogni singolo servizio — potenzialmente scritto in linguaggi diversi — e' costoso, error-prone e difficile da manutenere uniformemente.</p>
 <p>Un <strong>service mesh</strong> risolve questo problema spostando tutta la logica di comunicazione fuori dall'applicazione, in un proxy dedicato (il <strong>sidecar</strong>) affiancato a ogni istanza di servizio. Il sidecar intercetta tutto il traffico in ingresso e uscita, applicando le politiche configurate centralmente. Il codice applicativo parla con <code>localhost</code> come se non ci fosse nulla in mezzo; il service mesh fa il resto in modo trasparente.</p>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <div class="admonition note">
@@ -17219,7 +17240,7 @@
 </div>
 <div class="admonition note">
 <p class="admonition-title">Control Plane</p>
-<p>Il cervello del service mesh. Configura dinamicamente il data plane tramite API (tipicamente xDS). Gestisce: distribuzione dei certificati mTLS, policy di routing, service discovery, configurazione dei proxy. Non tocca il traffico applicativo — lavora solo su configurazione e certificati. Esempi: <strong>istiod</strong> (Istio), <strong>destination</strong> (Linkerd).</p>
+<p>Il cervello del service mesh. Configura dinamicamente il data plane tramite API (tipicamente <strong>xDS</strong> — il protocollo di discovery di Envoy: Listeners, Routes, Clusters, Endpoints inviati in streaming al proxy). Gestisce: distribuzione dei certificati mTLS, policy di routing, service discovery, configurazione dei proxy. Non tocca il traffico applicativo — lavora solo su configurazione e certificati. Esempi: <strong>istiod</strong> (Istio), <strong>destination</strong> (Linkerd).</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">East-West Traffic</p>
@@ -17305,7 +17326,7 @@
     app_b -- "localhost" --&gt; proxy_b
     app_c -- "localhost" --&gt; proxy_c</code></pre>
 <h3 id="sidecar-injection">Sidecar Injection<a class="headerlink" href="#sidecar-injection" title="Permanent link">&para;</a></h3>
-<p>Il sidecar proxy viene iniettato automaticamente nei Pod tramite un <strong>Mutating Admission Webhook</strong>. Quando un Pod viene creato in un namespace con la label <code>istio-injection: enabled</code> (o equivalente), il control plane intercetta la richiesta all'API Server e modifica la specifica del Pod per aggiungere il container sidecar e un init container.</p>
+<p>Il sidecar proxy viene iniettato automaticamente nei Pod tramite un <strong>Mutating Admission Webhook</strong> — un'estensione dell'API Kubernetes che intercetta le richieste di creazione degli oggetti e può modificarli prima che vengano salvati in etcd. Quando un Pod viene creato in un namespace con la label <code>istio-injection: enabled</code> (o equivalente), il control plane intercetta la richiesta all'API Server e modifica la specifica del Pod per aggiungere il container sidecar e un init container.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Abilitare sidecar injection su un namespace</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="l l-Scalar l-Scalar-Plain">kubectl label namespace production istio-injection=enabled</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
@@ -17317,7 +17338,7 @@
 <h3 id="intercettazione-del-traffico">Intercettazione del traffico<a class="headerlink" href="#intercettazione-del-traffico" title="Permanent link">&para;</a></h3>
 <p>L'init container configura regole <strong>iptables</strong> che reindirizzano tutto il traffico in ingresso (porta 15006) e in uscita (porta 15001) attraverso il proxy Envoy. L'applicazione non sa nulla di questo: continua a fare richieste a <code>http://service-b:8080</code> come se parlasse direttamente al servizio.</p>
 <h3 id="rotazione-certificati-mtls">Rotazione certificati mTLS<a class="headerlink" href="#rotazione-certificati-mtls" title="Permanent link">&para;</a></h3>
-<p>Il control plane agisce da <strong>Certificate Authority (CA)</strong>. Ad ogni sidecar viene emesso un certificato SVID (SPIFFE Verifiable Identity Document) con identita' basata sul service account Kubernetes. I certificati vengono ruotati automaticamente (tipicamente ogni 24h) senza downtime.</p>
+<p>Il control plane agisce da <strong>Certificate Authority (CA)</strong>. Ad ogni sidecar viene emesso un certificato <strong>SVID</strong> (SPIFFE Verifiable Identity Document) con identità basata sul service account Kubernetes. <strong>SPIFFE</strong> (Secure Production Identity Framework for Everyone) è lo standard open per assegnare identità crittografiche ai workload in ambienti distribuiti, indipendentemente dall'infrastruttura sottostante. I certificati vengono ruotati automaticamente (tipicamente ogni 24h) senza downtime.</p>
 <h2 id="service-mesh-vs-api-gateway">Service Mesh vs API Gateway<a class="headerlink" href="#service-mesh-vs-api-gateway" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -17500,7 +17521,7 @@
 <details class="info">
 <summary>API Gateway Pattern — Approfondimento</summary>
 <p>Per capire come service mesh e API gateway si complementano nella gestione del traffico north-south e east-west.</p>
-<p><strong>Approfondimento completo →</strong> <a href="../api-gateway/pattern.md">Pattern API Gateway</a></p>
+<p><strong>Approfondimento completo →</strong> <a href="../../api-gateway/pattern-base/">Pattern API Gateway</a></p>
 </details>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>

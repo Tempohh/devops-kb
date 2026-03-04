@@ -2291,12 +2291,19 @@
   <span class="md-ellipsis">
     
   
-    Pipeline fundamentals
+    Jenkins Pipeline — Fondamentali
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -2319,12 +2326,19 @@
   <span class="md-ellipsis">
     
   
-    Shared libraries
+    Jenkins Shared Libraries
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -13057,12 +13071,19 @@
   <span class="md-ellipsis">
     
   
-    Quarkus kafka
+    Quarkus e Kafka — SmallRye Reactive Messaging
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -17144,49 +17165,49 @@
       
       
       
-        <a href="../../../tags/#tag:certificati" class="md-tag">certificati</a>
+        <span class="md-tag">certificati</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:crittografia" class="md-tag">crittografia</a>
+        <span class="md-tag">crittografia</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:https" class="md-tag">https</a>
+        <span class="md-tag">https</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:pki" class="md-tag">pki</a>
+        <span class="md-tag">pki</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:sicurezza" class="md-tag">sicurezza</a>
+        <span class="md-tag">sicurezza</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:ssl" class="md-tag">ssl</a>
+        <span class="md-tag">ssl</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:tls" class="md-tag">tls</a>
+        <span class="md-tag">tls</span>
       
     
   </nav>
@@ -17195,8 +17216,8 @@
 
 <h1 id="tlsssl-basi">TLS/SSL — Basi<a class="headerlink" href="#tlsssl-basi" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>TLS (Transport Layer Security) è il protocollo crittografico che garantisce comunicazioni sicure su reti non affidabili. SSL (Secure Sockets Layer) è il predecessore ormai obsoleto: nei contesti attuali "SSL" è usato impropriamente per indicare TLS. TLS opera al layer &#8536;, wrappando qualsiasi protocollo applicativo (HTTP, SMTP, LDAP, ecc.) per aggiungere <strong>confidenzialità</strong> (cifratura), <strong>integrità</strong> (HMAC) e <strong>autenticazione</strong> (certificati).</p>
-<p>TLS 1.3 (RFC 8446, 2018) è la versione corrente: più veloce (1-RTT handshake invece di 2), più sicura (rimozione di cipher suite deboli), e con perfect forward secrecy obbligatorio. TLS 1.0 e 1.1 sono deprecati; TLS 1.2 è ancora accettabile ma TLS 1.3 è da preferire.</p>
+<p>TLS (Transport Layer Security) è il protocollo crittografico che garantisce comunicazioni sicure su reti non affidabili. SSL (Secure Sockets Layer) è il predecessore ormai obsoleto: nei contesti attuali "SSL" è usato impropriamente per indicare TLS. TLS opera al layer &#8536;, wrappando qualsiasi protocollo applicativo (HTTP, SMTP, LDAP, ecc.) per aggiungere <strong>confidenzialità</strong> (cifratura), <strong>integrità</strong> (HMAC — Hash-based Message Authentication Code: codice che verifica che i dati non siano stati alterati in transito) e <strong>autenticazione</strong> (certificati).</p>
+<p>TLS 1.3 (RFC 8446, 2018) è la versione corrente: più veloce (1-RTT — un solo Round-Trip Time per completare l'handshake invece di 2), più sicura (rimozione di cipher suite deboli), e con perfect forward secrecy obbligatorio. TLS 1.0 e 1.1 sono deprecati; TLS 1.2 è ancora accettabile ma TLS 1.3 è da preferire.</p>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <h3 id="pki-public-key-infrastructure">PKI — Public Key Infrastructure<a class="headerlink" href="#pki-public-key-infrastructure" title="Permanent link">&para;</a></h3>
 <p>La PKI è il sistema di fiducia su cui si basa TLS:</p>
@@ -17225,7 +17246,7 @@
 <tr>
 <td>Handshake</td>
 <td>Asimmetrica</td>
-<td>ECDHE + firma RSA/ECDSA</td>
+<td>ECDHE + firma RSA/ECDSA (Elliptic Curve Digital Signature Algorithm)</td>
 <td>Autenticazione + scambio chiavi</td>
 </tr>
 <tr>
@@ -17302,7 +17323,7 @@
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>  |                                          |
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>  |══ Dati cifrati (Application Data) ══════|
 </span></code></pre></div>
-<p>In TLS 1.3 il server può inviare dati cifrati già dopo il primo RTT. TLS 1.3 supporta anche <strong>0-RTT</strong> per sessioni riprese (attenzione: vulnerabile a replay attacks).</p>
+<p>In TLS 1.3 il server può inviare dati cifrati già dopo il primo RTT. TLS 1.3 supporta anche <strong>0-RTT</strong> (Zero Round-Trip Time — il client invia dati già nel primo pacchetto usando i parametri di una sessione precedente, senza attendere il completamento dell'handshake; attenzione: vulnerabile a replay attacks).</p>
 <h3 id="mtls-mutual-tls">mTLS — Mutual TLS<a class="headerlink" href="#mtls-mutual-tls" title="Permanent link">&para;</a></h3>
 <p>In TLS standard solo il server si autentica. In mTLS <strong>entrambi</strong> i lati si autenticano:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Client                                    Server
@@ -17380,12 +17401,12 @@
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="k">ssl_session_timeout</span><span class="w"> </span><span class="s">1d</span><span class="p">;</span>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="k">ssl_session_tickets</span><span class="w"> </span><span class="no">off</span><span class="p">;</span><span class="w">  </span><span class="c1"># Disabilitare per PFS</span>
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="c1"># OCSP Stapling — il server include lo status del certificato nella risposta</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="c1"># OCSP Stapling (OCSP = Online Certificate Status Protocol — protocollo per verificare se un certificato è ancora valido o è stato revocato) — il server include lo status del certificato nella risposta</span>
 </span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="k">ssl_stapling</span><span class="w"> </span><span class="no">on</span><span class="p">;</span>
 </span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="k">ssl_stapling_verify</span><span class="w"> </span><span class="no">on</span><span class="p">;</span>
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="k">resolver</span><span class="w"> </span><span class="mi">1</span><span class="s">.1.1.1</span><span class="w"> </span><span class="mi">8</span><span class="s">.8.8.8</span><span class="w"> </span><span class="s">valid=300s</span><span class="p">;</span>
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="c1"># HSTS</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="c1"># HSTS (HTTP Strict Transport Security) — istruisce il browser a usare sempre HTTPS per questo dominio</span>
 </span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="k">add_header</span><span class="w"> </span><span class="s">Strict-Transport-Security</span><span class="w"> </span><span class="s">&quot;max-age=63072000</span><span class="p">;</span><span class="w"> </span><span class="k">includeSubDomains</span><span class="p">;</span><span class="w"> </span><span class="k">preload&quot;</span><span class="w"> </span><span class="s">always</span><span class="p">;</span>
 </span></code></pre></div>
 <h3 id="configurazione-mtls-con-nginx">Configurazione mTLS con Nginx<a class="headerlink" href="#configurazione-mtls-con-nginx" title="Permanent link">&para;</a></h3>
@@ -17441,7 +17462,7 @@
 <tr>
 <td><code>hostname mismatch</code></td>
 <td>CN/SAN non corrisponde</td>
-<td>Verificare il campo SAN del certificato</td>
+<td>Verificare il campo SAN (Subject Alternative Name — lista degli hostname per cui il certificato è valido) del certificato</td>
 </tr>
 <tr>
 <td><code>SSL_ERROR_RX_RECORD_TOO_LONG</code></td>

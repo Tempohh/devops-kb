@@ -2291,12 +2291,19 @@
   <span class="md-ellipsis">
     
   
-    Pipeline fundamentals
+    Jenkins Pipeline — Fondamentali
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -2319,12 +2326,19 @@
   <span class="md-ellipsis">
     
   
-    Shared libraries
+    Jenkins Shared Libraries
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -13303,12 +13317,19 @@
   <span class="md-ellipsis">
     
   
-    Quarkus kafka
+    Quarkus e Kafka — SmallRye Reactive Messaging
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -17073,63 +17094,63 @@
       
       
       
-        <a href="../../../tags/#tag:b-tree" class="md-tag">b-tree</a>
+        <span class="md-tag">b-tree</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:brin" class="md-tag">brin</a>
+        <span class="md-tag">brin</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:gin" class="md-tag">gin</a>
+        <span class="md-tag">gin</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:gist" class="md-tag">gist</a>
+        <span class="md-tag">gist</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:hash" class="md-tag">hash</a>
+        <span class="md-tag">hash</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:indici" class="md-tag">indici</a>
+        <span class="md-tag">indici</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:performance" class="md-tag">performance</a>
+        <span class="md-tag">performance</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:postgresql" class="md-tag">postgresql</a>
+        <span class="md-tag">postgresql</span>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:query-planner" class="md-tag">query-planner</a>
+        <span class="md-tag">query-planner</span>
       
     
   </nav>
@@ -17214,11 +17235,11 @@
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1">-- Ottimo per: WHERE token = &#39;abc123&#39;</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1">-- Inutile per: WHERE token &gt; &#39;abc123&#39;, ORDER BY token</span>
 </span></code></pre></div>
-<p>In PostgreSQL moderno (9.1+) gli hash index sono WAL-safe. Nella pratica, i B-tree sono quasi sempre preferiti per la loro versatilità — un hash index ha senso solo se la colonna è usata <em>esclusivamente</em> per equality e il volume è tale che la differenza di performance è misurabile.</p>
+<p>In PostgreSQL moderno (9.1+) gli hash index sono WAL-safe (WAL — Write-Ahead Log: il meccanismo di durabilità di PostgreSQL che registra le modifiche prima di applicarle, garantendo il recovery dopo un crash). Nella pratica, i B-tree sono quasi sempre preferiti per la loro versatilità — un hash index ha senso solo se la colonna è usata <em>esclusivamente</em> per equality e il volume è tale che la differenza di performance è misurabile.</p>
 <hr />
 <h2 id="gin-generalized-inverted-index">GIN — Generalized Inverted Index<a class="headerlink" href="#gin-generalized-inverted-index" title="Permanent link">&para;</a></h2>
 <p>GIN è un indice invertito: mappa ogni <em>elemento</em> (parola, chiave JSON, elemento array) alle righe che lo contengono. Ideale per tipi di dato multi-valore.</p>
-<p><strong>Casi d'uso:</strong> Full-text search, ricerca in JSONB, ricerca in array, <code>pg_trgm</code> per LIKE fuzzy.</p>
+<p><strong>Casi d'uso:</strong> Full-text search, ricerca in JSONB (JSON Binary — il formato di storage binario di PostgreSQL per JSON, più veloce da interrogare rispetto a JSON testuale), ricerca in array, <code>pg_trgm</code> per LIKE fuzzy.</p>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1">-- Full-text search con GIN</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">idx_articoli_fts</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">articoli</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="n">gin</span><span class="p">(</span><span class="n">to_tsvector</span><span class="p">(</span><span class="s1">&#39;italian&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">corpo</span><span class="p">));</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>

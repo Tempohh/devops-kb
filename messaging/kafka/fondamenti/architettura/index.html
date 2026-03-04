@@ -2291,12 +2291,19 @@
   <span class="md-ellipsis">
     
   
-    Pipeline fundamentals
+    Jenkins Pipeline — Fondamentali
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -2319,12 +2326,19 @@
   <span class="md-ellipsis">
     
   
-    Shared libraries
+    Jenkins Shared Libraries
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -13400,12 +13414,19 @@
   <span class="md-ellipsis">
     
   
-    Quarkus kafka
+    Quarkus e Kafka — SmallRye Reactive Messaging
   
 
     
   </span>
   
+  
+    
+  
+  
+    <span class="md-status md-status--complete"></span>
+  
+
   
 
       </a>
@@ -17303,35 +17324,35 @@
       
       
       
-        <a href="../../../../tags/#tag:architettura" class="md-tag">architettura</a>
+        <span class="md-tag">architettura</span>
       
     
       
       
       
       
-        <a href="../../../../tags/#tag:distributed-systems" class="md-tag">distributed-systems</a>
+        <span class="md-tag">distributed-systems</span>
       
     
       
       
       
       
-        <a href="../../../../tags/#tag:kafka" class="md-tag">kafka</a>
+        <span class="md-tag">kafka</span>
       
     
       
       
       
       
-        <a href="../../../../tags/#tag:messaging" class="md-tag">messaging</a>
+        <span class="md-tag">messaging</span>
       
     
       
       
       
       
-        <a href="../../../../tags/#tag:streaming" class="md-tag">streaming</a>
+        <span class="md-tag">streaming</span>
       
     
   </nav>
@@ -17449,10 +17470,10 @@
 <ol>
 <li><strong>Producer invia un record</strong> al broker leader della partizione target.</li>
 <li><strong>Il broker leader</strong> scrive il record nel log della partizione sul disco (append-only).</li>
-<li><strong>I broker follower</strong> replicano il record dal leader (replication log fetch).</li>
-<li><strong>Quando il record è nelle ISR</strong> (In-Sync Replicas), il leader invia l'ack al producer.</li>
-<li><strong>Il consumer</strong> esegue il poll loop, richiede i record dall'offset corrente al broker leader.</li>
-<li><strong>Il consumer commette l'offset</strong> dopo aver processato i record (manualmente o automaticamente).</li>
+<li><strong>I broker follower replicano il record</strong>: ogni partizione ha un leader (il broker che riceve le scritture) e zero o più follower (broker che mantengono una copia aggiornata ma non servono richieste dirette). I follower recuperano i nuovi record dal leader tramite replication log fetch.</li>
+<li><strong>Il leader attende la conferma dalle ISR</strong>: le ISR (In-Sync Replicas) sono l'insieme delle repliche — incluso il leader — completamente sincronizzate con il log del leader. Con <code>acks=all</code> (o <code>acks=-1</code>), il leader invia l'acknowledgment al producer solo dopo che tutte le repliche nell'ISR hanno scritto il record. Il parametro <code>min.insync.replicas</code> (tipicamente 2 su cluster con replication factor 3) definisce il numero minimo di repliche ISR che devono confermare; se scende sotto questo valore, il producer riceve <code>NotEnoughReplicasException</code>.</li>
+<li><strong>Il consumer esegue il loop di <code>poll()</code></strong>: il consumer chiama periodicamente <code>consumer.poll(timeout_ms)</code> per richiedere al broker un batch di record a partire dall'offset corrente. <code>poll()</code> è il nome del metodo dell'API Kafka (Java/Python) — non è una traduzione. Kafka usa il <strong>pull model</strong>: non è il broker a inviare i dati al consumer, è sempre il consumer a richiederli (pull). Questo permette ai consumer di consumare al proprio ritmo senza rischio di overflow.</li>
+<li><strong>Il consumer esegue il commit dell'offset</strong>: dopo aver processato il batch, il consumer "fa il commit dell'offset" — persiste la propria posizione nel topic (es. "ho elaborato fino all'offset 1042 della partizione 0"). Kafka salva questa informazione nel topic interno <code>__consumer_offsets</code>. Al restart successivo, il consumer riprende dall'ultimo offset committato, evitando di riprocessare record già gestiti. Il commit può essere automatico (<code>enable.auto.commit=true</code>, ogni 5 secondi di default) o manuale (<code>consumer.commitSync()</code> per garanzia at-least-once, <code>consumer.commitAsync()</code> per performance).</li>
 </ol>
 <h3 id="garantia-di-ordinamento">Garantia di Ordinamento<a class="headerlink" href="#garantia-di-ordinamento" title="Permanent link">&para;</a></h3>
 <p>Kafka garantisce l'ordinamento dei record <strong>all'interno di una singola partizione</strong>. Record con la stessa key vengono sempre scritti nella stessa partizione (tramite <code>hash(key) % numPartitions</code>), garantendo l'ordinamento per quella chiave specifica. Non esiste garanzia di ordinamento globale tra partizioni diverse.</p>
@@ -17562,7 +17583,7 @@
 <ul>
 <li><strong>Creare topic con replication factor 1:</strong> nessuna tolleranza ai guasti, dati persi se il broker cade.</li>
 <li><strong>Usare Kafka come database:</strong> Kafka non è ottimizzato per query puntuali. Per ricerche per key usare un database esterno (es. proiettare i dati Kafka su PostgreSQL o Redis).</li>
-<li><strong>Consumer senza gestione degli errori:</strong> un consumer che non gestisce le eccezioni può bloccarsi senza commettere l'offset, causando il riprocessamento dei record al restart.</li>
+<li><strong>Consumer senza gestione degli errori:</strong> un consumer che non gestisce le eccezioni può bloccarsi senza fare il commit dell'offset, causando il riprocessamento dei record al restart.</li>
 <li><strong>Ignorare il lag del consumer group:</strong> monitorare sempre il consumer lag come indicatore di salute.</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -17586,17 +17607,19 @@
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Controllare i log del broker</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>tail<span class="w"> </span>-f<span class="w"> </span>/var/kafka/logs/server.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>error
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Verificare le ISR degradate</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--describe<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;Isr:&quot;</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Verificare quante repliche sono nell&#39;ISR per ogni partizione</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># (se Isr &lt; Replicas, una o più repliche follower sono indietro o irraggiungibili)</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--describe<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;Isr:&quot;</span>
 </span></code></pre></div>
 <h3 id="under-replicated-partitions">Under-Replicated Partitions<a class="headerlink" href="#under-replicated-partitions" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Identificare partizioni sotto-replicate</span>
+<p>Una partizione è <strong>under-replicated</strong> quando il numero di repliche nell'ISR è inferiore al <code>replication.factor</code> configurato. Esempio: <code>replication.factor=3</code> ma l'ISR conta solo 2 repliche — un follower è caduto o è in ritardo rispetto al leader.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Listare le partizioni under-replicated (ISR &lt; replication.factor)</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kafka-topics.sh<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--describe<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--under-replicated-partitions
 </span></code></pre></div>
-<p>Causa tipica: un broker follower è caduto e non ha ancora recuperato i dati. Verificare che il broker sia operativo e che le ISR tornino al numero atteso.</p>
+<p><strong>Causa tipica:</strong> un broker follower è irraggiungibile o è rimasto indietro nella replica (lag elevato rispetto al log del leader). Il follower viene rimosso dall'ISR fino a quando non si risincronizza completamente. Verificare che il broker sia operativo; una volta riavviato, recupera automaticamente i record mancanti e rientra nell'ISR.</p>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://kafka.apache.org/documentation/">Apache Kafka Documentation</a></li>
