@@ -8,5 +8,5 @@ Provider cloud, servizi managed e architetture cloud-native.
 
 ## Sotto-categorie
 
-- **[AWS](aws/)** — Amazon Web Services
-- **[Azure](azure/)** — Microsoft Azure
+- **[AWS](aws/_index.md)** — Amazon Web Services
+- **[Azure](azure/_index.md)** — Microsoft Azure

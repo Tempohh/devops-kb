@@ -12,7 +12,7 @@ related: [networking/tcp, containers/openshift]
 official_docs: https://kafka.apache.org/documentation/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-23
+last_updated: 2026-03-03
 ---
 
 # Apache Kafka
@@ -35,7 +35,7 @@ Apache Kafka è una piattaforma di event streaming distribuita, progettata per g
 
     Architettura, topics, partizioni, produttori, consumatori, broker e KRaft
 
-    [:octicons-arrow-right-24: Esplora](fondamenti/)
+    [:octicons-arrow-right-24: Esplora](fondamenti/_index.md)
 
 -   :material-transit-connection-variant:{ .lg .middle } **Pattern per Microservizi**
 
@@ -43,7 +43,7 @@ Apache Kafka è una piattaforma di event streaming distribuita, progettata per g
 
     Event-driven, Event Sourcing, Saga, Outbox, CQRS, Dead Letter Queue
 
-    [:octicons-arrow-right-24: Esplora](pattern-microservizi/)
+    [:octicons-arrow-right-24: Esplora](pattern-microservizi/_index.md)
 
 -   :material-file-document-outline:{ .lg .middle } **Schema Registry**
 
@@ -51,7 +51,7 @@ Apache Kafka è una piattaforma di event streaming distribuita, progettata per g
 
     Avro, Protobuf, evoluzione degli schemi, compatibilità
 
-    [:octicons-arrow-right-24: Esplora](schema-registry/)
+    [:octicons-arrow-right-24: Esplora](schema-registry/_index.md)
 
 -   :material-water-outline:{ .lg .middle } **Kafka Streams**
 
@@ -59,7 +59,7 @@ Apache Kafka è una piattaforma di event streaming distribuita, progettata per g
 
     Stream processing, topologie, ksqlDB, windowing e aggregazioni
 
-    [:octicons-arrow-right-24: Esplora](kafka-streams/)
+    [:octicons-arrow-right-24: Esplora](kafka-streams/_index.md)
 
 -   :material-connection:{ .lg .middle } **Kafka Connect**
 
@@ -67,7 +67,7 @@ Apache Kafka è una piattaforma di event streaming distribuita, progettata per g
 
     Connettori source/sink, CDC con Debezium, integrazione dati
 
-    [:octicons-arrow-right-24: Esplora](kafka-connect/)
+    [:octicons-arrow-right-24: Esplora](kafka-connect/_index.md)
 
 -   :material-shield-lock:{ .lg .middle } **Sicurezza**
 
@@ -75,7 +75,7 @@ Apache Kafka è una piattaforma di event streaming distribuita, progettata per g
 
     TLS/SSL, SASL, ACL, autenticazione e autorizzazione
 
-    [:octicons-arrow-right-24: Esplora](sicurezza/)
+    [:octicons-arrow-right-24: Esplora](sicurezza/_index.md)
 
 -   :material-cog:{ .lg .middle } **Operazioni**
 
@@ -83,7 +83,7 @@ Apache Kafka è una piattaforma di event streaming distribuita, progettata per g
 
     Monitoring, performance tuning, replica, log compaction, disaster recovery
 
-    [:octicons-arrow-right-24: Esplora](operazioni/)
+    [:octicons-arrow-right-24: Esplora](operazioni/_index.md)
 
 -   :material-kubernetes:{ .lg .middle } **Kubernetes & Cloud**
 
@@ -91,7 +91,7 @@ Apache Kafka è una piattaforma di event streaming distribuita, progettata per g
 
     Strimzi Operator, Helm, Amazon MSK, deployment cloud-native
 
-    [:octicons-arrow-right-24: Esplora](kubernetes-cloud/)
+    [:octicons-arrow-right-24: Esplora](kubernetes-cloud/_index.md)
 
 -   :material-code-braces:{ .lg .middle } **Sviluppo**
 
@@ -99,7 +99,7 @@ Apache Kafka è una piattaforma di event streaming distribuita, progettata per g
 
     Spring Kafka, Quarkus, exactly-once semantics, transazioni
 
-    [:octicons-arrow-right-24: Esplora](sviluppo/)
+    [:octicons-arrow-right-24: Esplora](sviluppo/_index.md)
 
 </div>
 

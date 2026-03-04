@@ -16,6 +16,6 @@ Message broker, event streaming e pattern asincroni per architetture a microserv
 
     Event streaming distribuito, fault-tolerant e scalabile. Lo standard de facto per architetture event-driven.
 
-    [:octicons-arrow-right-24: Esplora](kafka/)
+    [:octicons-arrow-right-24: Esplora](kafka/_index.md)
 
 </div>

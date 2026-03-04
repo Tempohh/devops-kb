@@ -9,7 +9,7 @@ related: [cloud/aws/storage/s3, cloud/aws/compute/ec2, cloud/aws/database/rds-au
 official_docs: https://docs.aws.amazon.com/ebs/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # EBS, EFS, FSx, Storage Gateway e Snow Family
@@ -391,12 +391,12 @@ FSx è la famiglia di file system managed di AWS per workload specifici che rich
 
 ### FSx for Windows File Server
 
-File system SMB/CIFS managed, integrato con Active Directory. Per applicazioni Windows che richiedono condivisioni di rete SMB.
+File system SMB (Server Message Block)/CIFS (Common Internet File System) managed, integrato con Active Directory. Per applicazioni Windows che richiedono condivisioni di rete SMB.
 
 **Caratteristiche:**
 - Protocollo SMB 2.0, 2.1, 3.0, 3.1.1
 - Integrazione AD: join automatico al domain (AWS Managed AD o self-managed AD)
-- DFS Namespaces: spazio dei nomi distribuito per aggregare share multiple
+- DFS (Distributed File System) Namespaces: spazio dei nomi distribuito per aggregare share multiple
 - Shadow Copies (Volume Shadow Copy Service) per backup a livello utente
 - Scalabilità: fino a 64 TB per file system, throughput fino a 2 GB/s
 - Deployment: Single-AZ (economico) o Multi-AZ (HA con failover automatico)
@@ -455,7 +455,7 @@ sudo mount -t lustre -o relatime,flock \
 
 ### FSx for NetApp ONTAP
 
-File system enterprise basato su NetApp ONTAP managed da AWS. Il più versatile: supporta NFS, SMB, iSCSI contemporaneamente, con feature enterprise come deduplica, compressione, thin provisioning.
+File system enterprise basato su NetApp ONTAP managed da AWS. Il più versatile: supporta NFS, SMB, iSCSI (Internet Small Computer System Interface) contemporaneamente, con feature enterprise come deduplica, compressione, thin provisioning.
 
 **Caratteristiche:**
 - Multi-protocol: NFS v3/v4, SMB 2.x/3.x, iSCSI
@@ -510,7 +510,7 @@ File system ZFS managed ad alte performance. Snapshot istantanei, cloni, compres
 
 ## AWS Storage Gateway
 
-Storage Gateway è un servizio ibrido che connette il datacenter on-premises ad AWS, fornendo accesso a storage cloud tramite protocolli standard (NFS, SMB, iSCSI, VTL). Viene installato come appliance virtuale (VMware, Hyper-V, KVM) o hardware fisico.
+Storage Gateway è un servizio ibrido che connette il datacenter on-premises ad AWS, fornendo accesso a storage cloud tramite protocolli standard (NFS, SMB, iSCSI, VTL). Viene installato come appliance virtuale (VMware, Hyper-V, KVM — Kernel-based Virtual Machine) o hardware fisico.
 
 ### File Gateway
 

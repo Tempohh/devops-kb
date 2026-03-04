@@ -9,7 +9,7 @@ related: [databases/fondamentali/transazioni-concorrenza, databases/sql-avanzato
 official_docs: https://www.postgresql.org/docs/current/indexes.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # Indici — Strutture e Strategie
@@ -119,7 +119,7 @@ CREATE INDEX idx_session_token_hash ON sessioni USING hash(token);
 -- Inutile per: WHERE token > 'abc123', ORDER BY token
 ```
 
-In PostgreSQL moderno (9.1+) gli hash index sono WAL-safe. Nella pratica, i B-tree sono quasi sempre preferiti per la loro versatilità — un hash index ha senso solo se la colonna è usata *esclusivamente* per equality e il volume è tale che la differenza di performance è misurabile.
+In PostgreSQL moderno (9.1+) gli hash index sono WAL-safe (WAL — Write-Ahead Log: il meccanismo di durabilità di PostgreSQL che registra le modifiche prima di applicarle, garantendo il recovery dopo un crash). Nella pratica, i B-tree sono quasi sempre preferiti per la loro versatilità — un hash index ha senso solo se la colonna è usata *esclusivamente* per equality e il volume è tale che la differenza di performance è misurabile.
 
 ---
 
@@ -127,7 +127,7 @@ In PostgreSQL moderno (9.1+) gli hash index sono WAL-safe. Nella pratica, i B-tr
 
 GIN è un indice invertito: mappa ogni *elemento* (parola, chiave JSON, elemento array) alle righe che lo contengono. Ideale per tipi di dato multi-valore.
 
-**Casi d'uso:** Full-text search, ricerca in JSONB, ricerca in array, `pg_trgm` per LIKE fuzzy.
+**Casi d'uso:** Full-text search, ricerca in JSONB (JSON Binary — il formato di storage binario di PostgreSQL per JSON, più veloce da interrogare rispetto a JSON testuale), ricerca in array, `pg_trgm` per LIKE fuzzy.
 
 ```sql
 -- Full-text search con GIN

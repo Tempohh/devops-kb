@@ -9,7 +9,7 @@ related: [cloud/aws/iam/_index, cloud/aws/security/_index, cloud/aws/fondamental
 official_docs: https://aws.amazon.com/compliance/shared-responsibility-model/
 status: complete
 difficulty: beginner
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Shared Responsibility Model
@@ -74,7 +74,7 @@ Il cliente è responsabile di tutto ciò che mette nel cloud:
 | **Dati** | Classificazione, cifratura (at rest + in transit), backup |
 | **IAM** | Gestione utenti, ruoli, policy, principio del minimo privilegio |
 | **OS/Platform** | Patching OS (se EC2), aggiornamento librerie applicative |
-| **Networking** | Security Groups, NACLs, VPC routing, NACLs |
+| **Networking** | Security Groups, NACLs (Network Access Control Lists), VPC routing |
 | **Firewall** | Configurazione delle regole di accesso |
 | **Applicazione** | Sicurezza del codice, dipendenze vulnerabili |
 | **Cifratura** | Abilitare/configurare KMS, TLS, cifratura S3 |

@@ -9,14 +9,14 @@ related: [ci-cd/gitops/_index, ci-cd/gitops/argocd, containers/helm/_index, cont
 official_docs: https://fluxcd.io/flux/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-27
+last_updated: 2026-03-03
 ---
 
 # Flux CD
 
 ## Panoramica
 
-Flux CD (v2) è un set di controller Kubernetes che implementano GitOps secondo il GitOps Toolkit. A differenza di ArgoCD (architettura monolitica), Flux è composto da controller indipendenti e specializzati: il Source Controller gestisce le sorgenti (Git, Helm, OCI), il Kustomize Controller applica i manifesti, il Helm Controller gestisce i release Helm, il Notification Controller gestisce gli alert, e l'Image Automation Controller aggiorna automaticamente i tag delle immagini nel repository Git. Ogni componente espone CRD Kubernetes e può essere usato in modo indipendente. Flux è un progetto CNCF Graduated.
+Flux CD (v2) è un set di controller Kubernetes che implementano GitOps secondo il GitOps Toolkit. A differenza di ArgoCD (architettura monolitica), Flux è composto da controller indipendenti e specializzati: il Source Controller gestisce le sorgenti (Git, Helm, OCI — Open Container Initiative, lo standard per i formati di immagini e artefatti container), il Kustomize Controller applica i manifesti, il Helm Controller gestisce i release Helm, il Notification Controller gestisce gli alert, e l'Image Automation Controller aggiorna automaticamente i tag delle immagini nel repository Git. Ogni componente espone CRD (Custom Resource Definition — estensioni dell'API Kubernetes) e può essere usato in modo indipendente. Flux è un progetto CNCF (Cloud Native Computing Foundation) Graduated.
 
 ## Architettura — GitOps Toolkit
 
@@ -367,7 +367,7 @@ spec:
 
 ## SOPS — Secrets Cifrati nel Repository
 
-SOPS permette di cifrare i secrets Kubernetes e committarli in chiaro nel repository Git.
+SOPS (Secrets OPerationS) permette di cifrare i secrets Kubernetes e committarli cifrati nel repository Git, rendendo sicuro lo storage di dati sensibili in Git.
 
 ```bash
 # Installare SOPS

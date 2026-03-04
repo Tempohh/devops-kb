@@ -9,7 +9,7 @@ related: [cloud/aws/messaging/eventbridge-kinesis, cloud/aws/compute/lambda, clo
 official_docs: https://docs.aws.amazon.com/sqs/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-03
 ---
 
 # SQS & SNS
@@ -306,7 +306,7 @@ aws sqs set-queue-attributes \
 | HTTP/HTTPS | `http`, `https` | Webhook |
 | Email | `email`, `email-json` | Notifiche ops |
 | SMS | `sms` | Mobile notification |
-| Mobile Push | `application` | APNS (iOS), FCM (Android), ADM |
+| Mobile Push | `application` | APNS (Apple Push Notification Service — iOS), FCM (Firebase Cloud Messaging — Android), ADM (Amazon Device Messaging) |
 | Kinesis Firehose | `firehose` | Streaming analytics |
 | SES (via Lambda) | - | Email transazionali avanzate |
 

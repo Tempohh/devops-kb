@@ -9,7 +9,7 @@ related: [ci-cd/github-actions/enterprise, ci-cd/jenkins/pipeline-fundamentals, 
 official_docs: https://docs.github.com/en/actions/using-workflows/reusing-workflows
 status: complete
 difficulty: advanced
-last_updated: 2026-02-27
+last_updated: 2026-03-03
 ---
 
 # GitHub Actions — Workflow Avanzati
@@ -342,7 +342,7 @@ GitHub Actions Runner
        ▼
 GitHub OIDC Provider (https://token.actions.githubusercontent.com)
        │
-       │  JWT firmato con claims: repo, branch, workflow, job_workflow_ref
+       │  JWT (JSON Web Token) firmato con claims: repo, branch, workflow, job_workflow_ref
        ▼
 Cloud Provider (AWS/Azure/GCP)
        │

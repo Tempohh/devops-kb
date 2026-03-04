@@ -5,11 +5,11 @@ category: networking
 tags: [tcp, udp, transport, connection-oriented, datagram]
 search_keywords: [tcp three way handshake, tcp four way termination, udp connectionless, tcp vs udp comparison, tcp flow control, tcp congestion control slow start cwnd, tcp state machine TIME_WAIT CLOSE_WAIT FIN_WAIT, tcp keepalive, tcp nagle algorithm, udp broadcast multicast]
 parent: networking/protocolli/_index
-related: [networking/protocolli/http2-http3, networking/protocolli/quic, networking/load-balancing/layer4-layer7]
+related: [networking/protocolli/http2-http3, networking/protocolli/quic, networking/load-balancing/layer4-vs-layer7]
 official_docs: https://www.rfc-editor.org/rfc/rfc793
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # TCP e UDP
@@ -66,7 +66,7 @@ L'header UDP è di soli 8 byte, contro i 20+ byte dell'header TCP.
 Una connessione TCP è univocamente identificata da una quadrupla: `(IP_src, Port_src, IP_dst, Port_dst)`. Le porte sono divise in:
 
 - **Well-known ports** (0–1023): HTTP (80), HTTPS (443), SSH (22), DNS (53)
-- **Registered ports** (1024–49151): applicazioni specifiche registrate con IANA
+- **Registered ports** (1024–49151): applicazioni specifiche registrate con IANA (Internet Assigned Numbers Authority)
 - **Ephemeral ports** (49152–65535): porte temporanee assegnate ai client
 
 ---
@@ -153,14 +153,14 @@ SYN_RCVD         SYN_SENT
 
 Il ricevitore annuncia quanta buffer space ha disponibile tramite il campo **Window Size** nell'header. Il mittente non può inviare più dati di quanti indicati dalla window.
 
-- **Window Scaling** (RFC 7323): estende il campo window a 30 bit via opzione TCP per supportare finestre fino a 1 GB (necessario su reti ad alta velocità e alto RTT)
+- **Window Scaling** (RFC 7323): estende il campo window a 30 bit via opzione TCP per supportare finestre fino a 1 GB (necessario su reti ad alta velocità e alto RTT (Round-Trip Time))
 - Se la window scende a 0, il mittente si ferma e invia **Window Probes** periodici per rilevare quando la window si riapre
 
 ### TCP: Congestion Control
 
 TCP implementa 4 algoritmi per evitare di sovraccaricare la rete:
 
-1. **Slow Start**: alla partenza, `cwnd` (congestion window) parte da 1 MSS e raddoppia ogni RTT fino a `ssthresh`
+1. **Slow Start**: alla partenza, `cwnd` (congestion window) parte da 1 MSS (Maximum Segment Size) e raddoppia ogni RTT fino a `ssthresh`
 2. **Congestion Avoidance**: superata `ssthresh`, `cwnd` cresce di 1 MSS per RTT (crescita lineare)
 3. **Fast Retransmit**: alla ricezione di 3 ACK duplicati, il mittente ritrasmette il segmento perso senza attendere il timeout
 4. **Fast Recovery**: dopo fast retransmit, `ssthresh = cwnd/2` e si riparte dalla congestion avoidance (non da slow start)
@@ -390,7 +390,7 @@ sysctl -w net.ipv4.tcp_syncookies=1
 ??? info "Load Balancing Layer 4 — Approfondimento"
     Il load balancing L4 opera a livello TCP/UDP, distribuendo le connessioni senza ispezionare il payload. La comprensione degli stati TCP è fondamentale per capire il comportamento del bilanciatore.
 
-    **Approfondimento completo →** [Layer 4 vs Layer 7](../load-balancing/layer4-layer7.md)
+    **Approfondimento completo →** [Layer 4 vs Layer 7](../load-balancing/layer4-vs-layer7.md)
 
 ---
 

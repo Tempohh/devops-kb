@@ -3,13 +3,13 @@ title: "Quarkus e Kafka — SmallRye Reactive Messaging"
 slug: quarkus-kafka
 category: messaging
 tags: [kafka, quarkus, smallrye, reactive, messaging]
-search_keywords: [quarkus kafka, smallrye reactive messaging, quarkus kafka producer consumer, @incoming @outgoing quarkus, quarkus devservices kafka, mutiny kafka]
+search_keywords: [quarkus kafka, smallrye reactive messaging, quarkus kafka producer consumer, "@incoming @outgoing quarkus", quarkus devservices kafka, mutiny kafka]
 parent: messaging/kafka/sviluppo
 related: [messaging/kafka/sviluppo/spring-kafka, messaging/kafka/sviluppo/exactly-once-semantics]
 official_docs: https://quarkus.io/guides/kafka
 status: complete
 difficulty: advanced
-last_updated: 2026-02-23
+last_updated: 2026-03-03
 ---
 
 # Quarkus e Kafka — SmallRye Reactive Messaging
@@ -219,7 +219,7 @@ class OrderConsumerTest {
     SmallRye opera su thread non bloccanti (Vert.x event loop). Operazioni bloccanti come accessi a DB, chiamate HTTP sincrone o I/O devono essere annotate con `@Blocking` per non bloccare l'event loop.
 
 !!! tip "Gestire i fallimenti con failure-strategy"
-    Configurare `failure-strategy=dead-letter-queue` per inviare i messaggi problematici al DLQ invece di bloccare il consumer. Alternative: `ignore` (scarta), `fail` (arresta il consumer).
+    Configurare `failure-strategy=dead-letter-queue` per inviare i messaggi problematici al DLQ (Dead Letter Queue) invece di bloccare il consumer. Alternative: `ignore` (scarta), `fail` (arresta il consumer).
 
 !!! warning "Emitter e back-pressure"
     `emitter.send()` può sollevare `BackPressureFailure` se il buffer è pieno. Usare `emitter.sendAndAwait()` per attendere lo spazio, oppure `emitter.hasRequests()` per verificare la disponibilità.

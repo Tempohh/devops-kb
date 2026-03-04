@@ -3,18 +3,18 @@ title: "Jenkins Shared Libraries"
 slug: jenkins-shared-libraries
 category: ci-cd
 tags: [jenkins, shared-libraries, groovy, dsl, pipeline-template, reusable-pipeline, global-library]
-search_keywords: [Jenkins Shared Libraries, Global Shared Library, Jenkins vars, Jenkins src, Groovy DSL Jenkins, custom pipeline steps, Jenkins library versioning, implicit loading library, explicit loading library, JenkinsPipelineUnit, pipeline testing Jenkins, Groovy class Jenkins, @Library annotation, loadLibrary, pipeline template, vars groovy call, resources Jenkins library, Jenkins DSL extension]
+search_keywords: [Jenkins Shared Libraries, Global Shared Library, Jenkins vars, Jenkins src, Groovy DSL Jenkins, custom pipeline steps, Jenkins library versioning, implicit loading library, explicit loading library, JenkinsPipelineUnit, pipeline testing Jenkins, Groovy class Jenkins, "@Library annotation", loadLibrary, pipeline template, vars groovy call, resources Jenkins library, Jenkins DSL extension]
 parent: ci-cd/jenkins/_index
 related: [ci-cd/jenkins/pipeline-fundamentals, ci-cd/jenkins/enterprise-patterns]
 official_docs: https://www.jenkins.io/doc/book/pipeline/shared-libraries/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-27
+last_updated: 2026-03-03
 ---
 
 # Jenkins Shared Libraries
 
-Le **Shared Libraries** sono il meccanismo per condividere codice Groovy tra pipeline Jenkins — equivalente a un SDK interno per le tue pipeline. In ambienti enterprise è lo standard per standardizzare, governare e riutilizzare pattern CI/CD.
+Le **Shared Libraries** sono il meccanismo per condividere codice Groovy tra pipeline Jenkins — equivalente a un SDK (Software Development Kit) interno per le tue pipeline. In ambienti enterprise è lo standard per standardizzare, governare e riutilizzare pattern CI/CD.
 
 ## Struttura della Shared Library
 
@@ -54,7 +54,7 @@ my-jenkins-library/
 
 ## Configurare la Shared Library in Jenkins
 
-### Via JCasC (Production Setup)
+### Via JCasC (Jenkins Configuration as Code — Production Setup)
 
 ```yaml
 # jenkins.yaml (JCasC)

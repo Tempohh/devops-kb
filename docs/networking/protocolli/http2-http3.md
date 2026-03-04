@@ -5,11 +5,11 @@ category: networking
 tags: [http2, http3, quic, performance, multiplexing]
 search_keywords: [http2 multiplexing, http2 server push, hpack header compression, http2 streams, http3 quic, http2 head of line blocking, http2 binary framing, http2 prioritization, migration to http2]
 parent: networking/protocolli/_index
-related: [networking/protocolli/tcp-udp, networking/protocolli/quic, networking/load-balancing/nginx-haproxy]
+related: [networking/protocolli/tcp-udp, networking/protocolli/quic, networking/load-balancing/layer4-vs-layer7]
 official_docs: https://http2.github.io/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # HTTP/2 e HTTP/3
@@ -44,7 +44,7 @@ Tipi di frame principali:
 | `DATA` | Corpo della richiesta/risposta |
 | `SETTINGS` | Negoziazione parametri della connessione |
 | `WINDOW_UPDATE` | Aggiornamento flow control |
-| `PING` | Heartbeat e misurazione RTT |
+| `PING` | Heartbeat e misurazione RTT (Round-Trip Time) |
 | `RST_STREAM` | Cancellazione di uno stream |
 | `GOAWAY` | Chiusura ordinata della connessione |
 | `PUSH_PROMISE` | Annuncio server push |
@@ -314,7 +314,7 @@ curl --version | grep "HTTP3"
 ??? info "Nginx e HAProxy — Approfondimento"
     Configurazione dettagliata di HTTP/2 e HTTP/3 su Nginx e HAProxy.
 
-    **Approfondimento completo →** [Nginx e HAProxy](../load-balancing/nginx-haproxy.md)
+    **Approfondimento completo →** [Nginx e HAProxy](../load-balancing/layer4-vs-layer7.md)
 
 ---
 

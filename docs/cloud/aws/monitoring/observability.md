@@ -9,7 +9,7 @@ related: [cloud/aws/monitoring/cloudwatch, cloud/aws/security/compliance-audit, 
 official_docs: https://docs.aws.amazon.com/xray/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # X-Ray, OpenTelemetry, Managed Grafana e Prometheus
@@ -467,7 +467,7 @@ EOF
 
 ## Amazon Managed Service for Prometheus (AMP)
 
-AMP è un servizio Prometheus fully managed, compatibile con il protocollo Prometheus (PromQL, remote write, alerting rules).
+AMP è un servizio Prometheus fully managed, compatibile con il protocollo Prometheus (PromQL — Prometheus Query Language, remote write, alerting rules).
 
 ```bash
 # Creare un workspace AMP
@@ -544,7 +544,7 @@ EOF
 
 ## Amazon Managed Grafana (AMG)
 
-Amazon Managed Grafana è un servizio Grafana hosted, con autenticazione tramite IAM Identity Center (SSO), e integrazione nativa con i data source AWS.
+Amazon Managed Grafana è un servizio Grafana hosted, con autenticazione tramite IAM Identity Center (SSO — Single Sign-On), e integrazione nativa con i data source AWS.
 
 ```bash
 # Creare un workspace Grafana

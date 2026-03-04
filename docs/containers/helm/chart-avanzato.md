@@ -9,7 +9,7 @@ related: [containers/helm/_index, containers/helm/deployment-produzione, contain
 official_docs: https://helm.sh/docs/chart_template_guide/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Chart Avanzato

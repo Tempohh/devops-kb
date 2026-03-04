@@ -9,7 +9,7 @@ related: [networking/fondamentali/tls-ssl-basics, networking/protocolli/http2-ht
 official_docs: https://developer.mozilla.org/en-US/docs/Web/HTTP
 status: complete
 difficulty: beginner
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # HTTP e HTTPS
@@ -18,7 +18,7 @@ last_updated: 2026-02-24
 
 HTTP (HyperText Transfer Protocol) è il protocollo applicativo fondamentale del Web, definito su TCP (porta 80) per la comunicazione client-server. Segue un modello request-response: il client invia una richiesta, il server risponde con dati e metadati. HTTPS è HTTP con crittografia TLS (Transport Layer Security), che opera sulla porta 443 e garantisce confidenzialità, integrità e autenticazione del server. Oggi HTTPS è lo standard de facto per qualsiasi servizio web.
 
-HTTP è stateless per design: ogni richiesta è indipendente e il server non mantiene stato tra le richieste. La gestione dello stato avviene tramite meccanismi aggiuntivi come cookie, session token o JWT.
+HTTP è stateless per design: ogni richiesta è indipendente e il server non mantiene stato tra le richieste. La gestione dello stato avviene tramite meccanismi aggiuntivi come cookie, session token o JWT (JSON Web Token — token firmato crittograficamente che contiene informazioni sull'identità dell'utente, senza richiedere al server di memorizzare sessioni).
 
 ## Concetti Chiave
 
@@ -113,7 +113,7 @@ Keep-Alive: timeout=5, max=1000
 ```
 
 !!! warning "Head-of-Line Blocking in HTTP/1.1"
-    HTTP/1.1 soffre di HOL blocking: le richieste vengono processate in ordine su una connessione. I browser aprono 6-8 connessioni parallele per aggirarlo. HTTP/2 risolve questo con il multiplexing.
+    HTTP/1.1 soffre di HOL (Head-of-Line) blocking: le richieste vengono processate in ordine su una connessione — se la prima è lenta, blocca tutte le successive. I browser aprono 6-8 connessioni parallele per aggirarlo. HTTP/2 risolve questo con il multiplexing.
 
 ## Configurazione & Pratica
 
@@ -224,7 +224,7 @@ If-None-Match: "33a64df551425fcc55e4d42a148795d9f25f89d4"
 - Abilitare HTTP/2 (multiplexing, header compression, server push)
 - Configurare caching appropriato con `Cache-Control` e `ETag`
 - Compressione gzip/brotli per le risposte
-- Minimizzare i redirect (ogni redirect aggiunge una RTT)
+- Minimizzare i redirect (ogni redirect aggiunge un RTT — Round-Trip Time, il tempo per un pacchetto di andare dal client al server e tornare)
 
 **API Design:**
 - Usare il metodo HTTP corretto (GET per lettura, POST per creazione, ecc.)
@@ -237,7 +237,7 @@ If-None-Match: "33a64df551425fcc55e4d42a148795d9f25f89d4"
 | Sintomo | Cause Probabili | Soluzione |
 |---------|-----------------|-----------|
 | `ERR_SSL_PROTOCOL_ERROR` | TLS mismatch, certificato invalido | Verificare versione TLS, validità certificato |
-| `403 Forbidden` | Permessi, IP block, CORS | Controllare autorizzazioni, CORS policy |
+| `403 Forbidden` | Permessi, IP block, CORS (Cross-Origin Resource Sharing — meccanismo che controlla quali domini possono fare richieste cross-origin) | Controllare autorizzazioni, CORS policy |
 | `502 Bad Gateway` | Backend down, timeout | Verificare health del backend |
 | `504 Gateway Timeout` | Backend lento | Aumentare timeout, ottimizzare backend |
 | `ERR_TOO_MANY_REDIRECTS` | Loop redirect | Controllare configurazione redirect HTTP↔HTTPS |

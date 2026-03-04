@@ -9,7 +9,7 @@ related: [messaging/kafka/fondamenti/architettura, messaging/kafka/fondamenti/to
 official_docs: https://kafka.apache.org/documentation/#consumerconfigs
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-23
+last_updated: 2026-03-03
 ---
 
 # Consumatori (Consumer)
@@ -23,8 +23,8 @@ Il **consumer** è il componente client che legge record da uno o più topic Kaf
 ### Poll Loop
 
 Il cuore di un consumer Kafka è il **poll loop**: un ciclo infinito che chiama periodicamente `consumer.poll(Duration)` per ottenere un batch di record dal broker. Il metodo `poll()` serve anche a:
-- Inviare **heartbeat** al Group Coordinator (indica che il consumer è vivo)
-- Eseguire eventuali **rebalancing** del consumer group
+- Inviare **heartbeat** al **Group Coordinator** — il broker designato a gestire l'iscrizione al consumer group, tracking degli offset committati e orchestrazione dei rebalancing (indica che il consumer è vivo)
+- Eseguire eventuali **rebalancing** — il processo con cui Kafka redistribuisce l'assegnazione delle partizioni tra i consumer del gruppo quando un membro si unisce, se ne va o viene considerato morto
 - Processare il commit degli offset schedulati (auto-commit)
 
 Se `poll()` non viene chiamato entro `max.poll.interval.ms`, il consumer viene considerato morto e viene avviato un rebalancing.
@@ -45,7 +45,7 @@ I record ricevuti vengono **deserializzati** usando i deserializzatori configura
 
 ### Commit degli Offset
 
-Dopo aver processato i record, il consumer deve **commettere l'offset** per registrare la posizione. Esistono due modalità:
+Dopo aver processato i record, il consumer deve **fare il commit dell'offset** — registrare la propria posizione nel topic, in modo da riprendere da lì in caso di riavvio. Esistono due modalità:
 
 #### Auto-Commit (default)
 
@@ -54,7 +54,7 @@ enable.auto.commit=true
 auto.commit.interval.ms=5000  # commit ogni 5 secondi
 ```
 
-Il consumer commette automaticamente l'offset più alto restituito da `poll()` ogni `auto.commit.interval.ms`. **Rischio:** se il consumer cade dopo la `poll()` ma prima di processare completamente i record, quegli offset vengono già commessi → perdita di messaggi.
+Il consumer fa automaticamente il commit dell'offset più alto restituito da `poll()` ogni `auto.commit.interval.ms`. **Rischio:** se il consumer cade dopo la `poll()` ma prima di processare completamente i record, il commit di quegli offset è già avvenuto → al restart non li rilegge → perdita di messaggi.
 
 #### Manual Commit
 

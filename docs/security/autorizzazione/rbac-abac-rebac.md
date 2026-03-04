@@ -9,7 +9,7 @@ related: [security/autorizzazione/opa, security/autenticazione/jwt, security/aut
 official_docs: https://csrc.nist.gov/publications/detail/sp/800-162/final
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # RBAC, ABAC e ReBAC — Modelli di Autorizzazione
@@ -155,7 +155,7 @@ Policy ABAC:
     action.time BETWEEN "08:00" AND "22:00"
 ```
 
-### ABAC con OPA (Policy as Code)
+### ABAC con OPA — Open Policy Agent (Policy as Code)
 
 ```rego
 # Rego — linguaggio di policy di OPA

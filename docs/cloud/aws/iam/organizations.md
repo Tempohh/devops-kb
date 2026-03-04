@@ -9,7 +9,7 @@ related: [cloud/aws/iam/_index, cloud/aws/iam/policies-avanzate, cloud/aws/fonda
 official_docs: https://docs.aws.amazon.com/organizations/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # AWS Organizations & Multi-Account
@@ -23,7 +23,7 @@ La strategia **multi-account** è il pattern di riferimento per organizzazioni A
 | **Security Isolation** | Account separati = blast radius limitato in caso di breach |
 | **Billing separation** | Costi per team/BU/environment chiari e separati |
 | **Service Limits** | Ogni account ha limiti indipendenti (no contesa tra team) |
-| **Compliance** | Ambienti regolamentati (PCI, HIPAA) in account dedicati |
+| **Compliance** | Ambienti regolamentati (PCI — Payment Card Industry, HIPAA — Health Insurance Portability and Accountability Act) in account dedicati |
 | **Governance** | Policy centrali applicate a tutti gli account |
 
 ---
@@ -292,7 +292,7 @@ Control Tower Components
 
 ## IAM Identity Center (ex AWS SSO)
 
-**IAM Identity Center** è il punto di accesso SSO centralizzato per tutti gli account AWS dell'Organization.
+**IAM Identity Center** è il punto di accesso SSO (Single Sign-On) centralizzato per tutti gli account AWS dell'Organization.
 
 ```
 IAM Identity Center Flow
@@ -309,7 +309,7 @@ IAM Identity Center Flow
 ```
 
 **Componenti:**
-- **Identity Source** — dove risiedono le identità: Identity Center directory, Active Directory (AWS Managed AD / AD Connector), External IdP (SAML 2.0)
+- **Identity Source** — dove risiedono le identità: Identity Center directory, Active Directory (AWS Managed AD / AD Connector), External IdP (Identity Provider — SAML 2.0 — Security Assertion Markup Language)
 - **Permission Sets** — template di policy che diventano IAM Roles negli account
 - **Account Assignment** — mappatura User/Group → PermissionSet → Account
 

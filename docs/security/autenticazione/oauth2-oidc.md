@@ -9,7 +9,7 @@ related: [security/autenticazione/jwt, security/autorizzazione/rbac-abac-rebac, 
 official_docs: https://oauth.net/2/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # OAuth 2.0 e OpenID Connect
@@ -20,7 +20,7 @@ last_updated: 2026-02-24
 
 **OAuth 2.0** è un framework di **autorizzazione delegata**: consente a un'applicazione (Client) di ottenere accesso limitato a risorse di un utente (Resource Owner) su un servizio (Resource Server), senza mai conoscere le credenziali dell'utente. L'accesso è mediato da un **Authorization Server** che emette token con scope limitati e revocabili.
 
-**OpenID Connect (OIDC)** è uno strato di **identità** costruito sopra OAuth 2.0: aggiunge l'**ID Token** (un JWT che contiene l'identità verificata dell'utente) e il concetto di **autenticazione**, non solo autorizzazione. OIDC trasforma OAuth 2.0 da un sistema di accesso a un sistema di login federato.
+**OpenID Connect (OIDC)** è uno strato di **identità** costruito sopra OAuth 2.0: aggiunge l'**ID Token** (un JWT — JSON Web Token — che contiene l'identità verificata dell'utente) e il concetto di **autenticazione**, non solo autorizzazione. OIDC trasforma OAuth 2.0 da un sistema di accesso a un sistema di login federato.
 
 !!! tip "Distinzione fondamentale"
     - **OAuth 2.0**: risponde a "può questa app accedere a questa risorsa per conto di questo utente?" → autorizzazione
@@ -36,7 +36,8 @@ last_updated: 2026-02-24
 │                                                                     │
 │  Resource Owner          Authorization Server        Resource Server│
 │  (Utente finale          (Keycloak / Entra ID /      (Il tuo API,  │
-│   o sistema M2M)          Cognito / Auth0)            Microservizio)│
+│   o sistema M2M —         Cognito / Auth0)            Microservizio)│
+│   Machine-to-Machine)                                               │
 │                                                                     │
 │       │                         │                         │         │
 │       │                         │                         │         │
@@ -49,7 +50,7 @@ last_updated: 2026-02-24
 
 **Client types** (con implicazioni di sicurezza diverse):
 - **Confidential client**: può mantenere un segreto (backend server, servizio M2M). Usa `client_secret`
-- **Public client**: non può mantenere un segreto (SPA, mobile app — il codice è nelle mani dell'utente). **Non deve avere un `client_secret`**; usa PKCE
+- **Public client**: non può mantenere un segreto (SPA — Single Page Application —, mobile app — il codice è nelle mani dell'utente). **Non deve avere un `client_secret`**; usa PKCE
 
 ---
 
@@ -196,7 +197,7 @@ def call_service_b(endpoint: str) -> dict:
     - Il secret è una password statica — può essere rubata
     - JWT assertion: il client firma un JWT con la propria chiave privata → il server verifica con la chiave pubblica registrata
     - La chiave privata può essere rotata senza cambiare la configurazione del server
-    - AWS, Azure e GCP supportano workload identity federation come alternativa a client credentials fissi
+    - AWS, Azure e GCP supportano workload identity federation come alternativa a client credentials fissi (AWS IRSA — IAM Roles for Service Accounts, GCP Workload Identity Federation)
 
 ---
 
@@ -443,7 +444,7 @@ Service A:
 |---|---|---|
 | Implicit Flow (senza PKCE) | Token nell'URL → leakage in log, referrer | Authorization Code + PKCE |
 | `client_secret` in SPA/mobile | Secret esposto nel codice client | Public client senza secret |
-| Access Token in localStorage | XSS ruba il token | httpOnly cookie per refresh token; in-memory per access token |
+| Access Token in localStorage | XSS (Cross-Site Scripting) ruba il token | httpOnly cookie per refresh token; in-memory per access token |
 | ID Token usato come bearer | Audience errata, claims non progettati per API | Usare Access Token per API, ID Token solo per UI |
 | Nessuna validazione `aud` | Un token per service-A accettato da service-B | Validare sempre `aud` = identifier del resource server |
 | Token lifetime troppo lungo | Finestra di compromissione ampia | Max 15 min per access token |
@@ -453,9 +454,9 @@ Service A:
 
 ## Best Practices Enterprise
 
-- **Un solo Identity Provider per l'intera organizzazione**: federare tutti i servizi su un unico IdP (Keycloak / Entra ID / Okta). SSO, audit centralizzato, gestione utenti unica
+- **Un solo Identity Provider per l'intera organizzazione**: federare tutti i servizi su un unico IdP (Identity Provider — Keycloak / Entra ID / Okta). SSO (Single Sign-On), audit centralizzato, gestione utenti unica
 - **Scope granulari per ogni servizio**: `orders:read`, `orders:write`, `payments:process` — non un unico scope generico `api:access`. Permette least privilege a livello di authorization server
-- **Rotazione automatica chiavi di firma**: l'IdP deve ruotare le chiavi RS256/ES256 almeno ogni 6 mesi. Il resource server deve cachare le JWKS con TTL breve per pick up automatico della nuova chiave
+- **Rotazione automatica chiavi di firma**: l'IdP deve ruotare le chiavi RS256/ES256 almeno ogni 6 mesi. Il resource server deve cachare le JWKS (JSON Web Key Set — documento che espone le chiavi pubbliche dell'IdP) con TTL breve per pick up automatico della nuova chiave
 - **Client credentials da Vault o Workload Identity**: non hardcodare `client_secret` in env var o ConfigMap — usa HashiCorp Vault o cloud workload identity (AWS IRSA, GCP Workload Identity)
 - **Token binding per ambienti ad alto rischio**: considera DPoP (Demonstrating Proof-of-Possession, RFC 9449) per legare il token alla chiave privata del client — un token rubato non è riutilizzabile senza la chiave corrispondente
 

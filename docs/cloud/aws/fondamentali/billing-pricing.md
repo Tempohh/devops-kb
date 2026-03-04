@@ -9,7 +9,7 @@ related: [cloud/aws/fondamentali/well-architected, cloud/aws/iam/organizations]
 official_docs: https://aws.amazon.com/pricing/
 status: complete
 difficulty: beginner
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Billing & Pricing AWS
@@ -70,7 +70,7 @@ Più flessibili delle RI — impegno su **spesa $/ora** per 1 o 3 anni:
 ### Dedicated Hosts
 
 - Server fisico **dedicato** al tuo account
-- Necessario per: BYOL (SQL Server, Oracle), compliance (multi-tenant non consentito)
+- Necessario per: BYOL (Bring Your Own License — SQL Server, Oracle), compliance (multi-tenant non consentito)
 - Prezzo più alto — si paga per host, non per istanza
 
 ### Dedicated Instances
@@ -186,7 +186,7 @@ aws ec2 create-tags \
 
 - Report **granulare** (per risorsa, per ora) esportato in S3
 - Formato CSV/Parquet — analizzabile con Athena, QuickSight, Redshift
-- Standard de-facto per FinOps avanzato e multi-account billing
+- Standard de-facto per FinOps (Financial Operations — gestione finanziaria del cloud) avanzato e multi-account billing
 
 ---
 
@@ -244,7 +244,7 @@ aws compute-optimizer get-ec2-instance-recommendations \
 | **Basic** | Gratuito | Nessuno | N/A |
 | **Developer** | $29/mese o 3% | Business hours email | 12h |
 | **Business** | $100/mese o 10/7/3% | 24/7 phone/email/chat | 1h |
-| **Enterprise On-Ramp** | $5.500/mese o 10/7/3% | 24/7 + pool di TAM | 30 min |
+| **Enterprise On-Ramp** | $5.500/mese o 10/7/3% | 24/7 + pool di TAM (Technical Account Manager) | 30 min |
 | **Enterprise** | $15.000/mese o 10/7/3/1% | 24/7 + TAM dedicato | 15 min |
 
 **Nota:** la percentuale è applicata sulla spesa mensile AWS (es. Business = max(100$, 10% di spesa fino a 10K, 7% da 10K a 80K, 3% oltre).

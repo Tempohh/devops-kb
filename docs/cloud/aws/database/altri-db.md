@@ -9,7 +9,7 @@ related: [cloud/aws/database/rds-aurora, cloud/aws/database/dynamodb, cloud/aws/
 official_docs: https://aws.amazon.com/products/databases/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Altri Database AWS — ElastiCache, Redshift, Neptune, DocumentDB e altri
@@ -215,7 +215,7 @@ def is_rate_limited(user_id: str, limit: int = 100, window: int = 60) -> bool:
 
 ## Amazon Redshift
 
-Redshift è il data warehouse managed di AWS, basato su PostgreSQL modificato con un'architettura colonnare ottimizzata per analytics e OLAP.
+Redshift è il data warehouse managed di AWS, basato su PostgreSQL modificato con un'architettura colonnare ottimizzata per analytics e OLAP (Online Analytical Processing).
 
 ### Architettura Cluster
 

@@ -9,7 +9,7 @@ related: [containers/docker/sicurezza, containers/registry/_index, containers/do
 official_docs: https://docs.docker.com/reference/dockerfile/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Dockerfile Avanzato
@@ -296,7 +296,7 @@ EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
 
-**Confronto superfici di attacco:**
+**Confronto superfici di attacco** — le **CVE** (Common Vulnerabilities and Exposures — identificativi standard delle vulnerabilità di sicurezza note, rilevate da scanner come Trivy o Grype):
 
 | Base Image | Dimensione | Vulnerabilità CVE (tipico) | Shell |
 |------------|-----------|---------------------------|-------|

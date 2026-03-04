@@ -9,7 +9,7 @@ related: [cloud/aws/messaging/sqs-sns, cloud/aws/compute/lambda, cloud/aws/stora
 official_docs: https://docs.aws.amazon.com/eventbridge/latest/userguide/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-26
+last_updated: 2026-03-03
 ---
 
 # EventBridge, Kinesis & MSK

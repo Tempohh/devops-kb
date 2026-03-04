@@ -9,7 +9,7 @@ related: [cloud/aws/compute/ec2, cloud/aws/networking/vpc, cloud/aws/networking/
 official_docs: https://docs.aws.amazon.com/autoscaling/ec2/userguide/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # EC2 Auto Scaling & Load Balancing
@@ -35,7 +35,7 @@ ALB (Application Load Balancer)
 
 ## Launch Templates
 
-Il **Launch Template** è il template di configurazione per le istanze dell'ASG (sostituisce Launch Configurations, deprecate).
+Il **Launch Template** è il template di configurazione per le istanze dell'ASG (Auto Scaling Group — gruppo di istanze EC2 che scala automaticamente; sostituisce Launch Configurations, deprecate).
 
 ```bash
 # Creare Launch Template
@@ -415,7 +415,7 @@ Internet → IGW → GWLB → Firewall Appliance → GWLB → Target (EC2, ALB)
 ```
 
 - Opera al Layer 3/4 con GENEVE encapsulation
-- Bilancia il traffico verso fleet di appliance (FW, IDS/IPS, DLP)
+- Bilancia il traffico verso fleet di appliance (FW — Firewall, IDS/IPS — Intrusion Detection/Prevention System, DLP — Data Loss Prevention)
 - Trasparente all'applicazione
 
 ---

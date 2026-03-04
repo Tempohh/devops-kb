@@ -9,7 +9,7 @@ related: [cloud/aws/messaging/sqs-sns, cloud/aws/messaging/eventbridge-kinesis, 
 official_docs: https://docs.aws.amazon.com/lambda/latest/dg/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # AWS Lambda — Serverless
@@ -373,7 +373,7 @@ aws lambda update-function-configuration \
 
 ---
 
-## Destinations e DLQ
+## Destinations e DLQ (Dead Letter Queue — coda che riceve gli eventi non elaborati dopo tutti i retry)
 
 ```bash
 # Lambda Destinations: dove inviare il risultato (successo o fallimento)

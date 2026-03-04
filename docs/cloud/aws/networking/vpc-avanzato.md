@@ -9,7 +9,7 @@ related: [cloud/aws/networking/vpc, cloud/aws/networking/route53, cloud/aws/secu
 official_docs: https://docs.aws.amazon.com/vpc/latest/peering/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # VPC Avanzato — Connectivity
@@ -228,7 +228,7 @@ aws ec2 enable-vgw-route-propagation \
 **Caratteristiche:**
 - 2 tunnel IPSec per HA (diversi IP AWS endpoint)
 - Throughput: fino a 1.25 Gbps per tunnel
-- Supporta BGP (dynamic routing) o static routing
+- Supporta BGP (Border Gateway Protocol — protocollo di routing dinamico tra sistemi autonomi) o static routing
 - Costo: $0.05/hr per connessione VPN
 
 **VPN CloudHub:** molteplici Customer Gateway collegati allo stesso VGW → comunicano tra loro (hub-and-spoke per multi-sede).
@@ -299,7 +299,7 @@ On-premises ── DX ── DX Gateway ── VGW ── VPC-A (eu-central-1)
 | Ridondanza | Necessita 2 connessioni | 2 tunnel inclusi |
 | Setup time | Settimane/mesi | Ore |
 | Costo | $$$ (porta + dati) | $ |
-| Cifratura | No (opzionale MACsec) | Sì (IPSec) |
+| Cifratura | No (opzionale MACsec — Media Access Control Security) | Sì (IPSec) |
 
 **Best practice:** DX per traffico primario + VPN come failover.
 

@@ -9,14 +9,14 @@ related: [cloud/aws/ci-cd/code-services, cloud/aws/compute/lambda, cloud/aws/con
 official_docs: https://docs.aws.amazon.com/cloudformation/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # CloudFormation, CDK & SAM
 
 ## AWS CloudFormation
 
-**CloudFormation** è il servizio IaC nativo di AWS — definisci l'infrastruttura in JSON o YAML e AWS crea/aggiorna/elimina le risorse (Stack) in modo dichiarativo.
+**CloudFormation** è il servizio IaC (Infrastructure as Code) nativo di AWS — definisci l'infrastruttura in JSON o YAML e AWS crea/aggiorna/elimina le risorse (Stack) in modo dichiarativo.
 
 ```
 CloudFormation Lifecycle

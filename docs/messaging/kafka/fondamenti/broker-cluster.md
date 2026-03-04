@@ -9,7 +9,7 @@ related: [messaging/kafka/fondamenti/zookeeper-kraft, messaging/kafka/operazioni
 official_docs: https://kafka.apache.org/documentation/#brokerconfigs
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-23
+last_updated: 2026-03-03
 ---
 
 # Broker e Cluster Kafka
@@ -65,7 +65,7 @@ flowchart TB
 
 **Flusso di lettura:**
 - I consumer leggono sempre dal **leader** (default)
-- Con `client.rack` configurato, i consumer possono leggere dai follower nella stessa AZ (rack-aware fetching, riduce costi cross-AZ)
+- Con `client.rack` configurato, i consumer possono leggere dai follower nella stessa AZ (Availability Zone), riducendo il traffico e i costi cross-zona (rack-aware fetching)
 
 ## Configurazione & Pratica
 
@@ -140,7 +140,7 @@ kafka-topics.sh --bootstrap-server localhost:9092 \
 ## Best Practices
 
 !!! tip "Distribuire le partizioni uniformemente"
-    Kafak bilancia automaticamente le partizioni, ma dopo aggiungere/rimuovere broker è necessario eseguire `kafka-reassign-partitions.sh` per ribilanciare il carico.
+    Kafka bilancia automaticamente le partizioni, ma dopo aggiungere/rimuovere broker è necessario eseguire `kafka-reassign-partitions.sh` per ribilanciare il carico.
 
 !!! tip "Rack awareness"
     Configurare `broker.rack` su ogni broker e `replica.assignment.strategy=org.apache.kafka.common.replica.RackAwareReplicaSelector` per distribuire le repliche tra availability zone diverse.

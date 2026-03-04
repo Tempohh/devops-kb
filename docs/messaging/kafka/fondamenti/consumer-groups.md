@@ -9,7 +9,7 @@ related: [messaging/kafka/fondamenti/consumatori, messaging/kafka/fondamenti/top
 official_docs: https://kafka.apache.org/documentation/#intro_consumers
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-23
+last_updated: 2026-03-03
 ---
 
 # Consumer Groups
@@ -410,7 +410,7 @@ watch -n 5 kafka-consumer-groups.sh \
   --group inventory-service
 ```
 
-Metriche JMX da monitorare:
+Metriche JMX (Java Management Extensions) da monitorare:
 - `kafka.consumer:type=consumer-fetch-manager-metrics,client-id=*,attribute=records-lag-max`
 - `kafka.consumer:type=consumer-fetch-manager-metrics,client-id=*,attribute=records-lag`
 

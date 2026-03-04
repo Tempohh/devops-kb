@@ -9,7 +9,7 @@ related: [ai/fondamentali/deep-learning, ai/training/fine-tuning, ai/training/va
 official_docs: https://scikit-learn.org/stable/user_guide.html
 status: complete
 difficulty: beginner
-last_updated: 2026-02-27
+last_updated: 2026-03-03
 ---
 
 # Machine Learning — Fondamentali
@@ -94,7 +94,7 @@ Trova l'iperpiano che massimizza il margine tra le classi. Efficace in spazi ad 
 | **Precision** | TP / (TP+FP) | Minimizzare falsi positivi (es. alert spam) |
 | **Recall** | TP / (TP+FN) | Minimizzare falsi negativi (es. anomaly detection) |
 | **F1 Score** | 2×(P×R)/(P+R) | Bilanciamento precision/recall |
-| **AUC-ROC** | Area sotto curva ROC | Valutazione robusta con classi sbilanciate |
+| **AUC-ROC** | Area sotto la curva ROC (Receiver Operating Characteristic — curva che mostra il tradeoff tra tasso di veri positivi e falsi positivi al variare della soglia) | Valutazione robusta con classi sbilanciate |
 
 !!! tip "Classi sbilanciate"
     In anomaly detection i casi anomali sono rari (es. 0.1% del dataset). L'accuracy del 99.9% si ottiene predicendo sempre "normale". Usare F1, AUC-ROC, o class_weight='balanced' nel modello.
@@ -133,7 +133,7 @@ labels = km_final.fit_predict(X)
 print(f"Silhouette Score: {silhouette_score(X, labels):.3f}")
 ```
 
-**DBSCAN**: identifica cluster di forma arbitraria, gestisce outlier. Utile per anomaly detection: i punti che non appartengono a nessun cluster sono anomalie.
+**DBSCAN** (Density-Based Spatial Clustering of Applications with Noise): identifica cluster di forma arbitraria raggruppando punti vicini tra loro, e marca come outlier i punti isolati. Utile per anomaly detection: i punti che non appartengono a nessun cluster sono anomalie.
 
 ```python
 from sklearn.cluster import DBSCAN
@@ -155,7 +155,7 @@ X_reduced = pca.fit_transform(X_scaled)
 print(f"Dimensioni ridotte da {X.shape[1]} a {X_reduced.shape[1]}")
 ```
 
-**t-SNE / UMAP**: proiezione non-lineare in 2D/3D per visualizzazione. Non usare per preprocessing, solo per esplorazione visiva.
+**t-SNE** (t-Distributed Stochastic Neighbor Embedding) **/ UMAP** (Uniform Manifold Approximation and Projection): tecniche di proiezione non-lineare che riducono i dati in 2D o 3D per visualizzazione. Non usare per preprocessing, solo per esplorazione visiva.
 
 **Autoencoder**: rete neurale che impara una rappresentazione compressa. L'encoder comprime, il decoder ricostruisce. Usato per anomaly detection (errore di ricostruzione alto = anomalia).
 
@@ -175,7 +175,7 @@ Agente → Azione → Environment → Nuovo Stato + Reward → Agente
 | DQN | Deep Q-Network | Q-Learning + neural network, Atari |
 | PPO (Proximal Policy Optimization) | Policy gradient | Stabile, usato per RLHF degli LLM |
 | SAC (Soft Actor-Critic) | Actor-critic, off-policy | Efficiente, continous action spaces |
-| A3C/A2C | Actor-critic, on-policy | Parallelizzabile |
+| A3C / A2C (Asynchronous / Advantage Actor-Critic) | Actor-critic, on-policy | Parallelizzabile |
 
 ### RL per LLM — RLHF
 
@@ -193,7 +193,7 @@ Il Reinforcement Learning from Human Feedback (RLHF) è il meccanismo che ha tra
 3. PPO/REINFORCE
    Il modello SFT genera risposte → il Reward Model le valuta
    → PPO aggiorna il modello per massimizzare il reward
-   KL divergence penalty: evita che il modello si allontani troppo dalla SFT policy
+   KL divergence penalty: penalità basata sulla KL divergence (Kullback-Leibler divergence — misura quanto due distribuzioni di probabilità differiscono tra loro) che evita che il modello si allontani troppo dalla SFT policy
 ```
 
 ## 4. Training Loop e Ottimizzazione
@@ -278,7 +278,7 @@ Le feature sono le variabili di input fornite al modello. La qualità delle feat
 ```python
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 
-# StandardScaler: media=0, std=1. Per algoritmi basati su distanza (SVM, KNN)
+# StandardScaler: media=0, std=1. Per algoritmi basati su distanza (SVM, KNN — K-Nearest Neighbors)
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X_train)  # fit solo su train!
 
@@ -386,9 +386,9 @@ print(f"Test score: {grid_search.score(X_test, y_test):.3f}")
 - **Baseline prima**: inizia sempre con un modello semplice (logistic regression, decision tree). Misura il miglioramento degli algoritmi complessi rispetto alla baseline.
 - **Fit solo su training**: scaler, encoder, e qualsiasi trasformazione si fittano SOLO sul training set e si applicano poi a validation e test.
 - **Metriche giuste**: scegli le metriche PRIMA di vedere i risultati. Le metriche dipendono dal business (falso positivo vs falso negativo ha costi diversi).
-- **Reproducibilità**: imposta `random_state` / seed ovunque. Versiona i dati (DVC).
+- **Reproducibilità**: imposta `random_state` / seed ovunque. Versiona i dati (DVC — Data Version Control, lo standard per versionare dataset come Git versiona il codice).
 - **Feature importance**: interpreta il modello per capire cosa sta imparando.
-- **Monitor drift**: in produzione, i dati cambiano (concept drift, data drift). Monitora le distribuzioni delle feature e le performance.
+- **Monitor drift**: in produzione, i dati cambiano nel tempo. Il **concept drift** si verifica quando cambia la relazione tra le feature e la target (es. i pattern di frode cambiano). Il **data drift** si verifica quando cambia la distribuzione delle feature di input (es. nuovi tipi di utenti). Monitora distribuzioni delle feature e performance del modello per rilevarli.
 
 ## Riferimenti
 

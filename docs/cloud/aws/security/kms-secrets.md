@@ -9,7 +9,7 @@ related: [cloud/aws/security/network-security, cloud/aws/security/compliance-aud
 official_docs: https://docs.aws.amazon.com/kms/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # KMS, Secrets Manager, Parameter Store e ACM
@@ -24,7 +24,7 @@ Questo documento copre la gestione della crittografia e dei secrets in AWS: AWS 
 
 ### Concetti Fondamentali
 
-AWS KMS è il servizio centralizzato per la gestione delle chiavi crittografiche in AWS. Le chiavi KMS non lasciano mai il servizio in plaintext — tutte le operazioni crittografiche avvengono all'interno di KMS su hardware validato FIPS 140-2 Level 3.
+AWS KMS è il servizio centralizzato per la gestione delle chiavi crittografiche in AWS. Le chiavi KMS non lasciano mai il servizio in plaintext — tutte le operazioni crittografiche avvengono all'interno di KMS su hardware validato FIPS (Federal Information Processing Standard) 140-2 Level 3.
 
 **Tipi di chiave (KMS Key Types):**
 
@@ -703,7 +703,7 @@ aws acm import-certificate \
 
 ### ACM Private CA
 
-ACM Private CA permette di creare una PKI interna per emettere certificati privati per risorse interne (microservizi, VPN, intranet).
+ACM Private CA (Certificate Authority — Autorità di Certificazione) permette di creare una PKI (Public Key Infrastructure — infrastruttura per gestire chiavi, certificati digitali e relazioni di fiducia tra enti) interna per emettere certificati privati per risorse interne (microservizi, VPN, intranet).
 
 ```bash
 # Creare una Private CA

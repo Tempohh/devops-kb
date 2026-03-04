@@ -9,7 +9,7 @@ related: [cloud/aws/security/kms-secrets, cloud/aws/security/network-security, c
 official_docs: https://docs.aws.amazon.com/guardduty/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # GuardDuty, Inspector, Macie, Security Hub, Config e CloudTrail
@@ -199,7 +199,7 @@ Inspector v2 (2021+) è un servizio di vulnerability assessment continuo e autom
 - **Lambda:** scansione del codice Lambda e dipendenze
 
 **Finding types:**
-- CVE (Common Vulnerabilities and Exposures) dal NVD database
+- CVE (Common Vulnerabilities and Exposures) dal NVD (National Vulnerability Database)
 - CIS (Center for Internet Security) benchmarks
 - Network reachability (porte aperte esposte a Internet)
 - Software composition analysis (SBOM — Software Bill of Materials)
@@ -260,11 +260,11 @@ aws ecr describe-image-scan-findings \
 
 ### Panoramica
 
-Macie usa machine learning per scoprire, classificare e proteggere dati sensibili (PII, PHI, credenziali, IP, dati finanziari) archiviati in Amazon S3.
+Macie usa machine learning per scoprire, classificare e proteggere dati sensibili (PII — Personally Identifiable Information, PHI — Protected Health Information, credenziali, IP, dati finanziari) archiviati in Amazon S3.
 
 **Tipi di dati rilevati:**
 - PII: SSN, carte di credito, numeri di passaporto, indirizzi, numeri di telefono
-- PHI: dati sanitari (HIPAA)
+- PHI: dati sanitari (HIPAA — Health Insurance Portability and Accountability Act)
 - Credenziali: password, chiavi API, chiavi SSH private
 - Dati finanziari: coordinate bancarie, codici IBAN
 

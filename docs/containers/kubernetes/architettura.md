@@ -9,7 +9,7 @@ related: [containers/kubernetes/workloads, containers/kubernetes/operators-crd]
 official_docs: https://kubernetes.io/docs/concepts/overview/components/
 status: complete
 difficulty: expert
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Architettura Kubernetes
@@ -68,14 +68,14 @@ Request Lifecycle — kubectl apply -f deployment.yaml
     |
     v
   1. AUTHENTICATION — Chi sei?
-     Meccanismi: X.509 client cert, Bearer token (SA), OIDC, webhook
+     Meccanismi: X.509 client cert, Bearer token (SA), OIDC (OpenID Connect), webhook
      ServiceAccount token: JWT firmato da K8s, validato dall'API server
      Kubernetes 1.24+: tokens proiettati (bound SA tokens, scadenza configurabile)
 
     |
     v
   2. AUTHORIZATION — Cosa puoi fare?
-     RBAC: verb (get/list/create/update/patch/delete/watch) su resource in namespace
+     RBAC (Role-Based Access Control): verb (get/list/create/update/patch/delete/watch) su resource in namespace
      Controllato da: kube-apiserver
      Oggetti: Role/ClusterRole + RoleBinding/ClusterRoleBinding
 
@@ -134,7 +134,7 @@ kubectl explain deployment.spec.template.spec --recursive | head -50
 
 ## etcd — Database di Stato del Cluster
 
-**etcd** è il database key-value distribuito che memorizza tutto lo stato del cluster Kubernetes. Usa il consenso Raft per la fault tolerance.
+**etcd** è il database key-value distribuito che memorizza tutto lo stato del cluster Kubernetes. Usa il consenso **Raft** — un algoritmo di consenso distribuito che garantisce che tutte le scritture vengano applicate nello stesso ordine su tutti i nodi del cluster, anche in presenza di fallimenti.
 
 ```
 etcd Raft Cluster (3 nodi)
@@ -149,7 +149,8 @@ etcd Raft Cluster (3 nodi)
    Linearizable reads/writes
    (tutti i write passano per il leader)
 
-  Quorum: majority = floor(N/2) + 1
+  Quorum (numero minimo di nodi che devono concordare per validare un'operazione):
+  majority = floor(N/2) + 1
   3 nodi → quorum = 2 → tollera 1 failure
   5 nodi → quorum = 3 → tollera 2 failure
 
@@ -212,7 +213,7 @@ Scheduling Pipeline — Fasi
        v
   1. FILTERING (predicates)
      Elimina nodi che NON soddisfano i requisiti:
-     - NodeUnschedulable (cordon)
+     - NodeUnschedulable (cordon — nodo marcato come non schedulabile, nuovi Pod non vengono assegnati ma quelli esistenti restano)
      - ResourcesFit (requests CPU/memory <= node allocatable)
      - VolumeBinding (PVC disponibile sul nodo)
      - NodeAffinity (nodeSelector, affinity obbligatoria)

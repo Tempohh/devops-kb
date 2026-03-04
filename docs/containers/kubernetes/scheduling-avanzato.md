@@ -9,7 +9,7 @@ related: [containers/kubernetes/workloads, containers/kubernetes/architettura]
 official_docs: https://kubernetes.io/docs/concepts/scheduling-eviction/
 status: complete
 difficulty: expert
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Scheduling Avanzato

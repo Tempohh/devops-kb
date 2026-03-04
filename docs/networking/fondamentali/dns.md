@@ -9,7 +9,7 @@ related: [networking/fondamentali/http-https, networking/fondamentali/tls-ssl-ba
 official_docs: https://www.rfc-editor.org/rfc/rfc1034
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # DNS — Domain Name System
@@ -40,8 +40,8 @@ Il DNS è organizzato in una gerarchia globale a tre livelli:
 
 | Tipo | Ruolo | Chi lo gestisce | Esempi |
 |---|---|---|---|
-| **Recursive Resolver** | Riceve la query dal client, interroga la gerarchia DNS per suo conto, restituisce la risposta finale. Implementa caching. | ISP, Google (8.8.8.8), Cloudflare (1.1.1.1), aziende | 8.8.8.8, 1.1.1.1, 9.9.9.9 |
-| **Root Name Server** | Conosce la posizione degli authoritative server per ogni TLD | IANA/ICANN (13 cluster globali, centinaia di anycast) | a.root-servers.net … m.root-servers.net |
+| **Recursive Resolver** | Riceve la query dal client, interroga la gerarchia DNS per suo conto, restituisce la risposta finale. Implementa caching. | ISP (Internet Service Provider), Google (8.8.8.8), Cloudflare (1.1.1.1), aziende | 8.8.8.8, 1.1.1.1, 9.9.9.9 |
+| **Root Name Server** | Conosce la posizione degli authoritative server per ogni TLD | IANA/ICANN (13 cluster globali, centinaia di istanze anycast — tecnica che assegna lo stesso IP a più server distribuiti geograficamente, instradando verso il più vicino) | a.root-servers.net … m.root-servers.net |
 | **TLD Name Server** | Conosce la posizione degli authoritative server per ogni dominio nel TLD | Registry (Verisign per .com, ecc.) | a.gtld-servers.net |
 | **Authoritative Name Server** | Detiene la zona ufficiale per il dominio; risponde con la risposta definitiva | Proprietario del dominio, DNS provider | ns1.cloudflare.com, Route53 |
 
@@ -141,7 +141,7 @@ sequenceDiagram
 | **AAAA** | Mappa un hostname a un indirizzo IPv6 | `www.example.com. 3600 IN AAAA 2606:2800:220:1::` |
 | **CNAME** | Alias — punta a un altro hostname (non a un IP). Non usabile per la root del dominio (@). | `blog.example.com. IN CNAME www.example.com.` |
 | **MX** | Mail Exchange — server SMTP per il dominio. Ha una priorità (numero più basso = preferito) | `example.com. IN MX 10 mail.example.com.` |
-| **TXT** | Testo arbitrario. Usato per SPF, DKIM, DMARC, verifica proprietà dominio | `example.com. IN TXT "v=spf1 include:_spf.google.com ~all"` |
+| **TXT** | Testo arbitrario. Usato per SPF (Sender Policy Framework — autorizza i server email), DKIM (DomainKeys Identified Mail — firma crittografica delle email), DMARC (Domain-based Message Authentication — policy di autenticazione email), e verifica proprietà dominio | `example.com. IN TXT "v=spf1 include:_spf.google.com ~all"` |
 | **SRV** | Localizzazione di servizi generici. Formato: `_service._proto.name TTL IN SRV priority weight port target` | `_https._tcp.example.com. IN SRV 10 5 443 www.example.com.` |
 | **PTR** | Reverse DNS — mappa un IP a un hostname. Usato in `in-addr.arpa` | `34.216.184.93.in-addr.arpa. IN PTR www.example.com.` |
 | **NS** | Name Server — i server autoritativi per il dominio | `example.com. IN NS ns1.example.com.` |
@@ -297,7 +297,7 @@ dig +ttlunits www.example.com
 # Query DNSSEC
 dig +dnssec www.cloudflare.com
 
-# Verificare tutti i record di una zona (se il server lo permette — AXFR)
+# Verificare tutti i record di una zona (se il server lo permette — AXFR: zone transfer, trasferimento completo della zona DNS)
 dig @ns1.example.com example.com AXFR
 ```
 

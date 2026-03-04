@@ -9,7 +9,7 @@ related: [containers/kubernetes/architettura, containers/openshift/operators-olm
 official_docs: https://kubernetes.io/docs/concepts/extend-kubernetes/operator/
 status: complete
 difficulty: expert
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Operators e CRD

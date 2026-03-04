@@ -9,7 +9,7 @@ related: [cloud/aws/networking/vpc, cloud/aws/networking/route53, cloud/aws/netw
 official_docs: https://aws.amazon.com/about-aws/global-infrastructure/
 status: complete
 difficulty: beginner
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # AWS Global Infrastructure
@@ -188,7 +188,7 @@ Request ──────────→ POP ────→ Fiber ────
 
 | Scope | Servizi |
 |-------|---------|
-| **Global** | IAM, Route 53, CloudFront, WAF (global), AWS Organizations |
+| **Global** | IAM, Route 53, CloudFront, WAF (Web Application Firewall — global), AWS Organizations |
 | **Regional** | VPC, EC2, S3, RDS, Lambda, SQS, SNS, DynamoDB, ECS, EKS |
 | **AZ-scoped** | Subnet, EC2 instance, EBS volume, RDS Primary/Standby |
 

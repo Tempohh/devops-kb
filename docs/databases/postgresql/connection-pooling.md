@@ -9,7 +9,7 @@ related: [databases/postgresql/replicazione, databases/postgresql/mvcc-vacuum, d
 official_docs: https://www.pgbouncer.org/config.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # Connection Pooling — PgBouncer
@@ -313,7 +313,7 @@ groups:
 
 - **Transaction mode per default**: per ogni applicazione web stateless (HTTP API). Evitare session mode tranne casi specifici (LISTEN/NOTIFY, sessione utente persistente)
 - **pool_size = num_CPU * 2-4**: non aumentare pool_size oltre questo range — più connessioni = più context switch = peggioramento. Il bottleneck è PostgreSQL, non PgBouncer
-- **2 istanze PgBouncer per HA**: PgBouncer è stateless — 2 repliche davanti allo stesso PostgreSQL garantiscono HA senza complessità. In Kubernetes usare un Service con 2 pod
+- **2 istanze PgBouncer per HA (High Availability)**: PgBouncer è stateless — 2 repliche davanti allo stesso PostgreSQL garantiscono HA senza complessità. In Kubernetes usare un Service con 2 pod
 - **Sidecar vs deployment dedicato**: sidecar (PgBouncer nel pod dell'app) massimizza il controllo per pod; deployment dedicato riduce i processi. In Kubernetes il deployment dedicato è più comune
 - **Non usare PgBouncer per PostgreSQL gestito (RDS, Cloud SQL)**: AWS RDS Proxy, Cloud SQL Auth Proxy e simili integrano già il connection pooling — aggiungere PgBouncer davanti crea doppio pooling senza benefici
 
@@ -337,7 +337,7 @@ groups:
 ??? info "PostgreSQL su Kubernetes — Deployment pattern"
     PgBouncer viene tipicamente deployato come Deployment separato o come sidecar nei pod applicativi.
 
-    **Approfondimento →** [Database su Kubernetes](../../kubernetes-cloud/db-su-kubernetes.md)
+    **Approfondimento →** [Database su Kubernetes](../kubernetes-cloud/db-su-kubernetes.md)
 
 ## Riferimenti
 

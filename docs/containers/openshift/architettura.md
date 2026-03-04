@@ -9,7 +9,7 @@ related: [containers/kubernetes/architettura, containers/openshift/operators-olm
 official_docs: https://docs.openshift.com/container-platform/latest/architecture/architecture.html
 status: complete
 difficulty: expert
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Architettura OpenShift

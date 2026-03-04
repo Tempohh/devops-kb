@@ -9,7 +9,7 @@ related: [cloud/aws/ci-cd/cloudformation-cdk, cloud/aws/monitoring/cloudwatch, c
 official_docs: https://docs.aws.amazon.com/codebuild/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # CodeBuild, CodeDeploy, CodePipeline e CodeArtifact
@@ -713,7 +713,7 @@ reports:
 
 1. **Manual Approval per production** — sempre richiedere approvazione umana
 2. **Notifiche SNS** per approval e fallimenti della pipeline
-3. **Artifact encryption** con KMS CMK
+3. **Artifact encryption** con KMS CMK (Customer Managed Key)
 4. **Cross-account con least-privilege** — il ruolo cross-account deve avere solo i permessi di deploy
 
 ---

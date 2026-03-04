@@ -9,7 +9,7 @@ related: [databases/fondamentali/transazioni-concorrenza, databases/nosql/cassan
 official_docs: https://martin.kleppmann.com/2015/05/11/please-stop-calling-databases-cp-or-ap.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # ACID, BASE e Teorema CAP
@@ -57,7 +57,7 @@ Una transazione committata sopravvive a qualsiasi failure: crash del processo, r
 
 ## BASE — Basically Available, Soft state, Eventually consistent
 
-BASE è il modello di consistenza alternativo scelto dai sistemi distribuiti che privilegiano la disponibilità e la tolleranza ai partition.
+BASE è il modello di consistenza alternativo scelto dai sistemi distribuiti che privilegiano la disponibilità e la tolleranza alle partizioni di rete (eventi in cui i nodi del cluster non riescono a comunicare tra loro).
 
 | Aspetto | Descrizione |
 |---------|-------------|
@@ -101,7 +101,7 @@ Il CAP tratta consistenza e disponibilità come binari, ma nella realtà esiston
 
 ### PACELC — L'estensione pratica
 
-PACELC (Abadi, 2012) estende CAP aggiungendo la dimensione latenza:
+**PACELC** (Partition → Availability vs Consistency, Else → Latency vs Consistency — Abadi, 2012) estende CAP aggiungendo la dimensione latenza:
 
 ```
 IF Partition: scegli tra Availability e Consistency
@@ -139,7 +139,7 @@ Linearizability → Serializability → Snapshot → Causal → Eventual
 | Livello | Garanzia | Implementazione tipica |
 |---------|----------|----------------------|
 | **Linearizability** | Ogni operazione sembra istantanea, ordine real-time rispettato | Raft/Paxos, Zookeeper |
-| **Serializability** | L'esecuzione è equivalente a una seriale — può non riflettere ordine fisico | 2PL, MVCC + SSI |
+| **Serializability** | L'esecuzione è equivalente a una seriale — può non riflettere ordine fisico | 2PL (Two-Phase Locking), MVCC (Multi-Version Concurrency Control) + SSI (Serializable Snapshot Isolation) |
 | **Snapshot Isolation** | Ogni transazione vede uno snapshot coerente al suo inizio | MVCC (PostgreSQL, Oracle) |
 | **Causal Consistency** | Le operazioni causalmente correlate sono viste nell'ordine corretto | Vector clocks (DynamoDB streams) |
 | **Eventual Consistency** | Converge, ma nessuna garanzia sull'ordine o il timing | Cassandra (ONE), DNS |

@@ -9,14 +9,14 @@ related: [ci-cd/gitops/_index, ci-cd/gitops/flux, containers/kubernetes/_index, 
 official_docs: https://argo-cd.readthedocs.io/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-27
+last_updated: 2026-03-03
 ---
 
 # ArgoCD
 
 ## Panoramica
 
-ArgoCD è uno strumento GitOps dichiarativo per Kubernetes che si installa come controller nel cluster e sincronizza continuamente lo stato del cluster con i manifesti Git. Ogni risorsa Kubernetes desiderata è rappresentata come una `Application` CRD che punta a un repository Git e a un namespace di destinazione. ArgoCD supporta Helm, Kustomize, Jsonnet e YAML plain come formati di configurazione, offre una web UI visuale per monitorare lo stato dei deployment, e include funzionalità avanzate come multi-cluster management, ApplicationSet per generazione di Application in bulk, e integrazione con Argo Rollouts per progressive delivery. ArgoCD è un progetto CNCF Graduated.
+ArgoCD è uno strumento GitOps dichiarativo per Kubernetes che si installa come controller nel cluster e sincronizza continuamente lo stato del cluster con i manifesti Git. Ogni risorsa Kubernetes desiderata è rappresentata come una `Application` CRD (Custom Resource Definition — un'estensione dell'API Kubernetes che aggiunge nuovi tipi di oggetti personalizzati) che punta a un repository Git e a un namespace di destinazione. ArgoCD supporta Helm, Kustomize, Jsonnet e YAML plain come formati di configurazione, offre una web UI visuale per monitorare lo stato dei deployment, e include funzionalità avanzate come multi-cluster management, ApplicationSet per generazione di Application in bulk, e integrazione con Argo Rollouts per progressive delivery. ArgoCD è un progetto CNCF (Cloud Native Computing Foundation) Graduated.
 
 ## Architettura
 
@@ -54,7 +54,7 @@ ArgoCD è uno strumento GitOps dichiarativo per Kubernetes che si installa come 
 | **API Server** | Espone API REST/gRPC per CLI e UI, gestisce autenticazione e RBAC |
 | **Repo Server** | Clona repository Git, renderizza template (Helm, Kustomize, Jsonnet) |
 | **Application Controller** | Loop di reconciliazione: confronta desired state (Git) con live state (K8s) |
-| **Dex** | Identity provider OIDC per SSO con GitHub, Okta, LDAP, SAML |
+| **Dex** | Identity provider OIDC (OpenID Connect) per SSO (Single Sign-On) con GitHub, Okta, LDAP (Lightweight Directory Access Protocol), SAML (Security Assertion Markup Language) |
 | **Redis** | Cache per rendering repository e stato applicazioni |
 | **ApplicationSet Controller** | Genera Application CRD da generator (Git, Cluster, List, Matrix) |
 

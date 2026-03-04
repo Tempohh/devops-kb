@@ -9,7 +9,7 @@ related: [messaging/kafka/fondamenti/topics-partizioni, messaging/kafka/fondamen
 official_docs: https://kafka.apache.org/documentation/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-23
+last_updated: 2026-03-03
 ---
 
 # Architettura di Apache Kafka
@@ -106,10 +106,10 @@ graph TB
 
 1. **Producer invia un record** al broker leader della partizione target.
 2. **Il broker leader** scrive il record nel log della partizione sul disco (append-only).
-3. **I broker follower** replicano il record dal leader (replication log fetch).
-4. **Quando il record è nelle ISR** (In-Sync Replicas), il leader invia l'ack al producer.
-5. **Il consumer** esegue il poll loop, richiede i record dall'offset corrente al broker leader.
-6. **Il consumer commette l'offset** dopo aver processato i record (manualmente o automaticamente).
+3. **I broker follower replicano il record**: ogni partizione ha un leader (il broker che riceve le scritture) e zero o più follower (broker che mantengono una copia aggiornata ma non servono richieste dirette). I follower recuperano i nuovi record dal leader tramite replication log fetch.
+4. **Il leader attende la conferma dalle ISR**: le ISR (In-Sync Replicas) sono l'insieme delle repliche — incluso il leader — completamente sincronizzate con il log del leader. Con `acks=all` (o `acks=-1`), il leader invia l'acknowledgment al producer solo dopo che tutte le repliche nell'ISR hanno scritto il record. Il parametro `min.insync.replicas` (tipicamente 2 su cluster con replication factor 3) definisce il numero minimo di repliche ISR che devono confermare; se scende sotto questo valore, il producer riceve `NotEnoughReplicasException`.
+5. **Il consumer esegue il loop di `poll()`**: il consumer chiama periodicamente `consumer.poll(timeout_ms)` per richiedere al broker un batch di record a partire dall'offset corrente. `poll()` è il nome del metodo dell'API Kafka (Java/Python) — non è una traduzione. Kafka usa il **pull model**: non è il broker a inviare i dati al consumer, è sempre il consumer a richiederli (pull). Questo permette ai consumer di consumare al proprio ritmo senza rischio di overflow.
+6. **Il consumer esegue il commit dell'offset**: dopo aver processato il batch, il consumer "fa il commit dell'offset" — persiste la propria posizione nel topic (es. "ho elaborato fino all'offset 1042 della partizione 0"). Kafka salva questa informazione nel topic interno `__consumer_offsets`. Al restart successivo, il consumer riprende dall'ultimo offset committato, evitando di riprocessare record già gestiti. Il commit può essere automatico (`enable.auto.commit=true`, ogni 5 secondi di default) o manuale (`consumer.commitSync()` per garanzia at-least-once, `consumer.commitAsync()` per performance).
 
 ### Garantia di Ordinamento
 
@@ -233,7 +233,7 @@ transaction.state.log.min.isr=2
 
 - **Creare topic con replication factor 1:** nessuna tolleranza ai guasti, dati persi se il broker cade.
 - **Usare Kafka come database:** Kafka non è ottimizzato per query puntuali. Per ricerche per key usare un database esterno (es. proiettare i dati Kafka su PostgreSQL o Redis).
-- **Consumer senza gestione degli errori:** un consumer che non gestisce le eccezioni può bloccarsi senza commettere l'offset, causando il riprocessamento dei record al restart.
+- **Consumer senza gestione degli errori:** un consumer che non gestisce le eccezioni può bloccarsi senza fare il commit dell'offset, causando il riprocessamento dei record al restart.
 - **Ignorare il lag del consumer group:** monitorare sempre il consumer lag come indicatore di salute.
 
 ## Troubleshooting
@@ -264,21 +264,24 @@ nc -zv localhost 9092
 # Controllare i log del broker
 tail -f /var/kafka/logs/server.log | grep -i error
 
-# Verificare le ISR degradate
+# Verificare quante repliche sono nell'ISR per ogni partizione
+# (se Isr < Replicas, una o più repliche follower sono indietro o irraggiungibili)
 kafka-topics.sh --bootstrap-server localhost:9092 --describe | grep "Isr:"
 ```
 
 ### Under-Replicated Partitions
 
+Una partizione è **under-replicated** quando il numero di repliche nell'ISR è inferiore al `replication.factor` configurato. Esempio: `replication.factor=3` ma l'ISR conta solo 2 repliche — un follower è caduto o è in ritardo rispetto al leader.
+
 ```bash
-# Identificare partizioni sotto-replicate
+# Listare le partizioni under-replicated (ISR < replication.factor)
 kafka-topics.sh \
   --bootstrap-server localhost:9092 \
   --describe \
   --under-replicated-partitions
 ```
 
-Causa tipica: un broker follower è caduto e non ha ancora recuperato i dati. Verificare che il broker sia operativo e che le ISR tornino al numero atteso.
+**Causa tipica:** un broker follower è irraggiungibile o è rimasto indietro nella replica (lag elevato rispetto al log del leader). Il follower viene rimosso dall'ISR fino a quando non si risincronizza completamente. Verificare che il broker sia operativo; una volta riavviato, recupera automaticamente i record mancanti e rientra nell'ISR.
 
 ## Riferimenti
 

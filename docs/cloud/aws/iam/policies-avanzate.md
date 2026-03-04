@@ -9,7 +9,7 @@ related: [cloud/aws/iam/_index, cloud/aws/iam/organizations, cloud/aws/security/
 official_docs: https://docs.aws.amazon.com/iam/latest/userguide/access_policies.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # IAM Policies Avanzate
@@ -36,7 +36,7 @@ ALLOW
 Se nessun Allow trovato → DENY implicito
 ```
 
-**Regola fondamentale: Explicit DENY sempre vince** — anche se c'è un Allow altrove.
+**Regola fondamentale: Explicit DENY sempre vince** — anche se c'è un Allow altrove. Le **SCP** (Service Control Policy — policy AWS Organizations che definiscono il massimo dei permessi consentiti agli account figlio) agiscono come filtro a monte di tutte le policy identity-based.
 
 ---
 
@@ -210,7 +210,7 @@ Le **Condition** permettono di applicare policy solo in determinati contesti.
 ```
 
 **Vantaggio ABAC vs RBAC:**
-- RBAC: devi creare/aggiornare policy per ogni nuovo progetto/team
+- RBAC (Role-Based Access Control): devi creare/aggiornare policy per ogni nuovo progetto/team
 - ABAC: le policy rimangono stabili — basta aggiungere i tag corretti all'utente e alle risorse
 
 ---
@@ -396,7 +396,7 @@ aws sts get-session-token \
 
 ## GitHub Actions — OIDC Federation (Zero Secrets)
 
-Pattern moderno per CI/CD: eliminare le access keys statiche usando OIDC.
+Pattern moderno per CI/CD: eliminare le access keys statiche usando OIDC (OpenID Connect).
 
 ```bash
 # 1. Creare OIDC Identity Provider in IAM

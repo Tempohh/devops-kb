@@ -9,7 +9,7 @@ related: [cloud/aws/database/rds-aurora, cloud/aws/database/altri-db, cloud/aws/
 official_docs: https://docs.aws.amazon.com/dynamodb/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Amazon DynamoDB — NoSQL Serverless
@@ -22,13 +22,13 @@ Amazon DynamoDB è un database NoSQL fully serverless, chiave-valore e documento
 - **Serverless:** nessun server da gestire, nessun patching, scaling automatico
 - **Performance:** latenza di lettura/scrittura in singola cifra di ms, sempre (anche a milioni di req/s)
 - **Scalabilità:** da zero a trilioni di item, fino a decine di milioni di richieste al secondo
-- **Disponibilità:** 99.999% SLA, dati replicati su 3 AZ automaticamente
+- **Disponibilità:** 99.999% SLA (Service Level Agreement — accordo sulla disponibilità garantita del servizio), dati replicati su 3 AZ automaticamente
 - **Nessuna join:** il modello di dati è denormalized-by-design
 - **Schema flessibile:** ogni item può avere attributi diversi (fatta eccezione per la primary key)
 
 **Quando NON usare DynamoDB:**
 - Query SQL complesse con JOIN tra entità diverse → RDS/Aurora
-- Transazioni ACID complesse tra molte tabelle → RDS/Aurora
+- Transazioni ACID (Atomicity, Consistency, Isolation, Durability — le 4 proprietà fondamentali di una transazione database affidabile) complesse tra molte tabelle → RDS/Aurora
 - Analytics su grandi dataset → Redshift, Athena
 - Ricerca full-text → OpenSearch
 
@@ -186,7 +186,7 @@ aws dynamodb update-table \
 - Garantisce che la lettura rifletta il write più recente confermato
 - Consuma 1 RCU per 4 KB (il doppio)
 - Richiede specificazione esplicita: `ConsistentRead: true`
-- Non disponibile per GSI (solo LSI)
+- Non disponibile per GSI — Global Secondary Index (solo LSI — Local Secondary Index)
 
 ```python
 # GetItem con strong consistency

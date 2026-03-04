@@ -9,7 +9,7 @@ related: [cloud/aws/networking/vpc-avanzato, cloud/aws/security/network-security
 official_docs: https://docs.aws.amazon.com/vpc/latest/userguide/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # VPC — Virtual Private Cloud
@@ -44,10 +44,10 @@ NAT Gateway (1+ per AZ, in subnet pubblica)
 
 ## Progettare un VPC — CIDR Planning
 
-**CIDR block** del VPC: da `/16` (65.536 IP) a `/28` (16 IP)
+**CIDR block** (Classless Inter-Domain Routing — notazione `IP/prefisso` per definire blocchi di indirizzi, es. `10.0.0.0/16`) del VPC: da `/16` (65.536 IP) a `/28` (16 IP)
 
 **Regole:**
-- Non sovrapporre CIDR tra VPC che si devono connettere (peering, TGW)
+- Non sovrapporre CIDR tra VPC che si devono connettere (peering, TGW — Transit Gateway)
 - AWS riserva **5 IP per subnet** (first 4 + last 1)
   - `.0` — Network address
   - `.1` — VPC router
@@ -198,7 +198,7 @@ Il **NAT Gateway** permette alle istanze in subnet private di accedere a Interne
 - **Costo:** $0.045/hr + $0.045/GB processato → significativo per alti volumi
 
 !!! warning "NAT Gateway per AZ"
-    Per alta disponibilità, creare **un NAT Gateway per AZ** e configurare route table private separate per AZ. Un singolo NAT GW è SPOF per le subnet private delle altre AZ.
+    Per alta disponibilità, creare **un NAT Gateway per AZ** e configurare route table private separate per AZ. Un singolo NAT GW è SPOF (Single Point of Failure) per le subnet private delle altre AZ.
 
 ```bash
 # Costo NAT Gateway (approssimativo)
@@ -368,7 +368,7 @@ I **VPC Endpoints** permettono di accedere a servizi AWS dalla subnet privata **
 | Tipo | Come funziona | Servizi |
 |------|-------------|---------|
 | **Gateway Endpoint** | Route nella route table | S3, DynamoDB |
-| **Interface Endpoint** | ENI nella subnet (PrivateLink) | Tutti gli altri (100+) |
+| **Interface Endpoint** | ENI (Elastic Network Interface) nella subnet (PrivateLink) | Tutti gli altri (100+) |
 
 ```bash
 # Gateway Endpoint per S3 (gratuito)

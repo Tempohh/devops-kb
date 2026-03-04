@@ -9,14 +9,14 @@ related: [cloud/aws/security/kms-secrets, cloud/aws/security/compliance-audit, c
 official_docs: https://docs.aws.amazon.com/waf/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # WAF, Shield, Network Firewall e Sicurezza di Rete AWS
 
 ## Panoramica
 
-La sicurezza di rete su AWS è stratificata su più livelli: protezione a livello applicativo (AWS WAF), protezione DDoS (AWS Shield), firewall managed a livello VPC (Network Firewall), e controllo granulare del traffico di rete (Security Groups, NACLs). Ogni livello serve uno scopo specifico e si integra con gli altri.
+La sicurezza di rete su AWS è stratificata su più livelli: protezione a livello applicativo (AWS WAF), protezione DDoS (Distributed Denial of Service — AWS Shield), firewall managed a livello VPC (Network Firewall), e controllo granulare del traffico di rete (Security Groups, NACLs). Ogni livello serve uno scopo specifico e si integra con gli altri.
 
 ---
 
@@ -24,7 +24,7 @@ La sicurezza di rete su AWS è stratificata su più livelli: protezione a livell
 
 ### Panoramica
 
-AWS WAF è un firewall a livello applicativo (Layer 7) che protegge le applicazioni web da attacchi comuni: SQL injection, Cross-Site Scripting (XSS), attacchi OWASP Top 10, bot dannosi, scraping, credential stuffing.
+AWS WAF è un firewall a livello applicativo (Layer 7) che protegge le applicazioni web da attacchi comuni: SQL injection, Cross-Site Scripting (XSS), attacchi OWASP (Open Web Application Security Project) Top 10, bot dannosi, scraping, credential stuffing.
 
 **Integrazione con:**
 - Application Load Balancer (ALB)
@@ -61,7 +61,7 @@ AWS e vendor di sicurezza forniscono rule groups già pronti:
 
 | Rule Group | Descrizione |
 |-----------|-------------|
-| `AWSManagedRulesCommonRuleSet` | OWASP Top 10: SQLi, XSS, LFI, RFI, SSRF |
+| `AWSManagedRulesCommonRuleSet` | OWASP Top 10: SQLi, XSS, LFI (Local File Inclusion), RFI (Remote File Inclusion), SSRF (Server-Side Request Forgery) |
 | `AWSManagedRulesKnownBadInputsRuleSet` | Pattern di input noti per sfruttare vulnerabilità |
 | `AWSManagedRulesSQLiRuleSet` | SQL injection avanzato |
 | `AWSManagedRulesLinuxRuleSet` | Attacchi specifici Linux (LFI, path traversal) |

@@ -9,7 +9,7 @@ related: [cloud/aws/database/dynamodb, cloud/aws/database/altri-db, cloud/aws/se
 official_docs: https://docs.aws.amazon.com/rds/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # RDS e Aurora — Database Relazionali Managed
@@ -57,7 +57,7 @@ Multi-AZ crea una replica sincrona del database in una diversa Availability Zone
 4. L'applicazione deve gestire il riconnection (connection pool retry)
 
 !!! warning "Multi-AZ standby NON è leggibile"
-    La standby Multi-AZ non è accessibile per le letture. Il suo unico scopo è l'HA. Per scalare le letture, usare Read Replicas.
+    La standby Multi-AZ non è accessibile per le letture. Il suo unico scopo è l'HA (High Availability). Per scalare le letture, usare Read Replicas.
 
 ```bash
 # Creare un'istanza RDS Multi-AZ
@@ -441,8 +441,8 @@ aws rds modify-db-cluster \
 ### Aurora Global Database
 
 Aurora Global Database permette di avere **un primary** in una Region e fino a **5 secondary** in altre Region, con:
-- **RPO < 1 secondo** (replication lag tipicamente < 1s)
-- **RTO < 1 minuto** (failover gestito manualmente)
+- **RPO** (Recovery Point Objective — massima perdita di dati accettabile) **< 1 secondo** (replication lag tipicamente < 1s)
+- **RTO** (Recovery Time Objective — tempo massimo di ripristino del servizio) **< 1 minuto** (failover gestito manualmente)
 - Secondary Region è read-only (può essere promossa a primary in caso di disaster)
 
 ```bash

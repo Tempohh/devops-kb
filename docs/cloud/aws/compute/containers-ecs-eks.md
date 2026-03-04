@@ -9,7 +9,7 @@ related: [cloud/aws/iam/policies-avanzate, cloud/aws/networking/vpc, cloud/aws/s
 official_docs: https://docs.aws.amazon.com/ecs/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # ECS, EKS & Containers AWS
@@ -24,7 +24,7 @@ last_updated: 2026-02-25
 | Fargate support | Sì (nativo) | Sì (Fargate profiles) |
 | Service mesh | App Mesh / ECS native | Istio, AWS App Mesh, Linkerd |
 | Advanced scheduling | Limitato | Completo (K8s scheduler) |
-| CRD / Operators | No | Sì |
+| CRD (Custom Resource Definition) / Operators | No | Sì |
 | Integrazione AWS | Nativa profonda | Buona (via add-ons) |
 | Use case | Nuovo su AWS, workloads semplici | Team K8s già formato, portabilità |
 

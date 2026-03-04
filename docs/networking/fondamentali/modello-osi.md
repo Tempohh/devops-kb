@@ -9,7 +9,7 @@ related: [networking/fondamentali/tcpip]
 official_docs: https://www.osi-model.com/
 status: complete
 difficulty: beginner
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # Modello OSI
@@ -117,7 +117,7 @@ L7 → Il servizio risponde? Autenticazione? Certificato valido?
 |---|---|---|
 | Nessuna connettività, LED spento | L1 – Fisico | Cavo, porta switch, NIC |
 | `ping` fallisce verso il gateway, ma L1 ok | L2 – Data Link | ARP non risolve, VLAN sbagliata |
-| `ping` verso gateway ok, ma non verso internet | L3 – Rete | Route mancante, NAT non configurato |
+| `ping` verso gateway ok, ma non verso internet | L3 – Rete | Route mancante, NAT (Network Address Translation) non configurato |
 | `ping` funziona, ma TCP non si connette | L4 – Trasporto | Firewall blocca la porta, servizio non in ascolto |
 | Connessione TCP ok, ma risposta HTTP 401 | L7 – Applicazione | Errore di autenticazione |
 | Connessione TLS fallisce | L6 – Presentazione | Certificato scaduto, cipher incompatibile |

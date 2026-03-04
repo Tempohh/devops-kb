@@ -9,7 +9,7 @@ related: [cloud/aws/monitoring/observability, cloud/aws/security/compliance-audi
 official_docs: https://docs.aws.amazon.com/cloudwatch/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Amazon CloudWatch — Metrics, Logs, Alarms, Dashboards
@@ -787,7 +787,7 @@ aws cloudwatch list-metrics \
 ## Relazioni
 
 ??? info "X-Ray e OpenTelemetry"
-    CloudWatch si integra con X-Ray per il distributed tracing. ADOT collector invia metriche sia a CloudWatch che a Prometheus.
+    CloudWatch si integra con X-Ray per il distributed tracing. ADOT (AWS Distro for OpenTelemetry — distribuzione AWS di OpenTelemetry per raccogliere metriche, log e trace) collector invia metriche sia a CloudWatch che a Prometheus.
 
     **Approfondimento completo →** [Observability](observability.md)
 

@@ -9,7 +9,7 @@ related: [cloud/aws/compute/ec2-autoscaling, cloud/aws/storage/ebs-efs-fsx, clou
 official_docs: https://docs.aws.amazon.com/ec2/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # EC2 — Elastic Compute Cloud
@@ -48,7 +48,7 @@ Additional characters:
 | **Memory Optimized** | Molta RAM | r5, r6g, x2gd, z1d | Database in-memory, SAP, Redis |
 | **Storage Optimized** | I/O locale alto | i3, i4i, d3, h1 | Database NoSQL, data warehouse |
 | **Accelerated** | GPU/FPGA | p3, p4, g4dn, g5, f1 | ML training, rendering, HPC |
-| **HPC** | Networking ultra-basso | hpc6a, hpc7g | Simulazioni scientifiche |
+| **HPC** (High Performance Computing) | Networking ultra-basso | hpc6a, hpc7g | Simulazioni scientifiche |
 
 **Graviton (ARM):** istanze `g` (m6g, c7g, r7g) — 20-40% prezzo/performance migliore vs x86 equivalente. Raccomandato per nuovi workloads.
 
@@ -248,11 +248,11 @@ aws ec2 run-instances \
 
 ## EC2 Nitro System
 
-Il **Nitro System** è l'hypervisor di nuova generazione AWS — dedicato hardware NVMe SSD e SR-IOV networking.
+Il **Nitro System** è l'hypervisor di nuova generazione AWS — dedicato hardware NVMe SSD e SR-IOV (Single Root I/O Virtualization — tecnica che permette a una scheda di rete di presentarsi come più interfacce virtuali indipendenti) networking.
 
 - Quasi-bare-metal performance (overhead hypervisor <1%)
 - ENA (Elastic Network Adapter): fino a **100 Gbps** per `u-6tb1.112xlarge`
-- EFA (Elastic Fabric Adapter): per HPC/MPI, latency simil-bare-metal
+- EFA (Elastic Fabric Adapter): per HPC/MPI (Message Passing Interface — standard di comunicazione tra processi paralleli in cluster HPC), latency simil-bare-metal
 - NVMe SSD locale: I/O diretto senza hypervisor (istanze `i4i`, `c5d`, ecc.)
 - **EBS-optimized** nativo: bandwidth dedicata per EBS (no condivisione con rete)
 

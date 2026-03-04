@@ -9,7 +9,7 @@ related: [containers/kubernetes/workloads, containers/kubernetes/scheduling-avan
 official_docs: https://kubernetes.io/docs/concepts/storage/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Kubernetes Storage

@@ -9,7 +9,7 @@ related: [cloud/aws/storage/s3, cloud/aws/security/network-security, cloud/aws/n
 official_docs: https://docs.aws.amazon.com/cloudfront/latest/APIReference/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # CloudFront — CDN Global
@@ -120,7 +120,7 @@ Distribution
 |--------|------|---------------|
 | `AllViewer` | 216adef6... | Passa tutto (headers, cookies, query) |
 | `AllViewerExceptHostHeader` | b689b0a8... | Tutti tranne Host |
-| `CORS-S3Origin` | 88a5eaf4... | CORS headers per S3 |
+| `CORS-S3Origin` | 88a5eaf4... | CORS (Cross-Origin Resource Sharing) headers per S3 |
 
 ---
 
@@ -265,7 +265,7 @@ function handler(event) {
 | Memoria | 2MB | 128MB - 10GB |
 | Accesso a rete | No | Sì |
 | Costo | $0.0000001/invocazione | $0.0000006/invocazione |
-| Use case | Header manipulation, URL rewrite, auth semplice | Auth JWT, A/B test, ISR |
+| Use case | Header manipulation, URL rewrite, auth semplice | Auth JWT, A/B test, ISR (Incremental Static Regeneration) |
 
 ### Lambda@Edge
 

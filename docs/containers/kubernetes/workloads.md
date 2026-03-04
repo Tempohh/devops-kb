@@ -9,14 +9,14 @@ related: [containers/kubernetes/scheduling-avanzato, containers/kubernetes/stora
 official_docs: https://kubernetes.io/docs/concepts/workloads/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Kubernetes Workloads
 
 ## Pod — L'Unità Fondamentale
 
-Il **Pod** è l'oggetto minimo deployabile in Kubernetes. Contiene uno o più container che condividono network namespace, IPC namespace e volumes.
+Il **Pod** è l'oggetto minimo deployabile in Kubernetes. Contiene uno o più container che condividono network namespace, IPC (Inter-Process Communication) namespace e volumes.
 
 ```yaml
 # Pod spec completa con tutti i pattern importanti
@@ -371,7 +371,7 @@ Scale Down: postgres da 3 a 2 pod
 
 ## DaemonSet — Un Pod per Nodo
 
-Il **DaemonSet** garantisce che ogni nodo (o un subset) esegua una copia del Pod. Usato per monitoring agents, log collectors, CNI plugins, storage drivers.
+Il **DaemonSet** garantisce che ogni nodo (o un subset) esegua una copia del Pod. Usato per monitoring agents, log collectors, CNI (Container Network Interface — lo standard di plugin che gestisce la rete dei container) plugins, storage drivers.
 
 ```yaml
 apiVersion: apps/v1

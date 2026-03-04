@@ -9,16 +9,16 @@ related: [networking/fondamentali/http-https, networking/sicurezza/firewall-waf,
 official_docs: https://www.rfc-editor.org/rfc/rfc8446
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # TLS/SSL — Basi
 
 ## Panoramica
 
-TLS (Transport Layer Security) è il protocollo crittografico che garantisce comunicazioni sicure su reti non affidabili. SSL (Secure Sockets Layer) è il predecessore ormai obsoleto: nei contesti attuali "SSL" è usato impropriamente per indicare TLS. TLS opera al layer 4/5, wrappando qualsiasi protocollo applicativo (HTTP, SMTP, LDAP, ecc.) per aggiungere **confidenzialità** (cifratura), **integrità** (HMAC) e **autenticazione** (certificati).
+TLS (Transport Layer Security) è il protocollo crittografico che garantisce comunicazioni sicure su reti non affidabili. SSL (Secure Sockets Layer) è il predecessore ormai obsoleto: nei contesti attuali "SSL" è usato impropriamente per indicare TLS. TLS opera al layer 4/5, wrappando qualsiasi protocollo applicativo (HTTP, SMTP, LDAP, ecc.) per aggiungere **confidenzialità** (cifratura), **integrità** (HMAC — Hash-based Message Authentication Code: codice che verifica che i dati non siano stati alterati in transito) e **autenticazione** (certificati).
 
-TLS 1.3 (RFC 8446, 2018) è la versione corrente: più veloce (1-RTT handshake invece di 2), più sicura (rimozione di cipher suite deboli), e con perfect forward secrecy obbligatorio. TLS 1.0 e 1.1 sono deprecati; TLS 1.2 è ancora accettabile ma TLS 1.3 è da preferire.
+TLS 1.3 (RFC 8446, 2018) è la versione corrente: più veloce (1-RTT — un solo Round-Trip Time per completare l'handshake invece di 2), più sicura (rimozione di cipher suite deboli), e con perfect forward secrecy obbligatorio. TLS 1.0 e 1.1 sono deprecati; TLS 1.2 è ancora accettabile ma TLS 1.3 è da preferire.
 
 ## Concetti Chiave
 
@@ -43,7 +43,7 @@ TLS usa entrambe in fasi distinte:
 
 | Fase | Tipo | Algoritmo (TLS 1.3) | Scopo |
 |------|------|---------------------|-------|
-| Handshake | Asimmetrica | ECDHE + firma RSA/ECDSA | Autenticazione + scambio chiavi |
+| Handshake | Asimmetrica | ECDHE + firma RSA/ECDSA (Elliptic Curve Digital Signature Algorithm) | Autenticazione + scambio chiavi |
 | Dati | Simmetrica | AES-256-GCM, ChaCha20-Poly1305 | Cifratura efficiente del traffico |
 
 !!! note "Perfect Forward Secrecy"
@@ -82,7 +82,7 @@ Client                                    Server
   |══ Dati cifrati (Application Data) ══════|
 ```
 
-In TLS 1.3 il server può inviare dati cifrati già dopo il primo RTT. TLS 1.3 supporta anche **0-RTT** per sessioni riprese (attenzione: vulnerabile a replay attacks).
+In TLS 1.3 il server può inviare dati cifrati già dopo il primo RTT. TLS 1.3 supporta anche **0-RTT** (Zero Round-Trip Time — il client invia dati già nel primo pacchetto usando i parametri di una sessione precedente, senza attendere il completamento dell'handshake; attenzione: vulnerabile a replay attacks).
 
 ### mTLS — Mutual TLS
 
@@ -175,12 +175,12 @@ ssl_session_cache   shared:SSL:10m;
 ssl_session_timeout 1d;
 ssl_session_tickets off;  # Disabilitare per PFS
 
-# OCSP Stapling — il server include lo status del certificato nella risposta
+# OCSP Stapling (OCSP = Online Certificate Status Protocol — protocollo per verificare se un certificato è ancora valido o è stato revocato) — il server include lo status del certificato nella risposta
 ssl_stapling on;
 ssl_stapling_verify on;
 resolver 1.1.1.1 8.8.8.8 valid=300s;
 
-# HSTS
+# HSTS (HTTP Strict Transport Security) — istruisce il browser a usare sempre HTTPS per questo dominio
 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
 ```
 
@@ -223,7 +223,7 @@ server {
 |--------|-------|-----------|
 | `certificate has expired` | Certificato scaduto | Rinnovare con certbot/cert-manager |
 | `certificate verify failed` | CA non fidata, self-signed | Aggiungere CA al trust store |
-| `hostname mismatch` | CN/SAN non corrisponde | Verificare il campo SAN del certificato |
+| `hostname mismatch` | CN/SAN non corrisponde | Verificare il campo SAN (Subject Alternative Name — lista degli hostname per cui il certificato è valido) del certificato |
 | `SSL_ERROR_RX_RECORD_TOO_LONG` | HTTP su porta HTTPS | Verificare che il server parli TLS |
 | `handshake failure` | TLS version/cipher mismatch | Verificare configurazione TLS |
 | `OCSP stapling failed` | Resolver non raggiungibile | Verificare DNS del server |

@@ -9,7 +9,7 @@ related: [cloud/aws/fondamentali/shared-responsibility, cloud/aws/monitoring/clo
 official_docs: https://aws.amazon.com/architecture/well-architected/
 status: complete
 difficulty: beginner
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # AWS Well-Architected Framework
@@ -51,7 +51,7 @@ Well-Architected Framework — 6 Pillars
 > *"Run and monitor systems to deliver business value and continually improve supporting processes and procedures."*
 
 **Principi di design:**
-- **Operations as code** — infrastruttura e procedure come codice (IaC)
+- **Operations as code** — infrastruttura e procedure come codice (IaC — Infrastructure as Code)
 - **Small, frequent, reversible changes** — deploy incrementali, rollback facile
 - **Refine operations procedures frequently** — runbook aggiornati e testati
 - **Anticipate failure** — chaos engineering, test di failure
@@ -61,7 +61,7 @@ Well-Architected Framework — 6 Pillars
 - Usa **CloudFormation/CDK** per infrastruttura come codice
 - Usa **AWS Systems Manager** per gestione operativa (patch, runbook, automazione)
 - Implementa **CloudWatch Dashboards** e allarmi prima del go-live
-- Definisci **KPI** operativi misurabili (MTTR, MTTD, change failure rate)
+- Definisci **KPI** (Key Performance Indicators) operativi misurabili (MTTR, MTTD — Mean Time To Detect, change failure rate)
 - Conduci **Game Days** (simulazioni di failure controllate)
 
 **Servizi AWS rilevanti:** CloudFormation, CDK, Systems Manager, CloudWatch, X-Ray, CodePipeline, Config

@@ -9,7 +9,7 @@ related: [ci-cd/strategie/_index, ci-cd/gitops/argocd, ci-cd/gitops/flux, contai
 official_docs: https://argo-rollouts.readthedocs.io/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-27
+last_updated: 2026-03-03
 ---
 
 # Strategie di Deployment
@@ -102,7 +102,7 @@ spec:
 
 **Rischi con Rolling Update:**
 - **Backward compatibility**: durante il rollout, versione V1 e V2 sono in esecuzione contemporaneamente. Le API devono essere backward-compatible (mai rimuovere field in un singolo deploy).
-- **Database migrations**: le migration devono essere compatibili con entrambe le versioni (expand-contract pattern).
+- **Database migrations**: le migration devono essere compatibili con entrambe le versioni (expand-contract pattern: prima si aggiunge il nuovo schema mantenendo quello vecchio, poi si migrano i dati, poi si rimuove il vecchio schema in un deploy successivo).
 - Se la readinessProbe non è configurata, Kubernetes non sa quando il pod è davvero pronto e può mandare traffico a pod non funzionanti.
 
 ## 3. Blue-Green

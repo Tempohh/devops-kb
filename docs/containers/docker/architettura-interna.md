@@ -9,7 +9,7 @@ related: [containers/container-runtime/_index, containers/docker/sicurezza]
 official_docs: https://docs.docker.com/engine/
 status: complete
 difficulty: expert
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Architettura Interna Docker
@@ -61,7 +61,7 @@ Docker Architecture Stack
   +---------------------------+
               |
               v
-  Linux Kernel (namespaces + cgroups + seccomp)
+  Linux Kernel (namespaces + cgroups + seccomp — secure computing mode: meccanismo kernel che limita le syscall disponibili al container)
 ```
 
 **Perché questo layering?**
@@ -204,7 +204,7 @@ cat /sys/fs/cgroup/system.slice/docker-<id>.scope/memory.pressure
 |---|---|---|
 | **Gerarchia** | Controller separati (cpu, memory, blkio) | Gerarchia unificata |
 | **CPU throttling** | CFS con cpu.cfs_quota_us | cpu.max (quota/period) |
-| **Memory OOM** | Behavior inconsistente | OOM killer migliorato con PSI |
+| **Memory OOM** | Behavior inconsistente | OOM killer migliorato con PSI (OOM = Out Of Memory: il kernel uccide processi quando la memoria è esaurita; PSI = Pressure Stall Information: metriche di pressione su CPU/memoria/I/O) |
 | **I/O accounting** | blkio (solo block) | io (block + filesystem) |
 | **Pressure Stall** | Non disponibile | PSI (cpu/memory/io pressure) |
 | **Support Docker** | Default su sistemi vecchi | Default da Docker 20.10+ |

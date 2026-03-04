@@ -9,7 +9,7 @@ related: [networking/load-balancing/algoritmi, networking/load-balancing/ha-e-fa
 official_docs: https://nginx.org/en/docs/stream/ngx_stream_core_module.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # Layer 4 vs Layer 7 Load Balancing
@@ -45,7 +45,7 @@ I load balancer operano a livelli diversi dello stack OSI, con implicazioni fond
 - **Routing basato su contenuto**: `/api/` → servizio API, `/static/` → CDN, `/ws/` → WebSocket server
 - **Microservizi**: ogni servizio ha il suo hostname o path prefix
 - **A/B testing e canary**: percentuale del traffico verso versioni diverse
-- **WAF e sicurezza**: ispezione del payload, protezione da attacchi HTTP
+- **WAF (Web Application Firewall) e sicurezza**: ispezione del payload, protezione da attacchi HTTP
 - **Caching**: il LB può cacheare risposte HTTP
 
 ## Architettura / Come Funziona

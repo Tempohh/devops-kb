@@ -3,13 +3,13 @@ title: "Jenkins Pipeline — Fondamentali"
 slug: jenkins-pipeline-fundamentals
 category: ci-cd
 tags: [jenkins, pipeline, declarative, scripted, groovy, stages, parallel, matrix, cps, jenkinsfile]
-search_keywords: [Jenkins Declarative Pipeline, Jenkins Scripted Pipeline, Jenkinsfile, Groovy pipeline, stages Jenkins, parallel stages Jenkins, matrix pipeline, CPS Continuation Passing Style, @NonCPS Jenkins, stash unstash Jenkins, input step Jenkins, post conditions Jenkins, when directive Jenkins, pipeline options, environment variables Jenkins, withCredentials, timeout retry]
+search_keywords: [Jenkins Declarative Pipeline, Jenkins Scripted Pipeline, Jenkinsfile, Groovy pipeline, stages Jenkins, parallel stages Jenkins, matrix pipeline, CPS Continuation Passing Style, "@NonCPS Jenkins", stash unstash Jenkins, input step Jenkins, post conditions Jenkins, when directive Jenkins, pipeline options, environment variables Jenkins, withCredentials, timeout retry]
 parent: ci-cd/jenkins/_index
 related: [ci-cd/jenkins/shared-libraries, ci-cd/jenkins/agent-infrastructure, ci-cd/jenkins/enterprise-patterns]
 official_docs: https://www.jenkins.io/doc/book/pipeline/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-03-03
 ---
 
 # Jenkins Pipeline — Fondamentali

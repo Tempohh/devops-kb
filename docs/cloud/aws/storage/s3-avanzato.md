@@ -9,7 +9,7 @@ related: [cloud/aws/storage/s3, cloud/aws/security/kms-secrets, cloud/aws/securi
 official_docs: https://docs.aws.amazon.com/s3/latest/userguide/security.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Amazon S3 — Sicurezza e Funzionalità Avanzate

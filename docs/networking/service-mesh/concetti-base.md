@@ -9,14 +9,14 @@ related: [networking/service-mesh/istio, networking/service-mesh/envoy, networki
 official_docs: https://istio.io/latest/docs/concepts/what-is-istio/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # Service Mesh — Concetti Base
 
 ## Panoramica
 
-In un'architettura a microservizi, ogni servizio deve gestire retry, timeout, circuit breaking, mTLS e distributed tracing. Implementare queste logiche in ogni singolo servizio — potenzialmente scritto in linguaggi diversi — e' costoso, error-prone e difficile da manutenere uniformemente.
+In un'architettura a microservizi, ogni servizio deve gestire retry, timeout, **circuit breaking** (meccanismo che interrompe le chiamate a un servizio degradato per evitare effetti a cascata — come un interruttore elettrico), mTLS (mutual TLS) e distributed tracing. Implementare queste logiche in ogni singolo servizio — potenzialmente scritto in linguaggi diversi — e' costoso, error-prone e difficile da manutenere uniformemente.
 
 Un **service mesh** risolve questo problema spostando tutta la logica di comunicazione fuori dall'applicazione, in un proxy dedicato (il **sidecar**) affiancato a ogni istanza di servizio. Il sidecar intercetta tutto il traffico in ingresso e uscita, applicando le politiche configurate centralmente. Il codice applicativo parla con `localhost` come se non ci fosse nulla in mezzo; il service mesh fa il resto in modo trasparente.
 
@@ -26,7 +26,7 @@ Un **service mesh** risolve questo problema spostando tutta la logica di comunic
     L'insieme di tutti i **sidecar proxy** in esecuzione affiancati ai servizi. Intercettano e gestiscono ogni singolo pacchetto di traffico. Implementano: routing, load balancing, health checking, mTLS, retry, timeout, circuit breaking, metrics collection, distributed tracing. Il proxy piu' utilizzato e' **Envoy**.
 
 !!! note "Control Plane"
-    Il cervello del service mesh. Configura dinamicamente il data plane tramite API (tipicamente xDS). Gestisce: distribuzione dei certificati mTLS, policy di routing, service discovery, configurazione dei proxy. Non tocca il traffico applicativo — lavora solo su configurazione e certificati. Esempi: **istiod** (Istio), **destination** (Linkerd).
+    Il cervello del service mesh. Configura dinamicamente il data plane tramite API (tipicamente **xDS** — il protocollo di discovery di Envoy: Listeners, Routes, Clusters, Endpoints inviati in streaming al proxy). Gestisce: distribuzione dei certificati mTLS, policy di routing, service discovery, configurazione dei proxy. Non tocca il traffico applicativo — lavora solo su configurazione e certificati. Esempi: **istiod** (Istio), **destination** (Linkerd).
 
 !!! note "East-West Traffic"
     Il traffico **service-to-service** all'interno del cluster (orizzontale). E' il dominio primario del service mesh. Esempio: `payment-service` chiama `inventory-service`.
@@ -86,7 +86,7 @@ graph TB
 
 ### Sidecar Injection
 
-Il sidecar proxy viene iniettato automaticamente nei Pod tramite un **Mutating Admission Webhook**. Quando un Pod viene creato in un namespace con la label `istio-injection: enabled` (o equivalente), il control plane intercetta la richiesta all'API Server e modifica la specifica del Pod per aggiungere il container sidecar e un init container.
+Il sidecar proxy viene iniettato automaticamente nei Pod tramite un **Mutating Admission Webhook** — un'estensione dell'API Kubernetes che intercetta le richieste di creazione degli oggetti e può modificarli prima che vengano salvati in etcd. Quando un Pod viene creato in un namespace con la label `istio-injection: enabled` (o equivalente), il control plane intercetta la richiesta all'API Server e modifica la specifica del Pod per aggiungere il container sidecar e un init container.
 
 ```yaml
 # Abilitare sidecar injection su un namespace
@@ -104,7 +104,7 @@ L'init container configura regole **iptables** che reindirizzano tutto il traffi
 
 ### Rotazione certificati mTLS
 
-Il control plane agisce da **Certificate Authority (CA)**. Ad ogni sidecar viene emesso un certificato SVID (SPIFFE Verifiable Identity Document) con identita' basata sul service account Kubernetes. I certificati vengono ruotati automaticamente (tipicamente ogni 24h) senza downtime.
+Il control plane agisce da **Certificate Authority (CA)**. Ad ogni sidecar viene emesso un certificato **SVID** (SPIFFE Verifiable Identity Document) con identità basata sul service account Kubernetes. **SPIFFE** (Secure Production Identity Framework for Everyone) è lo standard open per assegnare identità crittografiche ai workload in ambienti distribuiti, indipendentemente dall'infrastruttura sottostante. I certificati vengono ruotati automaticamente (tipicamente ogni 24h) senza downtime.
 
 ## Service Mesh vs API Gateway
 
@@ -223,7 +223,7 @@ kubectl exec <pod-name> -c istio-proxy -- curl -s localhost:15000/stats | grep "
 ??? info "API Gateway Pattern — Approfondimento"
     Per capire come service mesh e API gateway si complementano nella gestione del traffico north-south e east-west.
 
-    **Approfondimento completo →** [Pattern API Gateway](../api-gateway/pattern.md)
+    **Approfondimento completo →** [Pattern API Gateway](../api-gateway/pattern-base.md)
 
 ## Riferimenti
 

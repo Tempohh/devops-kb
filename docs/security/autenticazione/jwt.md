@@ -9,7 +9,7 @@ related: [security/autenticazione/oauth2-oidc, security/pki-certificati/pki-inte
 official_docs: https://jwt.io/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # JWT — JSON Web Token
@@ -49,7 +49,7 @@ eyJzdWIiOiJ1c2VyLTEyMyIsImlzcyI6Imh0dHBzOi8vaWRwLmV4YW1wbGUuY29tIiwiYXVkIjoiaHR0
 }
 ```
 
-Il `kid` è fondamentale per la **key rotation**: quando l'IdP ruota le chiavi di firma, emette nuovi JWT con un nuovo `kid`. Il resource server recupera le JWKS e trova la chiave corrispondente — zero downtime durante la rotazione.
+Il `kid` è fondamentale per la **key rotation**: quando l'IdP (Identity Provider — il sistema che autentica gli utenti ed emette i token) ruota le chiavi di firma, emette nuovi JWT con un nuovo `kid`. Il resource server recupera le JWKS (JSON Web Key Set — il documento pubblico che contiene le chiavi di firma del provider) e trova la chiave corrispondente — zero downtime durante la rotazione.
 
 ### Payload — I Claims
 
@@ -289,7 +289,7 @@ La revoca è il punto debole dei JWT. Quattro strategie, ordinate per complessit
    IdP mantiene una lista di jti revocati (in Redis con TTL = exp - now)
    Il resource server consulta Redis per ogni richiesta
    Pro: revoca immediata
-   Contro: latenza + Redis diventa un SPOF + dataset cresce con i token attivi
+   Contro: latenza + Redis diventa un SPOF (Single Point of Failure — nodo la cui interruzione causa un'interruzione del servizio intero) + dataset cresce con i token attivi
    Uso: solo per scenari critici (logout forzato, account compromesso)
 
 4. Token Introspection (RFC 7662)
@@ -340,7 +340,7 @@ JWE = header . encrypted_key . iv . ciphertext . tag
 
 **Quando usare JWE:**
 - Il token passa attraverso sistemi non fidati (es. in un URL parameter → NO, ma se obbligato)
-- Il payload contiene informazioni riservate che non devono essere visibili (es. informazioni mediche in contesti HIPAA)
+- Il payload contiene informazioni riservate che non devono essere visibili (es. informazioni mediche in contesti HIPAA — Health Insurance Portability and Accountability Act, normativa USA sulla privacy dei dati sanitari)
 - In genere: preferire **non mettere dati sensibili nel JWT** invece di cifrarlo — più semplice e meno rischi
 
 ---

@@ -9,14 +9,14 @@ related: [networking/fondamentali/modello-osi, networking/fondamentali/indirizzi
 official_docs: https://www.ietf.org/
 status: complete
 difficulty: beginner
-last_updated: 2026-02-24
+last_updated: 2026-03-03
 ---
 
 # Stack TCP/IP
 
 ## Panoramica
 
-Lo stack TCP/IP (Internet Protocol Suite) è la suite di protocolli su cui è costruita l'intera internet e la stragrande maggioranza delle reti moderne. Nato negli anni '70 all'interno del progetto ARPANET della DARPA, è stato formalizzato nell'RFC 1122 (1989) e ha sostituito nella pratica il modello OSI come implementazione di riferimento. A differenza di OSI — un modello teorico a 7 livelli — TCP/IP è un modello pratico a 4 livelli nato dall'esperienza reale: prima sono stati scritti i protocolli, poi il modello che li descriveva. Oggi è impossibile lavorare in DevOps senza comprendere come IP, TCP, UDP e i protocolli applicativi interagiscono tra loro.
+Lo stack TCP/IP (Internet Protocol Suite) è la suite di protocolli su cui è costruita l'intera internet e la stragrande maggioranza delle reti moderne. Nato negli anni '70 all'interno del progetto ARPANET della DARPA (Defense Advanced Research Projects Agency), è stato formalizzato nell'RFC 1122 (1989) e ha sostituito nella pratica il modello OSI come implementazione di riferimento. A differenza di OSI — un modello teorico a 7 livelli — TCP/IP è un modello pratico a 4 livelli nato dall'esperienza reale: prima sono stati scritti i protocolli, poi il modello che li descriveva. Oggi è impossibile lavorare in DevOps senza comprendere come IP, TCP, UDP e i protocolli applicativi interagiscono tra loro.
 
 ## Concetti Chiave
 
@@ -36,7 +36,7 @@ Lo stack TCP/IP (Internet Protocol Suite) è la suite di protocolli su cui è co
 | **Connessione** | Connection-oriented (three-way handshake) | Connectionless |
 | **Affidabilità** | Garantita (ACK, retransmit, reorder) | Non garantita (best-effort) |
 | **Ordine** | Garantito (numeri di sequenza) | Non garantito |
-| **Controllo flusso** | Si (sliding window) | No |
+| **Controllo flusso** | Sì — sliding window: il mittente può inviare più segmenti senza attendere un ACK per ciascuno, finché non supera la dimensione della finestra | No |
 | **Overhead** | Alto (header 20 byte minimo) | Basso (header 8 byte fisso) |
 | **Latenza** | Maggiore | Minore |
 | **Uso tipico** | HTTP, SSH, database, file transfer | DNS, streaming, VoIP, gaming, DHCP |
@@ -105,7 +105,7 @@ I campi chiave dell'header IPv4 (20 byte minimo):
 |---|---|---|
 | Version | 4 bit | 4 per IPv4 |
 | IHL | 4 bit | Internet Header Length (in parole da 32 bit) |
-| DSCP/ECN | 8 bit | Quality of Service, Explicit Congestion Notification |
+| DSCP (Differentiated Services Code Point)/ECN | 8 bit | Quality of Service, Explicit Congestion Notification |
 | Total Length | 16 bit | Lunghezza totale del pacchetto (header + dati), max 65535 byte |
 | TTL | 8 bit | Time To Live; decrementato di 1 a ogni hop; a 0 il pacchetto viene scartato (ICMP Time Exceeded) |
 | Protocol | 8 bit | Protocollo del layer superiore: 6=TCP, 17=UDP, 1=ICMP |
@@ -128,7 +128,7 @@ ip route get 8.8.8.8  # Quale route usa il sistema per raggiungere 8.8.8.8?
 
 # Testare connettività L3 (ICMP)
 ping -c 4 8.8.8.8
-ping -c 4 -s 1472 8.8.8.8  # Test con pacchetti grandi (MTU discovery)
+ping -c 4 -s 1472 8.8.8.8  # Test con pacchetti grandi (MTU discovery — MTU = Maximum Transmission Unit, dimensione massima del pacchetto trasmissibile sul mezzo)
 
 # Tracciare il percorso dei pacchetti (TTL incrementale)
 traceroute 8.8.8.8
@@ -170,10 +170,10 @@ tcpdump -i eth0 'host example.com and port 80' -n
 
 ## Best Practices
 
-- **Comprendi i numeri di porta**: porte < 1024 sono privilegiate (richiedono root). Le porte 1024-49151 sono registrate (IANA). Le porte 49152-65535 sono ephemeral (usate dai client per le connessioni uscenti).
-- **Monitora lo stato TCP**: `ss -s` mostra il conteggio delle connessioni per stato (ESTABLISHED, TIME_WAIT, CLOSE_WAIT). Un accumulo anomalo di TIME_WAIT o CLOSE_WAIT indica problemi nell'applicazione.
+- **Comprendi i numeri di porta**: porte < 1024 sono privilegiate (richiedono root). Le porte 1024-49151 sono registrate (IANA — Internet Assigned Numbers Authority, l'ente che gestisce l'assegnazione globale di indirizzi IP, numeri AS e numeri di porta). Le porte 49152-65535 sono ephemeral (usate dai client per le connessioni uscenti).
+- **Monitora lo stato TCP**: `ss -s` mostra il conteggio delle connessioni per stato (ESTABLISHED, TIME_WAIT, CLOSE_WAIT). **TIME_WAIT** è lo stato post-chiusura in cui il sistema attende che eventuali pacchetti in ritardo vengano ricevuti (dura 2×MSL, tipicamente 60s). **CLOSE_WAIT** indica che il lato remoto ha chiuso ma la connessione locale non è ancora stata chiusa dall'applicazione. Un accumulo anomalo di entrambi indica problemi nell'applicazione.
 - **Attenzione al TTL**: il TTL IP serve anche per diagnosticare. Un TTL di 64 suggerisce Linux, 128 Windows, 255 dispositivi di rete. Il numero di hop si calcola come `TTL_iniziale - TTL_ricevuto`.
-- **MTU e frammentazione**: la MTU standard Ethernet è 1500 byte. VPN e tunneling riducono l'MTU effettiva. Usa `ping -M do -s 1472` per verificare la MTU path (1472 + 28 header IP/ICMP = 1500).
+- **MTU e frammentazione**: la MTU (Maximum Transmission Unit — dimensione massima del frame trasmissibile sul mezzo) standard Ethernet è 1500 byte. VPN e tunneling riducono l'MTU effettiva. Usa `ping -M do -s 1472` per verificare la MTU path (1472 + 28 header IP/ICMP = 1500).
 
 ## Troubleshooting
 

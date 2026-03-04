@@ -9,12 +9,12 @@ related: [cloud/aws/networking/vpc, cloud/aws/networking/cloudfront, cloud/aws/c
 official_docs: https://docs.aws.amazon.com/route53/latest/developerguide/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-03-03
 ---
 
 # Route 53 — DNS Managed
 
-**Route 53** è il servizio DNS managed di AWS — global, altamente disponibile (SLA 100%), scalabile.
+**Route 53** è il servizio DNS managed di AWS — global, altamente disponibile (SLA — Service Level Agreement — al 100%), scalabile.
 
 !!! note "Il nome"
     "Route 53" si riferisce alla porta 53, la porta standard del DNS.
@@ -61,7 +61,7 @@ aws route53 associate-vpc-with-hosted-zone \
 | **AAAA** | IPv6 address | `api.company.com → 2001:db8::1` |
 | **CNAME** | Alias a un altro hostname (no root domain) | `www.company.com → company.com` |
 | **MX** | Mail exchange | Priority + hostname |
-| **TXT** | Testo (SPF, DKIM, verifica dominio) | `v=spf1 include:...` |
+| **TXT** | Testo (SPF — Sender Policy Framework, DKIM — DomainKeys Identified Mail — verifica dominio) | `v=spf1 include:...` |
 | **NS** | Nameserver della hosted zone | |
 | **SOA** | Start of Authority | |
 | **SRV** | Service record | `_http._tcp.example.com` |
