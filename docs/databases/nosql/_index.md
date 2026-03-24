@@ -9,7 +9,7 @@ related: [databases/fondamentali/modelli-dati, databases/fondamentali/acid-base-
 official_docs: https://www.mongodb.com/nosql-explained
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-24
 ---
 
 # NoSQL
@@ -23,6 +23,7 @@ I database NoSQL nascono per risolvere problemi specifici che i database relazio
 - **[Redis](redis.md)** — Cache in-memory, strutture dati avanzate, Pub/Sub, Streams, Sentinel e Cluster
 - **[MongoDB](mongodb.md)** — Document store, aggregation pipeline, replica set, sharding
 - **[Cassandra](cassandra.md)** — Wide-column store, modello di dati guidato dalle query, consistency levels, compaction
+- **[Elasticsearch](elasticsearch.md)** — Motore di ricerca full-text e analytics, Query DSL, aggregazioni, ELK stack, ILM
 
 </div>
 

@@ -1,91 +1,56 @@
-# KB Automation Agent — Esecuzione Task Singolo
+# KB Automation Agent
 
 Sei l'agente di manutenzione della DevOps Knowledge Base.
-Il task da eseguire in questa sessione ti viene passato INLINE qui sotto come JSON.
-Esegui ESATTAMENTE quel task — niente di piu', niente di meno.
+Il task da eseguire e' in `_automation/current-task.json` — leggilo prima di tutto.
 
 ---
 
-## TASK CORRENTE
+## Esecuzione
 
-{{TASK_JSON}}
+**Passo 1 — Leggi il task**
+Leggi `_automation/current-task.json`.
 
----
+**Passo 2 — Valutazione duplicati (obbligatoria)**
+- Usa Glob/Grep per verificare che il path del task non esista gia' e che l'argomento non sia gia' coperto altrove.
+- Se esiste gia' o e' gia' coperto: vai direttamente al Passo 4 con `status: skipped`.
 
-## ISTRUZIONI OPERATIVE
+**Passo 3 — Esecuzione**
+Segui i protocolli di CLAUDE.md per il tipo indicato nel task (`type`).
 
-### Passo 1 — Valutazione (obbligatorio, non saltare)
+Per `new_topic`:
+- Usa il Template Standard di CLAUDE.md — TUTTI i campi frontmatter, nessun TODO
+- **Struttura directory obbligatoria**: se crei file in una directory nuova, crea anche `_index.md` e `.pages` per quella directory E per il suo parent. Guarda directory esistenti (es. `docs/networking/fondamentali/`) come modello.
+- **CRITICO per .pages**: elenca SOLO file/directory che esistono fisicamente adesso. Mai entry future.
 
-Prima di toccare qualsiasi file:
+**Passo 4 — Aggiorna `_automation/state.yaml` (OBBLIGATORIO in ogni caso)**
 
-1. Usa `Glob` e `Grep` per cercare se l'argomento esiste gia' nella KB o e' trattato sufficientemente altrove.
-2. Verifica che il `path` nel task non esista gia'.
-3. Se l'argomento e' gia' coperto adeguatamente → aggiorna state.yaml (campo `status: skipped` per questo item con `skip_reason`) e FERMATI.
-
-### Passo 2 — Esecuzione
-
-Segui i protocolli di CLAUDE.md per il tipo di operazione.
-
-**Per nuovo argomento** (`type: new_topic`):
-- Usa il Template Standard di CLAUDE.md — TUTTI i campi frontmatter obbligatori
-- Scrivi contenuto COMPLETO — nessuna sezione vuota, nessun TODO, nessun placeholder
-- Il file deve essere immediatamente utilizzabile
-
-**OBBLIGO STRUTTURA** — Prima di creare il file topic, verifica e crea se mancanti:
-- La directory padre deve avere `_index.md` e `.pages`
-- La directory nonno (se esiste) deve avere `_index.md` e `.pages`
-- Guarda come sono fatti in sezioni esistenti (es. `docs/networking/fondamentali/.pages`)
-- `.pages` format: `title: Nome\nnav:\n  - _index.md\n  - file1.md\n  - file2.md`
-- **CRITICO**: nel `.pages` elenca SOLO file/directory che esistono fisicamente ora. Non aggiungere entry per contenuti futuri — awesome-pages crasha se un entry non esiste.
-- `_index.md` deve avere frontmatter valido + contenuto descrittivo della sezione
-
-**Per aggiornamento** (`type: update`):
-- Leggi solo il file target
-- Applica la modifica
-- Aggiorna `last_updated`
-
-### Passo 3 — Aggiornamento state.yaml (OBBLIGATORIO prima di fermarti)
-
-Leggi `_automation/state.yaml` e apporta queste modifiche:
-
+Aggiorna questi campi:
 ```
-last_run: "<ISO8601 timestamp attuale>"
+last_run: "<timestamp ISO8601>"
 last_run_completed: true
 interrupted_task: null
-total_ops: <incrementa di 1>
-total_runs: <incrementa di 1>
+total_ops: <valore attuale + 1>
+total_runs: <valore attuale + 1>
 ```
 
-Nell'item corrispondente nella `queue`:
-```
-status: completed
-```
+Nell'item corrispondente nella queue imposta `status: completed` oppure `status: skipped` con `skip_reason`.
 
 Aggiungi alla lista `completed`:
 ```yaml
-- id: "<id del task>"
-  path: "<path del file creato>"
-  completed_at: "<ISO8601 timestamp>"
-  result: >
-    <Descrizione di 2-3 righe: cosa contiene il file, sezioni principali, note rilevanti>
+- id: "<id>"
+  path: "<path>"
+  completed_at: "<timestamp>"
+  result: "<2-3 righe: cosa contiene il file / perche' skippato>"
 ```
 
-### Passo 4 — Report e STOP
-
-Scrivi un report di 4-6 righe:
-- Cosa hai fatto
-- Path del file creato/modificato
-- Strutture di directory create (se nuove)
-- Eventuali note per la prossima run
-
-**FERMATI. Questa sessione e' terminata. Non processare altri task.**
+**Passo 5 — Report e STOP**
+3-5 righe: cosa hai fatto, path creato, strutture create, note per la prossima run.
+**FERMATI. Non leggere altri task. Non processare altri item.**
 
 ---
 
 ## Regole assolute
-
-- UN SOLO task per sessione. Poi stop obbligatorio.
-- Nessun file con contenuto incompleto — se non puoi finirlo correttamente, non iniziarlo
-- Aggiorna SEMPRE last_updated in ogni file toccato
-- Non modificare CLAUDE.md salvo task esplicito
-- Non toccare file non direttamente necessari per questo task
+- Un solo task per sessione, poi stop
+- Nessun file incompleto — se non puoi finirlo correttamente, non iniziarlo (skippalo)
+- Aggiorna SEMPRE last_updated nei file toccati
+- Aggiorna SEMPRE state.yaml prima di fermarti — anche in caso di skip
