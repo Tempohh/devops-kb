@@ -6,7 +6,7 @@ tags: [load-balancing, alta-disponibilità, distribuzione-traffico, reverse-prox
 parent: networking
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # Load Balancing
@@ -30,6 +30,21 @@ I principali algoritmi: Round Robin, Least Connections, IP Hash, Random, Weighte
 
 ### [Alta Disponibilità e Failover](ha-e-failover.md)
 Eliminare il load balancer come single point of failure: active-passive con VRRP/Keepalived, active-active, health check attivi e passivi, graceful draining. Configurazioni di HA per Nginx e HAProxy in produzione.
+
+## Quale Scegliere
+
+La scelta del load balancer dipende dal layer di operazione richiesto, dall'ambiente (cloud vs on-premise) e dalla complessità di gestione accettabile.
+
+| Scenario | Strumento | Motivo |
+|----------|-----------|--------|
+| Reverse proxy HTTP/HTTPS general purpose, alta performance | **Nginx** | Ampiamente diffuso, configurazione semplice, ottimo come LB L7 e API gateway leggero |
+| Load balancing avanzato, health check attivi, statistiche dettagliate | **HAProxy** | Configurazione potente, stats dashboard nativa, eccellente per TCP e HTTP ad alta frequenza |
+| Cloud AWS, integrazione nativa con ECS/EKS/Lambda | **AWS ALB (L7) / NLB (L4)** | Managed service, auto-scaling, integrazione con WAF e ACM per certificati |
+| Kubernetes, esposizione servizi HTTP | **Ingress Controller** (Nginx, Traefik, HAProxy) | Il load balancing in Kubernetes è gestito dall'Ingress Controller scelto |
+| Alta disponibilità del load balancer stesso | **Keepalived + VRRP** | Virtual IP flottante tra due istanze LB, failover automatico in <3s |
+
+!!! tip "Punto di partenza consigliato"
+    Su cloud pubblico usa i **managed LB del provider** (AWS ALB/NLB, Azure LB, GCP Load Balancer). On-premise o in ambienti ibridi, **HAProxy** per casi avanzati o **Nginx** per la maggior parte dei casi generali.
 
 ## Relazioni con altri Argomenti
 

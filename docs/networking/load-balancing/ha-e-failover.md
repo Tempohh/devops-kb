@@ -9,7 +9,7 @@ related: [networking/load-balancing/layer4-vs-layer7, networking/load-balancing/
 official_docs: https://www.keepalived.org/manpage.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # Alta Disponibilità e Failover
@@ -17,6 +17,15 @@ last_updated: 2026-02-24
 ## Panoramica
 
 Un load balancer risolve la disponibilità dei backend, ma se il load balancer stesso cade, l'intera infrastruttura è irraggiungibile — diventa un **Single Point of Failure**. L'alta disponibilità (HA) del load balancer richiede ridondanza: almeno due istanze del LB operative, con un meccanismo per trasferire il traffico dalla primaria alla secondaria in caso di guasto. Le tecniche principali sono **active-passive** (una istanza attiva, una in standby) e **active-active** (entrambe attive con distribuzione del carico).
+
+## Prerequisiti
+
+Questo argomento presuppone familiarità con:
+- [Layer 4 vs Layer 7](layer4-vs-layer7.md) — capire la differenza tra LB L4 e L7 è necessario per scegliere la strategia HA corretta
+- [Algoritmi di Load Balancing](algoritmi.md) — gli algoritmi di load balancing determinano come il traffico è distribuito tra i backend in HA
+- [TCP/IP](../fondamentali/tcpip.md) — VRRP e keepalived operano a livello di rete: capire IP e ARP aiuta a comprendere il VIP failover
+
+Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
 
 ## Concetti Chiave
 

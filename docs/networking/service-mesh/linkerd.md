@@ -9,7 +9,7 @@ related: [networking/service-mesh/istio, networking/service-mesh/concetti-base, 
 official_docs: https://linkerd.io/2.x/overview/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # Linkerd
@@ -19,6 +19,14 @@ last_updated: 2026-02-24
 Linkerd è un service mesh per Kubernetes, sviluppato da Buoyant e progetto CNCF graduated. Si distingue da Istio per la filosofia **operativa**: minimalismo, facilità di installazione e un proxy scritto in **Rust** (linkerd-proxy) ultra-leggero e performante, a differenza di Envoy usato da Istio. Linkerd si concentra sul fare bene le cose essenziali: **mTLS automatico**, **osservabilità dei golden signals** (latency, success rate, requests/sec) e **reliability features** (retry, timeout, circuit breaking) — senza la complessità e i CRD di Istio.
 
 Linkerd è ideale quando si vuole ottenere sicurezza mTLS e osservabilità di base senza un overhead operativo elevato. Istio è da preferire quando si ha bisogno di traffico management avanzato (canary, mirroring, fault injection configurabile via CRD), WebAssembly extensibility, o integrazione con ecosistemi non-Kubernetes.
+
+## Prerequisiti
+
+Questo argomento presuppone familiarità con:
+- [Service Mesh — Concetti Base](concetti-base.md) — sidecar pattern, data plane, control plane, mTLS
+- [TLS/SSL Basics](../fondamentali/tls-ssl-basics.md) — mTLS automatico è il punto di forza di Linkerd
+
+Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
 
 ## Concetti Chiave
 

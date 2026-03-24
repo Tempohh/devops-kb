@@ -9,7 +9,7 @@ related: [networking/kubernetes/cni, networking/kubernetes/ingress, networking/s
 official_docs: https://kubernetes.io/docs/concepts/services-networking/network-policies/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # Network Policies
@@ -20,6 +20,15 @@ Le Kubernetes Network Policies sono regole di firewall a livello di pod che cont
 
 !!! warning "Dipendenza dal CNI"
     Le Network Policies sono **definite** tramite risorse Kubernetes, ma **implementate** dal CNI plugin. Calico, Cilium e Weave supportano NetworkPolicy. **Flannel non le supporta** — installare Calico o Cilium se si ha bisogno di Network Policy enforcement.
+
+## Prerequisiti
+
+Questo argomento presuppone familiarità con:
+- [CNI — Container Network Interface](cni.md) — le Network Policies sono definite in Kubernetes ma implementate dal CNI plugin (Flannel non le supporta)
+- [Indirizzi IP e Subnetting](../fondamentali/indirizzi-ip-subnetting.md) — CIDR notation per ipBlock rules
+- Kubernetes labels e selectors — le NetworkPolicy selezionano pod tramite matchLabels (documentazione non ancora presente in questa KB)
+
+Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
 
 ## Concetti Chiave
 

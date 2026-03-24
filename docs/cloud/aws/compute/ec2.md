@@ -9,12 +9,25 @@ related: [cloud/aws/compute/ec2-autoscaling, cloud/aws/storage/ebs-efs-fsx, clou
 official_docs: https://docs.aws.amazon.com/ec2/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-09
 ---
 
 # EC2 — Elastic Compute Cloud
 
-**EC2** fornisce capacità di calcolo ridimensionabile nel cloud — macchine virtuali (istanze) con scelta di CPU, memoria, storage e networking.
+**EC2** (Elastic Compute Cloud) fornisce macchine virtuali nel cloud con pieno controllo sull'OS, sul networking e sullo storage. È il servizio IaaS (Infrastructure as a Service) fondamentale di AWS: offre la massima flessibilità, ma richiede anche la maggiore responsabilità operativa — il cliente gestisce il sistema operativo, le patch, il middleware e l'applicazione.
+
+**Quando scegliere EC2:**
+- Hai bisogno di accesso root all'OS o di configurazioni specifiche di sistema
+- L'applicazione ha requisiti di stato persistente in memoria o su disco locale
+- Stai eseguendo software che richiede licenze BYOL (Bring Your Own License)
+- Il workload gira H24 con carico relativamente costante (EC2 On-Demand o Reserved è più economico di Lambda in questi casi)
+- Hai bisogno di tipi di istanza specializzati (GPU, FPGA, alta memoria)
+
+**Quando valutare alternative:**
+- Workload event-driven o intermittente → **Lambda** (nessun server da gestire)
+- Container senza voler gestire cluster → **Fargate** (serverless containers)
+- Applicazione containerizzata con orchestrazione → **EKS** o **ECS**
+- Database → servizi gestiti come **RDS** o **Aurora** (AWS gestisce OS e patch del DB)
 
 ---
 
@@ -52,11 +65,7 @@ Additional characters:
 
 **Graviton (ARM):** istanze `g` (m6g, c7g, r7g) — 20-40% prezzo/performance migliore vs x86 equivalente. Raccomandato per nuovi workloads.
 
-**Burstable (T instances):** t3, t3a, t4g usano **CPU Credits**.
-- Si accumulano crediti quando CPU < baseline
-- Si consumano crediti quando CPU > baseline
-- `unlimited` mode: può fare burst anche con crediti esauriti (a pagamento)
-- Ideali per workload con utilizzo medio basso ma spike occasionali
+**Burstable (T instances):** le istanze t3, t3a e t4g usano un sistema di **CPU Credits**. L'idea è che l'istanza ha una "baseline" di utilizzo CPU garantita (es. 20% per t3.small). Quando la CPU è sotto questa baseline, si accumulano crediti; quando si supera, si consumano. Questo le rende economiche per workload con utilizzo medio basso ma con spike occasionali (es. un server di sviluppo, un sito con traffico variabile). Con la modalità `unlimited`, l'istanza può fare burst illimitato anche a crediti esauriti, ma si paga il surplus — da monitorare per evitare sorprese in fattura.
 
 ---
 
@@ -138,7 +147,9 @@ aws ec2 run-instances \
 
 ## User Data
 
-Lo **User Data** è uno script eseguito **una sola volta** al primo avvio dell'istanza.
+Lo **User Data** è uno script eseguito **una sola volta** al primo avvio dell'istanza, prima che diventi disponibile. È il meccanismo per automatizzare la configurazione iniziale: installare pacchetti, avviare servizi, scaricare il codice applicativo. Lo script gira come root, quindi ha pieno controllo sul sistema.
+
+Un'alternativa moderna e più scalabile allo User Data è **AWS Systems Manager (SSM)**: permette di gestire la configurazione delle istanze in modo centralizzato e di eseguire comandi su flotte di istanze senza SSH. Lo User Data rimane utile per bootstrap semplici; per configurazioni complesse si preferisce SSM oppure strumenti di configuration management come Ansible o Chef.
 
 ```bash
 #!/bin/bash
@@ -217,7 +228,7 @@ IDENTITY=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" \
 
 ## Placement Groups
 
-I **Placement Groups** controllano dove vengono fisicamente collocate le istanze.
+I **Placement Groups** controllano dove vengono fisicamente collocate le istanze all'interno dell'infrastruttura AWS. Di default, AWS distribuisce le istanze per minimizzare il rischio di guasti correlati. Con i Placement Groups puoi sovrascrivere questo comportamento per ottimizzare in base alle esigenze del tuo workload — massima bandwidth (cluster), massima disponibilità (spread), o un compromesso per sistemi distribuiti come Kafka (partition).
 
 | Tipo | Posizionamento | Use case | Note |
 |------|-------------|----------|------|
@@ -267,6 +278,10 @@ aws ec2 describe-instance-types \
 ---
 
 ## Key Pairs e Accesso Sicuro
+
+Il metodo tradizionale per accedere alle istanze EC2 è tramite **SSH con key pair**: si genera una coppia di chiavi asimmetriche, la chiave pubblica viene caricata sull'istanza al lancio, e si usa la chiave privata per autenticarsi. È un approccio funzionante ma con limitazioni operative: richiede che la porta 22 sia aperta nei Security Group, che la chiave privata sia distribuita ai collaboratori in modo sicuro, e che le istanze siano raggiungibili via rete.
+
+I due metodi alternativi moderni — **Session Manager** e **EC2 Instance Connect** — eliminano questi problemi: non richiedono porte SSH aperte, funzionano anche su istanze senza IP pubblico, e ogni accesso viene loggato su CloudTrail.
 
 ```bash
 # Creare key pair
@@ -321,7 +336,9 @@ ssh ec2-user@<PUBLIC_IP>    # Valido per 60 secondi
 
 ## Hibernate
 
-**EC2 Hibernate** salva il contenuto della RAM su EBS e spegne l'istanza (simile a sleep del laptop).
+**EC2 Hibernate** salva il contenuto della RAM su EBS e spegne l'istanza, in modo analogo alla funzione "sleep" di un laptop. Al prossimo avvio, l'istanza ripristina lo stato in memoria e l'applicazione riprende da dove si era fermata — senza dover ripassare per il boot del sistema operativo e l'avvio dell'applicazione.
+
+È utile quando hai processi con stato in memoria che richiedono molto tempo per l'inizializzazione (es. database in-memory, applicazioni ML che caricano modelli grandi), e vuoi poter "mettere in pausa" l'istanza risparmiando sui costi senza perdere lo stato.
 
 ```bash
 # Abilitare hibernation al lancio

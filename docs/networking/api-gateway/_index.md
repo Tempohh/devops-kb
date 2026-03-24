@@ -6,7 +6,7 @@ tags: [api-gateway, reverse-proxy, microservizi, routing, rate-limiting, autenti
 parent: networking
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # API Gateway
@@ -30,6 +30,21 @@ Kong è l'API gateway open source più diffuso, basato su Nginx/OpenResty. Archi
 
 ### [Rate Limiting](rate-limiting.md)
 Proteggere le API da abusi e garantire equità d'accesso: token bucket, sliding window, fixed window. Implementazione con Redis per distribuzione multi-istanza, gestione dei burst, risposta 429 con Retry-After header.
+
+## Quale Scegliere
+
+La scelta dell'API gateway dipende dall'ambiente (Kubernetes o VM), dalla necessità di funzionalità avanzate e dal modello di configurazione preferito.
+
+| Scenario | Strumento | Motivo |
+|----------|-----------|--------|
+| Kubernetes, funzionalità avanzate, plugin ecosystem | **Kong** | Plugin-based, Kong Ingress Controller nativo, configurazione dichiarativa con deck |
+| Kubernetes, semplicità, GitOps, routing moderno | **Traefik** | Auto-discovery dei service Kubernetes, middleware componibili, nessun database richiesto |
+| Nginx già presente come reverse proxy, necessità di gateway leggero | **Nginx + configurazione gateway** | Riusare infrastruttura esistente, rate limiting e auth via `auth_request` |
+| AWS, serverless, integrazioni native cloud | **AWS API Gateway** | Managed service, integrazione nativa con Lambda, IAM, Cognito, senza infrastruttura da gestire |
+| Multicloud, API management enterprise, developer portal | **Kong Enterprise / Azure APIM** | Funzionalità enterprise: analytics, developer portal, RBAC granulare |
+
+!!! tip "Punto di partenza consigliato"
+    Su Kubernetes, scegli **Kong** per massima flessibilità e plugin ecosystem, oppure **Traefik** per semplicità e auto-discovery. Su AWS serverless, **AWS API Gateway** è la scelta naturale. Evita di costruire un gateway custom su Nginx a meno che l'infrastruttura non sia già consolidata.
 
 ## Relazioni con altri Argomenti
 

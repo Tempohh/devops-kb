@@ -9,7 +9,7 @@ related: [networking/sicurezza/zero-trust, networking/sicurezza/ddos-protezione,
 official_docs: https://netfilter.org/documentation/
 status: complete
 difficulty: expert
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # Firewall e WAF
@@ -21,6 +21,15 @@ Un firewall è un sistema di controllo del traffico di rete che applica politich
 Il **Web Application Firewall (WAF)** è una specializzazione che opera esclusivamente al Layer 7 su protocolli HTTP/HTTPS, comprende la semantica delle applicazioni web e protegge da classi di vulnerabilità specifiche come SQL injection, XSS e CSRF, descritte nelle OWASP Top 10.
 
 In un'architettura moderna a difesa in profondità, firewall e WAF sono componenti complementari che coprono livelli diversi della catena di protezione.
+
+## Prerequisiti
+
+Questo argomento presuppone familiarità con:
+- [Modello OSI](../fondamentali/modello-osi.md) — il firewall opera a L3/L4, il WAF a L7: sapere cos'è ogni layer è fondamentale
+- [TCP/IP](../fondamentali/tcpip.md) — three-way handshake, stati TCP (per capire stateful vs stateless inspection)
+- [HTTP/HTTPS](../fondamentali/http-https.md) — il WAF analizza traffico HTTP/HTTPS, comprende header, body, metodi
+
+Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
 
 ## Tipi di Firewall
 

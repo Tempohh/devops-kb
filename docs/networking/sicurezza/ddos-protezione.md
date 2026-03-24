@@ -9,7 +9,7 @@ related: [networking/sicurezza/firewall-waf, networking/api-gateway/rate-limitin
 official_docs: https://aws.amazon.com/shield/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # Protezione DDoS
@@ -19,6 +19,15 @@ last_updated: 2026-02-24
 Un attacco DDoS (Distributed Denial of Service) cerca di rendere un servizio inaccessibile saturando le risorse (banda, CPU, connessioni) con traffico generato da migliaia di host compromessi (botnet). La difesa contro DDoS richiede una strategia a più livelli: mitigazione in-cloud (CDN, anycast scrubbing), protezione a livello di rete (BGP blackholing, rate limiting), e hardening applicativo (WAF, rate limiting L7, CAPTCHA).
 
 Nessuna singola tecnologia protegge completamente da DDoS — la difesa efficace combina prevenzione, detection e risposta rapida.
+
+## Prerequisiti
+
+Questo argomento presuppone familiarità con:
+- [TCP/IP](../fondamentali/tcpip.md) — SYN flood, UDP flood, amplification: questi attacchi sfruttano meccanismi TCP/UDP specifici
+- [DNS](../fondamentali/dns.md) — gli attacchi di amplification usano spesso DNS come amplificatore
+- [Rate Limiting](../api-gateway/rate-limiting.md) — il rate limiting è una delle tecniche di mitigazione DDoS a livello applicativo
+
+Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
 
 ## Concetti Chiave
 

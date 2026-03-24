@@ -9,12 +9,16 @@ related: [cloud/aws/networking/vpc-avanzato, cloud/aws/security/network-security
 official_docs: https://docs.aws.amazon.com/vpc/latest/userguide/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-09
 ---
 
 # VPC — Virtual Private Cloud
 
-Un **VPC** è una rete virtuale privata isolata logicamente nel cloud AWS. È il fondamento di ogni architettura — ogni risorsa AWS (EC2, RDS, ECS...) vive dentro un VPC.
+Un **VPC** (Virtual Private Cloud) è una rete virtuale privata, isolata logicamente all'interno del cloud AWS. È il fondamento di ogni architettura: ogni risorsa computazionale (EC2, RDS, ECS, Lambda in VPC...) vive all'interno di un VPC.
+
+Pensalo come il tuo datacenter virtuale nel cloud: puoi definire il range di indirizzi IP, suddividerli in subnet, controllare il routing del traffico e configurare firewall a più livelli. AWS crea un **Default VPC** pre-configurato in ogni Region per permetterti di iniziare subito, ma per ambienti di produzione è sempre consigliabile creare un VPC custom con una progettazione deliberata della rete.
+
+Un VPC è **regionale** — copre tutte le Availability Zone di una Region. Le **subnet** che crei al suo interno sono invece **AZ-specifiche**: ogni subnet risiede in una singola AZ. Distribuire le risorse su subnet in AZ diverse è la base dell'alta disponibilità in AWS.
 
 ```
 VPC Architecture — Esempio Multi-AZ
@@ -44,7 +48,9 @@ NAT Gateway (1+ per AZ, in subnet pubblica)
 
 ## Progettare un VPC — CIDR Planning
 
-**CIDR block** (Classless Inter-Domain Routing — notazione `IP/prefisso` per definire blocchi di indirizzi, es. `10.0.0.0/16`) del VPC: da `/16` (65.536 IP) a `/28` (16 IP)
+Prima di creare qualsiasi risorsa, è fondamentale pianificare con attenzione il **CIDR block** (Classless Inter-Domain Routing — notazione `IP/prefisso` per definire blocchi di indirizzi, es. `10.0.0.0/16`) del VPC. Una volta creato, il CIDR principale non può essere ridotto e aggiungere CIDR secondari ha limitazioni. La regola più importante: **non sovrapporre mai i CIDR** tra VPC che potrebbero dover comunicare in futuro tramite VPC Peering o Transit Gateway.
+
+Il VPC può avere un CIDR da `/16` (65.536 IP) fino a `/28` (16 IP). Per produzione, `/16` è la scelta standard: offre spazio sufficiente per molte subnet senza essere sprecone.
 
 **Regole:**
 - Non sovrapporre CIDR tra VPC che si devono connettere (peering, TGW — Transit Gateway)
@@ -177,11 +183,14 @@ aws ec2 associate-route-table \
 
 ## Internet Gateway (IGW)
 
-- **1 IGW per VPC** — scalabile orizzontalmente, non è un single point of failure
-- Si allega al VPC (non alla subnet)
-- Una subnet è "pubblica" se la sua route table ha `0.0.0.0/0 → IGW`
-- Le istanze in subnet pubblica devono avere un **public IP** o **Elastic IP**
-- **NAT non è richiesto** — l'IGW esegue NAT 1:1 tra Public IP e Private IP
+L'**Internet Gateway** è il componente che connette il VPC a Internet. È il confine tra la tua rete privata nel cloud e Internet pubblico. Senza IGW, nessuna risorsa nel VPC può comunicare con l'esterno.
+
+Come funziona: l'IGW si allega al VPC (non a una subnet specifica). Una subnet diventa "pubblica" quando la sua route table ha una route `0.0.0.0/0 → IGW`, che instradia il traffico verso Internet attraverso il gateway. Le istanze in subnet pubblica devono anche avere un **Public IP** o un **Elastic IP** — senza di esso non sono raggiungibili dall'esterno, anche se la subnet è pubblica.
+
+Caratteristiche:
+- **1 IGW per VPC** — è un componente regionale scalabile orizzontalmente da AWS, non è un single point of failure
+- L'IGW esegue **NAT 1:1** tra il Public IP dell'istanza e il suo Private IP, trasparentemente
+- Non è necessario fare NAT manuale: l'IGW gestisce la traduzione automaticamente
 
 ---
 
@@ -240,14 +249,15 @@ aws ec2 release-address --allocation-id $EIP_ID
 
 ## Security Groups
 
-I **Security Groups** sono firewall **stateful** a livello di istanza/interfaccia.
+I **Security Groups** sono firewall **stateful** applicati a livello di singola risorsa (istanza EC2, database RDS, load balancer...). Sono il meccanismo di sicurezza di rete più usato in AWS e il punto di controllo principale per la maggior parte delle architetture.
+
+**Stateful** significa che il Security Group traccia le connessioni: se permetti traffico in ingresso su una porta, la risposta di ritorno è automaticamente permessa, senza dover configurare regole di outbound esplicite per le risposte. Questo semplifica notevolmente la gestione rispetto ai firewall stateless.
 
 **Caratteristiche:**
-- **Stateful**: se un pacchetto è permesso in ingresso, la risposta è automaticamente permessa in uscita
-- Solo regole `Allow` — le regole `Deny` non esistono (il non-match è automaticamente deny)
-- Applicati a: EC2, RDS, ELB, Lambda in VPC, ECS tasks, ecc.
-- Un'istanza può avere più SG (fino a 5 per interfaccia)
-- Le regole referenziano IP/CIDR o altri Security Group ID
+- **Solo regole Allow** — le regole `Deny` non esistono nei Security Group. Il traffico che non corrisponde a nessuna regola Allow viene automaticamente bloccato (deny implicito).
+- Si applicano a: EC2, RDS, ALB/NLB, Lambda in VPC, ECS tasks, ElastiCache, e altri
+- Un'istanza può avere più Security Group associati (fino a 5 per interfaccia), e i loro permessi si sommano
+- Le regole possono referenziare IP/CIDR oppure **altri Security Group ID** — questa è la caratteristica più potente: permette di dire "accetta traffico solo da risorse che hanno il Security Group X associato", senza dover conoscere i loro IP
 
 ```bash
 # Creare Security Group
@@ -317,15 +327,20 @@ RDS (SG: 5432 from App-SG)
 
 ## Network ACLs (NACLs)
 
-Le **NACL** sono firewall **stateless** a livello di subnet.
+Le **Network ACL** sono firewall **stateless** applicati a livello di subnet. A differenza dei Security Group, le NACL sono associate a una subnet intera e filtrano il traffico che entra ed esce da essa, indipendentemente dalla risorsa di destinazione.
+
+**Stateless** significa che le NACL non tracciano le connessioni: ogni pacchetto viene valutato indipendentemente. Questo implica che devi configurare regole esplicite sia per il traffico in ingresso che per le risposte in uscita (porte efimere).
+
+Nella maggior parte delle architetture i **Security Group** sono sufficienti. Le NACL sono uno strato di difesa aggiuntivo utile quando vuoi bloccare traffico a livello di intera subnet (es. bloccare un range IP sospetto per tutta una subnet), oppure quando hai requisiti di compliance che richiedono un firewall stateless esplicito.
 
 | Caratteristica | Security Group | NACL |
 |---------------|---------------|------|
 | Livello | Istanza/ENI | Subnet |
 | Stato | Stateful | Stateless |
 | Regole | Solo Allow | Allow + Deny |
-| Valutazione | Tutte le regole | In ordine numerico (prima match) |
-| Applicazione | Istanze specifiche | Tutte le istanze nella subnet |
+| Valutazione | Tutte le regole | In ordine numerico (prima match che corrisponde) |
+| Applicazione | Risorse specifiche | Tutte le risorse nella subnet |
+| Quando usarla | Default per la maggior parte dei casi | Difesa in profondità, blocchi IP-level su subnet |
 
 ```bash
 # NACLs — esempio di configurazione
@@ -361,14 +376,16 @@ aws ec2 create-network-acl-entry \
 
 ## VPC Endpoints
 
-I **VPC Endpoints** permettono di accedere a servizi AWS dalla subnet privata **senza passare per Internet** — più sicuro e più economico (nessun costo NAT Gateway/Internet).
+I **VPC Endpoints** permettono alle risorse in subnet private di accedere a servizi AWS **senza passare per Internet**. Senza VPC Endpoints, una Lambda in VPC privato che vuole leggere da S3 dovrebbe uscire su Internet tramite NAT Gateway — con costi di data transfer e un percorso che attraversa la rete pubblica. Con un VPC Endpoint, il traffico rimane sulla rete privata AWS e non passa per il NAT Gateway, riducendo sia i costi che la superficie di attacco.
 
 **Tipi:**
 
-| Tipo | Come funziona | Servizi |
-|------|-------------|---------|
-| **Gateway Endpoint** | Route nella route table | S3, DynamoDB |
-| **Interface Endpoint** | ENI (Elastic Network Interface) nella subnet (PrivateLink) | Tutti gli altri (100+) |
+| Tipo | Come funziona | Servizi | Costo |
+|------|-------------|---------|-------|
+| **Gateway Endpoint** | Aggiunge una route nella route table | Solo S3 e DynamoDB | Gratuito |
+| **Interface Endpoint** | Crea una ENI (Elastic Network Interface) nella subnet, accessibile tramite DNS privato (PrivateLink) | Tutti gli altri servizi AWS (100+) | ~$0.01/ora + data processing |
+
+La scelta è semplice: per S3 e DynamoDB usa sempre il Gateway Endpoint (gratuito, nessuna complessità aggiuntiva). Per altri servizi, valuta l'Interface Endpoint quando le risorse in VPC privato devono accedervi frequentemente e vuoi evitare sia i costi del NAT che l'esposizione a Internet.
 
 ```bash
 # Gateway Endpoint per S3 (gratuito)
@@ -392,7 +409,11 @@ aws ec2 create-vpc-endpoint \
 
 ## VPC Flow Logs
 
-I **VPC Flow Logs** registrano il traffico IP che attraversa le interfacce di rete del VPC.
+I **VPC Flow Logs** registrano metadati sul traffico IP che attraversa le interfacce di rete del VPC. Non catturano il contenuto dei pacchetti (payload), ma registrano informazioni come IP sorgente/destinazione, porte, protocollo, quantità di byte e se il traffico è stato permesso o rifiutato.
+
+Sono uno strumento essenziale per due scopi principali: **sicurezza** (investigare accessi anomali, trovare quale IP sta tentando connessioni non autorizzate, verificare che le regole dei Security Group funzionino come previsto) e **troubleshooting di rete** (capire perché una connessione viene bloccata).
+
+I log possono essere inviati a CloudWatch Logs (per query in tempo quasi reale con Log Insights) o a S3 (più economico per retention lunga, analizzabile con Athena).
 
 ```bash
 # Abilitare Flow Logs su VPC (verso CloudWatch Logs)

@@ -6,7 +6,7 @@ tags: [kubernetes, networking, cni, ingress, network-policy, service, pod]
 parent: networking
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # Kubernetes Networking
@@ -44,6 +44,21 @@ Come esporre servizi Kubernetes all'esterno via HTTP/HTTPS: Ingress resource, In
 
 ### [Network Policies](network-policies.md)
 Firewall a livello di pod: controllare quale pod può comunicare con quale altro pod o namespace. Default-deny, ingress/egress rules, selettori per label. Fondamentale per la sicurezza in ambienti multi-tenant.
+
+## Quale CNI Scegliere
+
+Il CNI plugin è una delle decisioni architetturali più durature di un cluster Kubernetes: è difficile da cambiare dopo il deploy. La scelta dipende da performance, funzionalità di sicurezza e integrazione con il cloud provider.
+
+| Scenario | CNI | Motivo |
+|----------|-----|--------|
+| Cluster semplice, priorità alla facilità di setup | **Flannel** | Overlay VXLAN semplice, zero configurazione, nessun supporto nativo a NetworkPolicy |
+| NetworkPolicy enforcement, BGP routing, cloud e on-premise | **Calico** | BGP nativo (no overlay su reti che lo supportano), NetworkPolicy completa, ampiamente diffuso |
+| Massima performance, osservabilità L7, eBPF, large cluster | **Cilium** | Sostituisce kube-proxy con eBPF, Hubble per observability, NetworkPolicy estesa con CiliumNetworkPolicy |
+| Cloud provider gestito (EKS, GKE, AKS) | **CNI del provider** | aws-vpc-cni, gke-dataplane-v2 (Cilium), Azure CNI — integrazione nativa con il networking cloud |
+| Service mesh + CNI in un unico stack | **Cilium** | Cilium può agire da CNI e da service mesh contemporaneamente, riducendo il numero di componenti |
+
+!!! tip "Punto di partenza consigliato"
+    Per nuovi cluster su cloud pubblico usa il **CNI nativo del provider** (aws-vpc-cni, Azure CNI). Per on-premise o quando serve NetworkPolicy avanzata, scegli **Calico** per maturità o **Cilium** per performance e observability eBPF.
 
 ## Relazioni con altri Argomenti
 

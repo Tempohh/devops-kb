@@ -48,6 +48,7 @@ Lingua contenuti: Italiano con terminologia tecnica in inglese.
 4. Se la modifica introduce nuove relazioni → aggiornare `related` nello stesso file
 5. **NON leggere né modificare altri file**
 6. **NON rigenerare diagrammi esistenti** — sono indipendenti
+7. **Gate qualità:** se la modifica aggiunge una sezione intera o cambia più del 30% del contenuto → impostare `status: needs-review` invece di `complete`. Questo segnala che il file ha subito una modifica significativa e richiede una revisione complessiva prima di tornare a `complete`.
 
 **File coinvolti:** SOLO il file `.md` dell'argomento target
 

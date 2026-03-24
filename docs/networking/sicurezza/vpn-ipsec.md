@@ -9,7 +9,7 @@ related: [networking/sicurezza/firewall-waf, networking/sicurezza/zero-trust, ne
 official_docs: https://www.wireguard.com/papers/wireguard.pdf
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # VPN e IPsec
@@ -22,6 +22,15 @@ Per un'infrastruttura DevOps moderna, i casi d'uso tipici sono: connettere data 
 
 !!! info "VPN vs Zero Trust"
     Le VPN tradizionali danno accesso all'intera rete interna una volta autenticati — approccio "castle and moat". Zero Trust Network Access (ZTNA) è l'alternativa moderna che concede accesso per singola applicazione con verifica continua dell'identità. Per nuove implementazioni, valutare ZTNA prima della VPN.
+
+## Prerequisiti
+
+Questo argomento presuppone familiarità con:
+- [TLS/SSL Basics](../fondamentali/tls-ssl-basics.md) — crittografia simmetrica/asimmetrica, scambio di chiavi, certificati (IPsec usa concetti analoghi)
+- [TCP/IP](../fondamentali/tcpip.md) — routing IP, come i pacchetti viaggiano da A a B (necessario per capire tunneling)
+- [Modello OSI](../fondamentali/modello-osi.md) — IPsec opera a L3, OpenVPN a L4/L7: il layer impatta il comportamento con NAT e firewall
+
+Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
 
 ## Concetti Chiave
 

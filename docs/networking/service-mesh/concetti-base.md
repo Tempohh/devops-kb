@@ -9,36 +9,45 @@ related: [networking/service-mesh/istio, networking/service-mesh/envoy, networki
 official_docs: https://istio.io/latest/docs/concepts/what-is-istio/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-09
 ---
 
 # Service Mesh — Concetti Base
 
 ## Panoramica
 
-In un'architettura a microservizi, ogni servizio deve gestire retry, timeout, **circuit breaking** (meccanismo che interrompe le chiamate a un servizio degradato per evitare effetti a cascata — come un interruttore elettrico), mTLS (mutual TLS) e distributed tracing. Implementare queste logiche in ogni singolo servizio — potenzialmente scritto in linguaggi diversi — e' costoso, error-prone e difficile da manutenere uniformemente.
+In un'architettura a microservizi, ogni servizio deve gestire retry, timeout, **circuit breaking** (meccanismo che interrompe le chiamate a un servizio degradato per evitare effetti a cascata — come un interruttore elettrico), mTLS (mutual TLS) e distributed tracing. Implementare queste logiche in ogni singolo servizio — potenzialmente scritto in linguaggi diversi — è costoso, error-prone e difficile da manutenere uniformemente.
 
 Un **service mesh** risolve questo problema spostando tutta la logica di comunicazione fuori dall'applicazione, in un proxy dedicato (il **sidecar**) affiancato a ogni istanza di servizio. Il sidecar intercetta tutto il traffico in ingresso e uscita, applicando le politiche configurate centralmente. Il codice applicativo parla con `localhost` come se non ci fosse nulla in mezzo; il service mesh fa il resto in modo trasparente.
+
+## Prerequisiti
+
+Questo argomento presuppone familiarità con:
+- [TCP/IP](../fondamentali/tcpip.md) — modello di rete, cos'è un pacchetto, come funziona il routing
+- [TLS/SSL Basics](../fondamentali/tls-ssl-basics.md) — TLS handshake, certificati, mutual TLS (mTLS)
+- Kubernetes di base — pod, container, namespace, Service (documentazione non ancora presente in questa KB)
+
+Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
 
 ## Concetti Chiave
 
 !!! note "Data Plane"
-    L'insieme di tutti i **sidecar proxy** in esecuzione affiancati ai servizi. Intercettano e gestiscono ogni singolo pacchetto di traffico. Implementano: routing, load balancing, health checking, mTLS, retry, timeout, circuit breaking, metrics collection, distributed tracing. Il proxy piu' utilizzato e' **Envoy**.
+    L'insieme di tutti i **sidecar proxy** in esecuzione affiancati ai servizi. Intercettano e gestiscono ogni singolo pacchetto di traffico. Implementano: routing, load balancing, health checking, mTLS, retry, timeout, circuit breaking, metrics collection, distributed tracing. Il proxy più utilizzato è **Envoy**.
 
 !!! note "Control Plane"
     Il cervello del service mesh. Configura dinamicamente il data plane tramite API (tipicamente **xDS** — il protocollo di discovery di Envoy: Listeners, Routes, Clusters, Endpoints inviati in streaming al proxy). Gestisce: distribuzione dei certificati mTLS, policy di routing, service discovery, configurazione dei proxy. Non tocca il traffico applicativo — lavora solo su configurazione e certificati. Esempi: **istiod** (Istio), **destination** (Linkerd).
 
 !!! note "East-West Traffic"
-    Il traffico **service-to-service** all'interno del cluster (orizzontale). E' il dominio primario del service mesh. Esempio: `payment-service` chiama `inventory-service`.
+    Il traffico **service-to-service** all'interno del cluster (orizzontale). È il dominio primario del service mesh. Esempio: `payment-service` chiama `inventory-service`.
 
 !!! note "North-South Traffic"
-    Il traffico **client esterno verso i servizi** (verticale, in ingresso al cluster). E' il dominio dell'API Gateway e dell'Ingress Controller. Il service mesh puo' gestirlo tramite un ingress gateway dedicato (es. Istio Ingress Gateway), ma non e' il suo punto di forza.
+    Il traffico **client esterno verso i servizi** (verticale, in ingresso al cluster). È il dominio dell'API Gateway e dell'Ingress Controller. Il service mesh può gestirlo tramite un ingress gateway dedicato (es. Istio Ingress Gateway), ma non è il suo punto di forza.
 
 ### Feature principali di un Service Mesh
 
 | Feature | Descrizione |
 |---------|-------------|
-| **mTLS automatico** | Ogni comunicazione service-to-service e' cifrata e autenticata bidirezionalmente, senza modificare il codice |
+| **mTLS automatico** | Ogni comunicazione service-to-service è cifrata e autenticata bidirezionalmente, senza modificare il codice |
 | **Traffic management** | Routing avanzato, canary deployment, A/B testing, traffic mirroring |
 | **Retry e timeout** | Politiche configurabili globalmente o per route |
 | **Circuit breaking** | Isolamento automatico di servizi degradati |
@@ -112,7 +121,7 @@ Il control plane agisce da **Certificate Authority (CA)**. Ad ogni sidecar viene
 |------------|-------------|-------------|
 | **Traffico** | East-West (service-to-service) | North-South (client-to-service) |
 | **Posizione** | Dentro il cluster, su ogni Pod | Edge del cluster / perimetro |
-| **Awareness** | L4/L7, conosce l'identita' dei workload | L7, conosce l'identita' del chiamante esterno |
+| **Awareness** | L4/L7, conosce l'identità dei workload | L7, conosce l'identità del chiamante esterno |
 | **mTLS** | Automatico tra tutti i servizi interni | SSL/TLS terminazione verso il client esterno |
 | **Auth** | SPIFFE/SVID, Kubernetes RBAC | API key, JWT, OAuth2, OIDC |
 | **Rate limiting** | Per-service, configurabile via policy | Per-consumer/IP/API key |
@@ -120,7 +129,7 @@ Il control plane agisce da **Certificate Authority (CA)**. Ad ogni sidecar viene
 | **Complementari?** | Si — lavorano su livelli diversi | Si — lavorano su livelli diversi |
 
 !!! tip "Suggerimento"
-    API Gateway e Service Mesh non si escludono: il pattern piu' comune in produzione li usa entrambi. L'API Gateway gestisce l'ingresso dal mondo esterno (auth, rate limiting per consumer), il service mesh gestisce la comunicazione interna (mTLS, retry, observability).
+    API Gateway e Service Mesh non si escludono: il pattern più comune in produzione li usa entrambi. L'API Gateway gestisce l'ingresso dal mondo esterno (auth, rate limiting per consumer), il service mesh gestisce la comunicazione interna (mTLS, retry, observability).
 
 ## Service Mesh vs Librerie (Hystrix / Resilience4j)
 
@@ -131,30 +140,30 @@ Il control plane agisce da **Certificate Authority (CA)**. Ad ogni sidecar viene
 | **Consistenza** | Uniforme su tutti i servizi | Dipende da come ogni team integra la lib |
 | **Overhead** | Latenza aggiuntiva (~1ms per hop) | Nessun hop di rete aggiuntivo |
 | **Observability** | Automatica e uniforme | Richiede instrumentazione manuale |
-| **Maturita'** | Relativamente recente (2017+) | Piu' maturo per certi pattern |
-| **Migrazione legacy** | Puo' gestire servizi esistenti senza modifiche | Richiede refactoring |
+| **Maturità** | Relativamente recente (2017+) | Più maturo per certi pattern |
+| **Migrazione legacy** | Può gestire servizi esistenti senza modifiche | Richiede refactoring |
 
 ## Quando NON usare un Service Mesh
 
 !!! warning "Attenzione"
-    Un service mesh aggiunge complessita' operativa significativa. Non e' sempre la scelta giusta.
+    Un service mesh aggiunge complessità operativa significativa. Non è sempre la scelta giusta.
 
 - **Pochi servizi (< 5-10)**: Il costo operativo supera i benefici. Usare librerie o gestione manuale.
-- **Monolite o monolite modulare**: Il service mesh e' pensato per microservizi distribuiti.
+- **Monolite o monolite modulare**: Il service mesh è pensato per microservizi distribuiti.
 - **Latency-sensitive al microsecondo**: Il sidecar aggiunge ~0.5-2ms per hop. In casi estremi, conta.
-- **Team piccolo senza expertise**: Istio in particolare ha una curva di apprendimento ripida. Linkerd e' piu' accessibile.
+- **Team piccolo senza expertise**: Istio in particolare ha una curva di apprendimento ripida. Linkerd è più accessibile.
 - **Infrastruttura non Kubernetes**: I service mesh moderni sono fortemente accoppiati a Kubernetes. Su VM pure richiede configurazione manuale complessa.
 
 ## Best Practices
 
 !!! tip "Adozione graduale"
-    Iniziare in modalita' PERMISSIVE (mTLS opzionale), instrumentare tutti i servizi, validare le metriche di observability, poi passare a STRICT progressivamente per namespace.
+    Iniziare in modalità PERMISSIVE (mTLS opzionale), instrumentare tutti i servizi, validare le metriche di observability, poi passare a STRICT progressivamente per namespace.
 
 !!! tip "Observability prima"
-    Il primo valore di un service mesh e' la visibilita'. Configurare Kiali/Grafana/Jaeger prima di attivare policy di sicurezza. Capire il traffico reale prima di gestirlo.
+    Il primo valore di un service mesh è la visibilità. Configurare Kiali/Grafana/Jaeger prima di attivare policy di sicurezza. Capire il traffico reale prima di gestirlo.
 
 !!! tip "mTLS STRICT in produzione"
-    In produzione, impostare sempre mTLS STRICT. La modalita' PERMISSIVE (che accetta anche traffico plain) non deve essere usata a regime — e' solo una fase di transizione.
+    In produzione, impostare sempre mTLS STRICT. La modalità PERMISSIVE (che accetta anche traffico plain) non deve essere usata a regime — è solo una fase di transizione.
 
 ```yaml
 # Istio: abilitare mTLS STRICT per namespace
@@ -206,17 +215,17 @@ kubectl exec <pod-name> -c istio-proxy -- curl -s localhost:15000/stats | grep "
 ## Relazioni
 
 ??? info "Istio — Approfondimento"
-    Istio e' il service mesh piu' diffuso in ecosistema Kubernetes. Usa Envoy come sidecar e istiod come control plane. Offre un set completo di CRD per traffic management e sicurezza.
+    Istio è il service mesh più diffuso in ecosistema Kubernetes. Usa Envoy come sidecar e istiod come control plane. Offre un set completo di CRD per traffic management e sicurezza.
 
     **Approfondimento completo →** [Istio](istio.md)
 
 ??? info "Envoy Proxy — Approfondimento"
-    Envoy e' il sidecar proxy alla base di Istio e di molti altri service mesh. Comprenderlo permette di fare troubleshooting avanzato e configurazione personalizzata.
+    Envoy è il sidecar proxy alla base di Istio e di molti altri service mesh. Comprenderlo permette di fare troubleshooting avanzato e configurazione personalizzata.
 
     **Approfondimento completo →** [Envoy Proxy](envoy.md)
 
 ??? info "Linkerd — Approfondimento"
-    Linkerd e' l'alternativa lightweight a Istio. Proxy scritto in Rust, zero config per mTLS, ideale per team che vogliono i benefici del service mesh con minore complessita' operativa.
+    Linkerd è l'alternativa lightweight a Istio. Proxy scritto in Rust, zero config per mTLS, ideale per team che vogliono i benefici del service mesh con minore complessità operativa.
 
     **Approfondimento completo →** [Linkerd](linkerd.md)
 

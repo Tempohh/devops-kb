@@ -9,7 +9,7 @@ related: [networking/service-mesh/istio, networking/service-mesh/concetti-base, 
 official_docs: https://www.envoyproxy.io/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # Envoy Proxy
@@ -19,6 +19,15 @@ last_updated: 2026-02-24
 Envoy è un proxy L4/L7 open source ad alte prestazioni, progettato da Lyft e ora gestito dalla CNCF. È il **data plane** di riferimento per service mesh come Istio e il componente centrale di molti API gateway (Kong, Ambassador). A differenza di Nginx e HAProxy, Envoy è progettato nativamente per ambienti cloud-native: configurazione dinamica via API (xDS), osservabilità integrata (metriche, tracing, access log), e supporto nativo per gRPC, HTTP/2 e HTTP/3.
 
 Envoy opera solitamente come **sidecar proxy** — un container affiancato ad ogni istanza applicativa — intercettando tutto il traffico in entrata e uscita. Questo pattern centralizza il networking (retry, circuit breaking, mTLS, tracing) senza modificare il codice applicativo.
+
+## Prerequisiti
+
+Questo argomento presuppone familiarità con:
+- [Service Mesh — Concetti Base](concetti-base.md) — il ruolo del sidecar proxy nel service mesh, data plane vs control plane
+- [HTTP/2 e HTTP/3](../protocolli/http2-http3.md) — HTTP/2 multiplexing e stream (Envoy lo usa come trasporto nativo)
+- [gRPC](../protocolli/grpc.md) — gRPC usa Envoy come proxy nativo in molti deployment
+
+Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
 
 ## Concetti Chiave
 

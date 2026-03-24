@@ -9,23 +9,32 @@ related: [networking/service-mesh/concetti-base, networking/service-mesh/envoy, 
 official_docs: https://istio.io/latest/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # Istio
 
 ## Panoramica
 
-**Istio** e' il service mesh open source piu' adottato nell'ecosistema Kubernetes. Nato da una collaborazione tra Google, IBM e Lyft nel 2017, offre un set completo di funzionalita' per il traffico service-to-service: sicurezza (mTLS automatico, authorization policy), traffic management (canary, circuit breaking, fault injection), e observability (metriche, tracing, service graph).
+**Istio** è il service mesh open source più adottato nell'ecosistema Kubernetes. Nato da una collaborazione tra Google, IBM e Lyft nel 2017, offre un set completo di funzionalità per il traffico service-to-service: sicurezza (mTLS automatico, authorization policy), traffic management (canary, circuit breaking, fault injection), e observability (metriche, tracing, service graph).
 
 Istio usa **Envoy** come data plane (sidecar proxy) e **istiod** come control plane unificato. Tutta la configurazione avviene tramite Kubernetes Custom Resource Definitions (CRD), che permettono di dichiarare le politiche in file YAML versionati in Git.
 
-**Capacita' principali:**
+**Capacità principali:**
 - mTLS automatico tra tutti i servizi con rotazione certificati
 - Routing avanzato: canary, A/B testing, traffic mirroring, fault injection
 - Circuit breaking e retry configurabili per route
 - Authorization policy fine-grained (source namespace, principal, JWT claims)
 - Integrazione nativa con Prometheus, Kiali, Jaeger, Zipkin, Grafana
+
+## Prerequisiti
+
+Questo argomento presuppone familiarità con:
+- [Service Mesh — Concetti Base](concetti-base.md) — data plane, control plane, sidecar pattern, east-west traffic
+- [Envoy Proxy](envoy.md) — architettura xDS, Listeners, Clusters, Routes (necessario per capire la configurazione istiod)
+- [TLS/SSL Basics](../fondamentali/tls-ssl-basics.md) — mTLS e certificati (Istio ruota certificati SVID automaticamente)
+
+Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
 
 ## Architettura
 
@@ -72,7 +81,7 @@ graph TB
 | **Galley** | Validazione e normalizzazione della configurazione |
 
 !!! note "Nota storica"
-    Prima di Istio 1.5 (2020), Pilot, Citadel e Galley erano processi separati. Da 1.5 sono stati unificati in un unico processo `istiod` per semplicita' operativa.
+    Prima di Istio 1.5 (2020), Pilot, Citadel e Galley erano processi separati. Da 1.5 sono stati unificati in un unico processo `istiod` per semplicità operativa.
 
 ## CRD Principali
 
@@ -261,7 +270,7 @@ spec:
 
 ### AuthorizationPolicy
 
-Definisce le **regole allow/deny** per il traffico: quale sorgente puo' raggiungere quale destinazione, su quale metodo/path.
+Definisce le **regole allow/deny** per il traffico: quale sorgente può raggiungere quale destinazione, su quale metodo/path.
 
 ```yaml
 # Permettere solo al checkout di chiamare il payment service
@@ -488,7 +497,7 @@ kubectl rollout restart deployment -n production
 | `minimal` | Sviluppo, risorse limitate | Solo istiod |
 | `default` | Produzione standard | istiod + ingress gateway |
 | `demo` | Demo, test, tutorial | Tutti i componenti + addons |
-| `ambient` | Nuova modalita' senza sidecar (alpha/beta) | istiod + ztunnel + waypoint proxy |
+| `ambient` | Nuova modalità senza sidecar (alpha/beta) | istiod + ztunnel + waypoint proxy |
 
 ## Best Practices
 
@@ -588,7 +597,7 @@ istioctl proxy-config log <pod-name>.<namespace> --level warning
 ## Relazioni
 
 ??? info "Envoy Proxy — Approfondimento"
-    Il sidecar che Istio inietta in ogni Pod e' Envoy. Capire l'architettura xDS di Envoy permette un troubleshooting avanzato con `proxy-config` e `config_dump`.
+    Il sidecar che Istio inietta in ogni Pod è Envoy. Capire l'architettura xDS di Envoy permette un troubleshooting avanzato con `proxy-config` e `config_dump`.
 
     **Approfondimento completo →** [Envoy Proxy](envoy.md)
 

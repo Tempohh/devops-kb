@@ -1,0 +1,1288 @@
+================================================================================
+  KNOWLEDGE BASE BLUEPRINT — Prompt Generico per la Costruzione di una KB
+  Architettura basata su MkDocs + Material Theme
+================================================================================
+
+Questo prompt descrive in modo completo l'architettura di una knowledge base
+scalabile, modulare e moderna. Forniscilo integralmente a qualsiasi AI assistant
+(ChatGPT, Perplexity, Claude, Gemini, ecc.) per generare tutti i file necessari.
+
+Il carattere [PLACEHOLDER] indica un campo che DEVI compilare prima di usare
+il prompt. La sezione 0 è quella da compilare.
+
+
+================================================================================
+  SEZIONE 0 — DA COMPILARE PRIMA DI USARE IL PROMPT
+  (Rimuovi queste istruzioni e lascia solo i valori compilati)
+================================================================================
+
+NOME PROGETTO:
+  [Inserisci il nome del progetto — es. "Data Engineering Knowledge Base",
+   "Cybersecurity Reference", "Frontend Dev Handbook"]
+
+SCOPO DEL PROGETTO:
+  [Descrivi in 3-5 frasi lo scopo della knowledge base. A chi serve? Quale
+   problema risolve? Chi e' il lettore ideale?]
+  Esempio: "Questa KB e' un riferimento tecnico per ingegneri che lavorano
+  con pipeline di dati. Copre concetti, strumenti e pattern dal dato grezzo
+  all'analisi. E' pensata per livelli da junior a senior."
+
+INTENZIONE D'USO:
+  [Spiega come intendi usarla — documentazione interna, studio personale,
+   team aziendale, progetto open-source, corso formativo, ecc.]
+
+ARGOMENTI PRINCIPALI DA COPRIRE (8-15 macro-aree):
+  [Elenca le categorie principali — queste diventeranno le cartelle top-level
+   e i tab di navigazione del sito]
+  Esempio:
+  - Fondamentali (concetti base dell'area)
+  - Strumento/Framework A
+  - Strumento/Framework B
+  - Cloud & Deployment
+  - Sicurezza
+  - Best Practices & Pattern
+  - ecc.
+
+ARGOMENTO DI ESEMPIO INIZIALE:
+  [Scegli UN singolo argomento concreto all'interno di una delle categorie
+   sopra. Questo sara' usato per generare il primo file .md di esempio
+   completo, che dimostra il template nella pratica]
+  Esempio: "Apache Spark — Architettura", "Zero Trust Security", "React Hooks"
+
+LINGUA DEI CONTENUTI:
+  [Italiano / Inglese / altra]
+
+COLORE PRIMARIO DEL TEMA (opzionale):
+  [Scegli tra: red, pink, purple, deep-purple, indigo, blue, light-blue, cyan,
+   teal, green, light-green, lime, yellow, amber, orange, deep-orange, brown,
+   grey, blue-grey — default: indigo]
+
+COLORE ACCENTO DEL TEMA (opzionale):
+  [Stessi valori di sopra — default: cyan]
+
+================================================================================
+  FINE SEZIONE 0
+================================================================================
+
+
+================================================================================
+  PROMPT DA FORNIRE ALL'AI
+================================================================================
+
+Voglio costruire una knowledge base tecnica con le caratteristiche esatte
+descritte di seguito. Genera tutti i file necessari rispettando fedelmente
+ogni specifica. Di seguito trovi:
+
+1. L'identita' e il contesto del progetto (compilato dall'utente)
+2. La struttura completa di tutti i file e le cartelle
+3. Il contenuto esatto di ogni file di configurazione/template
+4. Le convenzioni da rispettare
+
+Non aggiungere funzionalita' non richieste. Non semplificare la struttura.
+Genera i file esattamente come specificato.
+
+
+--------------------------------------------------------------------------------
+  1. IDENTITA' DEL PROGETTO
+--------------------------------------------------------------------------------
+
+Nome: [NOME PROGETTO]
+Scopo: [SCOPO DEL PROGETTO]
+Intenzione: [INTENZIONE D'USO]
+Lingua contenuti: [LINGUA]
+Argomenti principali: [LISTA ARGOMENTI]
+Argomento di esempio iniziale: [ARGOMENTO DI ESEMPIO]
+
+
+--------------------------------------------------------------------------------
+  2. STACK TECNOLOGICO
+--------------------------------------------------------------------------------
+
+- MkDocs (generatore sito statico da Markdown)
+- MkDocs Material Theme (tema grafico avanzato)
+- Plugin MkDocs: search, tags, awesome-pages
+- Python per la build
+- GitHub Pages (o altro hosting statico) per il deploy
+- Draw.io / diagrams.net per diagrammi complessi (file .drawio.svg)
+- Git + GitHub per versionamento
+
+Installazione dipendenze Python:
+  pip install mkdocs mkdocs-material mkdocs-awesome-pages-plugin
+
+
+--------------------------------------------------------------------------------
+  3. STRUTTURA CARTELLE E FILE (completa)
+--------------------------------------------------------------------------------
+
+Genera questa struttura esatta di file e cartelle:
+
+[nome-progetto]/                        <- root del progetto
+|
+|-- mkdocs.yml                          <- configurazione MkDocs (vedi sezione 4)
+|-- requirements.txt                    <- dipendenze Python
+|-- .gitignore
+|
+|-- docs/                               <- tutti i contenuti della KB
+    |
+    |-- index.md                        <- home page del sito
+    |-- tags.md                         <- indice globale per tag
+    |
+    |-- assets/
+    |   |-- styles/
+    |   |   |-- custom.css             <- stili personalizzati (vedi sezione 7)
+    |   |-- js/
+    |   |   |-- nav-enhance.js         <- mega-menu navigazione (vedi sezione 8)
+    |   |-- diagrams/                  <- file .drawio.svg (vuota inizialmente)
+    |
+    |-- _templates/
+    |   |-- TEMPLATE.md                <- template vuoto per nuove pagine
+    |
+    |-- [CATEGORIA-1]/                  <- prima categoria (es. "fondamentali")
+    |   |-- _index.md                  <- landing page della categoria
+    |   |-- [sotto-categoria-a]/
+    |   |   |-- _index.md
+    |   |   |-- [argomento-1].md
+    |   |   |-- [argomento-2].md
+    |   |-- [argomento-diretto].md     <- pagine senza sotto-categoria
+    |
+    |-- [CATEGORIA-2]/
+    |   |-- _index.md
+    |   |-- ...
+    |
+    |-- (ripeti per ogni categoria dell'utente)
+
+
+File speciali da creare:
+  - requirements.txt
+  - .gitignore
+  - docs/index.md (home page)
+  - docs/tags.md
+  - docs/_templates/TEMPLATE.md
+  - docs/assets/styles/custom.css
+  - docs/assets/js/nav-enhance.js
+  - mkdocs.yml
+  - Un _index.md per ogni categoria
+  - Un file .md di esempio completo per [ARGOMENTO DI ESEMPIO]
+
+
+--------------------------------------------------------------------------------
+  4. MKDOCS.YML — Configurazione completa
+--------------------------------------------------------------------------------
+
+Genera mkdocs.yml con questo contenuto (adatta site_name, site_description,
+i colori e la lingua ai valori dell'utente):
+
+---INIZIO FILE mkdocs.yml---
+
+site_name: [NOME PROGETTO]
+site_description: [SCOPO BREVE IN UNA RIGA]
+site_url: ""
+repo_url: ""
+repo_name: ""
+
+theme:
+  name: material
+  language: [CODICE LINGUA: it / en / fr / de / ecc.]
+  palette:
+    - scheme: default
+      primary: [COLORE PRIMARIO]
+      accent: [COLORE ACCENTO]
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: [COLORE PRIMARIO]
+      accent: [COLORE ACCENTO]
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+    - header.autohide
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+    admonition:
+      note: octicons/tag-16
+      warning: octicons/alert-16
+      tip: octicons/flame-16
+      example: octicons/code-16
+      info: octicons/info-16
+
+exclude_docs: |
+  _templates/
+
+plugins:
+  - search:
+      lang:
+        - [CODICE LINGUA]
+        - en
+      separator: '[\s\-\.]+'
+  - tags:
+  - awesome-pages
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.caret
+  - pymdownx.tilde
+  - pymdownx.smartsymbols
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - abbr
+  - attr_list
+  - md_in_html
+  - def_list
+  - footnotes
+
+extra_css:
+  - assets/styles/custom.css
+
+extra_javascript:
+  - assets/js/nav-enhance.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: ""
+  generator: false
+  status:
+    new: New
+    deprecated: Deprecated
+
+---FINE FILE mkdocs.yml---
+
+
+--------------------------------------------------------------------------------
+  5. FRONTMATTER OBBLIGATORIO — Ogni file .md di contenuto
+--------------------------------------------------------------------------------
+
+Ogni file .md (esclusi index.md, tags.md, _index.md di categoria) DEVE avere
+questo frontmatter YAML esatto in testa. Tutti i campi sono obbligatori:
+
+---
+title: "Nome Argomento"
+slug: nome-argomento
+category: nome-categoria
+tags: [tag1, tag2, tag3]
+search_keywords: [sinonimo1, sinonimo2, acronimo, termine-alternativo, variante-en, variante-it]
+parent: categoria/_index
+related: [categoria/slug-argomento-correlato-1, categoria/slug-argomento-correlato-2]
+official_docs: https://link-documentazione-ufficiale.com
+status: draft
+difficulty: intermediate
+last_updated: YYYY-MM-DD
+---
+
+Spiegazione dei campi:
+  title         : Titolo leggibile della pagina
+  slug          : Identico al nome file senza estensione, kebab-case
+  category      : Categoria principale di appartenenza
+  tags          : Elenco tag brevi, lowercase, in inglese, plurale dove sensato
+  search_keywords: Sinonimi, acronimi, varianti nella lingua dei contenuti e in
+                   inglese. Questo campo potenzia la ricerca semantica: includere
+                   tutte le varianti con cui qualcuno potrebbe cercare l'argomento.
+  parent        : Percorso relativo al _index.md della sezione padre
+  related       : Lista di slug di argomenti correlati (per le sezioni Relazioni)
+  official_docs : URL della documentazione ufficiale di riferimento
+  status        : draft | in-progress | complete | needs-review
+  difficulty    : beginner | intermediate | advanced | expert
+  last_updated  : Data dell'ultimo aggiornamento in formato YYYY-MM-DD
+
+REGOLE NAMING:
+  - File .md: kebab-case (es. "event-driven-architecture.md")
+  - Cartelle: kebab-case (es. "cloud-providers/")
+  - Slug: identico al nome file senza estensione
+  - Tags: lowercase, brevi, inglese
+  - Diagrammi: [categoria]-[argomento]-[descrizione].drawio.svg
+
+
+--------------------------------------------------------------------------------
+  6. TEMPLATE PAGINA CONTENUTO — docs/_templates/TEMPLATE.md
+--------------------------------------------------------------------------------
+
+Genera docs/_templates/TEMPLATE.md con questo contenuto esatto:
+
+---INIZIO FILE _templates/TEMPLATE.md---
+
+---
+title: "TITOLO ARGOMENTO"
+slug: slug-argomento
+category: categoria
+tags: [tag1, tag2, tag3]
+search_keywords: [sinonimo1, sinonimo2, acronimo, termine-alternativo, variante-en, variante-it]
+parent: categoria/_index
+related: [categoria/slug-correlato-1, categoria/slug-correlato-2]
+official_docs: https://link-documentazione-ufficiale.com
+status: draft
+difficulty: intermediate
+last_updated: YYYY-MM-DD
+---
+
+# TITOLO ARGOMENTO
+
+## Panoramica
+<!-- Cos'e', perche' esiste, quando si usa, quando NON si usa -->
+<!-- 3-5 frasi che danno il quadro completo -->
+
+## Concetti Chiave
+<!-- I fondamentali da conoscere -->
+<!-- Usare admonitions per definizioni importanti -->
+
+## Architettura / Come Funziona
+<!-- Spiegazione del funzionamento interno -->
+<!-- Valutare se proporre un diagramma -->
+
+## Configurazione & Pratica
+<!-- Esempi concreti, comandi, snippet di codice -->
+<!-- Code blocks sempre con language tag: ```yaml, ```bash, ```python, ecc. -->
+
+## Best Practices
+
+!!! tip "Suggerimento"
+    Pattern consigliato.
+
+!!! warning "Attenzione"
+    Anti-pattern da evitare.
+
+## Troubleshooting
+<!-- Problemi comuni e soluzioni -->
+
+## Relazioni
+
+??? info "Argomento Correlato — Contesto"
+    Breve riassunto contestuale (2-3 frasi).
+
+    **Approfondimento completo -->** [Argomento Correlato](../categoria/slug.md)
+
+## Riferimenti
+<!-- Link a documentazione ufficiale, articoli autorevoli -->
+- [Documentazione Ufficiale](https://...)
+
+---FINE FILE _templates/TEMPLATE.md---
+
+
+--------------------------------------------------------------------------------
+  7. STRUTTURA DI UNA PAGINA CONTENUTO — Standard di scrittura
+--------------------------------------------------------------------------------
+
+Sezioni standard (in ordine):
+  H1  : Titolo (1 solo per file, identico al campo title del frontmatter)
+  H2  : ## Panoramica
+  H2  : ## Concetti Chiave
+  H2  : ## Architettura / Come Funziona
+  H2  : ## Configurazione & Pratica
+  H2  : ## Best Practices
+  H2  : ## Troubleshooting
+  H2  : ## Relazioni
+  H2  : ## Riferimenti
+
+Regole di scrittura:
+  - Un solo H1 per file
+  - H2 per le sezioni principali, H3+ per sotto-sezioni
+  - Code blocks SEMPRE con language tag (```yaml, ```bash, ```python, ```json, ecc.)
+  - Acronimi espansi alla prima comparsa nel testo in prosa:
+    es. "HTTP (HyperText Transfer Protocol)" — poi solo "HTTP"
+  - Non espandere acronimi nei code block o nei commenti di codice
+  - Testo in prosa completo: ogni concetto introdotto deve essere spiegato,
+    non dare nulla per scontato anche se l'argomento sembra ovvio
+
+Admonitions disponibili:
+  !!! note "Titolo"        <- informazione supplementare
+  !!! warning "Titolo"     <- aspetto critico
+  !!! tip "Titolo"         <- best practice / consiglio
+  !!! example "Titolo"     <- caso d'uso concreto
+  !!! info "Titolo"        <- contesto aggiuntivo
+
+  Versione collassabile (per la sezione Relazioni):
+  ??? info "Titolo"        <- chiusa di default, clic per aprire
+  ???+ info "Titolo"       <- aperta di default
+
+Formattazione tipografica:
+  ==testo==      <- evidenziato giallo
+  ^^testo^^      <- inserito (underline)
+  ~~testo~~      <- cancellato (strikethrough)
+  `codice`       <- inline code
+  **grassetto**
+  *corsivo*
+
+
+--------------------------------------------------------------------------------
+  8. TEMPLATE LANDING PAGE DI CATEGORIA — _index.md
+--------------------------------------------------------------------------------
+
+Ogni cartella di categoria deve avere un _index.md con questa struttura.
+Usa l'icona Material piu' adatta al contenuto (vedi catalogo su
+squidfunk.github.io/mkdocs-material/reference/icons-emojis/).
+
+---INIZIO TEMPLATE _index.md---
+
+---
+title: "Nome Categoria"
+slug: nome-categoria
+category: nome-categoria
+tags: [tag1, tag2]
+parent: /
+status: complete
+difficulty: beginner
+last_updated: YYYY-MM-DD
+---
+
+# Nome Categoria
+
+Breve descrizione della categoria in 2-3 frasi. Spiega cosa copre questa
+sezione e perche' e' rilevante nel contesto del progetto.
+
+---
+
+## Aree di Conoscenza
+
+<div class="grid cards" markdown>
+
+-   :material-ICONA:{ .lg .middle } **Sotto-categoria A**
+
+    ---
+
+    Breve descrizione degli argomenti contenuti.
+
+    [:octicons-arrow-right-24: Sotto-categoria A](sotto-categoria-a/_index.md)
+
+-   :material-ICONA:{ .lg .middle } **Sotto-categoria B**
+
+    ---
+
+    Breve descrizione degli argomenti contenuti.
+
+    [:octicons-arrow-right-24: Sotto-categoria B](sotto-categoria-b/_index.md)
+
+</div>
+
+---
+
+## Percorsi di Studio
+
+### Percorso Base
+Per chi parte da zero:
+
+1. [Argomento 1](argomento-1.md) — descrizione breve
+2. [Argomento 2](argomento-2.md) — descrizione breve
+
+### Percorso Avanzato
+Per chi ha gia' le basi:
+
+1. [Argomento 3](sotto/argomento-3.md) — descrizione breve
+2. [Argomento 4](sotto/argomento-4.md) — descrizione breve
+
+---
+
+## Argomenti della Sezione
+
+| Sotto-sezione | Argomenti | Livello |
+|---------------|-----------|---------|
+| Sotto-categoria A | Argomento 1, Argomento 2 | Beginner |
+| Sotto-categoria B | Argomento 3, Argomento 4 | Intermediate |
+
+---FINE TEMPLATE _index.md---
+
+
+--------------------------------------------------------------------------------
+  9. HOME PAGE — docs/index.md
+--------------------------------------------------------------------------------
+
+Genera docs/index.md con questa struttura:
+
+---INIZIO FILE index.md---
+
+---
+title: Home
+---
+
+# [NOME PROGETTO]
+
+[SCOPO DEL PROGETTO in 2-3 frasi]
+
+---
+
+## Categorie Principali
+
+<div class="grid cards" markdown>
+
+-   :material-ICONA:{ .lg .middle } **[CATEGORIA 1]**
+
+    ---
+
+    Descrizione breve della categoria 1.
+
+    [:octicons-arrow-right-24: Esplora](categoria-1/_index.md)
+
+-   :material-ICONA:{ .lg .middle } **[CATEGORIA 2]**
+
+    ---
+
+    Descrizione breve della categoria 2.
+
+    [:octicons-arrow-right-24: Esplora](categoria-2/_index.md)
+
+<!-- Ripeti per ogni categoria -->
+
+</div>
+
+---
+
+## Come Usare questa Knowledge Base
+
+- **Naviga per categoria** usando i tab in alto
+- **Cerca qualsiasi termine** con la barra di ricerca (shortcut: `/` o `S`)
+- **Sfoglia per tag** nella pagina [Tags](tags.md)
+- **Segui i percorsi** suggeriti nelle landing page di ogni sezione
+- **Espandi le relazioni** nelle sezioni Relazioni per navigare tra argomenti collegati
+
+---FINE FILE index.md---
+
+
+--------------------------------------------------------------------------------
+  10. TAGS PAGE — docs/tags.md
+--------------------------------------------------------------------------------
+
+Genera docs/tags.md con questo contenuto esatto:
+
+---INIZIO FILE tags.md---
+
+---
+title: Tags
+---
+
+# Indice per Tag
+
+Tutti gli argomenti organizzati per tag.
+
+[TAGS]
+
+---FINE FILE tags.md---
+
+Nota: [TAGS] e' un tag speciale di MkDocs Material che viene sostituito
+automaticamente in fase di build con l'elenco dei tag presenti nei frontmatter
+di tutti i file. Non modificarlo.
+
+
+--------------------------------------------------------------------------------
+  11. CUSTOM CSS — docs/assets/styles/custom.css
+--------------------------------------------------------------------------------
+
+Genera docs/assets/styles/custom.css con questo contenuto esatto:
+
+---INIZIO FILE custom.css---
+
+/* ============================================
+   Knowledge Base — Custom Styles
+   ============================================ */
+
+/* --- Smooth Page Transitions --- */
+.md-content {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Sidebar Links Hover --- */
+.md-nav__link {
+  transition: color 0.2s ease, padding-left 0.2s ease;
+}
+
+.md-nav__link:hover {
+  padding-left: 4px;
+}
+
+/* --- Admonition Smooth Open --- */
+details {
+  transition: all 0.3s ease;
+}
+
+details[open] summary ~ * {
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Code Block Hover Effect --- */
+.highlight {
+  transition: box-shadow 0.2s ease;
+  border-radius: 6px;
+}
+
+.highlight:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* --- Tag Pills --- */
+.md-tag {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.md-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* --- Table Row Hover --- */
+.md-typeset table:not([class]) tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.md-typeset table:not([class]) tbody tr:hover {
+  background-color: var(--md-code-bg-color);
+}
+
+/* --- Header Separator --- */
+.md-typeset h2 {
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  padding-bottom: 0.4em;
+}
+
+/* --- Diagram Container --- */
+.diagram-container {
+  text-align: center;
+  margin: 1.5em 0;
+  padding: 1em;
+  border-radius: 8px;
+  background: var(--md-code-bg-color);
+  transition: box-shadow 0.2s ease;
+}
+
+.diagram-container:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.diagram-container img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* --- Smooth Scroll --- */
+html {
+  scroll-behavior: smooth;
+}
+
+/* --- Search Bar Focus --- */
+.md-search__input {
+  transition: box-shadow 0.2s ease;
+}
+
+.md-search__input:focus {
+  box-shadow: 0 0 0 3px rgba(68, 138, 255, 0.3);
+}
+
+/* ─────────────────────────────────────────────────────────
+   Nav: categories pushed to the right of the tab bar
+   ───────────────────────────────────────────────────────── */
+
+.md-tabs__item--category-start {
+  margin-left: auto;
+}
+
+/* ─────────────────────────────────────────────────────────
+   kbdrop — Mega-menu appended to <body> with position:fixed
+   ───────────────────────────────────────────────────────── */
+
+.kbdrop {
+  position: fixed;
+  display: none;
+  background: var(--md-default-bg-color);
+  border-top: 2px solid var(--md-accent-fg-color);
+  border-radius: 0 0 0.25rem 0.25rem;
+  box-shadow:
+    0 5px  5px -3px rgba(0, 0, 0, .20),
+    0 8px 10px  1px rgba(0, 0, 0, .14),
+    0 3px 14px  2px rgba(0, 0, 0, .12);
+  z-index: 9999;
+  margin: 0;
+}
+
+.kbdrop--visible {
+  display: block;
+  animation: kbDropDown 0.12s ease;
+}
+
+@keyframes kbDropDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.kbdrop__list {
+  list-style: none;
+  padding: 0.3rem 0;
+  margin: 0;
+  min-width: 200px;
+}
+
+.kbdrop__item {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kbdrop__item > a {
+  display: block;
+  padding: 0.55rem 1.1rem;
+  color: var(--md-default-fg-color);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  opacity: 0.7;
+  transition: color 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+
+.kbdrop__item > a:hover {
+  color: var(--md-accent-fg-color);
+  background: var(--md-code-bg-color);
+  opacity: 1;
+}
+
+.kbdrop--mega {
+  padding: 1rem 1.25rem 1.1rem;
+  max-width: min(640px, 90vw);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.kbdrop__section {
+  margin-bottom: 1.1rem;
+}
+
+.kbdrop__section:last-child {
+  margin-bottom: 0;
+}
+
+.kbdrop__section-header {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--md-accent-fg-color);
+  text-decoration: none;
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.55rem;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  transition: opacity 0.15s ease;
+}
+
+.kbdrop__section-header:hover {
+  opacity: 0.75;
+}
+
+.kbdrop__section-items {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0;
+}
+
+.kbdrop__section-items li a {
+  display: block;
+  padding: 0.28rem 0.45rem;
+  color: var(--md-default-fg-color);
+  font-size: 0.72rem;
+  text-decoration: none;
+  opacity: 0.72;
+  border-radius: 0.15rem;
+  transition: color 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+}
+
+.kbdrop__section-items li a:hover {
+  color: var(--md-accent-fg-color);
+  background: var(--md-code-bg-color);
+  opacity: 1;
+}
+
+---FINE FILE custom.css---
+
+
+--------------------------------------------------------------------------------
+  12. MEGA-MENU JAVASCRIPT — docs/assets/js/nav-enhance.js
+--------------------------------------------------------------------------------
+
+Genera docs/assets/js/nav-enhance.js con questo contenuto esatto.
+Questo script costruisce automaticamente un mega-menu a discesa sotto ogni
+tab di navigazione, con sezioni e sotto-link organizzati in griglia.
+
+---INIZIO FILE nav-enhance.js---
+
+(function () {
+  var activeTop = null;
+  var hideTimer = null;
+
+  function scheduleHide() {
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(hideAll, 250);
+  }
+
+  function cancelHide() {
+    clearTimeout(hideTimer);
+  }
+
+  function hideAll() {
+    cancelHide();
+    if (activeTop) {
+      activeTop.classList.remove('kbdrop--visible');
+      activeTop = null;
+    }
+  }
+
+  function measureWidth(el) {
+    el.style.visibility = 'hidden';
+    el.style.display    = 'block';
+    var w = el.offsetWidth;
+    el.style.display    = '';
+    el.style.visibility = '';
+    return w;
+  }
+
+  function showTop(drop, anchorRect) {
+    cancelHide();
+    if (activeTop === drop) return;
+    if (activeTop) activeTop.classList.remove('kbdrop--visible');
+
+    var dw   = measureWidth(drop);
+    var left = anchorRect.left + anchorRect.width / 2 - dw / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - dw - 8));
+
+    drop.style.top       = (anchorRect.bottom - 1) + 'px';
+    drop.style.left      = left + 'px';
+    drop.style.maxHeight = (window.innerHeight - anchorRect.bottom - 12) + 'px';
+    drop.classList.add('kbdrop--visible');
+    activeTop = drop;
+  }
+
+  function normHref(href) {
+    return href
+      .replace(/_index\/?$/, '')
+      .replace(/index\.html$/, '')
+      .replace(/\/?$/, '/');
+  }
+
+  function findDirectChildren(sectionHref) {
+    var base     = normHref(sectionHref);
+    var children = [];
+    var seen     = {};
+
+    document.querySelectorAll('a.md-nav__link').forEach(function (a) {
+      var href = a.href;
+      if (!href) return;
+      var norm = normHref(href);
+      if (seen[norm]) return;
+      if (!norm.startsWith(base)) return;
+      if (norm === base) return;
+
+      var rel   = norm.slice(base.length).replace(/\/?$/, '/');
+      var parts = rel.split('/').filter(Boolean);
+      if (parts.length !== 1) return;
+
+      seen[norm] = true;
+      var textEl = a.querySelector('.md-ellipsis');
+      var text   = (textEl ? textEl.textContent : a.textContent).trim();
+      if (text) children.push({ text: text, href: href });
+    });
+
+    return children;
+  }
+
+  function buildMenu(children) {
+    var sections = children.map(function (c) {
+      return { text: c.text, href: c.href, subs: findDirectChildren(c.href) };
+    });
+
+    var drop = document.createElement('div');
+    drop.className = 'kbdrop kbdrop--mega';
+    drop.setAttribute('data-kb-drop', '');
+
+    sections.forEach(function (s) {
+      var section = document.createElement('div');
+      section.className = 'kbdrop__section';
+
+      var header        = document.createElement('a');
+      header.className  = 'kbdrop__section-header';
+      header.href       = s.href;
+      header.textContent = s.text;
+      section.appendChild(header);
+
+      if (s.subs.length) {
+        var grid = document.createElement('ul');
+        grid.className = 'kbdrop__section-items';
+        s.subs.forEach(function (sub) {
+          var li = document.createElement('li');
+          var a  = document.createElement('a');
+          a.href        = sub.href;
+          a.textContent = sub.text;
+          li.appendChild(a);
+          grid.appendChild(li);
+        });
+        section.appendChild(grid);
+      }
+
+      drop.appendChild(section);
+    });
+
+    return drop;
+  }
+
+  function buildDropdowns() {
+    document.querySelectorAll('[data-kb-drop]').forEach(function (d) { d.remove(); });
+    hideAll();
+
+    var tabsList = document.querySelector('.md-tabs__list');
+    if (!tabsList) return;
+
+    var tabItems        = Array.from(tabsList.querySelectorAll(':scope > .md-tabs__item'));
+    var rootNames       = ['home', 'tags'];
+    var categoryStarted = false;
+
+    tabItems.forEach(function (item) {
+      item.classList.remove('md-tabs__item--category-start');
+      if (item._kbEnter) item.removeEventListener('mouseenter', item._kbEnter);
+      if (item._kbLeave) item.removeEventListener('mouseleave', item._kbLeave);
+      item._kbDrop = null;
+    });
+
+    tabItems.forEach(function (tabItem) {
+      var link = tabItem.querySelector('.md-tabs__link');
+      if (!link) return;
+
+      var name   = link.textContent.trim().toLowerCase();
+      var isRoot = rootNames.indexOf(name) !== -1;
+
+      if (!isRoot && !categoryStarted) {
+        tabItem.classList.add('md-tabs__item--category-start');
+        categoryStarted = true;
+      }
+      if (isRoot) return;
+
+      var children = findDirectChildren(link.href);
+      if (!children.length) return;
+
+      var drop = buildMenu(children);
+      document.body.appendChild(drop);
+      tabItem._kbDrop = drop;
+
+      drop.addEventListener('mouseenter', function () { cancelHide(); activeTop = drop; });
+      drop.addEventListener('mouseleave', scheduleHide);
+
+      tabItem._kbEnter = function () {
+        cancelHide();
+        showTop(drop, tabItem.getBoundingClientRect());
+      };
+      tabItem._kbLeave = scheduleHide;
+
+      tabItem.addEventListener('mouseenter', tabItem._kbEnter);
+      tabItem.addEventListener('mouseleave', tabItem._kbLeave);
+    });
+  }
+
+  window.addEventListener('scroll', hideAll, { passive: true });
+  document.addEventListener('click', function (e) {
+    if (!activeTop || !activeTop.contains(e.target)) hideAll();
+  });
+
+  if (typeof document$ !== 'undefined') {
+    document$.subscribe(buildDropdowns);
+  } else {
+    window.addEventListener('DOMContentLoaded', buildDropdowns);
+  }
+})();
+
+---FINE FILE nav-enhance.js---
+
+
+--------------------------------------------------------------------------------
+  13. REQUIREMENTS.TXT e .GITIGNORE
+--------------------------------------------------------------------------------
+
+Genera requirements.txt:
+---
+mkdocs>=1.5.0
+mkdocs-material>=9.5.0
+mkdocs-awesome-pages-plugin>=2.9.0
+---
+
+Genera .gitignore:
+---
+site/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+*.egg-info/
+dist/
+build/
+---
+
+
+--------------------------------------------------------------------------------
+  14. SISTEMA DI NAVIGAZIONE — Come funziona
+--------------------------------------------------------------------------------
+
+La navigazione e' completamente automatica grazie a tre meccanismi:
+
+A) PLUGIN AWESOME-PAGES
+   Genera la sidebar e i tab automaticamente dall'albero delle cartelle.
+   Non serve un nav: manuale in mkdocs.yml. L'ordine delle voci segue
+   l'ordine alfabetico dei file, modificabile con file .pages nelle cartelle.
+
+B) NAVIGATION.INDEXES
+   Ogni file _index.md diventa la landing page della sua cartella.
+   Cliccando un tab o una sezione si apre direttamente il suo _index.md.
+
+C) MEGA-MENU (nav-enhance.js)
+   Al passaggio del mouse sui tab della navbar, appare un menu a discesa
+   con tutte le sotto-sezioni della categoria, organizzate in griglia.
+   Le voci "Home" e "Tags" restano a sinistra; le categorie si allineano
+   a destra grazie alla classe CSS .md-tabs__item--category-start.
+   Il menu si costruisce dinamicamente leggendo i link gia' presenti nel DOM
+   (sidebar nascosta che MkDocs genera sempre), quindi non richiede
+   configurazione manuale.
+
+FILE .pages (opzionale per controllare l'ordine):
+   Crea un file .pages in qualsiasi cartella con questo formato:
+   ---
+   order:
+     - fondamentali
+     - argomento-1.md
+     - argomento-2.md
+   ---
+
+
+--------------------------------------------------------------------------------
+  15. SISTEMA DI RICERCA — Come funziona
+--------------------------------------------------------------------------------
+
+MkDocs Material offre ricerca full-text nativa con due livelli:
+
+LIVELLO 1 — RICERCA STANDARD (automatica)
+  Indicizza automaticamente tutto il testo di ogni pagina.
+  Shortcut: tasto "/" o "S" per aprire la barra di ricerca.
+  Funzionalita': suggerimenti in tempo reale, highlight dei risultati,
+  URL condivisibile per ogni ricerca.
+
+LIVELLO 2 — RICERCA SEMANTICA AMPLIATA (tramite search_keywords)
+  Il campo search_keywords nel frontmatter viene indicizzato insieme al
+  contenuto della pagina. Questo permette di trovare una pagina cercando
+  sinonimi, acronimi, varianti linguistiche o termini correlati che non
+  compaiono nel testo principale.
+  Esempio: la pagina "TLS/SSL" include search_keywords come
+  ["transport layer security", "https", "certificato", "crittografia",
+  "ssl certificate", "tls 1.3", "handshake"] — cosi' e' trovabile con
+  qualsiasi di questi termini anche se nel testo appare solo "TLS".
+
+REGOLA per search_keywords:
+  Includere sempre: acronimi, forma estesa, sinonimi in italiano e inglese,
+  abbreviazioni comuni, termini tecnici alternativi, nomi di tool/librerie
+  correlati che un utente potrebbe cercare aspettandosi di trovare questa pagina.
+
+
+--------------------------------------------------------------------------------
+  16. SISTEMA DI RELAZIONI — Come funziona
+--------------------------------------------------------------------------------
+
+Le relazioni tra argomenti sono gestite in due modi complementari:
+
+A) FRONTMATTER related:
+   Lista di slug di argomenti direttamente correlati.
+   Serve per la scoperta programmatica delle relazioni e per eventuali
+   estensioni future (grafo delle relazioni, pagina "vedi anche", ecc.).
+   Formato: percorso relativo dalla root docs senza estensione .md
+   Esempio: related: [sicurezza/tls, protocolli/http2, fondamentali/dns]
+
+B) SEZIONE ## Relazioni nel testo:
+   Usa admonitions collassabili per link contestuali ad argomenti correlati.
+   Ogni admonition include 2-3 frasi di contesto + link all'approfondimento.
+   Formato:
+
+   ??? info "Nome Argomento Correlato — Contesto"
+       Breve spiegazione del perche' questo argomento e' rilevante qui.
+       2-3 frasi che contestualizzano la relazione.
+
+       **Approfondimento completo -->** [Nome Argomento](../percorso/argomento.md)
+
+PRINCIPIO DI ISOLAMENTO:
+   Ogni file .md e' un'unita' autonoma. Aggiungere o modificare un argomento
+   non richiede MAI di modificare altri file (a meno di non voler aggiornare
+   esplicitamente i related di altre pagine). Il costo di ogni operazione e'
+   O(1) rispetto alla dimensione del progetto.
+
+
+--------------------------------------------------------------------------------
+  17. DIAGRAMMI — Come funziona
+--------------------------------------------------------------------------------
+
+Per diagrammi complessi usa file .drawio.svg salvati in docs/assets/diagrams/.
+
+NAMING: [categoria]-[argomento]-[descrizione].drawio.svg
+  Esempio: networking-tls-handshake-flow.drawio.svg
+
+EMBED nella pagina:
+  <div class="diagram-container">
+    <img src="../../assets/diagrams/[nome-file].drawio.svg"
+         alt="Descrizione del diagramma" />
+  </div>
+
+Il file .drawio.svg e' indipendente dal .md:
+  - Modifiche al .md non richiedono rigenerazione del diagramma
+  - Rigenerazione del diagramma non richiede modifica del .md
+  - Il path non cambia mai
+
+Per diagrammi semplici usa ASCII art direttamente nel testo:
+  ```
+  Client --> Server --> Database
+  ```
+
+Per diagrammi con Mermaid (supportato via pymdownx.superfences):
+  ```mermaid
+  graph LR
+    A[Client] --> B[Server]
+    B --> C[Database]
+  ```
+
+
+--------------------------------------------------------------------------------
+  18. COMANDI UTILI
+--------------------------------------------------------------------------------
+
+# Avviare il server di sviluppo locale (con hot-reload)
+mkdocs serve
+
+# Build del sito statico nella cartella site/
+mkdocs build
+
+# Deploy su GitHub Pages (branch gh-pages)
+mkdocs gh-deploy
+
+# Build con verbose output (utile per debug)
+mkdocs build --verbose
+
+# Verificare che il sito sia valido prima del deploy
+mkdocs build --strict
+
+
+--------------------------------------------------------------------------------
+  19. FILE DA GENERARE — Lista Riepilogativa
+--------------------------------------------------------------------------------
+
+L'AI deve generare TUTTI questi file nella prima risposta (o in sequenza
+se troppo lunghi per un'unica risposta):
+
+OBBLIGATORI (struttura base):
+  [ ] mkdocs.yml
+  [ ] requirements.txt
+  [ ] .gitignore
+  [ ] docs/index.md
+  [ ] docs/tags.md
+  [ ] docs/_templates/TEMPLATE.md
+  [ ] docs/assets/styles/custom.css
+  [ ] docs/assets/js/nav-enhance.js
+
+PER OGNI CATEGORIA (ripeti la struttura):
+  [ ] docs/[categoria]/_index.md
+
+FILE DI ESEMPIO (dimostrare il template in pratica):
+  [ ] docs/[categoria-pertinente]/[argomento-esempio].md
+      (file completo e dettagliato per [ARGOMENTO DI ESEMPIO])
+
+
+--------------------------------------------------------------------------------
+  20. PRINCIPI OPERATIVI — Istruzioni per chi mantiene la KB
+--------------------------------------------------------------------------------
+
+AGGIUNGERE UN NUOVO ARGOMENTO:
+  1. Identificare la categoria corretta
+  2. Verificare che l'argomento non esista gia' (controllare nomi file)
+  3. Creare il file .md con frontmatter completo dal TEMPLATE.md
+  4. Compilare TUTTI i campi (nessuno opzionale)
+  5. Popolare search_keywords con tutti i sinonimi rilevanti
+  6. Popolare related con gli slug degli argomenti collegati
+  7. Non modificare altri file
+
+MODIFICARE UN ARGOMENTO ESISTENTE:
+  1. Leggere il file dell'argomento
+  2. Applicare la modifica
+  3. Aggiornare last_updated
+  4. Se la modifica introduce nuove relazioni, aggiornare related nello stesso file
+  5. Non leggere ne' modificare altri file
+
+COLLEGARE DUE ARGOMENTI (aggiungere relazione):
+  1. Aprire file A -> aggiungere B nel campo related
+  2. Aprire file B -> aggiungere A nel campo related
+  3. Aggiornare last_updated in entrambi
+  (Unico caso in cui si toccano 2 file — costo O(2), mai di piu')
+
+QUALITA' DEI CONTENUTI:
+  - Ogni acronimo espanso alla prima comparsa nel testo
+  - Code block sempre con language tag
+  - Sezione Panoramica completa: cos'e', perche' esiste, quando usarlo,
+    quando NON usarlo
+  - Sezione Troubleshooting con i problemi reali piu' comuni
+  - Nessun contenuto incompleto o placeholder nel testo finale
+
+
+================================================================================
+  FINE PROMPT
+================================================================================
+
+Note per l'utente:
+  - Puoi fornire questo prompt in piu' messaggi se l'AI ha limiti di lunghezza
+  - Dopo aver generato la struttura base, usa il TEMPLATE.md per richiedere
+    la creazione di ogni nuovo argomento
+  - Il CLAUDE.md del progetto originale (se presente) contiene istruzioni
+    specifiche per l'AI che mantiene la KB — adattalo al tuo contesto
+  - Per il deploy su GitHub Pages: crea un repository, push del codice,
+    e lancia `mkdocs gh-deploy` oppure configura una GitHub Action automatica

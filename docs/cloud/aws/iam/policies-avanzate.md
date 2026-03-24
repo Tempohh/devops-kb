@@ -9,10 +9,26 @@ related: [cloud/aws/iam/_index, cloud/aws/iam/organizations, cloud/aws/security/
 official_docs: https://docs.aws.amazon.com/iam/latest/userguide/access_policies.html
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-09
 ---
 
 # IAM Policies Avanzate
+
+Questo documento approfondisce i meccanismi avanzati di IAM che permettono di costruire sistemi di accesso precisi, scalabili e sicuri. Si presuppone la conoscenza dei concetti base di IAM (Users, Groups, Roles e Policies): se sei nuovo su IAM, inizia dalla [pagina principale IAM](_index.md).
+
+I temi trattati qui — Conditions, ABAC, Permission Boundaries, Resource-based Policies e STS — diventano rilevanti quando le policy semplici non bastano più: ad esempio quando devi scalare la gestione dei permessi su decine di team, controllare l'accesso in base al contesto della richiesta (da dove arriva, con quale MFA, in quale Region), o delegare la creazione di identità ad altri senza perdere il controllo.
+
+---
+
+## Prerequisiti
+
+Questo argomento presuppone familiarità con:
+- [IAM — Introduzione](../iam/_index.md) — utenti, gruppi, ruoli, policy base, evaluation logic: tutti questi concetti sono prerequisiti per le tecniche avanzate
+- Almeno un caso d'uso reale con IAM — le tecniche avanzate (ABAC, Permission Boundaries, STS) hanno senso solo quando si è già lavorato con policy semplici e si è incontrato il loro limite (documentazione esperienziale, non disponibile come file KB)
+
+Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
+
+---
 
 ## Policy Evaluation Logic — Dettaglio
 
@@ -42,7 +58,7 @@ Se nessun Allow trovato → DENY implicito
 
 ## Conditions — Controllo Contestuale
 
-Le **Condition** permettono di applicare policy solo in determinati contesti.
+Le **Condition** permettono di applicare policy solo in determinati contesti, rendendo i permessi molto più precisi rispetto a un semplice Allow/Deny statico. Senza Conditions, una policy che permette `s3:GetObject` vale per qualsiasi chiamata, da qualsiasi IP, in qualsiasi Region, con o senza MFA. Con le Conditions, puoi restringere la stessa policy a "solo da questo range IP, solo con MFA attiva, solo nella Region EU".
 
 ```json
 // Struttura Condition
@@ -170,7 +186,9 @@ Le **Condition** permettono di applicare policy solo in determinati contesti.
 
 ## ABAC — Attribute-Based Access Control
 
-**ABAC** (tag-based access control) permette di scalare la gestione dei permessi usando i **tag** come attributi.
+**ABAC** (Attribute-Based Access Control, anche detto tag-based access control) è un approccio alla gestione dei permessi che usa i **tag** come attributi per determinare l'accesso, invece di definire policy separate per ogni team o progetto.
+
+Il problema che risolve: con un approccio tradizionale (RBAC — Role-Based Access Control), ogni volta che nasce un nuovo team o progetto devi creare nuove policy e nuovi role specifici. Con ABAC, scrivi la policy una volta in modo generico (es. "puoi gestire le risorse che hanno lo stesso tag Team del tuo utente") e il controllo degli accessi si aggiorna automaticamente man mano che tagghi correttamente utenti e risorse — senza toccare le policy IAM.
 
 ```json
 // Scenario: developer può gestire solo risorse con il suo team tag
@@ -217,7 +235,9 @@ Le **Condition** permettono di applicare policy solo in determinati contesti.
 
 ## Permission Boundaries
 
-Un **Permission Boundary** definisce il **massimo dei permessi** che un'identity può avere — anche se le sue policy allegano più permessi.
+Un **Permission Boundary** definisce il **tetto massimo dei permessi** che un'identità IAM può avere — anche se le sue policy allegano più permessi, i permessi effettivi non potranno mai superare il boundary.
+
+Il caso d'uso tipico è la **delega controllata**: vuoi permettere ai tuoi developer di creare autonomamente IAM Role per le loro applicazioni, ma senza rischiare che creino role con permessi amministrativi illimitati. Con i Permission Boundaries, puoi dire "i developer possono creare role, ma solo se questi role hanno il nostro boundary standard applicato" — garantendo così che i role creati dai developer non possano mai superare un determinato livello di accesso, indipendentemente da quali policy vi allegano.
 
 ```
 Permessi effettivi = Identity Policy ∩ Permission Boundary
@@ -274,7 +294,9 @@ aws iam put-role-permissions-boundary \
 
 ## Resource-Based Policies
 
-Le **Resource-based policies** sono allegare alla risorsa, non all'identity. Supportate da: S3, SQS, SNS, KMS, Lambda, API Gateway, Secrets Manager, ECR, CloudWatch Logs.
+Le **Resource-based policies** sono policy allegate direttamente alla risorsa (es. un bucket S3, una coda SQS), invece che all'identità che vi accede. Sono supportate da: S3, SQS, SNS, KMS, Lambda, API Gateway, Secrets Manager, ECR, CloudWatch Logs.
+
+Il vantaggio principale rispetto alle policy identity-based è l'accesso **cross-account senza AssumeRole**: un'entità di un altro account AWS può accedere direttamente alla risorsa se la resource policy lo permette, senza dover prima assumere un role nell'account di destinazione. Questo semplifica architetture in cui più account devono condividere una risorsa comune.
 
 ```json
 // S3 Bucket Policy — accesso cross-account
@@ -331,7 +353,9 @@ Le **Resource-based policies** sono allegare alla risorsa, non all'identity. Sup
 
 ## iam:PassRole
 
-`iam:PassRole` è un permesso speciale che controlla quali role un utente può "passare" a un servizio AWS.
+`iam:PassRole` è un permesso speciale che controlla quali role un utente può "passare" a un servizio AWS. Senza questo permesso, un utente non può associare un IAM Role a una risorsa (es. configurare il role di esecuzione di una Lambda function), anche se ha i permessi per creare la risorsa stessa.
+
+Questo meccanismo previene una forma di **privilege escalation**: senza `iam:PassRole`, un developer con accesso limitato potrebbe creare una Lambda function e assegnarle un role con permessi amministrativi, eseguendo poi codice con privilegi superiori ai propri.
 
 ```json
 // Permette di passare SOLO MyLambdaRole a Lambda
@@ -353,7 +377,9 @@ Le **Resource-based policies** sono allegare alla risorsa, non all'identity. Sup
 
 ## STS — Security Token Service
 
-**STS** fornisce credenziali temporanee. Le operazioni principali:
+**STS** (Security Token Service) è il servizio che emette le **credenziali temporanee** usate da IAM Roles. Ogni volta che un'entità "assume" un Role, è STS che genera e restituisce le credenziali temporanee (AccessKeyId, SecretAccessKey, SessionToken) con una scadenza configurata.
+
+Capire STS è importante perché le sue API sono usate in molti scenari: accesso cross-account, federazione con Identity Provider aziendali, e integrazione con CI/CD come GitHub Actions. Le operazioni principali sono:
 
 ```bash
 # AssumeRole — assume un role (cross-account, federation)
@@ -396,7 +422,9 @@ aws sts get-session-token \
 
 ## GitHub Actions — OIDC Federation (Zero Secrets)
 
-Pattern moderno per CI/CD: eliminare le access keys statiche usando OIDC (OpenID Connect).
+Il pattern moderno per CI/CD è eliminare completamente le access keys statiche usando **OIDC** (OpenID Connect). Il problema tradizionale è che per permettere a GitHub Actions di deployare su AWS si dovevano configurare delle access keys come secrets nel repository — con tutti i rischi che comportano (chiavi che scadono, che vengono accidentalmente esposte, da ruotare manualmente).
+
+Con OIDC, GitHub emette un token firmato che certifica l'identità del workflow (quale repository, quale branch, quale workflow file lo ha generato). AWS IAM verifica questo token e, se è valido, emette credenziali temporanee tramite STS — senza che nessuna chiave statica sia mai esistita.
 
 ```bash
 # 1. Creare OIDC Identity Provider in IAM

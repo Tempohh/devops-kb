@@ -9,7 +9,7 @@ related: [networking/kubernetes/network-policies, networking/kubernetes/ingress,
 official_docs: https://www.cni.dev/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # CNI — Container Network Interface
@@ -19,6 +19,15 @@ last_updated: 2026-02-24
 CNI (Container Network Interface) è la specifica che definisce come i plugin di rete devono configurare le interfacce di rete nei container. Quando Kubernetes crea un pod, chiama il plugin CNI per assegnare un IP al pod, configurare le route necessarie e garantire la connettività con il resto del cluster. Senza un CNI plugin installato, i pod restano in stato `Pending`.
 
 La scelta del CNI plugin è una delle decisioni architetturali più importanti in un cluster Kubernetes: impatta performance, funzionalità di sicurezza (Network Policy), osservabilità e compatibilità con il cloud provider. I tre CNI più diffusi sono **Flannel** (semplicità), **Calico** (BGP + NetworkPolicy avanzate) e **Cilium** (eBPF, massima performance e osservabilità).
+
+## Prerequisiti
+
+Questo argomento presuppone familiarità con:
+- [Indirizzi IP e Subnetting](../fondamentali/indirizzi-ip-subnetting.md) — CIDR notation, subnetting, come funzionano gli indirizzi IP in una rete
+- [TCP/IP](../fondamentali/tcpip.md) — routing IP, come i pacchetti attraversano la rete
+- Kubernetes di base — pod, node, namespace, deployment (documentazione non ancora presente in questa KB)
+
+Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
 
 ## Concetti Chiave
 

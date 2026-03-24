@@ -9,12 +9,27 @@ related: [cloud/aws/messaging/sqs-sns, cloud/aws/messaging/eventbridge-kinesis, 
 official_docs: https://docs.aws.amazon.com/lambda/latest/dg/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-09
 ---
 
 # AWS Lambda — Serverless
 
-**Lambda** è il servizio serverless di AWS — esegui codice senza gestire server, pagando solo per il tempo di esecuzione.
+**Lambda** è il servizio serverless di AWS: permette di eseguire codice senza dover provisioning, gestire o scalare alcun server. Si paga solo per il tempo di esecuzione effettivo, con granularità al millisecondo.
+
+Il modello di esecuzione è **event-driven**: Lambda non gira continuamente in attesa di richieste, ma viene invocata solo quando accade qualcosa — una richiesta HTTP arriva all'API Gateway, un messaggio arriva su una coda SQS, un file viene caricato su S3. Questo la rende ideale per carichi di lavoro intermittenti o variabili, dove mantenere un server sempre acceso sarebbe uno spreco.
+
+**Quando usare Lambda:**
+- Funzioni di breve durata (fino a 15 minuti) con logica event-driven
+- Backend API (con API Gateway o Function URL) che devono scalare a zero in assenza di traffico
+- Processing asincrono: trasformazione dati S3, elaborazione messaggi SQS, reazione a eventi DynamoDB
+- Automazione e orchestrazione (reazione ad eventi CloudWatch, EventBridge)
+- Glue code tra servizi AWS
+
+**Quando NON usare Lambda:**
+- Processi che richiedono più di 15 minuti → valuta ECS/Fargate o EC2
+- Applicazioni con stato persistente in memoria → Lambda è stateless per definizione
+- Workload con traffico costante e alto volume → EC2 o container sono più economici
+- Applicazioni che richiedono accesso a filesystem POSIX → ECS con EFS
 
 ```
 Lambda Model
@@ -187,6 +202,12 @@ exports.handler = async (event, context) => {
 
 ## Concurrency
 
+La **concurrency** di Lambda è il numero di invocazioni in esecuzione simultaneamente. Per default, un account AWS ha un limite di 1.000 esecuzioni concorrenti per Region, condiviso tra tutte le Lambda functions. Superato questo limite, le invocazioni vengono **throttlate** (rifiutate con errore `TooManyRequestsException`).
+
+Esistono due meccanismi per gestire la concurrency:
+- **Reserved Concurrency**: riserva un numero fisso di esecuzioni concorrenti per una funzione, garantendo che non venga "soffocata" dal traffico di altre funzioni — ma allo stesso tempo ponendo un tetto massimo (utile per proteggere sistemi a valle come un database).
+- **Provisioned Concurrency**: pre-inizializza un numero fisso di ambienti di esecuzione, eliminando completamente il cold start per quella funzione (a costo di pagare per il provisioning anche in assenza di traffico).
+
 ```
 Lambda Concurrency
 
@@ -329,7 +350,9 @@ aws lambda create-event-source-mapping \
 
 ## Lambda Layers
 
-I **Lambda Layers** sono archivi ZIP con librerie/dipendenze condivise tra più funzioni.
+I **Lambda Layers** sono archivi ZIP contenenti librerie, dipendenze o codice condiviso che possono essere riutilizzati da più funzioni Lambda. Senza i Layers, ogni funzione dovrebbe includere le proprie dipendenze nel package — con il rischio di duplicare decine di MB di librerie comuni tra funzioni diverse.
+
+I Layers risolvono due problemi: riducono le dimensioni del deployment package (migliorando i cold start) e centralizzano la gestione delle versioni delle dipendenze (aggiornare una libreria in un Layer la aggiorna per tutte le funzioni che lo usano).
 
 ```bash
 # Creare layer con dipendenze Python
@@ -356,7 +379,9 @@ aws lambda update-function-configuration \
 
 ## Lambda in VPC
 
-Lambda in VPC permette di accedere a risorse private (RDS, ElastiCache, EC2).
+Di default, Lambda gira in una rete gestita da AWS e può accedere a Internet e ai servizi AWS pubblici, ma non alle risorse private del tuo VPC (RDS, ElastiCache, EC2 in subnet private). Configurando Lambda in VPC, la funzione viene connessa alle tue subnet private e può raggiungere queste risorse.
+
+Attenzione: mettere Lambda in VPC ha implicazioni importanti. La funzione perde l'accesso diretto a Internet (richiede un NAT Gateway per le chiamate verso l'esterno) e all'inizio aggiungeva latenza ai cold start. Le versioni più recenti del runtime hanno migliorato questo aspetto, ma è comunque qualcosa da considerare.
 
 ```bash
 aws lambda update-function-configuration \

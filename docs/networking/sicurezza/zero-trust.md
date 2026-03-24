@@ -9,7 +9,7 @@ related: [networking/sicurezza/vpn-ipsec, networking/sicurezza/firewall-waf, net
 official_docs: https://csrc.nist.gov/publications/detail/sp/800-207/final
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-09
 ---
 
 # Zero Trust Networking
@@ -19,6 +19,15 @@ last_updated: 2026-02-24
 Zero Trust (ZT) è un paradigma di sicurezza basato sul principio **"never trust, always verify"**: nessun utente, dispositivo o servizio è considerato fidato per default, indipendentemente dalla sua posizione di rete (interno o esterno). Ogni accesso viene autenticato, autorizzato e continuamente verificato. Zero Trust sostituisce il modello tradizionale "castle and moat" dove tutto dentro il perimetro è fidato.
 
 Il modello è definito da NIST SP 800-207 e deriva dall'esperienza di Google con BeyondCorp (2011). I pilastri principali sono: **verifica esplicita dell'identità**, **accesso con privilegi minimi**, e **assunzione di breach** (assumere che la rete interna sia già compromessa).
+
+## Prerequisiti
+
+Questo argomento presuppone familiarità con:
+- [VPN e IPsec](vpn-ipsec.md) — Zero Trust è l'alternativa moderna alla VPN tradizionale: capire la VPN aiuta a capire perché Zero Trust la supera
+- [Firewall e WAF](firewall-waf.md) — il modello perimetrale che Zero Trust sostituisce si basa su firewall di confine
+- [TLS/SSL Basics](../fondamentali/tls-ssl-basics.md) — mTLS e certificati sono la base dell'identità crittografica in Zero Trust
+
+Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
 
 ## Concetti Chiave
 
