@@ -9,7 +9,7 @@ related: [ai/fondamentali/machine-learning, ai/modelli/_index, ai/training/fine-
 official_docs: https://pytorch.org/docs/stable/index.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-03-27
 ---
 
 # Deep Learning — Reti Neurali e Architetture
@@ -462,6 +462,135 @@ loss.backward()  # backward in BF16, nessun underflow
 - **Riproducibilità**: `torch.manual_seed(42)`, `torch.backends.cudnn.deterministic = True`.
 - **Profiling**: usa `torch.profiler` per identificare bottleneck (data loading spesso è il collo di bottiglia).
 - **Transfer learning sempre**: quasi mai si ha abbastanza dati per training from scratch. Inizia da ImageNet, BERT, o altro pre-trained model.
+
+## Troubleshooting
+
+### Scenario 1 — Loss diventa NaN o esplode durante il training
+
+**Sintomo**: la loss sale a `inf` o diventa `NaN` dopo poche iterazioni; le metriche smettono di aggiornarsi.
+
+**Causa**: gradient explosion (gradienti troppo grandi moltiplicano i pesi fino a overflow), oppure learning rate eccessivamente alto, o input non normalizzati.
+
+**Soluzione**: abilita gradient clipping, riduci il learning rate, verifica che gli input siano normalizzati.
+
+```python
+# 1. Gradient clipping — inserire subito prima di optimizer.step()
+torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+# 2. Rilevare NaN nei gradienti prima dello step
+for name, param in model.named_parameters():
+    if param.grad is not None and torch.isnan(param.grad).any():
+        print(f"NaN gradient in: {name}")
+
+# 3. Controlla statistiche input
+print(f"Input mean: {inputs.mean():.4f}, std: {inputs.std():.4f}")
+# Se std >> 1 o mean >> 0 → normalizza
+inputs = (inputs - inputs.mean()) / (inputs.std() + 1e-8)
+```
+
+---
+
+### Scenario 2 — CUDA out of memory (OOM)
+
+**Sintomo**: `RuntimeError: CUDA out of memory. Tried to allocate X GiB`.
+
+**Causa**: batch size troppo grande, accumulo di tensori nel grafico computazionale (dimenticato `.detach()` o `torch.no_grad()`), o modello troppo grande per la VRAM disponibile.
+
+**Soluzione**: riduci batch size, usa gradient accumulation, attiva mixed precision, svuota la cache CUDA.
+
+```python
+# 1. Controlla VRAM disponibile
+import torch
+print(torch.cuda.memory_summary(device=None, abbreviated=True))
+
+# 2. Gradient accumulation: simula batch più grandi con meno VRAM
+accumulation_steps = 4
+optimizer.zero_grad()
+for i, (inputs, targets) in enumerate(loader):
+    with autocast(dtype=torch.bfloat16):
+        loss = criterion(model(inputs), targets) / accumulation_steps
+    loss.backward()
+    if (i + 1) % accumulation_steps == 0:
+        optimizer.step()
+        optimizer.zero_grad()
+
+# 3. Svuota cache tra run (es. in notebook)
+torch.cuda.empty_cache()
+
+# 4. Attiva mixed precision per dimezzare la VRAM
+# (vedi sezione Mixed Precision Training)
+```
+
+---
+
+### Scenario 3 — Overfitting (train acc alta, val acc bassa)
+
+**Sintomo**: la training accuracy sale sopra al 95% mentre la validation accuracy si ferma o peggiora dopo qualche epoch. Gap crescente tra train loss e val loss.
+
+**Causa**: modello troppo complesso rispetto ai dati disponibili, o dati di training insufficienti/non variati.
+
+**Soluzione**: aumenta il dropout, aggiungi weight decay, usa data augmentation, riduci la capacità del modello.
+
+```python
+# 1. Aumenta dropout
+nn.Dropout(p=0.5)  # default 0.1-0.3 → prova 0.4-0.5
+
+# 2. Weight decay più aggressivo nell'optimizer
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.1)
+
+# 3. Data augmentation per immagini (torchvision.transforms)
+from torchvision import transforms
+augment = transforms.Compose([
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomCrop(32, padding=4),
+    transforms.ColorJitter(brightness=0.2, contrast=0.2),
+    transforms.RandomRotation(15),
+])
+
+# 4. Early stopping (vedere training loop nella sezione 7)
+# → il checkpoint salva il miglior val_acc prima che inizi il degrado
+```
+
+---
+
+### Scenario 4 — GPU sottoutilizzata (utilizzo < 50%)
+
+**Sintomo**: `nvidia-smi` mostra GPU utilization bassa (< 50%) durante il training; training più lento del previsto.
+
+**Causa**: il data loading è il collo di bottiglia (CPU-bound), batch size troppo piccolo, o operazioni frequenti CPU↔GPU.
+
+**Soluzione**: aumenta i worker del DataLoader, abilita `pin_memory`, usa `prefetch_factor`, o aumenta il batch size.
+
+```bash
+# Monitora GPU in tempo reale
+watch -n 1 nvidia-smi
+
+# Profila il training con PyTorch Profiler
+```
+
+```python
+# 1. Più worker per il DataLoader
+loader = DataLoader(
+    dataset,
+    batch_size=256,          # batch più grande → più lavoro per GPU
+    num_workers=8,           # parallelizza il data loading su CPU
+    pin_memory=True,         # trasferimento CPU→GPU più veloce
+    prefetch_factor=2,       # precarica 2 batch in anticipo
+    persistent_workers=True  # evita overhead di riavvio worker
+)
+
+# 2. Profiling dettagliato
+with torch.profiler.profile(
+    activities=[torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA],
+    record_shapes=True
+) as prof:
+    for i, batch in enumerate(loader):
+        if i >= 10: break
+        train_step(batch)
+
+print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+```
 
 ## Riferimenti
 

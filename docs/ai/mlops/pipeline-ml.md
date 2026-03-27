@@ -9,7 +9,7 @@ related: [ai/mlops/_index, ai/training/fine-tuning, ai/training/valutazione, ai/
 official_docs: https://mlflow.org/docs/latest/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-27
+last_updated: 2026-03-27
 ---
 
 # Pipeline ML e MLOps Tooling
@@ -752,6 +752,130 @@ async def injection_detection_middleware(request: Request, call_next):
 - **LLM-specific monitoring**: le metriche infrastrutturali (latenza, errori) non bastano. Monitora refusal rate, output quality, cost per query, e prompt injection attempt rate.
 - **Drift detection proattiva**: non aspettare che gli utenti si lamentino per accorgerti del drift. Implementa drift detection automatica che triggera re-evaluation.
 - **Canary deployment per ogni cambio modello**: ogni nuovo modello in produzione va rilasciato prima al 5-10% del traffico, monitorato, e poi gradualmente espanso.
+
+## Troubleshooting
+
+### Scenario 1 — MLflow: run non appaiono nella UI
+
+**Sintomo:** Il codice esegue senza errori ma i run non compaiono nell'interfaccia MLflow.
+
+**Causa:** `tracking_uri` non configurato correttamente — MLflow scrive su `./mlruns` locale invece del server remoto, oppure il server non è raggiungibile dalla macchina di training.
+
+**Soluzione:** Verificare l'URI configurato e la connettività al server.
+
+```bash
+# Controlla l'URI attivo
+python -c "import mlflow; print(mlflow.get_tracking_uri())"
+
+# Testa la raggiungibilità del server
+curl http://mlflow-server:5000/api/2.0/mlflow/experiments/list
+
+# Se usi variabile d'ambiente invece di set_tracking_uri
+export MLFLOW_TRACKING_URI=http://mlflow-server:5000
+python train.py
+
+# Se vuoi ispezionare i run locali
+mlflow ui --backend-store-uri ./mlruns --port 5001
+```
+
+---
+
+### Scenario 2 — DVC: `dvc pull` fallisce con errore di accesso S3
+
+**Sintomo:** `dvc pull` restituisce `ERROR: failed to pull data from the cloud` oppure `403 Forbidden`.
+
+**Causa:** Credenziali AWS non configurate, scadute, o il bucket S3 ha una policy che esclude il ruolo corrente.
+
+**Soluzione:** Verificare le credenziali e i permessi IAM.
+
+```bash
+# Verifica credenziali AWS attive
+aws sts get-caller-identity
+
+# Testa accesso diretto al bucket
+aws s3 ls s3://my-bucket/dvc-store/
+
+# Controlla la configurazione DVC
+dvc remote list
+dvc remote modify myremote region eu-west-1  # aggiusta la regione
+
+# Se si usano profili AWS named
+dvc remote modify myremote profile staging-profile
+
+# Forza il re-fetch ignorando la cache locale
+dvc pull --force
+```
+
+---
+
+### Scenario 3 — Kubeflow Pipeline: step di training rimane in stato `Pending`
+
+**Sintomo:** Il pipeline step che richiede GPU rimane bloccato in stato `Pending` indefinitamente senza errori espliciti.
+
+**Causa:** Nessun nodo del cluster soddisfa il `node_selector` per la GPU richiesta, oppure le GPU disponibili sono tutte occupate e non c'è autoscaling configurato.
+
+**Soluzione:** Verificare la disponibilità di nodi GPU e i selector configurati.
+
+```bash
+# Controlla i nodi GPU disponibili e le loro label
+kubectl get nodes -l nvidia.com/gpu.present=true
+kubectl describe nodes -l nvidia.com/gpu.present=true | grep -A5 "Allocatable"
+
+# Ispeziona il pod bloccato
+kubectl get pods -n kubeflow
+kubectl describe pod <training-pod-name> -n kubeflow | grep -A10 "Events"
+
+# Controlla le risorse GPU effettivamente disponibili
+kubectl get nodes -o json | jq '.items[].status.allocatable["nvidia.com/gpu"]'
+
+# Rimuovi il node selector per testare su CPU (solo debug)
+# Nel componente KFP: rimuovi set_gpu_limit() e add_node_selector_constraint()
+```
+
+---
+
+### Scenario 4 — LangFuse: trace non vengono registrate in produzione
+
+**Sintomo:** Il decorator `@observe` funziona in sviluppo ma in produzione le trace non appaiono su LangFuse.
+
+**Causa:** Le trace vengono inviate in modo asincrono — se il processo termina prima del flush, le trace vengono perse. Frequente in job batch o Lambda/Cloud Run con lifecycle breve.
+
+**Soluzione:** Forzare il flush prima della terminazione del processo.
+
+```python
+from langfuse import Langfuse
+
+langfuse = Langfuse(
+    public_key="pk-...",
+    secret_key="sk-...",
+    flush_at=10,        # flush ogni 10 eventi invece di aspettare il default
+    flush_interval=5    # flush ogni 5 secondi
+)
+
+# Per job batch: flush esplicito al termine
+def main():
+    try:
+        run_pipeline()
+    finally:
+        langfuse.flush()  # garantisce che tutte le trace vengano inviate
+
+# Per Lambda/Cloud Run: flush nel finally del handler
+def lambda_handler(event, context):
+    try:
+        result = process_request(event)
+        return result
+    finally:
+        langfuse.flush()
+```
+
+```bash
+# Verifica che le chiamate API a LangFuse non siano bloccate dal firewall
+curl -I https://cloud.langfuse.com/api/public/ingestion \
+  -H "Authorization: Bearer pk-..."
+
+# Controlla i log per errori di invio
+# LangFuse logga su stderr: cerca "LangfuseClient" nei log dell'app
+```
 
 ## Riferimenti
 

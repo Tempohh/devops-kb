@@ -9,7 +9,7 @@ related: [ai/mlops/_index, ai/mlops/infrastruttura-gpu, ai/modelli/modelli-open-
 official_docs: https://docs.vllm.ai/
 status: complete
 difficulty: expert
-last_updated: 2026-02-27
+last_updated: 2026-03-27
 ---
 
 # Model Serving — vLLM, TGI e Deployment
@@ -564,6 +564,132 @@ vllm:cpu_cache_usage_perc         # % CPU cache (swap)
 | ITL p95 | < 100ms | > 200ms |
 | Error rate | < 0.1% | > 1% |
 | GPU Util | > 60% | < 30% (spreco), > 95% (saturo) |
+
+## Troubleshooting
+
+### Scenario 1 — OOM (Out of Memory) all'avvio o sotto carico
+
+**Sintomo:** vLLM crasha con `CUDA out of memory` durante il caricamento del modello o sotto carico elevato.
+
+**Causa:** `--gpu-memory-utilization` troppo alto, `--max-num-seqs` eccessivo, o modello troppo grande per la VRAM disponibile.
+
+**Soluzione:** Ridurre l'utilizzo di VRAM o applicare quantizzazione.
+
+```bash
+# Verifica VRAM disponibile prima dell'avvio
+nvidia-smi --query-gpu=memory.free,memory.total --format=csv
+
+# Ridurre memory utilization (default 0.90 → 0.80)
+vllm serve meta-llama/Llama-3.1-8B-Instruct \
+    --gpu-memory-utilization 0.80 \
+    --max-num-seqs 128  # ridurre se ancora OOM
+
+# Applicare quantizzazione AWQ per ridurre VRAM
+vllm serve casperhansen/llama-3-8b-instruct-awq \
+    --quantization awq \
+    --dtype auto
+
+# Monitorare KV cache usage in real-time
+curl http://localhost:8000/metrics | grep gpu_cache_usage
+```
+
+---
+
+### Scenario 2 — TTFT alto (>2s) anche con pochi utenti
+
+**Sintomo:** Il tempo al primo token è molto alto nonostante poca concorrenza. L'ITL è normale.
+
+**Causa:** Prompt molto lunghi causano una fase di prefill costosa. Oppure il modello sta gestendo prefix caching miss su ogni richiesta.
+
+**Soluzione:** Abilitare prefix caching, ridurre la lunghezza dei system prompt, o separare prefill e decode su istanze dedicate.
+
+```bash
+# Abilita prefix caching per riusare KV cache di prompt condivisi
+vllm serve meta-llama/Llama-3.1-8B-Instruct \
+    --enable-prefix-caching \
+    --max-num-batched-tokens 8192
+
+# Verifica TTFT p95 con le metriche Prometheus
+curl -s http://localhost:8000/metrics | grep time_to_first_token
+
+# Misura la lunghezza media dei prompt in input
+python -c "
+import json, sys
+data = json.load(open('requests.json'))
+lengths = [len(r['prompt'].split()) for r in data]
+print(f'Avg: {sum(lengths)/len(lengths):.0f} tokens, Max: {max(lengths)}')
+"
+```
+
+---
+
+### Scenario 3 — Pod Kubernetes killato prima del completamento del caricamento
+
+**Sintomo:** Il pod vLLM viene riavviato ciclicamente (`CrashLoopBackOff` o `OOMKilled`) durante il caricamento del modello.
+
+**Causa:** La readiness/liveness probe scade prima che il modello sia caricato in VRAM, oppure il memory limit del container è troppo basso.
+
+**Soluzione:** Aumentare `initialDelaySeconds` e i memory limits.
+
+```yaml
+# Aumentare i delay delle probe per modelli grandi
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 180   # 3 minuti per modelli 70B+
+  periodSeconds: 15
+  failureThreshold: 5
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 240
+  failureThreshold: 3
+
+# Aumentare memory limit (RAM host, non VRAM)
+resources:
+  limits:
+    nvidia.com/gpu: 1
+    memory: 48Gi   # aumentare se il modello usa RAM durante il caricamento
+  requests:
+    memory: 32Gi
+```
+
+```bash
+# Verifica causa del crash
+kubectl describe pod vllm-xxx -n ai-serving
+kubectl logs vllm-xxx -n ai-serving --previous
+```
+
+---
+
+### Scenario 4 — Throughput basso, GPU utilization < 30%
+
+**Sintomo:** Il serving è lento e la GPU è quasi idle nonostante le request in coda.
+
+**Causa:** Batch size troppo piccolo (poche request in volo simultaneamente), oppure `max-num-seqs` troppo basso, o le request arrivano serializzate invece che in burst.
+
+**Soluzione:** Aumentare il parallelismo e verificare la configurazione del client.
+
+```bash
+# Aumentare il numero massimo di sequenze parallele
+vllm serve meta-llama/Llama-3.1-8B-Instruct \
+    --max-num-seqs 512 \
+    --max-num-batched-tokens 16384
+
+# Verificare le request in volo con le metriche
+watch -n1 'curl -s http://localhost:8000/metrics | grep -E "num_requests_(running|waiting)"'
+
+# Benchmark per misurare il throughput massimo reale
+python benchmarks/benchmark_throughput.py \
+    --backend vllm \
+    --model meta-llama/Llama-3.1-8B-Instruct \
+    --num-prompts 500 \
+    --request-rate 50  # aumentare fino a saturazione
+```
+
+---
 
 ## Best Practices
 

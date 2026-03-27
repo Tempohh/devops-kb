@@ -16,4 +16,5 @@ I concetti e gli standard su cui si basa l'osservabilità moderna.
 
 ## Argomenti
 
+- [I Tre Pilastri dell'Osservabilità](tre-pilastri-osservabilita.md) — Metriche, log e tracce: quando usare cosa e come si complementano
 - [OpenTelemetry](opentelemetry.md) — Lo standard CNCF per metriche, log e tracce unificati

@@ -9,7 +9,7 @@ related: [ai/mlops/_index, ai/mlops/model-serving, ai/fondamentali/deep-learning
 official_docs: https://docs.nvidia.com/cuda/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-27
+last_updated: 2026-03-27
 ---
 
 # Infrastruttura GPU per LLM
@@ -482,6 +482,126 @@ print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
 - **NVLink è essenziale per tensor parallelism**: senza NVLink, la comunicazione PCIe diventa il bottleneck. Su consumer GPU (no NVLink), usa pipeline parallelism invece.
 - **Separa inference da training GPU**: le GPU di training sono costantemente saturate; condividerle con l'inferenza crea picchi imprevedibili.
 - **Kubernetes MIG per GPU sharing**: usa MIG su A100/H100 per servire modelli piccoli (7B, 13B) su istanze isolate della stessa GPU fisica.
+
+## Troubleshooting
+
+### Scenario 1 — CUDA Out of Memory (OOM) durante inferenza
+
+**Sintomo:** `RuntimeError: CUDA out of memory. Tried to allocate X GiB` durante il caricamento del modello o la generazione.
+
+**Causa:** La VRAM disponibile è insufficiente per pesi + KV cache + overhead, spesso perché `batch_size` o `max_model_len` sono troppo alti.
+
+**Soluzione:** Ridurre `max_model_len` o `batch_size`, oppure passare a una quantizzazione più aggressiva (FP16 → NF4).
+
+```bash
+# Verifica VRAM disponibile prima del lancio
+nvidia-smi --query-gpu=memory.total,memory.free --format=csv
+
+# vLLM: riduci context window per liberare KV cache
+vllm serve meta-llama/Llama-3.1-8B-Instruct \
+    --max-model-len 8192 \           # era 32768
+    --gpu-memory-utilization 0.85    # lascia 15% di margine
+
+# Svuota cache PyTorch manualmente
+python -c "import torch; torch.cuda.empty_cache(); print('Cache svuotata')"
+
+# Controlla allocazione dettagliata
+python -c "import torch; print(torch.cuda.memory_summary())"
+```
+
+---
+
+### Scenario 2 — Processo GPU bloccato / NCCL timeout in multi-GPU
+
+**Sintomo:** Il processo si blocca senza errore, oppure `NCCL error: Timeout` o `NCCL error: unhandled system error` in setup tensor/pipeline parallelism.
+
+**Causa:** Mismatch nella topologia NVLink/PCIe tra i processi distribuiti, firewall tra nodi, o GPU con compute capability disomogenee.
+
+**Soluzione:** Verificare la topologia GPU, impostare le variabili d'ambiente NCCL, assicurarsi che tutte le GPU siano identiche.
+
+```bash
+# Visualizza topologia GPU e connettività NVLink
+nvidia-smi topo -m
+
+# Debug NCCL: abilita logging verbose
+export NCCL_DEBUG=INFO
+export NCCL_DEBUG_SUBSYS=ALL
+
+# Forza NCCL a usare un'interfaccia di rete specifica
+export NCCL_SOCKET_IFNAME=eth0
+
+# Verifica che tutte le GPU siano visibili e identiche
+nvidia-smi -L
+
+# Test di comunicazione NCCL tra GPU
+python -c "
+import torch
+import torch.distributed as dist
+dist.init_process_group('nccl')
+t = torch.ones(1).cuda()
+dist.all_reduce(t)
+print(f'All-reduce OK: {t.item()}')
+"
+```
+
+---
+
+### Scenario 3 — Bassa GPU Utilization (< 50%) durante inferenza
+
+**Sintomo:** `nvidia-smi` mostra GPU util al 20-40% nonostante carico elevato. Throughput (token/sec) molto inferiore al teorico.
+
+**Causa:** L'inferenza è memory-bound e la GPU aspetta i dati dalla VRAM (bandwidth saturation), oppure il batch size è troppo piccolo (GPU sotto-utilizzata), oppure bottleneck sulla CPU nel preprocessing.
+
+**Soluzione:** Aumentare il batch size, abilitare continuous batching, verificare che il collo di bottiglia non sia CPU/I/O.
+
+```bash
+# Profila per capire dove il tempo è speso
+nvidia-smi dmon -s pucvmet -d 1 -c 30   # 30 campioni, 1/sec
+# Colonne: power, util%, memory util%, enc, dec, temp
+
+# Se memory bandwidth è saturo (mem util ~100%): è normale per LLM (memory-bound)
+# Se compute util è basso e mem util è basso: batch troppo piccolo
+
+# vLLM: aumenta concorrenza massima
+vllm serve meta-llama/Llama-3.1-8B-Instruct \
+    --max-num-seqs 256 \             # più sequenze in parallelo
+    --enable-chunked-prefill         # migliora throughput su batch misti
+
+# Profila con Nsight Systems per identificare idle time
+nsys profile --trace=cuda,nvtx --output=profile python serve.py
+```
+
+---
+
+### Scenario 4 — Pod Kubernetes con GPU non schedulato / CrashLoopBackOff
+
+**Sintomo:** Il pod resta in `Pending` con evento `0/3 nodes are available: 3 Insufficient nvidia.com/gpu`, oppure va in `CrashLoopBackOff` con errore CUDA.
+
+**Causa:** Il NVIDIA device plugin non è installato o non funzionante, il nodo non ha la toleration corretta, o il driver NVIDIA non è installato sul nodo.
+
+**Soluzione:** Verificare device plugin, driver, e configurazione node selector/toleration.
+
+```bash
+# Controlla che il device plugin sia running
+kubectl get pods -n kube-system | grep nvidia
+
+# Verifica che le GPU siano esposte come risorse allocabili
+kubectl describe node <gpu-node> | grep -A5 "Allocatable"
+# Deve mostrare: nvidia.com/gpu: 1 (o più)
+
+# Se GPU non appare: verifica driver sul nodo
+ssh <gpu-node> "nvidia-smi"
+
+# Controlla eventi del pod in Pending
+kubectl describe pod <pod-name> | grep -A20 Events
+
+# Verifica che il pod abbia toleration e nodeSelector corretti
+kubectl get pod <pod-name> -o yaml | grep -A10 tolerations
+
+# Reinstalla device plugin se necessario
+kubectl delete -f nvidia-device-plugin.yml
+kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.14.0/nvidia-device-plugin.yml
+```
 
 ## Riferimenti
 

@@ -26,3 +26,5 @@ Comprendere i fondamentali del networking è prerequisito essenziale per qualsia
 | [DNS — Domain Name System](dns.md) | Risoluzione dei nomi, tipi di record, CoreDNS in Kubernetes e sicurezza DNS |
 | [HTTP e HTTPS](http-https.md) | Metodi, status code, header, versioni HTTP, caching e CORS |
 | [TLS/SSL — Fondamentali](tls-ssl-basics.md) | Handshake TLS 1.3, certificati X.509, PKI, mTLS e gestione dei certificati |
+| [NAT — Network Address Translation](nat.md) | SNAT, DNAT, PAT, port forwarding, conntrack e NAT in Kubernetes |
+| [eBPF — Extended Berkeley Packet Filter](ebpf.md) | Programmabilità kernel per networking, observability e security — base tecnologica di Cilium e Falco |

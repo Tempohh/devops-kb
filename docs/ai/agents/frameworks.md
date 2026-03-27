@@ -9,7 +9,7 @@ related: [ai/agents/_index, ai/agenti/claude-agent-sdk, ai/sviluppo/rag, ai/svil
 official_docs: https://python.langchain.com/docs/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-03-27
 ---
 
 # Framework Agentici — LangChain, LlamaIndex, AutoGen
@@ -528,6 +528,115 @@ print(result["final_report"])
 
 !!! tip "Regola empirica"
     Prova prima con l'SDK diretto del provider. Se arrivi a 200+ righe di boilerplate per gestire tool, routing, o stato — allora considera un framework. Spesso 200 righe di codice custom sono più manutenibili di 20 righe con un framework che nasconde 2000 righe di magia.
+
+## Troubleshooting
+
+### Scenario 1 — LangChain: ImportError o AttributeError dopo aggiornamento pacchetto
+
+**Sintomo:** `ImportError: cannot import name 'X' from 'langchain'` oppure `AttributeError: module 'langchain' has no attribute 'Y'` dopo un `pip install --upgrade`.
+
+**Causa:** LangChain ha riorganizzato i propri moduli più volte (0.1→0.2→0.3). Molte classi si trovano ora in pacchetti separati (`langchain-core`, `langchain-community`, `langchain-anthropic`, ecc.). Un upgrade non coordinato rompe i path di import.
+
+**Soluzione:** Blocca le versioni in `requirements.txt` e migra gli import ai nuovi path.
+
+```bash
+# Verifica le versioni installate
+pip show langchain langchain-core langchain-community langchain-anthropic
+
+# Identifica il nuovo path di import dalla documentazione di migrazione
+# Esempio: da langchain.chat_models → langchain_anthropic
+python -c "from langchain_anthropic import ChatAnthropic; print('OK')"
+
+# Blocca le versioni in requirements.txt
+pip freeze | grep langchain >> requirements.txt
+```
+
+---
+
+### Scenario 2 — AutoGen: loop infinito o conversazione che non termina
+
+**Sintomo:** `user_proxy.initiate_chat()` non termina mai oppure supera `max_consecutive_auto_reply` e si blocca senza risultato.
+
+**Causa:** La funzione `is_termination_msg` non cattura il segnale di stop dell'LLM (es. l'LLM scrive "TERMINATE" ma con punteggiatura, o in minuscolo), oppure `max_consecutive_auto_reply` è troppo basso per il task.
+
+**Soluzione:** Rendere la funzione di terminazione più robusta e aumentare il limite.
+
+```python
+# Funzione di terminazione robusta (case-insensitive, ignora punteggiatura)
+is_termination_msg=lambda msg: "terminate" in msg.get("content", "").lower()
+
+# Aumenta il limite per task complessi
+user_proxy = autogen.UserProxyAgent(
+    name="User",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=20,  # era 10
+    is_termination_msg=lambda msg: "terminate" in msg.get("content", "").lower(),
+)
+
+# Debug: stampa ogni messaggio per vedere dove si blocca
+for msg in user_proxy.chat_messages[assistant]:
+    print(f"[{msg['role']}]: {msg['content'][:100]}")
+```
+
+---
+
+### Scenario 3 — LangGraph: `KeyError` sullo stato durante l'esecuzione del grafo
+
+**Sintomo:** `KeyError: 'next_action'` oppure `KeyError: 'messages'` durante l'esecuzione del grafo, anche se i campi sembrano definiti nel `TypedDict`.
+
+**Causa:** Un nodo del grafo non ritorna tutti i campi dello stato oppure ne ritorna uno con nome errato. LangGraph fa merge parziale, ma un nodo che accede a un campo non ancora popolato causa `KeyError`.
+
+**Soluzione:** Ogni nodo deve ritornare solo i campi che modifica; inizializzare tutti i campi nell'`initial_state` prima di invocare il grafo.
+
+```python
+# initial_state deve avere TUTTI i campi del TypedDict
+initial_state = {
+    "messages": [HumanMessage(content="alert...")],
+    "next_action": "",       # stringa vuota, non omettere
+    "iteration_count": 0,
+    "final_report": ""
+}
+
+# Debug: usa stream() invece di invoke() per vedere lo stato nodo per nodo
+for step in app.stream(initial_state):
+    print(step)  # stampa {nome_nodo: stato_output}
+
+# Verifica che ogni nodo ritorni dict valido
+def my_node(state: AgentState) -> dict:
+    # NON ritornare lo stato completo — solo i campi modificati
+    return {"next_action": "generate_report"}
+```
+
+---
+
+### Scenario 4 — LlamaIndex: risposte vuote o "Non ho informazioni su questo"
+
+**Sintomo:** Il query engine risponde sempre con "I don't have information" anche se i documenti caricati contengono la risposta.
+
+**Causa:** (a) Il chunking ha prodotto frammenti troppo piccoli/grandi perdendo contesto; (b) `similarity_top_k` è troppo basso; (c) l'embedding model è diverso tra fase di indexing e query.
+
+**Soluzione:** Aumentare `similarity_top_k`, verificare la coerenza degli embedding, e loggare i source nodes per diagnosticare.
+
+```python
+# 1. Aumenta k e abbassa la soglia di similarità
+query_engine = index.as_query_engine(
+    similarity_top_k=10,        # era 5
+    node_postprocessors=[SimilarityPostprocessor(similarity_cutoff=0.5)]
+)
+
+# 2. Verifica i source nodes recuperati
+response = query_engine.query("la tua domanda")
+print(f"Nodes recuperati: {len(response.source_nodes)}")
+for node in response.source_nodes:
+    print(f"  Score: {node.score:.3f} | File: {node.metadata.get('file_name')}")
+    print(f"  Preview: {node.text[:100]}\n")
+
+# 3. Assicurati di usare lo stesso embed_model per index e query
+from llama_index.core import Settings
+Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")  # deve essere identico
+```
+
+---
 
 ## Riferimenti
 

@@ -9,7 +9,7 @@ related: [ai/fondamentali/deep-learning, ai/training/fine-tuning, ai/training/va
 official_docs: https://scikit-learn.org/stable/user_guide.html
 status: complete
 difficulty: beginner
-last_updated: 2026-03-03
+last_updated: 2026-03-27
 ---
 
 # Machine Learning — Fondamentali
@@ -389,6 +389,118 @@ print(f"Test score: {grid_search.score(X_test, y_test):.3f}")
 - **Reproducibilità**: imposta `random_state` / seed ovunque. Versiona i dati (DVC — Data Version Control, lo standard per versionare dataset come Git versiona il codice).
 - **Feature importance**: interpreta il modello per capire cosa sta imparando.
 - **Monitor drift**: in produzione, i dati cambiano nel tempo. Il **concept drift** si verifica quando cambia la relazione tra le feature e la target (es. i pattern di frode cambiano). Il **data drift** si verifica quando cambia la distribuzione delle feature di input (es. nuovi tipi di utenti). Monitora distribuzioni delle feature e performance del modello per rilevarli.
+
+## Troubleshooting
+
+### Scenario 1 — Overfitting: validation loss risale mentre training loss scende
+
+**Sintomo**: Training accuracy alta (>95%), validation accuracy molto più bassa o in calo progressivo. Gap crescente tra training e validation loss.
+
+**Causa**: Il modello memorizza il training set invece di generalizzare. Cause tipiche: modello troppo complesso, dataset troppo piccolo, nessuna regolarizzazione.
+
+**Soluzione**: Ridurre la complessità del modello, aggiungere regolarizzazione, usare early stopping o data augmentation.
+
+```python
+# Verifica rapida del gap train/validation
+from sklearn.model_selection import learning_curve
+import numpy as np
+
+train_sizes, train_scores, val_scores = learning_curve(
+    model, X, y, cv=5, scoring='f1_weighted',
+    train_sizes=np.linspace(0.1, 1.0, 10)
+)
+print(f"Train score: {train_scores[-1].mean():.3f}")
+print(f"Val score:   {val_scores[-1].mean():.3f}")
+print(f"Gap:         {train_scores[-1].mean() - val_scores[-1].mean():.3f}")
+
+# Fix: aggiungere regolarizzazione
+from sklearn.ensemble import RandomForestClassifier
+model = RandomForestClassifier(max_depth=5, min_samples_leaf=10, max_features='sqrt')
+```
+
+### Scenario 2 — Classi sbilanciate: il modello predice sempre la classe maggioritaria
+
+**Sintomo**: Accuracy apparentemente alta (es. 99%), ma precision/recall sulla classe minoritaria sono 0. Matrice di confusione con una riga quasi vuota.
+
+**Causa**: Il dataset ha una distribuzione molto sbilanciata (es. 99% negativo, 1% positivo). Il modello minimizza la loss totale predicendo sempre la classe maggioritaria.
+
+**Soluzione**: Usare `class_weight='balanced'`, oversampling (SMOTE) o undersampling, e metriche appropriate (F1, AUC-ROC).
+
+```python
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report
+from imblearn.over_sampling import SMOTE
+
+# Opzione 1: class_weight automatico
+model = RandomForestClassifier(class_weight='balanced', random_state=42)
+model.fit(X_train, y_train)
+
+# Opzione 2: SMOTE - oversampling sintetico della classe minoritaria
+smote = SMOTE(random_state=42)
+X_resampled, y_resampled = smote.fit_resample(X_train, y_train)
+model.fit(X_resampled, y_resampled)
+
+# Usare sempre report completo, non solo accuracy
+print(classification_report(y_test, model.predict(X_test)))
+```
+
+### Scenario 3 — Data leakage: performance irrealisticamente alte in validazione, pessime in produzione
+
+**Sintomo**: Metriche di validazione eccellenti (F1 > 0.99), ma il modello fallisce completamente su dati reali o in produzione.
+
+**Causa**: Il preprocessing (scaler, encoder, imputazione) è stato fittato sull'intero dataset prima dello split, o le feature includono informazioni future non disponibili al momento della predizione.
+
+**Soluzione**: Usare sempre sklearn Pipeline per garantire che il fit avvenga solo su training data; verificare che nessuna feature sia calcolata su dati futuri.
+
+```python
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# CORRETTO: scaler fittato solo nel training fold della pipeline
+pipeline = Pipeline([
+    ('scaler', StandardScaler()),   # fit avviene solo su X_train
+    ('model', GradientBoostingClassifier())
+])
+pipeline.fit(X_train, y_train)
+print(f"Test score: {pipeline.score(X_test, y_test):.3f}")
+
+# SBAGLIATO (data leakage):
+# scaler.fit(X)  # ← usa anche X_test!
+# X_scaled = scaler.transform(X)
+```
+
+### Scenario 4 — Convergenza lenta o instabile durante il training
+
+**Sintomo**: La loss oscilla molto senza scendere, oppure scende lentissimamente. Con PyTorch/TensorFlow: NaN nella loss dopo qualche epoch.
+
+**Causa**: Learning rate troppo alto (oscillazioni / NaN) o troppo basso (convergenza lenta). Feature non normalizzate con scale molto diverse. Gradient explosion con reti profonde.
+
+**Soluzione**: Normalizzare le feature, usare learning rate scheduling, aggiungere gradient clipping per reti profonde.
+
+```python
+import torch
+import torch.nn as nn
+
+# Gradient clipping per evitare explosion
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+for epoch in range(num_epochs):
+    loss = compute_loss(model, X_batch, y_batch)
+    optimizer.zero_grad()
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # clipping
+    optimizer.step()
+
+# Learning rate scheduling: riduci LR quando la loss stagna
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer, mode='min', factor=0.5, patience=5, verbose=True
+)
+scheduler.step(val_loss)  # chiamare dopo ogni epoch di validazione
+```
 
 ## Riferimenti
 

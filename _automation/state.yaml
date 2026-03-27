@@ -2,15 +2,24 @@
 # Aggiornato automaticamente - non modificare 'completed' manualmente
 
 version: 2
-last_run: '2026-03-24T23:45:00Z'
+last_run: '2026-03-27T14:14:09.321550+00:00'
 last_run_completed: true
 interrupted_task:
-  id: '023'
-  path: docs/networking/fondamentali/nat.md
+  id: '223'
+  path: docs/ai/modelli/claude.md
   step: started
-total_ops: 24
-total_runs: 15
+total_ops: 272
+total_runs: 36
 queue:
+- id: W-001
+  type: new_topic
+  path: docs/ci-cd/pipeline.md
+  category: ci-cd
+  priority: P0
+  reason: 'Broken link: ''iac/terraform/testing.md'' referenzia questo file che non esiste ancora.'
+  worth_if: Broken link attivo - necessario per evitare warning MkDocs
+  skip_if: Solo se il link nel file sorgente viene rimosso/corretto
+  status: completed
 - id: P0-001
   type: new_topic
   path: docs/monitoring/tools/jaeger-tempo.md
@@ -314,7 +323,7 @@ queue:
     '
   worth_if: Chi non ha background di networking e vuole capire come funziona l'indirizzamento
   skip_if: Già coperto abbastanza in tcpip.md o indirizzi-ip-subnetting.md
-  status: pending
+  status: completed
 - id: '024'
   type: new_topic
   path: docs/security/runtime/seccomp-apparmor.md
@@ -326,7 +335,7 @@ queue:
     '
   worth_if: Team con requisiti di hardening container in produzione
   skip_if: Già trattato in containers/container-runtime/sandboxing-avanzato.md
-  status: pending
+  status: completed
 - id: '025'
   type: new_topic
   path: docs/monitoring/fondamentali/tre-pilastri-osservabilita.md
@@ -338,150 +347,1821 @@ queue:
     '
   worth_if: Chiunque inizi la sezione monitoring — contestualizza tutto il resto
   skip_if: OpenTelemetry già copre questo sufficientemente
+  status: completed
+- id: '101'
+  type: new_topic
+  path: docs/containers/kubernetes/networking.md
+  category: containers
+  priority: P1
+  reason: 'Networking Kubernetes: CNI, Services (ClusterIP/NodePort/LoadBalancer), Ingress, NetworkPolicy, DNS interno. Gap
+    critico: workloads.md esiste ma il networking e'' assente.'
+  worth_if: Qualsiasi team che gestisce K8s in produzione
+  skip_if: Gia' coperto in dettaglio da un file esistente
+  status: completed
+- id: '102'
+  type: new_topic
+  path: docs/ci-cd/tools/github-actions.md
+  category: ci-cd
+  priority: P1
+  reason: GitHub Actions e' il CI/CD piu' usato. Manca completamente dalla KB. Workflow YAML, jobs/steps, matrix, secrets,
+    environments, reusable workflows, caching.
+  worth_if: Qualsiasi team che usa GitHub per il codice sorgente
+  skip_if: Gia' presente in altro file CI/CD
+  status: skipped
+- id: '103'
+  type: new_topic
+  path: docs/ci-cd/tools/argocd.md
+  category: ci-cd
+  priority: P1
+  reason: ArgoCD e' lo standard per GitOps su Kubernetes. App, ApplicationSet, sync policies, RBAC, multi-cluster. Complementare
+    a Helm e Kustomize.
+  worth_if: Team con K8s che vogliono GitOps e deployment dichiarativo
+  skip_if: Gia' trattato in altri file GitOps/CI-CD
+  status: skipped
+- id: '104'
+  type: new_topic
+  path: docs/security/iam/oauth2-oidc.md
+  category: security
+  priority: P1
+  reason: OAuth2 e OIDC sono i protocolli di autenticazione/autorizzazione moderni. Authorization Code Flow, PKCE, JWT, Keycloak,
+    scope, token refresh. Fondamentale per qualsiasi applicazione moderna.
+  worth_if: Team che sviluppano o gestiscono applicazioni con autenticazione
+  skip_if: Gia' coperto adeguatamente in security/
+  status: skipped
+- id: '105'
+  type: new_topic
+  path: docs/containers/kubernetes/ingress.md
+  category: containers
+  priority: P2
+  reason: Ingress controller e' il punto di ingresso HTTP/HTTPS in K8s. nginx-ingress, Traefik, TLS termination, path routing,
+    rate limiting, canary. Gap evidente con workloads/networking.
+  worth_if: Qualsiasi team con applicazioni HTTP esposte su K8s
+  skip_if: Gia' coperto in networking.md
+  status: completed
+- id: '106'
+  type: new_topic
+  path: docs/cloud/aws/containers/eks.md
+  category: cloud/aws
+  priority: P2
+  reason: 'EKS e'' il Kubernetes managed su AWS: il deployment K8s piu'' comune in enterprise. Node groups, Fargate, IRSA,
+    add-on management, upgrade strategy.'
+  worth_if: Team che usano AWS con carichi containerizzati
+  skip_if: Gia' trattato in file AWS esistenti
+  status: completed
+- id: '107'
+  type: new_topic
+  path: docs/databases/sql/postgresql-produzione.md
+  category: databases
+  priority: P2
+  reason: 'PostgreSQL in produzione: replication (streaming, logical), PgBouncer, VACUUM/autovacuum tuning, slow query analysis,
+    backup con WAL-G, extensions pg_stat_statements.'
+  worth_if: Team con PostgreSQL in produzione
+  skip_if: Gia' coperto in databases/sql/
+  status: skipped
+- id: '108'
+  type: new_topic
+  path: docs/networking/protocolli/http2-http3.md
+  category: networking
+  priority: P2
+  reason: HTTP/2 (multiplexing, server push, header compression) e HTTP/3 (QUIC, 0-RTT) sono fondamentali per capire performance
+    web e configurare load balancer/reverse proxy moderni.
+  worth_if: Chi configura nginx, load balancer, CDN o ottimizza API
+  skip_if: Gia' trattato in tcp-ip.md o file networking esistenti
+  status: completed
+- id: '109'
+  type: new_topic
+  path: docs/containers/kubernetes/helm.md
+  category: containers
+  priority: P2
+  reason: Helm e' il package manager de-facto per K8s. Charts, templates, values, hooks, OCI registries, Helmfile. Praticamente
+    ogni K8s deployment usa Helm.
+  worth_if: Tutti i team che gestiscono applicazioni su Kubernetes
+  skip_if: Gia' trattato in file K8s esistenti
+  status: completed
+- id: '110'
+  type: new_topic
+  path: docs/security/network/zero-trust.md
+  category: security
+  priority: P2
+  reason: 'Zero Trust Architecture: never trust always verify, micro-segmentation, service mesh mTLS, BeyondCorp. Rilevante
+    per K8s, cloud e compliance enterprise.'
+  worth_if: Team con requisiti di sicurezza enterprise o compliance
+  skip_if: Gia' trattato in mutual-tls.md o altro file security
+  status: completed
+- id: '111'
+  type: new_topic
+  path: docs/cloud/aws/compute/lambda.md
+  category: cloud/aws
+  priority: P3
+  reason: 'AWS Lambda: cold start, execution model, layers, event sources (API GW, SQS, S3), concurrency, SnapStart, cost
+    optimization.'
+  worth_if: Team con architetture event-driven o serverless su AWS
+  skip_if: Gia' trattato in file AWS esistenti
+  status: completed
+- id: '112'
+  type: new_topic
+  path: docs/ci-cd/tools/tekton.md
+  category: ci-cd
+  priority: P3
+  reason: 'Tekton e'' il CI/CD nativo Kubernetes: Pipeline, Task, PipelineRun, Triggers. Complementare ad ArgoCD nel pattern
+    CI (Tekton) + CD (ArgoCD).'
+  worth_if: Team che vogliono CI/CD cloud-native
+  skip_if: GitHub Actions o altro CI/CD gia' copre il gap adeguatamente
+  status: completed
+- id: '201'
+  type: new_topic
+  path: docs/cloud/gcp/fondamentali/panoramica.md
+  category: cloud/gcp
+  priority: P1
+  reason: 'GCP e'' il terzo cloud provider ma manca completamente dalla KB. Solo AWS e Azure sono coperti. Fondamentali GCP:
+    progetti, IAM, billing, regioni/zone, Google Cloud SDK.'
+  worth_if: Team che usano o valutano GCP — base imprescindibile
+  skip_if: Gia' presente in altro file GCP
+  status: completed
+- id: '202'
+  type: new_topic
+  path: docs/cloud/gcp/containers/gke.md
+  category: cloud/gcp
+  priority: P1
+  reason: GKE e' il Kubernetes managed di Google — il piu' maturo tra i cloud provider. Autopilot vs Standard, Workload Identity,
+    node pools, release channels, upgrade automatici.
+  worth_if: Team con carichi containerizzati su GCP
+  skip_if: Gia' trattato in file GCP esistenti
+  status: completed
+- id: '203'
+  type: new_topic
+  path: docs/monitoring/sre/incident-management.md
+  category: monitoring
+  priority: P1
+  reason: Gestione degli incidenti e' il pilastro pratico dell'SRE. Severity levels, on-call rotation (PagerDuty/OpsGenie),
+    runbook structure, war room, blameless postmortem, MTTR improvement. Completa il terzetto SLO/error-budget.
+  worth_if: Team con on-call e produzione critica
+  skip_if: Gia' coperto in slo-sla-sli.md o error-budget.md
+  status: completed
+- id: '204'
+  type: new_topic
+  path: docs/monitoring/sre/chaos-engineering.md
+  category: monitoring
+  priority: P2
+  reason: 'Chaos Engineering: Chaos Monkey, Litmus Chaos per Kubernetes, scenari (pod failure, network latency, CPU stress,
+    node drain), GameDay, steady state hypothesis. Completa il set SRE.'
+  worth_if: Team con alta disponibilita' e volonta' di testare i failure modes
+  skip_if: Gia' coperto in file SRE o monitoring esistenti
+  status: completed
+- id: '205'
+  type: new_topic
+  path: docs/cloud/finops/fondamentali.md
+  category: cloud
+  priority: P2
+  reason: FinOps e' la disciplina di ottimizzazione costi cloud. Reserved Instances vs Spot, rightsizing, tagging strategy,
+    cost allocation, unit economics, AWS Cost Explorer / GCP Billing / Azure Cost Management.
+  worth_if: Team con cloud spend rilevante e interesse a ottimizzare
+  skip_if: Gia' trattato nei file billing/pricing di AWS o Azure
+  status: completed
+- id: '206'
+  type: new_topic
+  path: docs/ci-cd/platform-engineering/backstage.md
+  category: ci-cd
+  priority: P2
+  reason: Backstage (CNCF) e' lo strumento di riferimento per Internal Developer Platforms. Software catalog, TechDocs, scaffolder
+    templates, plugins. Trend in forte crescita nei team DevOps maturi.
+  worth_if: Team con 10+ microservizi che vogliono migliorare la developer experience
+  skip_if: Gia' presente in file CI/CD esistenti
+  status: completed
+- id: '207'
+  type: new_topic
+  path: docs/networking/fondamentali/ebpf.md
+  category: networking
+  priority: P2
+  reason: eBPF e' la tecnologia abilitante di Cilium, Falco, Pixie, Tetragon. Permette networking e security a livello kernel
+    senza patching. Fondamentale per comprendere CNI moderni e runtime security.
+  worth_if: Team che usano Cilium, Falco o vogliono capire le basi tecnologiche dei CNI moderni
+  skip_if: Gia' trattato in cni.md o networking/kubernetes/
+  status: completed
+- id: '208'
+  type: new_topic
+  path: docs/cloud/gcp/compute/cloud-run.md
+  category: cloud/gcp
+  priority: P2
+  reason: Cloud Run e' il serverless container di GCP — fully managed, scale-to-zero, revision traffic splitting. Piu' flessibile
+    di Lambda per container esistenti. Complementare a GKE per workload stateless.
+  worth_if: Team che vogliono serverless con container su GCP
+  skip_if: Gia' trattato in file GCP esistenti
+  status: completed
+- id: '209'
+  type: new_topic
+  path: docs/iac/terraform/testing.md
+  category: iac
+  priority: P2
+  reason: 'Testing del codice IaC: Terratest (Go), terraform validate/plan, conftest/OPA per policy, checkov per security
+    scanning, tflint, pre-commit hooks. Gap: fondamentali/moduli/state esistono ma non il testing.'
+  worth_if: Team che vogliono IaC con quality gate nel CI/CD
+  skip_if: Gia' trattato in fondamentali.md o moduli.md
+  status: completed
+- id: '210'
+  type: new_topic
+  path: docs/containers/kubernetes/multi-cluster.md
+  category: containers
+  priority: P2
+  reason: 'Gestione multi-cluster K8s: Cluster API, Rancher, Fleet (Rancher), Argo CD multi-cluster, Crossplane, KubeFed v2.
+    Fondamentale per infrastrutture enterprise con piu'' cluster (dev/staging/prod, geo-distribuzione).'
+  worth_if: Team con 3+ cluster Kubernetes da gestire
+  skip_if: Gia' trattato in architettura.md o altri file K8s
+  status: completed
+- id: '211'
+  type: new_topic
+  path: docs/cloud/gcp/dati/bigquery.md
+  category: cloud/gcp
+  priority: P3
+  reason: BigQuery e' il data warehouse serverless di GCP — leader nel cloud analytics. Slot-based pricing, partitioned/clustered
+    tables, federated queries, BQML, streaming inserts. Manca completamente.
+  worth_if: Team con analytics o data engineering su GCP
+  skip_if: Gia' presente in file GCP esistenti
+  status: completed
+- id: '212'
+  type: new_topic
+  path: docs/monitoring/sre/capacity-planning.md
+  category: monitoring
+  priority: P3
+  reason: 'Capacity planning: demand forecasting, load testing (k6, Locust, JMeter), headroom management, cost vs performance
+    tradeoff. Completa il set SRE con un focus proattivo.'
+  worth_if: Team che gestiscono crescita del traffico e devono evitare over/under provisioning
+  skip_if: Gia' trattato in SLO o error-budget in modo sufficiente
+  status: completed
+- id: '213'
+  type: audit
+  path: docs/_templates/TEMPLATE.md
+  category: _templates
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '214'
+  type: audit
+  path: docs/ai/agents/agent-patterns.md
+  category: ai
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '215'
+  type: audit
+  path: docs/ai/agents/claude-agent-sdk.md
+  category: ai
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '216'
+  type: audit
+  path: docs/ai/agents/frameworks.md
+  category: ai
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '217'
+  type: audit
+  path: docs/ai/fondamentali/deep-learning.md
+  category: ai
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '218'
+  type: audit
+  path: docs/ai/fondamentali/llm-architettura.md
+  category: ai
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '219'
+  type: audit
+  path: docs/ai/fondamentali/machine-learning.md
+  category: ai
+  priority: P3
+  status: completed
+  reason: 'Issue: no_troubleshooting_section'
+- id: '220'
+  type: audit
+  path: docs/ai/mlops/infrastruttura-gpu.md
+  category: ai
+  priority: P3
+  status: completed
+  reason: 'Issue: no_troubleshooting_section'
+- id: '221'
+  type: audit
+  path: docs/ai/mlops/model-serving.md
+  category: ai
+  priority: P3
+  status: completed
+  reason: 'Issue: no_troubleshooting_section'
+- id: '222'
+  type: audit
+  path: docs/ai/mlops/pipeline-ml.md
+  category: ai
+  priority: P3
+  status: completed
+  reason: 'Issue: no_troubleshooting_section'
+- id: '223'
+  type: audit
+  path: docs/ai/modelli/claude.md
+  category: ai
+  priority: P3
   status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '224'
+  type: audit
+  path: docs/ai/modelli/modelli-open-source.md
+  category: ai
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '225'
+  type: audit
+  path: docs/ai/modelli/scelta-modello.md
+  category: ai
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '226'
+  type: audit
+  path: docs/ai/sviluppo/api-integration.md
+  category: ai
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '227'
+  type: audit
+  path: docs/ai/sviluppo/prompt-engineering.md
+  category: ai
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '228'
+  type: audit
+  path: docs/ai/sviluppo/rag.md
+  category: ai
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '229'
+  type: audit
+  path: docs/ai/tokens-context/context-window.md
+  category: ai
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '230'
+  type: audit
+  path: docs/ai/tokens-context/tokenizzazione.md
+  category: ai
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '231'
+  type: audit
+  path: docs/ai/training/fine-tuning.md
+  category: ai
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '232'
+  type: audit
+  path: docs/ai/training/valutazione.md
+  category: ai
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '233'
+  type: audit
+  path: docs/ci-cd/github-actions/enterprise.md
+  category: ci-cd
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '234'
+  type: audit
+  path: docs/ci-cd/github-actions/workflow-avanzati.md
+  category: ci-cd
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '235'
+  type: audit
+  path: docs/ci-cd/gitlab-ci/pipeline-avanzato.md
+  category: ci-cd
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '236'
+  type: audit
+  path: docs/ci-cd/gitops/argocd.md
+  category: ci-cd
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '237'
+  type: audit
+  path: docs/ci-cd/gitops/flux.md
+  category: ci-cd
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '238'
+  type: audit
+  path: docs/ci-cd/jenkins/agent-infrastructure.md
+  category: ci-cd
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '239'
+  type: audit
+  path: docs/ci-cd/jenkins/enterprise-patterns.md
+  category: ci-cd
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '240'
+  type: audit
+  path: docs/ci-cd/jenkins/pipeline-fundamentals.md
+  category: ci-cd
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '241'
+  type: audit
+  path: docs/ci-cd/jenkins/security-governance.md
+  category: ci-cd
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '242'
+  type: audit
+  path: docs/ci-cd/jenkins/shared-libraries.md
+  category: ci-cd
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '243'
+  type: audit
+  path: docs/ci-cd/strategie/deployment-strategies.md
+  category: ci-cd
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '244'
+  type: audit
+  path: docs/ci-cd/strategie/pipeline-security.md
+  category: ci-cd
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '245'
+  type: audit
+  path: docs/cloud/aws/ci-cd/cloudformation-cdk.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '246'
+  type: audit
+  path: docs/cloud/aws/ci-cd/code-services.md
+  category: cloud
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '247'
+  type: audit
+  path: docs/cloud/aws/compute/containers-ecs-eks.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '248'
+  type: audit
+  path: docs/cloud/aws/compute/ec2-autoscaling.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '249'
+  type: audit
+  path: docs/cloud/aws/compute/ec2.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '250'
+  type: audit
+  path: docs/cloud/aws/database/altri-db.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:2'
+- id: '251'
+  type: audit
+  path: docs/cloud/aws/database/dynamodb.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:2'
+- id: '252'
+  type: audit
+  path: docs/cloud/aws/database/rds-aurora.md
+  category: cloud
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '253'
+  type: audit
+  path: docs/cloud/aws/fondamentali/billing-pricing.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '254'
+  type: audit
+  path: docs/cloud/aws/fondamentali/global-infrastructure.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '255'
+  type: audit
+  path: docs/cloud/aws/fondamentali/shared-responsibility.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '256'
+  type: audit
+  path: docs/cloud/aws/fondamentali/well-architected.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '257'
+  type: audit
+  path: docs/cloud/aws/iam/organizations.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '258'
+  type: audit
+  path: docs/cloud/aws/iam/policies-avanzate.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '259'
+  type: audit
+  path: docs/cloud/aws/messaging/eventbridge-kinesis.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '260'
+  type: audit
+  path: docs/cloud/aws/messaging/sqs-sns.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '261'
+  type: audit
+  path: docs/cloud/aws/monitoring/cloudwatch.md
+  category: cloud
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '262'
+  type: audit
+  path: docs/cloud/aws/monitoring/observability.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:2'
+- id: '263'
+  type: audit
+  path: docs/cloud/aws/networking/cloudfront.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '264'
+  type: audit
+  path: docs/cloud/aws/networking/route53.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '265'
+  type: audit
+  path: docs/cloud/aws/networking/vpc-avanzato.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '266'
+  type: audit
+  path: docs/cloud/aws/networking/vpc.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '267'
+  type: audit
+  path: docs/cloud/aws/security/compliance-audit.md
+  category: cloud
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '268'
+  type: audit
+  path: docs/cloud/aws/security/kms-secrets.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:2'
+- id: '269'
+  type: audit
+  path: docs/cloud/aws/security/network-security.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:2'
+- id: '270'
+  type: audit
+  path: docs/cloud/aws/storage/ebs-efs-fsx.md
+  category: cloud
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '271'
+  type: audit
+  path: docs/cloud/aws/storage/s3-avanzato.md
+  category: cloud
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '272'
+  type: audit
+  path: docs/cloud/aws/storage/s3.md
+  category: cloud
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '273'
+  type: audit
+  path: docs/cloud/azure/ci-cd/arm-bicep.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '274'
+  type: audit
+  path: docs/cloud/azure/ci-cd/azure-devops.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '275'
+  type: audit
+  path: docs/cloud/azure/compute/aks-containers.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '276'
+  type: audit
+  path: docs/cloud/azure/compute/app-service-functions.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '277'
+  type: audit
+  path: docs/cloud/azure/compute/virtual-machines.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '278'
+  type: audit
+  path: docs/cloud/azure/database/altri-db.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '279'
+  type: audit
+  path: docs/cloud/azure/database/azure-sql.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '280'
+  type: audit
+  path: docs/cloud/azure/database/cosmos-db.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '281'
+  type: audit
+  path: docs/cloud/azure/fondamentali/global-infrastructure.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '282'
+  type: audit
+  path: docs/cloud/azure/fondamentali/pricing.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '283'
+  type: audit
+  path: docs/cloud/azure/fondamentali/shared-responsibility.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: corto:135righe, pochi_codeblock:1, no_troubleshooting_section'
+- id: '284'
+  type: audit
+  path: docs/cloud/azure/fondamentali/well-architected.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '285'
+  type: audit
+  path: docs/cloud/azure/identita/entra-id.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '286'
+  type: audit
+  path: docs/cloud/azure/identita/governance.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '287'
+  type: audit
+  path: docs/cloud/azure/identita/rbac-managed-identity.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '288'
+  type: audit
+  path: docs/cloud/azure/messaging/event-hubs.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '289'
+  type: audit
+  path: docs/cloud/azure/messaging/service-bus-event-grid.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '290'
+  type: audit
+  path: docs/cloud/azure/monitoring/application-insights.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '291'
+  type: audit
+  path: docs/cloud/azure/monitoring/monitor-log-analytics.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '292'
+  type: audit
+  path: docs/cloud/azure/networking/connettivita.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '293'
+  type: audit
+  path: docs/cloud/azure/networking/dns-cdn.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '294'
+  type: audit
+  path: docs/cloud/azure/networking/load-balancing.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '295'
+  type: audit
+  path: docs/cloud/azure/networking/vnet.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '296'
+  type: audit
+  path: docs/cloud/azure/security/defender-sentinel.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '297'
+  type: audit
+  path: docs/cloud/azure/security/key-vault.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '298'
+  type: audit
+  path: docs/cloud/azure/storage/blob-storage.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '299'
+  type: audit
+  path: docs/cloud/azure/storage/storage-avanzato.md
+  category: cloud
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '300'
+  type: audit
+  path: docs/containers/container-runtime/sandboxing-avanzato.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '301'
+  type: audit
+  path: docs/containers/docker/architettura-interna.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '302'
+  type: audit
+  path: docs/containers/docker/compose.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '303'
+  type: audit
+  path: docs/containers/docker/dockerfile-avanzato.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '304'
+  type: audit
+  path: docs/containers/docker/networking.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '305'
+  type: audit
+  path: docs/containers/docker/sicurezza.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '306'
+  type: audit
+  path: docs/containers/docker/storage.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '307'
+  type: audit
+  path: docs/containers/helm/chart-avanzato.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '308'
+  type: audit
+  path: docs/containers/helm/deployment-produzione.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '309'
+  type: audit
+  path: docs/containers/kubernetes/architettura.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '310'
+  type: audit
+  path: docs/containers/kubernetes/operators-crd.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '311'
+  type: audit
+  path: docs/containers/kubernetes/scheduling-avanzato.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '312'
+  type: audit
+  path: docs/containers/kubernetes/sicurezza.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '313'
+  type: audit
+  path: docs/containers/kubernetes/storage.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '314'
+  type: audit
+  path: docs/containers/kubernetes/troubleshooting.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '315'
+  type: audit
+  path: docs/containers/kubernetes/workloads.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '316'
+  type: audit
+  path: docs/containers/kustomize/avanzato.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '317'
+  type: audit
+  path: docs/containers/openshift/architettura.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '318'
+  type: audit
+  path: docs/containers/openshift/build-imagestream.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '319'
+  type: audit
+  path: docs/containers/openshift/gitops-pipelines.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '320'
+  type: audit
+  path: docs/containers/openshift/operators-olm.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '321'
+  type: audit
+  path: docs/containers/openshift/sicurezza-scc.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '322'
+  type: audit
+  path: docs/containers/registry/harbor.md
+  category: containers
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '323'
+  type: audit
+  path: docs/databases/fondamentali/acid-base-cap.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '324'
+  type: audit
+  path: docs/databases/fondamentali/indici.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '325'
+  type: audit
+  path: docs/databases/fondamentali/modelli-dati.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '326'
+  type: audit
+  path: docs/databases/fondamentali/sharding.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '327'
+  type: audit
+  path: docs/databases/fondamentali/transazioni-concorrenza.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '328'
+  type: audit
+  path: docs/databases/kubernetes-cloud/db-su-kubernetes.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '329'
+  type: audit
+  path: docs/databases/kubernetes-cloud/managed-databases.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '330'
+  type: audit
+  path: docs/databases/nosql/cassandra.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '331'
+  type: audit
+  path: docs/databases/nosql/mongodb.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '332'
+  type: audit
+  path: docs/databases/nosql/redis.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '333'
+  type: audit
+  path: docs/databases/postgresql/connection-pooling.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '334'
+  type: audit
+  path: docs/databases/postgresql/extensions.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '335'
+  type: audit
+  path: docs/databases/postgresql/mvcc-vacuum.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '336'
+  type: audit
+  path: docs/databases/postgresql/replicazione.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '337'
+  type: audit
+  path: docs/databases/replicazione-ha/backup-pitr.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '338'
+  type: audit
+  path: docs/databases/replicazione-ha/failover-recovery.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '339'
+  type: audit
+  path: docs/databases/replicazione-ha/strategie-replica.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '340'
+  type: audit
+  path: docs/databases/sql-avanzato/partitioning.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '341'
+  type: audit
+  path: docs/databases/sql-avanzato/query-optimizer.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '342'
+  type: audit
+  path: docs/databases/sql-avanzato/window-functions.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '343'
+  type: audit
+  path: docs/index.md
+  category: index.md
+  priority: P3
+  status: pending
+  reason: 'Issue: corto:117righe, pochi_codeblock:0, no_troubleshooting_section, no_keywords, no_related'
+- id: '344'
+  type: audit
+  path: docs/messaging/kafka/fondamenti/architettura.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '345'
+  type: audit
+  path: docs/messaging/kafka/fondamenti/broker-cluster.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0, pochi_keywords:7'
+- id: '346'
+  type: audit
+  path: docs/messaging/kafka/fondamenti/consumatori.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '347'
+  type: audit
+  path: docs/messaging/kafka/fondamenti/consumer-groups.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '348'
+  type: audit
+  path: docs/messaging/kafka/fondamenti/produttori.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '349'
+  type: audit
+  path: docs/messaging/kafka/fondamenti/topics-partizioni.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '350'
+  type: audit
+  path: docs/messaging/kafka/fondamenti/zookeeper-kraft.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0, pochi_keywords:7, pochi_related:1'
+- id: '351'
+  type: audit
+  path: docs/messaging/kafka/kafka-connect/debezium-cdc.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0, pochi_keywords:7'
+- id: '352'
+  type: audit
+  path: docs/messaging/kafka/kafka-connect/sink-connectors.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0, pochi_keywords:7, pochi_related:1'
+- id: '353'
+  type: audit
+  path: docs/messaging/kafka/kafka-connect/source-connectors.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0, pochi_keywords:7'
+- id: '354'
+  type: audit
+  path: docs/messaging/kafka/kafka-streams/ksqldb.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '355'
+  type: audit
+  path: docs/messaging/kafka/kafka-streams/topologie.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '356'
+  type: audit
+  path: docs/messaging/kafka/kafka-streams/windowing.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0, pochi_keywords:8, pochi_related:1'
+- id: '357'
+  type: audit
+  path: docs/messaging/kafka/kubernetes-cloud/helm.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_keywords:6'
+- id: '358'
+  type: audit
+  path: docs/messaging/kafka/kubernetes-cloud/msk-aws.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_keywords:9'
+- id: '359'
+  type: audit
+  path: docs/messaging/kafka/kubernetes-cloud/strimzi-operator.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '360'
+  type: audit
+  path: docs/messaging/kafka/operazioni/disaster-recovery.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0, pochi_keywords:8, pochi_related:1'
+- id: '361'
+  type: audit
+  path: docs/messaging/kafka/operazioni/log-compaction.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0, pochi_keywords:7'
+- id: '362'
+  type: audit
+  path: docs/messaging/kafka/operazioni/monitoring.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:2'
+- id: '363'
+  type: audit
+  path: docs/messaging/kafka/operazioni/performance-tuning.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '364'
+  type: audit
+  path: docs/messaging/kafka/operazioni/replication-fault-tolerance.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0, pochi_keywords:7'
+- id: '365'
+  type: audit
+  path: docs/messaging/kafka/pattern-microservizi/cqrs.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: no_related'
+- id: '366'
+  type: audit
+  path: docs/messaging/kafka/pattern-microservizi/dead-letter-queue.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: no_related'
+- id: '367'
+  type: audit
+  path: docs/messaging/kafka/pattern-microservizi/event-driven-architecture.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: no_related'
+- id: '368'
+  type: audit
+  path: docs/messaging/kafka/pattern-microservizi/event-sourcing.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: no_related'
+- id: '369'
+  type: audit
+  path: docs/messaging/kafka/pattern-microservizi/outbox-pattern.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_keywords:9, no_related'
+- id: '370'
+  type: audit
+  path: docs/messaging/kafka/pattern-microservizi/saga-pattern.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: no_related'
+- id: '371'
+  type: audit
+  path: docs/messaging/kafka/schema-registry/avro.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '372'
+  type: audit
+  path: docs/messaging/kafka/schema-registry/protobuf.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '373'
+  type: audit
+  path: docs/messaging/kafka/schema-registry/schema-evolution.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '374'
+  type: audit
+  path: docs/messaging/kafka/sicurezza/acl-autorizzazione.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '375'
+  type: audit
+  path: docs/messaging/kafka/sicurezza/sasl.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '376'
+  type: audit
+  path: docs/messaging/kafka/sicurezza/tls-ssl.md
+  category: messaging
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '377'
+  type: audit
+  path: docs/messaging/kafka/sviluppo/exactly-once-semantics.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0, pochi_keywords:7'
+- id: '378'
+  type: audit
+  path: docs/messaging/kafka/sviluppo/quarkus-kafka.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0, pochi_keywords:6'
+- id: '379'
+  type: audit
+  path: docs/messaging/kafka/sviluppo/spring-kafka.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_keywords:9'
+- id: '380'
+  type: audit
+  path: docs/messaging/kafka/sviluppo/transazioni.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0, pochi_keywords:7, pochi_related:1'
+- id: '381'
+  type: audit
+  path: docs/messaging/rabbitmq/affidabilita.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '382'
+  type: audit
+  path: docs/messaging/rabbitmq/architettura.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '383'
+  type: audit
+  path: docs/messaging/rabbitmq/clustering-ha.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '384'
+  type: audit
+  path: docs/messaging/rabbitmq/deployment.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '385'
+  type: audit
+  path: docs/messaging/rabbitmq/features-avanzate.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '386'
+  type: audit
+  path: docs/messaging/rabbitmq/vs-kafka.md
+  category: messaging
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '387'
+  type: audit
+  path: docs/networking/api-gateway/kong.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '388'
+  type: audit
+  path: docs/networking/api-gateway/pattern-base.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '389'
+  type: audit
+  path: docs/networking/api-gateway/rate-limiting.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '390'
+  type: audit
+  path: docs/networking/fondamentali/dns.md
+  category: networking
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '391'
+  type: audit
+  path: docs/networking/fondamentali/http-https.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '392'
+  type: audit
+  path: docs/networking/fondamentali/indirizzi-ip-subnetting.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_related:1'
+- id: '393'
+  type: audit
+  path: docs/networking/fondamentali/modello-osi.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: corto:134righe, no_troubleshooting_section, pochi_related:1'
+- id: '394'
+  type: audit
+  path: docs/networking/fondamentali/tcpip.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_keywords:8'
+- id: '395'
+  type: audit
+  path: docs/networking/fondamentali/tls-ssl-basics.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '396'
+  type: audit
+  path: docs/networking/kubernetes/cni.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '397'
+  type: audit
+  path: docs/networking/kubernetes/ingress.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '398'
+  type: audit
+  path: docs/networking/kubernetes/network-policies.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '399'
+  type: audit
+  path: docs/networking/load-balancing/algoritmi.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '400'
+  type: audit
+  path: docs/networking/load-balancing/ha-e-failover.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '401'
+  type: audit
+  path: docs/networking/load-balancing/layer4-vs-layer7.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '402'
+  type: audit
+  path: docs/networking/protocolli/grpc.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '403'
+  type: audit
+  path: docs/networking/protocolli/quic.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '404'
+  type: audit
+  path: docs/networking/protocolli/tcp-udp.md
+  category: networking
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '405'
+  type: audit
+  path: docs/networking/protocolli/websocket.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '406'
+  type: audit
+  path: docs/networking/service-mesh/concetti-base.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_keywords:9'
+- id: '407'
+  type: audit
+  path: docs/networking/service-mesh/envoy.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '408'
+  type: audit
+  path: docs/networking/service-mesh/istio.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:2'
+- id: '409'
+  type: audit
+  path: docs/networking/service-mesh/linkerd.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '410'
+  type: audit
+  path: docs/networking/sicurezza/ddos-protezione.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '411'
+  type: audit
+  path: docs/networking/sicurezza/firewall-waf.md
+  category: networking
+  priority: P3
+  status: completed
+  reason: Audit qualita' e completezza del file
+- id: '412'
+  type: audit
+  path: docs/networking/sicurezza/vpn-ipsec.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '413'
+  type: audit
+  path: docs/networking/sicurezza/zero-trust.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '414'
+  type: audit
+  path: docs/security/autenticazione/jwt.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '415'
+  type: audit
+  path: docs/security/autenticazione/mtls-spiffe.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '416'
+  type: audit
+  path: docs/security/autenticazione/oauth2-oidc.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '417'
+  type: audit
+  path: docs/security/autorizzazione/opa.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '418'
+  type: audit
+  path: docs/security/autorizzazione/rbac-abac-rebac.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '419'
+  type: audit
+  path: docs/security/compliance/audit-logging.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '420'
+  type: audit
+  path: docs/security/pki-certificati/cert-manager.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '421'
+  type: audit
+  path: docs/security/pki-certificati/pki-interna.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '422'
+  type: audit
+  path: docs/security/secret-management/kubernetes-secrets.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '423'
+  type: audit
+  path: docs/security/secret-management/vault.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: pochi_ts:0'
+- id: '424'
+  type: audit
+  path: docs/security/supply-chain/admission-control.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '425'
+  type: audit
+  path: docs/security/supply-chain/image-scanning.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '426'
+  type: audit
+  path: docs/security/supply-chain/sbom-cosign.md
+  category: security
+  priority: P3
+  status: pending
+  reason: 'Issue: no_troubleshooting_section'
+- id: '427'
+  type: audit
+  path: docs/tags.md
+  category: tags.md
+  priority: P3
+  status: pending
+  reason: 'Issue: corto:6righe, pochi_codeblock:0, no_troubleshooting_section, no_keywords, no_related'
+- id: '428'
+  type: proposal
+  path: _automation/proposals
+  category: meta
+  priority: P3
+  status: pending
+  reason: 'Analisi trasversale KB: genera proposte di miglioramento per approvazione utente'
 completed:
-- id: '005'
-  path: docs/monitoring/sre/slo-sla-sli.md
-  completed_at: '2026-03-24T12:00:00Z'
-  result: 'Creato file completo su SLO/SLA/SLI. Copre: definizioni e differenze tra SLI/ SLO/SLA, error budget, burn rate,
-    multiwindow multi-burnrate alerting (Google), tabella uptime di riferimento, SLO document template, PromQL per calcolo
-    SLI, tools (sloth, pyrra). Nuova cartella docs/monitoring/sre/ creata.
-
-    '
-- id: '006'
-  path: docs/monitoring/tools/loki.md
-  completed_at: '2026-03-24T12:00:00Z'
-  result: 'Creato file completo su Loki. Copre: modello dati (labels, chunk), LogQL (filtri, parsing JSON/logfmt/pattern,
-    metric queries), architettura componenti (Distributor/Ingester/Querier/Compactor), deploy Docker+Helm, configurazione
-    S3 per produzione, Promtail config (filesystem+Docker+K8s), Fluent Bit alternativa, pipeline stages, best practices labels,
-    troubleshooting.
-
-    '
-- id: '007'
-  path: docs/iac/terraform/state-management.md
-  completed_at: '2026-03-24T12:00:00Z'
-  result: 'Creato file completo su Terraform state management. Copre: struttura tfstate, state locking, backend (S3+DynamoDB,
-    GCS, Azure Blob), bootstrap delle risorse backend, organizzazione key S3, remote_state data source, comandi state management,
-    workspace (e quando NON usarli), import block (v1.5+), HA in CI/CD, troubleshooting corruzione state, drift detection,
-    force-unlock.
-
-    '
-- id: 008
-  path: docs/monitoring/alerting/alertmanager.md
-  completed_at: '2026-03-24T12:00:00Z'
-  result: 'Creato file completo su Alertmanager. Copre: routing tree, grouping, silencing, inhibition, receivers (Slack/PagerDuty/email),
-    timing (group_wait/group_interval/ repeat_interval), configurazione completa YAML, template personalizzati, deploy Helm,
-    clustering HA, silencing via API, amtool CLI, mute_time_intervals, troubleshooting notification fatigue.
-
-    '
-- id: 009
-  path: docs/iac/terraform/moduli.md
-  completed_at: '2026-03-24T12:18:00Z'
-  result: 'Creato file completo su Terraform Moduli. Copre: struttura modulo, variabili input/output, chiamata modulo, Terraform
-    Registry, moduli locali, versionamento sorgenti, passaggio provider alias, count/for_each nei moduli, best practices,
-    troubleshooting.'
-- id: '010'
-  path: docs/iac/ansible/fondamentali.md
-  completed_at: '2026-03-24T14:00:00Z'
-  result: 'Creato file completo su Ansible Fondamentali. Copre: architettura agentless SSH, inventory statico/dinamico INI
-    e YAML, playbook e play, 14 moduli principali, sistema precedenza variabili, handlers, facts, struttura progetto, roles
-    (struttura completa defaults/vars/tasks/handlers/templates), Ansible Galaxy e collections, Ansible Vault (cifratura file
-    e valori inline), template Jinja2, loop, condizioni when, gestione errori block/rescue/always, best practices idempotenza,
-    ottimizzazioni SSH multiplexing, troubleshooting connettività e vault. Nuova directory docs/iac/ansible/ con _index.md
-    e .pages. Aggiornato docs/iac/.pages con voce ansible.'
-- id: '011'
-  path: docs/containers/kubernetes/autoscaling.md
-  completed_at: '2026-03-24T15:00:00Z'
-  result: 'Creato file completo su Kubernetes Autoscaling. Copre: HPA (cpu, custom metrics RPS via Prometheus Adapter, behavior
-    scale-up/scale-down con stabilization window e policy), VPA (modalità Auto/Initial/Off, compatibilità con HPA, raccomandazioni),
-    KEDA (ScaledObject Kafka/Prometheus, ScaledJob RabbitMQ, scale-to-zero), Cluster Autoscaler su EKS (configurazione Helm,
-    expander, PDB compatibility). Best practices su requests accurati, flapping prevention, minReplicas HA, conflitti HPA+VPA.
-    Troubleshooting per tutti e 4 i componenti. Aggiornato docs/containers/kubernetes/.pages.'
-- id: P0-001
-  path: docs/monitoring/tools/jaeger-tempo.md
-  completed_at: '2026-03-24T11:36:43.449750+00:00'
+- id: '204'
+  path: docs/monitoring/sre/chaos-engineering.md
+  completed_at: '2026-03-25T13:41:59.027693+00:00'
   result: File presente su disco - completato ma state non aggiornato dall'agente
-- id: P0-002
-  path: docs/monitoring/sre/error-budget.md
-  completed_at: '2026-03-24T13:00:00Z'
-  result: 'Creato file completo su Error Budget. Copre: calcolo budget e burn rate, error budget policy (template completo
-    con soglie e azioni), alerting multiwindow multi-burnrate (CRITICAL/HIGH/MEDIUM/LOW), recording rules PromQL, dashboard
-    Grafana, gate CI/CD automatico, toil vs reliability work, quando rivalutare SLO, troubleshooting (spike transitori, SLI
-    mal calibrato, burn rate NaN, policy non rispettata). Aggiornato .pages con il nuovo file.'
-- id: '012'
-  path: docs/monitoring/sre/error-budget.md
-  completed_at: '2026-03-24T16:00:00Z'
-  result: 'SKIPPED — File già esistente, creato come P0-002 (broken link fix). Nessuna azione necessaria: docs/monitoring/sre/error-budget.md
-    è completo e copre tutti i requisiti del task (burn rate, error budget policy, alerting, toil vs reliability).'
-- id: '013'
-  path: docs/monitoring/tools/jaeger-tempo.md
-  completed_at: '2026-03-24T12:11:23.297594+00:00'
+- id: '205'
+  path: docs/cloud/finops/fondamentali.md
+  completed_at: '2026-03-25T13:47:50.019699+00:00'
   result: File presente su disco - completato ma state non aggiornato dall'agente
-- id: '014'
-  path: docs/ci-cd/observability/dora-metrics.md
-  completed_at: '2026-03-24T17:00:00Z'
-  result: SKIPPED — docs/ci-cd/strategie/_index.md contiene già una sezione "DORA Metrics — Misurare la Performance DevOps"
-    con tabella delle 4 metriche con benchmark Elite/High/Medium/Low, pseudocodice Python per calcolo di Deployment Frequency,
-    Lead Time, Change Failure Rate e MTTR, lista strumenti di raccolta, e tabella cause+interventi per miglioramento. Condizione
-    skip_if soddisfatta.
-- id: '015'
-  path: docs/ci-cd/strategie/feature-flags.md
-  completed_at: '2026-03-24T18:00:00Z'
-  result: 'SKIPPED — deployment-strategies.md contiene già la Sezione 5 "Feature Flags" completa con: tipi di flag, OpenFeature
-    SDK Go, Flipt self-hosted docker-compose, LaunchDarkly Python SDK, tabella comparativa strumenti. Condizione skip_if soddisfatta.'
-- id: '017'
-  path: docs/databases/nosql/elasticsearch.md
-  completed_at: '2026-03-24T20:00:00Z'
-  result: 'Creato file completo su Elasticsearch. Copre: inverted index, sharding/replica, mapping (text vs keyword, multi-fields,
-    tipi), architettura cluster (ruoli nodi, routing, ILM hot-warm-cold), Query DSL (bool/must/filter/should, match/term/range/fuzzy/knn),
-    aggregazioni (bucket/metric/pipeline), Data Streams, Ingest Pipeline (grok/date/set), deploy Docker Compose ES+Kibana,
-    alias per zero-downtime reindex, best practices heap/shard sizing/slow log, troubleshooting cluster RED/YELLOW/disk watermark.
-    Aggiornati .pages e _index.md della cartella nosql.'
-- id: '016'
-  path: docs/security/supply-chain/sast-dast.md
-  completed_at: '2026-03-24T19:00:00Z'
-  result: 'Creato file completo su SAST e DAST. Copre: tassonomia SAST/DAST/IAST/SCA, pipeline di analisi statica (taint analysis)
-    e dinamica, Semgrep (ruleset OWASP/secrets, regole custom YAML, soppressione falsi positivi, GitHub Actions), SonarQube
-    Community (docker-compose, quality gate, SonarCloud CI), OWASP ZAP (baseline e full scan Docker, GitHub Actions, file
-    soppressione TSV), Nuclei (template custom, scan API autenticati), pipeline security integrata SAST+DAST+secrets, best
-    practices shift-left graduale, SLA per severity, troubleshooting falsi positivi/timeout/legacy. Aggiornato .pages supply-chain.'
-- id: 018
-  path: docs/containers/kubernetes/resource-management.md
-  completed_at: '2026-03-24T21:00:00Z'
-  result: 'Creato file completo su Kubernetes Resource Management. Copre: requests vs limits (differenza semantica e enforcement),
-    unità di misura CPU/memoria, QoS classes (Guaranteed/Burstable/BestEffort) con condizioni e priorità eviction, flusso
-    scheduler→kubelet→cgroups, LimitRange (default+defaultRequest+max+min+maxLimitRequestRatio per container/pod/PVC), ResourceQuota
-    (compute/oggetti/storage con scope QoS e PriorityClass), right-sizing pattern, anti-pattern (tabella), troubleshooting
-    OOMKilled/Pending/throttling/LimitRange. Aggiornato .pages kubernetes.'
-- id: 019
-  path: docs/ci-cd/testing/contract-testing.md
-  completed_at: '2026-03-24T22:00:00Z'
-  result: 'Creato file completo su Contract Testing. Copre: pattern Consumer-Driven Contracts (CDC), flusso consumer→broker→provider
-    con diagramma ASCII, struttura pact file JSON, matchers (Like/Integer/EachLike), esempi consumer+provider in Python e
-    TypeScript, Pact Broker Docker Compose, can-i-deploy gate CI/CD, GitHub Actions pipeline consumer e provider, contract
-    testing per messaggi asincroni, schema validation con OpenAPI (schemathesis/oasdiff), best practices (pending/WIP pacts,
-    matchers vs valori esatti), troubleshooting. Nuova directory docs/ci-cd/testing/ con _index.md e .pages. Aggiornato docs/ci-cd/.pages
-    con voce testing.'
-- id: '020'
-  path: docs/iac/pulumi/fondamentali.md
-  completed_at: '2026-03-24T23:00:00Z'
-  result: 'Creato file completo su Pulumi Fondamentali. Copre: panoramica vs Terraform (quando scegliere Pulumi/HCL), concetti
-    chiave (Project, Stack, Resources, Output[T], Config/Secrets, Provider), architettura engine+state backend (Pulumi Cloud/S3/GCS/AzureBlob),
-    Component Resources, esempi Python (AWS ECS Fargate) e TypeScript (K8s Deployment), Stack References cross-stack, Automation
-    API, struttura progetto multi-stack, unit testing (PULUMI_TEST_MODE), gestione secrets+KMS, import risorse esistenti,
-    tabella anti-pattern, troubleshooting (state corrotto, Output<None>, provider auth, pulumi refresh). Nuova directory docs/iac/pulumi/
-    con _index.md e .pages. Aggiornato docs/iac/.pages con voce pulumi.'
-- id: '022'
-  path: docs/cloud/aws/networking/transit-gateway.md
-  completed_at: '2026-03-24T23:45:00Z'
-  result: SKIPPED — vpc-avanzato.md contiene già sezione "## Transit Gateway (TGW)" completa con diagramma ASCII, vantaggi
-    vs VPC Peering, CLI comandi (create-transit-gateway, attachment, RAM sharing, routing), TGW Route Tables per segmentazione,
-    e costi dettagliati. Condizione skip_if soddisfatta.
-- id: '021'
-  path: docs/ci-cd/strategie/trunk-based-development.md
-  completed_at: '2026-03-24T23:30:00Z'
-  result: 'Creato file completo su Trunk-Based Development. Copre: confronto con GitFlow (tabella completa), flusso di lavoro
-    base e con short-lived branch, release branches, feature flags come abilitatore, branch by abstraction (esempio Python
-    a 4 step), CI Pipeline GitHub Actions, pre-commit hooks, commit atomici, strategie di merge, best practices (do/don''t
-    con tabella anti-pattern), discipline necessarie (test/feature-flags/pair-programming/CD/observability), troubleshooting
-    (trunk rotto/flag debito tecnico/migrazione da GitFlow/hotfix). Aggiornato docs/ci-cd/strategie/.pages.'
+- id: '206'
+  path: docs/ci-cd/platform-engineering/backstage.md
+  completed_at: '2026-03-25T13:53:20.879764+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '207'
+  path: docs/networking/fondamentali/ebpf.md
+  completed_at: '2026-03-25T13:59:53.811386+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '208'
+  path: docs/cloud/gcp/compute/cloud-run.md
+  completed_at: '2026-03-26T16:33:04.746851+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '209'
+  path: docs/iac/terraform/testing.md
+  completed_at: '2026-03-26T16:36:05.682875+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '210'
+  path: docs/containers/kubernetes/multi-cluster.md
+  completed_at: '2026-03-26T16:40:41.385629+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: W-001
+  path: docs/ci-cd/pipeline.md
+  completed_at: '2026-03-26T16:46:59.207698+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '112'
+  path: docs/ci-cd/tools/tekton.md
+  completed_at: '2026-03-26T16:52:48.375911+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '211'
+  path: docs/cloud/gcp/dati/bigquery.md
+  completed_at: '2026-03-26T16:58:18.394134+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '212'
+  path: docs/monitoring/sre/capacity-planning.md
+  completed_at: '2026-03-26T17:04:45.443780+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '219'
+  path: docs/ai/fondamentali/machine-learning.md
+  completed_at: '2026-03-27T14:01:57.395489+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '220'
+  path: docs/ai/mlops/infrastruttura-gpu.md
+  completed_at: '2026-03-27T14:04:57.644671+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '221'
+  path: docs/ai/mlops/model-serving.md
+  completed_at: '2026-03-27T14:07:50.003043+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '222'
+  path: docs/ai/mlops/pipeline-ml.md
+  completed_at: '2026-03-27T14:11:16.529442+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+analysis:
+  last_started: '2026-03-26T19:36:29.720600+00:00'
+  total_files: 258
+  tasks_created: 216

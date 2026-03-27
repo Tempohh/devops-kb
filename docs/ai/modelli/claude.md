@@ -9,7 +9,7 @@ related: [ai/modelli/_index, ai/fondamentali/llm-architettura, ai/tokens-context
 official_docs: https://docs.anthropic.com/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-03-27
 ---
 
 # Claude — Architettura, Capacità e API
@@ -539,6 +539,127 @@ I limiti scalano con il tier (crescono con la spesa mensile). Tier 4+ ha limiti 
 | Computer Use | ✅ (beta) | ✅ (Operator) | ❌ |
 | Prezzo (Sonnet tier) | $3/$15 | $2.5/$10 | $3.5/$10.50 |
 | Safety/Alignment | Molto alto (CAI) | Alto | Medio |
+
+## Troubleshooting
+
+### Scenario 1 — HTTP 529 "Overloaded" ricorrente
+
+**Sintomo**: Le chiamate API falliscono con `APIStatusError: 529 Overloaded` in modo persistente, anche con retry.
+
+**Causa**: Il cluster Anthropic è sotto carico elevato. Può accadere in fasce orarie di picco (07-10 UTC, 14-18 UTC) o quando si usano modelli premium come Opus ad alto volume.
+
+**Soluzione**: Implementare exponential backoff con jitter, passare temporaneamente a Haiku, o spostare il workload sulla Batch API che è immune ai picchi sincroni.
+
+```python
+import random, time
+from anthropic import APIStatusError
+
+def call_with_backoff(client, **kwargs):
+    for attempt in range(6):
+        try:
+            return client.messages.create(**kwargs)
+        except APIStatusError as e:
+            if e.status_code in (529, 503):
+                delay = (2 ** attempt) + random.uniform(0, 1)
+                time.sleep(delay)
+            else:
+                raise
+    raise RuntimeError("Max retries exceeded")
+```
+
+---
+
+### Scenario 2 — `max_tokens` superato: risposta troncata
+
+**Sintomo**: La risposta si interrompe nel mezzo di una frase o di un blocco di codice; `response.stop_reason == "max_tokens"`.
+
+**Causa**: Il valore di `max_tokens` impostato è inferiore alla lunghezza effettiva della risposta generata. Non è un errore bloccante — l'API restituisce comunque HTTP 200.
+
+**Soluzione**: Aumentare `max_tokens` oppure chiedere a Claude di essere più conciso nel system prompt. Per risposte strutturate (JSON, codice) sempre impostare un margine abbondante.
+
+```python
+# Verifica stop_reason prima di processare la risposta
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=4096,   # aumentare se la risposta viene troncata
+    messages=[...]
+)
+
+if response.stop_reason == "max_tokens":
+    print("WARN: risposta troncata — aumentare max_tokens")
+
+text = response.content[0].text
+```
+
+---
+
+### Scenario 3 — Tool use in loop infinito (tool_use → tool_result → tool_use)
+
+**Sintomo**: Claude risponde continuamente con `stop_reason == "tool_use"` senza mai produrre una risposta finale testuale; il ciclo si ripete indefinitamente.
+
+**Causa**: La descrizione del tool non è abbastanza specifica, oppure il risultato restituito è ambiguo e Claude continua a cercare informazioni aggiuntive. Può anche essere dovuto a `tool_choice: {"type": "any"}` che forza sempre l'uso di un tool.
+
+**Soluzione**: Impostare un limite massimo di turni, migliorare la descrizione dei tool, o aggiungere `tool_choice: {"type": "auto"}` per permettere a Claude di rispondere senza tool.
+
+```python
+MAX_TOOL_TURNS = 10
+messages = [{"role": "user", "content": user_input}]
+
+for turn in range(MAX_TOOL_TURNS):
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=2048,
+        tools=tools,
+        tool_choice={"type": "auto"},  # non forzare uso tool
+        messages=messages
+    )
+    if response.stop_reason == "end_turn":
+        break
+    # aggiungi risposta + risultati tool a messages
+    messages.append({"role": "assistant", "content": response.content})
+    tool_results = execute_tools(response.content)
+    messages.append({"role": "user", "content": tool_results})
+else:
+    print("WARN: raggiunto limite massimo turni tool")
+```
+
+---
+
+### Scenario 4 — Prompt caching: cache miss inatteso (costi più alti del previsto)
+
+**Sintomo**: Nonostante `cache_control` sia configurato, i costi non scendono come atteso; i log mostrano sempre `cache_creation_input_tokens` senza `cache_read_input_tokens`.
+
+**Causa**: Il contenuto marcato con `cache_control` cambia tra le chiamate (es. timestamp nel system prompt, variabili iniettate nel testo cachato), oppure è trascorso più di 5 minuti tra le chiamate (cache TTL scaduto).
+
+**Soluzione**: Il testo cachato deve essere byte-identico tra le chiamate. Tenere fuori dalla sezione cachata qualsiasi parte dinamica. Monitorare `usage.cache_read_input_tokens` per verificare i cache hit.
+
+```python
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    system=[
+        {
+            "type": "text",
+            # SBAGLIATO: timestamp rende il testo sempre diverso
+            # "text": f"Sei un esperto. Data: {datetime.now()}\n{handbook}",
+            # CORRETTO: separare le parti statiche da quelle dinamiche
+            "text": handbook_static_content,
+            "cache_control": {"type": "ephemeral"}
+        },
+        {
+            "type": "text",
+            "text": f"Data corrente: {datetime.now().date()}"
+            # parte dinamica fuori dal blocco cachato
+        }
+    ],
+    messages=[{"role": "user", "content": domanda}]
+)
+
+# Verifica cache hit
+usage = response.usage
+print(f"Cache hit: {usage.cache_read_input_tokens} token")
+print(f"Cache miss: {usage.cache_creation_input_tokens} token")
+```
 
 ## Riferimenti
 

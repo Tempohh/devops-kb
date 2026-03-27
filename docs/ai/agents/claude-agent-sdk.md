@@ -9,7 +9,7 @@ related: [ai/agents/_index, ai/agents/frameworks, ai/sviluppo/prompt-engineering
 official_docs: https://docs.anthropic.com/en/docs/build-with-claude/tool-use
 status: complete
 difficulty: advanced
-last_updated: 2026-02-27
+last_updated: 2026-03-27
 ---
 
 # Claude Agent SDK e Claude Code
@@ -644,6 +644,134 @@ Inizia raccogliendo dati, poi analizza e crea il ticket.
 - **Limita i passi del loop**: imposta sempre un `max_steps` per evitare loop infiniti costosi. 10-20 step è sufficiente per la maggior parte dei task.
 - **CLAUDE.md per ogni progetto**: il file CLAUDE.md è il modo più efficiente per contestualizzare Claude Code al tuo progetto. Mantienilo aggiornato.
 - **Test su task semplici prima**: valida l'agente con task controllati e incrementa la complessità gradualmente.
+
+## Troubleshooting
+
+### Scenario 1 — Errore di autenticazione API key
+
+**Sintomo:** `AuthenticationError: 401 Unauthorized` o `Error: ANTHROPIC_API_KEY is not set` all'avvio.
+
+**Causa:** La variabile d'ambiente `ANTHROPIC_API_KEY` non è impostata nella sessione corrente o contiene un valore non valido.
+
+**Soluzione:** Verificare che la chiave sia esportata correttamente nella shell attiva e che non sia scaduta o revocata dalla console Anthropic.
+
+```bash
+# Verifica che la variabile sia impostata
+echo $ANTHROPIC_API_KEY
+
+# Imposta la chiave per la sessione corrente
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Verifica che Claude Code la veda
+claude --print "test" 2>&1 | head -5
+
+# Su Windows (PowerShell)
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
+```
+
+---
+
+### Scenario 2 — Agent loop infinito o `max_steps` raggiunto
+
+**Sintomo:** L'agente raggiunge sempre il limite di step senza completare il task. Output: `"Raggiunto il massimo numero di step"` oppure costi API insolitamente alti.
+
+**Causa:** Tool che restituiscono errori non strutturati (eccezioni Python invece di JSON con `error` field) causano loop in cui l'agente non riesce a progredire. Oppure il task è troppo generico e l'agente non trova un criterio di stop.
+
+**Soluzione:** Strutturare i tool result come JSON con campo `error` esplicito, aumentare `max_steps` con cautela, e rendere il task più specifico con un criterio di completamento chiaro.
+
+```python
+# SBAGLIATO — il tool lancia eccezione non gestita
+def bad_tool(input):
+    return some_api.call()  # può lanciare ConnectionError
+
+# CORRETTO — il tool cattura errori e li restituisce strutturati
+def good_tool(input):
+    try:
+        result = some_api.call()
+        return json.dumps({"success": True, "data": result})
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e), "error_type": type(e).__name__})
+
+# Debug: stampa ogni step per identificare il loop
+for step in range(max_steps):
+    print(f"[Step {step+1}] stop_reason={response.stop_reason}")
+    for block in response.content:
+        if block.type == "tool_use":
+            print(f"  Tool: {block.name} | Input: {json.dumps(block.input)[:200]}")
+```
+
+---
+
+### Scenario 3 — Hook PreToolUse blocca comandi legittimi
+
+**Sintomo:** Claude Code segnala `Blocked by hook` su comandi che dovrebbero essere permessi. L'agente si blocca su operazioni normali come `git status` o `kubectl get pods`.
+
+**Causa:** I pattern nel `BLOCKED_PATTERNS` dell'hook script sono troppo generici e matchano substring indesiderate (es. `rm` matcha anche `npm`, `terraform` matcha `terraform plan`).
+
+**Soluzione:** Rendere i pattern più specifici usando regex con word boundaries o prefissi esatti. Testare l'hook in isolamento con input di esempio.
+
+```bash
+# Test dell'hook in isolamento
+echo '{"tool_name":"Bash","tool_input":{"command":"git status"}}' | python .claude/hooks/validate_command.py
+echo "Exit code: $?"
+
+# Debug: logga tutti i comandi che passano per l'hook
+# Nel validate_command.py aggiungere:
+# import logging
+# logging.basicConfig(filename='/tmp/hook_debug.log', level=logging.DEBUG)
+# logging.debug(f"Comando ricevuto: {command}")
+
+# Verifica quali hook sono attivi nel progetto
+cat .claude/settings.json | python -m json.tool | grep -A5 hooks
+```
+
+```python
+# Pattern sicuri — usa prefissi esatti invece di substring
+BLOCKED_PATTERNS = [
+    r"^rm\s+-rf\s+/",          # solo rm -rf / (root)
+    r"\bDROP\s+TABLE\b",        # SQL DROP TABLE con word boundary
+    r"kubectl\s+delete\s+namespace",  # delete namespace specifico
+]
+
+import re
+for pattern in BLOCKED_PATTERNS:
+    if re.search(pattern, command, re.IGNORECASE):
+        print(f"BLOCCATO: {pattern}", file=sys.stderr)
+        sys.exit(2)
+```
+
+---
+
+### Scenario 4 — MCP server non risponde o timeout di connessione
+
+**Sintomo:** Claude Code non mostra i tool del server MCP configurato, oppure le chiamate ai tool MCP restituiscono `Connection refused` o timeout dopo diversi secondi.
+
+**Causa:** Il processo MCP server non è in esecuzione, il path del comando è errato nel `claude_desktop_config.json`, oppure le variabili d'ambiente richieste (es. token API) non sono state iniettate correttamente.
+
+**Soluzione:** Avviare il server MCP manualmente per verificare che funzioni, controllare il path dell'eseguibile, e verificare che le env var siano presenti nel contesto in cui Claude Code viene lanciato.
+
+```bash
+# Test manuale del server MCP (deve rispondere senza errori)
+echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"0.1.0","capabilities":{}},"id":1}' \
+  | python mcp_prometheus_server.py
+
+# Verifica che il comando del server sia nel PATH
+which npx
+which python
+npx --version
+
+# Verifica variabili d'ambiente disponibili nel processo
+env | grep -E "JIRA|PROMETHEUS|MCP"
+
+# Log del server MCP per diagnostica
+# Aggiungi al server MCP:
+# import logging
+# logging.basicConfig(filename='/tmp/mcp_server.log', level=logging.DEBUG)
+
+# Riavvio di Claude Code dopo modifiche alla config MCP
+# La config viene letta solo all'avvio
+claude --mcp-debug  # mostra output debug MCP alla partenza
+```
 
 ## Riferimenti
 

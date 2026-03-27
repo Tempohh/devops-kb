@@ -9,7 +9,7 @@ related: [ai/tokens-context/tokenizzazione, ai/tokens-context/context-window, ai
 official_docs: https://arxiv.org/abs/1706.03762
 status: complete
 difficulty: advanced
-last_updated: 2026-02-27
+last_updated: 2026-03-27
 ---
 
 # Architettura LLM — Transformer, Attention e Pre-training
@@ -364,6 +364,132 @@ I LLM generano token basandosi su pattern statistici, non su conoscenza verifica
 ### Knowledge Cutoff
 
 Il modello non sa nulla di eventi successivi alla data di cutoff del training. Claude 4.6 ha cutoff **agosto 2025**.
+
+## Troubleshooting
+
+### Scenario 1 — OOM (Out of Memory) durante l'inference
+
+**Sintomo:** `torch.cuda.OutOfMemoryError` o `CUDA out of memory` quando si carica o esegue un modello.
+
+**Causa:** La VRAM richiesta supera la capacità della GPU. Un modello da 7B in fp16 occupa ~14GB VRAM, più il KV cache che scala con `batch_size × seq_len × n_layers × d_head × 2`.
+
+**Soluzione:**
+- Usare quantizzazione 4-bit (GPTQ/AWQ/bitsandbytes) per ridurre il footprint
+- Ridurre `max_seq_len` o `batch_size`
+- Abilitare offloading CPU con `device_map="auto"`
+- Usare `torch_dtype=torch.float16` o `bfloat16` invece di fp32
+
+```bash
+# Caricamento con quantizzazione 4-bit via bitsandbytes
+from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+
+bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16)
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3.1-8B", quantization_config=bnb_config)
+
+# Verifica VRAM occupata
+import torch
+print(f"VRAM allocata: {torch.cuda.memory_allocated() / 1e9:.1f} GB")
+print(f"VRAM max: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+```
+
+---
+
+### Scenario 2 — Generazione lenta o throughput basso
+
+**Sintomo:** L'inference impiega molto più tempo del previsto; token/s molto bassi rispetto ai benchmark.
+
+**Causa:** Mancanza di ottimizzazioni: attention O(n²) standard, KV cache non abilitato, batch size 1, FlashAttention non disponibile.
+
+**Soluzione:**
+- Abilitare FlashAttention 2 (`attn_implementation="flash_attention_2"`)
+- Assicurarsi che il KV cache sia abilitato (default in `transformers`, ma va esplicitato per custom loop)
+- Usare `torch.compile()` per JIT compilation
+- Aumentare il batch size (se la VRAM lo permette) per amortizzare il costo fisso
+
+```python
+# Abilitare FlashAttention 2
+model = AutoModelForCausalLM.from_pretrained(
+    "meta-llama/Llama-3.1-8B",
+    attn_implementation="flash_attention_2",
+    torch_dtype=torch.bfloat16
+)
+
+# Compilare il modello con torch.compile (riduce overhead Python)
+model = torch.compile(model)
+
+# Misurare throughput
+import time
+start = time.time()
+outputs = model.generate(inputs, max_new_tokens=100, use_cache=True)
+elapsed = time.time() - start
+tokens_generated = outputs.shape[-1] - inputs.shape[-1]
+print(f"Throughput: {tokens_generated / elapsed:.1f} token/s")
+```
+
+---
+
+### Scenario 3 — Hallucination frequente su dati fattuali
+
+**Sintomo:** Il modello produce risposte plausibili ma fattualmente errate, soprattutto su date, nomi, statistiche.
+
+**Causa:** Il modello interpola statisticamente dai pattern di training. Se l'informazione è rara, conflittuale o successiva al cutoff, il modello "inventa" con alta confidenza.
+
+**Soluzione:**
+- Usare `temperature=0` (greedy decoding) per task fattuali
+- Implementare RAG per fornire contesto aggiornato nel prompt
+- Includere nel system prompt: "Se non sei sicuro, rispondi 'Non lo so'"
+- Post-processing con citation checking (es. grounding su un search engine)
+
+```python
+# Greedy decoding per massima determinismo
+outputs = model.generate(
+    inputs,
+    do_sample=False,        # greedy, non sampling
+    temperature=1.0,        # ignorato con do_sample=False
+    max_new_tokens=256,
+)
+
+# Oppure con temperature molto bassa
+outputs = model.generate(
+    inputs,
+    do_sample=True,
+    temperature=0.1,        # quasi-greedy, meno hallucination
+    top_p=0.9,
+)
+```
+
+---
+
+### Scenario 4 — Context window superata (truncation silenziosa)
+
+**Sintomo:** Il modello "dimentica" le prime parti del prompt; risposte incoerenti su conversazioni lunghe.
+
+**Causa:** L'input supera il `max_position_embeddings` del modello. Il tokenizer tronca silenziosamente a sinistra (o destra) senza warning esplicito.
+
+**Soluzione:**
+- Verificare sempre la lunghezza tokenizzata prima dell'inference
+- Usare tecniche di context compression (sliding window, summarization)
+- Scegliere modelli con context window adeguata (es. Claude 200K, Llama 3.1 128K)
+
+```python
+from transformers import AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.1-8B")
+
+text = "..."  # prompt lungo
+tokens = tokenizer(text, return_tensors="pt")
+n_tokens = tokens["input_ids"].shape[-1]
+max_ctx = tokenizer.model_max_length  # es. 131072 per Llama 3.1
+
+if n_tokens > max_ctx:
+    print(f"ATTENZIONE: {n_tokens} token > max context {max_ctx}. Verrà troncato.")
+    # Troncare mantenendo la fine (system prompt + ultima domanda)
+    tokens["input_ids"] = tokens["input_ids"][:, -max_ctx:]
+
+print(f"Token usati: {n_tokens} / {max_ctx} ({n_tokens/max_ctx*100:.1f}%)")
+```
+
+---
 
 ## Riferimenti
 
