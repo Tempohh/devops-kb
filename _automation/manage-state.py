@@ -19,12 +19,20 @@ Comandi:
 
 import sys
 import os
+import io
 import json
 import re
 import yaml
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Fix encoding su Windows: stdout/stderr forzati a UTF-8 per evitare
+# UnicodeEncodeError con caratteri non-cp1252 (frecce, accenti, ecc.)
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf-8-sig"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if sys.stderr.encoding and sys.stderr.encoding.lower() not in ("utf-8", "utf-8-sig"):
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 DOCS_ROOT      = Path(__file__).parent.parent / "docs"
 STATE_FILE     = Path(__file__).parent / "state.yaml"
@@ -808,6 +816,68 @@ def cmd_reject_proposal(prop_id):
     print(json.dumps({"status": "error", "message": f"Proposta '{prop_id}' non trovata"}, ensure_ascii=False))
 
 
+def cmd_maintain():
+    """
+    Manutenzione periodica: rotazione log, pulizia proposte archiviate.
+
+    Regole di retention (proporzionate al costo reale in termini di spazio):
+      runs.log       → rotate a 512 KB, mantieni 2 backup (.1 .2) = max 1.5 MB
+      proposals/approved → mantieni ultimi 50 file per data mtime
+      proposals/rejected → mantieni ultimi 50 file per data mtime
+
+    state.yaml è già gestito da 'prune' (max 15 completed in lista summary).
+    La sezione 'queue' mantiene lo storico completo: è necessaria per evitare
+    che init-analysis ri-crei task già eseguiti. A ~100 bytes/task, 500 task = 50 KB.
+    Non serve rotazione: cresce a ~0.1 MB/anno di utilizzo intenso.
+    """
+    LOG_FILE        = Path(__file__).parent / "runs.log"
+    LOG_MAX_BYTES   = 512 * 1024   # 512 KB prima della rotazione
+    LOG_KEEP        = 2            # numero di backup da mantenere
+    PROP_KEEP       = 50           # max file in approved/rejected
+
+    report = {"rotated_log": False, "proposals_pruned": 0, "actions": []}
+
+    # ── Rotazione runs.log ────────────────────────────────────────────────────
+    if LOG_FILE.exists() and LOG_FILE.stat().st_size >= LOG_MAX_BYTES:
+        # Sposta i backup esistenti: .2 viene eliminato, .1 → .2, corrente → .1
+        for i in range(LOG_KEEP, 0, -1):
+            older = LOG_FILE.with_suffix(f".log.{i}")
+            newer = LOG_FILE.with_suffix(f".log.{i-1}") if i > 1 else LOG_FILE
+            if older.exists():
+                older.unlink()
+            if newer.exists() and newer != LOG_FILE:
+                newer.rename(older)
+        # Rinomina corrente → .1
+        rotated = LOG_FILE.with_suffix(".log.1")
+        LOG_FILE.rename(rotated)
+        # Crea nuovo runs.log con intestazione
+        LOG_FILE.write_text(
+            f"# runs.log — ruotato il {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            f" (storico in {rotated.name})\n",
+            encoding="utf-8"
+        )
+        size_kb = rotated.stat().st_size // 1024
+        report["rotated_log"] = True
+        report["actions"].append(f"runs.log ruotato ({size_kb} KB → {rotated.name})")
+
+    # ── Pulizia proposte archiviate ───────────────────────────────────────────
+    for subdir in ("approved", "rejected"):
+        folder = PROPOSALS_DIR / subdir
+        if not folder.exists():
+            continue
+        files = sorted(folder.glob("*.yaml"), key=lambda f: f.stat().st_mtime, reverse=True)
+        excess = files[PROP_KEEP:]
+        for f in excess:
+            f.unlink()
+            report["proposals_pruned"] += 1
+            report["actions"].append(f"rimosso {subdir}/{f.name}")
+
+    if not report["actions"]:
+        report["actions"].append("nessuna azione necessaria")
+
+    print(json.dumps(report, ensure_ascii=False))
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -847,6 +917,8 @@ if __name__ == "__main__":
         cmd_approve_proposal(sys.argv[2])
     elif cmd == "reject-proposal" and len(sys.argv) >= 3:
         cmd_reject_proposal(sys.argv[2])
+    elif cmd == "maintain":
+        cmd_maintain()
     else:
         print(f"Comando sconosciuto: {cmd}", file=sys.stderr)
         sys.exit(1)

@@ -63,6 +63,8 @@ $pythonBin = if (Get-Command "python3" -ErrorAction SilentlyContinue) { "python3
 
 # check-mkdocs e' costoso (~20s). Eseguilo ogni N run.
 $MkdocsCheckInterval = 3
+# maintain: rotazione log e pulizia proposte. Eseguilo ogni 30 run (quasi gratuito).
+$MaintainInterval = 30
 
 # -- UI iniziale -------------------------------------------------------------
 
@@ -219,8 +221,8 @@ try {
             continue
         }
 
-        # Scrivi task su file (evita troncamento da -replace su YAML multiriga)
-        $taskJson | Out-File -FilePath $TaskFile -Encoding UTF8 -NoNewline
+        # Scrivi task su file — UTF8NoBOM per evitare BOM che rompe il parser JSON
+        [System.IO.File]::WriteAllText($TaskFile, $taskJson, [System.Text.UTF8Encoding]::new($false))
 
         Write-Host "  Task : [$($task.priority)] $($task.id) - $($task.path)" -ForegroundColor White
 
@@ -376,6 +378,19 @@ try {
 
             # -- Pruning -----------------------------------------------------
             & $pythonBin $StatePy prune | Out-Null
+
+            # -- Manutenzione periodica (log rotation, proposals cleanup) -----
+            if ($sessionRuns % $MaintainInterval -eq 0) {
+                $maintainOut = & $pythonBin $StatePy maintain 2>&1
+                try {
+                    $maintainObj = $maintainOut | ConvertFrom-Json
+                    if ($maintainObj.rotated_log -or $maintainObj.proposals_pruned -gt 0) {
+                        foreach ($action in $maintainObj.actions) {
+                            Write-Host "  [MAINTAIN] $action" -ForegroundColor DarkGray
+                        }
+                    }
+                } catch { }
+            }
 
             # -- Verifica risultato (dipende dal tipo task) -------------------
             $fileLines = 0
