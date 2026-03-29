@@ -9,7 +9,7 @@ related: [cloud/azure/security/key-vault, cloud/azure/compute/aks-containers, cl
 official_docs: https://learn.microsoft.com/azure/storage/blobs/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Azure Blob Storage
@@ -533,6 +533,138 @@ az storage account blob-service-properties update \
   --delete-retention-days 30 \
   --enable-container-delete-retention true \
   --container-delete-retention-days 30
+```
+
+## Troubleshooting
+
+### Scenario 1 — AuthorizationFailure su operazioni blob con Managed Identity
+
+**Sintomo:** Le chiamate API restituiscono `AuthorizationPermissionMismatch` o `403 Forbidden` nonostante la Managed Identity sia configurata.
+
+**Causa:** Il role assignment non è stato propagato (può richiedere fino a 5 minuti) oppure il ruolo assegnato non copre il container/blob target (scope troppo ampio o troppo stretto).
+
+**Soluzione:** Verificare il role assignment e lo scope, attendere la propagazione, poi ritestare.
+
+```bash
+# Verificare role assignments per una Managed Identity
+PRINCIPAL_ID=$(az identity show --resource-group $RG --name mi-myapp --query principalId -o tsv)
+az role assignment list \
+  --assignee $PRINCIPAL_ID \
+  --scope $(az storage account show --resource-group $RG --name $SA_NAME --query id -o tsv) \
+  --output table
+
+# Test accesso diretto con az CLI (come l'identity)
+az storage blob list \
+  --account-name $SA_NAME \
+  --container-name mycontainer \
+  --auth-mode login
+
+# Verificare accesso pubblico disabilitato (non confondere con RBAC)
+az storage account show \
+  --resource-group $RG \
+  --name $SA_NAME \
+  --query "allowBlobPublicAccess"
+```
+
+### Scenario 2 — Archive Rehydration bloccata o più lenta del previsto
+
+**Sintomo:** Il blob rimane in stato `rehydrate-pending` per ore o giorni; la lettura restituisce `BlobArchived`.
+
+**Causa:** La priorità di rehydration è `Standard` (fino a 15h). Oppure il blob è ancora in transizione e non è ancora leggibile nel tier di destinazione.
+
+**Soluzione:** Usare rehydration ad alta priorità per scenari urgenti, oppure monitorare lo stato del blob fino al completamento.
+
+```bash
+# Verificare stato corrente del blob (accessTier + archiveStatus)
+az storage blob show \
+  --account-name $SA_NAME \
+  --container-name mycontainer \
+  --name large-backup.tar.gz \
+  --query "{tier:properties.blobTier, archiveStatus:properties.archiveStatus}" \
+  --auth-mode login
+
+# Forzare rehydration ad alta priorità (costo maggiore, ~1h)
+az storage blob set-tier \
+  --account-name $SA_NAME \
+  --container-name mycontainer \
+  --name large-backup.tar.gz \
+  --tier Hot \
+  --rehydrate-priority High \
+  --auth-mode login
+
+# Monitorare il completamento
+watch -n 60 "az storage blob show \
+  --account-name $SA_NAME \
+  --container-name mycontainer \
+  --name large-backup.tar.gz \
+  --query properties.archiveStatus -o tsv --auth-mode login"
+```
+
+### Scenario 3 — Connessione al Blob Storage fallisce dall'interno di una VNet (Private Endpoint)
+
+**Sintomo:** Le VM o i servizi dentro la VNet non riescono a raggiungere `mystorageaccount.blob.core.windows.net`; la connessione va in timeout o risolve l'IP pubblico invece del private IP.
+
+**Causa:** La Private DNS Zone `privatelink.blob.core.windows.net` non è collegata alla VNet oppure il record A non è stato creato/aggiornato.
+
+**Soluzione:** Verificare il DNS link e il record A nella Private DNS Zone.
+
+```bash
+# Verificare che la zona DNS privata sia linkata alla VNet
+az network private-dns link vnet list \
+  --resource-group $RG \
+  --zone-name "privatelink.blob.core.windows.net" \
+  --output table
+
+# Verificare il record A nella zona privata
+az network private-dns record-set a list \
+  --resource-group $RG \
+  --zone-name "privatelink.blob.core.windows.net" \
+  --output table
+
+# Test DNS resolution dall'interno della VNet (eseguire su una VM nella VNet)
+# nslookup mystorageaccount.blob.core.windows.net
+# Deve rispondere con IP privato (es. 10.x.x.x), non IP pubblico
+
+# Verificare stato Private Endpoint
+az network private-endpoint show \
+  --resource-group $RG \
+  --name pep-storage-blob \
+  --query "privateLinkServiceConnections[0].privateLinkServiceConnectionState" \
+  --output json
+```
+
+### Scenario 4 — Lifecycle Management Policy non applica il tiering ai blob
+
+**Sintomo:** I blob rimangono nel tier Hot dopo il periodo configurato nella policy; la policy esiste ma non viene eseguita.
+
+**Causa:** La policy agisce solo su `blockBlob` e non su `appendBlob` o `pageBlob`. Oppure il prefisso nella policy non corrisponde al path dei blob. Le policy vengono valutate una volta ogni 24h e possono richiedere fino a 48h per avere effetto.
+
+**Soluzione:** Verificare la policy, i tipi di blob e attendere il ciclo di valutazione.
+
+```bash
+# Verificare la policy lifecycle corrente
+az storage account management-policy show \
+  --account-name $SA_NAME \
+  --resource-group $RG \
+  --output json
+
+# Verificare il tipo di blob (blockBlob vs appendBlob vs pageBlob)
+az storage blob show \
+  --account-name $SA_NAME \
+  --container-name mycontainer \
+  --name myfile.log \
+  --query "{type:properties.blobType, tier:properties.blobTier, lastModified:properties.lastModified}" \
+  --auth-mode login
+
+# Listare blob con tier e data modifica per debug
+az storage blob list \
+  --account-name $SA_NAME \
+  --container-name mycontainer \
+  --prefix logs/ \
+  --include m \
+  --query "[].{name:name, tier:properties.blobTier, lastModified:properties.lastModified}" \
+  --output table \
+  --auth-mode login
 ```
 
 ## Riferimenti

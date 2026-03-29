@@ -9,7 +9,7 @@ related: [containers/helm/_index, containers/helm/deployment-produzione, contain
 official_docs: https://helm.sh/docs/chart_template_guide/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Chart Avanzato
@@ -690,6 +690,108 @@ global:
 ```yaml
 {{/* Accedere ai global values in qualsiasi subchart */}}
 image: "{{ .Values.global.imageRegistry }}/{{ .Values.image.repository }}"
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — `helm template` genera output vuoto o errato per blocchi condizionali
+
+**Sintomo:** Un template condizionale (`{{- if .Values.ingress.enabled }}`) non genera output, oppure genera risorse quando non dovrebbe.
+
+**Causa:** Il valore in `values.yaml` è una stringa `"false"` invece del booleano `false`, oppure è assente e il default non è applicato correttamente.
+
+**Soluzione:** Verificare il tipo del valore con `helm template` in modalità debug. I valori passati via `--set` sono sempre stringhe — usare `--set-string` solo per valori stringa espliciti; per booleani usare `--set key=true` (senza virgolette).
+
+```bash
+# Debug del rendering: mostra tutti i manifesti generati
+helm template my-app ./myapp --debug
+
+# Verificare il valore effettivo passato
+helm template my-app ./myapp --set ingress.enabled=true --show-only templates/ingress.yaml
+
+# Inspect dei values effettivi (con override)
+helm install my-app ./myapp --dry-run --debug --set ingress.enabled=true 2>&1 | grep -A 5 "COMPUTED VALUES"
+```
+
+---
+
+### Scenario 2 — Hook `pre-upgrade` rimane in stato `Pending` o `Running`
+
+**Sintomo:** `helm upgrade` si blocca; il Job dell'hook non termina e Helm va in timeout.
+
+**Causa:** Il Job dell'hook ha `backoffLimit` esaurito (container in crash loop) oppure `activeDeadlineSeconds` non impostato e il pod è stuck. La policy `before-hook-creation` non elimina il Job precedente se il nome è cambiato.
+
+**Soluzione:** Controllare i log del Job e forzare la pulizia se necessario.
+
+```bash
+# Vedere lo stato dell'hook Job
+kubectl get jobs -n <namespace> | grep pre-upgrade
+
+# Log del pod dell'hook
+kubectl logs -n <namespace> job/<release>-pre-upgrade-migration
+
+# Se bloccato: eliminare manualmente il Job e ritentare
+kubectl delete job <release>-pre-upgrade-migration -n <namespace>
+helm upgrade my-app ./myapp -n <namespace>
+
+# Verificare eventi del pod per capire il crash
+kubectl describe pod -n <namespace> -l job-name=<release>-pre-upgrade-migration
+```
+
+---
+
+### Scenario 3 — Errore `UPGRADE FAILED: cannot patch ... field is immutable`
+
+**Sintomo:** `helm upgrade` fallisce con errore su campo immutabile (es. `selector` del Deployment o `claimRef` di un PV).
+
+**Causa:** Il template ha modificato i `selectorLabels` (campo immutabile nei Deployment) oppure ha cambiato il nome di una risorsa, creando una nuova risorsa invece di aggiornare quella esistente.
+
+**Soluzione:** Per i selettori immutabili, eseguire `helm upgrade` con `--force` (ricrea i Pod) oppure eliminare manualmente la risorsa prima dell'upgrade.
+
+```bash
+# Vedere il diff tra la release corrente e il nuovo chart
+helm diff upgrade my-app ./myapp -n production   # richiede plugin helm-diff
+
+# Forzare la ricreazione della risorsa (causa downtime breve)
+helm upgrade my-app ./myapp -n production --force
+
+# In alternativa: eliminare la risorsa immutabile manualmente
+kubectl delete deployment my-app -n production
+helm upgrade my-app ./myapp -n production
+
+# Verificare la release corrente
+helm history my-app -n production
+```
+
+---
+
+### Scenario 4 — `helm dependency update` fallisce o le dipendenze non si trovano
+
+**Sintomo:** `helm install` restituisce `Error: found in Chart.yaml, but missing in charts/ directory`; oppure `helm dependency update` non riesce a raggiungere il repository.
+
+**Causa:** Le dipendenze non sono state scaricate (`helm dependency update` non è stato eseguito), il repository è offline, o la versione del chart richiesta non esiste più.
+
+**Soluzione:** Aggiornare i repository locali e scaricare le dipendenze.
+
+```bash
+# Aggiornare l'indice di tutti i repository configurati
+helm repo update
+
+# Scaricare/aggiornare le dipendenze nella cartella charts/
+helm dependency update ./myapp
+
+# Verificare lo stato delle dipendenze
+helm dependency list ./myapp
+
+# Se il repository non è configurato, aggiungerlo prima
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+helm dependency update ./myapp
+
+# Ispezionare cosa c'è nella cartella charts/
+ls -la ./myapp/charts/
 ```
 
 ---

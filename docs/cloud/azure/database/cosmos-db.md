@@ -9,7 +9,7 @@ related: [cloud/azure/compute/aks-containers, cloud/azure/messaging/event-hubs, 
 official_docs: https://learn.microsoft.com/azure/cosmos-db/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-26
+last_updated: 2026-03-28
 ---
 
 # Azure Cosmos DB
@@ -434,6 +434,144 @@ az synapse linked-service create \
 - Abilita **Change Feed** per sincronizzazione con altri sistemi anziché polling
 - Usa **letture puntuali** (GET by id + partition key) invece di query quando possibile: costano 1 RU invece di 10-100
 - Non usare `SELECT *` nelle query: specifica solo i campi necessari
+
+## Troubleshooting
+
+### Scenario 1 — Request Rate Too Large (HTTP 429)
+
+**Sintomo:** Le operazioni restituiscono `429 TooManyRequests` con header `x-ms-retry-after-ms`. Latency aumenta bruscamente, operazioni falliscono a raffica.
+
+**Causa:** Il throughput provisionato (RU/s) è esaurito. Può essere causato da hot partition (una partition key riceve troppo traffico), query cross-partition costose, o throughput sottodimensionato.
+
+**Soluzione:**
+1. Verificare la partition key — se una singola key riceve la maggior parte del traffico, riprogettare con synthetic key
+2. Aumentare temporaneamente il throughput
+3. Abilitare Autoscale per assorbire i picchi automaticamente
+
+```bash
+# Controllare throughput corrente e RU consumate (metriche Azure Monitor)
+az monitor metrics list \
+  --resource $(az cosmosdb show --resource-group $RG --name $COSMOS_ACCOUNT --query id -o tsv) \
+  --metric "TotalRequestUnits" \
+  --interval PT1M \
+  --aggregation Total
+
+# Aumentare throughput del container
+az cosmosdb sql container throughput update \
+  --resource-group $RG \
+  --account-name $COSMOS_ACCOUNT \
+  --database-name myapp-db \
+  --name orders \
+  --throughput 5000
+
+# Migrare a autoscale per gestire picchi
+az cosmosdb sql container throughput migrate \
+  --resource-group $RG \
+  --account-name $COSMOS_ACCOUNT \
+  --database-name myapp-db \
+  --name orders \
+  --throughput-type autoscale
+```
+
+---
+
+### Scenario 2 — Query Lenta / Costo RU Elevato
+
+**Sintomo:** Query restituisce risultati ma impiega centinaia di ms e consuma 100+ RU. L'header `x-ms-request-charge` ha valori molto alti.
+
+**Causa:** Query cross-partition (la partition key non è nel filtro WHERE), assenza di indici compositi per ORDER BY, o uso di `SELECT *` con documenti grandi.
+
+**Soluzione:**
+1. Aggiungere la partition key al WHERE della query
+2. Aggiungere indici compositi per query con ORDER BY o filtri multipli
+3. Selezionare solo i campi necessari invece di `SELECT *`
+
+```bash
+# Aggiungere indice composito per query ORDER BY
+az cosmosdb sql container update \
+  --resource-group $RG \
+  --account-name $COSMOS_ACCOUNT \
+  --database-name myapp-db \
+  --name orders \
+  --idx '[{"indexingMode":"consistent","automatic":true,"includedPaths":[{"path":"/*"}],"excludedPaths":[{"path":"/\"_etag\"/?"}],"compositeIndexes":[[{"path":"/customerId","order":"ascending"},{"path":"/createdAt","order":"descending"}]]}]'
+```
+
+```python
+# Query ottimizzata: partition key nel filtro + campi specifici
+items = container.query_items(
+    query="SELECT c.id, c.total, c.status FROM c WHERE c.customerId = @customerId AND c.status = 'completed' ORDER BY c.createdAt DESC",
+    parameters=[{"name": "@customerId", "value": "cust-abc123"}],
+    partition_key="cust-abc123"  # evita cross-partition scan
+)
+```
+
+---
+
+### Scenario 3 — Failover Automatico Non Avviene / Regione Non Disponibile
+
+**Sintomo:** La regione primaria è down ma l'applicazione continua a ricevere errori invece di fare failover alla regione secondaria.
+
+**Causa:** Il failover automatico non è abilitato, oppure l'account ha una sola regione configurata, oppure il cliente usa endpoint regione-specifici invece dell'endpoint globale.
+
+**Soluzione:**
+1. Verificare che `--enable-automatic-failover true` sia impostato
+2. Verificare che l'applicazione usi l'endpoint globale (`.documents.azure.com`) non quello regionale
+3. Se necessario, eseguire failover manuale
+
+```bash
+# Verificare configurazione failover
+az cosmosdb show \
+  --resource-group $RG \
+  --name $COSMOS_ACCOUNT \
+  --query "{regions:locations, automaticFailover:enableAutomaticFailover}"
+
+# Abilitare failover automatico
+az cosmosdb update \
+  --resource-group $RG \
+  --name $COSMOS_ACCOUNT \
+  --enable-automatic-failover true
+
+# Failover manuale (promuove la regione secondaria a primaria)
+az cosmosdb failover-priority-change \
+  --resource-group $RG \
+  --name $COSMOS_ACCOUNT \
+  --failover-policies "northeurope=0" "westeurope=1"
+```
+
+---
+
+### Scenario 4 — Documenti Non Compaiono Nelle Letture (Consistency Issues)
+
+**Sintomo:** Un documento è stato scritto con successo (HTTP 201/200) ma una lettura immediata non lo trova, oppure due client leggono versioni diverse dello stesso documento.
+
+**Causa:** Il consistency level è impostato a `Eventual` o `Consistent Prefix` — letture da repliche diverse possono restituire dati non aggiornati. In multi-region write, possono esistere conflitti di scrittura.
+
+**Soluzione:**
+1. Alzare il consistency level a `Session` (default consigliato) o `Strong` se necessario
+2. Per multi-region write, implementare una conflict resolution policy
+3. Usare sempre la partition key nelle letture puntuali per leggere dalla partizione corretta
+
+```bash
+# Verificare consistency level corrente
+az cosmosdb show \
+  --resource-group $RG \
+  --name $COSMOS_ACCOUNT \
+  --query "consistencyPolicy"
+
+# Impostare Session consistency (read-your-writes garantito)
+az cosmosdb update \
+  --resource-group $RG \
+  --name $COSMOS_ACCOUNT \
+  --default-consistency-level Session
+```
+
+```python
+# Lettura puntuale (get by id + partition key) — sempre consistente con la replica locale
+response = container.read_item(
+    item="order-001",
+    partition_key="cust-abc123"  # garantisce lettura dalla partizione corretta
+)
+```
 
 ## Riferimenti
 

@@ -9,7 +9,7 @@ related: [ci-cd/gitops/_index, ci-cd/gitops/argocd, containers/helm/_index, cont
 official_docs: https://fluxcd.io/flux/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # Flux CD
@@ -738,6 +738,114 @@ spec:
       )
     ) * 100
 ```
+
+## Troubleshooting
+
+### Scenario 1 — Kustomization bloccata in stato `False / BuildFailed`
+
+**Sintomo:** `flux get kustomizations` mostra `False` con messaggio `build failed: ...`
+
+**Causa:** Il path nel repository non esiste, il YAML non è valido, oppure manca un file referenziato da `kustomization.yaml`.
+
+**Soluzione:** Verificare il path e il contenuto del repository, poi forzare la riconciliazione.
+
+```bash
+# Dettaglio dell'errore
+flux describe kustomization myapp-staging -n flux-system
+
+# Verificare che il source sia aggiornato e il path esista
+flux get sources git -n flux-system
+kubectl -n flux-system get gitrepository gitops-manifests -o jsonpath='{.status.artifact.path}'
+
+# Forzare riconciliazione dopo la correzione
+flux reconcile kustomization myapp-staging --with-source -n flux-system
+```
+
+---
+
+### Scenario 2 — HelmRelease bloccata in `ReconciliationFailed` dopo upgrade
+
+**Sintomo:** `flux get helmreleases` mostra `False / upgrade retries exhausted`; il Helm release è in stato `failed`.
+
+**Causa:** L'upgrade del chart è fallito (es. valori incompatibili, CRD mancante, timeout). Flux esaurisce i retry configurati e si blocca.
+
+**Soluzione:** Correggere la causa radice, poi sbloccare il release con un rollback o forzando la sospensione/ripresa.
+
+```bash
+# Vedere i dettagli del fallimento
+flux describe helmrelease ingress-nginx -n flux-system
+
+# Controllare lo stato Helm nativo
+helm history ingress-nginx -n flux-system
+
+# Sospendere, correggere i valori nel Git, poi riprendere
+flux suspend helmrelease ingress-nginx -n flux-system
+# (applica la correzione al repository)
+flux resume helmrelease ingress-nginx -n flux-system
+
+# Oppure forzare un rollback manuale
+helm rollback ingress-nginx -n flux-system
+flux reconcile helmrelease ingress-nginx -n flux-system
+```
+
+---
+
+### Scenario 3 — GitRepository non si aggiorna (`ArtifactOutdated` / errore autenticazione)
+
+**Sintomo:** `flux get sources git` mostra `False` con messaggio `failed to checkout ...` o `401 Unauthorized`.
+
+**Causa:** Il Secret con le credenziali (PAT o SSH key) è scaduto, revocato o non trovato. Oppure il branch/commit referenziato non esiste.
+
+**Soluzione:** Rinnovare il token e aggiornare il Secret, poi riconciliare.
+
+```bash
+# Verificare lo stato del source
+flux describe source git gitops-manifests -n flux-system
+
+# Ricreare il secret con nuove credenziali HTTPS
+kubectl -n flux-system create secret generic github-credentials \
+  --from-literal=username=git \
+  --from-literal=password=ghp_NUOVO_TOKEN \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# O con SSH: aggiornare il secret con la nuova chiave
+flux create secret git github-ssh-key \
+  --url=ssh://git@github.com/my-org/gitops-manifests \
+  --private-key-file=/path/to/new_id_ed25519 \
+  -n flux-system
+
+# Forzare il fetch
+flux reconcile source git gitops-manifests -n flux-system
+```
+
+---
+
+### Scenario 4 — SOPS: decryption fallita (`decryption failed: ...`)
+
+**Sintomo:** La Kustomization che usa SOPS fallisce con `decryption failed: cannot get data key`.
+
+**Causa:** La chiave privata age nel Secret `sops-age-key` non corrisponde alla chiave pubblica usata per cifrare i file, oppure il Secret non è presente nel namespace corretto.
+
+**Soluzione:** Verificare che la chiave age nel cluster sia quella corretta e che il Secret esista in `flux-system`.
+
+```bash
+# Verificare che il secret esista
+kubectl -n flux-system get secret sops-age-key
+
+# Controllare la chiave pubblica nel secret (deve corrispondere al .sops.yaml del repo)
+kubectl -n flux-system get secret sops-age-key -o jsonpath='{.data.age\.agekey}' \
+  | base64 -d | grep "^# public key:"
+
+# Ricreare il secret con la chiave corretta
+kubectl -n flux-system delete secret sops-age-key
+kubectl -n flux-system create secret generic sops-age-key \
+  --from-file=age.agekey=/path/to/correct/age.agekey
+
+# Forzare la riconciliazione
+flux reconcile kustomization myapp -n flux-system --with-source
+```
+
+---
 
 ## Relazioni
 

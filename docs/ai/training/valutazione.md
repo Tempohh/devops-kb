@@ -9,7 +9,7 @@ related: [ai/training/_index, ai/training/fine-tuning, ai/modelli/scelta-modello
 official_docs: https://docs.ragas.io/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-03-28
 ---
 
 # Valutazione LLM — Benchmark e Evals
@@ -604,6 +604,138 @@ promptfoo view  # apre UI comparativa nel browser
 - **Traccia i costi**: ogni eval run costa token. Con suite grandi e modelli costosi, il costo si accumula.
 - **Versiona l'eval set**: quando aggiungi o rimuovi test, registra la versione. I confronti tra versioni diverse dell'eval set non sono validi.
 - **Monitora anche in produzione**: gli evals offline non catturano la distribuzione reale dell'input. Usa sampling + monitoring per valutare la qualità in produzione.
+
+## Troubleshooting
+
+### Scenario 1 — Pass rate scende improvvisamente in CI
+
+**Sintomo:** La pipeline LLM eval fallisce con regressione > threshold anche senza modifiche ai prompt.
+
+**Causa:** Il modello API può avere variazioni di comportamento tra versioni minori (es. `claude-3-5-sonnet-20241022` vs un aggiornamento silenzioso), oppure c'è non-determinismo con `temperature > 0`.
+
+**Soluzione:** Fissa `temperature=0` per eval deterministici e aggiungi il checksum della versione modello al report.
+
+```python
+# Forza determinismo negli eval
+response = client.messages.create(
+    model="claude-3-5-sonnet-20241022",
+    max_tokens=2048,
+    temperature=0,          # deterministico
+    system=eval_case.input.get("system", ""),
+    messages=[{"role": "user", "content": eval_case.input["user"]}]
+)
+
+# Salva la versione modello nel risultato per tracciabilità
+result["model_version"] = response.model  # campo effettivo restituito dall'API
+```
+
+---
+
+### Scenario 2 — LLM-as-Judge restituisce JSON malformato
+
+**Sintomo:** `json.JSONDecodeError` frequente nel judge; il giudice aggiunge testo prima o dopo il JSON.
+
+**Causa:** Il modello giudice inserisce preambolo testuale (`"Ecco la mia valutazione: {...}"`) o markdown code fence (` ```json`), rendendo il parsing diretto impossibile.
+
+**Soluzione:** Usa un regex per estrarre il JSON o forza l'output con un tool/schema.
+
+```python
+import re
+
+def extract_json(text: str) -> dict:
+    """Estrae il primo oggetto JSON dal testo, ignorando preambolo e markdown."""
+    # Rimuove code fence markdown
+    text = re.sub(r"```(?:json)?\s*", "", text).strip()
+    # Cerca il primo { ... } valido
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        return json.loads(match.group())
+    raise ValueError(f"Nessun JSON trovato nel testo: {text[:200]}")
+
+# Oppure usa tool_choice per output strutturato garantito
+response = client.messages.create(
+    model=judge_model,
+    max_tokens=512,
+    tools=[{"name": "submit_evaluation", "input_schema": {
+        "type": "object",
+        "properties": {
+            "score": {"type": "integer", "minimum": 1, "maximum": 5},
+            "verdict": {"type": "string", "enum": ["pass", "fail"]},
+            "reasoning": {"type": "string"}
+        },
+        "required": ["score", "verdict", "reasoning"]
+    }}],
+    tool_choice={"type": "tool", "name": "submit_evaluation"},
+    messages=[{"role": "user", "content": judge_prompt}]
+)
+result = response.content[0].input  # sempre JSON strutturato
+```
+
+---
+
+### Scenario 3 — RAGAS restituisce NaN o score 0 su tutte le metriche
+
+**Sintomo:** `evaluate()` ritorna `{'faithfulness': nan, 'answer_relevancy': nan, ...}`.
+
+**Causa:** RAGAS usa internamente un LLM (OpenAI di default) per calcolare le metriche. Se la chiave API non è configurata o il modello non è accessibile, le chiamate falliscono silenziosamente.
+
+**Soluzione:** Configura esplicitamente il modello RAGAS con le credenziali corrette.
+
+```python
+from ragas import evaluate
+from ragas.llms import LangchainLLMWrapper
+from langchain_anthropic import ChatAnthropic
+
+# Usa Claude invece di OpenAI come modello RAGAS
+claude_llm = LangchainLLMWrapper(ChatAnthropic(
+    model="claude-3-5-haiku-20241022",  # modello economico per eval
+    api_key="<ANTHROPIC_API_KEY>"
+))
+
+result = evaluate(
+    dataset,
+    metrics=[faithfulness, answer_relevancy, context_precision, context_recall],
+    llm=claude_llm
+)
+
+# Debug: abilita logging per vedere le chiamate interne
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
+
+---
+
+### Scenario 4 — Benchmark lm-eval esauisce la memoria GPU
+
+**Sintomo:** `CUDA out of memory` durante `lm_eval` con modelli 7B+ su GPU consumer.
+
+**Causa:** Il batch size di default è troppo alto per la VRAM disponibile; i modelli grandi richiedono quantizzazione.
+
+**Soluzione:** Riduci il batch size e abilita la quantizzazione a 4-bit.
+
+```bash
+# Riduci batch_size e abilita quantizzazione 4-bit
+lm_eval \
+    --model hf \
+    --model_args "pretrained=meta-llama/Meta-Llama-3.1-8B-Instruct,load_in_4bit=True" \
+    --tasks mmlu \
+    --num_fewshot 5 \
+    --batch_size 1 \
+    --output_path results/mmlu
+
+# Verifica VRAM disponibile prima di eseguire
+nvidia-smi --query-gpu=memory.free,memory.total --format=csv
+
+# Per modelli molto grandi: usa device_map=auto per distribuire su più GPU
+lm_eval \
+    --model hf \
+    --model_args "pretrained=meta-llama/Meta-Llama-3.1-70B-Instruct,device_map=auto,load_in_8bit=True" \
+    --tasks mmlu \
+    --batch_size auto \
+    --output_path results/mmlu-70b
+```
+
+---
 
 ## Riferimenti
 

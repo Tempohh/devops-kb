@@ -9,7 +9,7 @@ related: [containers/kustomize/_index, containers/helm/_index, containers/opensh
 official_docs: https://kubectl.docs.kubernetes.io/references/kustomize/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Kustomize Avanzato
@@ -580,6 +580,166 @@ Kustomize Best Practices
   ✓ kubectl diff -k per review pre-apply
   ✓ kubeconform per schema validation
   ✓ conftest/OPA per policy enforcement
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — `kustomize build` fallisce con "no such file or directory"
+
+**Sintomo:** `Error: accumulating resources: accumulation err='accumulating resources from '../../base': ...no such file or directory`
+
+**Causa:** Il path relativo in `resources:` o `components:` è errato rispetto alla posizione del `kustomization.yaml`. I path sono sempre relativi al file che li dichiara.
+
+**Soluzione:** Verificare la struttura delle directory e i path relativi.
+
+```bash
+# Verificare la struttura
+find . -name "kustomization.yaml" | head -20
+
+# Testare il build dalla directory corretta
+cd overlays/production && kustomize build .
+
+# Oppure con path assoluto
+kustomize build overlays/production
+```
+
+---
+
+### Scenario 2 — JSON Patch fallisce con "add operation does not apply: doc is missing path"
+
+**Sintomo:** `Error: json patch error: add operation does not apply: doc is missing path "/spec/template/metadata/annotations"`
+
+**Causa:** `op: add` su un path intermedio inesistente (il parent non esiste). JSON Patch non crea path intermedi automaticamente.
+
+**Soluzione:** Usare `op: add` sul path parent prima, oppure usare Strategic Merge Patch che gestisce la creazione di oggetti annidati.
+
+```yaml
+# SBAGLIATO: il parent /spec/template/metadata/annotations potrebbe non esistere
+- op: add
+  path: /spec/template/metadata/annotations/prometheus.io~1scrape
+  value: "true"
+
+# CORRETTO: crea prima il parent se non esiste
+- op: add
+  path: /spec/template/metadata/annotations
+  value:
+    prometheus.io/scrape: "true"
+
+# ALTERNATIVA: Strategic Merge Patch (crea automaticamente i parent)
+# patch-annotations.yaml
+spec:
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+```
+
+---
+
+### Scenario 3 — `replacements` non propaga il valore, il campo rimane vuoto
+
+**Sintomo:** Dopo `kustomize build`, il campo target non viene aggiornato con il valore sorgente.
+
+**Causa:** Il `fieldPath` della sorgente o del target è errato, oppure il nome/kind della risorsa non corrisponde esattamente (case-sensitive).
+
+**Soluzione:** Verificare i path con `kustomize build` e ispezionare il manifest generato.
+
+```bash
+# Generare il manifest e cercare il campo target
+kustomize build overlays/production | grep -A5 "SERVICE_PORT"
+
+# Verificare che la risorsa sorgente esista nel build
+kustomize build overlays/production | grep -B2 "kind: Service"
+
+# Debug: stampare tutto il manifest generato su file
+kustomize build overlays/production > /tmp/manifest-debug.yaml
+cat /tmp/manifest-debug.yaml | grep -A3 "fieldPath target"
+```
+
+```yaml
+# Errore comune: fieldPath con notazione errata
+replacements:
+  - source:
+      kind: Service
+      name: myapp
+      fieldPath: spec.ports[0].port    # SBAGLIATO: usare notazione con punto
+      # fieldPath: spec.ports.0.port  # CORRETTO
+```
+
+---
+
+### Scenario 4 — `--enable-helm` richiesto ma non abilitato in ArgoCD
+
+**Sintomo:** ArgoCD mostra errore `helm not enabled` oppure i manifest Helm non vengono renderizzati.
+
+**Causa:** L'integrazione Kustomize+Helm richiede il flag `--enable-helm` che non è attivo di default in ArgoCD per motivi di sicurezza.
+
+**Soluzione:** Abilitare il flag nel ConfigMap di ArgoCD e verificare la versione di Kustomize supportata.
+
+```bash
+# Verificare la versione di kustomize usata da ArgoCD
+kubectl -n argocd exec deploy/argocd-repo-server -- kustomize version
+
+# Abilitare --enable-helm nel ConfigMap di ArgoCD
+kubectl -n argocd edit configmap argocd-cm
+```
+
+```yaml
+# argocd-cm — aggiungere buildOptions
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+data:
+  kustomize.buildOptions: "--enable-helm"
+  # Per versioni specifiche di kustomize
+  kustomize.version.v5.3.0: "--enable-helm"
+```
+
+```bash
+# Dopo la modifica, riavviare il repo-server
+kubectl -n argocd rollout restart deployment/argocd-repo-server
+
+# Verificare che l'Application synci correttamente
+argocd app sync myapp-production --dry-run
+```
+
+---
+
+### Scenario 5 — Component non applicato all'overlay
+
+**Sintomo:** Le risorse o patch del Component non appaiono nel manifest generato dall'overlay.
+
+**Causa:** Il `kind: Component` non può essere referenziato in `resources:` — deve essere referenziato in `components:`. Oppure il path del component è errato.
+
+**Soluzione:** Verificare che il component usi `kind: Component` e sia referenziato correttamente.
+
+```bash
+# Verificare il kind del component
+head -5 components/prometheus-monitoring/kustomization.yaml
+# Deve mostrare: kind: Component
+
+# Verificare che l'overlay lo referenzi in components: (non resources:)
+grep -A10 "components:" overlays/production/kustomization.yaml
+
+# Build di debug per vedere cosa viene incluso
+kustomize build overlays/production | grep -c "prometheus.io/scrape"
+```
+
+```yaml
+# SBAGLIATO: un Component non può stare in resources:
+resources:
+  - ../../base
+  - ../../components/prometheus-monitoring   # ERRORE
+
+# CORRETTO
+resources:
+  - ../../base
+components:
+  - ../../components/prometheus-monitoring   # CORRETTO
 ```
 
 ---

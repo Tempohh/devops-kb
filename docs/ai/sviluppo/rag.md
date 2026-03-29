@@ -7,9 +7,9 @@ search_keywords: [RAG, Retrieval-Augmented Generation, vector database, embeddin
 parent: ai/sviluppo/_index
 related: [ai/sviluppo/_index, ai/sviluppo/prompt-engineering, ai/tokens-context/context-window, ai/training/valutazione]
 official_docs: https://qdrant.tech/documentation/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-02-27
+last_updated: 2026-03-28
 ---
 
 # RAG — Retrieval-Augmented Generation
@@ -824,6 +824,155 @@ print(kb.query("Come si configura l'autoscaling orizzontale in Kubernetes?"))
 - **Testa con RAGAS**: misura faithfulness, answer_relevancy, context_precision prima del deployment.
 - **Versiona gli embedding**: se cambi modello di embedding, devi re-embeddare tutto il corpus. Traccia quale modello hai usato per ogni chunk.
 - **Refresh periodico**: i documenti cambiano. Implementa un pipeline di re-ingestion periodica.
+
+## Troubleshooting
+
+### Scenario 1 — Score di similarity bassi: tutti i risultati sotto 0.5
+
+**Sintomo:** Il vector search restituisce documenti con score molto bassi (0.2-0.4) o nessun risultato supera il threshold. La qualità delle risposte è scadente perché il contesto è irrilevante.
+
+**Causa:** Mismatch tra il modello di embedding usato in ingestion e quello in query, documenti e query in lingue diverse senza un modello multilingual, o chunking eccessivamente granulare che perde il contesto semantico.
+
+**Soluzione:** Verifica che ingestion e query usino lo stesso modello. Per corpora misti italiano/inglese, usa un modello multilingual come `bge-m3`.
+
+```python
+# Debugging: confronta embedding di query e documento
+def debug_similarity(query: str, doc: str, model_name: str = "BAAI/bge-m3"):
+    model = SentenceTransformer(model_name)
+    q_emb = model.encode(query, normalize_embeddings=True)
+    d_emb = model.encode(doc, normalize_embeddings=True)
+    score = float(np.dot(q_emb, d_emb))
+    print(f"Similarity: {score:.4f}")
+    # Se < 0.3 con documenti chiaramente rilevanti → problema di modello o lingua
+
+# Abbassa il threshold temporaneamente per diagnosticare
+results = qdrant.search(
+    collection_name=COLLECTION_NAME,
+    query_vector=query_embedding,
+    limit=10,
+    # score_threshold=0.7  # commenta per vedere tutti i risultati
+)
+for r in results:
+    print(f"Score {r.score:.3f}: {r.payload['content'][:100]}")
+```
+
+---
+
+### Scenario 2 — Hallucinations: il modello inventa informazioni non nel contesto
+
+**Sintomo:** Il modello risponde con dettagli plausibili ma non presenti in nessuno dei documenti recuperati. Spesso non cita le fonti o cita documenti che non contengono l'informazione riportata.
+
+**Causa:** Il system prompt non vincola abbastanza il modello a usare solo il contesto fornito. Il modello usa la sua conoscenza parametrica quando il contesto è insufficiente.
+
+**Soluzione:** Rafforza il vincolo nel system prompt e aggiungi verifiche post-generazione.
+
+```python
+# System prompt con vincoli espliciti anti-hallucination
+STRICT_SYSTEM = """Rispondi ESCLUSIVAMENTE con informazioni presenti nella documentazione fornita.
+REGOLE NON DEROGABILI:
+1. Se la risposta non è nella documentazione, scrivi: "INFORMAZIONE NON DISPONIBILE: questa informazione non è presente nella documentazione fornita."
+2. Ogni affermazione deve essere seguita dalla fonte tra parentesi quadre: [Fonte: nome_file.md]
+3. NON usare la tua conoscenza generale. Agisci come se non sapessi nulla al di fuori dei documenti.
+4. Se i documenti sono parzialmente rilevanti, rispondi solo per la parte coperta e segnala i gap."""
+
+# Post-processing: verifica che ogni fonte citata esista nel contesto
+def verify_citations(response: str, source_docs: list[dict]) -> dict:
+    available_sources = {doc["source"] for doc in source_docs}
+    # Estrai fonti citate nella risposta
+    cited = re.findall(r'\[Fonte: ([^\]]+)\]', response)
+    invalid = [c for c in cited if c not in available_sources]
+    return {
+        "has_hallucinated_sources": bool(invalid),
+        "invalid_citations": invalid,
+        "response_is_safe": not invalid
+    }
+```
+
+---
+
+### Scenario 3 — Risposta incompleta nonostante documenti pertinenti nel corpus
+
+**Sintomo:** Il sistema RAG risponde "Non ho trovato informazioni" o dà risposte parziali, ma i documenti rilevanti esistono nella knowledge base. Verificato cercando manualmente nel corpus.
+
+**Causa:** Il chunking ha spezzato le informazioni chiave in punti scomodi, la dimensione dei chunk è troppo piccola rispetto alla complessità della query, o il threshold di similarity è troppo alto.
+
+**Soluzione:** Diagnostica il retrieval con query diverse, prova chunking strategy alternative, e considera hybrid search o HyDE.
+
+```python
+# Diagnosi: test del retrieval isolato
+def diagnose_retrieval(query: str, expected_source: str) -> None:
+    """Verifica se il documento atteso è raggiungibile."""
+    q_emb = embedding_model.encode(query, normalize_embeddings=True).tolist()
+
+    # Cerca senza threshold per vedere dove si posiziona il documento atteso
+    all_results = qdrant.search(
+        collection_name=COLLECTION_NAME,
+        query_vector=q_emb,
+        limit=50  # ampio
+    )
+
+    for rank, r in enumerate(all_results):
+        if expected_source in r.payload.get("source", ""):
+            print(f"Trovato al rank {rank+1} con score {r.score:.3f}")
+            break
+    else:
+        print(f"PROBLEMA: '{expected_source}' non trovato nei top-50 risultati")
+        print("→ Verifica che il documento sia stato ingested correttamente")
+        print("→ Prova HyDE o multi-query retrieval")
+
+# Se il documento è al rank 30 con score 0.55:
+# → Score threshold di 0.7 lo stava filtrando → abbassa o usa reranking
+# → Rank 30 con score 0.55 → prova chunking più grande o HyDE
+```
+
+---
+
+### Scenario 4 — Latency alta in produzione (>3s per query)
+
+**Sintomo:** Il sistema RAG è troppo lento per un'interfaccia interattiva. Il profiling mostra che il collo di bottiglia è nel reranker o nell'embedding della query.
+
+**Causa:** Il cross-encoder reranker valuta N coppie (query, doc) in sequenza. Con N=50 candidati e un modello di reranking di medie dimensioni, il tempo di reranking può superare 1-2 secondi su CPU.
+
+**Soluzione:** Riduci i candidati pre-reranking, usa un reranker leggero, oppure parallelizza con asyncio o sposta il reranking su GPU.
+
+```python
+import time
+from functools import lru_cache
+
+# Profiling semplice
+def timed_rag_query(query: str) -> tuple[str, dict]:
+    timings = {}
+
+    t0 = time.perf_counter()
+    q_emb = embedding_model.encode(query, normalize_embeddings=True).tolist()
+    timings["embedding_ms"] = (time.perf_counter() - t0) * 1000
+
+    t1 = time.perf_counter()
+    candidates = qdrant.search(collection_name=COLLECTION_NAME, query_vector=q_emb, limit=20)
+    timings["retrieval_ms"] = (time.perf_counter() - t1) * 1000
+
+    t2 = time.perf_counter()
+    pairs = [(query, c.payload["content"]) for c in candidates]
+    scores = reranker.predict(pairs)
+    timings["reranking_ms"] = (time.perf_counter() - t2) * 1000
+
+    # Se reranking_ms > 1000ms → collo di bottiglia
+    # Opzioni: usa cross-encoder/ms-marco-MiniLM-L-6-v2 (più leggero)
+    # oppure riduci candidati da 20 a 10
+
+    t3 = time.perf_counter()
+    response = generate_answer(query, candidates[:5])
+    timings["llm_ms"] = (time.perf_counter() - t3) * 1000
+
+    return response, timings
+
+# Cache embedding per query frequenti (identiche)
+@lru_cache(maxsize=1000)
+def cached_embed(query: str) -> tuple:
+    return tuple(embedding_model.encode(query, normalize_embeddings=True).tolist())
+```
+
+---
 
 ## Riferimenti
 

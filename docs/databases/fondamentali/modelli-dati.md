@@ -9,7 +9,7 @@ related: [databases/fondamentali/acid-base-cap, databases/nosql/redis, databases
 official_docs: https://martinfowler.com/articles/nosql-distilled.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Modelli dei Dati
@@ -234,6 +234,134 @@ E-commerce moderno:
 ```
 
 **Il costo del polyglot persistence**: complessità operativa, sincronizzazione dei dati tra sistemi (CDC, event sourcing), più failure domain da gestire.
+
+## Troubleshooting
+
+### Scenario 1 — Query lente con molti JOIN (N+1 problem)
+
+**Sintomo**: l'applicazione esegue centinaia di query al secondo anche per pagine semplici; APM mostra query identiche replicate N volte.
+
+**Causa**: ORM che esegue lazy loading: carica una collezione e poi itera su ogni elemento eseguendo una query separata per le relazioni.
+
+**Soluzione**: abilitare eager loading esplicito o usare query con JOIN manuali.
+
+```python
+# Django — eager loading con select_related e prefetch_related
+# select_related: JOIN SQL (FK, OneToOne)
+orders = Order.objects.select_related('customer').all()
+
+# prefetch_related: query separata ottimizzata (ManyToMany, reverse FK)
+users = User.objects.prefetch_related('orders__items').all()
+
+# Verifica con Django Debug Toolbar o logging delle query
+import logging
+logging.getLogger('django.db.backends').setLevel(logging.DEBUG)
+```
+
+---
+
+### Scenario 2 — Document MongoDB con crescita incontrollata
+
+**Sintomo**: errore `Document exceeds maximum size 16793600` oppure letture sempre più lente su una collection; documenti nella collection superano i 16MB.
+
+**Causa**: array embedded non limitato (commenti, log, eventi) che cresce indefinitamente all'interno di un singolo documento.
+
+**Soluzione**: refactoring da embedding a referencing; spostare l'array in una collection separata.
+
+```javascript
+// Diagnosi: trovare documenti vicini al limite
+db.posts.find({}).forEach(doc => {
+  const size = Object.bsonsize(doc);
+  if (size > 10 * 1024 * 1024) { // > 10MB
+    print(`${doc._id}: ${(size/1024/1024).toFixed(2)} MB`);
+  }
+});
+
+// Migrazione: spostare commenti embedded in collection separata
+db.posts.find({}).forEach(post => {
+  if (post.comments && post.comments.length > 0) {
+    post.comments.forEach(comment => {
+      db.comments.insertOne({ ...comment, post_id: post._id });
+    });
+    db.posts.updateOne({ _id: post._id }, { $unset: { comments: "" } });
+  }
+});
+```
+
+---
+
+### Scenario 3 — Query Cassandra con ALLOW FILTERING
+
+**Sintomo**: query con `ALLOW FILTERING` in produzione con latenze elevate e timeout; warnings nei log del driver.
+
+**Causa**: query su colonne che non fanno parte della partition key o clustering key — Cassandra deve scansionare tutte le partizioni (full table scan distribuito).
+
+**Soluzione**: riprogettare il data model creando una tabella dedicata per il pattern di query necessario (query-driven design).
+
+```cql
+-- PROBLEMA: query su colonna non chiave
+SELECT * FROM events WHERE user_id = 123 AND status = 'pending' ALLOW FILTERING;
+-- Questo scansiona TUTTE le partizioni — inaccettabile in produzione
+
+-- SOLUZIONE: tabella dedicata al pattern di query
+CREATE TABLE events_by_status (
+  status TEXT,
+  created_at TIMESTAMP,
+  user_id UUID,
+  event_data TEXT,
+  PRIMARY KEY ((status), created_at, user_id)
+) WITH CLUSTERING ORDER BY (created_at DESC);
+
+-- Query efficiente sulla nuova tabella
+SELECT * FROM events_by_status
+WHERE status = 'pending' AND created_at > '2024-01-01';
+
+-- Verificare execution plan
+TRACING ON;
+SELECT * FROM events_by_status WHERE status = 'pending' LIMIT 100;
+```
+
+---
+
+### Scenario 4 — Similarity search vettoriale con bassa precisione (recall)
+
+**Sintomo**: il database vettoriale restituisce risultati non pertinenti; aggiungendo documenti la qualità peggiora progressivamente.
+
+**Causa**: indice HNSW con parametri `ef_construction` o `m` troppo bassi, oppure embedding generati da modelli diversi (spazi vettoriali incompatibili).
+
+**Soluzione**: ricreare l'indice con parametri più alti e verificare la coerenza del modello di embedding.
+
+```python
+# pgvector — verifica e ricreazione indice con parametri ottimizzati
+# ef_construction: qualità costruzione (default 64, aumentare per recall alta)
+# m: connessioni per nodo (default 16, range 4-64)
+
+# Diagnosi: misurare recall con ground truth
+import psycopg2
+conn = psycopg2.connect("...")
+cur = conn.cursor()
+
+# Ricrea indice con parametri migliori
+cur.execute("DROP INDEX IF EXISTS embeddings_hnsw_idx;")
+cur.execute("""
+  CREATE INDEX embeddings_hnsw_idx ON documents
+  USING hnsw (embedding vector_cosine_ops)
+  WITH (m = 32, ef_construction = 128);
+""")
+
+# Imposta ef per query (bilanciamento recall/latenza a runtime)
+cur.execute("SET hnsw.ef_search = 100;")
+
+# Verifica che tutti gli embedding usino lo stesso modello
+cur.execute("""
+  SELECT COUNT(*), AVG(vector_dims(embedding)) as avg_dims
+  FROM documents;
+""")
+print(cur.fetchone())  # Se avg_dims != 1536 (o atteso) ci sono embedding eterogenei
+conn.commit()
+```
+
+---
 
 ## Relazioni
 

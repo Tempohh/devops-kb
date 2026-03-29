@@ -3,13 +3,13 @@ title: "Broker e Cluster Kafka"
 slug: broker-cluster
 category: messaging
 tags: [kafka, broker, cluster, replica, leader, isr]
-search_keywords: [kafka broker, kafka cluster, leader follower, isr in-sync replicas, controller broker, replication factor, kafka server properties]
+search_keywords: [kafka broker, kafka cluster, leader follower, isr in-sync replicas, controller broker, replication factor, kafka server properties, partition leader, preferred leader, under-replicated partitions, rack awareness, broker.id, KRaft quorum, controller election, replica lag, kafka node, broker failover]
 parent: messaging/kafka/fondamenti
 related: [messaging/kafka/fondamenti/zookeeper-kraft, messaging/kafka/operazioni/replication-fault-tolerance]
 official_docs: https://kafka.apache.org/documentation/#brokerconfigs
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Broker e Cluster Kafka
@@ -159,19 +159,93 @@ kafka-topics.sh --bootstrap-server localhost:9092 \
 
 ## Troubleshooting
 
-**Under-replicated partitions persistenti**
-- Causa: disco pieno, I/O lento, GC pause, rete instabile
-- Diagnosi: `kafka-log-dirs.sh --describe --bootstrap-server ...`
-- Soluzione: liberare spazio, aumentare `replica.fetch.max.bytes`, controllare i log del broker
+### Scenario 1 — Under-replicated partitions persistenti
 
-**Broker non raggiunge il cluster dopo restart**
-- Verificare che `broker.id` sia univoco
-- Verificare che ZooKeeper/KRaft sia raggiungibile
-- Controllare i log: `/var/log/kafka/server.log`
+**Sintomo:** `kafka-topics.sh --describe --under-replicated-partitions` restituisce partizioni con ISR ridotto.
 
-**Leader non bilanciati (un broker gestisce troppe partizioni leader)**
-- Eseguire `kafka-leader-election.sh --election-type preferred --all-topic-partitions`
-- Se il problema persiste, usare `kafka-reassign-partitions.sh`
+**Causa:** Disco pieno su un follower, I/O lento, GC pause prolungate, oppure rete instabile che causa il superamento di `replica.lag.time.max.ms`.
+
+**Soluzione:** Identificare il broker in ritardo, liberare spazio disco, aumentare `replica.fetch.max.bytes` se il lag è da throughput. Monitorare il rientro nell'ISR.
+
+```bash
+# Identificare partizioni under-replicated
+kafka-topics.sh --bootstrap-server localhost:9092 \
+  --describe --under-replicated-partitions
+
+# Verificare spazio disco e dimensioni log per broker
+kafka-log-dirs.sh \
+  --bootstrap-server localhost:9092 \
+  --describe --topic-list orders
+```
+
+---
+
+### Scenario 2 — Broker non rientra nel cluster dopo restart
+
+**Sintomo:** Il broker si avvia ma non appare nella lista dei broker attivi; i log mostrano errori di connessione al controller.
+
+**Causa:** `broker.id` duplicato, indirizzo `advertised.listeners` non raggiungibile dagli altri broker, oppure ZooKeeper/KRaft quorum non disponibile.
+
+**Soluzione:** Verificare unicità del `broker.id`, controllare la resoluzione DNS di `advertised.listeners`, confermare la raggiungibilità del quorum KRaft o di ZooKeeper.
+
+```bash
+# Verificare log del broker
+tail -100 /var/log/kafka/server.log | grep -E "ERROR|WARN|controller"
+
+# Verificare i broker attivi nel cluster (KRaft)
+kafka-metadata-quorum.sh \
+  --bootstrap-server localhost:9092 describe --status
+
+# Verificare broker registrati (ZooKeeper legacy)
+zookeeper-shell.sh localhost:2181 ls /brokers/ids
+```
+
+---
+
+### Scenario 3 — Leader non bilanciati tra i broker
+
+**Sintomo:** Un broker gestisce una percentuale sproporzionata di partition leader; le metriche mostrano I/O asimmetrico.
+
+**Causa:** Dopo un failover, Kafka può eleggere leader non-preferred. I preferred leader non vengono riassegnati automaticamente se `auto.leader.rebalance.enable=false`.
+
+**Soluzione:** Eseguire l'elezione manuale dei preferred leader. Se il bilanciamento non migliora, ribilanciare le partizioni con `kafka-reassign-partitions.sh`.
+
+```bash
+# Elezione preferred leader su tutti i topic
+kafka-leader-election.sh \
+  --bootstrap-server localhost:9092 \
+  --election-type preferred \
+  --all-topic-partitions
+
+# Verificare distribuzione leader dopo l'elezione
+kafka-topics.sh --bootstrap-server localhost:9092 \
+  --describe --topic orders
+```
+
+---
+
+### Scenario 4 — Partizioni unavailable (nessun leader)
+
+**Sintomo:** `kafka-topics.sh --describe --unavailable-partitions` restituisce risultati; i producer ricevono `NOT_LEADER_OR_FOLLOWER` o `LEADER_NOT_AVAILABLE`.
+
+**Causa:** Tutti i broker con repliche ISR per quella partizione sono offline, oppure il numero di ISR è sceso sotto `min.insync.replicas` con `acks=all`.
+
+**Soluzione:** Riportare online almeno un broker dell'ISR. In scenari di emergenza (perdita accettabile) è possibile abilitare l'elezione di repliche non-ISR con `unclean.leader.election.enable=true` (solo temporaneamente).
+
+```bash
+# Identificare partizioni senza leader
+kafka-topics.sh --bootstrap-server localhost:9092 \
+  --describe --unavailable-partitions
+
+# Controllare quale broker aveva la replica (da ZooKeeper/KRaft metadata)
+kafka-metadata-quorum.sh \
+  --bootstrap-server localhost:9092 describe --replication
+
+# Abilitare unclean election SOLO in emergenza (rischio perdita dati)
+kafka-configs.sh --bootstrap-server localhost:9092 \
+  --entity-type brokers --entity-default \
+  --alter --add-config unclean.leader.election.enable=true
+```
 
 ## Riferimenti
 

@@ -9,7 +9,7 @@ related: [cloud/aws/iam/policies-avanzate, cloud/aws/networking/vpc, cloud/aws/s
 official_docs: https://docs.aws.amazon.com/ecs/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # ECS, EKS & Containers AWS
@@ -455,6 +455,136 @@ aws apprunner create-service \
 | Cold start | A 0 richieste scala a 0 | Minimo configurabile |
 | Costo idle | ~$0 (scale-to-zero) | Minimo configurabile |
 | Use case | MVP, microservizi semplici | Produzione enterprise |
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — ECS Task si ferma immediatamente (Essential container exited)
+
+**Sintomo:** Il task ECS passa da `PROVISIONING` a `STOPPED` con exit code non-zero; il service non raggiunge il desired count.
+
+**Causa:** Il container principale termina subito per errore applicativo, OOM kill, o mancanza di permessi IAM per leggere secrets/SSM.
+
+**Soluzione:** Controllare i log CloudWatch del container e verificare i permessi della execution role.
+
+```bash
+# Vedere gli ultimi stop reason del service
+aws ecs describe-tasks \
+    --cluster production \
+    --tasks $(aws ecs list-tasks --cluster production --service-name myapp --desired-status STOPPED --query 'taskArns[0]' --output text) \
+    --query 'tasks[0].{stopCode:stopCode,stoppedReason:stoppedReason,containers:containers[*].{name:name,exitCode:exitCode,reason:reason}}'
+
+# Log del container (awslogs driver)
+aws logs get-log-events \
+    --log-group-name /ecs/myapp \
+    --log-stream-name myapp/myapp/<task-id> \
+    --limit 50
+
+# Verificare che la execution role abbia accesso a Secrets Manager
+aws iam simulate-principal-policy \
+    --policy-source-arn arn:aws:iam::123456789012:role/ECSTaskExecutionRole \
+    --action-names secretsmanager:GetSecretValue \
+    --resource-arns arn:aws:secretsmanager:eu-central-1:123456789012:secret:myapp/db-password
+```
+
+---
+
+### Scenario 2 — EKS Pod in CrashLoopBackOff o ImagePullBackOff
+
+**Sintomo:** Pod rimane in `CrashLoopBackOff` o `ImagePullBackOff` dopo il deploy; `kubectl get pods` mostra restart count crescente.
+
+**Causa:** Per `ImagePullBackOff`: credenziali ECR scadute, IRSA non configurato per il kubelet, o immagine inesistente. Per `CrashLoopBackOff`: errore applicativo o liveness probe troppo aggressiva.
+
+**Soluzione:** Verificare i permessi del node group su ECR e i log del pod.
+
+```bash
+# Stato dettagliato del pod
+kubectl describe pod <pod-name> -n myapp
+
+# Log del container (inclusi i restart precedenti)
+kubectl logs <pod-name> -n myapp --previous
+
+# Verificare che il node group IAM role abbia AmazonEC2ContainerRegistryReadOnly
+aws iam list-attached-role-policies \
+    --role-name eksctl-production-nodegroup-NodeInstanceRole-XXXX | \
+    grep -i ecr
+
+# Per ImagePullBackOff da ECR: controllare che il token sia valido
+aws ecr get-authorization-token --region eu-central-1 \
+    --query 'authorizationData[0].expiresAt'
+
+# Forzare ricreazione dei pod
+kubectl rollout restart deployment/myapp -n myapp
+kubectl rollout status deployment/myapp -n myapp
+```
+
+---
+
+### Scenario 3 — ECS Service non si stabilizza (deployment bloccato)
+
+**Sintomo:** `aws ecs describe-services` mostra `deployments` con due entry attive (NEW e ACTIVE); il deployment non converge mai e scatta il circuit breaker.
+
+**Causa:** Le nuove task falliscono l'health check del load balancer (grace period troppo corto, porta sbagliata, o app troppo lenta al boot).
+
+**Soluzione:** Aumentare `healthCheckGracePeriodSeconds` e verificare la target group health check configuration.
+
+```bash
+# Vedere lo stato del deployment
+aws ecs describe-services \
+    --cluster production \
+    --services myapp \
+    --query 'services[0].{status:status,deployments:deployments[*].{status:status,runningCount:runningCount,failedTasks:failedTasks,rolloutState:rolloutState}}'
+
+# Aumentare il grace period per app lente al boot
+aws ecs update-service \
+    --cluster production \
+    --service myapp \
+    --health-check-grace-period-seconds 120
+
+# Verificare health checks sulla target group
+aws elbv2 describe-target-health \
+    --target-group-arn arn:aws:elasticloadbalancing:...:targetgroup/myapp/xxx
+
+# Forzare rollback manuale se circuit breaker non è abilitato
+aws ecs update-service \
+    --cluster production \
+    --service myapp \
+    --task-definition myapp:5 \   # versione precedente funzionante
+    --force-new-deployment
+```
+
+---
+
+### Scenario 4 — EKS Nodi non si aggiungono con Karpenter / Cluster Autoscaler
+
+**Sintomo:** Pod in stato `Pending` con evento `0/3 nodes are available: 3 Insufficient cpu`; nessun nodo viene aggiunto automaticamente.
+
+**Causa:** Karpenter non ha i permessi IAM corretti, il NodePool ha raggiunto i limits, oppure i pod hanno taints/affinity incompatibili con i node requirements definiti.
+
+**Soluzione:** Verificare i log di Karpenter e i limiti del NodePool.
+
+```bash
+# Log di Karpenter
+kubectl logs -n kube-system -l app.kubernetes.io/name=karpenter --tail=50
+
+# Stato dei NodePool e utilizzo corrente dei limiti
+kubectl get nodepools
+kubectl describe nodepool default
+
+# Vedere perché il pod è pending (scheduling events)
+kubectl describe pod <pending-pod> -n myapp | grep -A 20 Events
+
+# Verificare che IRSA di Karpenter sia corretto
+kubectl describe sa karpenter -n kube-system
+
+# Vedere nodi gestiti da Karpenter
+kubectl get nodeclaims
+kubectl get nodes -l karpenter.sh/nodepool=default
+
+# Se si usa Cluster Autoscaler: vedere i log
+kubectl logs -n kube-system -l app.kubernetes.io/name=cluster-autoscaler --tail=50
+```
 
 ---
 

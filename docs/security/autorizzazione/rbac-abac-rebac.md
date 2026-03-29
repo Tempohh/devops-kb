@@ -9,7 +9,7 @@ related: [security/autorizzazione/opa, security/autenticazione/jwt, security/aut
 official_docs: https://csrc.nist.gov/publications/detail/sp/800-162/final
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # RBAC, ABAC e ReBAC — Modelli di Autorizzazione
@@ -380,6 +380,119 @@ CORRETTO:
 - **Audit di ogni decisione di accesso**: ogni `allow` e `deny` deve essere loggato con soggetto, risorsa, azione, contesto
 - **Testare le policy**: le policy ABAC/ReBAC sono codice — devono avere test unitari (OPA ha `opa test`, OpenFGA ha test suite)
 - **Evitare policy condivise tra ambienti**: prod e staging devono avere policy isolate — un errore in staging non deve influenzare prod
+
+## Troubleshooting
+
+### Scenario 1 — Utente ha ancora accesso dopo revoca del ruolo
+
+**Sintomo**: un utente a cui è stato rimosso un ruolo continua a compiere azioni non più autorizzate.
+
+**Causa**: i ruoli sono codificati nel JWT al momento dell'emissione. Finché il token è valido, l'enforcement locale li accetta senza rileggere la sorgente di verità.
+
+**Soluzione**: ridurre il lifetime del JWT (max 15 minuti per sistemi sensibili) oppure implementare una token revocation list consultata ad ogni request.
+
+```python
+# Verifica revocation list a ogni request (Redis)
+import redis
+r = redis.Redis()
+
+def is_token_revoked(jti: str) -> bool:
+    return r.exists(f"revoked:{jti}") == 1
+
+def revoke_token(jti: str, ttl_seconds: int):
+    r.setex(f"revoked:{jti}", ttl_seconds, "1")
+
+# Alla revoca del ruolo utente:
+revoke_token(user_jwt["jti"], ttl_seconds=900)
+```
+
+---
+
+### Scenario 2 — Role explosion: centinaia di ruoli impossibili da gestire
+
+**Sintomo**: il numero di ruoli è esploso (>100), le assegnazioni sono inconsistenti, ogni onboarding richiede analisi manuale di quali ruoli assegnare.
+
+**Causa**: RBAC fine-grained applicato a domini troppo granulari senza gerarchia. Ogni combinazione di servizio × livello di accesso ha generato un ruolo distinto.
+
+**Soluzione**: introdurre RBAC gerarchico per l'accesso coarse-grained e delegare l'accesso fine-grained ad ABAC (OPA) o ReBAC (OpenFGA).
+
+```bash
+# Audit dei ruoli assegnati — trovare ruoli inutilizzati
+# (esempio con OPA decision log)
+cat /var/log/opa/decisions.json | \
+  jq -r '.input.user.roles[]' | \
+  sort | uniq -c | sort -rn | head -20
+# I ruoli con count basso sono candidati alla rimozione/consolidamento
+```
+
+---
+
+### Scenario 3 — Latenza elevata nelle query OpenFGA / SpiceDB
+
+**Sintomo**: i check di autorizzazione ReBAC richiedono >100ms, degradando le performance dell'API.
+
+**Causa**: il grafo delle relazioni è profondo (molti livelli di transitività) oppure il volume di tuple è elevato senza indici appropriati. Spesso anche mancanza di caching.
+
+**Soluzione**: abilitare il contextual tuple caching, limitare la profondità massima di traversata, e usare read replicas per i check.
+
+```yaml
+# OpenFGA — configurazione server con cache
+openfga:
+  datastore:
+    engine: postgres
+    uri: postgres://...
+  cache:
+    enabled: true
+    max_entries: 100000
+    ttl: 10s  # cache breve per bilanciare consistenza e latenza
+  max_tuple_count: 1000000
+  # Limita la profondità di traversata del grafo
+  resolve_node_limit: 25
+```
+
+```bash
+# Verifica latenza check con OpenFGA CLI
+fga query check --store-id $STORE_ID \
+  user:mario relation:can_read object:document:report-q4 \
+  --verbose  # mostra tempo di esecuzione e numero di tuple lette
+```
+
+---
+
+### Scenario 4 — Cross-tenant data leak: utente vede risorse di altro tenant
+
+**Sintomo**: un utente autenticato riesce ad accedere o visualizzare dati appartenenti a un tenant diverso dal proprio.
+
+**Causa**: il `tenant_id` non è validato come condizione mandatoria e separata dalle policy RBAC/ABAC. Un bug in una policy permette di bypassare l'isolamento.
+
+**Soluzione**: il tenant isolation deve essere un middleware separato eseguito prima di qualsiasi policy RBAC/ABAC, non una condizione all'interno della policy stessa.
+
+```python
+# Middleware di tenant isolation — non aggirabile dalle policy
+class TenantIsolationMiddleware:
+    def __call__(self, request):
+        user_tenant = request.user_jwt.get("tenant_id")
+        resource_tenant = request.resource.get("tenant_id")
+
+        if not user_tenant:
+            raise Unauthorized("tenant_id mancante nel JWT")
+
+        if resource_tenant and user_tenant != resource_tenant:
+            # Log dell'evento per audit — potenziale attacco IDOR
+            logger.warning(
+                "cross_tenant_attempt",
+                user=request.user_jwt["sub"],
+                user_tenant=user_tenant,
+                resource_tenant=resource_tenant,
+                resource=request.resource["id"],
+            )
+            raise Forbidden("Cross-tenant access denied")
+
+        # Solo dopo il check di tenant, procedi con RBAC/ABAC
+        return self.next(request)
+```
+
+---
 
 ## Riferimenti
 

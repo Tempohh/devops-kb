@@ -9,7 +9,7 @@ related: [containers/docker/architettura-interna, containers/kubernetes/storage]
 official_docs: https://docs.docker.com/engine/storage/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Docker Storage
@@ -303,6 +303,126 @@ volumes:
   app-logs:
   postgres-backup:
     external: true                                 # creato fuori da compose
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Volume non persiste i dati tra riavvii
+
+**Sintomo:** I dati scritti nel container scompaiono dopo `docker stop` / `docker start` o dopo un `docker rm`.
+
+**Causa:** Il container usa il layer RW di overlay2 invece di un named volume. Oppure il path montato nel container non corrisponde a dove l'applicazione scrive i dati.
+
+**Soluzione:** Verificare che il volume sia correttamente dichiarato e montato sul path giusto.
+
+```bash
+# Verifica i mount attivi del container
+docker inspect <container> --format '{{ json .Mounts }}' | jq .
+
+# Controlla dove l'applicazione scrive realmente
+docker exec <container> df -h
+docker exec <container> ls -la /var/lib/app/data  # path specifico dell'app
+
+# Se il volume è dichiarato ma non montato correttamente, ricreare il container
+docker stop <container> && docker rm <container>
+docker run -d --name <container> -v my-data:/var/lib/app/data myapp:latest
+
+# Verifica che il volume contenga i dati
+docker run --rm -v my-data:/data alpine ls -la /data
+```
+
+---
+
+### Scenario 2 — Permission denied accedendo ai file di un bind mount
+
+**Sintomo:** Il container produce errori `Permission denied` su file o directory montati via bind mount.
+
+**Causa:** L'UID/GID del processo nel container non corrisponde al proprietario del file sull'host. Comune quando il container gira come utente non-root.
+
+**Soluzione:** Allineare i permessi host o usare `--user` per eseguire il container con l'UID host.
+
+```bash
+# Verifica l'UID del processo nel container
+docker exec <container> id
+docker exec <container> ps aux
+
+# Verifica il proprietario del file sull'host
+ls -lan /host/path/data  # mostra UID numerici
+
+# Opzione 1: cambia il proprietario del file sull'host
+sudo chown -R 1001:1001 /host/path/data
+
+# Opzione 2: esegui il container con l'UID dell'utente host
+docker run --user $(id -u):$(id -g) -v $(pwd)/data:/app/data myapp
+
+# Opzione 3: SELinux — aggiungere :z (shared) o :Z (private)
+docker run -v $(pwd)/data:/app/data:z myapp
+```
+
+---
+
+### Scenario 3 — Disco esaurito in /var/lib/docker (overlay2 che cresce)
+
+**Sintomo:** L'host esaurisce lo spazio disco. `df -h` mostra `/var/lib/docker` molto grande. `docker system df` mostra immagini o container che occupano molto spazio.
+
+**Causa:** Accumulo di immagini non usate, layer dangling, container fermati non rimossi, o volumi orfani.
+
+**Soluzione:** Analizzare l'uso disco e fare pruning selettivo.
+
+```bash
+# Analisi spazio Docker
+docker system df
+docker system df -v  # dettaglio per immagine/container/volume
+
+# Pulizia selettiva
+docker container prune     # rimuove container fermati
+docker image prune         # rimuove immagini dangling (senza tag)
+docker image prune -a      # rimuove TUTTE le immagini non usate da container attivi
+docker volume prune        # rimuove volumi non usati
+docker builder prune       # rimuove build cache
+
+# Pulizia totale (attenzione: rimuove tutto il non usato)
+docker system prune --volumes
+
+# Se il problema è un container che scrive molto nel RW layer (log, tmp)
+docker exec <container> du -sh /* 2>/dev/null | sort -rh | head -20
+# Considerare di spostare il path incriminato su un volume
+```
+
+---
+
+### Scenario 4 — overlay2 non funziona su XFS (d_type error)
+
+**Sintomo:** Docker non parte o lancia errori come `layer does not exist` o `failed to create overlay mount`. In `journalctl -u docker` compare un warning su `d_type`.
+
+**Causa:** Il filesystem XFS è stato formattato con `ftype=0`, che disabilita i directory entry type necessari a overlay2.
+
+**Soluzione:** Verificare `ftype` e, se necessario, ricreare il filesystem o usare un driver alternativo.
+
+```bash
+# Verifica ftype del filesystem che ospita /var/lib/docker
+xfs_info /var/lib/docker | grep ftype
+# ftype=1 → OK per overlay2
+# ftype=0 → overlay2 non supportato
+
+# Verifica il driver attuale
+docker info | grep -E "Storage Driver|Backing Filesystem"
+
+# Soluzione A: ricrea il filesystem con ftype=1 (richiede backup e downtime)
+# mkfs.xfs -n ftype=1 /dev/sdX
+
+# Soluzione B: usa fuse-overlayfs (rootless) o cambia driver in daemon.json
+sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
+{
+  "storage-driver": "fuse-overlayfs"
+}
+EOF
+sudo systemctl restart docker
+
+# Soluzione C (dev/test only): usa il driver vfs (lento, no layer sharing)
+# "storage-driver": "vfs"
 ```
 
 ---

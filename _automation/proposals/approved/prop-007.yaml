@@ -1,0 +1,48 @@
+approved_at: '2026-03-29'
+description: "Il file docs/security/supply-chain/sast-dast.md ha un broken link nel\
+  \ campo related:\n\n```yaml\nrelated: [security/supply-chain/image-scanning, security/supply-chain/sbom-cosign,\n\
+  \          security/supply-chain/admission-control, ci-cd/pipeline/github-actions]\n\
+  ```\n\nIl path `ci-cd/pipeline/github-actions` non esiste. Nella KB ci sono:\n-\
+  \ `ci-cd/pipeline` — questo è un FILE (docs/ci-cd/pipeline.md), non una directory\n\
+  - `ci-cd/github-actions/workflow-avanzati` — il file GitHub Actions avanzato\n-\
+  \ `ci-cd/github-actions/enterprise` — il file GitHub Actions enterprise\n\nIl riferimento\
+  \ intendeva linkare GitHub Actions in quanto piattaforma CI dove si\nintegra SAST/DAST.\
+  \ Il path corretto è `ci-cd/github-actions/workflow-avanzati`\n(che copre security\
+  \ scanning steps) oppure `ci-cd/pipeline` (overview pipeline CI/CD).\n\nCorrezione\
+  \ suggerita:\n```yaml\nrelated:\n  - security/supply-chain/image-scanning\n  - security/supply-chain/sbom-cosign\n\
+  \  - security/supply-chain/admission-control\n  - ci-cd/github-actions/workflow-avanzati\
+  \   # FIX: era ci-cd/pipeline/github-actions\n  - ci-cd/strategie/pipeline-security\
+  \         # AGGIUNTA: argomento direttamente correlato\nlast_updated: 2026-03-29\n\
+  ```\n\nNota: `ci-cd/strategie/pipeline-security` esiste ed è semanticamente più\
+  \ rilevante\ndi GitHub Actions specifico, in quanto copre l'integrazione di security\
+  \ nei pipeline\nindipendentemente dalla piattaforma CI.\n"
+discovered_via: campionamento KB — campo related contiene path strutturalmente errato
+effort: small
+id: prop-007
+last_analyzed: 2026-03-29
+priority: medium
+rationale: 'Il path `ci-cd/pipeline/github-actions` è strutturalmente impossibile
+  nella gerarchia
+
+  attuale (ci-cd/pipeline è un file .md, non una directory). Questo è un link broken
+
+  che indicherebbe un errore di navigazione per qualsiasi tool di validazione dei
+  link.
+
+  Fixing aggiunge anche ci-cd/strategie/pipeline-security che è l''argomento più rilevante
+
+  per chi cerca come integrare SAST/DAST nella propria pipeline CI/CD.
+
+  '
+status: approved
+tags:
+- security
+- supply-chain
+- sast
+- dast
+- broken-link
+- fix-relation
+- ci-cd
+target_file: docs/security/supply-chain/sast-dast.md
+title: Fix broken link in sast-dast.md (ci-cd/pipeline/github-actions)
+type: fix-relation

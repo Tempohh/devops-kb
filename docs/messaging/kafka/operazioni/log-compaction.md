@@ -3,13 +3,13 @@ title: "Log Compaction"
 slug: log-compaction
 category: messaging
 tags: [kafka, log-compaction, compaction, cleanup, tombstone, changelog]
-search_keywords: [kafka log compaction, kafka compaction policy, kafka cleanup policy, tombstone record, kafka changelog topic, log cleaner, dirty ratio]
+search_keywords: [kafka log compaction, kafka compaction policy, kafka cleanup policy, tombstone record, kafka changelog topic, log cleaner, dirty ratio, compacted topic, log cleaner thread, kafka retention policy, kafka state store compaction, event sourcing kafka, min cleanable dirty ratio, delete retention ms, kafka key-based retention, kafka deduplication]
 parent: messaging/kafka/operazioni
 related: [messaging/kafka/fondamenti/topics-partizioni, messaging/kafka/kafka-streams/topologie]
 official_docs: https://kafka.apache.org/documentation/#compaction
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Log Compaction
@@ -183,9 +183,16 @@ Kafka Streams crea automaticamente topic changelog per i state store con compact
 
 ## Troubleshooting
 
-**Compaction non avviene mai**
+### Scenario 1 — Compaction non avviene mai
+
+**Sintomo:** Il topic compacted continua ad avere record duplicati per la stessa chiave; la dimensione del log non scende mai.
+
+**Causa:** Il log cleaner è disabilitato, il `cleanup.policy` non è impostato correttamente, oppure il dirty ratio non raggiunge mai la soglia configurata.
+
+**Soluzione:** Verificare che il cleaner sia attivo sul broker e che il topic abbia la policy corretta.
+
 ```bash
-# Verificare che il cleaner sia abilitato
+# Verificare configurazione del broker (cleaner abilitato)
 kafka-configs.sh --bootstrap-server localhost:9092 \
   --entity-type brokers --entity-name 1 --describe | grep cleaner
 
@@ -193,19 +200,92 @@ kafka-configs.sh --bootstrap-server localhost:9092 \
 kafka-configs.sh --bootstrap-server localhost:9092 \
   --entity-type topics --entity-name my-topic --describe
 
-# Log del cleaner (abilitare log level DEBUG per il cleaner)
-# log4j: log4j.logger.kafka.log.LogCleaner=DEBUG
+# Abbassare la soglia dirty ratio per forzare compaction più frequente
+kafka-configs.sh --bootstrap-server localhost:9092 \
+  --entity-type topics --entity-name my-topic \
+  --alter --add-config min.cleanable.dirty.ratio=0.1
+
+# Abilitare log DEBUG per monitorare il cleaner
+# In log4j.properties del broker:
+# log4j.logger.kafka.log.LogCleaner=DEBUG
 ```
 
-**Topic cresce indefinitamente nonostante compaction**
-- Verificare che tutti i record abbiano una chiave (key!=null)
-- Verificare che `min.cleanable.dirty.ratio` non sia troppo alto
-- Il cleaner non compatta i segmenti più recenti dell'`active segment` (il segmento in fase di scrittura)
+---
 
-**Consumer vede troppi tombstone**
-- Normale subito dopo eliminazioni massicce
-- I tombstone vengono rimossi dopo `delete.retention.ms`
-- Il consumer deve ignorare o gestire i record con valore null
+### Scenario 2 — Topic cresce indefinitamente nonostante compaction
+
+**Sintomo:** Il log compacted aumenta di dimensione senza che i vecchi record vengano rimossi.
+
+**Causa:** Record scritti senza chiave (key=null) non vengono mai compattati. Oppure il dirty ratio è troppo alto e il cleaner non si attiva abbastanza spesso.
+
+**Soluzione:** Verificare che tutti i producer inviino record con chiave. Ridurre `min.cleanable.dirty.ratio`.
+
+```bash
+# Controllare se ci sono record senza chiave nel topic
+kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic my-topic \
+  --from-beginning \
+  --property print.key=true \
+  --max-messages 100 | grep -c "^null"
+
+# Verificare dimensione segmenti dirty vs clean (tramite JMX)
+# Metric: kafka.log:type=LogCleanerManager,name=max-dirty-percent
+
+# Forzare compaction abbassando la soglia
+kafka-configs.sh --bootstrap-server localhost:9092 \
+  --entity-type topics --entity-name my-topic \
+  --alter --add-config min.cleanable.dirty.ratio=0.05
+```
+
+---
+
+### Scenario 3 — Consumer vede troppi tombstone / valori null
+
+**Sintomo:** Il consumer riceve molti record con `value=null` che causano NullPointerException o comportamenti inattesi.
+
+**Causa:** Tombstone inviati per eliminare chiavi restano nel log per `delete.retention.ms` (default 24h). Consumer che non gestiscono i valori null si rompono.
+
+**Soluzione:** I consumer devono filtrare i tombstone. Ridurre `delete.retention.ms` se i tombstone non sono necessari a lungo.
+
+```bash
+# Ridurre il tempo di retention dei tombstone (es. 1h)
+kafka-configs.sh --bootstrap-server localhost:9092 \
+  --entity-type topics --entity-name my-topic \
+  --alter --add-config delete.retention.ms=3600000
+
+# Verificare quanti tombstone sono presenti
+kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic my-topic \
+  --from-beginning \
+  --property print.key=true \
+  --property print.value=true | grep -c "null$"
+```
+
+---
+
+### Scenario 4 — Lag del cleaner troppo elevato / compaction lenta
+
+**Sintomo:** Il dirty ratio rimane alto per ore, il cleaner non riesce a stare al passo con la velocità di scrittura. Possibile aumento del lag in JMX.
+
+**Causa:** Un solo cleaner thread non basta per il volume di dati, oppure l'I/O rate del cleaner è limitato troppo aggressivamente.
+
+**Soluzione:** Aumentare `log.cleaner.threads` e/o alzare `log.cleaner.io.max.bytes.per.second` nella configurazione del broker.
+
+```bash
+# Verificare le metriche del cleaner via JMX (con kafka-jmx tool)
+# Metric: kafka.log:type=LogCleaner,name=cleaner-recopy-percent
+# Metric: kafka.log:type=LogCleanerManager,name=max-dirty-percent
+
+# Aggiornare configurazione broker (richiede riavvio o dynamic config se supportato)
+# In server.properties:
+# log.cleaner.threads=2
+# log.cleaner.io.max.bytes.per.second=52428800   # 50 MB/s
+
+# Verificare throughput del cleaner nel log del broker
+grep "LogCleaner" /var/log/kafka/server.log | tail -50
+```
 
 ## Riferimenti
 

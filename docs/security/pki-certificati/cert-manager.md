@@ -9,7 +9,7 @@ related: [security/pki-certificati/pki-interna, security/secret-management/vault
 official_docs: https://cert-manager.io/docs/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # cert-manager — Automazione Certificati su Kubernetes
@@ -397,6 +397,106 @@ spec:
 - **`rotationPolicy: Always`**: genera sempre una nuova chiave privata ad ogni rinnovo — evita che una chiave compromessa rimanga in uso a lungo
 - **Monitoring obbligatorio**: le alert Prometheus sui certificati in scadenza sono l'ultima rete di sicurezza se il rinnovo automatico fallisce silenziosamente
 - **IRSA/Workload Identity per DNS-01**: mai hardcodare credenziali AWS/GCP nel ClusterIssuer — usare IRSA (AWS), Workload Identity (GCP) o AzureAD Workload Identity
+
+## Troubleshooting
+
+### Scenario 1 — Certificate bloccato in stato `False` / non diventa Ready
+
+**Sintomo:** `kubectl get certificate -A` mostra `READY=False` persistente; il Secret TLS non viene creato.
+
+**Causa:** Il processo ACME (Order/Challenge) è fallito — spesso per HTTP-01 irraggiungibile, rate limit Let's Encrypt, o permessi DNS-01 insufficienti.
+
+**Soluzione:** Ispezionare la catena Order → Challenge → Ingress/DNS.
+
+```bash
+# Stato del Certificate
+kubectl describe certificate <name> -n <namespace>
+
+# Trovare l'Order associato (campo status.lastFailureTime)
+kubectl get orders -n <namespace>
+kubectl describe order <order-name> -n <namespace>
+
+# Trovare il Challenge e leggere l'errore
+kubectl get challenges -n <namespace>
+kubectl describe challenge <challenge-name> -n <namespace>
+
+# Log del controller per dettagli ACME
+kubectl logs -n cert-manager -l app=cert-manager | grep -i "error\|failed\|challenge"
+```
+
+---
+
+### Scenario 2 — Rate limit Let's Encrypt (`too many certificates already issued`)
+
+**Sintomo:** L'Order fallisce con messaggio `rateLimited` o `too many certificates already issued for exact set of domains`.
+
+**Causa:** Let's Encrypt limita a 5 certificati duplicati per dominio per settimana, e 50 certificati per dominio registrato per settimana.
+
+**Soluzione:** Usare lo staging per test; in produzione attendere il reset del rate limit (1 settimana).
+
+```bash
+# Verificare se si è in rate limit controllando l'Order
+kubectl describe order <order-name> -n <namespace> | grep -A5 "Message"
+
+# Passare temporaneamente allo staging per sbloccarsi
+kubectl patch certificate <name> -n <namespace> \
+  --type=merge -p '{"spec":{"issuerRef":{"name":"letsencrypt-staging"}}}'
+
+# Verificare rate limit attuali su crt.sh
+# Cercare il dominio su https://crt.sh per vedere quanti cert sono stati emessi
+```
+
+---
+
+### Scenario 3 — HTTP-01 Challenge fallisce: `Waiting for HTTP-01 challenge propagation`
+
+**Sintomo:** Il Challenge rimane in stato `pending` con messaggio `Waiting for HTTP-01 challenge propagation` o `error calling ACME server`.
+
+**Causa:** Let's Encrypt non riesce a raggiungere il path `/.well-known/acme-challenge/<token>` sul dominio — ingress mal configurato, firewall su porta 80, o ingress class errata.
+
+**Soluzione:** Verificare che l'Ingress temporaneo creato da cert-manager sia corretto e raggiungibile.
+
+```bash
+# Verificare che l'Ingress per il challenge sia stato creato
+kubectl get ingress -n <namespace>
+# Deve esistere un ingress temporaneo con path /.well-known/acme-challenge/...
+
+# Testare la raggiungibilità del challenge endpoint dal pod cert-manager
+kubectl run curl-test --image=curlimages/curl --rm -it --restart=Never -- \
+  curl -v http://<dominio>/.well-known/acme-challenge/test
+
+# Verificare che ingressClassName nel ClusterIssuer corrisponda a quella disponibile
+kubectl get ingressclass
+kubectl describe clusterissuer letsencrypt-prod | grep -A3 "Ingress"
+```
+
+---
+
+### Scenario 4 — Certificato scaduto nonostante cert-manager installato
+
+**Sintomo:** Il sito mostra certificato scaduto; `kubectl get certificate` mostra `READY=True` ma la data di scadenza è passata o il Secret contiene ancora il vecchio certificato.
+
+**Causa:** Il rinnovo automatico è fallito silenziosamente (spesso per un errore nell'Issuer), oppure il pod applicativo ha un volume montato con il vecchio Secret e non è stato riavviato.
+
+**Soluzione:** Forzare il rinnovo e riavviare i pod che montano il Secret.
+
+```bash
+# Forzare rinnovo immediato (richiede kubectl cert-manager plugin)
+kubectl cert-manager renew <certificate-name> -n <namespace>
+
+# Alternativa senza plugin: annotare il Secret per triggerare il rinnovo
+kubectl annotate certificate <name> -n <namespace> \
+  cert-manager.io/issuer-kind=ClusterIssuer --overwrite
+
+# Verificare la data di scadenza del certificato nel Secret
+kubectl get secret <secret-name> -n <namespace> -o jsonpath='{.data.tls\.crt}' \
+  | base64 -d | openssl x509 -noout -dates
+
+# Riavviare i pod che montano il Secret (necessario se non usano volume refresh automatico)
+kubectl rollout restart deployment/<deployment-name> -n <namespace>
+```
+
+---
 
 ## Riferimenti
 

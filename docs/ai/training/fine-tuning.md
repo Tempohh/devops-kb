@@ -9,7 +9,7 @@ related: [ai/training/_index, ai/training/valutazione, ai/fondamentali/deep-lear
 official_docs: https://huggingface.co/docs/trl/index
 status: complete
 difficulty: expert
-last_updated: 2026-02-27
+last_updated: 2026-03-28
 ---
 
 # Fine-Tuning — LoRA, QLoRA, RLHF, DPO
@@ -534,6 +534,121 @@ python convert_hf_to_gguf.py ./llama3-devops-merged --outfile llama3-devops.gguf
 - **W&B o MLflow per tracking**: traccia loss, learning rate, eval metrics in tempo reale.
 - **Testa il modello fine-tuned con un eval set**: confronta le performance sul tuo task specifico contro il base model.
 - **Non dimenticare di valutare la regressione**: il fine-tuning su un task specifico può degradare le capacità generali. Testa su MMLU o task generali dopo il fine-tuning.
+
+## Troubleshooting
+
+### Scenario 1 — CUDA Out of Memory durante il training
+
+**Sintomo:** `RuntimeError: CUDA out of memory` dopo pochi step, o subito all'avvio del training.
+
+**Causa:** Batch size, sequence length o rank LoRA troppo alti per la VRAM disponibile.
+
+**Soluzione:** Ridurre progressivamente il consumo di memoria con le seguenti leve, in ordine di impatto:
+
+```python
+# Leva 1: riduci batch size + aumenta gradient accumulation (mantieni effective batch)
+per_device_train_batch_size=1,         # da 2 a 1
+gradient_accumulation_steps=8,         # da 4 a 8 (effective batch invariato)
+
+# Leva 2: riduci max_seq_length
+max_seq_length=2048,                   # da 4096 a 2048
+
+# Leva 3: riduci rank LoRA (meno parametri addestrabili)
+r=8,                                   # da 16 a 8
+
+# Leva 4: abilita gradient checkpointing (30-40% meno VRAM, ~20% più lento)
+use_gradient_checkpointing="unsloth",  # con Unsloth
+# oppure:
+model.gradient_checkpointing_enable()  # con HuggingFace vanilla
+
+# Leva 5: passa da LoRA BF16 a QLoRA NF4
+load_in_4bit=True                      # quantizzazione del base model
+```
+
+### Scenario 2 — Training loss scende ma il modello produce output di bassa qualità
+
+**Sintomo:** La training loss cala regolarmente ma il modello fine-tuned risponde peggio del base model, oppure ripete pattern fissi invece di rispondere al contenuto della domanda.
+
+**Causa 1:** Overfitting — il modello memorizza il dataset invece di generalizzare. Eval loss risale mentre training loss scende.
+**Causa 2:** Formato del prompt non coerente tra training e inference.
+**Causa 3:** Dataset troppo piccolo o con poca varietà.
+
+**Soluzione:**
+
+```python
+# Verifica eval loss in W&B o nei log
+# Se eval loss risale → early stopping
+training_args = SFTConfig(
+    load_best_model_at_end=True,
+    metric_for_best_model="eval_loss",
+    greater_is_better=False,
+    num_train_epochs=3,          # riduci epochs se overfitting rapido
+    eval_steps=50,               # eval più frequente
+)
+
+# Verifica che il prompt template sia identico in training e inference
+# Errore comune: training usa <|begin_of_text|> ma inference no
+# Usa sempre il tokenizer.apply_chat_template()
+messages = [{"role": "user", "content": "domanda"}]
+prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+```
+
+### Scenario 3 — DPO training instabile (loss NaN o divergenza)
+
+**Sintomo:** La DPO loss diventa NaN dopo alcune centinaia di step, oppure il modello collassa producendo sempre la stessa risposta.
+
+**Causa:** Beta troppo basso (il modello si allontana troppo dal reference), oppure il dataset di preferenze ha `chosen` e `rejected` troppo simili tra loro.
+
+**Soluzione:**
+
+```python
+# Aumenta beta per penalizzare di più la divergenza dal ref model
+dpo_config = DPOConfig(
+    beta=0.3,                  # da 0.1 a 0.3 (più conservativo)
+    max_prompt_length=512,     # riduci se i prompt sono molto lunghi
+    max_length=1024,
+    loss_type="sigmoid",       # default, più stabile di "hinge"
+)
+
+# Verifica qualità del dataset: chosen e rejected devono essere chiaramente diversi
+# Scarta coppie dove la differenza è minima (es. solo punteggiatura)
+def filter_preference_pairs(dataset):
+    return [ex for ex in dataset
+            if len(ex["chosen"]) > 50
+            and len(ex["rejected"]) > 20
+            and ex["chosen"] != ex["rejected"]]
+```
+
+### Scenario 4 — Merge dell'adapter LoRA produce artefatti o qualità degradata
+
+**Sintomo:** Dopo `merge_and_unload()`, il modello merged produce output molto peggiori del modello con adapter caricato separatamente.
+
+**Causa:** Il merge viene eseguito su un modello caricato in 4-bit (QLoRA). Il merge richiede pesi in FP16/BF16.
+
+**Soluzione:** Ricaricare il base model in BF16 prima del merge.
+
+```bash
+# Ricarica il base model in BF16 (non quantizzato) per il merge
+```
+
+```python
+from peft import AutoPeftModelForCausalLM
+import torch
+
+# SBAGLIATO: merge su modello 4-bit → artefatti
+# model = AutoPeftModelForCausalLM.from_pretrained("./ft", load_in_4bit=True)
+
+# CORRETTO: carica in BF16 per merge pulito
+model = AutoPeftModelForCausalLM.from_pretrained(
+    "./llama3-devops-ft",
+    device_map="auto",
+    torch_dtype=torch.bfloat16,
+    # NON specificare load_in_4bit=True qui
+)
+
+merged_model = model.merge_and_unload()
+merged_model.save_pretrained("./llama3-devops-merged", safe_serialization=True)
+```
 
 ## Riferimenti
 

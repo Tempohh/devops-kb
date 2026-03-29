@@ -5,11 +5,11 @@ category: networking
 tags: [osi, networking, protocolli, layer, stack]
 search_keywords: [modello osi, 7 livelli osi, osi layers, layer fisico, data link layer, network layer, transport layer, session layer, presentation layer, application layer, osi vs tcp ip, encapsulation osi]
 parent: networking/fondamentali
-related: [networking/fondamentali/tcpip]
+related: [networking/fondamentali/tcpip, networking/fondamentali/indirizzi-ip-subnetting, networking/fondamentali/http-https, networking/protocolli/websocket]
 official_docs: https://www.osi-model.com/
 status: complete
 difficulty: beginner
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Modello OSI
@@ -138,6 +138,105 @@ L7 → Il servizio risponde? Autenticazione? Certificato valido?
   - L3: `ping`, `ip route`, `traceroute`
   - L4: `ss`, `netstat`, `nc`, `telnet`
   - L7: `curl`, `dig`, `openssl s_client`
+
+## Troubleshooting
+
+### Scenario 1 — Nessuna connettività di rete (sospetto L1/L2)
+
+**Sintomo:** Il host non comunica con nessun altro nodo, nemmeno il gateway. Il LED della NIC è spento o lampeggia in modo anomalo.
+
+**Causa:** Problema fisico (cavo scollegato, porta switch guasta, NIC difettosa) o L2 (VLAN errata, STP in blocking, indirizzo MAC non appreso).
+
+**Soluzione:** Verificare L1 prima di tutto, poi salire a L2.
+
+```bash
+# L1 — verifica stato interfaccia e link
+ip link show eth0
+ethtool eth0 | grep "Link detected"
+
+# L2 — verifica ARP e tabella MAC
+ip neigh show
+arp -n
+# Su switch: verificare VLAN membership e STP state
+bridge link show
+```
+
+---
+
+### Scenario 2 — `ping` fallisce verso host remoto ma gateway è raggiungibile (sospetto L3)
+
+**Sintomo:** `ping 192.168.1.1` (gateway) risponde, ma `ping 8.8.8.8` o un host su un'altra subnet non risponde.
+
+**Causa:** Route mancante o errata, default gateway non configurato, NAT assente su border router, policy di firewall a L3 che droppano i pacchetti ICMP.
+
+**Soluzione:** Ispezionare la routing table e tracciare il percorso.
+
+```bash
+# Verificare routing table
+ip route show
+ip route get 8.8.8.8        # quale route viene usata per questa dest?
+
+# Tracciare il percorso hop-by-hop
+traceroute 8.8.8.8
+traceroute -n 8.8.8.8       # senza risoluzione DNS (più veloce)
+
+# Controllare se ICMP è filtrato ma il routing funziona
+# (usa TCP invece di ICMP)
+traceroute -T -p 80 8.8.8.8
+```
+
+---
+
+### Scenario 3 — `ping` funziona ma la connessione TCP non si stabilisce (sospetto L4)
+
+**Sintomo:** `ping <host>` risponde correttamente (L3 ok), ma `curl`, `telnet`, o la propria applicazione non riesce a connettersi alla porta target. Il three-way handshake TCP non completa.
+
+**Causa:** Firewall (iptables, security group, ACL) che blocca la porta specifica; servizio non in ascolto sulla porta attesa; conntrack table piena; porta in TIME_WAIT che impedisce il riutilizzo.
+
+**Soluzione:** Verificare che il servizio sia in ascolto e che non ci siano regole di firewall bloccanti.
+
+```bash
+# Verificare se la porta è aperta sul host remoto
+nc -zv <host> <porta>
+telnet <host> <porta>
+
+# Sul host target: verificare che il servizio ascolti
+ss -tlnp | grep <porta>
+netstat -tlnp | grep <porta>
+
+# Controllare regole iptables (su Linux)
+iptables -L -n -v | grep <porta>
+
+# Verificare conntrack (se disponibile)
+conntrack -L | wc -l        # numero connessioni tracciate
+cat /proc/sys/net/netfilter/nf_conntrack_max
+```
+
+---
+
+### Scenario 4 — Handshake TLS fallisce o certificato non valido (sospetto L6)
+
+**Sintomo:** La connessione TCP si stabilisce (L4 ok), ma il client riceve un errore TLS: `SSL_ERROR_RX_RECORD_TOO_LONG`, `certificate verify failed`, `handshake failure`, o il browser mostra "Connessione non privata".
+
+**Causa:** Certificato scaduto, CN/SAN non corrispondente all'hostname, CA radice non fidata nel client, cipher suite incompatibile tra client e server, ALPN mismatch.
+
+**Soluzione:** Esaminare il certificato e la negoziazione TLS con `openssl`.
+
+```bash
+# Visualizzare il certificato presentato dal server
+openssl s_client -connect <host>:443 -servername <host> 2>/dev/null | \
+  openssl x509 -noout -dates -subject -issuer
+
+# Verificare la catena di certificati completa
+openssl s_client -connect <host>:443 -showcerts
+
+# Testare cipher suite supportate
+nmap --script ssl-enum-ciphers -p 443 <host>
+
+# Debug completo della negoziazione TLS
+openssl s_client -connect <host>:443 -tls1_2 -debug 2>&1 | head -50
+curl -v --tlsv1.2 https://<host>/
+```
 
 ## Riferimenti
 

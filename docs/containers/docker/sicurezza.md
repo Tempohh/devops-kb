@@ -9,7 +9,7 @@ related: [containers/docker/architettura-interna, containers/kubernetes/sicurezz
 official_docs: https://docs.docker.com/engine/security/
 status: complete
 difficulty: expert
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Docker Sicurezza
@@ -403,6 +403,130 @@ services:
 | Seccomp profile | Syscall pericolose accessibili (reboot, kexec_load, bpf) |
 | Image digest pin | Immagine soggetta a tag mutation (supply chain attack) |
 | Resource limits | Container può esaurire risorse host (DoS) |
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Container si avvia ma l'applicazione fallisce con "Operation not permitted"
+
+**Sintomo:** Il container parte, ma l'applicazione crasha con errori tipo `EPERM`, `permission denied`, o `operation not permitted` su operazioni di rete o filesystem.
+
+**Causa:** `--cap-drop ALL` senza aggiungere le capabilities necessarie. Spesso `NET_BIND_SERVICE` (porte < 1024) o `CHOWN` (script di entrypoint che cambiano owner).
+
+**Soluzione:**
+
+```bash
+# Identifica quale capability manca con strace
+docker run --rm --cap-drop ALL \
+    --security-opt seccomp=unconfined \   # elimina seccomp dalla diagnostica
+    myapp 2>&1 | grep -i "not permitted\|EPERM"
+
+# Oppure avvia temporaneamente con cap-drop ALL e aggiungi una alla volta
+docker run --rm \
+    --cap-drop ALL \
+    --cap-add NET_BIND_SERVICE \
+    --cap-add CHOWN \
+    myapp
+
+# Verifica capabilities attuali del container
+docker run --rm --cap-drop ALL ubuntu capsh --print
+# Le capabilities richieste compaiono nei log come EPERM sulle syscall corrispondenti
+```
+
+---
+
+### Scenario 2 — Rootless Docker: "cannot expose privileged port"
+
+**Sintomo:** Con rootless Docker, il container non riesce a fare binding su porte < 1024 (80, 443). Errore: `bind: permission denied`.
+
+**Causa:** In modalità rootless, il processo non ha `CAP_NET_BIND_SERVICE` sull'host, quindi le porte privilegiate sono inaccessibili.
+
+**Soluzione:**
+
+```bash
+# Opzione 1: abbassare la soglia porte privilegiate sul host
+sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+# Per renderlo persistente:
+echo "net.ipv4.ip_unprivileged_port_start=80" | sudo tee /etc/sysctl.d/99-rootless-docker.conf
+sudo sysctl --system
+
+# Opzione 2: usare porta alta e mettere un reverse proxy davanti
+docker run -p 8080:8080 mywebapp
+# poi nginx/traefik su host fa forward da 80 → 8080
+
+# Opzione 3: setcap sul binario dell'app nell'immagine
+# Nel Dockerfile:
+# RUN setcap cap_net_bind_service=+ep /usr/local/bin/myapp
+
+# Verifica configurazione rootless
+dockerd-rootless-setuptool.sh check
+```
+
+---
+
+### Scenario 3 — Seccomp blocca syscall e il container crasha silenziosamente
+
+**Sintomo:** Container si avvia e muore subito senza messaggi di errore chiari. I log mostrano `Killed` o exit code 159 (SIGSYS).
+
+**Causa:** Il profilo seccomp (default o custom) blocca una syscall usata dall'applicazione. Exit code 159 = SIGSYS = syscall non permessa.
+
+**Soluzione:**
+
+```bash
+# Verifica se è un problema seccomp disabilitandolo temporaneamente
+docker run --security-opt seccomp=unconfined myapp
+# Se funziona → il problema è seccomp
+
+# Identifica le syscall usate dall'applicazione con strace
+docker run --security-opt seccomp=unconfined --cap-add SYS_PTRACE \
+    --rm myapp strace -f -e trace=all myapp-binary 2>&1 | \
+    awk -F'(' '{print $1}' | sort | uniq > /tmp/syscalls-used.txt
+
+# Confronta con il profilo seccomp attuale e aggiungi le syscall mancanti
+# Syscall comuni mancanti in profili custom:
+# - clone3 (nuove versioni glibc)
+# - statx (filesystem stats moderno)
+# - io_uring_* (I/O asincrono)
+
+# Abilita audit per vedere le syscall bloccate (kernel audit)
+sudo ausearch -m SECCOMP | tail -20
+```
+
+---
+
+### Scenario 4 — AppArmor nega accesso e l'app non riesce a scrivere su /tmp
+
+**Sintomo:** L'applicazione genera errori di scrittura su `/tmp` o altri path. Il kernel log mostra `apparmor="DENIED"`.
+
+**Causa:** Il profilo AppArmor custom non include permessi di scrittura per i path necessari, oppure il profilo non è stato ricaricato dopo le modifiche.
+
+**Soluzione:**
+
+```bash
+# Verifica i deny AppArmor in tempo reale
+sudo journalctl -f | grep apparmor
+# oppure
+sudo dmesg | grep apparmor | tail -20
+# Output esempio: apparmor="DENIED" operation="file_mknod" profile="docker-web-profile" name="/tmp/.X11-unix/..."
+
+# Metti il profilo in modalità complain (log senza bloccare) per diagnostica
+sudo aa-complain /etc/apparmor.d/docker-web-profile
+# Poi riavvia il container e osserva i log per vedere tutti i deny
+
+# Aggiorna il profilo aggiungendo il path mancante
+sudo nano /etc/apparmor.d/docker-web-profile
+# Aggiungi: /tmp/** rw,
+
+# Ricarica il profilo senza riavviare i container
+sudo apparmor_parser -r /etc/apparmor.d/docker-web-profile
+
+# Torna in enforce mode dopo la diagnostica
+sudo aa-enforce /etc/apparmor.d/docker-web-profile
+
+# Verifica profilo attivo su un container in esecuzione
+cat /proc/$(docker inspect --format '{{.State.Pid}}' mycontainer)/attr/current
+```
 
 ---
 

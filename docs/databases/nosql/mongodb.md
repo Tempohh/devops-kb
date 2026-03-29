@@ -9,7 +9,7 @@ related: [databases/fondamentali/modelli-dati, databases/fondamentali/sharding, 
 official_docs: https://www.mongodb.com/docs/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # MongoDB
@@ -327,13 +327,136 @@ sh.status()
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| Query lenta con COLLSCAN | Indice mancante | `createIndex` sul campo filtrato |
-| Write lente | Write concern troppo stringente o nodo lento | Verificare `rs.status()`, rete tra nodi |
-| Replica lag alto | Operazione pesante in oplog | Analizzare oplog, aumentare `oplogSize` |
-| `Cursor timeout` su aggregation | Pipeline lenta, cursor non letto | Aggiungere `{ allowDiskUse: true }`, ottimizzare pipeline |
-| Documento > 16MB | Array cresce senza limite | Refactoring verso referencing |
+### Scenario 1 — Query lenta / COLLSCAN
+
+**Sintomo:** Query impiega secondi, `explain()` mostra `COLLSCAN` invece di `IXSCAN`.
+
+**Causa:** Nessun indice sul campo usato nel filtro, oppure l'indice esiste ma non viene usato (campo non in testa all'indice composto, o cardinalità troppo bassa).
+
+**Soluzione:** Verificare il piano di esecuzione, creare l'indice mancante.
+
+```javascript
+// 1. Analizzare il piano di esecuzione
+db.articoli.find({ tag: "nosql", pubblicato: true }).explain("executionStats")
+// Cercare: winningPlan.stage — IXSCAN = buono, COLLSCAN = indice mancante
+// Cercare: executionStats.totalDocsExamined >> nReturned = indice non selettivo
+
+// 2. Vedere indici esistenti sulla collection
+db.articoli.getIndexes()
+
+// 3. Creare l'indice mancante
+db.articoli.createIndex({ tag: 1, created_at: -1 })
+
+// 4. Verificare indici non usati (overhead inutile)
+db.articoli.aggregate([{ $indexStats: {} }])
+// Eliminare indici con accesses.ops = 0 da settimane
+db.articoli.dropIndex("nome_indice")
+```
+
+---
+
+### Scenario 2 — Replica lag alto / secondary in ritardo
+
+**Sintomo:** `rs.status()` mostra `optimeDate` del secondary molto indietro rispetto al primary; letture da secondary restituiscono dati vecchi.
+
+**Causa:** Operazione bulk (import, migration, aggregation con `$out`) genera un picco di oplog che il secondary non riesce a consumare. Può anche essere dovuto a rete lenta o secondary sovraccarico.
+
+**Soluzione:**
+
+```javascript
+// 1. Controllare lo stato del replica set e il lag
+rs.status()
+// Campo: members[N].optimeDate vs members[0].optimeDate (primary)
+// Campo: members[N].stateStr — SECONDARY ok, RECOVERING = problema grave
+
+// 2. Dimensione e utilizzo dell'oplog
+rs.printReplicationInfo()      // primary: dimensione oplog e window temporale
+rs.printSecondaryReplicationInfo()  // lag per ogni secondary
+
+// 3. Se il secondary è in RECOVERING, forzare risincronizzazione
+// Sul secondary (mongosh):
+db.adminCommand({ resync: 1 })
+
+// 4. Aumentare la finestra dell'oplog se troppo piccola (richiede riavvio)
+// mongod.conf:
+// replication:
+//   oplogSizeMB: 10240   # default: 5% del disco, minimo 990MB
+```
+
+---
+
+### Scenario 3 — Connessione esaurita / connection pool saturo
+
+**Sintomo:** Errori `connection pool timeout` o `too many open connections` nell'applicazione; `mongostat` mostra `conn` vicino al limite.
+
+**Causa:** L'applicazione apre troppe connessioni (istanze multiple senza pool condiviso, pool mal configurato) oppure il `maxConnections` del server è troppo basso.
+
+**Soluzione:**
+
+```bash
+# 1. Monitorare connessioni in tempo reale
+mongostat --host mongo1:27017 -u admin -p secret --authenticationDatabase admin 1
+# Colonne rilevanti: conn, qr|qw (query read/write queue)
+
+# 2. Connessioni attuali per database
+mongosh --eval 'db.serverStatus().connections'
+# current: connessioni aperte ora
+# available: connessioni ancora disponibili
+# totalCreated: connessioni create dall'avvio (alta = leak)
+```
+
+```python
+# 3. Configurare correttamente il pool lato applicazione
+from pymongo import MongoClient
+
+client = MongoClient(
+    "mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=rs0",
+    maxPoolSize=50,        # default 100 — ridurre se molte istanze app
+    minPoolSize=5,         # mantieni connessioni pre-aperte
+    maxIdleTimeMS=60000,   # chiudi connessioni idle dopo 60s
+    connectTimeoutMS=5000,
+    serverSelectionTimeoutMS=5000
+)
+# IMPORTANTE: creare il client UNA SOLA VOLTA e riutilizzarlo (singleton)
+```
+
+---
+
+### Scenario 4 — Aggregation fallisce con errore di memoria
+
+**Sintomo:** Aggregation pipeline restituisce `Exceeded memory limit for $group` o `Sort exceeded memory limit`.
+
+**Causa:** Uno stage della pipeline (tipicamente `$group`, `$sort`, `$lookup`) supera il limite di 100MB di RAM per stage.
+
+**Soluzione:**
+
+```javascript
+// 1. Aggiungere allowDiskUse per usare spill su disco
+db.ordini.aggregate(
+    [
+        { $match: { created_at: { $gte: ISODate("2023-01-01") } } },
+        { $group: { _id: "$cliente_id", totale: { $sum: "$importo" } } },
+        { $sort: { totale: -1 } }
+    ],
+    { allowDiskUse: true }   // abilita spill temporaneo su disco
+)
+
+// 2. Ottimizzare la pipeline — $match e $project il prima possibile
+// MALE: prima $group (processa tutti i documenti), poi $match
+// BENE: prima $match (riduce i documenti), poi $group
+db.ordini.aggregate([
+    { $match: { stato: "completato" } },      // ← prima del $group
+    { $project: { cliente_id: 1, importo: 1 } },  // ← riduce campi
+    { $group: { _id: "$cliente_id", totale: { $sum: "$importo" } } }
+])
+
+// 3. Verificare che $match usi un indice
+db.ordini.aggregate(
+    [{ $match: { stato: "completato" } }],
+    { explain: true }
+)
+// Cercare: queryPlanner.winningPlan — deve essere IXSCAN non COLLSCAN
+```
 
 ## Riferimenti
 

@@ -9,7 +9,7 @@ related: [networking/load-balancing/layer4-vs-layer7, networking/load-balancing/
 official_docs: https://www.keepalived.org/manpage.html
 status: complete
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-03-29
 ---
 
 # Alta Disponibilità e Failover
@@ -281,23 +281,110 @@ echo "enable server app_pool/s1" | socat stdio /run/haproxy/admin.sock
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| VIP non migra al failover | Keepalived non configurato correttamente | Verificare `systemctl status keepalived`, testare `check_nginx.sh` |
-| Backend marca come down troppo presto | `max_fails` troppo basso | Aumentare `max_fails`, verificare health check endpoint |
-| Backend down ma mai reintegrato | `rise` troppo alto o health check fallisce | Controllare risposta di `/health`, abbassare `rise` |
-| Spike di errori durante deploy | Nessun drain | Implementare graceful draining prima dello spegnimento |
-| Flapping (up/down ripetuto) | Health check instabile | Aumentare `fail_timeout`, verificare stabilità del backend |
+### Scenario 1 — VIP non migra al failover
+
+**Sintomo:** Il nodo primary cade ma il VIP non passa al secondary; il servizio rimane irraggiungibile.
+
+**Causa:** Keepalived non attivo sul secondary, misconfiguration di `virtual_router_id`, o firewall blocca i pacchetti VRRP multicast (224.0.0.18).
+
+**Soluzione:** Verificare lo stato di Keepalived su entrambi i nodi, controllare che `virtual_router_id` sia identico, aprire il traffico VRRP sul firewall.
 
 ```bash
-# Verifica stato VIP
+# Stato keepalived su entrambi i nodi
+systemctl status keepalived
+journalctl -u keepalived -n 50
+
+# Verifica che il VIP sia presente sul nodo attivo
 ip addr show eth0 | grep 10.0.0.100
 
-# Log keepalived
-journalctl -u keepalived -f
+# Test: simula failure manuale (abbassa priorità)
+# Sul primary, abbassa la priorità temporaneamente
+kill -STOP $(pgrep keepalived)   # oppure systemctl stop keepalived
+# Controlla se il VIP migra al secondary entro 3s
+ssh secondary "ip addr show eth0 | grep 10.0.0.100"
 
-# Stato HAProxy in tempo reale
-watch -n1 'echo "show stat" | socat stdio /run/haproxy/admin.sock | cut -d, -f1,2,18,19'
+# Verifica multicast VRRP (il traffico deve passare tra i nodi)
+tcpdump -i eth0 -n proto vrrp
+```
+
+---
+
+### Scenario 2 — Backend oscilla tra up e down (flapping)
+
+**Sintomo:** HAProxy o Nginx alternano continuamente un backend tra stato `UP` e `DOWN`; i log mostrano health check failures intermittenti.
+
+**Causa:** Il backend ha latenza elevata che supera il timeout dell'health check, oppure `fall`/`rise` configurati troppo aggressivi, oppure il backend è genuinamente instabile (GC pause, memoria).
+
+**Soluzione:** Aumentare `fail_timeout` e il valore di `fall`/`rise`, controllare la latenza dell'endpoint `/health`, investigare le cause lato applicazione.
+
+```bash
+# HAProxy: mostra stato backend in tempo reale
+watch -n1 'echo "show stat" | socat stdio /run/haproxy/admin.sock \
+  | awk -F"," "NR==1 || /app_pool/" | cut -d, -f1,2,18,19,43'
+
+# HAProxy: log degli ultimi state change
+grep "Server app_pool" /var/log/haproxy.log | tail -30
+
+# Test manuale health check endpoint
+curl -v -m 5 http://10.0.0.1:8080/health
+
+# Nginx: verifica errori passivi nel log degli errori
+tail -f /var/log/nginx/error.log | grep "upstream"
+```
+
+---
+
+### Scenario 3 — Spike di errori 502/503 durante deploy
+
+**Sintomo:** Durante un rolling deploy si registrano errori HTTP 5xx per 10-30 secondi prima del ripristino.
+
+**Causa:** Il backend viene spento prima che le connessioni attive vengano drenate, oppure il nuovo container risponde al health check prima di essere pronto a gestire traffico reale.
+
+**Soluzione:** Implementare graceful drain prima dello spegnimento, aggiungere `slow_start` per la reintegrazione, e assicurarsi che l'health check verifichi la readiness applicativa completa (non solo che il processo sia up).
+
+```bash
+# HAProxy: drain manuale prima dello spegnimento
+echo "disable server app_pool/s1" | socat stdio /run/haproxy/admin.sock
+
+# Attendi connessioni a zero
+until [ "$(echo 'show stat' | socat stdio /run/haproxy/admin.sock \
+  | awk -F',' '/app_pool,s1/{print $18}')" = "0" ]; do
+  echo "Waiting for connections to drain..."; sleep 2
+done
+
+# Nginx: verifica connessioni attive su un backend prima di spegnerlo
+ss -tnp | grep 8080 | wc -l
+
+# Dopo il deploy: riabilita gradualmente (HAProxy slowstart)
+# Aggiungere nel config: server s1 10.0.0.1:8080 check slowstart 60s
+echo "enable server app_pool/s1" | socat stdio /run/haproxy/admin.sock
+```
+
+---
+
+### Scenario 4 — Backend rimane in stato DOWN dopo recovery
+
+**Sintomo:** Un backend torna operativo (risponde 200 a `/health`) ma HAProxy o Nginx non lo reintegrano nel pool.
+
+**Causa:** Il valore di `rise` è troppo alto e richiede molti successi consecutivi, oppure il health check attivo è disabilitato, oppure il backend è stato disabilitato manualmente via socket admin.
+
+**Soluzione:** Verificare la configurazione `rise`, controllare lo stato via socket admin, forzare la reintegrazione manuale se necessario.
+
+```bash
+# HAProxy: verifica stato dettagliato del backend
+echo "show stat" | socat stdio /run/haproxy/admin.sock \
+  | awk -F',' 'NR==1{print} /app_pool,s1/{print}' \
+  | cut -d, -f1,2,17,18,19,43
+
+# HAProxy: forza reintegrazione manuale
+echo "enable server app_pool/s1" | socat stdio /run/haproxy/admin.sock
+echo "set server app_pool/s1 state ready" | socat stdio /run/haproxy/admin.sock
+
+# Nginx Plus: verifica stato upstream (richiede API)
+curl http://localhost/api/6/http/upstreams/backend_pool/servers
+
+# Verifica che il check script di Keepalived passi manualmente
+/etc/keepalived/check_nginx.sh && echo "OK" || echo "FAIL"
 ```
 
 ## Relazioni

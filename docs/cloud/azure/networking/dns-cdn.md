@@ -9,7 +9,7 @@ related: [cloud/azure/networking/vnet, cloud/azure/networking/load-balancing]
 official_docs: https://learn.microsoft.com/azure/dns/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Azure DNS & CDN
@@ -240,6 +240,141 @@ az monitor alert create \
     --target /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.Network/publicIPAddresses/myapp-pip \
     --condition "avg Under DDoS attack > 0" \
     --action-group arn:operations-action-group
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — DNS privato non risolve dall'interno della VNet
+
+**Sintomo:** Le VM nella VNet non riescono a risolvere nomi nella Private DNS Zone (es. `database.internal.company.com` restituisce NXDOMAIN).
+
+**Causa:** Manca il VNet Link tra la Private DNS Zone e la VNet, oppure la VNet non usa i DNS resolver di Azure (168.63.129.16).
+
+**Soluzione:** Verificare che esista il link e che la VNet sia configurata con DNS di default (168.63.129.16).
+
+```bash
+# Verificare i VNet link esistenti
+az network private-dns link vnet list \
+    --resource-group myapp-rg \
+    --zone-name internal.company.com \
+    --output table
+
+# Verificare DNS server configurato nella VNet (deve essere vuoto = default Azure)
+az network vnet show \
+    --resource-group myapp-rg \
+    --name production-vnet \
+    --query "dhcpOptions.dnsServers"
+
+# Creare il link mancante
+az network private-dns link vnet create \
+    --resource-group myapp-rg \
+    --zone-name internal.company.com \
+    --name production-link \
+    --virtual-network production-vnet \
+    --registration-enabled false
+```
+
+---
+
+### Scenario 2 — Private Endpoint non risolve tramite nome privato
+
+**Sintomo:** La connessione a un servizio PaaS (es. Azure SQL) tramite nome privato (`server.database.windows.net`) restituisce l'IP pubblico invece del 10.x.x.x del Private Endpoint.
+
+**Causa:** La Private DNS Zone `privatelink.database.windows.net` non è collegata alla VNet corrente, oppure il record A non punta all'IP del Private Endpoint.
+
+**Soluzione:**
+
+```bash
+# Verificare il record A nella zona privatelink
+az network private-dns record-set a list \
+    --resource-group myapp-rg \
+    --zone-name "privatelink.database.windows.net" \
+    --output table
+
+# Verificare l'IP del Private Endpoint (deve corrispondere)
+az network private-endpoint show \
+    --resource-group myapp-rg \
+    --name myapp-sql-pe \
+    --query "customDnsConfigs[].ipAddresses" \
+    --output table
+
+# Verificare link VNet
+az network private-dns link vnet list \
+    --resource-group myapp-rg \
+    --zone-name "privatelink.database.windows.net" \
+    --output table
+
+# Test risoluzione dall'interno della VM
+# nslookup server.database.windows.net 168.63.129.16
+```
+
+---
+
+### Scenario 3 — CDN Endpoint restituisce contenuto non aggiornato (cache stale)
+
+**Sintomo:** Dopo aver aggiornato file nello storage/origin, l'endpoint CDN continua a servire la versione precedente.
+
+**Causa:** Il contenuto è ancora in cache nei PoP CDN con TTL non scaduto. Il `Cache-Control` dell'origin non è configurato correttamente.
+
+**Soluzione:** Eseguire purge manuale o configurare TTL appropriato.
+
+```bash
+# Purge di file specifici
+az cdn endpoint purge \
+    --resource-group myapp-rg \
+    --profile-name myapp-cdn \
+    --name myapp-content \
+    --content-paths "/assets/app.js" "/assets/style.css"
+
+# Purge completo
+az cdn endpoint purge \
+    --resource-group myapp-rg \
+    --profile-name myapp-cdn \
+    --name myapp-content \
+    --content-paths "/*"
+
+# Verificare stato endpoint e regole caching
+az cdn endpoint show \
+    --resource-group myapp-rg \
+    --profile-name myapp-cdn \
+    --name myapp-content \
+    --query "{origin: origins, queryStringCaching: queryStringCachingBehavior}"
+```
+
+---
+
+### Scenario 4 — DNS Private Resolver non esegue forwarding verso on-premises
+
+**Sintomo:** Le query per domini interni (es. `corp.internal`) non vengono inoltrate al DNS on-premises; la risoluzione fallisce o restituisce NXDOMAIN.
+
+**Causa:** Il Forwarding Ruleset non è collegato alla VNet, oppure la Forwarding Rule per il dominio target è disabilitata o non esiste.
+
+**Soluzione:**
+
+```bash
+# Verificare le forwarding rules nel ruleset
+az dns-resolver forwarding-rule list \
+    --resource-group myapp-rg \
+    --forwarding-ruleset-name company-ruleset \
+    --output table
+
+# Verificare che il ruleset sia associato alla VNet
+az dns-resolver vnet-link list \
+    --resource-group myapp-rg \
+    --forwarding-ruleset-name company-ruleset \
+    --output table
+
+# Abilitare una rule disabilitata
+az dns-resolver forwarding-rule update \
+    --resource-group myapp-rg \
+    --forwarding-ruleset-name company-ruleset \
+    --forwarding-rule-name forward-to-onprem \
+    --forwarding-rule-state Enabled
+
+# Verificare connettività verso il DNS on-premises (porta 53)
+# Test dall'outbound subnet: nc -zv 192.168.1.53 53
 ```
 
 ---

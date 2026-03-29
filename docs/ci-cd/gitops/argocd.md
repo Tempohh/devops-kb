@@ -9,7 +9,7 @@ related: [ci-cd/gitops/_index, ci-cd/gitops/flux, containers/kubernetes/_index, 
 official_docs: https://argo-cd.readthedocs.io/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # ArgoCD
@@ -714,6 +714,127 @@ spec:
           - name: service-name
             value: myapp-preview
 ```
+
+## Troubleshooting
+
+### Scenario 1 — Application bloccata in stato `OutOfSync` dopo commit
+
+**Sintomo:** L'Application rimane `OutOfSync` anche dopo un commit corretto; il sync manuale non produce effetti visibili o genera errori generici.
+
+**Causa:** ArgoCD non riesce a renderizzare i template (Helm/Kustomize) per errori nel source, oppure ci sono differenze nei campi ignorati male configurati.
+
+**Soluzione:** Ispezionare i log del repo-server e forzare un refresh del cache Git.
+
+```bash
+# Forza il refresh del cache Git per l'Application
+argocd app get myapp-staging --refresh
+
+# Visualizza i diff dettagliati tra desired state e live state
+argocd app diff myapp-staging --local
+
+# Ispeziona errori di rendering nel repo-server
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-repo-server --tail=100
+
+# Forza sync con prune esplicito (attenzione: rimuove risorse non nel Git)
+argocd app sync myapp-staging --prune --force
+```
+
+---
+
+### Scenario 2 — Sync fallisce con `ComparisonError` o `PermissionDenied`
+
+**Sintomo:** La sync mostra errore `ComparisonError: failed to get cluster info` oppure `PermissionDenied` su alcune risorse Kubernetes.
+
+**Causa 1 (ComparisonError):** Il cluster remoto non è più raggiungibile o le credenziali sono scadute.
+**Causa 2 (PermissionDenied):** Il ServiceAccount di ArgoCD non ha i permessi RBAC Kubernetes necessari per le risorse target.
+
+**Soluzione:**
+
+```bash
+# Verifica lo stato dei cluster registrati
+argocd cluster list
+
+# Controlla gli errori di connessione al cluster
+argocd cluster get https://staging-k8s-api.example.com
+
+# Rinnova le credenziali del cluster (ricollega)
+argocd cluster add my-staging-cluster --name staging --upsert
+
+# Ispeziona i permessi del ServiceAccount argocd-application-controller
+kubectl auth can-i create deployments \
+  --as=system:serviceaccount:argocd:argocd-application-controller \
+  -n myapp-staging
+
+# Visualizza log dell'application controller per errori RBAC
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller --tail=200 | grep -i "permission\|forbidden\|error"
+```
+
+---
+
+### Scenario 3 — Drift continuo: ArgoCD corregge sempre le stesse risorse
+
+**Sintomo:** L'Application con `selfHeal: true` esegue sync continuamente (loop), ripristinando sempre le stesse risorse (es. `Deployment`, `HPA`).
+
+**Causa:** Un controller esterno (HPA, Cluster Autoscaler, Operator) modifica campi che ArgoCD considera parte del desired state, generando drift continuo. Campo tipico: `spec.replicas` gestito da HPA.
+
+**Soluzione:** Configurare `ignoreDifferences` per i campi gestiti da altri controller.
+
+```yaml
+# Nel manifest Application — ignorare spec.replicas se HPA è attivo
+spec:
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+      jqPathExpressions:
+        - .spec.metrics[].resource.target.averageUtilization
+
+# Verifica quante sync sono state eseguite nelle ultime ore
+argocd app history myapp-staging
+
+# Controlla il numero di sync recenti (loop indicator)
+kubectl get applications -n argocd myapp-staging -o jsonpath='{.status.history}' | jq 'length'
+```
+
+---
+
+### Scenario 4 — `argocd login` fallisce o SSO non funziona
+
+**Sintomo:** Il comando `argocd login` restituisce `FATA[...] dial tcp: connection refused` o il redirect SSO via Dex non completa il login (errore `invalid_client` o pagina bianca).
+
+**Causa 1:** L'URL configurato in `argocd-cm` (`url:`) non corrisponde all'URL effettivo usato nel browser (mismatch del redirect URI OAuth).
+**Causa 2:** Il secret `argocd-secret` non contiene le credenziali OAuth corrette per Dex.
+
+**Soluzione:**
+
+```bash
+# Verifica la configurazione attuale di argocd-cm
+kubectl get configmap argocd-cm -n argocd -o yaml | grep -A5 "url\|dex.config"
+
+# Controlla i log di Dex per errori OAuth
+kubectl logs -n argocd -l app.kubernetes.io/name=argocd-dex-server --tail=100 | grep -i "error\|invalid\|failed"
+
+# Verifica i secret Dex
+kubectl get secret argocd-secret -n argocd -o jsonpath='{.data}' | jq 'keys'
+
+# Reset password admin (utile se SSO non funziona in emergenza)
+# 1. Genera hash bcrypt della nuova password
+htpasswd -nbBC 10 "" 'MyNewPassword!' | tr -d ':\n' | sed 's/$2y/$2a/'
+# 2. Aggiorna il secret
+kubectl patch secret argocd-secret -n argocd \
+  --type merge \
+  -p '{"stringData":{"admin.password":"<hash-bcrypt>","admin.passwordMtime":"'$(date +%FT%T%Z)'"}}'
+
+# Riabilita account admin temporaneamente
+kubectl patch configmap argocd-cm -n argocd \
+  --type merge -p '{"data":{"admin.enabled":"true"}}'
+kubectl rollout restart deployment argocd-server -n argocd
+```
+
+---
 
 ## Relazioni
 

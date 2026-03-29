@@ -9,7 +9,7 @@ related: [databases/replicazione-ha/strategie-replica, databases/postgresql/repl
 official_docs: https://www.postgresql.org/docs/current/continuous-archiving.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Backup e Point-in-Time Recovery
@@ -325,13 +325,109 @@ echo "=== Test completato: $(date) ===" | tee -a "$LOG_FILE"
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| PITR si ferma prima del target | WAL mancante nell'archivio | Verificare `pg_stat_archiver`, controllare bucket S3 |
-| pg_basebackup fallisce | Troppo poche connessioni WAL sender | Aumentare `max_wal_senders` |
-| Restore lento | Restore single-thread, file grandi | Usare pgBackRest con `--process-max` per parallelo |
-| `archive_command` fallisce silenziosamente | Script con exit code 0 anche in caso di errore | Testare `archive_command` manualmente, verificare exit code |
-| Backup corrotto | Bit rot, problema I/O | `pgbackrest verify`, abilitare `data-checksums` in PostgreSQL |
+### Scenario 1 — PITR si ferma prima del target
+
+**Sintomo:** Il recovery termina prima del timestamp richiesto. PostgreSQL loga `recovery stopping before ...` con un tempo precedente al target, oppure si ferma con `requested WAL segment ... has already been removed`.
+
+**Causa:** Uno o più file WAL necessari per il replay non sono presenti nell'archivio. Questo accade se `archive_command` ha fallito silenziosamente, se il bucket S3 ha subito una cancellazione, o se la retention policy ha eliminato WAL ancora necessari.
+
+**Soluzione:** Verificare lo stato dell'archivio e identificare il gap.
+
+```bash
+# Controlla l'ultimo WAL archiviato correttamente e gli errori
+psql -c "SELECT archived_count, last_archived_wal, last_archived_time,
+                failed_count, last_failed_wal, last_failed_time
+         FROM pg_stat_archiver;"
+
+# Con pgBackRest: verifica integrità archivio WAL
+pgbackrest --stanza=mydb check
+
+# Lista i WAL disponibili nel bucket S3
+aws s3 ls s3://my-wal-archive/wal/ --recursive | sort | tail -20
+
+# Verifica che il WAL mancante esista nel backup corrente
+pgbackrest --stanza=mydb info
+```
+
+---
+
+### Scenario 2 — `archive_command` fallisce silenziosamente
+
+**Sintomo:** `pg_stat_archiver.failed_count` cresce, `last_failed_wal` aggiornato di recente, ma nessun alert ha notificato il problema. Il PITR risulterà incompleto se si tenta un restore.
+
+**Causa:** L'`archive_command` configurato in `postgresql.conf` restituisce exit code 0 anche quando il trasferimento non avviene (es. script bash con `|| true` implicito, permessi S3 scaduti, bucket pieno).
+
+**Soluzione:**
+
+```bash
+# Testa manualmente l'archive_command con un WAL reale
+WAL_FILE=$(ls /var/lib/postgresql/17/main/pg_wal/*.history 2>/dev/null | head -1)
+# Simula il comando (sostituisci %p e %f)
+aws s3 cp "$WAL_FILE" s3://my-wal-archive/wal/test-wal && echo "OK: exit $?" || echo "FAIL: exit $?"
+
+# Verifica permessi IAM per l'utente che esegue PostgreSQL
+aws sts get-caller-identity
+aws s3api put-object --bucket my-wal-archive --key wal/test --body /dev/null
+
+# Reset contatore errori dopo fix (richiede pg_reload_conf)
+psql -c "SELECT pg_reload_conf();"
+psql -c "SELECT pg_stat_reset_shared('archiver');"
+```
+
+---
+
+### Scenario 3 — pg_basebackup fallisce con "could not connect"
+
+**Sintomo:** `pg_basebackup` esce con `FATAL: no pg_hba.conf entry for replication connection` oppure `FATAL: number of requested standby connections exceeds max_wal_senders`.
+
+**Causa:** Il server non è configurato per accettare connessioni di replica (manca entry in `pg_hba.conf`) oppure `max_wal_senders` è troppo basso per supportare backup + repliche esistenti.
+
+**Soluzione:**
+
+```bash
+# Verifica configurazione corrente
+psql -c "SHOW max_wal_senders;"
+psql -c "SELECT count(*) FROM pg_stat_replication;"
+
+# Fix: aumenta max_wal_senders in postgresql.conf (richiede riavvio)
+# max_wal_senders = 10   (default: 10, aumentare se necessario)
+
+# Fix: aggiungi entry in pg_hba.conf per il backup user
+echo "host  replication  replicator  backup-server-ip/32  scram-sha-256" >> /etc/postgresql/17/main/pg_hba.conf
+psql -c "SELECT pg_reload_conf();"
+
+# Testa connessione di replica
+psql -h localhost -U replicator -c "IDENTIFY_SYSTEM;" replication=1
+```
+
+---
+
+### Scenario 4 — Restore pgBackRest lento (ore per dati di pochi GB)
+
+**Sintomo:** Il restore impiega molto più tempo del previsto. Il progresso di pgBackRest mostra un basso throughput.
+
+**Causa:** pgBackRest usa di default 1 processo per il restore. Su repository S3 con molti file, il download single-thread diventa il collo di bottiglia.
+
+**Soluzione:**
+
+```bash
+# Verifica quanti processi sta usando (output pgBackRest info)
+pgbackrest --stanza=mydb info
+
+# Restore parallelo con più processi
+pgbackrest --stanza=mydb \
+           --process-max=8 \          # usa 8 thread paralleli
+           --delta \                   # riusa file locali non cambiati
+           restore
+
+# Aggiungi process-max come default nel config per futuri restore
+# /etc/pgbackrest/pgbackrest.conf
+# [global]
+# process-max=8
+
+# Monitora velocità durante il restore
+watch -n 5 'du -sh /var/lib/postgresql/17/main/'
+```
 
 ## Riferimenti
 

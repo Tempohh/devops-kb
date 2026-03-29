@@ -9,7 +9,7 @@ related: [containers/docker/architettura-interna, networking/kubernetes/cni, con
 official_docs: https://docs.docker.com/engine/network/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Docker Networking
@@ -289,32 +289,121 @@ docker run -d \
 
 ## Troubleshooting Network
 
+### Scenario 1 — Container non si raggiungono sulla stessa rete
+
+**Sintomo:** `ping web` o `curl http://web` falliscono da un container all'altro sulla stessa bridge network custom.
+
+**Causa:** I container non sono effettivamente sulla stessa rete (collegati a reti diverse o alla `docker0` default che non ha DNS), oppure il nome del container non risolve perché si usa la bridge default.
+
+**Soluzione:** Verificare che entrambi i container siano sulla stessa network custom; la default `docker0` non fornisce DNS automatico.
+
 ```bash
-# 1. Container non si raggiungono — debug connettività
+# Verifica su quale rete è ogni container
+docker inspect web --format '{{json .NetworkSettings.Networks}}' | jq 'keys'
+docker inspect api --format '{{json .NetworkSettings.Networks}}' | jq 'keys'
+
+# Se i container sono su reti diverse, collegarli
+docker network connect app-network api
+
+# Testa la connettività con netshoot
 docker run --rm --network app-network nicolaka/netshoot \
-    ping web      # test ICMP
-    curl http://web:80  # test TCP
+    ping -c 3 web
 
-# 2. Port mapping non funziona
-docker ps | grep PORTS     # verifica il mapping
-ss -tlnp | grep :8080      # verifica che l'host ascolti sulla porta
-iptables -t nat -L DOCKER  # verifica regola DNAT
+# Verifica che la rete abbia il DNS embedded abilitato
+docker network inspect app-network | jq '.[0].Options'
+# "com.docker.network.bridge.enable_ip_masquerade": "true" deve essere presente
+```
 
-# 3. DNS non risolve
-docker run --rm --network app-network nicolaka/netshoot \
-    nslookup web 127.0.0.11   # interroga il DNS Docker direttamente
-    dig @127.0.0.11 web       # versione dettagliata
+---
 
-# 4. Performance: misura latenza container-to-container
-docker run --rm --network app-network nicolaka/netshoot \
-    iperf3 -c web -t 10    # dopo aver avviato un server iperf nel container "web"
+### Scenario 2 — Port mapping non funziona dall'esterno
 
-# 5. Traccia il percorso del pacchetto (con NFTables/iptables)
-docker run --rm --network host nicolaka/netshoot \
-    tcpdump -i any -n host 172.17.0.2
+**Sintomo:** `docker run -p 8080:80 nginx` avviato correttamente ma `curl http://HOST:8080` fallisce con connection refused.
 
-# 6. Ispeziona tutti i dettagli della network
-docker network inspect app-network --format '{{json .Containers}}' | jq
+**Causa:** `ip_forward` disabilitato sul kernel host, regola iptables DNAT mancante, o firewall esterno blocca la porta 8080.
+
+**Soluzione:** Verificare IP forwarding, regole iptables e stato del socket host.
+
+```bash
+# 1. Verifica che il processo ascolti
+docker ps --format 'table {{.Names}}\t{{.Ports}}'
+ss -tlnp | grep ':8080'
+
+# 2. Verifica ip_forward (deve essere 1)
+sysctl net.ipv4.ip_forward
+# Se 0: sudo sysctl -w net.ipv4.ip_forward=1
+
+# 3. Verifica regola DNAT generata da Docker
+iptables -t nat -L DOCKER -n --line-numbers | grep 8080
+
+# 4. Verifica chain DOCKER-USER (regole custom dell'utente che potrebbero bloccare)
+iptables -L DOCKER-USER -n -v
+
+# 5. Test locale sull'host (esclude problemi di rete esterna)
+curl -v http://127.0.0.1:8080
+```
+
+---
+
+### Scenario 3 — DNS interno non risolve i nomi dei container
+
+**Sintomo:** `nslookup web` dal container restituisce `NXDOMAIN` o `connection refused` nonostante il container `web` sia in running sulla stessa network.
+
+**Causa:** Il container interroga il DNS embedded `127.0.0.11` ma il servizio non risponde, oppure si usa la rete `docker0` default (che non ha DNS automatico).
+
+**Soluzione:** Verificare che il DNS embedded Docker sia raggiungibile e che la rete sia custom (non la default).
+
+```bash
+# Verifica il resolv.conf nel container
+docker exec api cat /etc/resolv.conf
+# Deve contenere: nameserver 127.0.0.11
+
+# Interroga direttamente il DNS Docker embedded
+docker exec api nslookup web 127.0.0.11
+docker exec api dig @127.0.0.11 web
+
+# Verifica che la network sia custom (non docker0)
+docker inspect api --format '{{.HostConfig.NetworkMode}}'
+# "bridge" = docker0 default (no DNS) — migrare a rete custom
+
+# Ricrea il container sulla rete custom
+docker network create app-network
+docker run -d --name web --network app-network nginx
+docker run -d --name api --network app-network myapi
+# Ora: docker exec api nslookup web → risolve correttamente
+```
+
+---
+
+### Scenario 4 — Overlay network: container su host diversi non si raggiungono
+
+**Sintomo:** In un cluster Docker Swarm, container su host diversi non comunicano attraverso la overlay network; `ping` timeout.
+
+**Causa:** Porta UDP 4789 (VXLAN) bloccata tra gli host, Swarm non completamente inizializzato, o la overlay network non è attachable.
+
+**Soluzione:** Verificare la raggiungibilità della porta VXLAN, lo stato del cluster Swarm e la membership dei container.
+
+```bash
+# Verifica stato nodi Swarm
+docker node ls   # tutti i nodi devono essere "Ready" e "Active"
+
+# Verifica che la porta 4789/UDP sia aperta tra gli host
+# Da host 1 verso host 2:
+nc -zuv 10.0.0.2 4789
+
+# Controlla la rete overlay
+docker network inspect prod-overlay | jq '.[0].Peers'
+# Deve mostrare tutti gli host del cluster
+
+# Verifica che i container siano sulla stessa overlay
+docker service ps web --format 'table {{.Name}}\t{{.Node}}\t{{.CurrentState}}'
+
+# Test connettività cross-host con netshoot
+docker run --rm --network prod-overlay nicolaka/netshoot \
+    ping -c 3 <nome-container-su-altro-host>
+
+# Se la rete non era "attachable" (per container standalone su overlay)
+docker network create --driver overlay --attachable prod-overlay
 ```
 
 ---

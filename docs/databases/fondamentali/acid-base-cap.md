@@ -9,7 +9,7 @@ related: [databases/fondamentali/transazioni-concorrenza, databases/nosql/cassan
 official_docs: https://martin.kleppmann.com/2015/05/11/please-stop-calling-databases-cp-or-ap.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # ACID, BASE e Teorema CAP
@@ -169,6 +169,97 @@ Coordinator                 Partecipante A     Partecipante B
 - **Saga pattern**: serie di transazioni locali con compensazioni (vedi Kafka)
 - **Optimistic concurrency control**: versioning senza lock, retry su conflitto
 - **Raft/Paxos consensus**: per sistemi come CockroachDB e Spanner
+
+## Troubleshooting
+
+### Scenario 1 — Letture stale dopo una scrittura (eventual consistency)
+
+**Sintomo**: L'applicazione scrive un record e immediatamente tenta di leggerlo, ma ottiene il valore precedente o un errore "not found".
+
+**Causa**: Il database è configurato in modalità AP/eventually consistent (es. Cassandra con consistency level ONE, DynamoDB in eventual read mode). La replica non ha ancora propagato la scrittura al nodo letto.
+
+**Soluzione**: Usare un consistency level più forte per le letture critiche, o applicare read-your-writes routing verso la replica primaria.
+
+```cql
+-- Cassandra: aumentare consistency level per letture critiche
+SELECT * FROM ordini WHERE id = 123 USING CONSISTENCY QUORUM;
+
+-- DynamoDB: forzare strong consistent read
+aws dynamodb get-item \
+  --table-name Ordini \
+  --key '{"id": {"S": "123"}}' \
+  --consistent-read
+```
+
+---
+
+### Scenario 2 — Transazione bloccata indefinitamente (2PC coordinator failure)
+
+**Sintomo**: Una transazione distribuita risulta in stato "in-doubt" o "prepared" e non avanza né in commit né in rollback. I lock restano acquisiti, bloccando altre operazioni.
+
+**Causa**: Il coordinator del 2PC è crashato dopo la fase PREPARE ma prima di inviare COMMIT o ROLLBACK. I partecipanti attendono istruzioni che non arrivano mai.
+
+**Soluzione**: Risolvere manualmente la transazione in-doubt dopo aver verificato lo stato su tutti i nodi, oppure abilitare il recovery automatico del coordinator.
+
+```sql
+-- PostgreSQL: visualizzare transazioni in-doubt (prepared)
+SELECT gid, prepared, owner, database FROM pg_prepared_xacts;
+
+-- Completare o annullare manualmente
+COMMIT PREPARED 'transaction_id_123';
+-- oppure
+ROLLBACK PREPARED 'transaction_id_123';
+```
+
+---
+
+### Scenario 3 — Violazione di consistency in scritture concorrenti (lost update)
+
+**Sintomo**: Due processi leggono lo stesso record, lo modificano, e riscrivono — uno dei due aggiornamenti va perso silenziosamente.
+
+**Causa**: L'isolation level usato (es. Read Committed) non protegge contro i lost update in scenari read-modify-write concorrenti. Entrambi i processi leggono il valore originale, non la versione aggiornata dall'altro.
+
+**Soluzione**: Usare `SELECT FOR UPDATE` per acquisire un lock esplicito, oppure ottimistic locking con version/timestamp check.
+
+```sql
+-- Soluzione 1: pessimistic locking
+BEGIN;
+SELECT saldo FROM conti WHERE id = 1 FOR UPDATE;
+UPDATE conti SET saldo = saldo - 100 WHERE id = 1;
+COMMIT;
+
+-- Soluzione 2: optimistic locking con versione
+UPDATE conti
+SET saldo = 900, version = version + 1
+WHERE id = 1 AND version = 5;  -- fallisce se versione cambiata nel frattempo
+-- Verificare rows_affected = 1, altrimenti retry
+```
+
+---
+
+### Scenario 4 — fsync disabilitato causa perdita dati dopo crash
+
+**Sintomo**: Dopo un crash o riavvio improvviso del database, alcune transazioni con COMMIT confermato risultano assenti al riavvio. Il database non segnala errori ma i dati sono mancanti.
+
+**Causa**: La durability è stata degradata disabilitando `fsync` o `synchronous_commit` per ottimizzare le performance. I COMMIT vengono confermati al client prima che i dati siano scritti fisicamente su disco.
+
+**Soluzione**: Verificare e ripristinare la configurazione di durabilità. In PostgreSQL, `synchronous_commit=off` è accettabile solo per operazioni non critiche (bulk import, log analytics).
+
+```bash
+-- Verificare configurazione PostgreSQL
+psql -c "SHOW synchronous_commit;"
+psql -c "SHOW fsync;"
+
+-- Verificare a livello di sessione o transazione
+psql -c "SET synchronous_commit = on;"
+
+# Nel file postgresql.conf — valori sicuri per produzione:
+# fsync = on
+# synchronous_commit = on
+# full_page_writes = on
+```
+
+---
 
 ## Relazioni
 

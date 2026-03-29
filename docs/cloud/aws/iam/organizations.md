@@ -9,7 +9,7 @@ related: [cloud/aws/iam/_index, cloud/aws/iam/policies-avanzate, cloud/aws/fonda
 official_docs: https://docs.aws.amazon.com/organizations/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # AWS Organizations & Multi-Account
@@ -436,6 +436,128 @@ Le **Tag Policy** controllano l'utilizzo dei tag in modo centralizzato nell'Orga
     }
   }
 }
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — SCP blocca azioni anche agli amministratori dell'account
+
+**Sintomo:** Un utente con `AdministratorAccess` riceve `AccessDenied` su operazioni che dovrebbe poter fare (es. `ec2:RunInstances`, `s3:PutObject`).
+
+**Causa:** Una SCP applicata all'OU o all'account nega esplicitamente l'azione. Le SCP hanno precedenza su qualsiasi policy IAM, incluse le policy managed AWS. Un Deny in SCP non è superabile nemmeno da admin dell'account.
+
+**Soluzione:** Identificare la SCP che causa il blocco e verificarne il contenuto.
+```bash
+# Identificare le SCP applicate all'account
+aws organizations list-policies-for-target \
+    --target-id 123456789012 \
+    --filter SERVICE_CONTROL_POLICY \
+    --output table
+
+# Ottenere il contenuto di una SCP specifica
+aws organizations describe-policy \
+    --policy-id p-xxxxxxxxxxxx \
+    --query 'Policy.Content' \
+    --output text | python -m json.tool
+
+# Verificare l'intera catena di OU (padre eredita SCP figlio)
+aws organizations list-parents --child-id 123456789012
+aws organizations list-parents --child-id ou-xxxx-yyyyyyy  # OU padre
+```
+
+---
+
+### Scenario 2 — IAM Identity Center: utente non riesce ad accedere a un account
+
+**Sintomo:** L'utente vede il portale SSO ma l'account target non compare nella lista, oppure compare ma il login fallisce con "You do not have access to this application".
+
+**Causa:** Manca l'Account Assignment: il gruppo/utente non è stato assegnato al PermissionSet su quell'account. Oppure il PermissionSet non è stato eseguito il provisioning nell'account (provisioning pending).
+
+**Soluzione:**
+```bash
+# Verificare le assegnazioni per un account specifico
+aws sso-admin list-account-assignments \
+    --instance-arn arn:aws:sso:::instance/ssoins-xxxx \
+    --account-id 123456789012 \
+    --permission-set-arn arn:aws:sso:::permissionSet/ssoins-xxxx/ps-xxxx
+
+# Verificare lo stato del provisioning del permission set
+aws sso-admin list-permission-sets-provisioned-to-account \
+    --instance-arn arn:aws:sso:::instance/ssoins-xxxx \
+    --account-id 123456789012
+
+# Forzare re-provisioning del permission set su tutti gli account
+aws sso-admin provision-permission-set \
+    --instance-arn arn:aws:sso:::instance/ssoins-xxxx \
+    --permission-set-arn arn:aws:sso:::permissionSet/ssoins-xxxx/ps-xxxx \
+    --target-type ALL_PROVISIONED_ACCOUNTS
+```
+
+---
+
+### Scenario 3 — Creazione account membro fallisce o rimane in stato PENDING
+
+**Sintomo:** `aws organizations create-account` completa senza errori ma l'account rimane in stato `IN_PROGRESS` o `FAILED` per lungo tempo.
+
+**Causa:** AWS richiede un indirizzo email unico per ogni account. Cause comuni: email già usata da un altro account AWS (anche fuori dall'Organization), limiti di creazione account raggiunti (default: 10 account), o problemi di verifica email.
+
+**Soluzione:**
+```bash
+# Controllare lo stato della richiesta di creazione account
+aws organizations describe-create-account-status \
+    --create-account-request-id car-xxxxxxxxxxxx
+
+# Listare tutti gli account con stato
+aws organizations list-accounts \
+    --query 'Accounts[*].{Name:Name,Status:Status,Email:Email}' \
+    --output table
+
+# In caso di FAILED: verificare il motivo
+aws organizations describe-create-account-status \
+    --create-account-request-id car-xxxxxxxxxxxx \
+    --query 'CreateAccountStatus.FailureReason'
+
+# Per superare il limite di account: richiedere aumento quota via Support
+aws service-quotas request-service-quota-increase \
+    --service-code organizations \
+    --quota-code L-29A0C5DF \
+    --desired-value 50
+```
+
+---
+
+### Scenario 4 — Cross-Account AssumeRole fallisce con "Not authorized to assume role"
+
+**Sintomo:** `aws sts assume-role` restituisce `AccessDenied: User is not authorized to assume role`.
+
+**Causa 1:** La Trust Policy del role nell'account target non include il principal corretto (account source o specifica ARN). **Causa 2:** La policy IAM dell'utente nell'account source non include `sts:AssumeRole` sulla risorsa ARN del role. **Causa 3:** `ExternalId` mancante o errato nella Trust Policy.
+
+**Soluzione:**
+```bash
+# Verificare la Trust Policy del role nell'account target
+# (eseguire dall'account target o con accesso cross-account esistente)
+aws iam get-role \
+    --role-name AdminRole \
+    --query 'Role.AssumeRolePolicyDocument' \
+    --output json
+
+# Verificare che l'utente source abbia sts:AssumeRole
+aws iam simulate-principal-policy \
+    --policy-source-arn arn:aws:iam::ACCOUNT_A:user/alice \
+    --action-names sts:AssumeRole \
+    --resource-arns arn:aws:iam::ACCOUNT_B:role/AdminRole
+
+# Testare assume-role con debug verboso
+aws sts assume-role \
+    --role-arn arn:aws:iam::ACCOUNT_B:role/AdminRole \
+    --role-session-name test-session \
+    --external-id "unique-secret" \
+    --debug 2>&1 | grep -E "(AccessDenied|AssumeRole|error)"
+
+# Verificare l'identità corrente e account ID
+aws sts get-caller-identity
 ```
 
 ---

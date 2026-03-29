@@ -736,13 +736,39 @@ def cmd_approve_proposal(prop_id):
         (int(str(i.get("id", 0))) for i in state.get("queue", []) if str(i.get("id", "")).isdigit()),
         default=0
     )
-    path = target_data.get("path", "")
+
+    # target_file / target_files → path (le proposte usano target_file, non path)
+    raw_target = target_data.get("target_file", target_data.get("target_files", ""))
+    if isinstance(raw_target, list):
+        raw_target = raw_target[0] if raw_target else ""
+    path = raw_target.lstrip("/") if raw_target else ""
+
+    # Mappa tipo proposta → tipo task standard
+    type_map = {
+        "new-file":       "new_topic",
+        "new_topic":      "new_topic",
+        "extend-section": "expand",
+        "extend":         "expand",
+        "expand":         "expand",
+        "fix-relation":   "audit",
+        "fix-link":       "audit",
+        "audit":          "audit",
+        "consolidate":    "audit",
+    }
+    raw_type = target_data.get("type", "expand")
+    task_type = type_map.get(raw_type, "expand")
+
+    # Mappa priorità testuale → P-code
+    priority_map = {"high": "P1", "medium": "P2", "low": "P3"}
+    raw_prio = str(target_data.get("priority", "medium")).lower()
+    task_priority = priority_map.get(raw_prio, raw_prio.upper() if raw_prio.startswith("p") else "P2")
+
     task = {
         "id": str(max_id + 1),
-        "type": target_data.get("type", "expand"),
+        "type": task_type,
         "path": path,
-        "category": path.split("/")[1] if "/" in path else "meta",
-        "priority": target_data.get("priority", "P2"),
+        "category": path.split("/")[1] if path and "/" in path else "meta",
+        "priority": task_priority,
         "status": "pending",
         "reason": target_data.get("description", target_data.get("title", "")),
         "proposal_id": target_file.stem

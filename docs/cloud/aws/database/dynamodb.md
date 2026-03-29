@@ -9,7 +9,7 @@ related: [cloud/aws/database/rds-aurora, cloud/aws/database/altri-db, cloud/aws/
 official_docs: https://docs.aws.amazon.com/dynamodb/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # Amazon DynamoDB — NoSQL Serverless
@@ -798,6 +798,78 @@ Soluzioni:
 2. Usare ProjectionExpression per recuperare solo i campi necessari
 3. Considerare DAX per hot reads
 4. Verificare la Region — connettiti sempre alla Region più vicina
+
+### Scenario 3 — ConditionalCheckFailedException inatteso
+
+**Sintomo:** `ConditionalCheckFailedException` viene sollevata anche quando si presume che la condizione sia verificata, causando fallimenti intermittenti in operazioni concurrent.
+
+**Causa:** Race condition tra più processi che leggono lo stesso item e tentano di aggiornarlo basandosi su un attributo di versione o su `attribute_not_exists`. Il valore letto è già stato modificato al momento della scrittura.
+
+**Soluzione:** Implementare optimistic locking con retry limitato e backoff esponenziale. Loggare i conflitti per rilevare pattern anomali.
+
+```python
+import time
+import random
+
+def update_with_retry(table, key, version, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            table.update_item(
+                Key=key,
+                UpdateExpression='SET version = :newV, #data = :data',
+                ConditionExpression='version = :currentV',
+                ExpressionAttributeNames={'#data': 'data'},
+                ExpressionAttributeValues={
+                    ':newV': version + 1,
+                    ':currentV': version,
+                    ':data': 'updated'
+                }
+            )
+            return True
+        except table.meta.client.exceptions.ConditionalCheckFailedException:
+            if attempt == max_retries - 1:
+                raise
+            # Exponential backoff con jitter
+            wait = (2 ** attempt) + random.uniform(0, 0.5)
+            time.sleep(wait)
+            # Ri-leggere il valore corrente
+            response = table.get_item(Key=key, ConsistentRead=True)
+            version = response['Item']['version']
+    return False
+```
+
+### Scenario 4 — Item size supera il limite di 400 KB
+
+**Sintomo:** `ValidationException: Item size has exceeded the maximum allowed size` durante PutItem o UpdateItem.
+
+**Causa:** Un singolo item DynamoDB non può superare 400 KB. Attributi con contenuto binario, JSON annidato profondo, o liste di grandi dimensioni provocano il superamento del limite.
+
+**Soluzione:** Decomposizione dell'item: spostare i payload grandi su S3 e conservare in DynamoDB solo il riferimento (S3 key). Oppure suddividere l'item in chunk con sort key progressiva.
+
+```bash
+# Verificare la dimensione dell'item corrente
+aws dynamodb get-item \
+  --table-name Documents \
+  --key '{"docId": {"S": "doc-001"}}' \
+  --query 'Item' | python3 -c "
+import sys, json
+item = json.load(sys.stdin)
+size = len(json.dumps(item).encode('utf-8'))
+print(f'Item size approssimativa: {size} bytes ({size/1024:.1f} KB)')
+"
+
+# Pattern: memorizzare payload su S3, riferimento in DynamoDB
+aws s3 cp large-payload.json s3://my-bucket/documents/doc-001/payload.json
+
+aws dynamodb update-item \
+  --table-name Documents \
+  --key '{"docId": {"S": "doc-001"}}' \
+  --update-expression 'SET payloadRef = :ref, payloadBucket = :bucket REMOVE largeAttribute' \
+  --expression-attribute-values '{
+    ":ref": {"S": "documents/doc-001/payload.json"},
+    ":bucket": {"S": "my-bucket"}
+  }'
+```
 
 ---
 

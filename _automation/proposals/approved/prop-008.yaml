@@ -1,0 +1,62 @@
+approved_at: '2026-03-29'
+description: "La categoria docs/dev/ è stata aggiunta di recente (last_updated: 2026-03-28)\
+  \ e i suoi\nfile non sono ancora referenziati da file correlati in altre sezioni\
+  \ della KB.\nQuesto crea un grafo di relazioni unidirezionale: dev/ punta verso\
+  \ networking/security/\nma i file di destinazione non puntano a dev/.\n\n**File\
+  \ dev/ con relazioni ad alto valore non ancora bidirezionali:**\n\n1. docs/dev/sicurezza/tls-da-codice.md\n\
+  \   - Ha related verso: security/autenticazione/mtls-spiffe, security/pki-certificati/cert-manager,\n\
+  \     networking/fondamentali/tls-ssl-basics\n   - MA questi file non hanno il backlink\
+  \ verso dev/sicurezza/tls-da-codice\n   - Chi legge tls-ssl-basics.md non scopre\
+  \ mai che esiste una guida pratica sull'implementazione\n     TLS in Java/Go/.NET\n\
+  \n2. docs/dev/resilienza/circuit-breaker.md\n   - Ha related verso: networking/service-mesh/istio,\
+  \ networking/service-mesh/linkerd (indirettamente)\n   - MA linkerd.md non linka\
+  \ dev/resilienza/circuit-breaker, nonostante Linkerd supporti\n     circuit breaking\
+  \ e il file dev abbia una sezione dedicata al confronto App vs Mesh\n\n3. docs/dev/integrazioni/database-patterns.md\n\
+  \   - Ha related verso: databases/postgresql/connection-pooling, databases/nosql/mongodb\n\
+  \   - MA questi file di database non hanno backlink verso database-patterns\n\n\
+  **Modifiche da applicare (3 file):**\n\n**File 1: docs/networking/fondamentali/tls-ssl-basics.md**\n\
+  - Aggiungere in related: `dev/sicurezza/tls-da-codice`\n- Rationale: chi legge TLS\
+  \ fondamentali spesso cerca poi come implementarlo nel codice\n\n**File 2: docs/networking/service-mesh/linkerd.md**\n\
+  - Aggiungere in related: `dev/resilienza/circuit-breaker`\n- Rationale: Linkerd\
+  \ e il circuit breaker applicativo sono complementari;\n  la sezione \"App vs Service\
+  \ Mesh\" in circuit-breaker.md fa riferimento esplicito a Linkerd\n\n**File 3: docs/databases/postgresql/connection-pooling.md**\n\
+  - Aggiungere in related: `dev/integrazioni/database-patterns`\n- Rationale: connection-pooling\
+  \ copre PgBouncer/infra; database-patterns copre HikariCP/EFCore/pgxpool\n  (lato\
+  \ codice) — sono complementari per chi gestisce un'applicazione con PostgreSQL\n\
+  \nIn tutti e tre i file: aggiornare last_updated a 2026-03-29.\n"
+discovered_via: campionamento KB — categoria dev/ nuova senza inbound references da
+  file correlati
+effort: small
+id: prop-008
+last_analyzed: 2026-03-29
+priority: medium
+rationale: 'Le relazioni nella KB sono bidirezionali per convenzione (vedi CLAUDE.md
+  Protocollo 3).
+
+  Quando dev/ è stato creato, i backlink nei file esistenti non sono stati aggiunti
+  perché
+
+  farlo avrebbe richiesto la modifica di molti file contemporaneamente, violando il
+
+  principio di costo O(1) per operazione. Questo backfill è ora necessario per rendere
+
+  il grafo delle relazioni navigabile in entrambe le direzioni sulle connessioni più
+
+  semanticamente significative. Sono stati scelti solo i 3 backlink a più alto valore
+
+  (mTLS pratico, circuit breaker App/Mesh, DB pooling infra vs codice).
+
+  '
+status: approved
+tags:
+- dev
+- backlink
+- relations
+- tls
+- circuit-breaker
+- database
+- fix-relation
+target_file: multiple (networking/service-mesh/linkerd.md, security/autenticazione/mtls-spiffe.md,
+  networking/fondamentali/tls-ssl-basics.md)
+title: Backlink a dev/ da file correlati in networking e security
+type: fix-relation

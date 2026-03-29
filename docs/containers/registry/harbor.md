@@ -9,7 +9,7 @@ related: [containers/registry/_index, security/supply-chain/image-scanning, secu
 official_docs: https://goharbor.io/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Harbor — Enterprise Registry
@@ -675,6 +675,136 @@ curl -s -u "admin:Harbor12345" \
 # Health check completo
 curl -s "https://registry.company.com/api/v2.0/health" \
     | jq '.components[] | select(.status != "healthy")'
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Harbor Core in CrashLoopBackOff dopo deploy
+
+**Sintomo:** `kubectl get pods -n harbor` mostra `harbor-core-xxx` in `CrashLoopBackOff` o `Error`.
+
+**Causa:** Connessione fallita al database PostgreSQL (password errata, PVC non montato) oppure `externalURL` non corrisponde all'hostname effettivo.
+
+**Soluzione:**
+```bash
+# Verificare i log del core
+kubectl logs -n harbor deployment/harbor-core --tail=100
+
+# Errore tipico: "failed to ping db" → verificare credenziali database
+kubectl get secret -n harbor harbor-harbor-core -o jsonpath='{.data.secret}' | base64 -d
+
+# Verificare che il PVC database sia Bound
+kubectl get pvc -n harbor
+
+# Verificare externalURL nel ConfigMap
+kubectl get cm -n harbor harbor-harbor-core -o yaml | grep -i externalurl
+
+# Restart forzato dopo fix
+kubectl rollout restart deployment/harbor-core -n harbor
+kubectl rollout status deployment/harbor-core -n harbor
+```
+
+---
+
+### Scenario 2 — Push fallisce con "401 Unauthorized" anche con credenziali corrette
+
+**Sintomo:** `docker push registry.company.com/myteam/myapp:v1.0.0` restituisce `401 Unauthorized` o `denied: requested access to the resource is denied`.
+
+**Causa:** Il robot account non ha permesso `push` sul project, oppure il token è scaduto, oppure Harbor non è raggiungibile in HTTPS con certificato valido.
+
+**Soluzione:**
+```bash
+# Verificare che docker sia autenticato correttamente
+docker login registry.company.com
+cat ~/.docker/config.json | jq '.auths["registry.company.com"]'
+
+# Verificare scadenza e permessi del robot account via API
+curl -s -u "admin:Harbor12345" \
+    "https://registry.company.com/api/v2.0/robots?page=1&page_size=20" \
+    | jq '.[] | select(.name | contains("ci-pipeline")) | {name, duration, expiration_time, permissions}'
+
+# Verificare che il certificato TLS sia valido
+openssl s_client -connect registry.company.com:443 -servername registry.company.com < /dev/null 2>&1 | grep -E "Verify|issuer"
+
+# Su Kubernetes: aggiornare il secret con nuovo token
+kubectl delete secret harbor-robot -n myapp
+kubectl create secret docker-registry harbor-robot \
+    --docker-server=registry.company.com \
+    --docker-username='robot$ci-pipeline' \
+    --docker-password='new-secret' \
+    -n myapp
+```
+
+---
+
+### Scenario 3 — Garbage Collection blocca push/pull in produzione
+
+**Sintomo:** Durante l'esecuzione della GC, tutti i push e pull verso Harbor falliscono con errori di timeout o `503 Service Unavailable`.
+
+**Causa:** Harbor mette in sola lettura il registry durante la GC. Se la GC è programmata in orario di punta, impatta il traffico produzione.
+
+**Soluzione:**
+```bash
+# Verificare se GC è in corso
+curl -s -u "admin:Harbor12345" \
+    "https://registry.company.com/api/v2.0/system/gc?page=1&page_size=5" \
+    | jq '.[] | {id, status, creation_time, update_time}'
+
+# Interrompere una GC in esecuzione (se possibile)
+# Non esiste API di stop diretto — attendere il completamento o riavviare jobservice
+kubectl rollout restart deployment/harbor-jobservice -n harbor
+
+# Riprogrammare GC in orario off-peak (domenica 3:00)
+curl -s -u "admin:Harbor12345" \
+    -X PUT "https://registry.company.com/api/v2.0/system/gc/schedule" \
+    -H "Content-Type: application/json" \
+    -d '{"schedule": {"type": "Custom", "cron": "0 0 3 * * 0"}}'
+
+# Prima di GC: eseguire dry_run per stimare lo spazio liberabile
+curl -s -u "admin:Harbor12345" \
+    -X POST "https://registry.company.com/api/v2.0/system/gc/schedule" \
+    -H "Content-Type: application/json" \
+    -d '{"schedule": {"type": "Manual"}, "parameters": {"dry_run": true, "delete_untagged": true}}'
+```
+
+---
+
+### Scenario 4 — Replication verso ECR fallisce silenziosamente
+
+**Sintomo:** Le replication policy mostrano status `Success` ma le immagini non arrivano su ECR, oppure lo stato è `Failed` senza messaggi chiari.
+
+**Causa:** Credenziali ECR scadute (i token AWS durano 12h), endpoint ECR non raggiungibile dalla rete Harbor, oppure filtri della policy troppo restrittivi.
+
+**Soluzione:**
+```bash
+# Verificare i task di una replication execution
+curl -s -u "admin:Harbor12345" \
+    "https://registry.company.com/api/v2.0/replication/executions?policy_id=1&page=1&page_size=5" \
+    | jq '.[] | {id, status, start_time, end_time, failed, succeed, stopped}'
+
+# Dettaglio errori sui task falliti
+EXEC_ID=42
+curl -s -u "admin:Harbor12345" \
+    "https://registry.company.com/api/v2.0/replication/executions/${EXEC_ID}/tasks" \
+    | jq '.[] | select(.status == "Failed") | {id, status, job_id}'
+
+# Log del task specifico
+TASK_ID=123
+curl -s -u "admin:Harbor12345" \
+    "https://registry.company.com/api/v2.0/replication/executions/${EXEC_ID}/tasks/${TASK_ID}/log"
+
+# Testare connettività all'endpoint ECR
+curl -s -u "admin:Harbor12345" \
+    -X POST "https://registry.company.com/api/v2.0/registries/2/info"
+
+# Rinnovare credenziali ECR (token 12h): aggiornare l'endpoint con nuova password
+aws ecr get-login-password --region eu-west-1 | \
+    curl -s -u "admin:Harbor12345" \
+        -X PUT "https://registry.company.com/api/v2.0/registries/2" \
+        -H "Content-Type: application/json" \
+        -d "{\"credential\": {\"access_key\": \"AWS\", \"access_secret\": \"$(cat -)\"}}"
 ```
 
 ---

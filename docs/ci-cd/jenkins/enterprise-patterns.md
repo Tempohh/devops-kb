@@ -9,7 +9,7 @@ related: [ci-cd/jenkins/pipeline-fundamentals, ci-cd/jenkins/shared-libraries, c
 official_docs: https://www.jenkins.io/doc/book/pipeline/multibranch/
 status: complete
 difficulty: expert
-last_updated: 2026-02-27
+last_updated: 2026-03-28
 ---
 
 # Jenkins Enterprise Patterns
@@ -1012,15 +1012,152 @@ pipeline {
 
 ## Troubleshooting
 
-**Pipeline bloccata in "waiting for next executor"**: Agent pool esaurito. Aumentare `JNLP_MAX_AGENTS` o ridurre `parallelism` nel Pod Template. Verificare risorse del Kubernetes cluster.
+### Scenario 1 — Pipeline bloccata in "waiting for next executor"
 
-**`RejectedAccessException` in script sandbox**: Il codice nella shared library usa API non approvate. Approvare in *Manage Jenkins → In-process Script Approval* oppure spostare il codice in una classe `src/` con `@NonCPS` appropriato.
+**Sintomo:** La pipeline resta in coda con messaggio `Waiting for next available executor` e non parte.
 
-**Build time che cresce nel tempo**: Controllare con `analyzeBuildTiming()`. Candidati: checkout su repo cresciuto (usare `shallow clone`), dipendenze non cachate (PVC cache), test non parallelizzati.
+**Causa:** L'agent pool è esaurito: tutti gli executor (statici o pod dinamici) sono occupati da altre build. Su Kubernetes, può indicare ResourceQuota esaurita o nodi insufficienti.
 
-**Multibranch non rileva nuovi branch**: Verificare GitHub App permissions (`Repository contents: read`, `Pull requests: read`), controllare log del branch scanning in `Manage Jenkins → System Log`.
+**Soluzione:** Verificare lo stato degli agent e aumentare la capacità:
 
-**`ConcurrentModificationException` su liste Groovy**: Pattern tipico CPS. Usare `.toList()` o `.clone()` prima di iterare collezioni mutabili, oppure annotare il metodo con `@NonCPS`.
+```bash
+# Verificare pod Jenkins agent su Kubernetes
+kubectl get pods -n jenkins -l jenkins=agent
+kubectl describe quota -n jenkins          # controlla ResourceQuota
+
+# Aumentare max agent nel JCasC (jenkins-casc.yaml)
+# kubernetes.maxRequestsPerHostStr: "32"
+# oppure ridurre parallelism nel Pod Template
+
+# Verificare executor occupati via API
+curl -s "$JENKINS_URL/computer/api/json?pretty=true" | \
+  jq '.computer[] | {name: .displayName, busy: .countBusyExecutors, total: .countTotalExecutors}'
+```
+
+---
+
+### Scenario 2 — `RejectedAccessException` in script sandbox
+
+**Sintomo:** Build fallisce con `org.jenkinsci.plugins.scriptsecurity.sandbox.RejectedAccessException: Scripts not permitted to use method...`
+
+**Causa:** Il codice nella shared library o nel Jenkinsfile usa API Java/Groovy non incluse nella whitelist della Groovy Sandbox. È una misura di sicurezza Jenkins.
+
+**Soluzione:** Approvare il metodo in *Manage Jenkins → In-process Script Approval* oppure refactoring del codice:
+
+```groovy
+// PRIMA (causa l'errore): iterazione diretta su tipo non approvato
+def result = someList.collectEntries { ... }
+
+// DOPO opzione 1: annotare con @NonCPS i metodi che usano API Groovy native
+@NonCPS
+def myHelper(List items) {
+    return items.collectEntries { [it.name, it.value] }
+}
+
+// DOPO opzione 2: spostare in classe src/ (fuori dalla sandbox)
+// src/com/myorg/Utils.groovy — eseguito fuori sandbox
+```
+
+```bash
+# Vedere tutti i metodi in attesa di approvazione
+curl -s "$JENKINS_URL/scriptApproval/api/json" | jq '.pendingScripts[].script'
+```
+
+---
+
+### Scenario 3 — Build time in crescita costante nel tempo
+
+**Sintomo:** Pipeline che in passato durava 8 min ora impiega 25 min senza modifiche significative al codice.
+
+**Causa:** Accumulo di problemi: repository git cresciuto (checkout lento), dipendenze non cachate tra build, test non parallelizzati, agent che non riusa layer Docker cache.
+
+**Soluzione:** Diagnosticare con timing analysis e applicare ottimizzazioni mirate:
+
+```groovy
+// Aggiungere al Jenkinsfile per diagnostica
+post { always { analyzeBuildTiming() } }
+```
+
+```bash
+# Shallow clone per ridurre checkout time
+git clone --depth=50 <repo>
+
+# Nel Jenkinsfile: limitare la profondità del checkout
+checkout([$class: 'GitSCM',
+    branches: [[name: env.BRANCH_NAME]],
+    extensions: [[$class: 'CloneOption', depth: 50, shallow: true]],
+    userRemoteConfigs: scm.userRemoteConfigs
+])
+
+# Verificare hit/miss cache Maven (PVC)
+kubectl exec -n jenkins <agent-pod> -- du -sh /root/.m2/repository
+```
+
+---
+
+### Scenario 4 — Multibranch non rileva nuovi branch o PR
+
+**Sintomo:** Un nuovo branch o PR creato su GitHub non compare automaticamente in Jenkins. Scan manuale funziona ma webhook no.
+
+**Causa:** GitHub App non ha i permessi corretti, oppure il webhook non è configurato/raggiungibile, oppure il pattern di inclusione branch esclude il branch in questione.
+
+**Soluzione:** Verificare permessi, webhook e pattern filtro:
+
+```bash
+# Verificare che il webhook arrivi (ispezionare in GitHub → repo → Settings → Webhooks)
+# Payload URL: https://<jenkins-url>/github-webhook/
+# Content type: application/json
+# Events: Push + Pull Requests
+
+# Verificare log scanning in Jenkins
+# Manage Jenkins → System Log → filtro "com.cloudbees.jenkins.plugins.bitbucket"
+# o "org.jenkinsci.plugins.github_branch_source"
+
+# Testare manualmente la connessione con curl
+curl -I -H "Authorization: Bearer <github-app-token>" \
+  https://api.github.com/repos/my-org/my-repo/branches
+```
+
+Controllare che il filtro `headWildcardFilter` includa il pattern del branch:
+
+```groovy
+// Verificare che il pattern copra il branch
+headWildcardFilter {
+    includes('main release/* feature/* hotfix/* fix/*')
+    excludes('dependabot/*')
+}
+```
+
+---
+
+### Scenario 5 — `ConcurrentModificationException` su liste Groovy in pipeline
+
+**Sintomo:** Build fallisce con `java.util.ConcurrentModificationException` durante iterazione su liste o mappe in codice pipeline.
+
+**Causa:** Pattern tipico del CPS (Continuation-Passing Style) transformation di Jenkins: alcune operazioni Groovy su collezioni non sono thread-safe nel contesto CPS serializzabile.
+
+**Soluzione:** Usare `.toList()` / `.clone()` per creare copie prima di iterare, oppure isolare il codice con `@NonCPS`:
+
+```groovy
+// PROBLEMATICO: iterazione diretta su lista condivisa
+def myList = [1, 2, 3]
+myList.each { item ->
+    myList.remove(item)  // ConcurrentModificationException
+}
+
+// CORRETTO opzione 1: copia prima di iterare
+myList.toList().each { item ->
+    myList.remove(item)
+}
+
+// CORRETTO opzione 2: metodo @NonCPS per logica complessa
+@NonCPS
+List<String> filterServices(List<Map> services, List<String> changed) {
+    return services
+        .findAll { svc -> changed.any { f -> f.startsWith("${svc.dir}/") } }
+        .collect { it.name }
+}
+```
 
 ## Riferimenti
 

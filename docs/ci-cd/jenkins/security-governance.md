@@ -9,7 +9,7 @@ related: [ci-cd/jenkins/agent-infrastructure, ci-cd/jenkins/enterprise-patterns,
 official_docs: https://www.jenkins.io/doc/book/security/
 status: complete
 difficulty: expert
-last_updated: 2026-02-27
+last_updated: 2026-03-28
 ---
 
 # Jenkins Security & Governance
@@ -947,15 +947,137 @@ authorized_user {
 
 ## Troubleshooting
 
-**"Access denied" su Job con ruolo corretto**: Verificare se il folder ha un'override di autorizzazione locale che sovrascrive il ruolo globale. Controllare le properties del folder in *Manage → Configure Global Security*.
+### Scenario 1 — "Access Denied" su job con ruolo apparentemente corretto
 
-**Credenziali non trovate da uno shared library step**: Le credenziali in `withCredentials` sono cercate nel context del controller, non dell'agent. Verificare che l'ID esista e che il job abbia il permesso `Credentials/Use` (permesso implicito se nel folder corretto).
+**Sintomo:** Un utente con il ruolo assegnato correttamente riceve `AccessDeniedException` o "403 Forbidden" quando tenta di accedere o eseguire un job.
 
-**SAML redirect loop**: Verificare che il `Service Provider Entity ID` in Okta/AzureAD corrisponda esattamente all'URL Jenkins. Controllare i cookie di sessione (Jenkins richiede che il load balancer usi `sticky sessions` o che le sessioni siano condivise in HA).
+**Causa:** Il folder contiene un'override di autorizzazione locale (Block Inheritance) che sovrascrive i ruoli globali del Role Strategy Plugin.
 
-**Script approval si svuota dopo restart**: Verificare che `scriptApproval.xml` sia incluso nel backup/PVC. In JCasC, usare la sezione `security.scriptApproval.approvedSignatures` per pre-approvare signature note.
+**Soluzione:** Verificare le properties del folder e rimuovere o correggere l'override locale:
 
-**Audit log incompleto**: Il Audit Trail plugin logga solo le richieste HTTP. Per tracciare azioni Groovy interne (es. accesso a Jenkins.instance), usare il Jenkins Event Bus o fare logging esplicito in ogni step critico.
+```bash
+# Via Jenkins Script Console (Manage Jenkins → Script Console)
+Jenkins.instance.getAllItems(com.cloudbees.hudson.plugins.folder.Folder).each { folder ->
+  def prop = folder.getProperties().find { it instanceof com.cloudbees.hudson.plugins.folder.properties.AuthorizationMatrixProperty }
+  if (prop) println "Folder: ${folder.fullName} — override presente: ${prop.class.simpleName}"
+}
+```
+
+```groovy
+// Oppure verificare via REST API
+// GET /job/<folder>/config.xml  → cercare <properties> con AuthorizationMatrix
+```
+
+### Scenario 2 — Credenziali non trovate da shared library step
+
+**Sintomo:** `withCredentials([usernamePassword(credentialsId: 'my-creds', ...)])` fallisce con `CredentialsUnavailableException` o le variabili risultano vuote.
+
+**Causa:** Le credenziali sono cercate nel contesto del controller (non dell'agent) e l'ID specificato non esiste nello scope accessibile al job, oppure il job non ha il permesso implicito `Credentials/Use`.
+
+**Soluzione:** Verificare l'esistenza e lo scope delle credenziali:
+
+```bash
+# Script Console — lista credenziali accessibili da un folder specifico
+def store = Jenkins.instance.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0]
+store.getCredentials(com.cloudbees.plugins.credentials.domains.Domain.global()).each {
+  println "ID: ${it.id} — Type: ${it.class.simpleName}"
+}
+```
+
+```bash
+# Verifica via CLI Jenkins
+java -jar jenkins-cli.jar -s https://jenkins.corp.example.com/ \
+  -auth admin:${API_TOKEN} \
+  list-credentials-as-xml "folder/subfolder"
+```
+
+### Scenario 3 — SAML redirect loop dopo login
+
+**Sintomo:** Dopo il reindirizzamento al provider SAML (Okta/Azure AD), Jenkins rispedisce l'utente all'IdP in loop infinito, mai completando il login.
+
+**Causa:** Il `Service Provider Entity ID` configurato nel provider non corrisponde esattamente all'URL base Jenkins, oppure il load balancer non gestisce le sessioni in modo sticky (le richieste SAML richiedono che assertion e callback arrivino allo stesso nodo).
+
+**Soluzione:**
+
+```bash
+# Verificare il metadata SP generato da Jenkins
+curl -s https://jenkins.corp.example.com/securityRealm/metadata | \
+  grep -o 'entityID="[^"]*"'
+
+# Il valore deve corrispondere ESATTAMENTE a quello configurato in Okta/AzureAD
+# Verificare anche i cookie di sessione
+curl -I https://jenkins.corp.example.com/ | grep -i set-cookie
+```
+
+```yaml
+# Nginx — configurazione sticky session per Jenkins HA
+upstream jenkins_cluster {
+  ip_hash;  # sticky per IP — alternativa: cookie_hash
+  server jenkins-node1:8080;
+  server jenkins-node2:8080;
+}
+```
+
+### Scenario 4 — Script approval svuotato dopo restart o re-deploy
+
+**Sintomo:** Pipeline precedentemente funzionanti falliscono con `org.jenkinsci.plugins.scriptsecurity.sandbox.RejectedAccessException` dopo un restart del controller o un re-deploy del pod.
+
+**Causa:** Il file `scriptApproval.xml` non è incluso nel backup o nel PVC Kubernetes, quindi le approvazioni accumulate vengono perse.
+
+**Soluzione:** Includere `scriptApproval.xml` nel backup e/o pre-popolare via JCasC:
+
+```yaml
+# jenkins-casc.yaml — pre-approvazione signature note
+security:
+  scriptApproval:
+    approvedSignatures:
+      - "method groovy.lang.GroovyObject getProperty java.lang.String"
+      - "staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods collect java.util.Collection groovy.lang.Closure"
+      - "method java.util.Map entrySet"
+```
+
+```bash
+# Backup manuale di scriptApproval.xml
+kubectl cp jenkins-0:/var/jenkins_home/scriptApproval.xml ./backup/scriptApproval.xml
+# Restore
+kubectl cp ./backup/scriptApproval.xml jenkins-0:/var/jenkins_home/scriptApproval.xml
+kubectl exec jenkins-0 -- /bin/bash -c "chown jenkins:jenkins /var/jenkins_home/scriptApproval.xml"
+```
+
+### Scenario 5 — Audit log incompleto o assente
+
+**Sintomo:** Il log di audit non registra alcune azioni (es. esecuzioni di pipeline via API, modifiche via script Groovy), rendendo impossibile tracciare chi ha eseguito cosa.
+
+**Causa:** Il plugin Audit Trail logga solo le richieste HTTP in ingresso. Le azioni interne avviate da Groovy (es. `Jenkins.instance.*`) o da trigger interni non passano per il layer HTTP.
+
+**Soluzione:** Integrare il logging a livello di pipeline e abilitare il log verboso del plugin:
+
+```groovy
+// In pipeline — logging esplicito delle azioni critiche
+pipeline {
+  stages {
+    stage('Deploy') {
+      steps {
+        script {
+          def user = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')?.userId ?: 'timer/api'
+          echo "AUDIT: deploy eseguito da ${user} — build #${env.BUILD_NUMBER} — ${new Date()}"
+        }
+        // ... passi di deploy
+      }
+    }
+  }
+}
+```
+
+```bash
+# Verifica configurazione Audit Trail plugin
+# Manage Jenkins → Configure System → Audit Trail
+# Assicurarsi che "Log Location" punti a un path persistente
+# e che "Log File Size" sia adeguato (default 100MB)
+
+# Lettura diretta del log audit
+tail -f /var/jenkins_home/logs/audit.log | grep -E "(POST|DELETE|PUT)"
+```
 
 ## Riferimenti
 

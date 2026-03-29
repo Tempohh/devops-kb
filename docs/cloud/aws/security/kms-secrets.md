@@ -9,7 +9,7 @@ related: [cloud/aws/security/network-security, cloud/aws/security/compliance-aud
 official_docs: https://docs.aws.amazon.com/kms/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # KMS, Secrets Manager, Parameter Store e ACM
@@ -800,11 +800,43 @@ aws iam simulate-principal-policy \
   --resource-arns arn:aws:kms:us-east-1:123456789012:key/mrk-1234
 ```
 
-### Rotazione Secrets Manager Fallita
+### Scenario 1 — AccessDeniedException su KMS
 
+**Sintomo:** `An error occurred (AccessDeniedException) when calling the Decrypt operation`
+
+**Causa:** Il principal manca di permessi nella Key Policy, nella IAM Policy, o una SCP Organizations nega l'accesso.
+
+**Soluzione:**
+1. Verificare la Key Policy — il principal deve essere esplicitamente autorizzato
+2. Verificare la IAM Policy del principal
+3. Verificare che non ci sia una SCP Organizations che nega l'accesso
+4. Per encrypt/decrypt S3: verificare che il bucket sia nella stessa Region della chiave
+
+```bash
+# Simulare una policy per debug
+aws iam simulate-principal-policy \
+  --policy-source-arn arn:aws:iam::123456789012:role/AppRole \
+  --action-names kms:Decrypt \
+  --resource-arns arn:aws:kms:us-east-1:123456789012:key/mrk-1234
+
+# Verificare la Key Policy corrente
+aws kms get-key-policy \
+  --key-id alias/myapp-encryption \
+  --policy-name default \
+  --query Policy \
+  --output text | python3 -m json.tool
+```
+
+### Scenario 2 — Rotazione Secrets Manager Fallita
+
+**Sintomo:** Il secret non viene ruotato all'ora pianificata; evento `RotationFailed` in CloudTrail.
+
+**Causa:** La Lambda di rotazione non riesce a connettersi al database (Security Group, VPC), oppure non ha i permessi IAM per aggiornare il secret.
+
+**Soluzione:**
 1. Verificare i log della Lambda function di rotazione (CloudWatch Logs)
-2. Verificare che il Security Group della Lambda permetta la connessione al database
-3. Verificare che la Lambda abbia accesso al secret tramite IAM policy
+2. Verificare che il Security Group della Lambda permetta traffico in uscita verso il database (porta 3306/5432)
+3. Verificare che la Lambda execution role abbia `secretsmanager:PutSecretValue` e `secretsmanager:GetSecretValue`
 
 ```bash
 # Monitorare eventi di rotazione
@@ -812,6 +844,71 @@ aws cloudwatch filter-log-events \
   --log-group-name "/aws/lambda/SecretsManagerRDSMySQLRotation" \
   --filter-pattern "ERROR" \
   --start-time $(date -d '1 hour ago' +%s000)
+
+# Verificare la configurazione di rotazione
+aws secretsmanager describe-secret \
+  --secret-id "prod/myapp/database" \
+  --query '{RotationEnabled:RotationEnabled,RotationLambda:RotationLambdaARN,Rules:RotationRules}'
+```
+
+### Scenario 3 — SecureString SSM restituisce valore cifrato
+
+**Sintomo:** `aws ssm get-parameter` restituisce la stringa in forma cifrata (`AQICAHi...`) invece del valore in chiaro.
+
+**Causa:** Manca il flag `--with-decryption`, oppure il principal non ha `kms:Decrypt` sulla chiave usata per cifrare il parametro.
+
+**Soluzione:** Aggiungere `--with-decryption` al comando e verificare che il ruolo IAM abbia `kms:Decrypt` sulla CMK corretta.
+
+```bash
+# Corretto: aggiungere --with-decryption
+aws ssm get-parameter \
+  --name "/myapp/prod/db-password" \
+  --with-decryption \
+  --query 'Parameter.Value' \
+  --output text
+
+# Verificare quale chiave KMS cifra il parametro
+aws ssm get-parameter \
+  --name "/myapp/prod/db-password" \
+  --query 'Parameter.{Type:Type,LastModified:LastModifiedDate}'
+
+# Aggiungere permesso kms:Decrypt al ruolo (inline policy)
+aws iam put-role-policy \
+  --role-name AppRole \
+  --policy-name KMSDecryptSSM \
+  --policy-document '{
+    "Version":"2012-10-17",
+    "Statement":[{"Effect":"Allow","Action":"kms:Decrypt",
+      "Resource":"arn:aws:kms:us-east-1:123456789012:key/KEY-ID"}]}'
+```
+
+### Scenario 4 — Certificato ACM bloccato su PENDING_VALIDATION
+
+**Sintomo:** Il certificato richiesto rimane in stato `PENDING_VALIDATION` per ore o giorni.
+
+**Causa:** Il record CNAME di validazione DNS non è stato aggiunto nella hosted zone, oppure la propagazione DNS non è ancora avvenuta.
+
+**Soluzione:** Aggiungere il record CNAME fornito da ACM al provider DNS. Con Route 53 si può automatizzare.
+
+```bash
+# Recuperare i record CNAME di validazione
+aws acm describe-certificate \
+  --certificate-arn arn:aws:acm:us-east-1:123456789012:certificate/abc12345 \
+  --query 'Certificate.DomainValidationOptions[*].{Domain:DomainName,Name:ResourceRecord.Name,Value:ResourceRecord.Value,Type:ResourceRecord.Type}'
+
+# Aggiungere automaticamente il record in Route 53 (se la zona è su Route 53)
+HOSTED_ZONE_ID="Z1234567890ABC"
+CNAME_NAME="_abc123.myapp.com."
+CNAME_VALUE="_xyz789.acm-validations.aws."
+aws route53 change-resource-record-sets \
+  --hosted-zone-id "$HOSTED_ZONE_ID" \
+  --change-batch '{
+    "Changes":[{"Action":"UPSERT","ResourceRecordSet":{
+      "Name":"'"$CNAME_NAME"'","Type":"CNAME","TTL":300,
+      "ResourceRecords":[{"Value":"'"$CNAME_VALUE"'"}]}}]}'
+
+# Verificare la propagazione DNS
+dig +short CNAME "$CNAME_NAME"
 ```
 
 ---

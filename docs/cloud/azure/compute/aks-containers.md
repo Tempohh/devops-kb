@@ -9,7 +9,7 @@ related: [cloud/azure/networking/vnet, cloud/azure/security/key-vault, cloud/azu
 official_docs: https://learn.microsoft.com/azure/aks/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-26
+last_updated: 2026-03-28
 ---
 
 # AKS & Container Instances
@@ -599,6 +599,137 @@ az aks create \
   --enable-private-cluster \
   --private-dns-zone system \
   ...
+```
+
+## Troubleshooting
+
+### Scenario 1 — Nodi in stato NotReady dopo upgrade
+
+**Sintomo:** Dopo `az aks upgrade`, uno o più nodi rimangono in stato `NotReady` e i pod non vengono schedulati.
+
+**Causa:** Il node image potrebbe non essere aggiornato correttamente, oppure il kubelet non è riuscito a riavviarsi a causa di conflitti con le extension o i CSI driver.
+
+**Soluzione:** Verificare lo stato dei nodi e forzare il drain/reimaging del nodo problematico.
+
+```bash
+# Verificare stato nodi
+kubectl get nodes -o wide
+kubectl describe node <nome-nodo>
+
+# Controllare eventi recenti sul nodo
+kubectl get events --field-selector involvedObject.name=<nome-nodo>
+
+# Upgrade forzato del node image per il pool problematico
+az aks nodepool upgrade \
+  --resource-group $RG \
+  --cluster-name $CLUSTER_NAME \
+  --name apppool \
+  --node-image-only
+
+# Se il nodo è irrecuperabile: drain e delete (autoscaler ne crea uno nuovo)
+kubectl drain <nome-nodo> --ignore-daemonsets --delete-emptydir-data
+kubectl delete node <nome-nodo>
+```
+
+---
+
+### Scenario 2 — ImagePullBackOff da ACR privato
+
+**Sintomo:** I pod rimangono in `ImagePullBackOff` o `ErrImagePull` con errore `unauthorized: authentication required` quando cercano di pullare immagini da ACR.
+
+**Causa:** L'AKS Managed Identity non ha il ruolo `AcrPull` sull'ACR, oppure il cluster non è stato creato con `--attach-acr`.
+
+**Soluzione:** Assegnare il ruolo `AcrPull` alla kubelet identity del cluster.
+
+```bash
+# Ottenere l'Object ID della kubelet identity
+KUBELET_IDENTITY=$(az aks show \
+  --resource-group $RG \
+  --name $CLUSTER_NAME \
+  --query "identityProfile.kubeletidentity.objectId" -o tsv)
+
+ACR_ID=$(az acr show --name $ACR_NAME --query id -o tsv)
+
+# Assegnare ruolo AcrPull
+az role assignment create \
+  --assignee-object-id $KUBELET_IDENTITY \
+  --assignee-principal-type ServicePrincipal \
+  --role AcrPull \
+  --scope $ACR_ID
+
+# Verificare role assignment
+az role assignment list --scope $ACR_ID --output table
+
+# In alternativa: attach ACR al cluster esistente
+az aks update \
+  --resource-group $RG \
+  --name $CLUSTER_NAME \
+  --attach-acr $ACR_NAME
+```
+
+---
+
+### Scenario 3 — Pod OOMKilled o evicted per memory pressure
+
+**Sintomo:** Pod terminati con status `OOMKilled` (exit code 137) o evicted con messaggio `The node was low on resource: memory`.
+
+**Causa:** I container non hanno `resources.limits` definiti, oppure il workload consuma più memoria del previsto. In caso di eviction, il nodo è sotto pressione di memoria per troppi pod senza limiti.
+
+**Soluzione:** Impostare resource requests e limits, e configurare VPA o KEDA se il consumo è variabile.
+
+```bash
+# Verificare consumo risorse dei pod
+kubectl top pods --all-namespaces --sort-by=memory
+kubectl top nodes
+
+# Descrivere il pod per vedere OOMKilled
+kubectl describe pod <nome-pod> -n <namespace>
+
+# Verificare eventi di eviction sul nodo
+kubectl get events --all-namespaces --field-selector reason=Evicted
+```
+
+```yaml
+# Aggiungere resource requests e limits al deployment
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "250m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+```
+
+---
+
+### Scenario 4 — Workload Identity: token non acquisito (pod accede a Key Vault con 403)
+
+**Sintomo:** Il pod ottiene errore `403 Forbidden` o `DefaultAzureCredential authentication failed` quando accede a Key Vault o altri servizi Azure. Il log mostra `EnvironmentCredential`, `ManagedIdentityCredential` falliti.
+
+**Causa:** Il Federated Credential non è configurato correttamente (subject sbagliato), la label `azure.workload.identity/use: "true"` manca dal pod, oppure il ruolo non è stato assegnato alla Managed Identity.
+
+**Soluzione:** Verificare ogni step della catena WIF.
+
+```bash
+# 1. Verificare che il cluster abbia OIDC e WI abilitati
+az aks show --resource-group $RG --name $CLUSTER_NAME \
+  --query "{oidc: oidcIssuerProfile.enabled, wi: securityProfile.workloadIdentity.enabled}"
+
+# 2. Verificare il ServiceAccount ha l'annotation corretta
+kubectl get serviceaccount <sa-name> -n <namespace> -o yaml
+
+# 3. Verificare che il pod abbia la label azure.workload.identity/use: "true"
+kubectl get pod <pod-name> -n <namespace> -o jsonpath='{.metadata.labels}'
+
+# 4. Verificare il Federated Credential (subject deve corrispondere namespace:sa-name)
+az identity federated-credential list \
+  --identity-name mi-myapp-prod \
+  --resource-group $RG \
+  --output table
+
+# 5. Verificare role assignment della Managed Identity
+MANAGED_IDENTITY_ID=$(az identity show --resource-group $RG --name mi-myapp-prod --query principalId -o tsv)
+az role assignment list --assignee $MANAGED_IDENTITY_ID --output table
 ```
 
 ## Riferimenti

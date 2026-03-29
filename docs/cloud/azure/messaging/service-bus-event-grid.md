@@ -9,7 +9,7 @@ related: [cloud/azure/messaging/event-hubs, cloud/azure/compute/app-service-func
 official_docs: https://learn.microsoft.com/azure/service-bus-messaging/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Azure Service Bus & Event Grid
@@ -408,6 +408,150 @@ az eventgrid namespace topic event-subscription create \
     --topic-name orders \
     --event-subscription-name orders-processor \
     --delivery-configuration '{"deliveryMode": "Queue", "queue": {"receiveLockDurationInSeconds": 60, "maxDeliveryCount": 5}}'
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Messaggi bloccati in DLQ senza elaborazione
+
+**Sintomo:** I messaggi si accumulano nella Dead Letter Queue senza che nessun consumer li riprocessi. Il contatore DLQ cresce continuamente.
+
+**Causa:** Nessun consumer attivo sulla DLQ, o `max-delivery-count` raggiunto per errori ripetuti nel consumer (eccezioni non gestite, timeout, deserializzazione fallita).
+
+**Soluzione:** Ispezionare i messaggi DLQ per identificare il motivo (`dead_letter_reason`), correggere il bug nel consumer, poi ricircolare i messaggi validi.
+
+```bash
+# Monitorare contatore DLQ
+az servicebus queue show \
+    --resource-group myapp-rg \
+    --namespace-name myapp-servicebus \
+    --name orders-queue \
+    --query "countDetails.deadLetterMessageCount"
+
+# Ispezionare DLQ via Python (vedere sezione Dead Letter Queue)
+# Dopo correzione: ricircolare messaggi verso queue principale
+from azure.servicebus import ServiceBusSubQueue, ServiceBusMessage
+
+def reprocess_dlq():
+    with ServiceBusClient(NAMESPACE, credential) as client:
+        with client.get_queue_receiver(QUEUE_NAME, sub_queue=ServiceBusSubQueue.DEAD_LETTER) as dlq_receiver:
+            with client.get_queue_sender(QUEUE_NAME) as sender:
+                msgs = dlq_receiver.receive_messages(max_message_count=100, max_wait_time=5)
+                for msg in msgs:
+                    new_msg = ServiceBusMessage(body=msg.body)
+                    sender.send_messages(new_msg)
+                    dlq_receiver.complete_message(msg)
+```
+
+---
+
+### Scenario 2 — Message lock scaduto durante elaborazione lunga
+
+**Sintomo:** Eccezione `MessageLockLostError` durante `complete_message()` o `abandon_message()`. Il messaggio viene rielaborato più volte (duplicati visibili nei log).
+
+**Causa:** Il lock-duration della queue (default 1 min, max 5 min) è scaduto prima che l'elaborazione terminasse. Service Bus ha rimesso il messaggio disponibile.
+
+**Soluzione:** Rinnovare il lock periodicamente durante elaborazione lunga, oppure aumentare `--lock-duration` fino a PT5M. Per elaborazioni > 5 min usare deferred messages.
+
+```python
+import asyncio
+from azure.servicebus.aio import ServiceBusClient as AsyncServiceBusClient
+
+async def process_with_lock_renewal(msg):
+    """Rinnova il lock ogni 60s durante elaborazione."""
+    async def renew_lock():
+        while True:
+            await asyncio.sleep(60)
+            try:
+                await receiver.renew_message_lock(msg)
+            except Exception:
+                break
+
+    renewal_task = asyncio.create_task(renew_lock())
+    try:
+        await do_long_processing(msg)
+        await receiver.complete_message(msg)
+    finally:
+        renewal_task.cancel()
+```
+
+```bash
+# Aumentare lock duration su queue esistente (max 5 minuti)
+az servicebus queue update \
+    --resource-group myapp-rg \
+    --namespace-name myapp-servicebus \
+    --name orders-queue \
+    --lock-duration PT5M
+```
+
+---
+
+### Scenario 3 — Event Grid webhook non riceve eventi
+
+**Sintomo:** Gli eventi vengono pubblicati (HTTP 200 dal publisher) ma il webhook handler non li riceve. Nessun errore visibile nella sottoscrizione.
+
+**Causa 1:** La sottoscrizione è in stato `SubscriptionValidationFailed` — Event Grid richiede un handshake di validazione al momento della creazione. Se l'endpoint non ha risposto con `validationResponse`, la sottoscrizione è disabilitata.
+
+**Causa 2:** L'endpoint non è raggiungibile pubblicamente (es. `localhost`) o restituisce status != 200.
+
+**Soluzione:**
+
+```bash
+# Verificare stato della sottoscrizione
+az eventgrid event-subscription show \
+    --source-resource-id /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.EventGrid/topics/myapp-events \
+    --name orders-to-servicebus \
+    --query "provisioningState"
+
+# Verificare metriche di delivery (eventi falliti)
+az monitor metrics list \
+    --resource /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.EventGrid/topics/myapp-events \
+    --metric "DeliveryAttemptFailCount" \
+    --interval PT1H
+
+# Risposta corretta all'handshake di validazione (webhook handler)
+# Event Grid invia POST con validationCode — il webhook deve rispondere:
+# { "validationResponse": "<validationCode>" }
+```
+
+---
+
+### Scenario 4 — Service Bus namespace irraggiungibile da VNet / Private Endpoint
+
+**Sintomo:** Errore `ServiceBusConnectionError` o timeout solo da risorse nella VNet (VM, AKS, Functions). Connessione funziona da macchine con IP pubblico.
+
+**Causa:** Il namespace ha Private Endpoint abilitato con `--public-network-access Disabled`, ma la VNet/subnet del client non ha il DNS privato configurato correttamente o manca la regola NSG per la porta 443/5671/5672.
+
+**Soluzione:**
+
+```bash
+# Verificare configurazione accesso rete del namespace
+az servicebus namespace show \
+    --resource-group myapp-rg \
+    --name myapp-servicebus \
+    --query "{publicAccess: publicNetworkAccess, privateEndpoints: privateEndpointConnections}"
+
+# Verificare che la Private DNS Zone sia collegata alla VNet
+az network private-dns link vnet show \
+    --resource-group myapp-rg \
+    --zone-name "privatelink.servicebus.windows.net" \
+    --name myapp-dns-link
+
+# Test risoluzione DNS dall'interno della VNet
+# nslookup myapp-servicebus.servicebus.windows.net
+# Deve restituire IP privato (10.x.x.x), non IP pubblico
+
+# Aggiungere regola NSG per porta AMQP
+az network nsg rule create \
+    --resource-group myapp-rg \
+    --nsg-name myapp-nsg \
+    --name AllowServiceBusAMQP \
+    --priority 100 \
+    --direction Outbound \
+    --protocol Tcp \
+    --destination-port-ranges 5671 5672 443
 ```
 
 ---

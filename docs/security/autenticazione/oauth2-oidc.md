@@ -9,7 +9,7 @@ related: [security/autenticazione/jwt, security/autorizzazione/rbac-abac-rebac, 
 official_docs: https://oauth.net/2/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # OAuth 2.0 e OpenID Connect
@@ -459,6 +459,112 @@ Service A:
 - **Rotazione automatica chiavi di firma**: l'IdP deve ruotare le chiavi RS256/ES256 almeno ogni 6 mesi. Il resource server deve cachare le JWKS (JSON Web Key Set — documento che espone le chiavi pubbliche dell'IdP) con TTL breve per pick up automatico della nuova chiave
 - **Client credentials da Vault o Workload Identity**: non hardcodare `client_secret` in env var o ConfigMap — usa HashiCorp Vault o cloud workload identity (AWS IRSA, GCP Workload Identity)
 - **Token binding per ambienti ad alto rischio**: considera DPoP (Demonstrating Proof-of-Possession, RFC 9449) per legare il token alla chiave privata del client — un token rubato non è riutilizzabile senza la chiave corrispondente
+
+## Troubleshooting
+
+### Scenario 1 — Token scaduto / `401 Unauthorized` su ogni richiesta
+
+**Sintomo**: il resource server risponde sempre `401` con `WWW-Authenticate: Bearer error="invalid_token", error_description="The access token expired"`.
+
+**Causa**: l'access token è scaduto e il client non gestisce il rinnovo via refresh token, oppure anche il refresh token è scaduto.
+
+**Soluzione**: verificare che il client implementi il rinnovo automatico prima della scadenza (30s di margine). Se anche il refresh token è scaduto, forzare un nuovo login.
+
+```bash
+# Decodifica rapida del token per ispezionare exp/iat (senza verifica firma)
+echo "<access_token>" | cut -d'.' -f2 | base64 -d 2>/dev/null | python3 -m json.tool | grep -E '"exp"|"iat"|"sub"'
+
+# Rinnovo manuale con refresh token (debug)
+curl -s -X POST https://idp.example.com/oauth2/token \
+  -d "grant_type=refresh_token" \
+  -d "client_id=my-app" \
+  -d "refresh_token=<refresh_token>" | jq '{access_token: .access_token[0:30], expires_in: .expires_in}'
+```
+
+---
+
+### Scenario 2 — `invalid_grant` al momento dello scambio del code
+
+**Sintomo**: il token endpoint risponde `{"error":"invalid_grant","error_description":"Code not valid"}` subito dopo il redirect con il `code`.
+
+**Causa**: il code è monouso e ha una TTL breve (tipicamente 30-60s). Cause comuni: il code è già stato usato (double-submit del callback), il `redirect_uri` nella chiamata `/token` non coincide esattamente con quello usato in `/authorize`, oppure il `code_verifier` PKCE non corrisponde al `code_challenge` inviato.
+
+**Soluzione**: assicurarsi che il callback handler sia idempotente (nessun doppio submit), che `redirect_uri` sia identico byte per byte, e che `code_verifier` sia quello generato per quella specifica sessione.
+
+```bash
+# Verifica configurazione client su Keycloak (admin API)
+curl -s -H "Authorization: Bearer <admin_token>" \
+  https://idp.example.com/admin/realms/enterprise/clients?clientId=my-app \
+  | jq '.[0] | {redirectUris, webOrigins, publicClient}'
+
+# Test manuale scambio code con curl (Authorization Code flow)
+curl -s -X POST https://idp.example.com/oauth2/token \
+  -d "grant_type=authorization_code" \
+  -d "client_id=my-app" \
+  -d "code=<code_dal_redirect>" \
+  -d "redirect_uri=https://app.example.com/callback" \
+  -d "code_verifier=<verifier>" | jq .
+```
+
+---
+
+### Scenario 3 — `invalid_token` con errore `Invalid audience`
+
+**Sintomo**: la validazione del JWT nel resource server fallisce con `InvalidAudienceError` anche se il token è stato emesso dall'IdP corretto.
+
+**Causa**: il claim `aud` nel token non contiene l'identifier del resource server. L'Authorization Server emette token con audience basata sugli scope o sulla configurazione del client — se non è stato configurato il `resource` / `audience` corretto, il token avrà un `aud` diverso da quello atteso.
+
+**Soluzione**: configurare esplicitamente l'audience nel client o nell'authorization server. In Keycloak usare un `Audience Mapper` nel client scope. Verificare che il resource server confronti `aud` con il proprio identifier registrato.
+
+```bash
+# Ispeziona il claim aud del token emesso
+TOKEN=$(curl -s -X POST https://idp.example.com/oauth2/token \
+  -d "grant_type=client_credentials" \
+  -d "client_id=service-a" \
+  -d "client_secret=xxx" \
+  -d "scope=service-b:read" | jq -r '.access_token')
+
+echo $TOKEN | cut -d'.' -f2 | base64 -d 2>/dev/null | python3 -m json.tool | grep -E '"aud"|"scope"|"azp"'
+
+# Keycloak: aggiungi audience mapper via admin API
+curl -s -X POST -H "Authorization: Bearer <admin_token>" \
+  -H "Content-Type: application/json" \
+  https://idp.example.com/admin/realms/enterprise/clients/<client_uuid>/protocol-mappers/models \
+  -d '{"name":"audience-mapper","protocol":"openid-connect","protocolMapper":"oidc-audience-mapper","config":{"included.client.audience":"service-b","access.token.claim":"true"}}'
+```
+
+---
+
+### Scenario 4 — Refresh token reuse detection: utente disconnesso inaspettatamente
+
+**Sintomo**: gli utenti vengono disconnessi improvvisamente anche se attivi; il log dell'IdP mostra `Refresh token already used` o `Token reuse detected`.
+
+**Causa**: la **refresh token rotation** è attiva (correttamente), ma l'app tenta di usare lo stesso refresh token più di una volta. Causa tipica: race condition tra più tab del browser che tentano contemporaneamente il rinnovo, oppure un load balancer che duplica la richiesta.
+
+**Soluzione**: implementare un lock/mutex lato client per serializzare i rinnovi. Solo una istanza alla volta deve chiamare `/token` con il refresh token; le altre attendono il risultato. Se il problema è lato IdP (es. proxy che fa retry), disabilitare i retry automatici sulla chiamata di rinnovo.
+
+```javascript
+// Mutex per refresh token (browser — single tab)
+let refreshPromise = null;
+
+async function getValidToken() {
+  if (isTokenValid()) return currentAccessToken;
+
+  if (!refreshPromise) {
+    refreshPromise = doTokenRefresh()
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;  // tutte le chiamate concorrenti attendono la stessa promise
+}
+
+// Keycloak: verifica eventi di reuse detection nel log
+// Admin Console → Events → Filter: event_type = "REFRESH_TOKEN_REUSE"
+// oppure via API:
+curl -s -H "Authorization: Bearer <admin_token>" \
+  "https://idp.example.com/admin/realms/enterprise/events?type=REFRESH_TOKEN_REUSE&max=20" | jq '.[] | {time, userId, ipAddress, details}'
+```
+
+---
 
 ## Riferimenti
 

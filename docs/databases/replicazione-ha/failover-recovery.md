@@ -9,7 +9,7 @@ related: [databases/replicazione-ha/strategie-replica, databases/postgresql/repl
 official_docs: https://patroni.readthedocs.io/en/latest/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Failover e Recovery
@@ -313,13 +313,125 @@ patronictl reinit postgres-cluster <ex-primary-node>
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| Patroni non fa failover | TTL troppo alto o nodo etcd irraggiungibile | Ridurre TTL, verificare health etcd |
-| Ex-primary non si unisce | Replica lag troppo alto | `patronictl reinit` — riparte da basebackup |
-| Errori `split-brain detected` | Due nodi con il lock simultaneamente | Bug etcd o clock drift — aggiornare etcd, sincronizzare NTP |
-| Failover in loop | Entrambi i nodi si promuovono e falliscono | Verificare `maximum_lag_on_failover`, pg_rewind configurato |
-| App non si riconnette dopo failover | Connessioni cached, no retry logic | Aggiungere retry con backoff, usare PgBouncer (pause/resume) |
+### Scenario 1 — Patroni non esegue il failover dopo il crash del primary
+
+**Sintomo:** Il primary è down, `patronictl list` mostra il nodo come `stopped` o `unknown`, ma nessuna standby viene promossa.
+
+**Causa:** Il TTL del lock etcd non è ancora scaduto, oppure i nodi etcd sono irraggiungibili e Patroni non può acquisire il lock. In entrambi i casi nessun nodo può diventare leader.
+
+**Soluzione:** Verificare lo stato di etcd e ridurre il TTL se troppo conservativo.
+
+```bash
+# Verifica health etcd
+etcdctl --endpoints=etcd1:2379,etcd2:2379,etcd3:2379 endpoint health
+etcdctl --endpoints=etcd1:2379 endpoint status
+
+# Controlla il lock corrente nel DCS
+etcdctl --endpoints=etcd1:2379 get /db/postgres-cluster/leader
+
+# Forza il failover manualmente (se etcd è raggiungibile)
+patronictl -c /etc/patroni.yml failover postgres-cluster \
+    --master pg-node-1 \
+    --candidate pg-node-2 \
+    --force
+
+# Ridurre TTL nella configurazione DCS (richiede restart Patroni)
+# bootstrap.dcs.ttl: 20   (default 30 — abbassare con cautela)
+```
+
+---
+
+### Scenario 2 — Ex-primary non si unisce al cluster dopo il failover
+
+**Sintomo:** Dopo un failover, il nodo che era primary rimane in stato `stopped` o `start failed` in `patronictl list`. I log mostrano errori tipo `could not connect to the primary server` o `timeline diverged`.
+
+**Causa:** Il nodo ex-primary ha WAL divergenti rispetto al nuovo primary (ha continuato a ricevere write localmente o ha una timeline più vecchia). Patroni non può applicare pg_rewind o il nodo ha troppo lag.
+
+**Soluzione:** Reinizializzare il nodo da zero tramite basebackup del nuovo primary.
+
+```bash
+# Verifica lo stato del nodo e l'errore specifico
+patronictl -c /etc/patroni.yml list
+journalctl -u patroni -n 100 --no-pager
+
+# Controlla divergenza timeline
+psql -U postgres -c "SELECT timeline_id, redo_lsn FROM pg_control_checkpoint();"
+# Sul nuovo primary:
+psql -U postgres -c "SELECT pg_current_wal_lsn();"
+
+# Reinizializza il nodo (cancella dati locali e riparte da basebackup)
+patronictl -c /etc/patroni.yml reinit postgres-cluster pg-node-1
+
+# Verifica che il nodo si sia unito correttamente
+patronictl -c /etc/patroni.yml list
+# Attendi stato "running" con replication_state "streaming"
+```
+
+---
+
+### Scenario 3 — L'applicazione non si riconnette dopo il failover
+
+**Sintomo:** Il cluster ha un nuovo primary funzionante, ma l'applicazione continua a ricevere errori `connection refused` o `FATAL: the database system is starting up`. Il traffico non riprende automaticamente.
+
+**Causa:** Le connessioni aperte sono cached sul vecchio IP/socket. HAProxy non ha ancora rilevato il cambio tramite health check, oppure l'applicazione non implementa retry con backoff.
+
+**Soluzione:** Verificare la configurazione del load balancer e aggiungere retry logic lato applicazione.
+
+```bash
+# Verifica che HAProxy veda il nuovo primary
+echo "show servers state" | socat stdio /run/haproxy/admin.sock
+# Il server con il nuovo IP del primary deve essere "UP"
+
+# Controlla che le API REST di Patroni rispondano correttamente
+curl -s http://pg-node-2:8008/primary   # deve rispondere 200
+curl -s http://pg-node-1:8008/primary   # deve rispondere 503 (ex-primary)
+
+# Se usi PgBouncer: verifica che abbia applicato il nuovo primary
+psql -p 6432 -U pgbouncer pgbouncer -c "SHOW POOLS;"
+
+# Ricarica configurazione PgBouncer senza downtime
+psql -p 6432 -U pgbouncer pgbouncer -c "RELOAD;"
+
+# Test connessione diretta al nuovo primary
+psql -h pg-node-2 -U postgres -c "SELECT pg_is_in_recovery();"  # deve restituire 'f'
+```
+
+---
+
+### Scenario 4 — Failover in loop: nodi si promuovono e falliscono ripetutamente
+
+**Sintomo:** `patronictl list` mostra alternanza continua del leader. I log riportano `promoted` e poi `demoted` in rapida successione. Il cluster non raggiunge uno stato stabile.
+
+**Causa:** Il nodo promosso ha un lag superiore a `maximum_lag_on_failover` oppure `pg_rewind` non è abilitato e le timeline divergono ad ogni promozione. Può anche essere causato da clock drift tra i nodi che invalida il TTL del lock.
+
+**Soluzione:** Mettere in pausa Patroni, diagnosticare il nodo problematico, correggere la configurazione e riprendere.
+
+```bash
+# Ferma l'automazione Patroni per analisi sicura
+patronictl -c /etc/patroni.yml pause postgres-cluster
+
+# Controlla il lag di ogni replica
+psql -U postgres -c "
+SELECT client_addr, state, sent_lsn, write_lsn, flush_lsn, replay_lsn,
+       (sent_lsn - replay_lsn) AS replication_lag_bytes
+FROM pg_stat_replication;"
+
+# Verifica sincronizzazione NTP su tutti i nodi
+timedatectl show --property=NTPSynchronized
+chronyc tracking
+
+# Abilita pg_rewind nella configurazione Patroni (necessario per reintegrazione rapida)
+# In patroni.yml aggiungere:
+#   postgresql:
+#     use_pg_rewind: true
+
+# Reinizializza il nodo con lag elevato
+patronictl -c /etc/patroni.yml reinit postgres-cluster <nodo-con-lag>
+
+# Riprendi l'automazione solo dopo che tutti i nodi sono "running"
+patronictl -c /etc/patroni.yml list
+patronictl -c /etc/patroni.yml resume postgres-cluster
+```
 
 ## Riferimenti
 

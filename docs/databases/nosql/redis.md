@@ -9,7 +9,7 @@ related: [databases/fondamentali/modelli-dati, networking/api-gateway/rate-limit
 official_docs: https://redis.io/docs/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Redis
@@ -354,13 +354,165 @@ redis-cli --memkeys    # analisi memoria per prefisso (Redis 7+)
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| Latenza alta su singoli comandi | Operazione O(n) bloccante | SLOWLOG, evitare KEYS/LRANGE grandi |
-| Memoria cresce senza limite | Chiavi senza TTL, dataset non bounded | Aggiungere TTL, configurare eviction |
-| `MOVED` error | Client non-cluster su Redis Cluster | Usare client cluster-aware |
-| Failover Sentinel troppo lento | `down-after-milliseconds` alto | Ridurre a 2-5s in produzione |
-| Replica lag alto | Replication buffer pieno o rete lenta | Aumentare `repl-backlog-size` |
+### Scenario 1 — Latenza alta su singoli comandi
+
+**Sintomo:** Alcuni comandi impiegano decine o centinaia di ms; gli altri client si bloccano durante quel periodo.
+
+**Causa:** Il loop di comando Redis è single-threaded: un'operazione O(n) su un dataset grande (es. `KEYS *`, `SMEMBERS` su un set con milioni di elementi, `LRANGE 0 -1`) blocca tutti gli altri client per tutta la sua durata.
+
+**Soluzione:** Identificare i comandi lenti con SLOWLOG, sostituirli con alternative O(1)/O(log n) o con iterazione via cursor.
+
+```bash
+# Soglia slowlog (default 10000 µs = 10ms)
+redis-cli CONFIG SET slowlog-log-slower-than 5000   # abbassa a 5ms
+
+# Visualizza gli ultimi 10 comandi lenti
+redis-cli SLOWLOG GET 10
+# output: id, timestamp, durata (µs), comando, client
+
+# Sostituzione: invece di KEYS * usa SCAN con cursor
+redis-cli SCAN 0 MATCH "utente:*" COUNT 100
+# cursor=0 inizia; continua con il cursor restituito finché ritorna 0
+
+# Verifica istantanea dei comandi in corso
+redis-cli CLIENT LIST
+```
+
+---
+
+### Scenario 2 — Memoria che cresce senza limite
+
+**Sintomo:** `redis-cli INFO memory` mostra `used_memory` in crescita costante; OOM killer o eviction error (`OOM command not allowed when used memory > maxmemory`).
+
+**Causa:** Chiavi senza TTL accumulate nel tempo (tipico di session store o cache senza scadenza), oppure `maxmemory` non configurato e policy `noeviction` (default).
+
+**Soluzione:** Impostare TTL sui nuovi oggetti, configurare `maxmemory` e policy di eviction, analizzare le chiavi più pesanti.
+
+```bash
+# Analisi memoria corrente
+redis-cli INFO memory | grep -E "used_memory_human|maxmemory_human|mem_fragmentation_ratio"
+
+# Trova le chiavi più grandi (sampling — non blocca)
+redis-cli --bigkeys
+
+# Quante chiavi NON hanno TTL?
+redis-cli INFO keyspace
+# db0:keys=150000,expires=80000,avg_ttl=3600000
+# → 70000 chiavi senza TTL
+
+# Configura maxmemory e eviction
+redis-cli CONFIG SET maxmemory 4gb
+redis-cli CONFIG SET maxmemory-policy allkeys-lru
+
+# Imposta TTL su chiavi esistenti senza scadenza (operazione batch con SCAN)
+# Esempio: aggiunge TTL di 7 giorni a tutte le chiavi "sessione:*" senza TTL
+redis-cli SCAN 0 MATCH "sessione:*" COUNT 500 | while read cursor keys; do
+  for key in $keys; do
+    redis-cli TTL "$key" | grep -q "^-1$" && redis-cli EXPIRE "$key" 604800
+  done
+  [ "$cursor" = "0" ] && break
+done
+```
+
+---
+
+### Scenario 3 — Errore MOVED in Redis Cluster
+
+**Sintomo:** Il client riceve `MOVED 5432 node2:6379` e non riesce a eseguire il comando.
+
+**Causa:** Il client non è cluster-aware: invia il comando al nodo sbagliato invece di seguire il redirect verso il nodo che gestisce l'hash slot della chiave.
+
+**Soluzione:** Usare un client con supporto cluster nativo; per operazioni multi-key usare hash tag per forare le chiavi sullo stesso slot.
+
+```bash
+# Verifica quale slot appartiene a una chiave
+redis-cli CLUSTER KEYSLOT "utente:1001"
+# → 13645
+
+# Verifica quale nodo gestisce quel slot
+redis-cli -c CLUSTER NODES | grep "13645"
+
+# Con redis-cli -c il redirect è automatico
+redis-cli -c -h node1 -p 6379 GET "utente:1001"
+# Internally: MOVED → segue redirect
+
+# Hash tag per co-locare chiavi correlate sullo stesso slot
+# {user:1001}:profilo  e  {user:1001}:sessione → stesso slot (basato su "user:1001")
+redis-cli CLUSTER KEYSLOT "{user:1001}:profilo"
+redis-cli CLUSTER KEYSLOT "{user:1001}:sessione"
+# → devono restituire lo stesso numero
+
+# Stato del cluster
+redis-cli -c CLUSTER INFO | grep cluster_state
+redis-cli -c CLUSTER NODES
+```
+
+---
+
+### Scenario 4 — Failover Sentinel troppo lento o non avviene
+
+**Sintomo:** Il primary è down ma Sentinel impiega più di 30 secondi per promuovere la replica; oppure il failover non parte mai.
+
+**Causa 1:** `down-after-milliseconds` troppo alto (default 30000ms = 30s).
+**Causa 2:** Quorum non raggiunto (meno di `quorum` Sentinel concordano che il primary è down).
+**Causa 3:** Il Sentinel non riesce a connettersi alla replica da promuovere.
+
+**Soluzione:** Ridurre il timeout di rilevamento, verificare il quorum e la connettività tra Sentinel e nodi.
+
+```bash
+# Stato corrente visto dai Sentinel
+redis-cli -p 26379 SENTINEL masters
+redis-cli -p 26379 SENTINEL replicas mymaster
+redis-cli -p 26379 SENTINEL sentinels mymaster
+
+# Numero di Sentinel che vedono il primary DOWN
+redis-cli -p 26379 SENTINEL ckquorum mymaster
+# Output: OK X usable Sentinels. Quorum and failover authorization can be reached
+
+# Abbassa il timeout di rilevamento (aggiornamento a caldo)
+redis-cli -p 26379 SENTINEL SET mymaster down-after-milliseconds 5000
+redis-cli -p 26379 SENTINEL SET mymaster failover-timeout 30000
+
+# Log Sentinel per debug
+tail -f /var/log/redis/sentinel.log | grep -E "ODOWN|SDOWN|failover|promote"
+
+# Forza failover manuale (per test)
+redis-cli -p 26379 SENTINEL FAILOVER mymaster
+```
+
+---
+
+### Scenario 5 — Replica lag alto o replica disconnessa
+
+**Sintomo:** `redis-cli INFO replication` mostra `master_link_status:down` o `lag` in crescita sulla replica; i dati sulla replica sono stale.
+
+**Causa:** Replication backlog troppo piccolo (la replica non riesce a fare partial resync dopo una disconnessione breve); rete lenta; primary sovraccarico con molte scritture.
+
+**Soluzione:** Aumentare `repl-backlog-size`, verificare la rete, monitorare il replication offset.
+
+```bash
+# Stato replication sul primary
+redis-cli INFO replication
+# master_replid: ...
+# master_repl_offset: 1234567
+# repl_backlog_size: 1048576    # default 1MB — spesso troppo piccolo
+# connected_slaves: 1
+# slave0: ip=...,port=6379,state=online,offset=1234500,lag=0
+
+# Aumenta backlog per tollerare disconnessioni brevi senza full resync
+redis-cli CONFIG SET repl-backlog-size 64mb
+
+# Sulle repliche: verifica lag e stato
+redis-cli -h replica-host INFO replication | grep -E "master_link_status|master_last_io|slave_repl_offset"
+
+# Confronta offset primary vs replica
+PRIMARY_OFFSET=$(redis-cli -h primary INFO replication | grep master_repl_offset | cut -d: -f2)
+REPLICA_OFFSET=$(redis-cli -h replica INFO replication | grep slave_repl_offset | cut -d: -f2)
+echo "Lag in bytes: $((PRIMARY_OFFSET - REPLICA_OFFSET))"
+
+# Verifica latenza di rete tra nodi
+redis-cli -h replica --latency-history -i 1
+```
 
 ## Riferimenti
 

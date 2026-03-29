@@ -9,10 +9,12 @@ related:
   - messaging/kafka/pattern-microservizi/event-sourcing
   - messaging/kafka/pattern-microservizi/saga-pattern
   - messaging/kafka/pattern-microservizi/cqrs
+  - messaging/kafka/pattern-microservizi/outbox-pattern
+  - messaging/kafka/pattern-microservizi/dead-letter-queue
 official_docs: https://kafka.apache.org/documentation/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Event-Driven Architecture

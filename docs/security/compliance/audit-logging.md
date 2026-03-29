@@ -9,7 +9,7 @@ related: [security/supply-chain/admission-control, security/secret-management/va
 official_docs: https://falco.org/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Audit Logging e Runtime Security
@@ -450,6 +450,129 @@ kube-bench run --targets master --check 1.2.22,1.2.23,1.2.24
 - **Log structured, non free-text**: i log in formato JSON permettono query, alerting e correlazione automatica. I log in formato testo richiedono parsing fragile e sono inutili come SIEM input
 - **Separazione: chi logga non può cancellare**: il service account che scrive i log non deve avere permessi di delete sullo storage dei log — separation of duties
 - **Falco DryRun prima della produzione**: le prime versioni delle regole Falco producono falsi positivi. Usare `output_fields` e validare su staging prima di collegare alert bloccanti
+
+## Troubleshooting
+
+### Scenario 1 — Falco non genera alert per attività anomale
+
+**Sintomo**: shell avviata in container o accesso a `/etc/shadow` senza che Falco produca alert.
+
+**Causa**: driver eBPF non caricato correttamente, oppure Falco in crash silenzioso, oppure la regola è stata disabilitata o sovrascritta.
+
+**Soluzione**: verificare che il pod Falco sia Running, che il driver sia attivo, e controllare se le regole di default sono state accidentalmente escluse.
+
+```bash
+# Stato dei pod Falco
+kubectl get pods -n falco
+
+# Log del pod Falco (cerca errori di caricamento regole o driver)
+kubectl logs -n falco daemonset/falco --tail=50
+
+# Verifica che il driver eBPF sia caricato
+kubectl exec -n falco daemonset/falco -- falco --version
+
+# Test manuale: invia un evento sintetico e verifica che Falco lo catturi
+kubectl exec -n falco daemonset/falco -- falco-driver-loader
+
+# Controlla le regole caricate
+kubectl exec -n falco daemonset/falco -- falco --list-syscall-events | grep -i shell
+```
+
+---
+
+### Scenario 2 — Kubernetes API server non produce audit log
+
+**Sintomo**: il file `/var/log/kubernetes/audit.log` non esiste o è vuoto; `kubectl exec` in produzione non compare nei log.
+
+**Causa**: `--audit-log-path` non configurato sull'API server, o `audit-policy.yaml` non montato correttamente, o policy con `level: None` troppo aggressiva.
+
+**Soluzione**: verificare i flag dell'API server e la policy applicata. Su cluster managed (EKS/GKE/AKS) l'audit log va abilitato dalla console del provider.
+
+```bash
+# Verifica i flag attuali dell'API server (su nodi control plane)
+ps aux | grep kube-apiserver | grep -o '\-\-audit[^ ]*'
+
+# Su EKS: abilitare audit log dal Console o via eksctl
+eksctl utils update-cluster-logging \
+  --enable-types audit \
+  --cluster my-cluster \
+  --region eu-west-1
+
+# Verifica CIS Benchmark per audit configuration
+kube-bench run --targets master --check 1.2.22,1.2.23,1.2.24,1.2.25
+
+# Cerca eventi di exec negli ultimi 15 minuti (una volta che i log arrivano)
+jq '. | select(.objectRef.subresource == "exec") | {user: .user.username, pod: .objectRef.name, time: .requestReceivedTimestamp}' \
+  /var/log/kubernetes/audit.log | tail -20
+```
+
+---
+
+### Scenario 3 — Log applicativi non arrivano al SIEM / OpenSearch
+
+**Sintomo**: eventi di audit applicativi non compaiono nell'indice `security-audit` su OpenSearch; dashboard SIEM vuoto.
+
+**Causa**: Fluentbit non in esecuzione, misconfiguration del filtro namespace, OpenSearch irraggiungibile, oppure il JSON dei log applicativi non è parsato correttamente.
+
+**Soluzione**: tracciare il percorso del log dalla sorgente all'output.
+
+```bash
+# Verifica che Fluentbit stia girando come DaemonSet
+kubectl get pods -n logging -l app=fluent-bit
+
+# Controlla i log di Fluentbit per errori di connessione a OpenSearch
+kubectl logs -n logging daemonset/fluent-bit --tail=100 | grep -i "error\|retry\|failed"
+
+# Testa la connettività da Fluentbit verso OpenSearch
+kubectl exec -n logging daemonset/fluent-bit -- \
+  curl -s http://opensearch.logging.svc.cluster.local:9200/_cluster/health
+
+# Verifica che l'indice esista e riceva documenti
+curl -s "http://opensearch:9200/security-audit/_count" | jq .
+
+# Controlla il parsing del JSON: simula il parsing di un log campione
+kubectl exec -n logging daemonset/fluent-bit -- \
+  fluent-bit -i dummy -F parser -p parser=json -o stdout -p format=json_lines
+```
+
+---
+
+### Scenario 4 — Falso positivo Falco blocca operazioni legittime
+
+**Sintomo**: alert Falco continui per operazioni normali (es. script di init che scrive in `/etc/hosts`, job di backup che legge il service account token).
+
+**Causa**: regole Falco troppo generiche che non escludono use case legittimi dell'ambiente specifico. Le regole di default sono progettate per un baseline generico.
+
+**Soluzione**: non disabilitare la regola — aggiungere un'eccezione mirata usando le macro `allowed_*` o la direttiva `exceptions` introdotta in Falco 0.28+.
+
+```yaml
+# Aggiungi eccezione alla regola esistente (non sovrascrivere la regola intera)
+# File: /etc/falco/falco_rules.local.yaml
+
+# Metodo 1: sovrascrittura macro (compatibile con tutte le versioni)
+- macro: allowed_etc_writers
+  condition: (proc.name in (dpkg, apt, yum, rpm, puppet, chef, ansible-playbook, backup-agent))
+
+# Metodo 2: exceptions Falco >= 0.28 (preferito — più preciso)
+- rule: Read K8s Service Account Token
+  exceptions:
+    - name: allowed_backup_jobs
+      fields: [proc.name, container.image.repository]
+      comps: [=, startswith]
+      values:
+        - [velero, velero/velero]
+        - [backup-agent, mycompany/backup]
+```
+
+```bash
+# Reload delle regole senza riavviare Falco
+kubectl exec -n falco daemonset/falco -- kill -1 $(pgrep falco)
+
+# Verifica che le nuove eccezioni siano caricate
+kubectl logs -n falco daemonset/falco | grep "Loading rules"
+```
+
+---
 
 ## Riferimenti
 

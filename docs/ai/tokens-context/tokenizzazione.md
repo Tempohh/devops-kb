@@ -9,7 +9,7 @@ related: [ai/tokens-context/context-window, ai/sviluppo/prompt-engineering, ai/m
 official_docs: https://github.com/openai/tiktoken
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-03-28
 ---
 
 # Tokenizzazione — BPE, Vocab e Costo Token
@@ -393,6 +393,112 @@ Lo stesso testo produce token diversi con tokenizer diversi:
 - **Preferisci output strutturati brevi**: istruire il modello a rispondere in JSON compatto invece di prosa verbose riduce i token di output (che costano di più).
 - **Cache il system prompt**: con prompt caching (Claude) un system prompt di 2000 token ripetuto 10.000 volte costa 90% in meno. Vedi [Context Window](context-window.md).
 - **Lingua del prompt**: i prompt in inglese usano meno token. Se il modello lo supporta bene, considera di mantenere il system prompt in inglese e l'output in italiano.
+
+## Troubleshooting
+
+### Scenario 1 — Il conteggio token dell'SDK differisce da tiktoken
+
+**Sintomo:** `count_tokens` di Anthropic restituisce un numero diverso da quello calcolato con `tiktoken.get_encoding("cl100k_base")`.
+
+**Causa:** Anthropic usa un tokenizer proprietario non identico a cl100k_base. Le differenze sono tipicamente <5% ma possono salire per testo non-ASCII, codice o caratteri speciali.
+
+**Soluzione:** Per Claude, usare sempre l'API `count_tokens` come fonte di verità. Tiktoken è solo una stima rapida per GPT-4.
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+response = client.messages.count_tokens(
+    model="claude-3-5-sonnet-20241022",
+    messages=[{"role": "user", "content": testo}]
+)
+print(f"Token reali per Claude: {response.input_tokens}")
+```
+
+---
+
+### Scenario 2 — I token consumati sono molti più del previsto in produzione
+
+**Sintomo:** Il costo API mensile supera di molto le stime iniziali. I log mostrano `input_tokens` elevati anche per richieste semplici.
+
+**Causa:** Il system prompt, la conversation history accumulata, o i retrieved chunk RAG vengono inviati per intero ad ogni chiamata senza troncamento. Il contatore token non viene monitorato in modo continuo.
+
+**Soluzione:** Aggiungere logging del token usage su ogni risposta e impostare alert sui costi. Applicare strategie di compressione del contesto.
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+def call_with_token_logging(messages: list, system: str = "") -> str:
+    response = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=1024,
+        system=system,
+        messages=messages
+    )
+    usage = response.usage
+    print(f"[TOKEN LOG] input={usage.input_tokens} output={usage.output_tokens} "
+          f"total={usage.input_tokens + usage.output_tokens}")
+    return response.content[0].text
+```
+
+---
+
+### Scenario 3 — Testo in italiano usa molti più token del previsto
+
+**Sintomo:** Prompt identici in italiano costano il 30-50% in più rispetto alla versione inglese. Il modello a volte tronca la risposta prima di finire.
+
+**Causa:** I tokenizer LLM sono addestrati prevalentemente su testo inglese. L'italiano, con i suoi suffissi variabili e accenti, viene segmentato in più subword rispetto all'inglese.
+
+**Soluzione:** Mantenere il system prompt in inglese dove possibile. Per contenuti obbligatoriamente in italiano, aumentare il budget di token del 30-40% rispetto alle stime in inglese.
+
+```python
+import tiktoken
+
+enc = tiktoken.get_encoding("cl100k_base")
+
+prompt_en = "Analyze the Kubernetes deployment configuration and identify potential issues."
+prompt_it = "Analizza la configurazione del deployment Kubernetes e identifica i problemi potenziali."
+
+tok_en = len(enc.encode(prompt_en))
+tok_it = len(enc.encode(prompt_it))
+
+print(f"English: {tok_en} token")
+print(f"Italian: {tok_it} token")
+print(f"Overhead italiano: +{((tok_it/tok_en)-1)*100:.1f}%")
+```
+
+---
+
+### Scenario 4 — `tiktoken.encoding_for_model()` lancia `KeyError` per un modello recente
+
+**Sintomo:** `tiktoken.encoding_for_model("gpt-4o-2024-11-20")` (o altro modello recente) lancia `KeyError: 'gpt-4o-2024-11-20'`.
+
+**Causa:** La versione installata di tiktoken non include il mapping per il modello più recente. Il package model→encoding è aggiornato con nuove release.
+
+**Soluzione:** Aggiornare tiktoken, oppure usare il fallback su cl100k_base (valido per tutti i modelli GPT-4 family).
+
+```bash
+# Aggiorna tiktoken all'ultima versione
+pip install --upgrade tiktoken
+
+# Verifica modelli supportati
+python -c "import tiktoken; print(list(tiktoken.model.MODEL_TO_ENCODING.keys()))"
+```
+
+```python
+import tiktoken
+
+def safe_encode(text: str, model: str = "gpt-4o") -> list[int]:
+    """Tokenizza con fallback automatico se il modello non è mappato."""
+    try:
+        enc = tiktoken.encoding_for_model(model)
+    except KeyError:
+        enc = tiktoken.get_encoding("cl100k_base")
+    return enc.encode(text)
+```
 
 ## Riferimenti
 

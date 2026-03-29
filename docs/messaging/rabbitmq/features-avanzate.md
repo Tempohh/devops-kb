@@ -9,7 +9,7 @@ related: [messaging/rabbitmq/architettura, messaging/rabbitmq/affidabilita, mess
 official_docs: https://www.rabbitmq.com/docs/streams
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Features Avanzate
@@ -522,6 +522,119 @@ rabbitmqctl set_parameter shovel migrate-orders \
 - Bridge tra ambienti (staging → production per replay di messaggi reali)
 - Forwarding permanente tra sistemi con topologie diverse
 - DR (Disaster Recovery): shovel da primary a secondary in modalità warm standby
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Messages stuck in queue, consumers present but not consuming
+
+**Sintomo:** La queue ha messaggi non consegnati (`messages_ready > 0`) ma i consumer sono connessi e `messages_unacknowledged` è basso o zero.
+
+**Causa:** Il consumer ha raggiunto il limite `prefetch_count` (basic_qos) e sta bloccando perché non ha ancora ackato i messaggi in volo, oppure la queue è una Priority Queue con messaggi a bassa priorità mai processati (starvation).
+
+**Soluzione:**
+```bash
+# Ispezionare lo stato della queue e dei consumer
+rabbitmqctl list_queues name messages_ready messages_unacknowledged consumers
+rabbitmqctl list_consumers queue_name channel_pid prefetch_count
+
+# Verificare prefetch del consumer (valore 0 = illimitato, valori bassi = bottleneck)
+rabbitmqctl list_channels name prefetch_count messages_unacknowledged
+
+# Se starvation in priority queue: aumentare prefetch e monitorare per priorità
+rabbitmqctl list_queues name messages_ready --formatter=pretty_table
+```
+
+---
+
+### Scenario 2 — DLQ si riempie inaspettatamente
+
+**Sintomo:** Messaggi arrivano continuamente nella Dead Letter Queue anche senza errori evidenti nei log del consumer.
+
+**Causa comune 1:** Il consumer esegue `basic_nack(requeue=False)` anche per errori transitori (connessione DB, timeout), mandando il messaggio in DLX invece di farlo riaccodare.
+**Causa comune 2:** `x-message-ttl` troppo basso rispetto ai tempi di processing; i messaggi scadono prima di essere consumati.
+**Causa comune 3:** `x-delivery-limit` su Quorum Queue raggiunto per messaggi che falliscono troppo velocemente.
+
+**Soluzione:**
+```python
+# Ispezionare gli headers x-death del messaggio nella DLQ per capire la causa
+def inspect_dead_letter(ch, method, properties, body):
+    death_info = properties.headers.get('x-death', [])
+    for death in death_info:
+        # 'reason' può essere: rejected / expired / maxlen / delivery-limit
+        print(f"Reason: {death['reason']}, Queue: {death['queue']}, Count: {death['count']}")
+
+# Controllare TTL configurato sulla queue
+rabbitmqctl list_queues name arguments --formatter=pretty_table | grep -i ttl
+
+# Verificare delivery-limit
+rabbitmqctl list_queues name arguments | grep delivery-limit
+```
+
+---
+
+### Scenario 3 — Stream consumer riceve messaggi dall'inizio ad ogni restart
+
+**Sintomo:** Un consumer su una Stream Queue rilegge tutti i messaggi dall'offset 0 ad ogni riavvio dell'applicazione, causando elaborazione duplicata.
+
+**Causa:** L'applicazione non persiste l'offset consumato. Con `OffsetSpecification.first()` o `OffsetSpecification.offset(0)` senza storage dell'offset, il consumer riparte sempre dall'inizio.
+
+**Soluzione:**
+```python
+# Salvare e ripristinare l'offset tra restart
+import redis
+
+r = redis.Redis()
+OFFSET_KEY = "stream:audit-events:consumer-group-A:offset"
+
+async def on_message(msg):
+    # ... processa il messaggio ...
+    # Salva l'offset DOPO il processing
+    await r.set(OFFSET_KEY, msg.offset)
+
+# Al restart: recupera l'ultimo offset salvato
+last_offset = await r.get(OFFSET_KEY)
+offset_spec = (
+    OffsetSpecification.offset(int(last_offset) + 1)
+    if last_offset
+    else OffsetSpecification.next()  # nuovi messaggi se prima esecuzione
+)
+
+consumer = await env.create_consumer(
+    "audit-events",
+    callback=on_message,
+    offset_specification=offset_spec,
+)
+```
+
+---
+
+### Scenario 4 — Federation link DOWN, messaggi non sincronizzati
+
+**Sintomo:** Il Federation link risulta in stato `{state, down}` o `{state, starting}`. I messaggi si accumulano sull'upstream ma non arrivano al downstream.
+
+**Causa:** Connettività di rete interrotta, credenziali errate, o policy di federation non applicata correttamente all'exchange.
+
+**Soluzione:**
+```bash
+# Verificare lo stato dei link federation
+rabbitmqctl list_parameters --vhost / component federation-upstream
+rabbitmqctl eval 'rabbit_federation_status:status().'
+
+# Controllare lo stato dei link tramite Management API
+curl -u admin:password http://rabbitmq:15672/api/federation-links
+
+# Forzare il restart del link (se la causa è transiente)
+# Tramite Management UI: Admin > Federation Status > Restart link
+# Oppure via policy: ri-applicare la policy per forzare re-inizializzazione
+rabbitmqctl clear_policy federate-orders
+rabbitmqctl set_policy --apply-to exchanges federate-orders \
+    "^orders$" '{"federation-upstream":"eu-primary"}'
+
+# Verificare connettività verso l'upstream
+rabbitmq-diagnostics check_port_connectivity --hostname rabbitmq-eu.internal --port 5672
+```
 
 ---
 

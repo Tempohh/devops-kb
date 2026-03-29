@@ -9,7 +9,7 @@ related: [cloud/azure/networking/vnet, cloud/azure/security/key-vault, cloud/azu
 official_docs: https://learn.microsoft.com/azure/virtual-machines/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-28
 ---
 
 # Azure Virtual Machines
@@ -551,34 +551,181 @@ az vm create \
 
 ## Troubleshooting
 
+### Scenario 1 — VM non raggiungibile via SSH/RDP
+
+**Sintomo:** Connessione SSH o RDP rifiutata o in timeout. La VM risulta in stato `Running` nel portale.
+
+**Causa:** NSG blocca le porte, IP pubblico non assegnato, servizio SSH/RDP non attivo dentro la VM, o disco OS pieno/corrotto.
+
+**Soluzione:** Verificare NSG, abilitare boot diagnostics per vedere lo stato della VM, usare la console seriale come accesso di emergenza.
+
 ```bash
-# Diagnostica boot (screenshot e log seriale)
+# 1. Verifica stato VM e IP
+az vm show --resource-group $RG --name $VM_NAME --show-details --output table
+
+# 2. Controlla NSG associato alla NIC
+NIC_ID=$(az vm show -g $RG -n $VM_NAME --query "networkProfile.networkInterfaces[0].id" -o tsv)
+az network nic show --ids $NIC_ID --query "networkSecurityGroup" -o tsv
+
+# 3. Visualizza regole NSG (verifica porta 22/3389 in entrata)
+az network nsg rule list --resource-group $RG --nsg-name $NSG_NAME --output table
+
+# 4. Accesso di emergenza via console seriale (non richiede rete)
+az serial-console connect --resource-group $RG --name $VM_NAME
+
+# 5. Boot diagnostics — log seriale per vedere errori OS
 az vm boot-diagnostics enable \
   --resource-group $RG \
   --name $VM_NAME \
   --storage mystorageaccount
 
-az vm boot-diagnostics get-boot-log \
-  --resource-group $RG \
-  --name $VM_NAME
+az vm boot-diagnostics get-boot-log --resource-group $RG --name $VM_NAME
+```
 
-# Accesso console seriale (senza SSH)
-az serial-console connect \
-  --resource-group $RG \
-  --name $VM_NAME
+---
 
-# Repair VM (monta disco su VM di riparazione)
-az vm repair create \
-  --resource-group $RG \
-  --name $VM_NAME \
-  --repair-username repairuser \
-  --repair-password "SecurePassword123!"
+### Scenario 2 — VM Extension bloccata in stato "Updating" o "Failed"
 
-# Visualizzare log estensioni
+**Sintomo:** Un'extension (es. AzureMonitorLinuxAgent, CustomScript) rimane in stato `Transitioning` per ore, oppure mostra `ProvisioningState: Failed`.
+
+**Causa:** Script di setup fallito dentro la VM, versione extension incompatibile con l'OS, o agente VM guest non responsivo.
+
+**Soluzione:** Rimuovere e reinstallare l'extension. Se persiste, riavviare il VM agent.
+
+```bash
+# Visualizza stato di tutte le extension
 az vm extension list \
   --resource-group $RG \
   --vm-name $VM_NAME \
   --output table
+
+# Rimuovi l'extension bloccata
+az vm extension delete \
+  --resource-group $RG \
+  --vm-name $VM_NAME \
+  --name AzureMonitorLinuxAgent
+
+# Riavvia il VM agent (da dentro la VM via SSH/console)
+# Linux:
+sudo systemctl restart walinuxagent
+
+# Windows (da PowerShell dentro la VM):
+# Restart-Service WindowsAzureGuestAgent
+
+# Reinstalla l'extension dopo riavvio agent
+az vm extension set \
+  --resource-group $RG \
+  --vm-name $VM_NAME \
+  --name AzureMonitorLinuxAgent \
+  --publisher Microsoft.Azure.Monitor \
+  --version 1.0 \
+  --enable-auto-upgrade true
+```
+
+---
+
+### Scenario 3 — VMSS non scala: nuove istanze non raggiungono stato Healthy
+
+**Sintomo:** L'autoscale scatta e aggiunge istanze, ma queste rimangono in stato `Creating` o passano a `Unhealthy`. Il load balancer non instrada traffico alle nuove istanze.
+
+**Causa:** cloud-init/custom-data fallisce, health probe del load balancer non riceve risposta (porta chiusa, app non ancora pronta), o immagine corrotta.
+
+**Soluzione:** Verificare i log di provisioning delle istanze fallite e i health probe del LB.
+
+```bash
+# Elenca istanze VMSS con stato
+az vmss list-instances \
+  --resource-group $RG \
+  --name vmss-web-frontend \
+  --output table
+
+# Visualizza log di provisioning di una specifica istanza
+INSTANCE_ID="0"
+az vmss get-instance-view \
+  --resource-group $RG \
+  --name vmss-web-frontend \
+  --instance-id $INSTANCE_ID
+
+# Log cloud-init dall'istanza (via SSH o bastion)
+# sudo cat /var/log/cloud-init-output.log
+# sudo journalctl -u cloud-init
+
+# Verifica health probe LB
+az network lb probe list \
+  --resource-group $RG \
+  --lb-name vmss-lb \
+  --output table
+
+# Forza reimaging di un'istanza problematica
+az vmss reimage \
+  --resource-group $RG \
+  --name vmss-web-frontend \
+  --instance-id $INSTANCE_ID
+```
+
+---
+
+### Scenario 4 — Disco OS pieno: VM non risponde, applicazione crashata
+
+**Sintomo:** La VM è in stato `Running` ma le applicazioni crashano, SSH connette ma i comandi falliscono con "No space left on device". I log mostrano errori di scrittura su filesystem.
+
+**Causa:** Disco OS o dati esaurito. Cause comuni: log non ruotati, dump applicativi, immagini Docker accumulate, /tmp non pulita.
+
+**Soluzione:** Estendere il disco tramite Azure (richiede deallocate se disco OS), poi espandere la partizione dentro la VM.
+
+```bash
+# 1. Verifica dimensione disco OS corrente
+az vm show \
+  --resource-group $RG \
+  --name $VM_NAME \
+  --query "storageProfile.osDisk.diskSizeGb"
+
+# 2. Deallocate VM (necessario per resize disco OS)
+az vm deallocate --resource-group $RG --name $VM_NAME
+
+# 3. Estendi il disco OS (es. da 128 a 256 GB)
+az vm update \
+  --resource-group $RG \
+  --name $VM_NAME \
+  --os-disk-size-gb 256
+
+# Per disco dati (può essere fatto a caldo su Premium SSD)
+az disk update \
+  --resource-group $RG \
+  --name disk-data-01 \
+  --size-gb 512
+
+# 4. Riavvia la VM
+az vm start --resource-group $RG --name $VM_NAME
+
+# 5. Da dentro la VM: espandi la partizione (Linux)
+# sudo growpart /dev/sda 1
+# sudo resize2fs /dev/sda1      # ext4
+# sudo xfs_growfs /             # xfs
+```
+
+---
+
+### Strumenti diagnostici generali
+
+```bash
+# Repair VM: monta disco OS su VM di supporto per riparazione offline
+az vm repair create \
+  --resource-group $RG \
+  --name $VM_NAME \
+  --repair-username repairuser \
+  --repair-password "SecurePassword123!" \
+  --verbose
+
+# Restore VM da repair
+az vm repair restore --resource-group $RG --name $VM_NAME
+
+# Run Command: esegui script dentro la VM senza SSH (richiede VM agent)
+az vm run-command invoke \
+  --resource-group $RG \
+  --name $VM_NAME \
+  --command-id RunShellScript \
+  --scripts "df -h && free -m && top -bn1 | head -20"
 ```
 
 ## Relazioni

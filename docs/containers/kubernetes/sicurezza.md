@@ -9,7 +9,7 @@ related: [security/autenticazione/mtls-spiffe, security/autorizzazione/opa, secu
 official_docs: https://kubernetes.io/docs/concepts/security/
 status: complete
 difficulty: expert
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Kubernetes Sicurezza
@@ -463,6 +463,109 @@ falcosidekick:
 # 8. Falco o equivalente per runtime monitoring
 # 9. Image scanning nel CI e continuous scanning con Trivy Operator
 # 10. Admission controller: Gatekeeper o Kyverno per policy enforcement
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Pod rifiutato da PSA con violazione "restricted"
+
+**Sintomo:** `kubectl apply` restituisce `Error from server (Forbidden): pods "my-pod" is forbidden: violates PodSecurity "restricted:latest"`.
+
+**Causa:** Il namespace ha `pod-security.kubernetes.io/enforce: restricted` e il pod manca di `allowPrivilegeEscalation: false`, `runAsNonRoot: true` o `seccompProfile`.
+
+**Soluzione:** Aggiungere i campi mancanti nel `securityContext` del container, oppure usare la modalità `warn`/`audit` per identificare le violazioni senza bloccare.
+
+```bash
+# Identifica cosa viola il profilo senza applicare
+kubectl apply --dry-run=server -f pod.yaml
+
+# Passa temporaneamente a warn per vedere le violazioni senza blocco
+kubectl label namespace production \
+    pod-security.kubernetes.io/enforce=baseline \
+    pod-security.kubernetes.io/warn=restricted --overwrite
+
+# Verifica cosa manca nel SecurityContext del container
+kubectl explain pod.spec.containers.securityContext
+```
+
+---
+
+### Scenario 2 — ServiceAccount con accesso negato a risorse Kubernetes
+
+**Sintomo:** Il pod riceve `403 Forbidden` quando chiama l'API server (es. il controller non riesce a listare i ConfigMap).
+
+**Causa:** Il `RoleBinding` manca o è legato al namespace sbagliato; oppure il pod usa il ServiceAccount `default` che non ha permessi.
+
+**Soluzione:** Verificare che esista un `RoleBinding` corretto che associ il SA al `Role` giusto nel namespace del pod.
+
+```bash
+# Verifica se il SA può eseguire l'azione richiesta
+kubectl auth can-i list configmaps \
+    --as=system:serviceaccount:production:api-sa \
+    -n production
+
+# Lista tutti i RoleBinding per il SA
+kubectl get rolebindings -n production -o json | \
+    jq '.items[] | select(.subjects[]? | .kind=="ServiceAccount" and .name=="api-sa")'
+
+# Controlla se il pod monta il token SA corretto
+kubectl get pod <pod-name> -n production -o jsonpath='{.spec.serviceAccountName}'
+```
+
+---
+
+### Scenario 3 — NetworkPolicy blocca traffico inatteso
+
+**Sintomo:** Il servizio smette di rispondere dopo l'applicazione di una NetworkPolicy; le chiamate tra pod vanno in timeout.
+
+**Causa:** La policy `default-deny-all` blocca tutto il traffico, ma mancano le regole allow esplicite per i percorsi necessari (DNS, metrics, database).
+
+**Soluzione:** Verificare la connettività tra pod e aggiungere le regole `ingress`/`egress` mancanti. Il traffico DNS sulla porta 53 verso `kube-dns` è spesso dimenticato.
+
+```bash
+# Verifica quali NetworkPolicy si applicano a un pod
+kubectl get networkpolicies -n production
+kubectl describe networkpolicy default-deny-all -n production
+
+# Test connettività con un pod temporaneo di debug
+kubectl run nettest --image=nicolaka/netshoot --rm -it --restart=Never \
+    -n production -- curl -v http://api:8080
+
+# Controlla i log del CNI plugin (es. Calico) per drop
+kubectl logs -n calico-system -l k8s-app=calico-node --tail=50 | grep -i denied
+
+# Verifica che DNS sia raggiungibile
+kubectl run dnstest --image=busybox --rm -it --restart=Never \
+    -n production -- nslookup kubernetes.default
+```
+
+---
+
+### Scenario 4 — Token IRSA non valido: credenziali AWS negate al pod
+
+**Sintomo:** Il pod su EKS riceve `InvalidIdentityToken` o `AccessDenied` quando chiama AWS SDK, nonostante la ServiceAccount abbia l'annotation IRSA corretta.
+
+**Causa:** L'OIDC provider non è stato associato al cluster, oppure la trust policy dell'IAM Role non corrisponde esattamente al namespace e al nome del ServiceAccount.
+
+**Soluzione:** Verificare che l'OIDC provider sia registrato in IAM e che la trust policy usi i valori esatti (case-sensitive) di namespace e SA.
+
+```bash
+# Verifica che l'OIDC provider sia associato al cluster
+aws eks describe-cluster --name my-cluster \
+    --query "cluster.identity.oidc.issuer" --output text
+
+# Controlla se l'OIDC provider è registrato in IAM
+aws iam list-open-id-connect-providers
+
+# Verifica il token proiettato nel pod
+kubectl exec -n production <pod-name> -- \
+    cat /var/run/secrets/eks.amazonaws.com/serviceaccount/token | \
+    cut -d'.' -f2 | base64 -d 2>/dev/null | jq '{sub, aud, exp}'
+
+# Controlla le variabili d'ambiente AWS impostate da IRSA
+kubectl exec -n production <pod-name> -- env | grep -E 'AWS_|ROLE'
 ```
 
 ---

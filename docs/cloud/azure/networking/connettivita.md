@@ -9,7 +9,7 @@ related: [cloud/azure/networking/vnet, cloud/azure/networking/load-balancing]
 official_docs: https://learn.microsoft.com/azure/vpn-gateway/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Connettività Ibrida Azure
@@ -217,6 +217,148 @@ az network vpn-gateway create \
 # - Routing tra spoke VNet
 # - Routing tra branch e VNet
 # - Routing tra branch e Internet (via Azure Firewall nell'hub)
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Tunnel VPN Site-to-Site non si connette
+
+**Sintomo:** La connessione VPN rimane in stato `Unknown` o `NotConnected` dopo la creazione.
+
+**Causa:** Mismatch nei parametri IKE/IPSec (pre-shared key, algoritmi di crittografia, DH group) tra il VPN Gateway Azure e il dispositivo on-premises, oppure firewall che blocca le porte UDP 500/4500.
+
+**Soluzione:** Verificare i parametri di negoziazione IKE e lo stato della connessione:
+
+```bash
+# Verificare stato connessione e dettagli errore
+az network vpn-connection show \
+    --resource-group myapp-rg \
+    --name on-premises-connection \
+    --query "{status:connectionStatus, errorMessage:ingressBytesTransferred}"
+
+# Ottenere log diagnostici della connessione
+az network vpn-connection show-device-config-script \
+    --resource-group myapp-rg \
+    --name on-premises-connection \
+    --vendor Cisco --device-family ISR --firmware-version IOS-12.x
+
+# Avviare packet capture sul VPN Gateway per debug IKE
+az network vnet-gateway start-packet-capture \
+    --resource-group myapp-rg \
+    --name production-vpngw
+
+# Controllare BGP peers (se BGP abilitato)
+az network vnet-gateway list-bgp-peer-status \
+    --resource-group myapp-rg \
+    --name production-vpngw
+```
+
+---
+
+### Scenario 2 — Circuito ExpressRoute in stato "Not Provisioned"
+
+**Sintomo:** Il circuito ExpressRoute mostra `CircuitProvisioningState: NotProvisioned` o `ServiceProviderProvisioningState: NotProvisioned` e non è possibile instradare traffico.
+
+**Causa:** Il provider di connettività non ha ancora completato il provisioning fisico del cross-connect, oppure il `serviceKey` non è stato comunicato correttamente al provider.
+
+**Soluzione:**
+
+```bash
+# Verificare stato corrente del circuito
+az network express-route show \
+    --resource-group myapp-rg \
+    --name production-circuit \
+    --query "{provisioningState:provisioningState, serviceProviderState:serviceProviderProvisioningState, serviceKey:serviceKey}"
+
+# Verificare che i peering siano configurati correttamente
+az network express-route peering list \
+    --resource-group myapp-rg \
+    --circuit-name production-circuit \
+    --output table
+
+# Controllare le route apprese dal circuito
+az network express-route list-route-tables \
+    --resource-group myapp-rg \
+    --name production-circuit \
+    --peering-name AzurePrivatePeering \
+    --path primary
+```
+
+> Il `serviceKey` deve essere fornito al provider prima che possa procedere. Se il provider conferma il provisioning ma lo stato rimane `NotProvisioned`, aprire un ticket Microsoft Support.
+
+---
+
+### Scenario 3 — Route BGP non propagate alle VNet spoke
+
+**Sintomo:** Le VM nelle VNet spoke non raggiungono la rete on-premises nonostante il tunnel VPN o ExpressRoute sia attivo e il BGP mostri peers connessi.
+
+**Causa:** Route mancanti nella route table del gateway, policy BGP che filtrano i prefissi, oppure la VNet non ha la propagazione delle route del gateway abilitata.
+
+**Soluzione:**
+
+```bash
+# Verificare route effettive propagate al gateway
+az network vnet-gateway list-advertised-routes \
+    --resource-group myapp-rg \
+    --name production-vpngw \
+    --peer 169.254.21.1   # IP BGP peer on-premises
+
+# Verificare route learned (ricevute dall'on-premises)
+az network vnet-gateway list-learned-routes \
+    --resource-group myapp-rg \
+    --name production-vpngw
+
+# Verificare che la subnet spoke abbia propagazione route gateway abilitata
+az network vnet subnet show \
+    --resource-group myapp-rg \
+    --vnet-name spoke-vnet \
+    --name default \
+    --query routeTable
+
+# Abilitare propagazione route gateway su una route table esistente
+az network route-table update \
+    --resource-group myapp-rg \
+    --name spoke-rt \
+    --disable-bgp-route-propagation false
+```
+
+---
+
+### Scenario 4 — Client Point-to-Site non riesce a connettersi
+
+**Sintomo:** Il client VPN P2S riceve errore di autenticazione o il tunnel si connette ma non raggiunge le risorse Azure.
+
+**Causa:** Certificato client scaduto o revocato, pool di indirizzi P2S in conflitto con subnet Azure/on-premises, oppure mancata aggiunta dei DNS custom al profilo VPN.
+
+**Soluzione:**
+
+```bash
+# Verificare certificati root caricati sul gateway
+az network vnet-gateway show \
+    --resource-group myapp-rg \
+    --name production-vpngw \
+    --query vpnClientConfiguration.vpnClientRootCertificates
+
+# Revocare un certificato client specifico
+az network vnet-gateway revoked-cert create \
+    --resource-group myapp-rg \
+    --gateway-name production-vpngw \
+    --name compromised-client-cert \
+    --thumbprint "ABCDEF1234567890..."
+
+# Scaricare profilo VPN aggiornato (dopo modifiche)
+az network vnet-gateway vpn-client generate \
+    --resource-group myapp-rg \
+    --name production-vpngw \
+    --processor-architecture Amd64
+
+# Verificare configurazione P2S corrente (pool IP, protocolli)
+az network vnet-gateway show \
+    --resource-group myapp-rg \
+    --name production-vpngw \
+    --query vpnClientConfiguration
 ```
 
 ---

@@ -9,7 +9,7 @@ related: [ci-cd/gitlab-ci/_index, ci-cd/gitops/argocd, security/supply-chain]
 official_docs: https://docs.gitlab.com/ee/ci/directed_acyclic_graph/
 status: complete
 difficulty: expert
-last_updated: 2026-02-27
+last_updated: 2026-03-28
 ---
 
 # GitLab CI — Pipeline Avanzate
@@ -625,6 +625,151 @@ include:
       environment: staging
       namespace: myapp-staging
       image-tag: $CI_COMMIT_SHORT_SHA
+```
+
+## Troubleshooting
+
+### Scenario 1 — Job con `needs` non trova gli artifacts
+
+**Sintomo:** Il job fallisce con `ERROR: Job '...' is not in any dependency chain` oppure gli artifacts del job upstream non sono disponibili nonostante `artifacts: true` in `needs`.
+
+**Causa:** Il job upstream è configurato con `artifacts: expire_in` molto breve, oppure manca `artifacts.paths` (solo `reports` non vengono scaricati automaticamente via `needs`), oppure il job upstream non è nello stesso pipeline DAG.
+
+**Soluzione:** Verificare che il job upstream abbia `artifacts.paths` espliciti e che `expire_in` sia sufficiente per tutta la durata della pipeline. Per i report JUnit/coverage usare `artifacts.reports` in aggiunta a `artifacts.paths`.
+
+```yaml
+# ✅ Corretto: paths espliciti per il download via needs
+compile-backend:
+  stage: build
+  script: mvn package
+  artifacts:
+    paths:
+      - target/*.jar          # Scaricabile via needs
+    reports:
+      junit: target/surefire-reports/TEST-*.xml  # Solo per il widget MR
+    expire_in: 2h
+
+# Verifica che gli artifacts siano presenti nel job upstream:
+# GitLab UI → Pipeline → Job → Browse artifacts
+```
+
+---
+
+### Scenario 2 — Pipeline downstream con `strategy: depend` rimane bloccata
+
+**Sintomo:** Il job `trigger` rimane nello stato "running" per ore e non completa. La pipeline downstream è visibile ma non viene attenduta correttamente.
+
+**Causa:** La pipeline downstream contiene job con `when: manual` non eseguiti oppure protected environments con approvazioni pendenti. Con `strategy: depend`, GitLab aspetta il completamento totale inclusi job manuali.
+
+**Soluzione:** Nella pipeline downstream, assicurarsi che i job manuali bloccanti abbiano `allow_failure: true` se non devono bloccare il flusso, oppure usare `strategy: depend` solo sulle pipeline che si completano automaticamente.
+
+```yaml
+# Nel progetto upstream: imposta timeout esplicito
+trigger-api-deploy:
+  trigger:
+    project: my-org/api-service
+    branch: main
+    strategy: depend
+  timeout: 30m   # Evita attese infinite
+
+# Nel progetto downstream: job manuali non bloccanti
+deploy-canary:
+  when: manual
+  allow_failure: true   # Non blocca la pipeline padre
+  environment:
+    name: production
+```
+
+---
+
+### Scenario 3 — Compliance pipeline non viene applicata ai nuovi progetti
+
+**Sintomo:** Nuovi progetti creati nel gruppo non eseguono i job di compliance (`mandatory-secret-detection`, ecc.) nonostante il compliance framework sia configurato sul gruppo.
+
+**Causa:** Il compliance framework deve essere assegnato esplicitamente ad ogni progetto (o ai subgroup) — non viene ereditato automaticamente dai nuovi progetti creati dopo la configurazione.
+
+**Soluzione:** Usare l'API GitLab per assegnare il compliance framework a tutti i progetti del gruppo, inclusi quelli futuri tramite webhook o automazione.
+
+```bash
+# Lista tutti i progetti del gruppo senza compliance framework
+curl --header "PRIVATE-TOKEN: $ADMIN_TOKEN" \
+  "https://gitlab.com/api/v4/groups/$GROUP_ID/projects?per_page=100" \
+  | jq '.[] | select(.compliance_frameworks == []) | .id, .name'
+
+# Assegna il compliance framework a un progetto specifico
+curl -X PUT \
+  --header "PRIVATE-TOKEN: $ADMIN_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{"compliance_framework_id": 1}' \
+  "https://gitlab.com/api/v4/projects/$PROJECT_ID"
+
+# Verifica la configurazione del compliance framework
+curl --header "PRIVATE-TOKEN: $ADMIN_TOKEN" \
+  "https://gitlab.com/api/v4/groups/$GROUP_ID/compliance_frameworks"
+```
+
+---
+
+### Scenario 4 — Dynamic child pipeline genera YAML invalido
+
+**Sintomo:** Lo stage `trigger` fallisce con `Error: could not parse YAML file generated-pipeline.yml` oppure `jobs config should contain at least one visible job`.
+
+**Causa:** Lo script di generazione produce YAML malformato (indentazione errata, caratteri speciali non escaped), oppure nessun servizio ha subito modifiche e il file generato contiene solo `stages` senza job.
+
+**Soluzione:** Aggiungere validazione del YAML generato prima del trigger e gestire il caso base (nessuna modifica = nessun job da eseguire) con un job placeholder.
+
+```python
+# scripts/generate_pipeline.py — versione robusta
+import yaml, os, subprocess, sys
+
+changed_files = subprocess.run(
+    ['git', 'diff', '--name-only', 'HEAD~1'],
+    capture_output=True, text=True
+).stdout.strip().split('\n')
+
+changed_services = {
+    f.split('/')[1] for f in changed_files
+    if f.startswith('services/') and len(f.split('/')) > 2
+}
+
+pipeline = {'stages': ['build', 'test']}
+
+if not changed_services:
+    # Job placeholder: evita pipeline vuota (YAML invalido per GitLab)
+    pipeline['no-changes'] = {
+        'stage': 'build',
+        'script': ['echo "No services changed, skipping"']
+    }
+else:
+    for service in changed_services:
+        pipeline[f'build-{service}'] = {
+            'stage': 'build',
+            'script': [f'cd services/{service} && mvn package']
+        }
+
+output = yaml.dump(pipeline, default_flow_style=False)
+
+# Validazione base prima di emettere il YAML
+try:
+    yaml.safe_load(output)
+except yaml.YAMLError as e:
+    print(f"YAML generation failed: {e}", file=sys.stderr)
+    sys.exit(1)
+
+print(output)
+```
+
+```bash
+# Debug: valida il YAML generato localmente prima di committare
+python scripts/generate_pipeline.py > /tmp/test-pipeline.yml
+python -c "import yaml; yaml.safe_load(open('/tmp/test-pipeline.yml'))" && echo "YAML valido"
+
+# Oppure usa il GitLab CI Lint API
+curl -X POST \
+  --header "PRIVATE-TOKEN: $CI_JOB_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data "{\"content\": \"$(cat /tmp/test-pipeline.yml | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')\"}" \
+  "https://gitlab.com/api/v4/ci/lint"
 ```
 
 ## Relazioni

@@ -9,7 +9,7 @@ related: [containers/kubernetes/sicurezza, security/autenticazione/oauth2-oidc, 
 official_docs: https://docs.openshift.com/container-platform/latest/authentication/managing-security-context-constraints.html
 status: complete
 difficulty: expert
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Sicurezza e SCC
@@ -348,6 +348,116 @@ spec:
               configMap:
                 name: ldap-sync-config
 EOF
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Pod non si avvia per violazione SCC
+
+**Sintomo:** Il pod rimane in `Pending` o fallisce con `Error creating: pods ... is forbidden: unable to validate against any security context constraint`.
+
+**Causa:** Nessuna SCC nel cluster è compatibile con i requisiti del pod (es. richiede `runAsUser: 0` ma non ha accesso a `anyuid`).
+
+**Soluzione:** Identificare quale SCC serve e assegnarla al ServiceAccount del pod.
+
+```bash
+# Verifica quale SCC è necessaria
+oc adm policy scc-subject-review -f pod.yaml
+
+# Verifica a quale SCC ha accesso il ServiceAccount
+oc adm policy scc-review -z my-service-account -n my-namespace
+
+# Assegna la SCC necessaria
+oc adm policy add-scc-to-user anyuid -z my-service-account -n my-namespace
+
+# Controlla gli eventi del pod per il messaggio preciso
+oc describe pod my-pod -n my-namespace | grep -A5 Events
+```
+
+---
+
+### Scenario 2 — Login OAuth fallisce (Identity Provider non raggiungibile)
+
+**Sintomo:** La console OpenShift mostra "An error occurred. Please try again." dopo il redirect all'Identity Provider. Il login via `oc login` restituisce `401 Unauthorized`.
+
+**Causa:** Configurazione OAuth errata (URL LDAP/OIDC non raggiungibile, certificato CA mancante, credenziali del Secret non valide).
+
+**Soluzione:** Verificare i log dell'OAuth server e la connettività all'Identity Provider.
+
+```bash
+# Controlla i log dell'OAuth server
+oc logs -n openshift-authentication deployment/oauth-openshift --tail=50
+
+# Verifica che il secret con le credenziali esista
+oc get secret -n openshift-config
+oc describe secret ldap-bind-secret -n openshift-config
+
+# Testa la connettività LDAP dal cluster
+oc run -it --rm ldap-test --image=registry.access.redhat.com/ubi9/ubi \
+    --restart=Never -- ldapsearch -H ldaps://ldap.company.com:636 -x
+
+# Verifica la configurazione OAuth attuale
+oc get oauth cluster -o yaml
+```
+
+---
+
+### Scenario 3 — LDAP Group Sync non funziona
+
+**Sintomo:** I gruppi LDAP non vengono creati/aggiornati in OpenShift. Il CronJob esiste ma i gruppi non si sincronizzano.
+
+**Causa:** ServiceAccount del CronJob manca di permessi, ConfigMap con la config non montata correttamente, o filtro LDAP non restituisce risultati.
+
+**Soluzione:** Eseguire la sync manualmente per intercettare l'errore, verificare i permessi del ServiceAccount.
+
+```bash
+# Esegui sync manualmente con dry-run per vedere errori
+oc adm groups sync \
+    --sync-config=ldap-sync-config.yaml
+
+# Verifica i log del CronJob
+oc logs -n openshift-authentication job/ldap-group-sync-<id>
+
+# Verifica che il ServiceAccount abbia il ClusterRole necessario
+oc adm policy who-can create groups
+
+# Assegna il ClusterRole corretto se mancante
+oc adm policy add-cluster-role-to-user \
+    system:auth-delegator -z ldap-sync-sa -n openshift-authentication
+
+# Lista i gruppi sincronizzati
+oc get groups
+```
+
+---
+
+### Scenario 4 — SCC custom non viene applicata al pod
+
+**Sintomo:** Il pod usa `restricted-v2` invece della SCC custom assegnata, oppure `oc adm policy scc-subject-review` non mostra la SCC custom.
+
+**Causa:** La SCC custom ha una `priority` troppo bassa rispetto ad altre SCC assegnate al ServiceAccount, oppure il pod non usa il ServiceAccount corretto.
+
+**Soluzione:** Aumentare la priority della SCC custom o verificare il ServiceAccount nel pod spec.
+
+```bash
+# Verifica quale SCC usa il pod in esecuzione
+oc get pod my-pod -o yaml | grep 'openshift.io/scc'
+
+# Lista SCC assegnate a un ServiceAccount con priorità
+oc adm policy scc-subject-review \
+    -z my-service-account -n my-namespace
+
+# Verifica la priority della SCC custom
+oc get scc myapp-scc -o jsonpath='{.priority}'
+
+# Aumenta la priority della SCC custom (edit inline)
+oc patch scc myapp-scc --type=json \
+    -p='[{"op":"replace","path":"/priority","value":20}]'
+
+# Verifica che il pod usi il ServiceAccount corretto
+oc get pod my-pod -o jsonpath='{.spec.serviceAccountName}'
 ```
 
 ---

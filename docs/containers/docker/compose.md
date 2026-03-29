@@ -9,7 +9,7 @@ related: [containers/docker/networking, containers/docker/storage, containers/ku
 official_docs: https://docs.docker.com/compose/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Docker Compose
@@ -432,6 +432,109 @@ docker compose config --volumes       # lista volumi
 # Cleanup
 docker compose images                 # immagini usate
 docker system prune -a --volumes      # cleanup completo (ATTENZIONE in prod!)
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Il container non attende che il database sia pronto
+
+**Sintomo:** Il servizio `api` crasha all'avvio con `Connection refused` o `could not connect to server` nonostante `depends_on: db`.
+
+**Causa:** `depends_on` di default attende solo che il container sia *avviato*, non che il processo interno (es. PostgreSQL) sia pronto ad accettare connessioni.
+
+**Soluzione:** Aggiungere un `healthcheck` al servizio `db` e usare `condition: service_healthy` in `depends_on`.
+
+```yaml
+services:
+  db:
+    image: postgres:16-alpine
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  api:
+    depends_on:
+      db:
+        condition: service_healthy
+```
+
+---
+
+### Scenario 2 — Variabili d'ambiente non risolte (valore letterale `${VAR}`)
+
+**Sintomo:** Il container riceve la stringa letterale `${DATABASE_URL}` invece del valore atteso, oppure Compose emette warning `variable is not set`.
+
+**Causa:** Il file `.env` non è nella stessa directory da cui si lancia `docker compose`, oppure la variabile non è definita nel file `.env` né nell'environment dell'host.
+
+**Soluzione:** Verificare la presenza e il contenuto del file `.env`, oppure dichiarare esplicitamente il percorso con `--env-file`.
+
+```bash
+# Verifica quale valore Compose risolve effettivamente
+docker compose config | grep DATABASE_URL
+
+# Usare un env-file alternativo
+docker compose --env-file .env.production up -d
+
+# Debug: mostrare tutte le variabili non risolte
+docker compose config 2>&1 | grep "variable is not set"
+```
+
+---
+
+### Scenario 3 — Porte già in uso (`bind: address already in use`)
+
+**Sintomo:** `docker compose up` fallisce con `Error response from daemon: Ports are not available: exposing port TCP 0.0.0.0:5432 -> 0.0.0.0:0: listen tcp 0.0.0.0:5432: bind: address already in use`.
+
+**Causa:** Un altro processo (o un container precedente non rimosso) occupa già la porta sull'host.
+
+**Soluzione:** Identificare il processo che occupa la porta, fermarlo o mappare una porta diversa.
+
+```bash
+# Trovare il processo che usa la porta (Linux/macOS)
+sudo lsof -i :5432
+# oppure
+sudo ss -tulpn | grep 5432
+
+# Windows
+netstat -ano | findstr :5432
+
+# Fermare eventuali container rimasti
+docker compose down
+docker ps -a | grep 5432   # cerca container fermati con quella porta
+
+# Alternativa: cambiare la porta host nel compose file
+ports:
+  - "15432:5432"           # porta host diversa
+```
+
+---
+
+### Scenario 4 — Volume con dati stale dopo modifica immagine / schema
+
+**Sintomo:** Il container si avvia ma presenta dati inconsistenti o errori di schema (es. `column does not exist`) dopo un rebuild dell'immagine o una migrazione.
+
+**Causa:** Il named volume persiste i dati della run precedente; il nuovo codice/schema non è compatibile con i dati esistenti.
+
+**Soluzione:** Rimuovere il volume per fare un fresh start, oppure eseguire le migrazioni correttamente.
+
+```bash
+# Rimuove container E volumi (ATTENZIONE: distrugge i dati)
+docker compose down --volumes
+
+# Rimuovere solo il volume specifico
+docker volume ls | grep myapp
+docker volume rm myapp_db-data
+
+# Approccio non-destructive: eseguire migrazioni
+docker compose run --rm api python -m alembic upgrade head
+
+# Ispezionare i dati nel volume prima di rimuoverlo
+docker compose exec db psql -U postgres -c "\dt"
 ```
 
 ---

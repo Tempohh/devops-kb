@@ -9,7 +9,7 @@ related: [messaging/rabbitmq/clustering-ha, messaging/rabbitmq/affidabilita, sec
 official_docs: https://www.rabbitmq.com/kubernetes/operator/operator-overview
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Deployment e Operazioni
@@ -629,6 +629,121 @@ rabbitmq-perf-test \
     --queue-count 5 \
     --rate 1000 \
     --time 30
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Pod RabbitMQ in CrashLoopBackOff su Kubernetes
+
+**Sintomo:** Il pod del cluster non si avvia, status `CrashLoopBackOff`. I log mostrano errori di peer discovery o permission denied.
+
+**Causa:** Configurazione Erlang cookie non coerente tra i pod, oppure il PersistentVolume ha ownership errata (fsGroup mismatch).
+
+**Soluzione:** Verificare i log del pod, controllare la coerenza dell'Erlang cookie e le permission del volume.
+
+```bash
+# Ispeziona i log del pod
+kubectl logs -n messaging production-server-0 --previous
+
+# Verifica Erlang cookie nei pod (deve essere identico su tutti)
+kubectl exec -n messaging production-server-0 -- cat /var/lib/rabbitmq/.erlang.cookie
+
+# Se il problema è il volume, verificare ownership
+kubectl exec -n messaging production-server-0 -- ls -la /var/lib/rabbitmq/
+
+# Forza il riavvio del pod (il cluster operator lo ricrea)
+kubectl delete pod -n messaging production-server-0
+
+# Controlla gli eventi del pod
+kubectl describe pod -n messaging production-server-0
+```
+
+---
+
+### Scenario 2 — Memory Alarm attivo: publisher bloccati
+
+**Sintomo:** I client producer ricevono `PRECONDITION_FAILED` o si bloccano senza risposta. La Management UI mostra un banner rosso "memory alarm".
+
+**Causa:** RabbitMQ ha superato il watermark di memoria (`vm_memory_high_watermark`). Il broker blocca tutte le connessioni publisher come meccanismo di back-pressure.
+
+**Soluzione:** Identificare le queue con backlog elevato, aumentare i consumer, o incrementare temporaneamente il watermark.
+
+```bash
+# Verifica alarms attivi
+rabbitmq-diagnostics check_local_alarms
+rabbitmqctl status | grep alarms
+
+# Identifica le queue con più messaggi
+rabbitmqctl list_queues name messages memory consumers --vhost /production \
+    | sort -k2 -rn | head -20
+
+# Purga queue obsolete per liberare memoria
+rabbitmqctl purge_queue nome-queue --vhost /production
+
+# Aumento temporaneo del watermark (non persistente — solo in emergenza)
+rabbitmqctl set_vm_memory_high_watermark 0.6
+
+# Verifica memoria totale usata per nodo
+rabbitmq-diagnostics memory_breakdown
+```
+
+---
+
+### Scenario 3 — Quorum Queue ha perso il quorum
+
+**Sintomo:** L'alert `RabbitMQQuorumQueueNotMajority` si attiva. I consumer non ricevono messaggi, i producer ricevono errori. La Management UI mostra la queue in stato degraded.
+
+**Causa:** Uno o più nodi del cluster sono offline e la maggioranza (quorum) necessaria non è più raggiungibile. Con 3 nodi è sufficiente perdere 2 per perdere il quorum.
+
+**Soluzione:** Ripristinare il nodo mancante. Se il nodo è irrecuperabile, rimuoverlo dal cluster e resettare la membership della queue.
+
+```bash
+# Verifica lo stato del cluster e dei nodi
+rabbitmq-diagnostics cluster_status
+
+# Controlla i membri della quorum queue specifica
+rabbitmqctl quorum_status nome-queue --vhost /production
+
+# Se un nodo è irrecuperabile, rimuoverlo dal cluster
+rabbitmqctl forget_cluster_node rabbit@nodo-morto
+
+# Forza la rielezione del leader della quorum queue
+rabbitmqctl quorum_queue elect_leader nome-queue --vhost /production
+
+# In Kubernetes: verifica che il StatefulSet sia al completo
+kubectl get statefulset -n messaging production
+kubectl get pods -n messaging -l app.kubernetes.io/name=production
+```
+
+---
+
+### Scenario 4 — Topology Operator non crea le risorse AMQP
+
+**Sintomo:** Le CRD `Queue`, `Exchange`, `Binding` rimangono in stato `Pending` o mostrano errori. Le risorse non compaiono nella Management UI.
+
+**Causa:** Il Topology Operator non riesce ad autenticarsi al cluster RabbitMQ, oppure il Secret con le credenziali non è nel namespace corretto.
+
+**Soluzione:** Verificare i log del Topology Operator, la presenza del Secret e i permessi dell'utente default.
+
+```bash
+# Verifica lo stato delle CRD Topology
+kubectl get queues,exchanges,bindings -n messaging
+kubectl describe queue nome-queue -n messaging  # eventi di errore
+
+# Log del Topology Operator
+kubectl logs -n rabbitmq-system \
+    deployment/messaging-topology-operator --tail=50
+
+# Verifica che il Secret con credenziali esista
+kubectl get secret production-default-user -n messaging
+kubectl get secret production-default-user -n messaging \
+    -o jsonpath='{.data.username}' | base64 -d
+
+# Testa la connessione manualmente dal pod dell'operator
+kubectl exec -n rabbitmq-system deployment/messaging-topology-operator -- \
+    curl -u admin:password http://production.messaging:15672/api/overview
 ```
 
 ---

@@ -9,7 +9,7 @@ related: [cloud/aws/messaging/eventbridge-kinesis, cloud/aws/compute/lambda, clo
 official_docs: https://docs.aws.amazon.com/sqs/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # SQS & SNS
@@ -554,6 +554,128 @@ aws sesv2 send-email \
 - Sandbox iniziale: solo indirizzi verificati, 200 email/giorno
 - Richiesta aumento limite per produzione (via console → "Request Production Access")
 - Gestire bounce e complaint: tasso bounce <2%, complaint <0.1% per non essere sospesi
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Messaggi non vengono consumati (stuck in queue)
+
+**Sintomo:** `ApproximateNumberOfMessagesVisible` cresce ma i consumer non elaborano i messaggi.
+
+**Causa:** Il `VisibilityTimeout` è troppo basso rispetto al tempo di elaborazione: il messaggio riappare in coda prima che il consumer finisca, causando un loop. In alternativa, il consumer non chiama `DeleteMessage` dopo l'elaborazione.
+
+**Soluzione:** Aumentare il `VisibilityTimeout` o chiamare `ChangeMessageVisibility` durante l'elaborazione. Verificare che `DeleteMessage` venga sempre chiamato a elaborazione completata.
+
+```bash
+# Verificare lo stato della coda
+aws sqs get-queue-attributes \
+    --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-queue \
+    --attribute-names ApproximateNumberOfMessagesVisible ApproximateNumberOfMessagesNotVisible VisibilityTimeout
+
+# Estendere visibility timeout a runtime
+aws sqs change-message-visibility \
+    --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-queue \
+    --receipt-handle "AQEB..." \
+    --visibility-timeout 300
+
+# Verificare se i messaggi si accumulano in DLQ
+aws sqs get-queue-attributes \
+    --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-dlq \
+    --attribute-names ApproximateNumberOfMessagesVisible
+```
+
+---
+
+### Scenario 2 — Messaggi finiti in DLQ inaspettatamente
+
+**Sintomo:** La DLQ accumula messaggi; `maxReceiveCount` viene raggiunto rapidamente.
+
+**Causa:** Il consumer riceve il messaggio, va in errore (eccezione, timeout, crash) e non chiama `DeleteMessage`. SQS lo rimette in coda; dopo `maxReceiveCount` tentativi lo sposta in DLQ.
+
+**Soluzione:** Analizzare i messaggi in DLQ per capire la causa del fallimento. Correggere il consumer. Usare `start-message-move-task` per re-processare i messaggi.
+
+```bash
+# Leggere messaggi DLQ per analisi (senza cancellarli)
+aws sqs receive-message \
+    --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-dlq \
+    --max-number-of-messages 10 \
+    --visibility-timeout 0 \
+    --attribute-names All
+
+# Re-inviare messaggi dalla DLQ alla coda sorgente dopo il fix
+aws sqs start-message-move-task \
+    --source-arn arn:aws:sqs:eu-central-1:123456789012:myapp-dlq \
+    --destination-arn arn:aws:sqs:eu-central-1:123456789012:myapp-queue \
+    --max-number-of-messages-per-second 5
+
+# Monitorare avanzamento del task
+aws sqs list-message-move-tasks \
+    --source-arn arn:aws:sqs:eu-central-1:123456789012:myapp-dlq
+```
+
+---
+
+### Scenario 3 — SNS non consegna messaggi a SQS (AccessDenied)
+
+**Sintomo:** Il topic SNS pubblica messaggi ma la coda SQS non li riceve. CloudWatch mostra `NumberOfNotificationsFailed`.
+
+**Causa:** La Queue Policy della coda SQS non autorizza SNS a invocare `sqs:SendMessage`. Questo è un requisito esplicito per il pattern SNS→SQS.
+
+**Soluzione:** Aggiungere una Resource-Based Policy alla coda che permetta all'ARN del topic SNS di inviare messaggi.
+
+```bash
+# Verificare la policy attuale della coda
+aws sqs get-queue-attributes \
+    --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-queue \
+    --attribute-names Policy
+
+# Aggiungere policy corretta (sostituire gli ARN)
+aws sqs set-queue-attributes \
+    --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-queue \
+    --attributes '{
+        "Policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"sns.amazonaws.com\"},\"Action\":\"sqs:SendMessage\",\"Resource\":\"arn:aws:sqs:eu-central-1:123456789012:myapp-queue\",\"Condition\":{\"ArnLike\":{\"aws:SourceArn\":\"arn:aws:sns:eu-central-1:123456789012:myapp-topic\"}}}]}"
+    }'
+
+# Verificare fallimenti SNS → SQS via CloudWatch
+aws cloudwatch get-metric-statistics \
+    --namespace AWS/SNS \
+    --metric-name NumberOfNotificationsFailed \
+    --dimensions Name=TopicName,Value=myapp-topic \
+    --start-time 2026-03-28T00:00:00Z \
+    --end-time 2026-03-28T23:59:59Z \
+    --period 3600 \
+    --statistics Sum
+```
+
+---
+
+### Scenario 4 — FIFO Queue: messaggi duplicati o fuori ordine
+
+**Sintomo:** Con una coda FIFO si ricevono messaggi duplicati, oppure messaggi con stesso `MessageGroupId` arrivano in ordine errato.
+
+**Causa:** Duplicati: il `MessageDeduplicationId` non è univoco o `ContentBasedDeduplication` è disabilitato e il producer non fornisce un ID. Ordine errato: consumer diversi stanno elaborando lo stesso `MessageGroupId` in parallelo (non consentito in FIFO).
+
+**Soluzione:** Garantire `MessageDeduplicationId` univoco per ogni messaggio (o abilitare `ContentBasedDeduplication`). In FIFO, messaggi con stesso `MessageGroupId` sono consegnati a un unico consumer alla volta.
+
+```bash
+# Verificare attributi della coda FIFO
+aws sqs get-queue-attributes \
+    --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/orders.fifo \
+    --attribute-names FifoQueue ContentBasedDeduplication DeduplicationScope
+
+# Inviare con MessageDeduplicationId esplicito e univoco
+aws sqs send-message \
+    --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/orders.fifo \
+    --message-body '{"orderId": "ORD-001"}' \
+    --message-group-id "customer-456" \
+    --message-deduplication-id "ORD-001-$(date +%s%N)"
+
+# Abilitare ContentBasedDeduplication (evita gestione manuale degli ID)
+aws sqs set-queue-attributes \
+    --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/orders.fifo \
+    --attributes '{"ContentBasedDeduplication": "true"}'
+```
 
 ---
 

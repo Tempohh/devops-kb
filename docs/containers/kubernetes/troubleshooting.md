@@ -9,7 +9,7 @@ related: [containers/kubernetes/workloads, containers/kubernetes/scheduling-avan
 official_docs: https://kubernetes.io/docs/tasks/debug/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Troubleshooting Kubernetes
@@ -349,6 +349,123 @@ kubectl ctx production               # cambia a context production
 kubectl ns production                # cambia namespace default
 kubectl tree deployment/api -n prod  # mostra ReplicaSet → Pod hierarchy
 stern "api-.*" -n production         # log da tutti i pod api-*
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Pod in CrashLoopBackOff dopo deploy
+
+**Sintomo:** Il pod entra in CrashLoopBackOff subito dopo il deploy; `kubectl get pods` mostra RESTARTS in aumento.
+
+**Causa:** L'applicazione crasha all'avvio per configurazione errata (env mancante, secret non montato, dipendenza non raggiungibile) oppure la liveness probe è troppo aggressiva.
+
+**Soluzione:** Leggere i log del container precedente e la descrizione del pod per individuare la causa.
+
+```bash
+# Log dell'ultima esecuzione crashata
+kubectl logs <pod> -n <ns> --previous
+
+# Dettaglio eventi e probe
+kubectl describe pod <pod> -n <ns>
+# Cercare: "Liveness probe failed", "OOMKilled", "Error from container"
+
+# Verifica variabili d'ambiente effettivamente iniettate
+kubectl exec <pod> -n <ns> -- env | sort
+
+# Se la liveness probe è troppo aggressiva, aumentare initialDelaySeconds
+kubectl edit deployment <deploy> -n <ns>
+# → spec.template.spec.containers[].livenessProbe.initialDelaySeconds: 60
+```
+
+---
+
+### Scenario 2 — Service non raggiunge nessun Pod (Endpoints vuoti)
+
+**Sintomo:** `curl` sul service restituisce "connection refused" o timeout; `kubectl get endpoints <svc>` mostra `<none>`.
+
+**Causa:** Il `selector` del Service non corrisponde alle `labels` dei pod — spesso per un typo nel label o per una modifica al Deployment che non ha aggiornato il Service.
+
+**Soluzione:** Confrontare il selector del Service con le label effettive dei pod.
+
+```bash
+# Mostra il selector del service
+kubectl get svc <service> -n <ns> -o jsonpath='{.spec.selector}'
+
+# Mostra le label dei pod che dovrebbero essere selezionati
+kubectl get pods -n <ns> --show-labels
+
+# Verifica endpoint live
+kubectl get endpoints <service> -n <ns>
+
+# Quick test: seleziona manualmente i pod con le label attese
+kubectl get pods -n <ns> -l app=<value>,tier=<value>
+
+# Fix: aggiorna il selector del service o le label del Deployment
+kubectl label pod <pod> -n <ns> app=<correct-value> --overwrite
+```
+
+---
+
+### Scenario 3 — Nodo in stato NotReady
+
+**Sintomo:** `kubectl get nodes` mostra un nodo `NotReady`; i pod sul nodo risultano in `Unknown` o vengono evicted.
+
+**Causa:** Il kubelet sul nodo ha smesso di comunicare con l'API server. Cause frequenti: kubelet crashato, disco pieno, pressione di memoria, problemi di rete al nodo.
+
+**Soluzione:** Controllare lo stato del kubelet sul nodo e le Conditions riportate.
+
+```bash
+# Condizioni del nodo
+kubectl describe node <node> | grep -A10 "Conditions:"
+
+# Sul nodo via SSH
+systemctl status kubelet
+journalctl -u kubelet --since "30m ago" | grep -iE "error|fail|fatal"
+
+# Verifica disco
+df -h
+du -sh /var/lib/containerd/*
+crictl rmi --prune   # rimuovi immagini non usate
+
+# Verifica memoria
+free -h
+ps aux --sort=-%mem | head -10
+
+# Riavvio kubelet se il processo è crashed
+systemctl restart kubelet
+systemctl enable kubelet
+```
+
+---
+
+### Scenario 4 — PVC bloccato in stato Pending
+
+**Sintomo:** Il pod rimane `Pending` e `kubectl get pvc` mostra il PVC in stato `Pending` indefinitamente.
+
+**Causa:** Nessun PersistentVolume disponibile corrisponde alle richieste del PVC (capacità, `accessModes`, `storageClassName` incompatibili) oppure il CSI driver non è funzionante.
+
+**Soluzione:** Ispezionare gli eventi del PVC e verificare la compatibilità con i PV disponibili o il provisioner dinamico.
+
+```bash
+# Dettaglio eventi del PVC
+kubectl describe pvc <pvc> -n <ns>
+# Cercare: "no matching PersistentVolume", "waiting for first consumer"
+
+# Lista PV disponibili e loro stato
+kubectl get pv -o wide
+
+# Confronta storageClass del PVC con quelle disponibili
+kubectl get pvc <pvc> -n <ns> -o jsonpath='{.spec.storageClassName}'
+kubectl get storageclass
+
+# Verifica CSI driver (provisioner dinamico)
+kubectl get pods -n kube-system | grep csi
+kubectl logs -n kube-system <csi-controller-pod> -c csi-provisioner --tail=50
+
+# Se volumeBindingMode=WaitForFirstConsumer: il PV viene creato solo quando il pod è schedulato
+kubectl get storageclass <class> -o jsonpath='{.volumeBindingMode}'
 ```
 
 ---

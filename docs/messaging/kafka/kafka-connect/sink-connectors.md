@@ -3,13 +3,13 @@ title: "Sink Connectors"
 slug: sink-connectors
 category: messaging
 tags: [kafka, connect, sink, elasticsearch, s3, jdbc]
-search_keywords: [kafka connect sink, sink connector kafka, elasticsearch sink kafka, s3 sink connector, jdbc sink connector, kafka to database, kafka export data]
+search_keywords: [kafka connect sink, sink connector kafka, elasticsearch sink kafka, s3 sink connector, jdbc sink connector, kafka to database, kafka export data, dlq kafka connect, dead letter queue kafka connect, kafka sink idempotent, kafka to s3 parquet, http sink connector, kafka connect consumer group]
 parent: messaging/kafka/kafka-connect
-related: [messaging/kafka/kafka-connect/source-connectors]
+related: [messaging/kafka/kafka-connect/source-connectors, messaging/kafka/kafka-connect/debezium-cdc, messaging/kafka/fondamenti/broker-cluster]
 official_docs: https://kafka.apache.org/documentation/#connect
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Sink Connectors
@@ -194,18 +194,87 @@ curl -X POST http://localhost:8083/connectors \
 
 ## Troubleshooting
 
-**Record scritti in ritardo (elevato lag)**
-- Aumentare `tasks.max` (distribuisce le partizioni su più task)
-- Aumentare `batch.size`
-- Verificare performance della destinazione (es. Elasticsearch slow log)
+### Scenario 1 — Elevato lag del consumer (record scritti in ritardo)
 
-**Errori di schema (schema mismatch)**
-- Verificare che `value.converter` del connector corrisponda al formato effettivo dei record
-- Con Schema Registry: verificare la compatibilità degli schemi
+**Sintomo:** Il consumer group lag del connector cresce costantemente; i dati arrivano nella destinazione con ritardo crescente.
 
-**Connector che reprocessa record dopo restart**
-- Normale in at-least-once; la destinazione deve gestire duplicati
-- Con JDBC Sink + upsert mode, il reprocessing è idempotente
+**Causa:** Numero di task insufficiente rispetto alle partizioni del topic, o batch.size troppo piccolo che causa flush frequenti.
+
+**Soluzione:** Aumentare `tasks.max` fino al numero di partizioni del topic. Aumentare `batch.size` e verificare le performance della destinazione.
+
+```bash
+# Verificare il lag attuale del connector
+kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+  --group connect-elasticsearch-orders-sink --describe
+
+# Aggiornare la configurazione del connector
+curl -X PUT http://localhost:8083/connectors/elasticsearch-orders-sink/config \
+  -H "Content-Type: application/json" \
+  -d '{"tasks.max": "4", "batch.size": "3000"}'
+```
+
+### Scenario 2 — Errori di schema (schema mismatch / deserialization error)
+
+**Sintomo:** Il connector entra in stato FAILED con errori `org.apache.kafka.connect.errors.DataException` o `SchemaParseException`.
+
+**Causa:** Il `value.converter` configurato non corrisponde al formato effettivo dei record nel topic (es. Avro configurato ma record sono JSON), oppure schema incompatibile con Schema Registry.
+
+**Soluzione:** Verificare il formato dei record e allineare il converter. Con Schema Registry controllare la compatibilità.
+
+```bash
+# Verificare lo stato e il messaggio di errore del connector
+curl http://localhost:8083/connectors/elasticsearch-orders-sink/status | jq .
+
+# Consumare un record raw dal topic per verificare il formato
+kafka-console-consumer.sh --bootstrap-server kafka:9092 \
+  --topic orders --from-beginning --max-messages 1
+
+# Se JSON: usare JsonConverter
+curl -X PUT http://localhost:8083/connectors/elasticsearch-orders-sink/config \
+  -H "Content-Type: application/json" \
+  -d '{"value.converter": "org.apache.kafka.connect.json.JsonConverter",
+       "value.converter.schemas.enable": "false"}'
+```
+
+### Scenario 3 — Connector reprocessa record dopo restart
+
+**Sintomo:** Dopo un riavvio del connector (o del worker), i record già scritti vengono scritti nuovamente nella destinazione, causando duplicati.
+
+**Causa:** Comportamento normale in at-least-once delivery. Gli offset vengono committati periodicamente; un crash prima del commit causa riprocessamento.
+
+**Soluzione:** La destinazione deve gestire l'idempotenza. Per JDBC Sink usare `insert.mode=upsert`. Per Elasticsearch, `key.ignore=false` usa la chiave Kafka come document ID. Verificare la configurazione degli offset.
+
+```bash
+# Verificare gli offset committati dal connector
+kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+  --group connect-jdbc-orders-sink --describe
+
+# Per JDBC Sink: assicurarsi che upsert sia attivo
+curl http://localhost:8083/connectors/jdbc-orders-sink/config | \
+  jq '{"insert.mode": .["insert.mode"], "pk.mode": .["pk.mode"]}'
+```
+
+### Scenario 4 — Record finiscono nella DLQ invece di essere scritti
+
+**Sintomo:** Il connector rimane attivo (stato RUNNING) ma i record non arrivano alla destinazione. Il topic DLQ si riempie di messaggi con header di errore.
+
+**Causa:** `errors.tolerance=all` è configurato e i record falliscono silenziosamente. Causa tipica: record malformati, destinazione non raggiungibile intermittentemente, o trasformazione (SMT) che fallisce.
+
+**Soluzione:** Ispezionare i record nella DLQ leggendo gli header di errore. Correggere la causa root e riconsiderare `errors.tolerance` se il volume di errori è inatteso.
+
+```bash
+# Leggere i record dalla DLQ con header
+kafka-console-consumer.sh --bootstrap-server kafka:9092 \
+  --topic orders.DLQ --from-beginning \
+  --property print.headers=true --max-messages 5
+
+# Verificare le metriche di errore del connector
+curl http://localhost:8083/connectors/elasticsearch-sink-with-dlq/status | \
+  jq '.tasks[] | {id: .id, state: .state, trace: .trace}'
+
+# Se la destinazione era temporaneamente non raggiungibile: riavviare i task
+curl -X POST http://localhost:8083/connectors/elasticsearch-sink-with-dlq/tasks/0/restart
+```
 
 ## Riferimenti
 

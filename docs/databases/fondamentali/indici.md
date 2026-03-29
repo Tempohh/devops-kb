@@ -9,7 +9,7 @@ related: [databases/fondamentali/transazioni-concorrenza, databases/sql-avanzato
 official_docs: https://www.postgresql.org/docs/current/indexes.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Indici — Strutture e Strategie
@@ -273,6 +273,109 @@ EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM ordini WHERE status = 'pending';
 -- Cerca "Index Scan" o "Index Only Scan" nell'output
 -- Buffers: mostra hit cache vs disk I/O
 ```
+
+## Troubleshooting
+
+### Scenario 1 — L'indice esiste ma il planner non lo usa
+
+**Sintomo:** `EXPLAIN ANALYZE` mostra `Seq Scan` su una tabella grande nonostante esista un indice sulla colonna filtrata.
+
+**Causa:** Statistiche stale, bassa selettività della colonna, o `random_page_cost` non calibrato per SSD.
+
+**Soluzione:**
+```sql
+-- Aggiorna le statistiche
+ANALYZE nome_tabella;
+
+-- Verifica la selettività della colonna
+SELECT attname, n_distinct, correlation
+FROM pg_stats
+WHERE tablename = 'nome_tabella' AND attname = 'nome_colonna';
+
+-- Se l'infrastruttura usa SSD, abbassa random_page_cost
+SET random_page_cost = 1.1;  -- default 4.0 (ottimizzato per HDD)
+
+-- Forza l'uso dell'indice temporaneamente per isolare il problema
+SET enable_seqscan = off;
+EXPLAIN ANALYZE SELECT * FROM nome_tabella WHERE colonna = 'valore';
+SET enable_seqscan = on;
+```
+
+### Scenario 2 — Index bloat: indice lento e di dimensioni eccessive
+
+**Sintomo:** Query con indice sempre più lente nel tempo, `pg_relation_size(indexrelid)` mostra dimensioni anomale, `idx_scan` alto ma throughput basso.
+
+**Causa:** Molti UPDATE/DELETE lasciano dead tuples nell'indice. PostgreSQL non compatta automaticamente le pagine interne del B-tree.
+
+**Soluzione:**
+```sql
+-- Verifica la dimensione e il numero di scan degli indici
+SELECT
+    indexname,
+    pg_size_pretty(pg_relation_size(indexrelid)) AS size,
+    idx_scan,
+    idx_tup_read,
+    idx_tup_fetch
+FROM pg_stat_user_indexes
+WHERE tablename = 'nome_tabella'
+ORDER BY pg_relation_size(indexrelid) DESC;
+
+-- Rebuild senza lock (PostgreSQL 12+)
+REINDEX INDEX CONCURRENTLY idx_nome;
+
+-- Alternativa: ricrea l'indice manualmente
+CREATE INDEX CONCURRENTLY idx_nome_new ON tabella(colonna);
+DROP INDEX CONCURRENTLY idx_nome;
+ALTER INDEX idx_nome_new RENAME TO idx_nome;
+```
+
+### Scenario 3 — Indice composito non usato per colonne intermedie
+
+**Sintomo:** Un indice su `(a, b, c)` non viene usato per query che filtrano solo su `b` o `c`. Oppure un range filter su `a` impedisce l'uso di `b` nell'indice.
+
+**Causa:** Il B-tree composito può essere usato solo da sinistra: un range su `a` "consuma" il prefix e le colonne successive non possono essere navigate con un index scan efficiente.
+
+**Soluzione:**
+```sql
+-- Verifica quale parte dell'indice viene usata
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT * FROM ordini WHERE status = 'pending' AND created_at > now() - interval '7 days';
+
+-- Se status ha poca selettività, considera l'ordine inverso
+CREATE INDEX idx_ordini_data_status ON ordini(created_at DESC, status)
+WHERE status IN ('pending', 'processing');
+
+-- Per query solo su colonne intermedie: indice separato
+CREATE INDEX idx_ordini_created ON ordini(created_at DESC);
+```
+
+### Scenario 4 — CREATE INDEX blocca le scritture in produzione
+
+**Sintomo:** `CREATE INDEX` su tabella grande blocca INSERT/UPDATE/DELETE per minuti o ore, causando timeout a cascata sulle applicazioni.
+
+**Causa:** `CREATE INDEX` standard acquisisce un lock `ShareLock` che blocca le scritture per tutta la durata della build.
+
+**Soluzione:**
+```sql
+-- Usa CONCURRENTLY: nessun lock su scritture (richiede più tempo)
+CREATE INDEX CONCURRENTLY idx_ordini_cliente ON ordini(cliente_id);
+
+-- Verifica il progresso (PostgreSQL 12+)
+SELECT phase, blocks_done, blocks_total,
+       round(100.0 * blocks_done / nullif(blocks_total, 0), 1) AS pct
+FROM pg_stat_progress_create_index
+WHERE relid = 'ordini'::regclass;
+
+-- Se CONCURRENTLY fallisce (es. per violazione unique), rimuovi l'indice invalido
+SELECT indexname, indisvalid
+FROM pg_indexes
+JOIN pg_index ON indexrelid = (schemaname||'.'||indexname)::regclass
+WHERE tablename = 'ordini';
+
+DROP INDEX CONCURRENTLY idx_ordini_cliente;  -- rimuovi l'indice invalido e riprova
+```
+
+---
 
 ## Relazioni
 

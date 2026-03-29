@@ -3,13 +3,13 @@ title: "Transazioni Kafka"
 slug: transazioni
 category: messaging
 tags: [kafka, transazioni, transactions, atomic, exactly-once, producer]
-search_keywords: [kafka transactions, transactional producer kafka, atomic writes kafka, kafka transaction coordinator, transaction log kafka, zombie fencing kafka, kafka transactional id]
+search_keywords: [kafka transactions, transactional producer kafka, atomic writes kafka, kafka transaction coordinator, transaction log kafka, zombie fencing kafka, kafka transactional id, transactional.id, exactly-once semantics, EOS kafka, __transaction_state, zombie producer, idempotent producer, sendOffsetsToTransaction, consume-transform-produce, atomic commit offset, begin transaction kafka, abort transaction kafka]
 parent: messaging/kafka/sviluppo
-related: [messaging/kafka/sviluppo/exactly-once-semantics]
+related: [messaging/kafka/sviluppo/exactly-once-semantics, messaging/kafka/sviluppo/spring-kafka, messaging/kafka/pattern-microservizi/outbox-pattern, messaging/kafka/fondamenti/broker-cluster]
 official_docs: https://kafka.apache.org/documentation/#transactions
 status: complete
 difficulty: expert
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Transazioni Kafka
@@ -235,15 +235,87 @@ transactional.id.expiration.ms=604800000  # 7 giorni
 | `TransactionAbortedException` | Il coordinator ha abortito la transazione | Abortire e riprovare |
 | `KafkaException` (altri) | Errori recuperabili | `abortTransaction()` + retry |
 
-**Consumer vede record "parziali" nonostante le transazioni**
-- Verificare che il consumer usi `isolation.level=read_committed`
-- Con `read_uncommitted` (default), il consumer vede tutti i record inclusi quelli di transazioni abortite o in corso
+### Scenario 1 — Consumer vede record di transazioni abortite
 
-**Transazioni lente**
-- Il commit della transazione richiede round-trip con il Transaction Coordinator e tutti i broker toccati dalla transazione
-- Ridurre il numero di partizioni toccate per transazione
-- Verificare la latenza di rete tra broker
-- Considerare se l'overhead EOS è accettabile per il use case specifico
+**Sintomo:** Il consumer riceve record che dovevano essere eliminati perché la transazione è stata abortita.
+
+**Causa:** Il consumer è configurato con `isolation.level=read_uncommitted` (il default), che rende visibili tutti i record indipendentemente dallo stato della transazione.
+
+**Soluzione:** Impostare esplicitamente `read_committed` nel consumer.
+
+```java
+Properties consumerProps = new Properties();
+consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+// Verifica il valore corrente
+KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
+
+// Da CLI: controlla la configurazione del consumer group
+kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+  --describe --group my-consumer-group
+```
+
+### Scenario 2 — ProducerFencedException al riavvio dell'applicazione
+
+**Sintomo:** L'applicazione lancia `ProducerFencedException` subito dopo l'avvio, prima ancora di processare un record.
+
+**Causa:** Un'altra istanza (o la stessa prima del crash) è ancora attiva con lo stesso `transactional.id`, oppure l'epoch precedente è più recente di quello che il nuovo producer ha ricevuto. Il broker rifiuta il producer con epoch inferiore.
+
+**Soluzione:** Verificare che non ci siano istanze zombie. Il `transactional.id` deve essere univoco per ogni istanza running contemporaneamente. Chiudere il producer fencato e inizializzarne uno nuovo.
+
+```bash
+# Verifica producer attivi tramite describe del topic
+kafka-transactions.sh --bootstrap-server kafka:9092 \
+  --describe --transactional-id payment-processor-instance-1
+
+# In Kubernetes: verifica che non ci siano pod duplicati
+kubectl get pods -l app=payment-processor --all-namespaces
+
+# Log da cercare per confermare il fencing
+grep "ProducerFenced\|transactional.id\|epoch" app.log
+```
+
+### Scenario 3 — Transazione bloccata / timeout del coordinator
+
+**Sintomo:** Le transazioni impiegano molto tempo e alla fine falliscono con `TimeoutException` o vengono abortite dal coordinator. Il throughput cala drasticamente.
+
+**Causa:** Il `transaction.timeout.ms` del producer è troppo basso per la durata effettiva del processing, oppure il Transaction Coordinator è sovraccarico. Ogni transazione aperta blocca la garbage collection del log sulle partizioni toccate.
+
+**Soluzione:** Aumentare il timeout in modo proporzionale alla durata effettiva delle transazioni. Ridurre il numero di partizioni per transazione. Verificare la latenza verso il coordinator.
+
+```bash
+# Verifica timeout configurato nel producer (default: 60000ms)
+kafka-configs.sh --bootstrap-server kafka:9092 \
+  --describe --entity-type brokers --entity-default | grep transaction
+
+# Controlla transazioni aperte (dangling)
+kafka-transactions.sh --bootstrap-server kafka:9092 \
+  --list | grep ONGOING
+
+# Metrics del Transaction Coordinator (JMX)
+kafka.server:type=transaction-coordinator-metrics,name=transaction-avg-time-ms
+kafka.server:type=transaction-coordinator-metrics,name=transaction-failure-rate
+```
+
+### Scenario 4 — Offset non committati dopo crash nel consume-transform-produce
+
+**Sintomo:** Dopo un crash, il consumer rilegge record già processati, causando duplicati nell'output anche con EOS abilitato.
+
+**Causa:** Il commit degli offset non è stato incluso nella transazione tramite `sendOffsetsToTransaction`. Se gli offset vengono committati separatamente con `consumer.commitSync()`, il crash tra la commit della transazione e la commit degli offset crea un gap.
+
+**Soluzione:** Usare esclusivamente `producer.sendOffsetsToTransaction()` per committare gli offset come parte della transazione. Non chiamare mai `consumer.commitSync()` in un loop EOS.
+
+```java
+// SBAGLIATO: offset committati separatamente
+producer.commitTransaction();
+consumer.commitSync(offsetsToCommit);  // ← se crasha qui, i record vengono riletti
+
+// CORRETTO: offset come parte della transazione
+producer.sendOffsetsToTransaction(offsetsToCommit, consumer.groupMetadata());
+producer.commitTransaction();  // offset + output: operazione atomica
+
+// Verifica: controlla che il consumer group NON usi auto.commit
+props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+```
 
 ## Riferimenti
 

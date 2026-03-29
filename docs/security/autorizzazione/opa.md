@@ -9,7 +9,7 @@ related: [security/autorizzazione/rbac-abac-rebac, security/supply-chain/admissi
 official_docs: https://www.openpolicyagent.org/docs/latest/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # OPA — Open Policy Agent
@@ -479,6 +479,115 @@ decision_logs:
 - **Fail closed (`failure_mode_allow: false`)**: se OPA non è raggiungibile → nega l'accesso, non permetterlo. Il fail-open è un rischio di sicurezza
 - **Performance**: OPA tipicamente risponde in 0.1-1ms per policy semplici. Per regole complesse con large data sets, usa partial evaluation o pre-computing dei risultati
 - **Separare data dalla policy**: le policy descrivono la logica, i dati (ruoli, configurazioni) vengono caricati separatamente — questo permette di aggiornare la configurazione senza cambiare la policy
+
+## Troubleshooting
+
+### Scenario 1 — OPA non risponde o risponde lentamente
+
+**Sintomo:** Le chiamate al sidecar OPA raggiungono il timeout (>100ms) o restituiscono `connection refused`.
+
+**Causa:** Il bundle non è ancora stato caricato all'avvio (OPA non è ready), oppure la policy ha una query complessa su un dataset grande.
+
+**Soluzione:** Usare `readinessProbe` con `?bundle=true` per non ricevere traffico finché OPA non è pronto. Per latenze elevate, abilitare il profiling Rego e valutare la partial evaluation.
+
+```bash
+# Verifica stato health e bundle
+curl http://localhost:8181/health?bundle=true
+
+# Profiling di una query specifica
+curl -X POST http://localhost:8181/v1/data/myapp/authz/allow \
+  -H "Content-Type: application/json" \
+  -d '{"input": {...}}' \
+  -G --data-urlencode 'instrument=true' | jq '.metrics'
+
+# Benchmark di una policy
+opa bench --data policies/ 'data.myapp.authz.allow' \
+  --input input.json --count 1000
+```
+
+---
+
+### Scenario 2 — Policy restituisce sempre `undefined` invece di `true`/`false`
+
+**Sintomo:** La risposta OPA è `{"result": null}` o `{}` invece di `{"result": true/false}`.
+
+**Causa:** Il path nella query non corrisponde al package Rego, oppure manca il `default` per la regola — se nessuna branch matcha, Rego restituisce `undefined`.
+
+**Soluzione:** Verificare che il package name nel file `.rego` coincida con il path della query. Aggiungere sempre `default allow = false`.
+
+```bash
+# Inspect dei package disponibili
+curl http://localhost:8181/v1/policies | jq '.[].ast.package.path'
+
+# Query esplicita con path completo (debug)
+curl -X POST http://localhost:8181/v1/data \
+  -d '{"input": {"user": "test"}}' | jq .
+
+# Eval locale per debug rapido
+opa eval \
+  --data policies/ \
+  --input input.json \
+  --format pretty \
+  'data.myapp.authz'    # Stampa tutto il namespace per ispezione
+```
+
+---
+
+### Scenario 3 — Bundle non aggiornato: la policy vecchia è ancora attiva
+
+**Sintomo:** Dopo un deploy di nuove policy sul bundle server, OPA continua a usare la versione precedente.
+
+**Causa:** OPA usa il polling via `ETag`/`If-None-Match`. Se il bundle server non restituisce `ETag` corretti o la revisione nel `.manifest` non è cambiata, OPA non scarica il nuovo bundle.
+
+**Soluzione:** Assicurarsi che il bundle server aggiorni l'`ETag` ad ogni deploy. Verificare la revisione nel manifest e forzare un reload manuale in emergenza.
+
+```bash
+# Verifica la revisione del bundle attualmente caricato
+curl http://localhost:8181/v1/bundles/status | jq '.bundles'
+
+# Forza reload del bundle via API (OPA ≥ 0.45)
+curl -X POST http://localhost:8181/v1/bundles/reload
+
+# Controlla i log OPA per errori di download bundle
+kubectl logs <pod> -c opa | grep -E "bundle|download|error"
+
+# Verifica il manifest del bundle locale
+tar -xzf bundle.tar.gz .manifest -O | jq .
+```
+
+---
+
+### Scenario 4 — Test Rego falliscono con errore `unsafe variable`
+
+**Sintomo:** `opa test` o `opa eval` restituisce `1 error occurred: <var> is unsafe`.
+
+**Causa:** Una variabile usata nel corpo di una regola non è vincolata a nessun valore — Rego richiede che tutte le variabili siano "safe" (vincolate da almeno un'espressione positiva).
+
+**Soluzione:** Assicurarsi che ogni variabile sia assegnata prima di essere usata in confronti. Usare `some` per dichiarare variabili di iterazione esplicite.
+
+```rego
+# ERRATO — 'role' non è vincolata prima del confronto
+allow if {
+    role == "admin"          # 'role' unsafe: da dove viene?
+    role in input.user.roles
+}
+
+# CORRETTO — 'role' è vincolata dall'iterazione
+allow if {
+    some role in input.user.roles
+    role == "admin"
+}
+```
+
+```bash
+# Esegui il check statico delle policy prima dei test
+opa check ./policies/
+
+# Test con output verbose per identificare la riga esatta
+opa test ./policies/ -v 2>&1 | grep -A5 "FAIL\|error"
+```
+
+---
 
 ## Riferimenti
 

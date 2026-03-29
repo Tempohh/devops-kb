@@ -9,7 +9,7 @@ related: [cloud/aws/fondamentali/well-architected, cloud/aws/iam/organizations]
 official_docs: https://aws.amazon.com/pricing/
 status: complete
 difficulty: beginner
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # Billing & Pricing AWS
@@ -277,6 +277,112 @@ Con **AWS Organizations** si possono consolidare i costi di più account:
 - **Volume discounts** — aggregazione utilizzo → pricing tier più vantaggioso (es. S3)
 - **Savings Plans e RI sharing** — un account acquista, tutti ne beneficiano (configurabile)
 - **Cost center tagging** — tag obbligatori per ogni account tramite Service Control Policy
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Spike di costi imprevisto sull'account
+
+**Sintomo:** La spesa mensile aumenta bruscamente; AWS Budgets invia un alert.
+
+**Causa:** Risorsa creata per errore (es. NAT Gateway non rimosso dopo test), egress data transfer inatteso, o istanza lasciata in esecuzione.
+
+**Soluzione:**
+1. Aprire Cost Explorer → filtro per servizio → ordinare per costo decrescente
+2. Identificare il servizio e la Region responsabile
+3. Drilldown sul giorno dello spike → verificare quali risorse sono attive
+
+```bash
+# Listar tutte le risorse costose con tag mancanti (possibile risorsa dimenticata)
+aws ce get-cost-and-usage \
+    --time-period Start=2026-03-01,End=2026-03-28 \
+    --granularity MONTHLY \
+    --metrics "UnblendedCost" \
+    --group-by Type=DIMENSION,Key=SERVICE \
+    --query 'ResultsByTime[0].Groups[*].[Keys[0],Metrics.UnblendedCost.Amount]' \
+    --output table
+
+# Verificare NAT Gateway attivi in tutte le Region
+aws ec2 describe-nat-gateways --filter Name=state,Values=available \
+    --query 'NatGateways[*].[NatGatewayId,VpcId,State]' --output table
+```
+
+---
+
+### Scenario 2 — I Cost Allocation Tags non appaiono in Cost Explorer
+
+**Sintomo:** Tag applicati alle risorse non compaiono nei filtri di Cost Explorer o nei report CUR.
+
+**Causa:** I tag non sono stati **attivati** in Billing Management Console; oppure la latenza di propagazione (fino a 24h) non è ancora trascorsa.
+
+**Soluzione:**
+1. Andare in Billing Console → Cost Allocation Tags
+2. Verificare che il tag sia in stato "Active" (non "Inactive")
+3. Attivare il tag se necessario → attendere ~24h per la propagazione
+
+```bash
+# Verificare quali tag sono attivi/inattivi
+aws ce list-cost-allocation-tags \
+    --status Active \
+    --query 'CostAllocationTags[*].[TagKey,Status]' --output table
+
+# Non esiste CLI diretta per attivare i tag: operazione da console
+# Billing Console → Cost Allocation Tags → seleziona tag → "Activate"
+```
+
+---
+
+### Scenario 3 — Saving Plans o RI non applicati alle istanze
+
+**Sintomo:** Le istanze continuano a essere fatturate a tariffa On-Demand nonostante l'acquisto di Reserved Instances o Savings Plans.
+
+**Causa:** Mismatch su Region, instance family, OS, o tenancy. Per le RI Standard il match deve essere esatto; per i Savings Plans il commitment potrebbe essere esaurito da altri servizi.
+
+**Soluzione:**
+1. Verificare la **RI/SP Utilization** in Cost Explorer → Savings Plans → Utilization Report
+2. Confrontare l'instance type, Region e OS delle istanze con quanto acquistato
+3. Considerare la conversione a Convertible RI o l'acquisto di Compute Savings Plans
+
+```bash
+# Verificare RI acquistate e loro attributi
+aws ec2 describe-reserved-instances \
+    --filters Name=state,Values=active \
+    --query 'ReservedInstances[*].[ReservedInstancesId,InstanceType,ProductDescription,Scope,State]' \
+    --output table
+
+# Verificare utilizzo Savings Plans
+aws savingsplans describe-savings-plans \
+    --states active \
+    --query 'savingsPlans[*].[savingsPlanId,savingsPlanType,commitment,currency,status]' \
+    --output table
+```
+
+---
+
+### Scenario 4 — AWS Budgets non invia alert nonostante il superamento
+
+**Sintomo:** La spesa supera la soglia configurata ma non arrivano notifiche email o SNS.
+
+**Causa:** L'indirizzo email non è verificato (problema SNS), la soglia è impostata su "Forecasted" invece che "Actual", oppure il budget è stato creato su un account child in Organizations senza permessi.
+
+**Soluzione:**
+1. Verificare che l'alert sia di tipo "ACTUAL" (non solo "FORECASTED")
+2. Controllare la subscription SNS → la prima email di conferma deve essere accettata
+3. In ambienti Organizations: verificare che il management account abbia abilitato il billing access per gli account member
+
+```bash
+# Verificare i budget configurati e le soglie
+aws budgets describe-budgets \
+    --account-id $(aws sts get-caller-identity --query Account --output text) \
+    --query 'Budgets[*].[BudgetName,BudgetLimit.Amount,BudgetType,TimeUnit]' \
+    --output table
+
+# Verificare le notifiche associate a un budget
+aws budgets describe-notifications-for-budget \
+    --account-id $(aws sts get-caller-identity --query Account --output text) \
+    --budget-name "Monthly-100"
+```
 
 ---
 

@@ -3,13 +3,13 @@ title: "Source Connectors"
 slug: source-connectors
 category: messaging
 tags: [kafka, connect, source, connectors, jdbc, debezium, integrazione]
-search_keywords: [kafka connect source, source connector kafka, jdbc source connector, kafka connect rest api, confluent hub connectors, file source connector, kafka connect worker]
+search_keywords: [kafka connect source, source connector kafka, jdbc source connector, kafka connect rest api, confluent hub connectors, file source connector, kafka connect worker, kafka ingestion, connect distributed, smt trasformazione, connect offset management, kafka connect plugin, source task kafka, polling connector, connect-offsets topic]
 parent: messaging/kafka/kafka-connect
 related: [messaging/kafka/kafka-connect/debezium-cdc, messaging/kafka/kafka-connect/sink-connectors]
 official_docs: https://kafka.apache.org/documentation/#connect
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Source Connectors
@@ -209,23 +209,100 @@ curl -X POST http://localhost:8083/connectors/postgres-orders-source/tasks/0/res
 
 ## Troubleshooting
 
-**Task in stato `FAILED`**
+### Scenario 1 — Task in stato `FAILED`
+
+**Sintomo:** Il connector è visibile ma uno o più task risultano in stato `FAILED` nella REST API.
+
+**Causa:** Errore di connessione alla sorgente, credenziali scadute, schema incompatibile, o eccezione non gestita nel polling.
+
+**Soluzione:** Leggere il trace dell'errore dal task status, correggere la configurazione e riavviare il task.
+
 ```bash
-# Verificare l'errore
-curl http://localhost:8083/connectors/my-connector/status | jq '.tasks'
-# Riavviare il task
+# Ispezionare l'errore del task
+curl -s http://localhost:8083/connectors/my-connector/status | jq '.tasks[] | {id, state, trace}'
+
+# Riavviare il task fallito (task id 0)
 curl -X POST http://localhost:8083/connectors/my-connector/tasks/0/restart
+
+# Se tutti i task sono failed, riavviare il connector intero
+curl -X POST http://localhost:8083/connectors/my-connector/restart
 ```
 
-**Connector lento / lag elevato**
-- Aumentare `tasks.max` per parallelismo su più tabelle
-- Ridurre `poll.interval.ms`
-- Aumentare `batch.max.rows`
-- Verificare performance del database sorgente
+### Scenario 2 — Connector lento o lag elevato
 
-**Duplicate records dopo restart**
-- Normale con at-least-once delivery; il consumer deve essere idempotente
-- Con `mode=incrementing` il rischio è minimizzato
+**Sintomo:** I record arrivano su Kafka con ritardo rispetto alla sorgente; il consumer group del topic di destinazione accumula lag.
+
+**Causa:** `poll.interval.ms` troppo alto, `batch.max.rows` troppo basso, `tasks.max=1` con molte tabelle, o query lenta sul database sorgente.
+
+**Soluzione:** Aumentare il parallelismo e ottimizzare i parametri di polling.
+
+```bash
+# Aggiornare la configurazione del connector via REST API
+curl -X PUT http://localhost:8083/connectors/postgres-orders-source/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",
+    "tasks.max": "4",
+    "poll.interval.ms": "500",
+    "batch.max.rows": "5000",
+    "connection.url": "jdbc:postgresql://db:5432/mydb",
+    "connection.user": "kafka_user",
+    "connection.password": "secret",
+    "mode": "timestamp+incrementing",
+    "timestamp.column.name": "updated_at",
+    "incrementing.column.name": "id",
+    "table.whitelist": "orders,customers",
+    "topic.prefix": "db."
+  }'
+
+# Monitorare il lag consumer sul topic
+kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+  --describe --group my-consumer-group
+```
+
+### Scenario 3 — Record duplicati dopo restart
+
+**Sintomo:** Dopo un riavvio del worker o del connector, compaiono record duplicati nel topic Kafka.
+
+**Causa:** At-least-once delivery garantita da Kafka Connect: se un commit degli offset non va a buon fine prima del crash, i record vengono rielaborati.
+
+**Soluzione:** Il consumer deve essere idempotente. Con `mode=incrementing` il rischio è minimizzato perché gli offset sono deterministici. Verificare che il topic `connect-offsets` sia replicato correttamente.
+
+```bash
+# Verificare il contenuto degli offset salvati
+kafka-console-consumer.sh --bootstrap-server kafka:9092 \
+  --topic connect-offsets --from-beginning \
+  --formatter "kafka.coordinator.group.GroupMetadataManager\$OffsetMessageFormatter"
+
+# Controllare la replication factor del topic degli offset
+kafka-topics.sh --bootstrap-server kafka:9092 \
+  --describe --topic connect-offsets
+```
+
+### Scenario 4 — Connector non si avvia: `ClassNotFoundException` o plugin non trovato
+
+**Sintomo:** Al momento della creazione del connector la REST API restituisce `500` con errore `ClassNotFoundException` o "Connector class not found".
+
+**Causa:** Il JAR del connector non è presente nel `plugin.path` configurato nel worker, oppure il path è errato o il processo non è stato riavviato dopo l'installazione del plugin.
+
+**Soluzione:** Verificare che il JAR sia nella directory corretta e riavviare il worker Connect.
+
+```bash
+# Listare i plugin riconosciuti dal worker
+curl -s http://localhost:8083/connector-plugins | jq '.[].class'
+
+# Verificare il contenuto del plugin.path
+ls -la /opt/kafka/plugins/
+
+# Installare un plugin da Confluent Hub (se confluent-hub è disponibile)
+confluent-hub install confluentinc/kafka-connect-jdbc:latest \
+  --component-dir /opt/kafka/plugins --no-prompt
+
+# Dopo l'installazione riavviare il worker Connect
+systemctl restart kafka-connect
+# oppure, in ambiente containerizzato
+docker restart kafka-connect
+```
 
 ## Riferimenti
 

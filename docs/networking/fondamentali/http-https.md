@@ -9,7 +9,7 @@ related: [networking/fondamentali/tls-ssl-basics, networking/protocolli/http2-ht
 official_docs: https://developer.mozilla.org/en-US/docs/Web/HTTP
 status: complete
 difficulty: beginner
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # HTTP e HTTPS
@@ -234,14 +234,142 @@ If-None-Match: "33a64df551425fcc55e4d42a148795d9f25f89d4"
 
 ## Troubleshooting
 
-| Sintomo | Cause Probabili | Soluzione |
-|---------|-----------------|-----------|
-| `ERR_SSL_PROTOCOL_ERROR` | TLS mismatch, certificato invalido | Verificare versione TLS, validità certificato |
-| `403 Forbidden` | Permessi, IP block, CORS (Cross-Origin Resource Sharing — meccanismo che controlla quali domini possono fare richieste cross-origin) | Controllare autorizzazioni, CORS policy |
-| `502 Bad Gateway` | Backend down, timeout | Verificare health del backend |
-| `504 Gateway Timeout` | Backend lento | Aumentare timeout, ottimizzare backend |
-| `ERR_TOO_MANY_REDIRECTS` | Loop redirect | Controllare configurazione redirect HTTP↔HTTPS |
-| Lentezza inspiegabile | Keep-alive disabilitato, no HTTP/2 | Abilitare keep-alive e HTTP/2 |
+### Scenario 1 — ERR_SSL_PROTOCOL_ERROR / Handshake TLS fallito
+
+**Sintomo:** Il browser mostra `ERR_SSL_PROTOCOL_ERROR` o `SSL_ERROR_HANDSHAKE_FAILURE_ALERT`; `curl` riporta `SSL routines:ssl3_get_server_certificate:certificate verify failed`.
+
+**Causa:** Versione TLS non supportata (es. server accetta solo TLS 1.3 ma client supporta solo 1.2), cipher suite incompatibili, certificato scaduto o emesso da CA non riconosciuta.
+
+**Soluzione:** Verificare la configurazione TLS del server e il certificato.
+
+```bash
+# Ispezionare certificato e handshake
+openssl s_client -connect example.com:443 -showcerts
+
+# Verificare scadenza certificato
+echo | openssl s_client -connect example.com:443 2>/dev/null \
+  | openssl x509 -noout -dates
+
+# Testare versioni TLS specifiche
+curl --tlsv1.2 https://example.com
+curl --tlsv1.3 https://example.com
+
+# Verifica con nmap
+nmap --script ssl-enum-ciphers -p 443 example.com
+```
+
+---
+
+### Scenario 2 — 502 Bad Gateway / 504 Gateway Timeout
+
+**Sintomo:** Gli utenti ricevono `502 Bad Gateway` o `504 Gateway Timeout` dal reverse proxy (Nginx, ALB). Il backend è apparentemente up.
+
+**Causa:** Il backend non risponde entro il timeout configurato nel proxy, la connessione viene rifiutata (backend crashato o porta sbagliata), oppure il proxy non riesce a raggiungere il backend (problema di rete/DNS interno).
+
+**Soluzione:** Verificare health del backend e timeout del proxy.
+
+```bash
+# Testare backend direttamente (bypass proxy)
+curl -v http://backend-host:8080/health
+
+# Controllare log Nginx
+tail -100 /var/log/nginx/error.log | grep "upstream"
+
+# Verificare connettività da proxy a backend
+nc -zv backend-host 8080
+
+# Aumentare timeout in Nginx se il backend è lento
+# In nginx.conf:
+# proxy_connect_timeout 10s;
+# proxy_read_timeout 60s;
+# proxy_send_timeout 60s;
+
+# Controllare processo backend
+systemctl status app-service
+journalctl -u app-service --since "10 minutes ago"
+```
+
+---
+
+### Scenario 3 — ERR_TOO_MANY_REDIRECTS / Loop redirect
+
+**Sintomo:** Il browser mostra `ERR_TOO_MANY_REDIRECTS`; `curl -L` va in loop tra 301 e 302.
+
+**Causa:** Configurazione errata dei redirect HTTP→HTTPS quando il reverse proxy comunica con il backend in HTTP ma il backend reindirizza di nuovo a HTTPS, oppure conflitto tra redirect a www e non-www.
+
+**Soluzione:** Correggere la chain di redirect e impostare correttamente `X-Forwarded-Proto`.
+
+```bash
+# Diagnosticare la chain di redirect
+curl -v -L --max-redirs 5 http://example.com 2>&1 | grep -E "Location:|< HTTP"
+
+# Verificare quanti redirect avvengono
+curl -o /dev/null -s -w "Redirects: %{num_redirects}\nFinal URL: %{url_effective}\n" \
+     -L http://example.com
+
+# Fix tipico in Nginx (passare proto al backend)
+# proxy_set_header X-Forwarded-Proto $scheme;
+
+# Fix in applicazione Laravel/Rails: leggere X-Forwarded-Proto
+# e non forzare redirect se già HTTPS
+```
+
+---
+
+### Scenario 4 — 403 Forbidden inatteso / CORS Error
+
+**Sintomo:** Le chiamate API restituiscono `403 Forbidden` senza motivo apparente, oppure il browser mostra `CORS policy: No 'Access-Control-Allow-Origin' header`.
+
+**Causa:** Per il 403: rate limiting, IP ban, JWT scaduto/invalido, policy IAM restrittiva. Per CORS: il server non include gli header `Access-Control-Allow-Origin` per il dominio del client, o il preflight OPTIONS non viene gestito.
+
+**Soluzione:** Diagnosticare la fonte del 403 e configurare CORS se necessario.
+
+```bash
+# Ispezionare risposta completa con headers
+curl -v -H "Origin: https://frontend.example.com" \
+        -H "Authorization: Bearer TOKEN" \
+        https://api.example.com/resource
+
+# Testare preflight CORS manualmente
+curl -v -X OPTIONS \
+     -H "Origin: https://frontend.example.com" \
+     -H "Access-Control-Request-Method: POST" \
+     -H "Access-Control-Request-Headers: Content-Type,Authorization" \
+     https://api.example.com/resource
+
+# Decodificare JWT per verificare scadenza
+echo "TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool
+
+# Header Nginx per CORS (esempio)
+# add_header 'Access-Control-Allow-Origin' 'https://frontend.example.com';
+# add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+```
+
+---
+
+### Scenario 5 — Performance degradata / Lentezza inspiegabile
+
+**Sintomo:** Le richieste HTTP sono lente anche per risorse piccole; il time-to-first-byte (TTFB) è alto; ogni richiesta sembra aprire una nuova connessione TCP.
+
+**Causa:** Keep-alive disabilitato (ogni richiesta apre una nuova connessione TCP+TLS), HTTP/1.1 invece di HTTP/2, compressione assente, o cache non configurata.
+
+**Soluzione:** Abilitare keep-alive, HTTP/2 e compressione.
+
+```bash
+# Misurare tempi dettagliati per ogni fase
+curl -o /dev/null -s -w \
+  "DNS: %{time_namelookup}s\nConnect: %{time_connect}s\nTLS: %{time_appconnect}s\nTTFB: %{time_starttransfer}s\nTotal: %{time_total}s\n" \
+  https://example.com
+
+# Verificare se HTTP/2 è attivo
+curl -v --http2 https://example.com 2>&1 | grep -E "HTTP/[12]"
+
+# Controllare headers di compressione nella risposta
+curl -H "Accept-Encoding: gzip, br" -I https://example.com | grep -i "content-encoding"
+
+# Verificare keep-alive
+curl -v https://example.com 2>&1 | grep -i "keep-alive\|connection"
+```
 
 ## Relazioni
 

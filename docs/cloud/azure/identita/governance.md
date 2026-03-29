@@ -9,7 +9,7 @@ related: [cloud/azure/identita/entra-id, cloud/azure/identita/rbac-managed-ident
 official_docs: https://learn.microsoft.com/azure/governance/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Azure Governance
@@ -65,7 +65,7 @@ az account management-group list --output table
 | Effect | Comportamento |
 |--------|--------------|
 | `Disabled` | Policy ignorata |
-| `Audit` | Non blocca, registra non-compliance in CloudWatch |
+| `Audit` | Non blocca, registra non-compliance nell'Activity Log |
 | `AuditIfNotExists` | Audit se una risorsa correlata non esiste |
 | `Append` | Aggiunge proprietà alla risorsa |
 | `Modify` | Modifica tag o proprietà |
@@ -297,6 +297,129 @@ Configurazione (tramite Entra ID portal → Security → Conditional Access):
 - Raggruppa risorse (gruppi, app, SharePoint) in "access packages"
 - Flusso di richiesta → approvazione → provisioning automatico
 - Gestione lifecycle: scadenza, rinnovo, rimozione automatica
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Policy assegnata ma le risorse risultano ancora non conformi
+
+**Sintomo:** Dopo aver assegnato una policy, il compliance state rimane `NonCompliant` anche su risorse che sembrano conformi.
+
+**Causa:** L'evaluation cycle di Azure Policy non è immediato. Il ciclo standard avviene ogni 24h; le nuove assegnazioni richiedono fino a 30 minuti per la prima valutazione.
+
+**Soluzione:** Forzare una re-valutazione manuale.
+
+```bash
+# Forzare scan di compliance sull'intera subscription
+az policy state trigger-scan --subscription $SUBSCRIPTION_ID
+
+# Forzare scan su un resource group specifico
+az policy state trigger-scan \
+    --resource-group myapp-rg \
+    --no-wait
+
+# Verificare stato compliance dopo il trigger
+az policy state list \
+    --resource-group myapp-rg \
+    --query "[?complianceState=='NonCompliant'].{Policy:policyDefinitionName, Resource:resourceId}" \
+    --output table
+```
+
+---
+
+### Scenario 2 — Resource Lock ReadOnly blocca operazioni di lettura o tag
+
+**Sintomo:** Operazioni come `az vm list`, `az tag update`, o deployment ARM falliscono con `AuthorizationFailed` o `ScopeLocked` su risorse con lock `ReadOnly`.
+
+**Causa:** Il lock `ReadOnly` blocca tutte le operazioni che richiedono una write sul resource provider, incluse alcune che appaiono come lettura ma aggiornano metadata interni (es. tag, etag, list keys).
+
+**Soluzione:** Rimuovere temporaneamente il lock, eseguire l'operazione, ripristinare il lock. Oppure usare `CanNotDelete` se il requisito è solo prevenire eliminazioni.
+
+```bash
+# Verificare lock esistenti
+az lock list --resource-group production-rg --output table
+
+# Rimuovere lock ReadOnly temporaneamente
+az lock delete \
+    --name "readonly-critical" \
+    --resource-group critical-rg
+
+# Eseguire l'operazione necessaria (es. aggiornare tag)
+az tag update \
+    --resource-id /subscriptions/$SUBSCRIPTION_ID/resourceGroups/critical-rg \
+    --operation Merge \
+    --tags "CostCenter=IT"
+
+# Ripristinare il lock
+az lock create \
+    --name "readonly-critical" \
+    --resource-group critical-rg \
+    --lock-type ReadOnly
+```
+
+---
+
+### Scenario 3 — Attivazione PIM fallisce o non viene approvata
+
+**Sintomo:** L'utente tenta di attivare un ruolo eligible in PIM ma riceve errore `ActivationFailed` oppure la richiesta rimane in stato `PendingApproval` indefinitamente.
+
+**Causa 1:** MFA non completata o sessione Entra ID senza claim MFA recente.
+**Causa 2:** Nessun approvatore configurato o approvatori non raggiungibili.
+**Causa 3:** Il ruolo ha una finestra di attivazione massima inferiore a quanto richiesto.
+
+**Soluzione:** Verificare la configurazione del ruolo in PIM e la presenza di approvatori attivi.
+
+```bash
+# Verificare assigned roles eligible tramite MS Graph (richiede Graph API token)
+az rest --method GET \
+    --url "https://graph.microsoft.com/v1.0/roleManagement/directory/roleEligibilityScheduleRequests?\$filter=principalId eq '$USER_OBJECT_ID'" \
+    --headers "Content-Type=application/json"
+
+# Verificare stato richieste di attivazione PIM in sospeso
+az rest --method GET \
+    --url "https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignmentScheduleRequests?\$filter=principalId eq '$USER_OBJECT_ID' and status eq 'PendingApproval'"
+```
+
+!!! tip "Configurazione PIM"
+    In caso di approvatori non disponibili, configurare sempre un approvatore di backup. Impostare `maxActivationDuration` adeguato (es. PT8H per turni di lavoro standard).
+
+---
+
+### Scenario 4 — Policy assegnata al Management Group non si applica alle subscription figlie
+
+**Sintomo:** Una policy assegnata a livello di Management Group non viene ereditata dalle subscription o resource group sottostanti; le risorse nelle subscription figlie risultano escluse dalla compliance.
+
+**Causa 1:** La subscription è stata aggiunta al Management Group dopo l'assegnazione della policy e il ciclo di propagazione non è ancora completato.
+**Causa 2:** Esiste un'assegnazione a livello inferiore con effetto `Disabled` che sovrascrive la policy padre.
+**Causa 3:** La subscription ha un'exemption configurata.
+
+**Soluzione:** Verificare la gerarchia, le exemption e i lock di policy.
+
+```bash
+# Verificare che la subscription sia nel Management Group corretto
+az account management-group show \
+    --name "mg-production" \
+    --expand --recurse \
+    --output json | jq '.children[].id'
+
+# Controllare assignment effettivi sulla subscription (includendo quelli ereditati)
+az policy assignment list \
+    --subscription $SUBSCRIPTION_ID \
+    --query "[].{Name:name, Scope:scope, DisplayName:displayName}" \
+    --output table
+
+# Verificare eventuali exemption che escludono la subscription
+az policy exemption list \
+    --subscription $SUBSCRIPTION_ID \
+    --output table
+
+# Controllare se esiste un override con Disabled a livello inferiore
+az policy assignment list \
+    --subscription $SUBSCRIPTION_ID \
+    --query "[?parameters.effect.value=='Disabled'].{Name:name, Scope:scope}" \
+    --output table
+```
 
 ---
 

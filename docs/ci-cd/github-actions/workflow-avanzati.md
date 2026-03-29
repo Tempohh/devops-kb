@@ -9,7 +9,7 @@ related: [ci-cd/github-actions/enterprise, ci-cd/jenkins/pipeline-fundamentals, 
 official_docs: https://docs.github.com/en/actions/using-workflows/reusing-workflows
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # GitHub Actions — Workflow Avanzati
@@ -737,6 +737,114 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+```
+
+## Troubleshooting
+
+### Scenario 1 — Reusable workflow non trova i secrets
+
+**Sintomo:** Il called workflow fallisce con `Error: secret not found` o variabili d'ambiente vuote, anche se il secret esiste nel repository caller.
+
+**Causa:** I secrets non vengono propagati automaticamente ai reusable workflows. Senza `secrets: inherit` o dichiarazione esplicita nel job chiamante, il called workflow riceve secrets vuoti.
+
+**Soluzione:** Aggiungere `secrets: inherit` nel job caller oppure passare i secrets esplicitamente.
+
+```yaml
+# Opzione 1: propaga tutti i secrets
+jobs:
+  run-called:
+    uses: my-org/.github/.github/workflows/reusable.yml@main
+    secrets: inherit
+
+# Opzione 2: passaggio esplicito
+jobs:
+  run-called:
+    uses: my-org/.github/.github/workflows/reusable.yml@main
+    secrets:
+      deploy-token: ${{ secrets.PROD_DEPLOY_TOKEN }}
+```
+
+---
+
+### Scenario 2 — OIDC fallisce con `Error: Not authorized to perform sts:AssumeRoleWithWebIdentity`
+
+**Sintomo:** Il workflow con OIDC AWS fallisce al passo `configure-aws-credentials` con errore di autorizzazione.
+
+**Causa:** La Trust Policy del ruolo IAM contiene un `StringEquals` su `sub` che non corrisponde al valore esatto emesso da GitHub (es. branch sbagliato, environment non incluso, o repo con case diverso).
+
+**Soluzione:** Verificare il valore di `sub` effettivo usando il JWT decodificato, poi allineare la Trust Policy.
+
+```bash
+# Debug: aggiungere uno step per stampare il token OIDC (solo in test)
+- name: Debug OIDC token claims
+  run: |
+    TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+      "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+    # Decodifica il payload JWT (base64 della parte centrale)
+    echo $TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq .
+
+# Trust Policy corretta: usare StringLike con wildcard
+"Condition": {
+  "StringLike": {
+    "token.actions.githubusercontent.com:sub": "repo:my-org/my-repo:*"
+  }
+}
+```
+
+---
+
+### Scenario 3 — Matrix job ignorano `fail-fast: false` e si cancellano tutti
+
+**Sintomo:** Un job della matrix fallisce e tutti gli altri job paralleli vengono cancellati, nonostante `fail-fast: false` sia impostato.
+
+**Causa:** `fail-fast` è impostato a livello di `strategy` ma un job upstream (via `needs:`) è fallito, propagando la cancellazione. Oppure il `cancel-in-progress: true` di un concurrency group sta intervenendo.
+
+**Soluzione:** Verificare che `fail-fast: false` sia nella sezione `strategy` del job matrix (non altrove) e che nessun concurrency group stia cancellando i run.
+
+```yaml
+jobs:
+  test:
+    strategy:
+      fail-fast: false   # Deve essere qui, dentro strategy
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        java: ['17', '21']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: ./test.sh
+
+  # Se c'è un concurrency group, assicurarsi che non impatti la matrix
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false  # Non cancellare run con matrix in corso
+```
+
+---
+
+### Scenario 4 — Cache non ripristinata tra run (cache miss costante)
+
+**Sintomo:** La cache non viene mai ripristinata; ogni run ricostruisce le dipendenze da zero. Il log mostra `Cache not found for key: ...`.
+
+**Causa:** La cache key include un hash del lock file (`hashFiles`) ma il lock file è diverso tra branch, oppure il path della cache non corrisponde alla directory effettiva delle dipendenze.
+
+**Soluzione:** Verificare il path della cache e usare `restore-keys` come fallback per partial match.
+
+```yaml
+- name: Cache Maven
+  uses: actions/cache@v4
+  with:
+    path: ~/.m2/repository
+    # Key esatta basata sul lock file
+    key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+    # Fallback: accetta qualsiasi cache Maven dello stesso OS
+    restore-keys: |
+      ${{ runner.os }}-maven-
+
+# Debug: verificare che il path esista dopo il restore
+- name: Debug cache path
+  run: |
+    ls -la ~/.m2/repository 2>/dev/null || echo "Cache path non trovato"
+    du -sh ~/.m2/repository 2>/dev/null || echo "Directory vuota o assente"
 ```
 
 ## Relazioni

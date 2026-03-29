@@ -9,7 +9,7 @@ related: [containers/openshift/build-imagestream, containers/helm/deployment-pro
 official_docs: https://docs.openshift.com/gitops/latest/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # GitOps e Pipelines
@@ -418,6 +418,126 @@ GitOps Image Promotion Flow
   8. ArgoCD sync automatico → deploy in produzione
 
   Audit trail completo: ogni deployment è tracciato in Git
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — ArgoCD Application bloccata in `OutOfSync` dopo sync
+
+**Sintomo:** L'Application rimane `OutOfSync` anche dopo un sync manuale; il diff mostra differenze su campi non modificati (es. `spec.replicas`, `creationTimestamp`).
+
+**Causa:** ArgoCD confronta il manifest Git con la risorsa live inclusi campi iniettati dal cluster (HPA, defaulting del webhook, controller). Questi campi non presenti in Git appaiono come drift.
+
+**Soluzione:** Aggiungere `ignoreDifferences` nel manifest Application per i campi gestiti da altri controller.
+
+```yaml
+# Application — ignoreDifferences per campi gestiti da HPA e controller
+ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+      - /spec/replicas        # gestito da HPA
+      - /metadata/annotations # iniettato da admission webhook
+  - group: ""
+    kind: ServiceAccount
+    jsonPointers:
+      - /secrets              # iniettato dal token controller
+```
+
+```bash
+# Forzare un hard-refresh (svuota la cache del repo server)
+argocd app get production-api --hard-refresh
+
+# Verificare il diff attuale
+argocd app diff production-api
+
+# Sync manuale con opzioni di debug
+argocd app sync production-api --debug
+```
+
+---
+
+### Scenario 2 — PipelineRun fallisce su step `build` con errore di permessi Buildah
+
+**Sintomo:** Il TaskRun termina con `Error: error creating build container: Error committing the finished image: ... permission denied`.
+
+**Causa:** Il ServiceAccount della pipeline non ha il SecurityContextConstraint `privileged` o `anyuid` necessario per Buildah in modalità rootless. Su OpenShift il SCC di default (`restricted`) blocca i container che richiedono UID specifici.
+
+**Soluzione:** Assegnare il SCC corretto al ServiceAccount della pipeline.
+
+```bash
+# Verificare quale SCC viene applicato al pod della pipeline
+oc get pod <pipelinerun-pod> -o jsonpath='{.metadata.annotations.openshift\.io/scc}'
+
+# Assegnare SCC "pipeline" (incluso nell'OpenShift Pipelines operator) al SA
+oc adm policy add-scc-to-user privileged -z pipeline -n <namespace>
+
+# Alternativa: usare il SA "pipeline" predefinito che ha già i permessi corretti
+oc get sa pipeline -n <namespace>
+
+# Controllare i log del task fallito
+tkn taskrun logs <taskrun-name> -n <namespace>
+```
+
+---
+
+### Scenario 3 — EventListener non riceve i webhook GitHub
+
+**Sintomo:** I push su GitHub non scatenano alcuna PipelineRun; l'EventListener risponde 200 ma non crea TriggerRun.
+
+**Causa 1:** Il secret HMAC configurato nel TriggerBinding non coincide con quello registrato su GitHub.
+**Causa 2:** La Route dell'EventListener non è esposta esternamente o ha TLS non valido.
+**Causa 3:** Il filtro `branches` nell'interceptor non corrisponde alla branch del push.
+
+**Soluzione:**
+
+```bash
+# Verificare che la Route sia accessibile
+oc get route -n pipelines github-push-el
+curl -s -o /dev/null -w "%{http_code}" https://<route-host>
+
+# Controllare i log dell'EventListener per vedere i payload ricevuti
+oc logs -n pipelines -l eventlistener=github-push --tail=50
+
+# Verificare il secret HMAC
+oc get secret github-secret -n pipelines -o jsonpath='{.data.secretToken}' | base64 -d
+
+# Testare manualmente un webhook (sostituire TOKEN e URL)
+curl -X POST https://<route-host> \
+  -H "Content-Type: application/json" \
+  -H "X-GitHub-Event: push" \
+  -H "X-Hub-Signature-256: sha256=<hmac>" \
+  -d '{"ref":"refs/heads/main","repository":{"clone_url":"https://github.com/org/repo"}}'
+```
+
+---
+
+### Scenario 4 — Sync Waves bloccato: ArgoCD aspetta indefinitamente la wave precedente
+
+**Sintomo:** Il sync si blocca su una wave intermedia; i log ArgoCD mostrano `Waiting for resource to become healthy: apps/Deployment/<name>`.
+
+**Causa:** Una risorsa nella wave N non raggiunge lo stato `Healthy` (es. un Deployment che non parte per mancanza di immagine, ConfigMap errata, o readiness probe fallita). ArgoCD non avanza alla wave N+1 finché tutte le risorse della wave corrente non sono healthy.
+
+**Soluzione:**
+
+```bash
+# Identificare quale risorsa blocca la wave
+argocd app get production-api -o wide | grep -v Synced
+
+# Controllare lo stato dei pod del Deployment bloccato
+oc get pods -n production -l app=<deployment-name>
+oc describe pod <pod-name> -n production
+
+# Se il blocco è un falso positivo (es. Job one-shot), aggiungere hook di tipo PostSync
+# oppure impostare ignoreDifferences per il campo status
+
+# Forzare lo skip di una risorsa specifica durante il sync (solo emergenze)
+argocd app sync production-api --resource apps:Deployment:<name> --force
+
+# Controllare gli eventi ArgoCD per il dettaglio dell'health check
+oc get events -n openshift-gitops --field-selector reason=ResourceUpdated
 ```
 
 ---

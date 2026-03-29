@@ -9,7 +9,7 @@ related: [security/secret-management/kubernetes-secrets, security/pki-certificat
 official_docs: https://developer.hashicorp.com/vault/docs
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # HashiCorp Vault
@@ -409,13 +409,150 @@ spec:
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| Pod stuck in init (vault-agent-init) | Service account non autorizzato / role sbagliato | Controllare `kubectl logs <pod> -c vault-agent-init` |
-| `permission denied` sulla policy | Policy non assegnata o path errato | `vault token lookup`, `vault policy read <name>` |
-| Credenziali DB scadono prima del rinnovo | TTL troppo breve o agent non funziona | Verificare vault-agent logs, aumentare TTL |
-| Vault sealed dopo restart | Auto-unseal non configurato o KMS irraggiungibile | Verificare network, IAM role per KMS |
-| `too many open requests` | Rate limiting Vault | Aumentare `max_lease_count`, ottimizzare l'acquisizione token |
+### Scenario 1 — Pod bloccato in init (vault-agent-init CrashLoopBackOff)
+
+**Sintomo**
+Il pod resta fermo in fase di init; il container `vault-agent-init` va in `CrashLoopBackOff` o `Error`.
+
+**Causa**
+Il service account del pod non è autorizzato: il Vault role non include il namespace/SA, oppure il Kubernetes auth method non è configurato correttamente.
+
+**Soluzione**
+1. Leggere i log del container init per avere il messaggio di errore esatto.
+2. Verificare che il role Vault includa il service account e il namespace del pod.
+3. Rieseguire la configurazione dell'auth method se necessario.
+
+```bash
+# Ispeziona i log del container init
+kubectl logs <pod-name> -c vault-agent-init -n <namespace>
+
+# Verifica il role Vault
+vault read auth/kubernetes/role/<role-name>
+# Controlla bound_service_account_names e bound_service_account_namespaces
+
+# Aggiorna il role se il SA o il namespace non corrisponde
+vault write auth/kubernetes/role/<role-name> \
+  bound_service_account_names=<sa-name> \
+  bound_service_account_namespaces=<namespace> \
+  policies=<policy-name> \
+  ttl=1h
+
+# Verifica la configurazione del Kubernetes auth method
+vault read auth/kubernetes/config
+```
+
+---
+
+### Scenario 2 — `permission denied` quando l'app accede a un path
+
+**Sintomo**
+L'autenticazione ha successo (token ottenuto), ma ogni read/write su un path restituisce `Code: 403. Errors: 1 error occurred: * 1 error occurred: * permission denied`.
+
+**Causa**
+La policy assegnata al role non include quel path specifico, oppure la policy è stata aggiornata ma il token in uso è stato emesso con la vecchia versione.
+
+**Soluzione**
+1. Recuperare il token corrente e verificare le policy associate.
+2. Leggere il contenuto della policy per controllare i path autorizzati.
+3. Correggere la policy o rieseguire il login per ottenere un nuovo token con le policy aggiornate.
+
+```bash
+# Verifica le policy associate al token attivo
+vault token lookup
+
+# Leggi la policy per ispezionare i path autorizzati
+vault policy read <policy-name>
+
+# Testa esplicitamente i permessi su un path
+vault token capabilities <token> <path>
+# Esempio:
+vault token capabilities s.abc123 database/creds/orders-db
+
+# Aggiorna la policy se il path manca
+cat > orders-policy.hcl <<'EOF'
+path "database/creds/orders-db" {
+  capabilities = ["read"]
+}
+path "kv/data/orders/*" {
+  capabilities = ["read"]
+}
+EOF
+vault policy write orders-service orders-policy.hcl
+```
+
+---
+
+### Scenario 3 — Vault rimane sealed dopo un restart
+
+**Sintomo**
+Dopo un riavvio del pod/nodo Vault, il servizio risponde `Vault is sealed` e le applicazioni non riescono ad autenticarsi.
+
+**Causa**
+Auto-unseal non configurato (si usa il Shamir manuale) oppure il KMS configurato non è raggiungibile (problema di rete, IAM role mancante, credenziali scadute).
+
+**Soluzione**
+1. Verificare lo stato corrente di Vault.
+2. Se auto-unseal è configurato, controllare la connettività al KMS e i permessi IAM.
+3. Se auto-unseal non è configurato, eseguire l'unseal manuale come misura temporanea e pianificare la migrazione.
+
+```bash
+# Controlla lo stato di Vault
+vault status
+# Se Sealed: true → il nodo è sealed
+
+# Verifica i log per capire perché l'auto-unseal ha fallito
+kubectl logs <vault-pod> -n vault | grep -i "seal\|kms\|unseal"
+
+# Test connettività al KMS AWS (da dentro il pod)
+aws kms describe-key --key-id <kms-key-arn> --region <region>
+
+# Unseal manuale di emergenza (richiede le Shamir key shares)
+vault operator unseal <key-share-1>
+vault operator unseal <key-share-2>
+vault operator unseal <key-share-3>
+
+# Verifica che tutti i nodi HA siano unsealed
+vault operator members
+```
+
+---
+
+### Scenario 4 — Credenziali database scadono prima del rinnovo (lease expired)
+
+**Sintomo**
+L'applicazione riceve errori di autenticazione al database (`FATAL: password authentication failed`) anche se il pod è attivo. Il lease del database secret è scaduto.
+
+**Causa**
+Il Vault Agent non sta rinnovando il lease (sidecar non attivo, o `agent-pre-populate-only: "true"`) oppure il `max_ttl` del database role è troppo breve e il rinnovo è stato negato.
+
+**Soluzione**
+1. Verificare che il Vault Agent sidecar sia in esecuzione e stia rinnovando i lease.
+2. Controllare i lease attivi e il loro stato.
+3. Aumentare `default_ttl` e `max_ttl` nel database role se necessario.
+
+```bash
+# Verifica che il sidecar vault-agent sia attivo nel pod
+kubectl get pod <pod-name> -n <namespace> -o jsonpath='{.spec.containers[*].name}'
+kubectl logs <pod-name> -c vault-agent -n <namespace> | tail -50
+
+# Elenca i lease attivi per il database role
+vault list sys/leases/lookup/database/creds/orders-db/
+
+# Ispeziona un lease specifico
+vault lease lookup database/creds/orders-db/<lease-id>
+
+# Rinnova manualmente un lease (se ancora rinnovabile)
+vault lease renew database/creds/orders-db/<lease-id>
+
+# Aggiorna TTL nel database role per evitare scadenze frequenti
+vault write database/roles/orders-service \
+  db_name=orders-db \
+  default_ttl="4h" \
+  max_ttl="24h"
+
+# Verifica l'annotazione nel Deployment (agent-pre-populate-only deve essere false)
+# vault.hashicorp.com/agent-pre-populate-only: "false"
+```
 
 ## Riferimenti
 

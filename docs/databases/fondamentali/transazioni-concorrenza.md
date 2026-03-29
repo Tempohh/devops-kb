@@ -9,7 +9,7 @@ related: [databases/fondamentali/acid-base-cap, databases/postgresql/mvcc-vacuum
 official_docs: https://www.postgresql.org/docs/current/transaction-iso.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Transazioni e Concorrenza
@@ -332,6 +332,125 @@ WHERE id = 1 AND versione = 5;
 -- → 0 rows affected = conflitto, l'applicazione deve gestirlo
 -- → 1 row affected = successo
 ```
+
+## Troubleshooting
+
+### Scenario 1 — Serialization failure in produzione
+
+**Sintomo**: L'applicazione riceve intermittentemente `ERROR: could not serialize access due to read/write dependencies among transactions` con `SQLSTATE 40001`.
+
+**Causa**: Transazioni con isolamento SERIALIZABLE in conflitto — SSI ha rilevato un pattern non serializzabile e ha abortito una delle transazioni.
+
+**Soluzione**: Implementare retry con exponential backoff nel codice applicativo. È il comportamento atteso con SERIALIZABLE, non un bug.
+
+```python
+import psycopg2, time
+
+def run_with_retry(conn, fn, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            with conn.transaction():
+                conn.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+                return fn(conn)
+        except psycopg2.errors.SerializationFailure:
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(0.05 * (2 ** attempt))  # 50ms, 100ms, 200ms...
+```
+
+```sql
+-- Verificare frequenza serialization failures
+SELECT datname, xact_rollback, deadlocks
+FROM pg_stat_database
+WHERE datname = current_database();
+```
+
+---
+
+### Scenario 2 — Query bloccata indefinitamente (lock wait)
+
+**Sintomo**: Una query `UPDATE` o `SELECT FOR UPDATE` non termina — l'applicazione si blocca senza risposta.
+
+**Causa**: Un'altra transazione detiene un row-level lock sulla stessa riga e non ha ancora fatto COMMIT o ROLLBACK (es. transazione idle in transaction, connessione staccata).
+
+**Soluzione**: Identificare la transazione bloccante e terminarla se idle; usare `lock_timeout` per evitare blocchi indefiniti.
+
+```sql
+-- Trovare le query bloccate e chi le blocca
+SELECT
+    blocked.pid AS blocked_pid,
+    blocked.query AS blocked_query,
+    blocking.pid AS blocking_pid,
+    blocking.query AS blocking_query,
+    blocking.state AS blocking_state,
+    now() - blocking.query_start AS blocking_duration
+FROM pg_stat_activity blocked
+JOIN pg_stat_activity blocking
+    ON blocking.pid = ANY(pg_blocking_pids(blocked.pid))
+WHERE cardinality(pg_blocking_pids(blocked.pid)) > 0;
+
+-- Terminare la transazione bloccante (se idle/stuck)
+SELECT pg_terminate_backend(<blocking_pid>);
+
+-- Prevenire blocchi indefiniti a livello sessione
+SET lock_timeout = '5s';
+-- Oppure a livello query
+SET LOCAL lock_timeout = '2s';
+```
+
+---
+
+### Scenario 3 — Deadlock ricorrenti su stessa coppia di tabelle
+
+**Sintomo**: Log PostgreSQL riporta `ERROR: deadlock detected` ripetutamente, sempre tra le stesse transazioni o tabelle.
+
+**Causa**: Due code path dell'applicazione acquisiscono lock su righe/tabelle in ordine opposto (es. A locka ordini→pagamenti, B locka pagamenti→ordini).
+
+**Soluzione**: Canonicalizzare l'ordine di acquisizione dei lock — sempre nello stesso ordine (es. per ID crescente). Abilitare log_lock_waits per diagnosi.
+
+```sql
+-- Abilitare log dei deadlock e dei lock wait (postgresql.conf o per sessione)
+SET deadlock_timeout = '250ms';  -- Ridurre per rilevare prima in sviluppo
+SET log_lock_waits = on;         -- Logga le attese di lock
+
+-- Pattern sicuro: ordina SEMPRE per chiave primaria crescente
+BEGIN;
+SELECT id FROM conti WHERE id = ANY(ARRAY[5, 3, 8]) ORDER BY id FOR UPDATE;
+-- Acquisisce lock su 3, 5, 8 — ordine deterministico per tutti i caller
+UPDATE conti SET saldo = saldo - 100 WHERE id = 3;
+UPDATE conti SET saldo = saldo + 100 WHERE id = 5;
+COMMIT;
+```
+
+---
+
+### Scenario 4 — Lost update silenzioso (dati corrotti)
+
+**Sintomo**: Un contatore o un campo aggregato risulta inferiore al valore atteso dopo aggiornamenti concorrenti. Nessun errore nei log.
+
+**Causa**: Pattern read-modify-write non atomico con READ COMMITTED: due transazioni leggono lo stesso valore, entrambe calcolano il nuovo valore partendo dallo stesso base, e l'ultima scrittura sovrascrive la prima.
+
+**Soluzione**: Usare UPDATE atomico con espressione SQL invece di read-modify-write applicativo; oppure `SELECT FOR UPDATE` se il calcolo è complesso.
+
+```sql
+-- SBAGLIATO: read in applicazione + write separata (lost update possibile)
+-- val = SELECT valore FROM contatori WHERE id = 1;  -- legge 10
+-- UPDATE contatori SET valore = val + 1 WHERE id = 1;  -- scrive 11
+-- Se due sessioni leggono 10 contemporaneamente, entrambe scrivono 11
+
+-- CORRETTO: UPDATE atomico
+UPDATE contatori SET valore = valore + 1 WHERE id = 1;
+-- Un singolo UPDATE è atomico — nessun lost update possibile
+
+-- CORRETTO: SELECT FOR UPDATE se il calcolo dipende da logica applicativa
+BEGIN;
+SELECT valore FROM contatori WHERE id = 1 FOR UPDATE;
+-- Nessun'altra transazione può modificare questa riga fino al COMMIT
+UPDATE contatori SET valore = <nuovo_valore_calcolato> WHERE id = 1;
+COMMIT;
+```
+
+---
 
 ## Relazioni
 

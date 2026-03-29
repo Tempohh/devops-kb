@@ -9,7 +9,7 @@ related: [cloud/azure/identita/rbac-managed-identity, cloud/azure/identita/gover
 official_docs: https://learn.microsoft.com/azure/active-directory/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Microsoft Entra ID (Azure AD)
@@ -277,6 +277,130 @@ az ad user list \
 | Password spray attack | Tentativi di login su molti account |
 
 **Risposta automatica:** Conditional Access con condizione `User Risk` o `Sign-in Risk`.
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — AADSTS error durante token acquisition
+
+**Sintomo:** L'applicazione riceve un errore `AADSTS` (es. `AADSTS70011`, `AADSTS65001`, `AADSTS50020`) al momento dell'acquisizione del token.
+
+**Causa:** Cause frequenti: audience/scope errato, admin consent non concesso, tenant non autorizzato, o client secret scaduto.
+
+**Soluzione:** Decodificare il codice AADSTS specifico e agire di conseguenza.
+
+```bash
+# Verificare stato client secret (scadenza)
+az ad app credential list --id $APP_ID --output table
+
+# Verificare le API permissions e lo stato del consent
+az ad app permission list --id $APP_ID --output table
+az ad app permission list-grants --id $APP_ID --output table
+
+# Rigenerare client secret se scaduto
+az ad app credential reset \
+    --id $APP_ID \
+    --append \
+    --display-name "prod-secret-$(date +%Y%m)" \
+    --end-date "2028-01-01"
+
+# Test token acquisition (client credentials flow)
+curl -X POST \
+    "https://login.microsoftonline.com/$TENANT_ID/oauth2/v2.0/token" \
+    -d "client_id=$APP_ID&client_secret=$CLIENT_SECRET&grant_type=client_credentials&scope=https://graph.microsoft.com/.default"
+```
+
+---
+
+### Scenario 2 — Service principal non ha accesso alla risorsa Azure
+
+**Sintomo:** Operazioni Azure CLI falliscono con `AuthorizationFailed` o `does not have authorization to perform action`.
+
+**Causa:** Il Service Principal non ha il ruolo RBAC appropriato sulla subscription/resource group, oppure il contesto CLI è autenticato su una subscription diversa.
+
+**Soluzione:** Assegnare il ruolo corretto e verificare il contesto.
+
+```bash
+# Verificare identità corrente e subscription attiva
+az account show
+az ad signed-in-user show 2>/dev/null || echo "Logged in as SP"
+
+# Controllare ruoli assegnati al service principal
+SP_OBJECT_ID=$(az ad sp show --id $APP_ID --query id -o tsv)
+az role assignment list --assignee $SP_OBJECT_ID --all --output table
+
+# Assegnare ruolo Contributor a livello resource group
+az role assignment create \
+    --assignee $SP_OBJECT_ID \
+    --role "Contributor" \
+    --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RG_NAME"
+
+# Verificare l'assegnazione
+az role assignment list --assignee $SP_OBJECT_ID \
+    --scope "/subscriptions/$SUBSCRIPTION_ID" \
+    --output table
+```
+
+---
+
+### Scenario 3 — Conditional Access blocca l'accesso utente
+
+**Sintomo:** L'utente riceve `AADSTS53003` ("Access has been blocked by Conditional Access policies") o viene forzato a soddisfare requisiti inattesi (MFA, compliant device).
+
+**Causa:** Una o più policy di Conditional Access corrispondono alla sessione dell'utente (location, app, ruolo, rischio).
+
+**Soluzione:** Identificare quale policy si applica tramite Sign-in logs e agire sulla policy o sull'utente.
+
+```bash
+# Consultare i sign-in logs per trovare la policy CA applicata
+az rest \
+    --method GET \
+    --url "https://graph.microsoft.com/v1.0/auditLogs/signIns?\$filter=userPrincipalName eq 'user@company.com'&\$top=5" \
+    --query "value[].{Status:status.errorCode, CA:appliedConditionalAccessPolicies[0].displayName, Reason:status.failureReason}"
+
+# Listare tutte le policy Conditional Access attive
+az rest \
+    --method GET \
+    --url "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies?\$filter=state eq 'enabled'" \
+    --query "value[].{Name:displayName, State:state}" \
+    --output table
+
+# Escludere utente specifico da una policy (via Graph PATCH — usare portal per sicurezza)
+# Portal: Entra ID → Security → Conditional Access → selezionare policy → Exclude users/groups
+```
+
+---
+
+### Scenario 4 — Utente guest B2B non riesce ad accedere all'applicazione
+
+**Sintomo:** L'utente invitato riceve `AADSTS65005` o accede al tenant ma non vede l'applicazione o riceve errori di autorizzazione.
+
+**Causa:** L'app registration non è configurata per utenti multi-tenant/guest, oppure al guest manca il ruolo applicativo, oppure la policy B2B del tenant blocca gli account esterni.
+
+**Soluzione:** Verificare la configurazione dell'app e i permessi del guest.
+
+```bash
+# Verificare sign-in audience dell'app (deve includere account guest)
+az ad app show --id $APP_ID --query "signInAudience" -o tsv
+# AzureADMyOrg = solo utenti interni; AzureADMultipleOrgs = include guest B2B
+
+# Verificare che il guest esista nel tenant
+az ad user show --id "partner@external.com" --query "{UPN:userPrincipalName, Type:userType}" -o json
+
+# Assegnare ruolo applicativo al guest
+GUEST_ID=$(az ad user show --id "partner@external.com" --query id -o tsv)
+az ad app role assignment create \
+    --assignee $GUEST_ID \
+    --role-assignment-id "<app-role-id>" \
+    --resource-id "$(az ad sp show --id $APP_ID --query id -o tsv)"
+
+# Listare External Collaboration Settings (accettabilità domini)
+az rest \
+    --method GET \
+    --url "https://graph.microsoft.com/v1.0/policies/authorizationPolicy" \
+    --query "{GuestAccess:allowInvitesFrom, DefaultGuestRole:guestUserRoleId}"
+```
 
 ---
 

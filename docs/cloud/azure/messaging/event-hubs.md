@@ -9,7 +9,7 @@ related: [cloud/azure/messaging/service-bus-event-grid, cloud/azure/storage/blob
 official_docs: https://learn.microsoft.com/azure/event-hubs/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Azure Event Hubs
@@ -479,6 +479,156 @@ Event routing custom con filtri avanzati?
 
 Simple background queue low-cost?
   └── Storage Queue
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Throughput Units esauriti (ingress throttling)
+
+**Sintomo:** Il producer riceve errori `ServerBusy` o `QuotaExceededException`; i messaggi vengono rifiutati o ritardati.
+
+**Causa:** Il namespace Standard ha raggiunto il limite di TU configurati (1 TU = 1 MB/s ingress). Se auto-inflate non è abilitato, il traffico in eccesso viene throttled.
+
+**Soluzione:** Abilitare auto-inflate o aumentare manualmente i TU; monitorare la metrica `ThrottledRequests`.
+
+```bash
+# Verificare TU attuali e abilitare auto-inflate
+az eventhubs namespace show \
+    --resource-group myapp-rg \
+    --name myapp-eventhubs \
+    --query "{sku:sku.capacity, autoInflate:isAutoInflateEnabled, maxTU:maximumThroughputUnits}"
+
+# Aumentare TU manualmente
+az eventhubs namespace update \
+    --resource-group myapp-rg \
+    --name myapp-eventhubs \
+    --capacity 10
+
+# Abilitare auto-inflate
+az eventhubs namespace update \
+    --resource-group myapp-rg \
+    --name myapp-eventhubs \
+    --enable-auto-inflate true \
+    --maximum-throughput-units 20
+
+# Monitorare throttling (ultimi 30 minuti)
+az monitor metrics list \
+    --resource /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.EventHub/namespaces/myapp-eventhubs \
+    --metric ThrottledRequests \
+    --interval PT1M \
+    --start-time $(date -u -d '30 minutes ago' +%Y-%m-%dT%H:%MZ)
+```
+
+---
+
+### Scenario 2 — Consumer non avanza (offset bloccato)
+
+**Sintomo:** Il consumer group non processa nuovi eventi; la metrica `IncomingMessages` cresce ma `OutgoingMessages` è piatta. Il lag aumenta continuamente.
+
+**Causa:** Il checkpoint store (Blob Storage) non viene aggiornato (eccezione silenziata nel callback `on_event`), oppure un singolo consumer detiene una partition ma non la processa (crash senza rilascio).
+
+**Soluzione:** Verificare i checkpoint nel Blob container, forzare il rilascio delle partition resettando il consumer group, o eliminare e ricreare il checkpoint.
+
+```bash
+# Vedere checkpoint nel Blob container (ogni partition ha un file)
+az storage blob list \
+    --account-name mystorageaccount \
+    --container-name event-checkpoints \
+    --prefix "myapp-eventhubs/app-events/analytics-consumer/" \
+    --output table
+
+# Eliminare checkpoint per ripartire dall'inizio (ATTENZIONE: replay tutti gli eventi in retention)
+az storage blob delete-batch \
+    --account-name mystorageaccount \
+    --source event-checkpoints \
+    --pattern "myapp-eventhubs/app-events/analytics-consumer/*"
+
+# Verificare lag per consumer group tramite metrica IncomingMessages vs OutgoingMessages
+az monitor metrics list \
+    --resource /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.EventHub/namespaces/myapp-eventhubs/eventhubs/app-events \
+    --metric IncomingMessages,OutgoingMessages \
+    --interval PT5M
+```
+
+---
+
+### Scenario 3 — Kafka client non riesce a connettersi
+
+**Sintomo:** Il Kafka producer/consumer riceve `SASL authentication failed` o `Connection refused` quando usa l'endpoint Kafka di Event Hubs.
+
+**Causa:** Le cause più comuni sono: (1) SKU Basic (non supporta Kafka), (2) connection string errata o scaduta nella password SASL, (3) porta 9093 bloccata dal firewall, (4) `group.id` non corrisponde a un Consumer Group esistente.
+
+**Soluzione:** Verificare lo SKU, rigenerare le chiavi SAS se necessario, e creare esplicitamente il Consumer Group prima di avviare il consumer.
+
+```bash
+# Verificare SKU (deve essere Standard, Premium o Dedicated per Kafka)
+az eventhubs namespace show \
+    --resource-group myapp-rg \
+    --name myapp-eventhubs \
+    --query "sku.name"
+
+# Rigenerare chiave SAS primaria
+az eventhubs namespace authorization-rule keys renew \
+    --resource-group myapp-rg \
+    --namespace-name myapp-eventhubs \
+    --name RootManageSharedAccessKey \
+    --key PrimaryKey \
+    --query primaryConnectionString
+
+# Verificare connettività porta 9093 (da Linux/WSL)
+nc -zv myapp-eventhubs.servicebus.windows.net 9093
+
+# Listare Consumer Group esistenti
+az eventhubs eventhub consumer-group list \
+    --resource-group myapp-rg \
+    --namespace-name myapp-eventhubs \
+    --eventhub-name app-events \
+    --output table
+```
+
+---
+
+### Scenario 4 — Capture non crea file su Blob Storage
+
+**Sintomo:** Event Hubs Capture è abilitato ma nessun file `.avro` compare nel container di destinazione dopo il tempo configurato (`--capture-interval`).
+
+**Causa:** Il Managed Identity (o la Service Principal) usata da Event Hubs non ha il ruolo `Storage Blob Data Contributor` sul container di destinazione. In alternativa, il container non esiste o il namespace non ha il firewall Blob Storage configurato correttamente.
+
+**Soluzione:** Assegnare il ruolo corretto e verificare che il container esista; usare i log diagnostici per identificare l'errore specifico.
+
+```bash
+# Verificare ruolo assegnato all'identità di Event Hubs namespace
+EH_PRINCIPAL=$(az eventhubs namespace show \
+    --resource-group myapp-rg \
+    --name myapp-eventhubs \
+    --query "identity.principalId" -o tsv)
+
+az role assignment list \
+    --assignee $EH_PRINCIPAL \
+    --scope /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.Storage/storageAccounts/mystorageaccount \
+    --output table
+
+# Assegnare ruolo se mancante
+az role assignment create \
+    --assignee $EH_PRINCIPAL \
+    --role "Storage Blob Data Contributor" \
+    --scope /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.Storage/storageAccounts/mystorageaccount/blobServices/default/containers/eventhubs-capture
+
+# Verificare impostazioni Capture
+az eventhubs eventhub show \
+    --resource-group myapp-rg \
+    --namespace-name myapp-eventhubs \
+    --name app-events \
+    --query "captureDescription"
+
+# Abilitare log diagnostici per ArchiveLogs
+az monitor diagnostic-settings create \
+    --resource /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.EventHub/namespaces/myapp-eventhubs \
+    --name eh-diag \
+    --logs '[{"category":"ArchiveLogs","enabled":true}]' \
+    --workspace $LOG_ANALYTICS_WORKSPACE_ID
 ```
 
 ---

@@ -9,7 +9,7 @@ related: [databases/fondamentali/sharding, databases/fondamentali/indici, databa
 official_docs: https://www.postgresql.org/docs/current/ddl-partitioning.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Partitioning
@@ -220,6 +220,125 @@ SELECT COUNT(*) FROM log_eventi WHERE livello = 'ERROR';
 | Cross-partition ops | JOIN locali, transazioni ACID | JOIN costosi, no ACID semplice |
 | Complessità | Bassa-media | Alta |
 | Caso d'uso | Tabelle grandi, lifecycle management | Volume > singolo nodo, write throughput estremo |
+
+## Troubleshooting
+
+### Scenario 1 — Partition pruning non avviene (query scansiona tutte le partizioni)
+
+**Sintomo:** `EXPLAIN` mostra che la query tocca tutte le partizioni anche con filtro sulla partition key.
+
+**Causa:** Il filtro non è abbastanza selettivo per il planner, oppure si usa una funzione sulla colonna (es. `DATE(timestamp) = '2024-01-01'`) che impedisce il pruning, oppure `enable_partition_pruning = off`.
+
+**Soluzione:**
+```sql
+-- Verifica che partition pruning sia abilitato
+SHOW enable_partition_pruning;  -- deve essere 'on'
+SET enable_partition_pruning = on;
+
+-- SBAGLIATO: funzione sulla partition key blocca il pruning
+SELECT * FROM log_eventi WHERE DATE(timestamp) = '2024-01-15';
+
+-- CORRETTO: confronto diretto con range
+SELECT * FROM log_eventi
+WHERE timestamp >= '2024-01-15' AND timestamp < '2024-01-16';
+
+-- Verifica con EXPLAIN
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT * FROM log_eventi WHERE timestamp >= '2024-01-15' AND timestamp < '2024-01-16';
+-- Cerca "Partitions: 1 out of N" o "Rows Removed by Partition Pruning"
+```
+
+---
+
+### Scenario 2 — INSERT fallisce con "no partition of relation found for row"
+
+**Sintomo:** `ERROR: no partition of relation "tabella" found for row` su INSERT di una riga.
+
+**Causa:** Il valore della partition key non rientra in nessuna partizione definita e non esiste una partizione DEFAULT.
+
+**Soluzione:**
+```sql
+-- Identifica il valore che non ha partizione
+-- Es: si inserisce una riga con timestamp='2025-06-15' ma la partizione non esiste
+
+-- Opzione 1: creare la partizione mancante
+CREATE TABLE log_eventi_2025_06
+    PARTITION OF log_eventi
+    FOR VALUES FROM ('2025-06-01') TO ('2025-07-01');
+
+-- Opzione 2: creare partizione DEFAULT per catturare valori non coperti
+CREATE TABLE log_eventi_default
+    PARTITION OF log_eventi DEFAULT;
+
+-- Verifica le partizioni esistenti
+SELECT relname, pg_get_expr(relpartbound, oid) AS bounds
+FROM pg_class
+WHERE relispartition AND relparentrelid = 'log_eventi'::regclass
+ORDER BY relname;
+```
+
+---
+
+### Scenario 3 — ATTACH PARTITION lento o causa lock eccessivo
+
+**Sintomo:** `ALTER TABLE ... ATTACH PARTITION` blocca la tabella padre per minuti su tabelle grandi.
+
+**Causa:** PostgreSQL esegue una scansione full della nuova tabella per verificare che tutte le righe rispettino i vincoli della partizione. Su tabelle da milioni di righe il lock è prolungato.
+
+**Soluzione:**
+```sql
+-- Tecnica per ATTACH senza lock prolungato:
+-- 1. Aggiungere un CHECK constraint PRIMA dell'attach (non richiede scansione al momento dell'attach)
+ALTER TABLE log_eventi_2025_03
+    ADD CONSTRAINT chk_ts CHECK (
+        timestamp >= '2025-03-01' AND timestamp < '2025-04-01'
+    ) NOT VALID;
+
+-- 2. Validare il constraint in background (richiede solo ShareUpdateExclusiveLock)
+ALTER TABLE log_eventi_2025_03 VALIDATE CONSTRAINT chk_ts;
+
+-- 3. Ora l'ATTACH è quasi istantaneo (il constraint è già verificato)
+ALTER TABLE log_eventi ATTACH PARTITION log_eventi_2025_03
+    FOR VALUES FROM ('2025-03-01') TO ('2025-04-01');
+
+-- Verifica partizioni attive
+SELECT count(*) FROM pg_inherits
+WHERE inhparent = 'log_eventi'::regclass;
+```
+
+---
+
+### Scenario 4 — pg_partman non crea le partizioni future
+
+**Sintomo:** Le partizioni future non vengono create automaticamente; INSERT fallisce con errore "no partition found".
+
+**Causa:** `partman.run_maintenance()` non viene eseguito dalla cron job, oppure `p_premake` è troppo basso, oppure l'estensione pg_cron non è configurata.
+
+**Soluzione:**
+```sql
+-- Verifica la configurazione corrente
+SELECT * FROM partman.part_config WHERE parent_table = 'public.log_eventi';
+
+-- Esegui manualmente la manutenzione
+SELECT partman.run_maintenance('public.log_eventi');
+
+-- Aumenta il numero di partizioni create in anticipo
+UPDATE partman.part_config
+SET premake = 6  -- crea 6 partizioni future invece del default
+WHERE parent_table = 'public.log_eventi';
+
+-- Se usi pg_cron, verifica che il job esista
+SELECT * FROM cron.job WHERE command LIKE '%run_maintenance%';
+
+-- Ricrea il job se mancante (esegue ogni ora)
+SELECT cron.schedule('partman-maintenance', '0 * * * *',
+    'SELECT partman.run_maintenance()');
+
+-- Controlla eventuali errori nel log di pg_partman
+SELECT * FROM partman.part_config_sub WHERE sub_parent = 'public.log_eventi';
+```
+
+---
 
 ## Relazioni
 

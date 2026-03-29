@@ -9,7 +9,7 @@ related: [cloud/aws/compute/ec2, cloud/aws/networking/vpc, cloud/aws/networking/
 official_docs: https://docs.aws.amazon.com/autoscaling/ec2/userguide/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # EC2 Auto Scaling & Load Balancing
@@ -417,6 +417,130 @@ Internet → IGW → GWLB → Firewall Appliance → GWLB → Target (EC2, ALB)
 - Opera al Layer 3/4 con GENEVE encapsulation
 - Bilancia il traffico verso fleet di appliance (FW — Firewall, IDS/IPS — Intrusion Detection/Prevention System, DLP — Data Loss Prevention)
 - Trasparente all'applicazione
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Le istanze vengono terminate subito dopo il lancio
+
+**Sintomo:** Le istanze entrano in `InService` e poi vengono subito terminate dall'ASG.
+
+**Causa:** L'health check ELB fallisce prima che l'applicazione sia pronta (grace period troppo basso o `/health` endpoint non disponibile).
+
+**Soluzione:** Aumentare `health-check-grace-period` oppure correggere l'endpoint di health check.
+
+```bash
+# Verificare lo stato degli health check
+aws elbv2 describe-target-health \
+    --target-group-arn $TG_ARN \
+    --query 'TargetHealthDescriptions[*].{Id:Target.Id,State:TargetHealth.State,Reason:TargetHealth.Reason}'
+
+# Aumentare il grace period
+aws autoscaling update-auto-scaling-group \
+    --auto-scaling-group-name myapp-asg \
+    --health-check-grace-period 600
+
+# Verificare attività recenti dell'ASG (scaling events, terminate)
+aws autoscaling describe-scaling-activities \
+    --auto-scaling-group-name myapp-asg \
+    --max-items 10
+```
+
+---
+
+### Scenario 2 — L'ASG non scala nonostante il carico elevato
+
+**Sintomo:** CPU al 90%+ ma il numero di istanze non aumenta. La scaling policy sembra inattiva.
+
+**Causa:** Cooldown period attivo, allarme CloudWatch non in stato `ALARM`, o policy non collegata correttamente all'ASG.
+
+**Soluzione:** Verificare lo stato degli allarmi CloudWatch e controllare il cooldown.
+
+```bash
+# Verificare stato allarmi CloudWatch legati all'ASG
+aws cloudwatch describe-alarms \
+    --alarm-name-prefix myapp-asg \
+    --query 'MetricAlarms[*].{Name:AlarmName,State:StateValue,Reason:StateReason}'
+
+# Verificare le scaling policies configurate
+aws autoscaling describe-policies \
+    --auto-scaling-group-name myapp-asg
+
+# Forzare uno scaling manuale per test
+aws autoscaling set-desired-capacity \
+    --auto-scaling-group-name myapp-asg \
+    --desired-capacity 5 \
+    --honor-cooldown false
+
+# Verificare se c'è un cooldown attivo
+aws autoscaling describe-auto-scaling-groups \
+    --auto-scaling-group-names myapp-asg \
+    --query 'AutoScalingGroups[0].{DefaultCooldown:DefaultCooldown,DesiredCapacity:DesiredCapacity}'
+```
+
+---
+
+### Scenario 3 — Instance Refresh bloccato o in stato Failed
+
+**Sintomo:** `start-instance-refresh` risulta in stato `Failed` o rimane a `InProgress` senza avanzare.
+
+**Causa:** `MinHealthyPercentage` troppo alto, istanze che non superano gli health check dopo il refresh, o `AutoRollback` scattato.
+
+**Soluzione:** Controllare il motivo del fallimento e le attività di rollback.
+
+```bash
+# Verificare stato del refresh e motivo del fallimento
+aws autoscaling describe-instance-refreshes \
+    --auto-scaling-group-name myapp-asg \
+    --query 'InstanceRefreshes[0].{Status:Status,Reason:StatusReason,Progress:PercentageComplete}'
+
+# Annullare un refresh in corso
+aws autoscaling cancel-instance-refresh \
+    --auto-scaling-group-name myapp-asg
+
+# Riprovare con MinHealthyPercentage più basso
+aws autoscaling start-instance-refresh \
+    --auto-scaling-group-name myapp-asg \
+    --strategy Rolling \
+    --preferences '{
+        "MinHealthyPercentage": 70,
+        "InstanceWarmup": 300,
+        "AutoRollback": false
+    }'
+```
+
+---
+
+### Scenario 4 — L'ALB restituisce 502/503 intermittenti sotto carico
+
+**Sintomo:** Utenti ricevono errori HTTP 502 o 503, specialmente durante eventi di scaling o deploy.
+
+**Causa:** Istanze rimosse dal Target Group prima del completamento delle richieste in corso (deregistration delay troppo basso) o nuove istanze aggiunte troppo presto (warmup insufficiente).
+
+**Soluzione:** Aumentare il deregistration delay e verificare lo stato dei target.
+
+```bash
+# Verificare metriche di errore sull'ALB
+aws cloudwatch get-metric-statistics \
+    --namespace AWS/ApplicationELB \
+    --metric-name HTTPCode_ELB_5XX_Count \
+    --dimensions Name=LoadBalancer,Value=app/myapp-alb/xxxx \
+    --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ) \
+    --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
+    --period 60 \
+    --statistics Sum
+
+# Aumentare il deregistration delay (default 300s, ridurlo può causare 502)
+aws elbv2 modify-target-group-attributes \
+    --target-group-arn $TG_ARN \
+    --attributes '[{"Key": "deregistration_delay.timeout_seconds", "Value": "60"}]'
+
+# Verificare target unhealthy nel TG
+aws elbv2 describe-target-health \
+    --target-group-arn $TG_ARN \
+    --query 'TargetHealthDescriptions[?TargetHealth.State!=`healthy`]'
+```
 
 ---
 

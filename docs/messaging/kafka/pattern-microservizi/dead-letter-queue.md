@@ -12,7 +12,7 @@ related:
 official_docs: https://docs.spring.io/spring-kafka/docs/current/reference/html/#dead-letters
 status: complete
 difficulty: advanced
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Dead Letter Queue (DLQ)

@@ -9,7 +9,7 @@ related: [ci-cd/jenkins/pipeline-fundamentals, ci-cd/jenkins/enterprise-patterns
 official_docs: https://plugins.jenkins.io/kubernetes/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-27
+last_updated: 2026-03-28
 ---
 
 # Jenkins Agent Infrastructure
@@ -726,6 +726,118 @@ spec:
     requests.memory: "40Gi"
     limits.cpu: "20"
     limits.memory: "80Gi"
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Pod agente bloccato in Pending
+
+**Sintomo:** Il job Jenkins rimane in coda indefinitamente, il pod agente risulta `Pending` nel namespace `jenkins-agents`.
+
+**Causa:** Risorse insufficienti nel cluster (CPU/memory), nessun nodo con il `nodeSelector` richiesto, o PVC non legato (Unbound).
+
+**Soluzione:** Verificare eventi del pod e stato dei PVC.
+
+```bash
+# Controllare eventi del pod bloccato
+kubectl describe pod -n jenkins-agents -l jenkins/agent=true | grep -A 20 Events
+
+# Verificare nodi disponibili con il label richiesto
+kubectl get nodes -l workload=build
+
+# Controllare stato PVC
+kubectl get pvc -n jenkins-agents
+kubectl describe pvc maven-cache-pvc -n jenkins-agents
+
+# Verificare risorse disponibili sui nodi
+kubectl describe nodes | grep -A 10 "Allocated resources"
+```
+
+---
+
+### Scenario 2 — Agente non riesce a connettersi al controller (JNLP timeout)
+
+**Sintomo:** Il pod agente viene creato ma il container `jnlp` crasha con errori `Connection refused` o `Failed to connect to jenkins-controller:50000`.
+
+**Causa:** La porta 50000 non è raggiungibile dal namespace agenti (NetworkPolicy restrittiva), il Service `jenkins-agent` non punta al controller, o `jenkinsTunnel` in JCasC è configurato erroneamente.
+
+**Soluzione:**
+
+```bash
+# Verificare che il Service jenkins-agent esista e punti alla porta 50000
+kubectl get svc -n jenkins jenkins-agent
+kubectl describe svc -n jenkins jenkins-agent
+
+# Test di connettività dalla NetworkPolicy
+kubectl run test-conn --rm -it --image=busybox -n jenkins-agents -- \
+    nc -zv jenkins-agent.jenkins.svc.cluster.local 50000
+
+# Controllare log del container jnlp
+kubectl logs -n jenkins-agents <pod-name> -c jnlp --previous
+
+# Se si usa WebSocket: verificare che l'ingress/LB supporti upgrade WebSocket
+kubectl get ingress -n jenkins
+```
+
+---
+
+### Scenario 3 — Build lenta per mancanza di cache dipendenze
+
+**Sintomo:** Ogni build Maven/NPM scarica tutte le dipendenze da zero, anche con PVC di cache configurato.
+
+**Causa:** Il PVC `ReadWriteMany` non è montato correttamente, il `mountPath` non corrisponde alla directory di cache del tool, o il `storageClassName` NFS non è disponibile.
+
+**Soluzione:**
+
+```bash
+# Verificare che il PVC sia montato nel pod agente
+kubectl exec -n jenkins-agents <pod-name> -c maven -- df -h /root/.m2/repository
+
+# Verificare contenuto della cache
+kubectl exec -n jenkins-agents <pod-name> -c maven -- ls -la /root/.m2/repository
+
+# Controllare che lo StorageClass NFS sia disponibile e funzionante
+kubectl get storageclass
+kubectl get pv | grep maven-cache
+
+# Se la cache è vuota: pre-popolare con un job di warm-up
+kubectl exec -n jenkins-agents <pod-name> -c maven -- \
+    mvn dependency:resolve -f /path/to/pom.xml
+```
+
+---
+
+### Scenario 4 — JCasC non viene applicato all'avvio del controller
+
+**Sintomo:** Il controller Jenkins si avvia con la configurazione di default (wizard di setup attivo, nessun cloud Kubernetes configurato), ignorando il file `jenkins.yaml`.
+
+**Causa:** La variabile d'ambiente `CASC_JENKINS_CONFIG` non è impostata, il ConfigMap non è montato correttamente, o il plugin `configuration-as-code` non è installato.
+
+**Soluzione:**
+
+```bash
+# Verificare che la env var sia presente nel pod controller
+kubectl exec -n jenkins <jenkins-pod> -- env | grep CASC
+
+# Controllare che il ConfigMap sia montato
+kubectl exec -n jenkins <jenkins-pod> -- ls -la /etc/jenkins/
+kubectl exec -n jenkins <jenkins-pod> -- cat /etc/jenkins/jenkins.yaml | head -20
+
+# Verificare che il plugin JCasC sia installato
+kubectl exec -n jenkins <jenkins-pod> -- \
+    ls /var/jenkins_home/plugins/ | grep configuration-as-code
+
+# Forzare reload della configurazione a caldo (senza restart)
+JENKINS_URL="https://jenkins.company.com"
+TOKEN="<api-token>"
+curl -s -o /dev/null -w "%{http_code}" -X POST \
+    "${JENKINS_URL}/configuration-as-code/reload" \
+    -H "Authorization: Bearer ${TOKEN}"
+
+# Verificare log di avvio per errori JCasC
+kubectl logs -n jenkins <jenkins-pod> | grep -i "casc\|configuration-as-code"
 ```
 
 ---

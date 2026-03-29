@@ -3,13 +3,18 @@ title: "Istio"
 slug: istio
 category: networking
 tags: [istio, envoy, kubernetes, service-mesh, mtls, virtualservice, destinationrule]
-search_keywords: [istio installation istioctl, istio virtual service, istio destination rule, istio gateway crd, istio peer authentication mtls, istio authorization policy, istio traffic management, istiod control plane, istio observability kiali jaeger prometheus, istio canary deployment, istio fault injection, istio circuit breaker, istio ingress gateway]
+search_keywords: [istio installation istioctl, istio virtual service, istio destination rule, istio gateway crd, istio peer authentication mtls, istio authorization policy, istio traffic management, istiod control plane, istio observability kiali jaeger prometheus, istio canary deployment, istio fault injection, istio circuit breaker, istio ingress gateway, istio 1.20, istio 1.21, ambient mesh, istio ambient mode, EnvoyFilter, WasmPlugin, WorkloadEntry, ServiceEntry istio, istio-prometheus integration, kiali graph, jaeger tracing istio, istio vs linkerd, istio vs cilium, 503 upstream reset istio, pilot-discovery, istiod crashloopbackoff, istio sidecar injection, istio outlier detection, istio traffic splitting]
 parent: networking/service-mesh/_index
-related: [networking/service-mesh/concetti-base, networking/service-mesh/envoy, networking/api-gateway/ingress-controller]
+related:
+  - networking/service-mesh/concetti-base
+  - networking/service-mesh/envoy
+  - networking/kubernetes/ingress
+  - networking/kubernetes/network-policies
+  - dev/resilienza/circuit-breaker
 official_docs: https://istio.io/latest/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-03-29
 ---
 
 # Istio

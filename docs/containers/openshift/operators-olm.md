@@ -9,7 +9,7 @@ related: [containers/kubernetes/operators-crd, containers/openshift/architettura
 official_docs: https://docs.openshift.com/container-platform/latest/operators/understanding/olm/olm-understanding-olm.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Operators e OLM
@@ -294,6 +294,120 @@ oc apply -f ./oc-mirror-workspace/results-*/
 
 # Crea CatalogSource che punta al mirror locale
 # (generato automaticamente da oc mirror)
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — CSV rimane in fase `Installing` o `Failed`
+
+**Sintomo:** `oc get csv -n <namespace>` mostra il CSV con `PHASE: Installing` o `PHASE: Failed` indefinitamente.
+
+**Causa:** Immagine dell'operator non raggiungibile, RBAC insufficiente, o CRD già esistente in conflitto.
+
+**Soluzione:** Ispezionare gli eventi e i log del pod OLM.
+
+```bash
+# Verifica lo stato dettagliato del CSV
+oc describe csv <csv-name> -n <namespace>
+# Cercare sezione "Conditions" per il messaggio di errore
+
+# Log del catalog operator
+oc logs -n openshift-operator-lifecycle-manager \
+    deployment/catalog-operator -f
+
+# Log del packageserver
+oc logs -n openshift-operator-lifecycle-manager \
+    deployment/packageserver -f
+
+# Controlla eventi nel namespace
+oc get events -n <namespace> --sort-by=.lastTimestamp | tail -20
+```
+
+---
+
+### Scenario 2 — InstallPlan non viene creato dopo la Subscription
+
+**Sintomo:** La Subscription esiste ma `oc get installplan -n <namespace>` non mostra nulla.
+
+**Causa:** CatalogSource non raggiungibile o pod del catalog in errore. OLM non riesce a risolvere il package dalla sorgente.
+
+**Soluzione:** Verificare lo stato dei CatalogSource e del pod associato.
+
+```bash
+# Controlla lo stato dei CatalogSource
+oc get catalogsource -n openshift-marketplace
+oc describe catalogsource <source-name> -n openshift-marketplace
+# Cercare: "READY" nel campo CONNECTION STATE
+
+# Verifica il pod del catalog (grpc server)
+oc get pods -n openshift-marketplace
+oc logs <catalog-pod> -n openshift-marketplace
+
+# Controlla se il package è disponibile nel catalog
+oc get packagemanifest <package-name> -n openshift-marketplace
+
+# Forza riconciliazione eliminando e ricreando la Subscription
+oc delete subscription <name> -n <namespace>
+oc apply -f subscription.yaml
+```
+
+---
+
+### Scenario 3 — Upgrade bloccato, nuova versione non compare
+
+**Sintomo:** Esiste una versione più recente sul catalog ma OLM non crea un InstallPlan di upgrade per la Subscription esistente.
+
+**Causa:** La versione corrente non ha un `replaces` che copre il CSV installato, oppure il channel è stato rinominato/rimosso.
+
+**Soluzione:** Verificare il grafo degli upgrade e il channel attivo.
+
+```bash
+# Controlla il channel e il CSV installato
+oc get subscription <name> -n <namespace> -o yaml
+# Campi importanti: channel, installedCSV, currentCSV
+
+# Verifica i canali disponibili per il package
+oc get packagemanifest <package-name> \
+    -o jsonpath='{.status.channels[*].name}'
+
+# Verifica il grafo di upgrade (replaces chain)
+oc get packagemanifest <package-name> \
+    -o jsonpath='{.status.channels[?(@.name=="stable")].entries[*]}'
+
+# Se il channel è cambiato, aggiorna la Subscription
+oc patch subscription <name> -n <namespace> \
+    --type merge \
+    -p '{"spec":{"channel":"stable-v2"}}'
+```
+
+---
+
+### Scenario 4 — Operator installato ma CR non viene riconciliata
+
+**Sintomo:** Il CSV è in `Succeeded` e l'operator pod è Running, ma la Custom Resource creata non produce risultati (pod non creati, status vuoto).
+
+**Causa:** Il pod dell'operator è in crash loop, manca RBAC sul namespace target, o la CR ha un campo non valido.
+
+**Soluzione:** Controllare log dell'operator e RBAC.
+
+```bash
+# Verifica lo stato del pod dell'operator
+oc get pods -n <operator-namespace>
+oc logs deployment/<operator-deployment> -n <operator-namespace> -f
+
+# Controlla se ci sono errori di RBAC
+oc auth can-i list pods \
+    --as=system:serviceaccount:<operator-namespace>:<operator-sa> \
+    -n <target-namespace>
+
+# Descrivi la CR per vedere gli eventi e lo status
+oc describe <cr-kind> <cr-name> -n <namespace>
+
+# Verifica che la CRD sia installata correttamente
+oc get crd | grep <group>
+oc describe crd <crd-name>
 ```
 
 ---

@@ -9,7 +9,7 @@ related: [security/secret-management/vault, security/supply-chain/admission-cont
 official_docs: https://kubernetes.io/docs/concepts/configuration/secret/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Kubernetes Secrets — Native e Avanzati
@@ -334,6 +334,127 @@ spec:
 - **Non usare env var per secret critici**: le env var sono visibili in `kubectl describe pod`, in `/proc/PID/environ`, e nei log. Preferire file montati come volume (aggiornabili senza restart)
 - **ESO per managed cloud**: se usi AWS/GCP/Azure, ESO + Secrets Manager è la soluzione più semplice e sicura — centralizza la gestione con rotazione
 - **Sealed Secrets per GitOps on-premise**: quando non hai un cloud secret store ma vuoi tutto in Git
+
+## Troubleshooting
+
+### Scenario 1 — Secret non montato nel pod / pod rimane in `Pending`
+
+**Sintomo:** Il pod non parte e `kubectl describe pod` mostra `MountVolume.SetUp failed: secret "my-secret" not found` oppure il pod è bloccato in `Pending`.
+
+**Causa:** Il Secret referenziato nel volume o nell'`envFrom` non esiste nel namespace del pod, oppure è stato creato nel namespace sbagliato.
+
+**Soluzione:** Verificare che il Secret esista nello stesso namespace del pod e che il nome corrisponda esattamente.
+
+```bash
+# Verifica esistenza del secret nel namespace corretto
+kubectl get secret my-secret -n production
+
+# Lista tutti i secret nel namespace
+kubectl get secrets -n production
+
+# Dettaglio del pod per leggere il messaggio di errore completo
+kubectl describe pod <pod-name> -n production
+
+# Se il secret manca, crearlo
+kubectl create secret generic my-secret \
+  --from-literal=password="mypassword" \
+  -n production
+```
+
+---
+
+### Scenario 2 — ExternalSecret rimane in `SecretSyncedError` o `NotReady`
+
+**Sintomo:** `kubectl get externalsecret -n production` mostra `STATUS: SecretSyncedError` o `READY: False`. Il Kubernetes Secret target non viene creato o aggiornato.
+
+**Causa:** Problema di autenticazione/autorizzazione tra ESO e lo store esterno (permessi IAM mancanti, IRSA non configurato, path errato nel secret store).
+
+**Soluzione:** Ispezionare gli eventi dell'ExternalSecret e i log del controller ESO.
+
+```bash
+# Controlla lo status e gli eventi dell'ExternalSecret
+kubectl describe externalsecret orders-db-credentials -n production
+
+# Controlla i log del controller ESO
+kubectl logs -n external-secrets \
+  -l app.kubernetes.io/name=external-secrets \
+  --tail=50
+
+# Verifica che il SecretStore sia Ready
+kubectl get clustersecretstore aws-secrets-manager
+kubectl describe clustersecretstore aws-secrets-manager
+
+# Test manuale: verifica che la SA abbia accesso al secret AWS
+kubectl exec -it -n external-secrets \
+  $(kubectl get pod -n external-secrets -l app.kubernetes.io/name=external-secrets -o jsonpath='{.items[0].metadata.name}') \
+  -- env | grep AWS
+```
+
+---
+
+### Scenario 3 — Sealed Secret non viene decifrato (`controller not found` o `decryption error`)
+
+**Sintomo:** Dopo `kubectl apply` di un SealedSecret, il Kubernetes Secret non viene creato. `kubectl get sealedsecret` mostra `STATUS: SyncError`.
+
+**Causa 1:** Il controller Sealed Secrets è stato ricreato con una nuova chiave — i SealedSecret cifrati con la vecchia chiave non sono più decifrabili.
+**Causa 2:** Il SealedSecret è stato cifrato per un namespace diverso (scope `strict` = namespace-locked).
+
+**Soluzione:**
+
+```bash
+# Verifica stato del controller
+kubectl get pods -n kube-system -l app.kubernetes.io/name=sealed-secrets
+
+# Controlla gli eventi del SealedSecret
+kubectl describe sealedsecret orders-credentials -n production
+
+# Log del controller per vedere errori di decifratura
+kubectl logs -n kube-system \
+  -l app.kubernetes.io/name=sealed-secrets \
+  --tail=30
+
+# Se la chiave è stata persa, ripristinare il backup della chiave privata
+kubectl apply -f sealed-secrets-key-backup.yaml -n kube-system
+kubectl rollout restart deployment/sealed-secrets-controller -n kube-system
+
+# Rigenerare il SealedSecret con la chiave pubblica attuale
+kubeseal --fetch-cert --controller-namespace kube-system > pub-cert.pem
+kubectl create secret generic orders-credentials \
+  --from-literal=password="newvalue" \
+  --dry-run=client -o yaml | \
+kubeseal --cert pub-cert.pem --format yaml > sealed-orders-credentials.yaml
+```
+
+---
+
+### Scenario 4 — Le variabili d'ambiente dai Secret non si aggiornano dopo una modifica
+
+**Sintomo:** Aggiornato un Kubernetes Secret con `kubectl apply` o tramite ESO, ma il pod continua a leggere il valore vecchio. I secret montati come volume si aggiornano, ma le env var restano stantie.
+
+**Causa:** Le env var (`env`/`envFrom`) vengono iniettate al momento del lancio del pod e non vengono aggiornate dynamicamente. Solo i secret montati come volume (`volumeMounts`) vengono sincronizzati dal kubelet.
+
+**Soluzione:** Forzare il rolling restart del deployment. Se il problema è ricorrente, usare Reloader.
+
+```bash
+# Forza il rolling restart del deployment per ricaricare le env var
+kubectl rollout restart deployment/orders-service -n production
+
+# Verifica che il restart sia completato
+kubectl rollout status deployment/orders-service -n production
+
+# Verifica il valore attuale dell'env var nel pod aggiornato
+kubectl exec -it \
+  $(kubectl get pod -n production -l app=orders-service -o jsonpath='{.items[0].metadata.name}') \
+  -n production -- env | grep DB_PASS
+
+# Soluzione permanente: installare Reloader e annotare il deployment
+helm install reloader stakater/reloader -n kube-system
+kubectl annotate deployment orders-service \
+  reloader.stakater.com/auto="true" \
+  -n production
+```
+
+---
 
 ## Riferimenti
 

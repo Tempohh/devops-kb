@@ -9,7 +9,7 @@ related: [cloud/aws/networking/vpc, cloud/aws/networking/cloudfront, cloud/aws/c
 official_docs: https://docs.aws.amazon.com/route53/latest/developerguide/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # Route 53 — DNS Managed
@@ -342,6 +342,116 @@ aws route53resolver associate-firewall-rule-group \
     --vpc-id $VPC_ID \
     --priority 100 \
     --name "association"
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Il DNS non risolve dopo la creazione della Hosted Zone
+
+**Sintomo:** Query DNS verso il dominio restituisce `NXDOMAIN` o timeout anche dopo aver creato record nella hosted zone.
+
+**Causa:** Il domain registrar punta ancora ai vecchi nameserver, non ai 4 NS assegnati da Route 53.
+
+**Soluzione:** Copiare i 4 nameserver della hosted zone nel registrar del dominio (può richiedere fino a 48h di propagazione).
+
+```bash
+# Verificare i nameserver assegnati alla hosted zone
+aws route53 get-hosted-zone \
+    --id Z1234567890 \
+    --query 'DelegationSet.NameServers'
+
+# Verificare la propagazione DNS (da CLI)
+dig NS company.com @8.8.8.8
+nslookup company.com 1.1.1.1
+```
+
+---
+
+### Scenario 2 — Il failover non scatta nonostante l'endpoint sia down
+
+**Sintomo:** Il Primary è irraggiungibile, ma Route 53 continua a rispondere con il record Primary invece di switchare al Secondary.
+
+**Causa:** L'health check non è associato al record Primary, oppure `EvaluateTargetHealth` è `false` sull'Alias Target, oppure la soglia di failure (`FailureThreshold`) non è ancora stata superata (default: 3 check consecutivi).
+
+**Soluzione:** Verificare l'associazione health check e controllare lo stato corrente.
+
+```bash
+# Verificare stato health check
+aws route53 get-health-check-status \
+    --health-check-id hc-primary-id \
+    --query 'HealthCheckObservations[*].{Region:IPAddress,Status:StatusReport.Status}'
+
+# Verificare che il record Primary abbia HealthCheckId configurato
+aws route53 list-resource-record-sets \
+    --hosted-zone-id Z1234567890 \
+    --query "ResourceRecordSets[?Failover=='PRIMARY']"
+
+# Testare l'health check manualmente (HTTP)
+curl -v https://api.company.com/health
+```
+
+---
+
+### Scenario 3 — Private Hosted Zone non risolta all'interno del VPC
+
+**Sintomo:** Le istanze EC2 nel VPC non riescono a risolvere hostname nella private hosted zone (es. `db.internal.company.com`).
+
+**Causa:** La private hosted zone non è associata al VPC corretto, oppure i DNS attributes del VPC (`enableDnsHostnames`, `enableDnsSupport`) non sono abilitati.
+
+**Soluzione:** Verificare associazione VPC e DNS attributes.
+
+```bash
+# Verificare VPC associati alla hosted zone
+aws route53 list-vpc-association-authorizations \
+    --hosted-zone-id Z1234567890
+
+# Verificare DNS attributes del VPC
+aws ec2 describe-vpc-attribute \
+    --vpc-id vpc-xxxxx \
+    --attribute enableDnsSupport
+aws ec2 describe-vpc-attribute \
+    --vpc-id vpc-xxxxx \
+    --attribute enableDnsHostnames
+
+# Abilitare DNS support se disabilitato
+aws ec2 modify-vpc-attribute \
+    --vpc-id vpc-xxxxx \
+    --enable-dns-support
+
+# Associare VPC alla private hosted zone
+aws route53 associate-vpc-with-hosted-zone \
+    --hosted-zone-id Z1234567890 \
+    --vpc VPCRegion=eu-central-1,VPCId=vpc-xxxxx
+```
+
+---
+
+### Scenario 4 — Geolocation routing risponde con record Default invece del record atteso
+
+**Sintomo:** Un client in una location specifica (es. Italia) riceve il record `Default` invece del record configurato per `Europe`.
+
+**Causa:** Route 53 geolocation usa la posizione rilevata dall'IP del resolver DNS del client, non dell'IP del client stesso. Se il resolver è un DNS pubblico (8.8.8.8) geolocalizzato diversamente, la policy fallisce. In alternativa, il record per la location specifica non è stato creato.
+
+**Soluzione:** Verificare i record esistenti e testare con un resolver specifico.
+
+```bash
+# Elencare tutti i record geolocation per verificare la copertura
+aws route53 list-resource-record-sets \
+    --hosted-zone-id Z1234567890 \
+    --query "ResourceRecordSets[?GeoLocation!=null].{Name:Name,Geo:GeoLocation}"
+
+# Testare con resolver specifico per geolocation
+dig api.company.com @1.1.1.1
+
+# Usare Route 53 Test DNS response (console) o CLI
+aws route53 test-dns-answer \
+    --hosted-zone-id Z1234567890 \
+    --record-name api.company.com \
+    --record-type A \
+    --resolver-ip 8.8.8.8 \
+    --edns0-client-subnet-ip 151.0.0.0  # IP italiano per simulare client IT
 ```
 
 ---

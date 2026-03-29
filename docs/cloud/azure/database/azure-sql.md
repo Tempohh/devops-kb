@@ -9,7 +9,7 @@ related: [cloud/azure/security/key-vault, cloud/azure/networking/vnet, cloud/azu
 official_docs: https://learn.microsoft.com/azure/azure-sql/database/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-28
 ---
 
 # Azure SQL
@@ -432,25 +432,144 @@ az sql mi link create \
 
 ## Troubleshooting
 
+### Scenario 1 — Connessione rifiutata / timeout dal client
+
+**Sintomo:** L'applicazione riceve `Cannot open server 'X' requested by the login` o timeout di connessione anche con credenziali corrette.
+
+**Causa:** Firewall del server SQL non include l'IP del client, oppure l'accesso pubblico è disabilitato senza Private Endpoint raggiungibile dalla rete del client.
+
+**Soluzione:** Verificare le regole firewall e aggiungere l'IP o il range necessario.
+
 ```bash
-# Verificare dimensione database e spazio usato
+# Listare regole firewall attive
+az sql server firewall-rule list \
+  --resource-group $RG \
+  --server $SERVER_NAME \
+  --output table
+
+# Aggiungere IP specifico (o range)
+az sql server firewall-rule create \
+  --resource-group $RG \
+  --server $SERVER_NAME \
+  --name AllowClientIP \
+  --start-ip-address 203.0.113.10 \
+  --end-ip-address 203.0.113.10
+
+# Verificare se accesso pubblico è abilitato
+az sql server show \
+  --resource-group $RG \
+  --name $SERVER_NAME \
+  --query "publicNetworkAccess" -o tsv
+```
+
+### Scenario 2 — Database raggiunge il limite di storage
+
+**Sintomo:** Errori `The database has reached its size quota` o `INSERT failed: database is full`. Il database smette di accettare scritture.
+
+**Causa:** Il database ha raggiunto il valore `--max-size` configurato. Comune in database con crescita rapida o log transaction non purgati.
+
+**Soluzione:** Aumentare la dimensione massima o liberare spazio eliminando dati/indici obsoleti.
+
+```bash
+# Verificare dimensione corrente e massima
 az sql db show \
   --resource-group $RG \
   --server $SERVER_NAME \
   --name $DB_NAME \
-  --query "{name:name, size:maxSizeBytes, currentSize:currentSku}" \
+  --query "{name:name, maxSizeBytes:maxSizeBytes, status:status}" \
   --output json
 
-# Listare connessioni attive (richiede query T-SQL)
-# SELECT session_id, login_name, program_name, host_name, status
-# FROM sys.dm_exec_sessions WHERE is_user_process = 1
+# Aumentare max-size (es. da 100GB a 250GB)
+az sql db update \
+  --resource-group $RG \
+  --server $SERVER_NAME \
+  --name $DB_NAME \
+  --max-size 250GB
 
-# Controllare lo stato del failover group
+# Query T-SQL per verificare spazio usato per tabella
+# SELECT TOP 10 t.name, SUM(a.total_pages)*8/1024 AS TotalMB
+# FROM sys.tables t JOIN sys.indexes i ON t.object_id=i.object_id
+# JOIN sys.partitions p ON i.object_id=p.object_id AND i.index_id=p.index_id
+# JOIN sys.allocation_units a ON p.partition_id=a.container_id
+# GROUP BY t.name ORDER BY TotalMB DESC
+```
+
+### Scenario 3 — Failover Group in stato degradato o CATCH_UP lento
+
+**Sintomo:** `az sql failover-group show` riporta `replicationState: CATCH_UP` da molto tempo o `SUSPENDED`. Il failover automatico non avviene come previsto.
+
+**Causa:** Lag di replica elevato tra primaria e secondaria (workload pesante, rete degradata, o secondaria sottodimensionata). In stato `SUSPENDED` la replica è ferma.
+
+**Soluzione:** Verificare il replication lag, controllare le metriche di rete, e se necessario ridimensionare la secondaria per allinearla alla primaria.
+
+```bash
+# Controllare stato del failover group
 az sql failover-group show \
   --resource-group $RG \
   --server $SERVER_NAME \
   --name fg-myapp-prod \
-  --query "replicationState" -o tsv
+  --query "{state:replicationState, role:role, partnerServers:partnerServers}" \
+  --output json
+
+# Controllare metriche di replica dal portale (replication_lag_sec)
+az monitor metrics list \
+  --resource $(az sql db show --resource-group $RG --server $SERVER_NAME --name $DB_NAME --query id -o tsv) \
+  --metric "replication_lag_sec" \
+  --interval PT1M \
+  --output table
+
+# Verificare service tier della secondaria (deve essere uguale alla primaria)
+az sql db show \
+  --resource-group rg-database-dr \
+  --server sqlsrv-dr-northeurope \
+  --name $DB_NAME \
+  --query "currentSku" --output json
+```
+
+### Scenario 4 — Performance degradata: query lente su Azure SQL Database
+
+**Sintomo:** Query che prima completavano in pochi ms ora impiegano secondi. CPU o DTU/vCore al 100% su Azure Monitor.
+
+**Causa:** Piano di esecuzione subottimale (statistiche obsolete, indici mancanti), lock contention, o aumento improvviso del carico (es. missing index su tabella cresciuta).
+
+**Soluzione:** Usare Query Performance Insight dal portale oppure T-SQL per identificare le top query per consumo, poi agire su indici o statistiche.
+
+```bash
+# Verificare utilizzo risorse del database tramite CLI
+az monitor metrics list \
+  --resource $(az sql db show --resource-group $RG --server $SERVER_NAME --name $DB_NAME --query id -o tsv) \
+  --metric "cpu_percent,dtu_consumption_percent,deadlock" \
+  --interval PT5M \
+  --output table
+
+# Ottenere suggerimenti automatici di performance (Index Advisor)
+az sql db op list \
+  --resource-group $RG \
+  --server $SERVER_NAME \
+  --database $DB_NAME \
+  --output table
+```
+
+```sql
+-- Top 5 query per CPU (eseguire su database target)
+SELECT TOP 5
+    qs.total_worker_time/qs.execution_count AS avg_cpu_us,
+    qs.execution_count,
+    SUBSTRING(st.text, (qs.statement_start_offset/2)+1,
+        ((qs.statement_end_offset - qs.statement_start_offset)/2)+1) AS query_text
+FROM sys.dm_exec_query_stats qs
+CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st
+ORDER BY avg_cpu_us DESC;
+
+-- Identificare indici mancanti
+SELECT TOP 10
+    migs.avg_total_user_cost * migs.avg_user_impact * (migs.user_seeks + migs.user_scans) AS improvement_measure,
+    mid.statement AS table_name,
+    mid.equality_columns, mid.inequality_columns, mid.included_columns
+FROM sys.dm_db_missing_index_group_stats migs
+JOIN sys.dm_db_missing_index_groups mig ON migs.group_handle = mig.index_group_handle
+JOIN sys.dm_db_missing_index_details mid ON mig.index_handle = mid.index_handle
+ORDER BY improvement_measure DESC;
 ```
 
 ## Riferimenti

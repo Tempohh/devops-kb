@@ -3,13 +3,13 @@ title: "Kafka con Helm"
 slug: helm
 category: messaging
 tags: [kafka, kubernetes, helm, bitnami, deploy]
-search_keywords: [kafka helm chart, bitnami kafka, helm install kafka, kafka kubernetes deploy, helm values kafka, kafka helm produzione]
+search_keywords: [kafka helm chart, bitnami kafka, helm install kafka, kafka kubernetes deploy, helm values kafka, kafka helm produzione, helm upgrade kafka, helm rollback kafka, kafka statefulset kubernetes, kafka kraft kubernetes, kafka sasl kubernetes, kafka persistent volume kubernetes, kafka broker kubernetes, bitnami kafka chart parameters, deploy kafka k8s]
 parent: messaging/kafka/kubernetes-cloud
 related: [messaging/kafka/kubernetes-cloud/strimzi-operator, messaging/kafka/kubernetes-cloud/msk-aws, messaging/kafka/fondamenti/architettura]
 official_docs: https://artifacthub.io/packages/helm/bitnami/kafka
 status: complete
 difficulty: advanced
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Kafka con Helm

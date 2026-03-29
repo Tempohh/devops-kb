@@ -9,7 +9,7 @@ related: [databases/fondamentali/acid-base-cap, databases/fondamentali/sharding,
 official_docs: https://cassandra.apache.org/doc/latest/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Apache Cassandra
@@ -338,13 +338,179 @@ ALTER TABLE log_eventi WITH default_time_to_live = 2592000;  -- 30 giorni
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| `ReadTimeoutException` | Partizione troppo grande, tombstone eccessive | Analizzare partition size, ridurre tombstone |
-| `TombstoneOverwhelmingException` | Troppe tombstone attraversate | Rivedere pattern delete, usare TTL/TWCS |
-| Nodo lento (UN ma lento) | Compaction in corso, GC pause | `nodetool tpstats`, aumentare heap JVM, ottimizzare compaction |
-| Write latenza alta | Nodi sotto load, coordinatore lontano | Token aware policy sul client, aggiungere nodi |
-| Read inconsistente | Repair mancante dopo nodo down | `nodetool repair` sul keyspace |
+### Scenario 1 — ReadTimeoutException sulle query
+
+**Sintomo:** Le query restituiscono `com.datastax.driver.core.exceptions.ReadTimeoutException` in modo intermittente o sistematico su tabelle specifiche.
+
+**Causa:** Partizione troppo grande (hotspot su singolo nodo), eccesso di tombstone attraversate durante la lettura, o nodo replica non raggiungibile.
+
+**Soluzione:** Identificare la dimensione della partizione e il conteggio tombstone, poi intervenire sulla data model o sui parametri di compaction.
+
+```bash
+# Verifica dimensione partizioni e tombstone per tabella
+nodetool tablestats mio_keyspace.metriche_sensore
+
+# Cerca le partizioni più grandi (richiede accesso SSTable)
+nodetool getendpoints mio_keyspace metriche_sensore "sensor-42"
+
+# Analisi tombstone a livello SSTable (offline)
+sstable2json /var/lib/cassandra/data/mio_keyspace/metriche_sensore-*/mc-1-big-Data.db \
+  | python3 -c "import sys,json; [print(r) for r in json.load(sys.stdin) if r.get('deletedAt')]" | head -50
+
+# Aumenta timeout lettura in cassandra.yaml (workaround temporaneo)
+# read_request_timeout_in_ms: 10000   # default 5000ms
+```
+
+```sql
+-- Diagnostica: quante righe ha una partizione specifica?
+SELECT COUNT(*) FROM metriche_sensore
+WHERE sensor_id = 'sensor-42' AND bucket = '2024-01';
+
+-- Se partizioni enormi: rivedere bucketing più granulare (es. per giorno)
+-- Soluzione strutturale: aggiungere campo bucket giornaliero alla partition key
+```
+
+---
+
+### Scenario 2 — TombstoneOverwhelmingException
+
+**Sintomo:** Le query falliscono con `TombstoneOverwhelmingException: Query over table ... has more than 100000 tombstones`. I log mostrano anche warning con soglie inferiori.
+
+**Causa:** DELETE frequenti o TTL su molte righe creano tombstone che la compaction non ha ancora eliminato. Le query range attraversano migliaia di tombstone prima di trovare dati validi.
+
+**Soluzione:** Intervenire sulla strategia di compaction (TWCS per time series), ridurre `gc_grace_seconds` con cautela, e monitorare le soglie.
+
+```bash
+# Vedi tombstone count per tabella
+nodetool tablestats mio_keyspace.metriche_sensore | grep -i tomb
+
+# Forza compaction immediata per liberare tombstone
+nodetool compact mio_keyspace metriche_sensore
+
+# Controlla i threshold in cassandra.yaml
+grep -i tombstone /etc/cassandra/cassandra.yaml
+# tombstone_warn_threshold: 1000
+# tombstone_fail_threshold: 100000
+```
+
+```sql
+-- Passa a TWCS per time series: compatta per finestra temporale,
+-- le tombstone vengono eliminate intera finestra alla volta
+ALTER TABLE metriche_sensore
+    WITH compaction = {
+        'class': 'TimeWindowCompactionStrategy',
+        'compaction_window_unit': 'DAYS',
+        'compaction_window_size': 1
+    }
+    AND default_time_to_live = 2592000;  -- 30 giorni TTL
+
+-- Riduci gc_grace_seconds su tabelle con delete frequenti
+-- (solo se repair è eseguito più spesso di gc_grace_seconds)
+ALTER TABLE log_eventi WITH gc_grace_seconds = 86400;  -- 1 giorno invece di 10
+```
+
+---
+
+### Scenario 3 — Nodo lento o thread pool in saturazione
+
+**Sintomo:** `nodetool status` mostra il nodo come `UN` (Up Normal) ma le latenze sono alte, o `nodetool tpstats` mostra `Pending` o `Blocked` tasks nelle thread pool.
+
+**Causa:** Compaction in corso che consuma I/O, GC pause JVM (heap insufficiente), o coda di operazioni satura (es. `MutationStage` o `ReadStage` bloccati).
+
+**Soluzione:** Ottimizzare heap JVM, limitare la concorrenza della compaction, verificare I/O.
+
+```bash
+# Stato thread pool (cerca Pending > 0 o Blocked > 0)
+nodetool tpstats
+
+# Compaction in corso e percentuale completamento
+nodetool compactionstats
+
+# Limita compaction throughput per ridurre impatto I/O
+nodetool setcompactionthroughput 64   # MB/s (default 64, 0 = illimitato)
+
+# GC pause: controlla i log Cassandra
+grep -i "gc" /var/log/cassandra/system.log | tail -50
+
+# Verifica heap JVM (da jvm.options o cassandra-env.sh)
+# Regola: heap = min(1/4 RAM, 8GB). Per server con 32GB → MAX_HEAP_SIZE=8G
+grep -i "heap" /etc/cassandra/jvm.options
+
+# I/O stats per identificare saturazione disco
+iostat -x 1 10
+```
+
+---
+
+### Scenario 4 — Dati inconsistenti dopo nodo down
+
+**Sintomo:** Dopo che un nodo è stato down per un periodo, le letture con `LOCAL_QUORUM` restituiscono dati obsoleti o mancanti. Oppure `nodetool repair` mostra differenze tra repliche.
+
+**Causa:** Durante il downtime, il nodo non ha ricevuto le write indirizzate a lui. L'**hinted handoff** copre solo brevi interruzioni (default: 3h). Se il downtime supera questa finestra, le repliche divergono.
+
+**Soluzione:** Eseguire `nodetool repair` dopo ogni intervento su un nodo. Monitorare il repair coverage regolarmente.
+
+```bash
+# Repair sul keyspace specifico (può essere lungo su dataset grandi)
+nodetool repair mio_keyspace
+
+# Repair su singola tabella (più veloce per test)
+nodetool repair mio_keyspace metriche_sensore
+
+# Repair incrementale (solo cambiamenti dall'ultimo repair — Cassandra 4+)
+nodetool repair --incremental mio_keyspace
+
+# Verifica che l'hinted handoff sia attivo e controlla i pending hint
+nodetool info | grep "Dropped Hints"
+nodetool tpstats | grep "HintedHandoff"
+
+# Monitora i repair in corso
+nodetool compactionstats  # i repair appaiono come compaction di tipo "VALIDATION"
+```
+
+```yaml
+# cassandra.yaml — parametri hinted handoff
+hinted_handoff_enabled: true
+max_hint_window_in_ms: 10800000   # 3 ore (aumentare se downtime frequenti)
+hinted_handoff_throttle_in_kb: 1024
+```
+
+---
+
+### Scenario 5 — Write latenza alta e hotspot
+
+**Sintomo:** Le write latenze aumentano su specifiche partizioni, mentre altre partizioni rimangono veloci. `nodetool status` mostra distribuzione sbilanciata del load.
+
+**Causa:** **Hotspot**: la partition key scelta concentra le write su pochi nodi (es. partition key con bassa cardinalità come `country_code`, o timestamp come partition key). Con vnodes mal configurati, il bilanciamento può essere sub-ottimale.
+
+**Soluzione:** Rivedere la partition key, aggiungere un campo di salting/bucketing, verificare la distribuzione dei token.
+
+```bash
+# Vedi la distribuzione dei dati per nodo (ownership percentuale)
+nodetool status mio_keyspace
+
+# Verifica distribuzione token (output esteso con ownership)
+nodetool ring mio_keyspace | head -40
+
+# Se distribuzione sbilanciata dopo aggiunta di nodi → ribalancia
+nodetool rebalance   # Cassandra 4.1+
+
+# Token aware policy nel driver Python (write diretta al nodo proprietario)
+```
+
+```python
+from cassandra.cluster import Cluster
+from cassandra.policies import TokenAwarePolicy, DCAwareRoundRobinPolicy
+
+cluster = Cluster(
+    ['cassandra1', 'cassandra2'],
+    load_balancing_policy=TokenAwarePolicy(
+        DCAwareRoundRobinPolicy(local_dc='datacenter1')
+    )
+)
+# Token-aware routing: il coordinator è il nodo proprietario della partizione
+# → elimina un hop di rete, riduce latenza write del 30-50%
+```
 
 ## Riferimenti
 

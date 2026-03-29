@@ -3,13 +3,13 @@ title: "Quarkus e Kafka — SmallRye Reactive Messaging"
 slug: quarkus-kafka
 category: messaging
 tags: [kafka, quarkus, smallrye, reactive, messaging]
-search_keywords: [quarkus kafka, smallrye reactive messaging, quarkus kafka producer consumer, "@incoming @outgoing quarkus", quarkus devservices kafka, mutiny kafka]
+search_keywords: [quarkus kafka, smallrye reactive messaging, quarkus kafka producer consumer, "@incoming @outgoing quarkus", quarkus devservices kafka, mutiny kafka, quarkus reactive messaging, microprofile reactive messaging, quarkus kafka emitter, smallrye kafka connector, quarkus kafka avro, quarkus kafka testcontainers, quarkus native kafka, backpressure kafka quarkus]
 parent: messaging/kafka/sviluppo
 related: [messaging/kafka/sviluppo/spring-kafka, messaging/kafka/sviluppo/exactly-once-semantics]
 official_docs: https://quarkus.io/guides/kafka
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Quarkus e Kafka — SmallRye Reactive Messaging
@@ -226,17 +226,83 @@ class OrderConsumerTest {
 
 ## Troubleshooting
 
-**Messaggi non ricevuti dopo startup**
-- Verificare `auto.offset.reset=earliest` se il consumer è nuovo e vuole leggere messaggi esistenti
-- Verificare che il canale nel `application.properties` corrisponda al nome nell'annotazione `@Incoming`
+### Scenario 1 — Messaggi non ricevuti dopo startup
 
-**OutOfMemoryError durante test**
-- DevServices usa Testcontainers che richiedono Docker. Verificare che Docker sia in esecuzione.
-- Configurare `quarkus.kafka.devservices.shared=true` per riusare il container tra test
+**Sintomo:** Il consumer è avviato ma non processa messaggi presenti nel topic prima dello startup.
 
-**Messaggi non committati (offset non avanzano)**
-- Se si usa `Message<T>`, chiamare esplicitamente `message.ack()`
-- Con payload diretto (non Message), il commit è automatico al termine del metodo
+**Causa:** Il default di `auto.offset.reset` è `latest`, quindi il consumer legge solo i nuovi messaggi prodotti dopo la connessione.
+
+**Soluzione:** Impostare `auto.offset.reset=earliest` per i consumer nuovi che devono leggere dalla coda, oppure verificare il `group.id` per ripartire da un offset committato.
+
+```properties
+mp.messaging.incoming.orders.auto.offset.reset=earliest
+mp.messaging.incoming.orders.group.id=order-processor
+```
+
+### Scenario 2 — Offset non avanzano (consumer bloccato)
+
+**Sintomo:** Il consumer riceve messaggi ma gli offset non vengono committati; i messaggi vengono riprocessati dopo ogni restart.
+
+**Causa:** Quando si usa `Message<T>` come parametro, l'ack deve essere chiamato esplicitamente. Se il metodo torna senza chiamare `message.ack()` o `message.nack()`, l'offset non avanza.
+
+**Soluzione:** Chiamare sempre `message.ack()` al termine del processing, o usare il payload diretto (non `Message<T>`) per ack automatico.
+
+```java
+@Incoming("orders")
+public CompletionStage<Void> process(Message<String> message) {
+    try {
+        processOrder(message.getPayload());
+        return message.ack();       // commit esplicito richiesto
+    } catch (Exception e) {
+        return message.nack(e);     // manda al DLQ se configurato
+    }
+}
+```
+
+### Scenario 3 — BackPressureFailure durante produzione con Emitter
+
+**Sintomo:** `io.smallrye.reactive.messaging.providers.locals.ContextAwareMessage$BackPressureFailure` al momento di `emitter.send()` sotto carico.
+
+**Causa:** Il buffer dell'Emitter è pieno: il producer genera messaggi più velocemente di quanto Kafka riesca ad accettarli.
+
+**Soluzione:** Usare `sendAndAwait()` per attendere che il buffer si svuoti, oppure aumentare il buffer con `overflow-buffer-size`.
+
+```properties
+# Aumentare il buffer (default: 256)
+mp.messaging.outgoing.processed-orders.overflow-buffer-size=1024
+```
+
+```java
+// Alternativa: attesa bloccante (solo se @Blocking)
+emitter.sendAndAwait(Json.encode(order));
+
+// Controllo prima di inviare
+if (emitter.hasRequests()) {
+    emitter.send(Json.encode(order));
+}
+```
+
+### Scenario 4 — DevServices non avvia il container Kafka
+
+**Sintomo:** In dev mode, l'applicazione fallisce con `Connection refused` verso `localhost:9092` o Docker non viene trovato.
+
+**Causa:** DevServices usa Testcontainers che richiede Docker (o Podman) in esecuzione. Se Docker Desktop è spento o non configurato, il container non parte.
+
+**Soluzione:** Verificare Docker, oppure disabilitare DevServices e configurare un broker manuale.
+
+```bash
+# Verificare che Docker sia in esecuzione
+docker info
+
+# Oppure usare Podman come alternativa
+export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
+```
+
+```properties
+# Disabilitare DevServices e puntare a un broker esterno
+quarkus.kafka.devservices.enabled=false
+kafka.bootstrap.servers=localhost:9092
+```
 
 ## Riferimenti
 

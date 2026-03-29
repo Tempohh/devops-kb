@@ -3,13 +3,13 @@ title: "Exactly-Once Semantics (EOS)"
 slug: exactly-once-semantics
 category: messaging
 tags: [kafka, exactly-once, eos, idempotenza, semantics, delivery-guarantee]
-search_keywords: [kafka exactly once, exactly once semantics kafka, kafka idempotent producer, kafka eos, at least once at most once kafka, delivery guarantee kafka, kafka processing guarantee]
+search_keywords: [kafka exactly once, exactly once semantics kafka, kafka idempotent producer, kafka eos, at least once at most once kafka, delivery guarantee kafka, kafka processing guarantee, transaction coordinator kafka, kafka transactional id, zombie fencing kafka, kafka read committed, exactly once processing stream, KIP-98, EXACTLY_ONCE_V2, idempotent consumer kafka]
 parent: messaging/kafka/sviluppo
 related: [messaging/kafka/sviluppo/transazioni, messaging/kafka/fondamenti/produttori]
 official_docs: https://kafka.apache.org/documentation/#semantics
 status: complete
 difficulty: expert
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Exactly-Once Semantics (EOS)
@@ -209,18 +209,86 @@ streamsProps.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
 
 ## Troubleshooting
 
-**ProducerFencedException**
-- Un producer con lo stesso `transactional.id` è già attivo
-- Assicurarsi che `transactional.id` sia univoco per istanza
-- Se il pod si è riavviato, aspettare che il vecchio producer scada (`transaction.timeout.ms`)
+### Scenario 1 — ProducerFencedException al riavvio del producer
 
-**InvalidTxnStateException**
-- Il producer sta cercando di fare operazioni fuori ordine (es. `send` prima di `beginTransaction`)
-- Verificare il flusso del codice
+**Sintomo:** Il producer lancia `ProducerFencedException` all'avvio o durante `initTransactions()`.
 
-**Consumer vede record duplicati con read_committed**
-- Verificare che il producer usi `transactional.id` e `initTransactions()`
-- Verificare che `sendOffsetsToTransaction` sia chiamato prima di `commitTransaction`
+**Causa:** Esiste già un producer attivo con lo stesso `transactional.id`. Kafka utilizza l'epoch per fare zombie fencing: quando un nuovo producer si registra con lo stesso ID, l'epoch viene incrementato e il vecchio producer viene invalidato. Se il vecchio producer è ancora attivo o non ha completato la pulizia, si genera il conflitto.
+
+**Soluzione:** Assicurarsi che `transactional.id` sia unico per istanza (es. includere il nome del pod Kubernetes). Se il pod si è riavviato rapidamente, attendere la scadenza del timeout della transazione precedente.
+
+```bash
+# Verificare le transazioni attive sul broker
+kafka-transactions.sh --bootstrap-server kafka:9092 describe \
+  --transactional-id order-processor-1
+
+# Verificare il transaction timeout configurato
+kafka-configs.sh --bootstrap-server kafka:9092 --describe \
+  --entity-type brokers --entity-name 1 | grep transaction.max.timeout.ms
+```
+
+### Scenario 2 — InvalidTxnStateException durante send o commit
+
+**Sintomo:** `InvalidTxnStateException` con messaggio "Invalid transition attempted from state X to state Y".
+
+**Causa:** Il producer ha chiamato operazioni fuori dal ciclo di vita corretto della transazione. Ad esempio: `send()` prima di `beginTransaction()`, `commitTransaction()` dopo un'eccezione senza `abortTransaction()`, o `beginTransaction()` senza aver chiamato `initTransactions()` all'avvio.
+
+**Soluzione:** Verificare che il flusso rispetti sempre: `initTransactions()` → `beginTransaction()` → `send()`/`sendOffsetsToTransaction()` → `commitTransaction()` oppure `abortTransaction()` in caso di errore.
+
+```java
+// Pattern corretto con gestione errori
+producer.initTransactions();  // una sola volta all'avvio
+while (true) {
+    producer.beginTransaction();
+    try {
+        // operazioni...
+        producer.commitTransaction();
+    } catch (Exception e) {
+        producer.abortTransaction();  // SEMPRE in caso di errore
+        // poi gestire il consumer (seek, rethrow, ecc.)
+    }
+}
+```
+
+### Scenario 3 — Consumer vede record duplicati con read_committed
+
+**Sintomo:** Il consumer con `isolation.level=read_committed` riceve comunque record duplicati o record di transazioni abortite.
+
+**Causa:** Il producer non sta usando correttamente le transazioni: manca `transactional.id`, `initTransactions()` non viene chiamato, oppure `sendOffsetsToTransaction()` non include tutti gli offset del consumer. In alternativa, alcuni consumer del gruppo usano `read_uncommitted` (default).
+
+**Soluzione:** Verificare la configurazione del producer e di tutti i consumer del gruppo.
+
+```bash
+# Verificare la configurazione del consumer group
+kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+  --describe --group my-consumer-group
+
+# Verificare i transaction marker scritti nel topic
+kafka-dump-log.sh --files /var/kafka/logs/processed-orders-0/00000000000000000000.log \
+  --print-data-log | grep -E "COMMIT|ABORT"
+```
+
+### Scenario 4 — Transazione bloccata, consumer lag cresce
+
+**Sintomo:** Il consumer lag aumenta anche se i messaggi sembrano arrivare. Il consumer con `read_committed` non avanza.
+
+**Causa:** Una transazione aperta (non committata né abortita) blocca il Last Stable Offset (LSO). I consumer con `read_committed` non possono avanzare oltre l'LSO. Questo accade quando un producer si blocca, va in crash durante una transazione, o il `transaction.timeout.ms` è molto alto.
+
+**Soluzione:** Identificare il producer con la transazione aperta e terminarlo, oppure attendere che scada il timeout della transazione. Abbassare `transaction.timeout.ms` per minimizzare il blocco in futuro.
+
+```bash
+# Verificare il Last Stable Offset vs Log End Offset
+kafka-log-dirs.sh --bootstrap-server kafka:9092 \
+  --topic-list processed-orders --describe | grep -E "offsetLag|size"
+
+# Elencare le transazioni in stato "Ongoing"
+kafka-transactions.sh --bootstrap-server kafka:9092 list | grep Ongoing
+
+# Abbassare il timeout sulle transazioni lente (config dinamica)
+kafka-configs.sh --bootstrap-server kafka:9092 --alter \
+  --entity-type brokers --entity-default \
+  --add-config transaction.max.timeout.ms=300000
+```
 
 ## Riferimenti
 

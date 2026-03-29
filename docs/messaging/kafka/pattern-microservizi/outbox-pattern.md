@@ -3,7 +3,7 @@ title: "Outbox Pattern"
 slug: outbox-pattern
 category: messaging
 tags: [kafka, microservizi, outbox, debezium, cdc, atomicità, pattern]
-search_keywords: [transactional outbox, dual write, CDC change data capture, Debezium, polling publisher, at-least-once, deduplication, atomicity, dual write problem]
+search_keywords: [transactional outbox, dual write, CDC change data capture, Debezium, polling publisher, at-least-once, deduplication, atomicity, dual write problem, outbox table, event relay, replication slot, WAL logical, kafka connect transforms, event routing, idempotent consumer]
 parent: messaging/kafka/pattern-microservizi
 related:
   - messaging/kafka/pattern-microservizi/saga-pattern
@@ -12,7 +12,7 @@ related:
 official_docs: https://microservices.io/patterns/data/transactional-outbox.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Outbox Pattern

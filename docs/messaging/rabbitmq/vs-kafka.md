@@ -9,7 +9,7 @@ related: [messaging/rabbitmq/_index, messaging/kafka/_index, messaging/rabbitmq/
 official_docs: https://www.rabbitmq.com/docs/streams
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # RabbitMQ vs Kafka
@@ -400,6 +400,123 @@ STRATEGIA DI MIGRAZIONE ZERO-DOWNTIME:
   4. Verifica che gli offset/ack siano allineati
   5. Rimuovi il vecchio sistema quando tutti i consumer sono migrati
   6. Rimuovi il doppio-write dal producer
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Consumer RabbitMQ lento, messaggi si accumulano nella queue
+
+**Sintomo:** La queue cresce indefinitamente; i consumer non riescono a tenere il passo dei producer.
+
+**Causa:** Prefetch count troppo alto (consumer prende più messaggi di quanti riesce a processare) oppure consumer single-threaded con latenza elevata per messaggio.
+
+**Soluzione:** Ridurre il prefetch e scalare orizzontalmente i consumer.
+
+```bash
+# Verificare la profondità della queue e il consumer utilisation
+rabbitmqctl list_queues name messages consumers consumer_utilisation
+
+# Nel codice: impostare prefetch basso per task pesanti
+channel.basic_qos(prefetch_count=1)  # un messaggio alla volta per consumer
+
+# Scalare i consumer con Docker
+docker-compose up --scale worker=5
+```
+
+---
+
+### Scenario 2 — Kafka: consumer group bloccato, offset non avanza (consumer lag in crescita)
+
+**Sintomo:** Il consumer lag aumenta costantemente; i messaggi vengono letti ma gli offset non vengono committati.
+
+**Causa:** Il consumer crasha dopo aver ricevuto il messaggio ma prima del commit dell'offset (o `enable.auto.commit=true` con intervallo troppo lungo).
+
+**Soluzione:** Verificare lo stato del consumer group e abilitare commit manuale.
+
+```bash
+# Ispezionare il lag del consumer group
+kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+  --group my-group --describe
+
+# Reset dell'offset a latest (se i messaggi persi sono accettabili)
+kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+  --group my-group --topic my-topic \
+  --reset-offsets --to-latest --execute
+
+# Reset a un timestamp specifico
+kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+  --group my-group --topic my-topic \
+  --reset-offsets --to-datetime 2026-03-29T00:00:00.000 --execute
+```
+
+---
+
+### Scenario 3 — Messaggi duplicati dopo failover (RabbitMQ o Kafka)
+
+**Sintomo:** I consumer ricevono lo stesso messaggio più volte dopo un riavvio o un rebalance.
+
+**Causa:** RabbitMQ: messaggio consegnato ma non ancora acknowledged quando il consumer va down → il broker lo reinvia. Kafka: l'offset non era stato committato al momento del crash.
+
+**Soluzione:** Implementare idempotenza lato consumer con deduplication key.
+
+```python
+# RabbitMQ: usare message_id per deduplication
+import redis
+
+redis_client = redis.Redis()
+
+def process_message(ch, method, properties, body):
+    msg_id = properties.message_id
+    if redis_client.setnx(f"processed:{msg_id}", "1"):
+        redis_client.expire(f"processed:{msg_id}", 86400)  # TTL 24h
+        # elabora il messaggio
+        do_work(body)
+    # sempre ack per evitare reinvii infiniti
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
+# Kafka: commit manuale dopo elaborazione idempotente
+consumer.poll(timeout_ms=1000)
+process_records(records)  # idempotente
+consumer.commit()          # solo dopo elaborazione completata
+```
+
+---
+
+### Scenario 4 — Bridge Kafka→RabbitMQ perde messaggi durante riavvio
+
+**Sintomo:** Dopo il riavvio del bridge, alcuni messaggi non arrivano su RabbitMQ pur essendo presenti in Kafka.
+
+**Causa:** Il bridge committava l'offset Kafka prima di ricevere la conferma di publish da RabbitMQ (`mandatory=True` + conferma publish non attesa).
+
+**Soluzione:** Committare l'offset Kafka solo dopo la conferma sincrona di RabbitMQ e implementare publisher confirms.
+
+```python
+# Configurazione corretta: disable auto-commit Kafka
+consumer = KafkaConsumer(
+    'topic',
+    enable_auto_commit=False,   # commit manuale
+    auto_offset_reset='earliest'
+)
+
+# Abilitare publisher confirms su RabbitMQ
+channel.confirm_delivery()  # abilita modo sincrono
+
+for msg in consumer:
+    try:
+        channel.basic_publish(
+            exchange='my-exchange',
+            routing_key='my-key',
+            body=msg.value,
+            properties=pika.BasicProperties(delivery_mode=2)
+        )
+        # basic_publish in confirm_delivery mode è sincrono:
+        # ritorna solo quando RabbitMQ ha confermato la ricezione
+        consumer.commit()  # offset committato DOPO conferma RabbitMQ
+    except pika.exceptions.UnroutableError:
+        # Messaggio non routable: loggare e decidere (DLQ o skip)
+        logger.error("Messaggio non routable: %s", msg.value)
 ```
 
 ---

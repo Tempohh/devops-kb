@@ -9,7 +9,7 @@ related: [messaging/kafka/operazioni/performance-tuning, messaging/kafka/operazi
 official_docs: https://kafka.apache.org/documentation/#monitoring
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Monitoring di Kafka
@@ -355,24 +355,116 @@ services:
 
 ## Troubleshooting
 
-### Consumer lag che non scende
+### Scenario 1 — Consumer lag che non scende
 
-1. Verificare che il consumer group sia attivo: `kafka-consumer-groups.sh --describe --group NOME`
-2. Controllare se ci sono partizioni non assegnate (consumer morti)
-3. Verificare le performance del consumer: è il processing lento o il fetch da Kafka?
-4. Considerare di aumentare il numero di istanze consumer (fino al numero di partizioni)
+**Sintomo:** `kafka_consumergroup_lag_sum` rimane costante o cresce anche con il consumer attivo.
 
-### JMX non raggiungibile
+**Causa:** Il consumer non riesce a tenere il passo con la produzione: processing troppo lento, consumer group con partizioni non assegnate, o istanze consumer crashate.
+
+**Soluzione:** Verificare lo stato del gruppo e identificare se è un problema di throughput o di assignment.
 
 ```bash
-# Testare la connessione JMX
-jconsole kafka-broker-1.example.com:9999
+# Descrivere lo stato del consumer group
+kafka-consumer-groups.sh \
+  --bootstrap-server kafka-broker-1:9092 \
+  --command-config admin.properties \
+  --describe --group order-processor
 
-# Verificare le opzioni JMX nel broker
-export JMX_PORT=9999
+# Verificare se ci sono partizioni senza consumer assegnato (campo CONSUMER-ID vuoto)
+kafka-consumer-groups.sh \
+  --bootstrap-server kafka-broker-1:9092 \
+  --command-config admin.properties \
+  --describe --group order-processor | awk '$NF == "-" || $NF == "" {print "Unassigned:", $0}'
+
+# Se il gruppo è DEAD/EMPTY, resettare gli offset solo se i messaggi non devono essere riprocessati
+kafka-consumer-groups.sh \
+  --bootstrap-server kafka-broker-1:9092 \
+  --command-config admin.properties \
+  --reset-offsets --to-latest \
+  --group order-processor --topic orders --execute
+```
+
+### Scenario 2 — JMX non raggiungibile da JMX Exporter
+
+**Sintomo:** Prometheus restituisce errori di scrape per il job `kafka-brokers`; `kafka_server_*` metrics assenti in Grafana.
+
+**Causa:** JMX Exporter non configurato come Java Agent nel broker, porta JMX bloccata da firewall, o hostname RMI non corretto (frequente in ambienti containerizzati).
+
+**Soluzione:** Verificare le variabili d'ambiente del broker e la raggiungibilità della porta.
+
+```bash
+# Verificare che il processo Kafka abbia il javaagent attivo
+ps aux | grep kafka | grep jmx_prometheus_javaagent
+
+# Testare il scrape endpoint dell'exporter
+curl -s http://kafka-broker-1.example.com:7071/metrics | head -20
+
+# Se JMX remoto è necessario, impostare l'hostname RMI esplicito
 export KAFKA_JMX_OPTS="-Dcom.sun.jmx.remote.ssl=false \
   -Dcom.sun.jmx.remote.authenticate=false \
-  -Djava.rmi.server.hostname=kafka-broker-1.example.com"
+  -Djava.rmi.server.hostname=kafka-broker-1.example.com \
+  -Dcom.sun.management.jmxremote \
+  -Dcom.sun.management.jmxremote.port=9999 \
+  -Dcom.sun.management.jmxremote.rmi.port=9999"
+```
+
+### Scenario 3 — Under-replicated partitions persistenti
+
+**Sintomo:** Alert `KafkaUnderReplicatedPartitions > 0` persistente; `kafka_server_replica_manager_under_replicated_partitions` > 0 per più di qualche minuto.
+
+**Causa:** Un broker è lento nel replicare (I/O disk saturo, GC pause lunghe, rete degradata) oppure un broker è down e le repliche non sono state riassegnate.
+
+**Soluzione:** Identificare il broker problematico e verificare I/O e replica lag.
+
+```bash
+# Trovare le partizioni under-replicated
+kafka-topics.sh \
+  --bootstrap-server kafka-broker-1:9092 \
+  --command-config admin.properties \
+  --describe --under-replicated-partitions
+
+# Verificare lo stato di tutti i broker
+kafka-broker-api-versions.sh \
+  --bootstrap-server kafka-broker-1:9092 \
+  --command-config admin.properties
+
+# Controllare il replica lag via JMX (ReplicaFetcherManager)
+# Su ogni broker sospetto, verificare il valore di:
+# kafka.server:type=ReplicaFetcherManager,name=MaxLag,clientId=Replica
+
+# Riavviare il broker problematico se i log mostrano GC pause o I/O errors
+journalctl -u kafka --since "1 hour ago" | grep -E "GC|IOException|TimeoutException"
+```
+
+### Scenario 4 — Metriche consumer lag mancanti in Prometheus
+
+**Sintomo:** `kafka_consumergroup_lag` non è visibile in Prometheus nonostante Kafka Exporter sia up.
+
+**Causa:** Il consumer group non è attivo (nessun consumer connesso in quel momento) oppure Kafka Exporter non ha i permessi ACL per leggere gli offset dei gruppi.
+
+**Soluzione:** Verificare i permessi ACL e la connettività di Kafka Exporter verso il broker.
+
+```bash
+# Verificare che Kafka Exporter raggiunga il broker
+curl -s http://kafka-exporter:9308/metrics | grep kafka_consumergroup
+
+# Controllare i log di Kafka Exporter per errori di autenticazione
+docker logs kafka-exporter 2>&1 | grep -E "error|WARN|auth|SASL"
+
+# Aggiungere ACL per l'utente monitoring se mancanti
+kafka-acls.sh \
+  --bootstrap-server kafka-broker-1:9092 \
+  --command-config admin.properties \
+  --add \
+  --allow-principal User:monitoring \
+  --operation Describe \
+  --group '*'
+
+# Verificare che almeno un consumer del gruppo sia attivo
+kafka-consumer-groups.sh \
+  --bootstrap-server kafka-broker-1:9092 \
+  --command-config admin.properties \
+  --list | grep order-processor
 ```
 
 ---

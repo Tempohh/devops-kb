@@ -9,7 +9,7 @@ related: [cloud/aws/monitoring/cloudwatch, cloud/aws/security/compliance-audit, 
 official_docs: https://docs.aws.amazon.com/xray/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # X-Ray, OpenTelemetry, Managed Grafana e Prometheus
@@ -694,6 +694,68 @@ aws iam simulate-principal-policy \
 
 ```bash
 aws amp list-workspaces --query 'workspaces[*].{id:workspaceId,status:status.statusCode}'
+```
+
+### Scenario 3 — AMG non visualizza dati da AMP
+
+**Sintomo:** Dashboard Grafana mostra "No data" su panel che usano AMP come data source, nonostante le metriche esistano.
+
+**Causa:** Il workspace Grafana non ha i permessi IAM per interrogare AMP, oppure il data source è configurato con endpoint o regione errata.
+
+**Soluzione:** Verificare che il service role di AMG abbia la policy `AmazonPrometheusQueryAccess` e che l'URL del workspace AMP nel data source sia corretto (incluso il workspace ID).
+
+```bash
+# Verificare il service role associato al workspace Grafana
+aws grafana describe-workspace \
+  --workspace-id ws-1234567890 \
+  --query 'workspace.{roleArn:workspaceRoleArn,status:status}'
+
+# Verificare che la policy AmazonPrometheusQueryAccess sia attachata al role
+aws iam list-attached-role-policies \
+  --role-name GrafanaServiceRole \
+  --query 'AttachedPolicies[*].PolicyName'
+
+# Testare query PromQL direttamente tramite AWS CLI per isolare il problema
+aws amp query-metrics \
+  --workspace-id $WORKSPACE_ID \
+  --query 'up' \
+  --time $(date +%s)
+```
+
+### Scenario 4 — X-Ray Daemon perde dati in ambienti ad alto volume
+
+**Sintomo:** I trace appaiono incompleti nella Service Map; subsegment mancanti; il daemon segnala `Segment buffer is full. Dropping…` nei log.
+
+**Causa:** Il buffer UDP del daemon è troppo piccolo per il volume di segmenti generati. Il default `TotalBufferSizeMB: 50` non è sufficiente per servizi ad alto throughput.
+
+**Soluzione:** Aumentare `TotalBufferSizeMB` e `Concurrency` nella configurazione del daemon; oppure ridurre il sampling rate sul servizio per diminuire il volume inviato.
+
+```bash
+# Controllare i log del daemon per confermare il problema
+sudo journalctl -u xray --since "10 minutes ago" | grep -i "drop\|buffer\|full"
+
+# Aggiornare la configurazione del daemon
+sudo tee /etc/amazon/xray/cfg.yaml << 'EOF'
+TotalBufferSizeMB: 128
+Concurrency: 16
+Region: "us-east-1"
+Socket:
+  UDPAddress: "127.0.0.1:2000"
+  TCPAddress: "127.0.0.1:2000"
+Logging:
+  LogLevel: "warn"
+  LogPath: "/var/log/xray/xray.log"
+EOF
+
+sudo systemctl restart xray
+
+# Ridurre sampling rate se il volume è eccessivo
+aws xray update-sampling-rule \
+  --sampling-rule-update '{
+    "RuleName": "Default",
+    "FixedRate": 0.02,
+    "ReservoirSize": 2
+  }'
 ```
 
 ---

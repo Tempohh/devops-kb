@@ -9,7 +9,7 @@ related: [cloud/azure/networking/vnet, cloud/azure/networking/dns-cdn, cloud/azu
 official_docs: https://learn.microsoft.com/azure/load-balancer/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Azure Load Balancing
@@ -331,6 +331,152 @@ az network traffic-manager endpoint create \
 | Caching | No | No | Sì | No |
 | IP Statico | Sì | Sì | No (Anycast) | No (DNS) |
 | Internal | Sì | Sì | No | No |
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Health probe fallisce, backend pool vuoto
+
+**Sintomo:** Il Load Balancer o Application Gateway mostra tutti i backend come "unhealthy"; il traffico non viene instradato.
+
+**Causa:** La health probe non riceve risposta HTTP 200 dal path configurato, oppure il NSG blocca le sonde (Azure Load Balancer usa IP `168.63.129.16`).
+
+**Soluzione:** Verificare che il NSG consenta il traffico dal tag `AzureLoadBalancer` e che l'endpoint di health risponda correttamente.
+
+```bash
+# Verificare lo stato dei backend nel Load Balancer
+az network lb show \
+    --resource-group myapp-rg \
+    --name myapp-lb \
+    --query "backendAddressPools[].backendIPConfigurations[].id" -o tsv
+
+# Controllare le health probe dell'Application Gateway
+az network application-gateway show-backend-health \
+    --resource-group myapp-rg \
+    --name production-appgw \
+    --query "backendAddressPools[].backendHttpSettingsCollection[].servers[]" -o table
+
+# Assicurarsi che il NSG abbia la regola per le probe
+az network nsg rule create \
+    --resource-group myapp-rg \
+    --nsg-name myvm-nsg \
+    --name AllowAzureLoadBalancer \
+    --priority 100 \
+    --source-address-prefixes AzureLoadBalancer \
+    --destination-port-ranges 80 443 \
+    --access Allow \
+    --protocol Tcp
+```
+
+---
+
+### Scenario 2 — Application Gateway restituisce 502 Bad Gateway
+
+**Sintomo:** I client ricevono errore `502 Bad Gateway` dall'Application Gateway.
+
+**Causa:** Il backend non risponde sulla porta/protocollo configurato nelle HTTP Settings, oppure il certificato backend non è trusted dall'Application Gateway (in modalità HTTPS end-to-end).
+
+**Soluzione:** Verificare le HTTP Settings e, per HTTPS backend, aggiungere il certificato root del backend come "trusted root certificate".
+
+```bash
+# Controllare i log di diagnostica dell'Application Gateway
+az monitor diagnostic-settings list \
+    --resource-group myapp-rg \
+    --resource production-appgw \
+    --resource-type "Microsoft.Network/applicationGateways"
+
+# Abilitare i log se non attivi
+az monitor diagnostic-settings create \
+    --resource-group myapp-rg \
+    --resource production-appgw \
+    --resource-type "Microsoft.Network/applicationGateways" \
+    --name appgw-diag \
+    --workspace /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.OperationalInsights/workspaces/myapp-law \
+    --logs '[{"category":"ApplicationGatewayAccessLog","enabled":true},{"category":"ApplicationGatewayFirewallLog","enabled":true}]'
+
+# Query Log Analytics per errori 502
+az monitor log-analytics query \
+    --workspace /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.OperationalInsights/workspaces/myapp-law \
+    --analytics-query 'AzureDiagnostics | where ResourceType == "APPLICATIONGATEWAYS" | where httpStatus_d == 502 | take 20'
+```
+
+---
+
+### Scenario 3 — Front Door non fa failover sull'origin di backup
+
+**Sintomo:** Quando l'origin primario è down, Front Door non reindirizza il traffico all'origin secondario; i client ricevono errori.
+
+**Causa:** Il `successful-samples-required` è impostato troppo alto, oppure il `probe-interval-in-seconds` è troppo lungo — Front Door non ha ancora dichiarato unhealthy l'origin primario.
+
+**Soluzione:** Abbassare la soglia di failure detection o aumentare la frequenza delle probe. Verificare anche che l'origin secondario risponda alle probe.
+
+```bash
+# Controllare lo stato attuale delle origini
+az afd origin list \
+    --resource-group myapp-rg \
+    --profile-name myapp-afd \
+    --origin-group-name production-origins \
+    --query "[].{name:name,enabled:enabledState,priority:priority,weight:weight}" -o table
+
+# Aggiornare l'origin group per rilevamento più rapido
+az afd origin-group update \
+    --resource-group myapp-rg \
+    --profile-name myapp-afd \
+    --origin-group-name production-origins \
+    --probe-interval-in-seconds 10 \
+    --sample-size 4 \
+    --successful-samples-required 2
+
+# Forzare disable di un'origin per test failover
+az afd origin update \
+    --resource-group myapp-rg \
+    --profile-name myapp-afd \
+    --origin-group-name production-origins \
+    --origin-name italy-north \
+    --enabled-state Disabled
+```
+
+---
+
+### Scenario 4 — Traffic Manager continua a risolvere verso endpoint unhealthy
+
+**Sintomo:** Il DNS di Traffic Manager continua a puntare a un endpoint non disponibile; alcuni utenti ricevono errori nonostante il failover configurato.
+
+**Causa:** Il TTL DNS è troppo alto (client cacheano la risposta), oppure il monitor di Traffic Manager non ha ancora rilevato il down perché `--ttl` e gli intervalli di probe non sono allineati.
+
+**Soluzione:** Ridurre il TTL per failover più rapido e verificare che il path `/health` risponda correttamente (non redirect 301/302, che Traffic Manager non segue per default).
+
+```bash
+# Verificare lo stato degli endpoint
+az network traffic-manager endpoint show \
+    --resource-group myapp-rg \
+    --profile-name myapp-tm \
+    --name endpoint-eu \
+    --type azureEndpoints \
+    --query "{status:endpointStatus,monitorStatus:endpointMonitorStatus}" -o table
+
+# Ridurre TTL e intervallo di monitoring
+az network traffic-manager profile update \
+    --resource-group myapp-rg \
+    --name myapp-tm \
+    --ttl 10 \
+    --monitor-interval 10 \
+    --monitor-timeout 5 \
+    --monitor-tolerated-failures 2
+
+# Disabilitare manualmente un endpoint per test
+az network traffic-manager endpoint update \
+    --resource-group myapp-rg \
+    --profile-name myapp-tm \
+    --name endpoint-eu \
+    --type azureEndpoints \
+    --endpoint-status Disabled
+
+# Verificare la risoluzione DNS corrente
+nslookup myapp-global.trafficmanager.net
+dig myapp-global.trafficmanager.net
+```
 
 ---
 

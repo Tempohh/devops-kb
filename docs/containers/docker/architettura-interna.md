@@ -9,7 +9,7 @@ related: [containers/container-runtime/_index, containers/docker/sicurezza]
 official_docs: https://docs.docker.com/engine/
 status: complete
 difficulty: expert
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Architettura Interna Docker
@@ -427,6 +427,139 @@ docker run nginx — Sequenza Completa
   6. Il container è in esecuzione
      PID 1 nel container = nginx
      PID 7421 sull'host  = nginx (visibile da /proc)
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Container OOM-killed senza avviso chiaro
+
+**Sintomo:** Il container si riavvia ciclicamente; `docker ps` mostra `Restarting` o `Exited (137)`. Il codice di uscita 137 = 128 + SIGKILL.
+
+**Causa:** Il processo ha superato il `memory.max` del cgroup e il kernel OOM killer ha terminato il processo. Questo accade spesso quando il limite memoria è troppo basso o l'applicazione ha un memory leak.
+
+**Soluzione:** Verificare il kill OOM nei log del kernel e aumentare il limite o correggere il leak.
+
+```bash
+# Conferma OOM kill
+dmesg | grep -i "oom"
+# [12345.678] oom-kill: ... task=nginx, pid=7421, ...
+
+# Verifica memoria cgroup live
+CONTAINER_ID=$(docker inspect --format '{{.Id}}' my-container)
+cat /sys/fs/cgroup/system.slice/docker-${CONTAINER_ID}.scope/memory.events
+# low 0
+# high 0
+# max 3          ← quante volte ha toccato il limite
+# oom 1          ← quante volte OOM killer è intervenuto
+# oom_kill 1
+
+# Monitora usage in tempo reale
+docker stats my-container --no-stream
+
+# Aumenta il limite (richiede ricreazione container)
+docker run --memory="512m" --memory-swap="512m" my-image
+```
+
+---
+
+### Scenario 2 — Container non riesce a comunicare in rete (network namespace isolato)
+
+**Sintomo:** Il container non raggiunge altri servizi o internet. `docker exec my-container curl http://example.com` fallisce con "Could not resolve host" o "Connection refused".
+
+**Causa:** Problemi comuni: DNS non configurato nel network namespace del container, regole iptables corrotte dopo riavvio di dockerd, interfaccia `docker0` assente.
+
+**Soluzione:**
+
+```bash
+# Verifica che docker0 esista sull'host
+ip link show docker0
+# Se assente: sudo systemctl restart docker
+
+# Controlla le regole iptables Docker
+sudo iptables -t nat -L DOCKER --line-numbers
+sudo iptables -L DOCKER-USER
+
+# Ispeziona la configurazione di rete del container
+docker inspect --format '{{json .NetworkSettings}}' my-container | jq '.Networks'
+
+# Entra nel network namespace e diagnostica
+CONTAINER_PID=$(docker inspect --format '{{.State.Pid}}' my-container)
+nsenter --target $CONTAINER_PID --net ip route
+nsenter --target $CONTAINER_PID --net ip addr
+nsenter --target $CONTAINER_PID --net cat /etc/resolv.conf
+
+# Rigenera le regole iptables Docker (flush e ricrea)
+sudo iptables -t nat -F DOCKER
+sudo iptables -F DOCKER
+sudo systemctl restart docker
+```
+
+---
+
+### Scenario 3 — Disco pieno per layer overlay2 orfani
+
+**Sintomo:** `No space left on device` quando si avvia un container o si effettua un pull. `df -h /var/lib/docker` mostra spazio esaurito.
+
+**Causa:** Layer overlay2 orfani da container/immagini eliminati senza passare per Docker (es. kill del daemon), oppure accumulo di immagini dangling, container stoppati, volumi inutilizzati.
+
+**Soluzione:**
+
+```bash
+# Situazione attuale
+docker system df
+# TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+# Images          45        3         12.3GB    11.1GB (90%)
+# Containers      8         2         1.2GB     900MB (75%)
+# Local Volumes   12        4         5.6GB     3.2GB (57%)
+# Build Cache     ...
+
+# Rimozione selettiva (sicura)
+docker image prune      # rimuove solo immagini dangling (senza tag)
+docker container prune  # rimuove container stoppati
+docker volume prune     # rimuove volumi non collegati a container
+docker network prune    # rimuove reti inutilizzate
+
+# Pulizia aggressiva (ATTENZIONE: rimuove tutto il non-utilizzato)
+docker system prune -a --volumes
+
+# Se lo spazio è ancora mancante: layer overlay2 orfani
+# (non gestibili da Docker - richiede intervento manuale)
+sudo du -sh /var/lib/docker/overlay2/* | sort -h | tail -20
+```
+
+---
+
+### Scenario 4 — Container privilegiato o capability mancante causa permission denied
+
+**Sintomo:** Il processo nel container riceve `Operation not permitted` o `Permission denied` per operazioni di sistema (es. mount, cambio hostname, accesso a /proc, raw socket).
+
+**Causa:** Docker applica per default un set ridotto di capabilities Linux (circa 14 delle 40+ disponibili) e un profilo seccomp che blocca ~44 syscall. Operazioni come `mount`, `ptrace`, modifica reti richiedono capabilities specifiche.
+
+**Soluzione:**
+
+```bash
+# Identifica quale capability manca
+# Cerca EPERM (errno 1) o EACCES nei log
+docker logs my-container 2>&1 | grep -i "permission\|operation not permitted"
+
+# Lista capabilities attuali del container
+docker inspect --format '{{json .HostConfig.CapAdd}}' my-container
+docker inspect --format '{{json .HostConfig.CapDrop}}' my-container
+
+# Aggiungi solo la capability necessaria (mai usare --privileged in prod)
+docker run --cap-add=NET_ADMIN my-image          # per operazioni di rete
+docker run --cap-add=SYS_PTRACE my-image         # per debugging (strace)
+docker run --cap-add=SYS_ADMIN my-image          # per mount (usare con cautela)
+
+# Verifica seccomp: se una syscall è bloccata (non è una capability)
+# Test con profilo unrestricted per isolare il problema
+docker run --security-opt seccomp=unconfined my-image
+
+# Identifica la syscall bloccata con strace (richiede SYS_PTRACE)
+docker run --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
+    my-image strace -e trace=all my-command 2>&1 | grep EPERM
 ```
 
 ---

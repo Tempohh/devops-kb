@@ -9,7 +9,7 @@ related: [cloud/aws/compute/ec2-autoscaling, cloud/aws/storage/ebs-efs-fsx, clou
 official_docs: https://docs.aws.amazon.com/ec2/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-09
+last_updated: 2026-03-28
 ---
 
 # EC2 — Elastic Compute Cloud
@@ -384,6 +384,133 @@ aws ssm send-command \
     --document-name "AWS-ConfigureAWSPackage" \
     --parameters '{"action": ["Install"], "name": ["AmazonCloudWatchAgent"]}' \
     --region eu-central-1
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Istanza non raggiungibile via SSH
+
+**Sintomo:** `ssh: connect to host <IP> port 22: Connection timed out` o `Connection refused`.
+
+**Causa:** Security Group non permette la porta 22 in ingresso, oppure l'istanza non ha IP pubblico/Elastic IP, oppure il servizio SSH è crashato.
+
+**Soluzione:**
+```bash
+# Verificare Security Group dell'istanza
+aws ec2 describe-instances \
+    --instance-ids i-xxxx \
+    --query 'Reservations[0].Instances[0].SecurityGroups'
+
+# Controllare regole ingress del Security Group
+aws ec2 describe-security-groups \
+    --group-ids sg-xxxx \
+    --query 'SecurityGroups[0].IpPermissions'
+
+# Verificare che l'istanza abbia un IP pubblico
+aws ec2 describe-instances \
+    --instance-ids i-xxxx \
+    --query 'Reservations[0].Instances[0].{PublicIP:PublicIpAddress,State:State.Name}'
+
+# Alternativa senza SSH: usare Session Manager (non richiede porta 22)
+aws ssm start-session --target i-xxxx
+```
+
+---
+
+### Scenario 2 — User Data non viene eseguito / errori al boot
+
+**Sintomo:** L'istanza è avviata ma le configurazioni attese (pacchetti, servizi) non sono presenti. Nessun errore visibile nella console.
+
+**Causa:** Errore nello script User Data (bash error, comando non trovato, variabile non definita). Il processo cloud-init esegue lo script ma fallisce silenziosamente dal punto di vista dell'utente.
+
+**Soluzione:**
+```bash
+# Controllare il log di cloud-init (dalla console EC2 o via SSH/SSM)
+sudo cat /var/log/cloud-init-output.log
+
+# Stato dettagliato di cloud-init
+sudo cloud-init status --long
+
+# Verificare se il User Data è stato ricevuto correttamente
+curl -H "X-aws-ec2-metadata-token: $(curl -X PUT http://169.254.169.254/latest/api/token \
+    -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600')" \
+    http://169.254.169.254/latest/user-data
+
+# Se si vuole ri-eseguire User Data su un'istanza esistente (dev/test)
+sudo cloud-init clean --logs
+sudo cloud-init init
+```
+
+---
+
+### Scenario 3 — Istanza in stato `pending` per lungo tempo o `terminated` subito dopo il lancio
+
+**Sintomo:** `aws ec2 describe-instances` mostra `state: pending` per più di 5 minuti, oppure l'istanza passa direttamente da `pending` a `terminated`.
+
+**Causa principale per `terminated` immediato:** capacità insufficiente per il tipo di istanza richiesto nella AZ scelta (comune per istanze Spot o tipi specializzati); volume EBS root troppo piccolo rispetto al minimo dell'AMI; IAM Instance Profile inesistente o con nome sbagliato.
+
+**Soluzione:**
+```bash
+# Verificare il motivo della terminazione
+aws ec2 describe-instances \
+    --instance-ids i-xxxx \
+    --query 'Reservations[0].Instances[0].StateReason'
+
+# Controllare la dimensione minima richiesta dall'AMI
+aws ec2 describe-images \
+    --image-ids ami-xxxx \
+    --query 'Images[0].BlockDeviceMappings[0].Ebs.VolumeSize'
+
+# Provare una AZ diversa (se problema di capacità)
+aws ec2 run-instances \
+    --subnet-id subnet-yyyy \   # subnet in AZ diversa
+    ...
+
+# Verificare disponibilità del tipo di istanza per AZ
+aws ec2 describe-instance-type-offerings \
+    --location-type availability-zone \
+    --filters Name=instance-type,Values=m6g.xlarge \
+    --query 'InstanceTypeOfferings[].Location'
+```
+
+---
+
+### Scenario 4 — CPU Credits esauriti su istanze T (burstable)
+
+**Sintomo:** Performance applicativa degrada bruscamente su istanze t3/t4g. CloudWatch mostra `CPUCreditBalance` che scende a 0 e `CPUSurplusChargesApplied` sale.
+
+**Causa:** Il workload ha un utilizzo CPU costantemente superiore alla baseline dell'istanza (es. t3.small ha baseline 20%). I crediti CPU si esauriscono e, se in modalità `unlimited`, iniziano ad accumularsi costi aggiuntivi.
+
+**Soluzione:**
+```bash
+# Verificare il saldo crediti CPU
+aws cloudwatch get-metric-statistics \
+    --namespace AWS/EC2 \
+    --metric-name CPUCreditBalance \
+    --dimensions Name=InstanceId,Value=i-xxxx \
+    --start-time $(date -u -d '1 hour ago' +%FT%TZ) \
+    --end-time $(date -u +%FT%TZ) \
+    --period 300 \
+    --statistics Average
+
+# Controllare costi surplus (modalità unlimited)
+aws cloudwatch get-metric-statistics \
+    --namespace AWS/EC2 \
+    --metric-name CPUSurplusChargesApplied \
+    --dimensions Name=InstanceId,Value=i-xxxx \
+    --start-time $(date -u -d '1 day ago' +%FT%TZ) \
+    --end-time $(date -u +%FT%TZ) \
+    --period 3600 \
+    --statistics Sum
+
+# Disabilitare modalità unlimited per contenere i costi (degrada a standard)
+aws ec2 modify-instance-credit-specification \
+    --instance-credit-specifications InstanceId=i-xxxx,CpuCredits=standard
+
+# Soluzione definitiva: upgrade a istanza non-burstable della stessa famiglia
+# t3.medium → m5.large (baseline 100%, costo maggiore ma prevedibile)
 ```
 
 ---

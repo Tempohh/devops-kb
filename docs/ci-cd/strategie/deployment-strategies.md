@@ -9,7 +9,7 @@ related: [ci-cd/strategie/_index, ci-cd/gitops/argocd, ci-cd/gitops/flux, contai
 official_docs: https://argo-rollouts.readthedocs.io/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # Strategie di Deployment
@@ -640,6 +640,118 @@ spec:
 | Release di feature significative | Feature Flags |
 | Validazione ML model | Shadow Deployment |
 | Database migration | Recreate in finestra + expand-contract |
+
+## Troubleshooting
+
+### Scenario 1 — Rolling Update bloccato in `Progressing`
+
+**Sintomo:** Il deployment rimane in stato `Progressing` indefinitamente; alcuni pod restano in `Pending` o `CrashLoopBackOff`.
+
+**Causa:** La readinessProbe fallisce (app non risponde entro `failureThreshold`), oppure il cluster non ha risorse sufficienti per i pod extra definiti da `maxSurge`.
+
+**Soluzione:** Ispezionare i pod nuovi e i loro log; verificare le risorse disponibili nei nodi.
+
+```bash
+# Stato del rollout
+kubectl rollout status deployment/myapp
+
+# Dettaglio dei pod in stato anomalo
+kubectl get pods -l app=myapp
+kubectl describe pod <pod-name>
+kubectl logs <pod-name> --previous
+
+# Verifica risorse nodi
+kubectl describe nodes | grep -A 5 "Allocated resources"
+
+# Rollback immediato
+kubectl rollout undo deployment/myapp
+
+# Cronologia revisioni
+kubectl rollout history deployment/myapp
+```
+
+---
+
+### Scenario 2 — Blue-Green: il Service non switcha al nuovo deployment
+
+**Sintomo:** Dopo aver modificato il selector del Service, il traffico continua ad arrivare ai pod della versione vecchia.
+
+**Causa:** I pod del deployment Green non hanno il label corrispondente al selector aggiornato, oppure i pod Green non sono in stato `Ready`.
+
+**Soluzione:** Verificare che i label dei pod Green corrispondano esattamente al selector del Service.
+
+```bash
+# Confronta selector del Service con label dei pod
+kubectl get svc myapp -o jsonpath='{.spec.selector}'
+kubectl get pods -l app=myapp,version=green --show-labels
+
+# Verifica che i pod Green siano Ready
+kubectl get pods -l version=green
+kubectl describe endpoints myapp
+
+# Se i pod non compaiono negli endpoint, controllare readinessProbe
+kubectl describe pod <green-pod-name> | grep -A 10 "Readiness"
+
+# Patch manuale del selector
+kubectl patch svc myapp -p '{"spec":{"selector":{"app":"myapp","version":"green"}}}'
+```
+
+---
+
+### Scenario 3 — Canary Argo Rollouts: AnalysisRun fallisce con errore Prometheus
+
+**Sintomo:** Il Rollout si blocca o viene abortito con `AnalysisPhase: Error`; nei log compare `no data returned from Prometheus query`.
+
+**Causa:** L'indirizzo Prometheus nell'AnalysisTemplate non è raggiungibile dal pod di analisi, oppure la query usa label non ancora presenti per la nuova versione (il canary ha ricevuto troppo poco traffico per generare metriche).
+
+**Soluzione:** Verificare la connettività al server Prometheus e controllare che i metric label corrispondano al servizio canary.
+
+```bash
+# Stato del Rollout e degli AnalysisRun
+kubectl argo rollouts get rollout myapp --watch
+kubectl get analysisrun -l rollouts-pod-template-hash=<hash>
+kubectl describe analysisrun <analysisrun-name>
+
+# Test query Prometheus da dentro il cluster
+kubectl run prom-test --image=curlimages/curl --rm -it --restart=Never -- \
+  curl "http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query?query=up"
+
+# Ispeziona i log del controller Argo Rollouts
+kubectl logs -n argo-rollouts deployment/argo-rollouts | grep -i error
+
+# Annulla il rollout e torna alla versione stabile
+kubectl argo rollouts abort myapp
+kubectl argo rollouts undo myapp
+```
+
+---
+
+### Scenario 4 — Feature Flag: il flag non viene valutato correttamente (fallback costante)
+
+**Sintomo:** L'applicazione restituisce sempre il valore di default del flag, indipendentemente dalla configurazione sul server (Flipt, LaunchDarkly, ecc.).
+
+**Causa:** Il provider non riesce a raggiungere il server dei feature flag (network policy, DNS, certificato), oppure la chiave SDK è errata. In failsafe mode, tutti i flag tornano al valore di default.
+
+**Soluzione:** Verificare la connettività al server dei flag, il corretto caricamento della chiave SDK e le NetworkPolicy in Kubernetes.
+
+```bash
+# Verifica che il pod possa raggiungere il server Flipt
+kubectl exec -it <app-pod> -- curl -v http://flipt.flipt.svc.cluster.local:8080/health
+
+# Controlla i log dell'applicazione per errori di connessione al provider
+kubectl logs <app-pod> | grep -i "feature\|flag\|flipt\|provider"
+
+# Verifica le NetworkPolicy che potrebbero bloccare il traffico
+kubectl get networkpolicy -A
+kubectl describe networkpolicy <policy-name>
+
+# Test diretto dell'API Flipt
+curl -X GET http://flipt.mycompany.internal/api/v1/namespaces/default/flags/new-checkout-flow \
+  -H "Authorization: Bearer <token>"
+
+# Verifica che il Secret con la SDK key sia montato correttamente
+kubectl get secret feature-flag-sdk-key -o jsonpath='{.data.key}' | base64 -d
+```
 
 ## Relazioni
 

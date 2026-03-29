@@ -3,13 +3,13 @@ title: "Disaster Recovery"
 slug: disaster-recovery
 category: messaging
 tags: [kafka, disaster-recovery, mirrormaker, backup, multi-datacenter, geo-replication]
-search_keywords: [kafka disaster recovery, mirrormaker 2, kafka multi datacenter, kafka geo replication, kafka backup, rpo rto kafka, kafka failover, kafka active passive]
+search_keywords: [kafka disaster recovery, mirrormaker 2, kafka multi datacenter, kafka geo replication, kafka backup, rpo rto kafka, kafka failover, kafka active passive, geo-replication kafka, cross-cluster replication, MM2, mirror maker, kafka dr plan, offset translation, active-active kafka, active-passive kafka, kafka business continuity]
 parent: messaging/kafka/operazioni
-related: [messaging/kafka/operazioni/replication-fault-tolerance]
+related: [messaging/kafka/operazioni/replication-fault-tolerance, messaging/kafka/fondamenti/broker-cluster, messaging/kafka/kubernetes-cloud/msk-aws]
 official_docs: https://kafka.apache.org/documentation/#georeplication
 status: complete
 difficulty: expert
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Disaster Recovery
@@ -221,20 +221,117 @@ kafka-configs.sh --bootstrap-server kafka:9092 \
 
 ## Troubleshooting
 
-**MM2 non replica nuovi topic**
-- Verificare la regex `topics` nel connector
-- Topic blacklist potrebbe escludere il nuovo topic
-- Riavviare il connector dopo aver modificato la configurazione
+### Scenario 1 — MM2 non replica i nuovi topic
 
-**Consumer group offset non sincronizzato**
-- Verificare che `MirrorCheckpointConnector` sia in esecuzione
-- Controllare il topic `mm2-checkpoints.primary.internal` nel cluster secondario
-- Aumentare la frequenza di sync: `sync.group.offsets.interval.seconds=30`
+**Sintomo:** Un nuovo topic creato nel cluster primario non appare nel cluster secondario dopo diversi minuti.
 
-**Topic replicati con lag elevato**
-- Aumentare `tasks.max` nel MirrorSourceConnector
-- Verificare la bandwidth di rete tra datacenter
-- Monitorare metriche JMX: `kafka.connect:type=mirror-source-metrics`
+**Causa:** La regex `topics` del connector non copre il nuovo topic, oppure il topic è incluso nella blacklist. MM2 rileva nuovi topic con un polling periodico (default 10 minuti).
+
+**Soluzione:** Verificare la configurazione del connector e forzare il refresh.
+
+```bash
+# Verificare la configurazione attuale del connector
+curl http://connect:8083/connectors/mirror-source-connector/config | jq .
+
+# Controllare i topic attualmente replicati
+kafka-topics.sh --bootstrap-server secondary-kafka:9092 --list | grep "^primary\."
+
+# Forzare refresh della lista topic nel connector (restart task)
+curl -X POST http://connect:8083/connectors/mirror-source-connector/tasks/0/restart
+
+# Se la blacklist esclude il topic, aggiornare la configurazione
+curl -X PUT http://connect:8083/connectors/mirror-source-connector/config \
+  -H "Content-Type: application/json" \
+  -d '{"topics.blacklist": ".*internal.*"}'
+```
+
+---
+
+### Scenario 2 — Consumer group offset non sincronizzato dopo failover
+
+**Sintomo:** Dopo il failover, i consumer riprendono dall'inizio del topic (offset 0) invece di riprendere dall'ultimo offset processato.
+
+**Causa:** Il `MirrorCheckpointConnector` non è in esecuzione o il sync degli offset era in ritardo al momento del disastro. Gli offset tradotti risiedono nel topic `mm2-checkpoints.primary.internal`.
+
+**Soluzione:** Verificare il checkpoint connector e, se necessario, ripristinare gli offset manualmente.
+
+```bash
+# Verificare lo stato del MirrorCheckpointConnector
+curl http://connect:8083/connectors/mirror-checkpoint-connector/status | jq .
+
+# Leggere gli offset tradotti disponibili
+kafka-console-consumer.sh \
+  --bootstrap-server secondary-kafka:9092 \
+  --topic mm2-checkpoints.primary.internal \
+  --from-beginning --max-messages 100
+
+# Impostare manualmente l'offset per un consumer group
+kafka-consumer-groups.sh \
+  --bootstrap-server secondary-kafka:9092 \
+  --group my-consumer-group \
+  --topic primary.orders \
+  --reset-offsets --to-latest --execute
+
+# Ridurre l'intervallo di sync per il futuro (nel connector config)
+# sync.group.offsets.interval.seconds=30
+```
+
+---
+
+### Scenario 3 — Lag di replicazione elevato (backlog MM2)
+
+**Sintomo:** I topic nel cluster secondario sono in ritardo di migliaia/milioni di messaggi rispetto al primario. La metrica `replication-latency-ms-avg` è alta.
+
+**Causa:** Il numero di task MM2 è insufficiente per il throughput, oppure la bandwidth WAN è il collo di bottiglia. Possibile anche per topic con partizioni elevate con `tasks.max` troppo basso.
+
+**Soluzione:** Aumentare il parallelismo e monitorare le metriche di rete.
+
+```bash
+# Verificare il lag di replicazione per topic
+kafka-consumer-groups.sh \
+  --bootstrap-server secondary-kafka:9092 \
+  --describe --group primary.primary->secondary
+
+# Controllare metriche JMX MM2 via kcat
+kcat -b secondary-kafka:9092 -L | grep "primary\."
+
+# Aumentare tasks.max nel connector (richiede restart)
+curl -X PUT http://connect:8083/connectors/mirror-source-connector/config \
+  -H "Content-Type: application/json" \
+  -d '{"tasks.max": "8", "connector.class": "org.apache.kafka.connect.mirror.MirrorSourceConnector"}'
+
+# Monitorare throughput di rete tra datacenter
+# Su Linux: iftop -i eth0 -f "host secondary-kafka"
+```
+
+---
+
+### Scenario 4 — Loop di replicazione in topologia active-active
+
+**Sintomo:** I messaggi vengono duplicati indefinitamente tra i due cluster. I topic crescono in modo anomalo. I log mostrano messaggi con header `__mm2_origin` che vengono rireplicati.
+
+**Causa:** Con `IdentityReplicationPolicy` in modalità active-active, MM2 non distingue i messaggi originali da quelli già replicati e li ricopia in entrambe le direzioni creando un loop.
+
+**Soluzione:** Ripristinare la `DefaultReplicationPolicy` (che usa i prefissi) o disabilitare una direzione di replicazione.
+
+```bash
+# Verificare la policy attuale
+curl http://connect:8083/connectors/mirror-source-connector/config | \
+  jq '."replication.policy.class"'
+
+# Disabilitare immediatamente la replicazione inversa per fermare il loop
+curl -X PUT http://connect:8083/connectors/mirror-source-secondary-primary/config \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": "false"}'
+
+# Ripristinare DefaultReplicationPolicy (usa prefissi per evitare loop)
+curl -X PUT http://connect:8083/connectors/mirror-source-connector/config \
+  -H "Content-Type: application/json" \
+  -d '{"replication.policy.class": "org.apache.kafka.connect.mirror.DefaultReplicationPolicy"}'
+
+# Verificare che non ci siano topic con doppio prefisso (es. primary.primary.orders)
+kafka-topics.sh --bootstrap-server secondary-kafka:9092 --list | grep "primary\.primary\."
+```
 
 ## Riferimenti
 

@@ -9,7 +9,7 @@ related: [databases/sql-avanzato/partitioning, databases/fondamentali/modelli-da
 official_docs: https://www.postgresql.org/docs/current/contrib.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # PostgreSQL Extensions
@@ -352,6 +352,130 @@ SELECT * FROM prodotti WHERE nome ILIKE '%postg%';  -- LIKE veloce con indice tr
 - **`shared_preload_libraries` richiede restart**: le estensioni che usano questo parametro (pg_stat_statements, pg_cron, timescaledb) richiedono restart di PostgreSQL per l'installazione iniziale
 - **pgvector: scegliere le dimensioni con cura**: vettori a 1536 dim (OpenAI) pesano 6KB per riga — con 1M righe = 6GB solo per gli embedding. Considerare quantizzazione o dimensioni ridotte
 - **TimescaleDB e pg_partman non coesistono**: non usare entrambi sulla stessa tabella — TimescaleDB gestisce il proprio partizionamento interno
+
+## Troubleshooting
+
+### Scenario 1 — CREATE EXTENSION fallisce con "extension not available"
+
+**Sintomo:** `ERROR: could not open extension control file ".../pgvector.control": No such file or directory`
+
+**Causa:** Il pacchetto OS dell'estensione non è installato sul server, oppure la versione di PostgreSQL non corrisponde al pacchetto.
+
+**Soluzione:**
+
+```bash
+# Su Debian/Ubuntu — installa il pacchetto per la versione PG corretta
+sudo apt install postgresql-16-pgvector
+
+# Verifica estensioni disponibili (file .control presenti)
+ls $(pg_config --sharedir)/extension/*.control
+
+# Su Amazon RDS / Aurora: verifica le estensioni consentite nel parameter group
+aws rds describe-db-parameters \
+  --db-parameter-group-name my-pg-params \
+  --query 'Parameters[?ParameterName==`rds.extensions`]'
+```
+
+---
+
+### Scenario 2 — pgvector: query di similarità lente nonostante l'indice
+
+**Sintomo:** Query `ORDER BY embedding <=> $1 LIMIT 10` impiega secondi su tabelle da centinaia di migliaia di righe, anche con indice HNSW creato.
+
+**Causa 1:** L'indice è stato creato prima di popolare la tabella — un indice HNSW/IVFFlat costruito su poche righe non beneficia le query su milioni di righe.
+**Causa 2:** `hnsw.ef_search` troppo basso, oppure l'indice IVFFlat ha `lists` sottodimensionato.
+
+**Soluzione:**
+
+```sql
+-- Verifica che il planner usi l'indice
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT id FROM documenti ORDER BY embedding <=> $1 LIMIT 10;
+
+-- Ricostruisci l'indice dopo il caricamento bulk
+REINDEX INDEX CONCURRENTLY idx_documenti_hnsw;
+
+-- Aumenta ef_search per migliorare recall (a scapito della latenza)
+SET hnsw.ef_search = 200;
+
+-- Verifica dimensioni embedding coerenti
+SELECT MAX(vector_dims(embedding)) AS max_dim,
+       MIN(vector_dims(embedding)) AS min_dim
+FROM documenti;
+-- max_dim e min_dim devono essere uguali
+```
+
+---
+
+### Scenario 3 — pg_cron: i job non vengono eseguiti
+
+**Sintomo:** Il job è presente in `cron.job` con `active = true` ma `cron.job_run_details` non registra esecuzioni.
+
+**Causa 1:** `pg_cron` non è in `shared_preload_libraries` — PostgreSQL non ha caricato il background worker.
+**Causa 2:** `cron.database_name` punta a un database diverso da quello dove è installata l'estensione.
+
+**Soluzione:**
+
+```bash
+# Verifica che pg_cron sia caricato come background worker
+psql -c "SELECT name, setting FROM pg_settings WHERE name LIKE '%preload%';"
+
+# postgresql.conf deve contenere:
+grep shared_preload_libraries /etc/postgresql/16/main/postgresql.conf
+# Output atteso: shared_preload_libraries = 'pg_cron'
+
+# Dopo la modifica: restart obbligatorio (non solo reload)
+sudo systemctl restart postgresql
+```
+
+```sql
+-- Verifica database configurato per pg_cron
+SHOW cron.database_name;
+-- Deve corrispondere al database corrente
+
+-- Controlla gli errori nelle ultime esecuzioni
+SELECT jobid, start_time, status, return_message
+FROM cron.job_run_details
+WHERE status = 'failed'
+ORDER BY start_time DESC
+LIMIT 20;
+```
+
+---
+
+### Scenario 4 — TimescaleDB: la compressione non riduce lo spazio
+
+**Sintomo:** `add_compression_policy` è attivo ma lo spazio su disco non diminuisce. `select_tablespace` mostra chunk non compressi.
+
+**Causa:** La compression policy si attiva solo sui chunk che soddisfano l'intervallo minimo (`compress_after`). Chunk recenti non vengono mai compressi. Oppure la policy è definita ma il job di background TimescaleDB è disabilitato.
+
+**Soluzione:**
+
+```sql
+-- Verifica stato dei job TimescaleDB (background workers)
+SELECT job_id, proc_name, schedule_interval, next_start, last_run_status
+FROM timescaledb_information.jobs
+WHERE proc_name = 'policy_compression';
+
+-- Comprimi manualmente un chunk specifico per test
+SELECT compress_chunk(c)
+FROM show_chunks('metriche', older_than => INTERVAL '8 days') c;
+
+-- Verifica ratio compressione per chunk
+SELECT chunk_name,
+       pg_size_pretty(before_compression_total_bytes) AS before,
+       pg_size_pretty(after_compression_total_bytes)  AS after,
+       compression_ratio
+FROM chunk_compression_stats('metriche')
+ORDER BY chunk_name;
+
+-- Se il job è in pausa, riabilitalo
+SELECT alter_job(job_id, scheduled => true)
+FROM timescaledb_information.jobs
+WHERE proc_name = 'policy_compression';
+```
+
+---
 
 ## Relazioni
 

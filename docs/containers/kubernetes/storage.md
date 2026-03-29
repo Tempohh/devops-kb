@@ -9,7 +9,7 @@ related: [containers/kubernetes/workloads, containers/kubernetes/scheduling-avan
 official_docs: https://kubernetes.io/docs/concepts/storage/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Kubernetes Storage
@@ -379,6 +379,113 @@ spec:
 
 !!! warning "Local Volumes e HA"
     I local volume sono legati fisicamente a un nodo. Se il nodo muore, i dati sono irraggiungibili fino a quando il nodo non torna online. **Non adatti per applicazioni critiche senza replica applicativa.** Usare per database che implementano la propria replica (Cassandra, TiKV, Raft-based DBs).
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — PVC bloccato in stato `Pending`
+
+**Sintomo:** Il PVC non diventa `Bound`, rimane `Pending` indefinitamente.
+
+**Causa:** Può dipendere da più cause: nessuna StorageClass default, `volumeBindingMode: WaitForFirstConsumer` senza pod associato, provisioner CSI non disponibile, o mismatch tra richiesta e PV disponibili.
+
+**Soluzione:**
+```bash
+# Ispeziona gli eventi del PVC
+kubectl describe pvc <nome-pvc> -n <namespace>
+# Cerca: "no persistent volumes available" / "no nodes available" / "waiting for first consumer"
+
+# Verifica la StorageClass default
+kubectl get storageclass
+# La SC default ha l'annotation: storageclass.kubernetes.io/is-default-class: "true"
+
+# Controlla i log del CSI controller
+kubectl logs -n kube-system -l app=ebs-csi-controller -c csi-provisioner --tail=50
+
+# Se il PV è manual/static, verifica che status sia Available (non Bound ad altro PVC)
+kubectl get pv
+```
+
+---
+
+### Scenario 2 — Pod bloccato in `ContainerCreating` con errore di mount
+
+**Sintomo:** Il pod rimane in `ContainerCreating` per minuti, `kubectl describe pod` mostra errori come `Unable to attach or mount volumes`.
+
+**Causa:** Il volume è ancora attaccato al nodo precedente (Volume Attach Error), il nodo target non è raggiungibile, oppure il CSI node plugin non è in esecuzione sul nodo.
+
+**Soluzione:**
+```bash
+# Ispeziona il pod
+kubectl describe pod <nome-pod> -n <namespace>
+# Cerca: "Multi-Attach error" / "timed out waiting for the condition"
+
+# Verifica il CSI node plugin sul nodo target
+kubectl get pods -n kube-system -l app=ebs-csi-node -o wide
+# Deve esserci un pod su ogni nodo
+
+# In caso di Multi-Attach error (volume ancora legato al vecchio nodo):
+# Attendi che k8s rilevi il nodo come NotReady (default ~5 min)
+# Oppure verifica e forza il detach tramite cloud console (es. AWS EC2 → Volumes)
+
+# Verifica lo stato del VolumeAttachment
+kubectl get volumeattachment
+kubectl describe volumeattachment <nome>
+```
+
+---
+
+### Scenario 3 — Espansione PVC fallita o non applicata al filesystem
+
+**Sintomo:** Dopo il patch del PVC la `CAPACITY` non aumenta, oppure il PVC mostra `FileSystemResizePending` ma il filesystem nel pod è ancora alla dimensione originale.
+
+**Causa:** La StorageClass non ha `allowVolumeExpansion: true`, oppure il CSI ha ridimensionato il volume ma il filesystem necessita di un restart del pod per essere ridimensionato in-pod.
+
+**Soluzione:**
+```bash
+# Controlla lo stato dell'espansione
+kubectl describe pvc <nome-pvc> -n <namespace>
+# Cerca: "Resizing" / "FileSystemResizePending" nelle Conditions
+
+# Verifica che la StorageClass supporti l'espansione
+kubectl get storageclass <nome-sc> -o yaml | grep allowVolumeExpansion
+
+# Se FileSystemResizePending: riavvia il pod per triggerare il resize del FS
+kubectl rollout restart deployment/<nome-deploy> -n <namespace>
+# Oppure per StatefulSet:
+kubectl rollout restart statefulset/<nome-sts> -n <namespace>
+
+# Verifica dimensione FS nel pod dopo restart
+kubectl exec -n <namespace> <nome-pod> -- df -h /data
+```
+
+---
+
+### Scenario 4 — PV rimasto in stato `Released` e non riutilizzabile
+
+**Sintomo:** Un PV ha `reclaimPolicy: Retain` e dopo la cancellazione del PVC rimane in stato `Released`. Un nuovo PVC non riesce a fare bind a quel PV.
+
+**Causa:** Lo stato `Released` indica che il PV aveva un riferimento a un PVC precedente (`claimRef`) che impedisce il binding a nuovi PVC. Kubernetes non fa bind automatico di PV in stato `Released`.
+
+**Soluzione:**
+```bash
+# Verifica lo stato e il claimRef
+kubectl describe pv <nome-pv>
+# Cerca: "claimRef" con namespace/name del vecchio PVC
+
+# Rimuovi il claimRef per rendere il PV Available
+kubectl patch pv <nome-pv> -p '{"spec":{"claimRef": null}}'
+
+# Il PV torna in stato Available e può essere riutilizzato
+kubectl get pv <nome-pv>
+# STATUS: Available
+
+# Poi crea o aggiorna il PVC per fare il bind (usa selector se necessario)
+```
+
+!!! warning "Attenzione"
+    Prima di eseguire `patch claimRef: null`, verifica che i dati nel PV non siano necessari o siano già stati salvati. L'operazione non cancella i dati, ma consente il loro sovrascrittura da parte di un nuovo PVC.
 
 ---
 

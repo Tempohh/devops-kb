@@ -9,7 +9,7 @@ related: [databases/postgresql/connection-pooling, databases/replicazione-ha/bac
 official_docs: https://cloudnative-pg.io/documentation/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Database su Kubernetes
@@ -351,13 +351,166 @@ spec:
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| Pod `Pending` dopo create | PVC non provisioned (storageClass errata, AZ sbagliata) | `kubectl describe pvc`, verificare CSI driver e StorageClass |
-| PostgreSQL lento su Kubernetes | Storage network con alta latenza | Valutare local SSD, ottimizzare `shared_buffers`, `work_mem` |
-| Pod OOMKilled | `max_connections * work_mem > limits.memory` | Ridurre `max_connections` o `work_mem`, aumentare limits |
-| Replica non si sincronizza | Network policy blocca la porta 5432 tra pod | Aggiungere NetworkPolicy per la replica |
-| Backup fallisce | Credenziali S3 errate o bucket inesistente | Verificare Secret e IAM role del pod |
+### Scenario 1 — Pod rimane in `Pending` dopo la creazione
+
+**Sintomo:** Il pod del database resta in stato `Pending` indefinitamente; nessun evento di scheduling.
+
+**Causa:** Il PVC non viene provisioned — cause tipiche: StorageClass inesistente o errata, CSI driver non installato, PVC in AZ diversa dal nodo disponibile.
+
+**Soluzione:** Ispezionare il PVC e gli eventi del pod per identificare l'errore esatto.
+
+```bash
+# Controlla lo stato del PVC
+kubectl get pvc -n databases
+
+# Dettagli del PVC (eventi di errore in fondo)
+kubectl describe pvc postgres-data-postgres-0 -n databases
+
+# Verifica CSI driver installati
+kubectl get csidrivers
+
+# Verifica le StorageClass disponibili
+kubectl get storageclass
+
+# Se il pod è in Pending, controlla gli eventi di scheduling
+kubectl describe pod postgres-0 -n databases | grep -A 20 "Events:"
+```
+
+---
+
+### Scenario 2 — Pod `OOMKilled` — container ucciso per memoria esaurita
+
+**Sintomo:** Il pod si riavvia ciclicamente con stato `OOMKilled`; `kubectl describe pod` mostra `Exit Code: 137`.
+
+**Causa:** Il consumo di memoria PostgreSQL supera il `limits.memory` del container. Formula critica: `max_connections × work_mem` può eccedere il limite, specialmente sotto carico.
+
+**Soluzione:** Ridurre `max_connections` o `work_mem`, oppure aumentare il `limits.memory`. Con CNPG modificare i parametri nel manifest del Cluster.
+
+```bash
+# Verifica il motivo del crash
+kubectl describe pod postgres-0 -n databases | grep -A 5 "Last State"
+
+# Controlla l'utilizzo corrente di memoria
+kubectl top pod -n databases
+
+# Con CNPG: aggiorna i parametri PostgreSQL nel Cluster
+kubectl patch cluster postgres-cluster -n databases --type=merge \
+  -p '{"spec":{"postgresql":{"parameters":{"max_connections":"100","work_mem":"16MB"}}}}'
+
+# Verifica che il rolling restart sia avvenuto
+kubectl cnpg status postgres-cluster -n databases
+```
+
+---
+
+### Scenario 3 — Replica non sincronizzata / lag elevato
+
+**Sintomo:** La replica mostra lag crescente o stato `Streaming` assente; `kubectl cnpg status` riporta replica non allineata al primary.
+
+**Causa:** NetworkPolicy che blocca la porta 5432 tra pod, oppure storage della replica troppo lento per seguire il WAL rate del primary.
+
+**Soluzione:** Verificare le NetworkPolicy nel namespace e misurare il WAL lag con query su PostgreSQL.
+
+```bash
+# Stato del cluster CNPG (replica lag visibile)
+kubectl cnpg status postgres-cluster -n databases
+
+# Controlla NetworkPolicy attive nel namespace
+kubectl get networkpolicy -n databases
+kubectl describe networkpolicy -n databases
+
+# Query sul primary per verificare lo stato di replica
+kubectl cnpg psql postgres-cluster -n databases -- \
+  -c "SELECT client_addr, state, sent_lsn, write_lsn, flush_lsn, replay_lsn,
+             (sent_lsn - replay_lsn) AS replication_lag
+      FROM pg_stat_replication;"
+
+# Se NetworkPolicy è il problema, aggiungere una regola permissiva tra pod CNPG
+kubectl apply -f - <<EOF
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cnpg-replication
+  namespace: databases
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: postgres-cluster
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          cnpg.io/cluster: postgres-cluster
+    ports:
+    - port: 5432
+EOF
+```
+
+---
+
+### Scenario 4 — Backup CNPG fallisce con errore S3
+
+**Sintomo:** Il Backup object è in stato `Failed`; `kubectl describe backup` mostra errori di autenticazione S3 o bucket non trovato.
+
+**Causa:** Secret con credenziali S3 errate o assenti, IAM role non associato al service account, bucket inesistente o policy S3 troppo restrittiva.
+
+**Soluzione:** Verificare il Secret, il ServiceAccount e le policy S3.
+
+```bash
+# Stato del backup
+kubectl get backup -n databases
+kubectl describe backup postgres-backup-20240115 -n databases
+
+# Verifica il Secret delle credenziali S3
+kubectl get secret s3-credentials -n databases -o jsonpath='{.data}' | \
+  python3 -c "import sys,json,base64; d=json.load(sys.stdin); \
+  [print(k, base64.b64decode(v).decode()) for k,v in d.items()]"
+
+# Log del controller CNPG per errori dettagliati
+kubectl logs -n cnpg-system -l app.kubernetes.io/name=cloudnative-pg --tail=50
+
+# Test manuale della connessione S3 dall'interno del namespace
+kubectl run s3-test --rm -it --image=amazon/aws-cli --restart=Never \
+  --env="AWS_ACCESS_KEY_ID=<key>" \
+  --env="AWS_SECRET_ACCESS_KEY=<secret>" \
+  -- s3 ls s3://my-cnpg-backups/
+
+# Verifica che il bucket esista e sia raggiungibile
+aws s3 ls s3://my-cnpg-backups/ --region eu-west-1
+```
+
+---
+
+### Scenario 5 — Performance I/O degradate rispetto all'atteso
+
+**Sintomo:** Query lente, alta latenza sui write, `pg_stat_bgwriter` mostra checkpoint frequenti.
+
+**Causa:** Storage network (EBS, Azure Disk) con latenza 1-5ms vs NVMe locale; `shared_buffers` e `checkpoint_completion_target` non ottimizzati per il volume di workload.
+
+**Soluzione:** Profilare l'I/O del storage, ottimizzare i parametri PostgreSQL, e valutare local SSD per workload ad alto IOPS.
+
+```bash
+# Misura le performance I/O dello storage dal pod
+kubectl exec -it postgres-0 -n databases -- \
+  dd if=/dev/zero of=/var/lib/postgresql/data/testfile bs=1M count=1000 oflag=direct
+
+# Query PostgreSQL per statistiche I/O
+kubectl cnpg psql postgres-cluster -n databases -- \
+  -c "SELECT * FROM pg_stat_bgwriter;"
+
+# Verifica checkpoint troppo frequenti
+kubectl cnpg psql postgres-cluster -n databases -- \
+  -c "SELECT checkpoints_timed, checkpoints_req, checkpoint_write_time,
+             checkpoint_sync_time FROM pg_stat_bgwriter;"
+
+# Aumenta shared_buffers al 25% della RAM disponibile (via CNPG patch)
+kubectl patch cluster postgres-cluster -n databases --type=merge \
+  -p '{"spec":{"postgresql":{"parameters":{
+    "shared_buffers":"2GB",
+    "checkpoint_completion_target":"0.9",
+    "wal_buffers":"64MB"
+  }}}}'
+```
 
 ## Riferimenti
 

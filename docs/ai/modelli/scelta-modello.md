@@ -9,7 +9,7 @@ related: [ai/modelli/_index, ai/modelli/modelli-open-source, ai/sviluppo/prompt-
 official_docs: https://artificialanalysis.ai/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-03-27
 ---
 
 # Guida alla Scelta del Modello
@@ -291,6 +291,148 @@ promptfoo view  # UI comparativa
 - **Non valutare su dati propri**: i benchmark pubblici non riflettono la distribuzione del tuo task.
 - **Lock-in su un singolo provider**: costruisci un'astrazione (LiteLLM, Gateway) che permette di cambiare modello.
 - **Sottovalutare il prompt engineering**: spesso migliorare il prompt dà più benefici che passare a un modello più grande.
+
+## Troubleshooting
+
+### Scenario 1 — Qualità output insoddisfacente nonostante modello frontier
+
+**Sintomo**: Il modello scelto (es. Claude Sonnet, GPT-4o) produce output imprecisi, incompleti o fuori formato su task DevOps specifici (IaC, log analysis).
+
+**Causa**: Il problema raramente è il modello — nella maggior parte dei casi è il prompt. System prompt vago, assenza di few-shot examples, o `temperature` troppo alta per task deterministici.
+
+**Soluzione**: Prima di cambiare modello, ottimizzare il prompt. Aggiungere esempi di output atteso (few-shot), abbassare `temperature` a 0 per task strutturati, e specificare il formato di output nel system prompt.
+
+```python
+# Esempio: prompt ottimizzato per classificazione severity log
+system_prompt = """Classifica la severity di questo log DevOps.
+Output JSON SOLO con questo formato: {"severity": "critical|high|medium|low", "reason": "..."}
+
+Esempi:
+Input: "OOMKilled: container memory limit exceeded"
+Output: {"severity": "critical", "reason": "container terminato per OOM, richiede intervento immediato"}
+
+Input: "Slow query detected: 3.2s"
+Output: {"severity": "medium", "reason": "degradazione performance, non bloccante"}"""
+
+response = client.messages.create(
+    model="claude-haiku-4-5-20251001",  # Haiku è sufficiente con prompt buono
+    max_tokens=128,
+    temperature=0,
+    system=system_prompt,
+    messages=[{"role": "user", "content": log_line}]
+)
+```
+
+---
+
+### Scenario 2 — Costi API molto più alti del previsto
+
+**Sintomo**: La fattura mensile supera il budget stimato di 3-10×. Il volume di richieste è corretto ma il costo per richiesta è alto.
+
+**Causa**: Prompt troppo lunghi (system prompt ripetuto ogni call senza caching), uso di modelli premium per task che non lo richiedono, output `max_tokens` sovradimensionato.
+
+**Soluzione**: Abilitare prompt caching per system prompt statici lunghi (risparmio 90%), usare Haiku per classificazioni rapide, e analizzare la distribuzione dei token con `response.usage`.
+
+```bash
+# Stima costi prima del deployment
+# Formula: (input_tokens * input_price + output_tokens * output_price) * volume_mensile
+
+# Esempio: 1M richieste/mese, 500 token input, 200 token output
+# Claude Sonnet: (500 * $3/1M + 200 * $15/1M) * 1M = $1.5 + $3 = $4.500/mese
+# Claude Haiku:  (500 * $0.25/1M + 200 * $1.25/1M) * 1M = $0.125 + $0.25 = $375/mese
+
+# Con prompt caching (system prompt 400 token ripetuto):
+# Prima call: full price
+# Successive: 400 * $0.03/1M (cache read Sonnet) invece di $3/1M = -90% sui token cachati
+```
+
+---
+
+### Scenario 3 — Latenza eccessiva in pipeline utente-facing
+
+**Sintomo**: Le API LLM introducono 3-10s di latenza, rendendo la pipeline troppo lenta per l'uso interattivo o per alert real-time.
+
+**Causa**: Uso di modelli grandi (Opus, Sonnet) per task che non richiedono quella capacità, o generazione di output lunghi quando basta una risposta breve. La latenza TTFT (time-to-first-token) scala con il carico del provider.
+
+**Soluzione**: Passare a Haiku o Gemini Flash per il path critico, limitare `max_tokens` al minimo necessario, abilitare lo streaming per ridurre la latenza percepita, e usare un pattern a due stadi (fast model prima, slow model solo se necessario).
+
+```python
+import asyncio
+
+async def fast_triage(alert: str) -> str:
+    """Classificazione rapida: <300ms con Haiku"""
+    resp = await async_client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=32,       # solo la classificazione
+        temperature=0,
+        messages=[{"role": "user", "content": f"Severity (critical/high/medium/low): {alert}"}]
+    )
+    return resp.content[0].text.strip()
+
+async def deep_analysis(alert: str) -> str:
+    """Analisi approfondita: solo per critical/high"""
+    resp = await async_client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": f"Analisi root cause: {alert}"}]
+    )
+    return resp.content[0].text
+
+async def handle_alert(alert: str) -> dict:
+    severity = await fast_triage(alert)
+    if severity in ("critical", "high"):
+        analysis = await deep_analysis(alert)
+        return {"severity": severity, "analysis": analysis}
+    return {"severity": severity, "analysis": None}
+```
+
+---
+
+### Scenario 4 — Eval positivi ma performance peggiore in produzione
+
+**Sintomo**: Il modello performa bene sul dataset di valutazione ma produce output scadenti sui dati reali di produzione.
+
+**Causa**: Il set di eval non è rappresentativo della distribuzione reale dei dati (distribution shift). Prompt di eval troppo "puliti" rispetto ai log/dati reali che contengono rumore, formati variabili, edge case.
+
+**Soluzione**: Costruire l'eval set campionando direttamente dai log di produzione. Includere esempi "brutti" (log malformati, messaggi troncati, encoding anomali). Validare con shadow traffic prima del rollout completo.
+
+```python
+# Pipeline per costruire eval set da dati reali
+import random
+
+def build_eval_from_production(prod_logs: list, sample_size: int = 200) -> list:
+    """Campiona log reali per costruire eval rappresentativo"""
+    # Stratifica per severity/tipo per avere copertura bilanciata
+    by_type = {}
+    for log in prod_logs:
+        log_type = classify_log_type(log)  # regex rapida
+        by_type.setdefault(log_type, []).append(log)
+
+    eval_set = []
+    per_type = sample_size // len(by_type)
+
+    for log_type, logs in by_type.items():
+        sampled = random.sample(logs, min(per_type, len(logs)))
+        for log in sampled:
+            eval_set.append({
+                "id": f"prod-{log_type}-{len(eval_set)}",
+                "input": log,
+                "source": "production",   # traccia l'origine
+                "log_type": log_type
+            })
+
+    return eval_set
+
+# Esegui shadow evaluation prima del rollout
+async def shadow_eval(new_model: str, current_model: str, traffic_sample: list):
+    results = {"wins": 0, "losses": 0, "ties": 0}
+    for item in traffic_sample:
+        resp_new = await call_model(new_model, item["input"])
+        resp_current = await call_model(current_model, item["input"])
+        verdict = await llm_judge(resp_new, resp_current, item)
+        results[verdict] += 1
+    return results
+```
 
 ## Riferimenti
 

@@ -9,7 +9,7 @@ related: [cloud/azure/compute/app-service-functions, cloud/azure/compute/aks-con
 official_docs: https://learn.microsoft.com/azure/azure-monitor/app/app-insights-overview
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Application Insights
@@ -489,28 +489,135 @@ Dashboard consigliata per team applicativi:
 
 ## Troubleshooting
 
+### Scenario 1 — Nessuna telemetria ricevuta (dati non appaiono nel portale)
+
+**Sintomo**: L'app gira ma in Application Insights non arrivano request, eccezioni o log. Il Live Metrics è vuoto.
+
+**Causa**: Connection string errata o non impostata, sampling al 0%, endpoint di ingestione irraggiungibile (firewall/NSG), oppure SDK non inizializzato prima del primo request handler.
+
+**Soluzione**: Verificare la connection string, testare la connettività all'endpoint e controllare che `configure_azure_monitor()` / `appInsights.setup().start()` venga chiamato all'avvio dell'app, prima di qualsiasi middleware.
+
 ```bash
-# Verificare telemetria in arrivo
+# 1. Verificare che la variabile d'ambiente sia valorizzata
+echo $APPLICATIONINSIGHTS_CONNECTION_STRING
+
+# 2. Controllare telemetria negli ultimi 5 minuti
 az monitor app-insights query \
   --app ai-myapp-prod \
   --resource-group $RG \
-  --analytics-query "requests | where timestamp > ago(5m) | count"
+  --analytics-query "union requests, traces, exceptions | where timestamp > ago(5m) | count"
 
-# Testare connection string (con curl)
-curl -X POST "https://westeurope-5.in.applicationinsights.azure.com/v2/track" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Microsoft.ApplicationInsights.Event",
-    "time": "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'",
-    "iKey": "INSTRUMENTATION_KEY",
-    "data": {
-      "baseType": "EventData",
-      "baseData": {
-        "ver": 2,
-        "name": "test_event"
-      }
-    }
-  }'
+# 3. Test diretto all'endpoint di ingestione (verificare raggiungibilità)
+curl -s -o /dev/null -w "%{http_code}" \
+  "https://westeurope-5.in.applicationinsights.azure.com/v2/track" \
+  -X POST -H "Content-Type: application/json" -d '[]'
+# Risposta attesa: 200 o 400 (endpoint raggiungibile); 0 o timeout = problema di rete
+
+# 4. Controllare i log dell'SDK per errori di configurazione
+# Python: abilitare debug logging
+# import logging; logging.getLogger("azure").setLevel(logging.DEBUG)
+```
+
+---
+
+### Scenario 2 — Dati parziali: solo alcune richieste appaiono (sampling aggressivo)
+
+**Sintomo**: Application Insights mostra un volume di request molto inferiore al reale. Il sampling rate nel portale è < 100%.
+
+**Causa**: Adaptive Sampling ha ridotto il rate (default: target 5 req/s). In ambienti ad alto traffico questo è normale, ma può nascondere errori rari.
+
+**Soluzione**: Aumentare il target o passare a fixed-rate sampling per i dati critici. Usare `isSampledOut` in KQL per verificare l'esclusione.
+
+```bash
+# Verificare il sampling rate attuale in KQL
+az monitor app-insights query \
+  --app ai-myapp-prod \
+  --resource-group $RG \
+  --analytics-query "requests | where timestamp > ago(1h) | summarize avg(itemCount) by bin(timestamp, 5m) | render timechart"
+# itemCount > 1 indica che ogni sample rappresenta più request reali
+```
+
+```python
+# Python: aumentare target sampling (più dati, più costo)
+configure_azure_monitor(
+    connection_string=os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"],
+    sampling_ratio=1.0  # 100% — nessun sampling
+)
+```
+
+---
+
+### Scenario 3 — Distributed Tracing interrotto: operation_Id non correlato tra servizi
+
+**Sintomo**: Nella Application Map i servizi appaiono disconnessi. Le query KQL su `operation_Id` non trovano i record del servizio downstream.
+
+**Causa**: I correlation headers W3C TraceContext (`traceparent`, `tracestate`) non vengono propagati nelle chiamate HTTP. Può accadere se si usa un HTTP client non instrumentato, un proxy che rimuove gli header, o SDK con versioni diverse.
+
+**Soluzione**: Assicurarsi di usare HTTP client instrumentati (es. `requests` con OpenTelemetry, `axios` con AppInsights SDK) e di iniettare i headers nelle chiamate manuali.
+
+```python
+# Propagazione manuale headers in Python (se il client HTTP non è auto-instrumentato)
+from opentelemetry.propagate import inject
+import requests as http_client
+
+def call_downstream_service(url: str) -> dict:
+    headers = {}
+    inject(headers)  # Inietta traceparent e tracestate
+    response = http_client.get(url, headers=headers)
+    return response.json()
+```
+
+```kql
+// Verificare correlazione: cercare operation_Id orfani (senza parent)
+requests
+| where timestamp > ago(1h)
+| where isempty(operation_ParentId)
+| summarize OrphanCount = count() by cloud_RoleName
+// Un numero alto indica servizi che non ricevono gli header di correlazione
+```
+
+---
+
+### Scenario 4 — Costi elevati: spesa Log Analytics superiore alle aspettative
+
+**Sintomo**: La fattura Azure mostra un volume di ingestione molto alto per il workspace Log Analytics associato ad Application Insights.
+
+**Causa**: Volume di telemetria elevato (es. ogni SQL query loggata come dependency), sampling non configurato, retention period lungo, o custom metrics con alta cardinalità.
+
+**Soluzione**: Abilitare Adaptive Sampling, ridurre la retention a 30 giorni per i dati non critici, filtrare le dependency di bassa utilità (es. health checks), e usare `customMetrics` invece di `traces` per metriche numeriche.
+
+```bash
+# Analizzare volume per tipo di telemetria (ultimi 7 giorni)
+az monitor app-insights query \
+  --app ai-myapp-prod \
+  --resource-group $RG \
+  --analytics-query "
+union requests, dependencies, exceptions, traces, customEvents, pageViews
+| where timestamp > ago(7d)
+| summarize TotalRows = count(), TotalSizeKB = sum(_BilledSize) / 1024 by itemType
+| order by TotalSizeKB desc"
+
+# Ridurre retention del workspace (default 90 giorni → 30 giorni)
+LAW_ID=$(az monitor app-insights component show \
+  --resource-group $RG --app ai-myapp-prod \
+  --query workspaceResourceId -o tsv)
+az monitor log-analytics workspace update \
+  --ids $LAW_ID \
+  --retention-time 30
+```
+
+```python
+# Filtrare dependency non utili (es. health checks, blob polling)
+from azure.monitor.opentelemetry import configure_azure_monitor
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+
+# Escludere endpoint specifici tramite filtro custom nel processor
+# O configurare sampling solo per dipendenze critiche
+configure_azure_monitor(
+    connection_string=os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"],
+    sampling_ratio=0.1  # Ridurre a 10% per ambienti ad alto traffico
+)
 ```
 
 ## Riferimenti

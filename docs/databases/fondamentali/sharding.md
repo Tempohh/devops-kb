@@ -9,7 +9,7 @@ related: [databases/fondamentali/acid-base-cap, databases/fondamentali/modelli-d
 official_docs: https://vitess.io/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Sharding
@@ -277,6 +277,116 @@ item = {
 
 # Per leggere tutti gli eventi del giorno: scatter-gather su 10 partition
 ```
+
+## Troubleshooting
+
+### Scenario 1 — Hot Shard (shard sovraccarico)
+
+**Sintomo**: un singolo shard riceve la quasi totalità del traffico. Latenza elevata, CPU/IO al limite su un nodo mentre gli altri sono idle.
+
+**Causa**: shard key con distribuzione non uniforme (es. range sharding su `created_at`, timestamp sequenziali, tenant di dimensioni molto diverse).
+
+**Soluzione**: identificare la shard key incriminata e valutare resharding con hash sharding o shard key composita. Nel breve periodo, splittare lo shard hot.
+
+```bash
+# MongoDB: verificare distribuzione degli chunk
+mongosh --eval "db.ordini.getShardDistribution()"
+
+# DynamoDB: monitorare consumed capacity per partition
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/DynamoDB \
+  --metric-name ConsumedWriteCapacityUnits \
+  --dimensions Name=TableName,Value=ordini \
+  --period 60 --statistics Sum \
+  --start-time 2024-01-01T00:00:00Z \
+  --end-time 2024-01-01T01:00:00Z
+
+# Vitess: ispezionare distribuzione tablet
+vtctlclient GetShard ks/0
+```
+
+---
+
+### Scenario 2 — Scatter-Gather con latenza inaccettabile
+
+**Sintomo**: query che dovrebbero essere veloci impiegano secondi. EXPLAIN mostra fan-out su tutti gli shard.
+
+**Causa**: la query non include la shard key nel predicato, obbligando il middleware a fare broadcast su tutti i nodi e aggregare i risultati.
+
+**Soluzione**: riscrivere la query includendo la shard key, oppure aggiungere un global secondary index se il pattern di accesso non è modificabile.
+
+```sql
+-- Query problematica (scatter-gather su tutti gli shard):
+SELECT * FROM ordini WHERE created_at > NOW() - INTERVAL '7 days';
+
+-- Query riscritta con shard key (single-shard):
+SELECT * FROM ordini
+WHERE tenant_id = 'acme'               -- shard key inclusa
+  AND created_at > NOW() - INTERVAL '7 days';
+
+-- Citus: verificare piano di esecuzione
+EXPLAIN (VERBOSE, ANALYZE)
+  SELECT * FROM ordini WHERE created_at > NOW() - INTERVAL '7 days';
+-- Cercare "Custom Scan (Citus Adaptive)" con "Task Count" = N shard
+```
+
+---
+
+### Scenario 3 — Resharding bloccato o dati inconsistenti post-migrazione
+
+**Sintomo**: dopo un resharding, alcune query restituiscono risultati mancanti o duplicati. Oppure il processo di migrazione non avanza.
+
+**Causa**: mancata sincronizzazione tra la doppia scrittura (vecchio e nuovo shard) e l'aggiornamento della routing table. Race condition durante il cutover.
+
+**Soluzione**: usare un periodo di doppia scrittura verificato, validare la count dei record prima del cutover, e usare CDC (Change Data Capture) per garantire la sync.
+
+```bash
+# Vitess: monitorare stato resharding
+vtctlclient VReplicationExec \
+  <tablet-alias> "select * from _vt.vreplication"
+
+# Verificare che i dati siano in sync prima del cutover
+# (confronto count su vecchio vs nuovo shard)
+vtctlclient VDiff <keyspace>/<workflow>
+
+# In caso di errore, rollback al vecchio shard
+vtctlclient CancelResharding <keyspace>
+
+# MongoDB: stato della migrazione chunk
+mongosh --eval "sh.status()" | grep "currently running"
+```
+
+---
+
+### Scenario 4 — Transazione cross-shard fallita parzialmente
+
+**Sintomo**: un'operazione che aggiorna dati su più shard lascia il sistema in uno stato inconsistente (una parte eseguita, l'altra no).
+
+**Causa**: assenza di coordinamento transazionale distribuito. Il 2PC non è supportato dal middleware, oppure uno shard è temporaneamente irraggiungibile.
+
+**Soluzione**: implementare il pattern Saga con compensating transactions, oppure ridisegnare il modello dati per collocare i dati correlati sullo stesso shard.
+
+```python
+# Saga pattern con compensating transaction
+def trasferisci_ordine(order_id, from_tenant, to_tenant):
+    try:
+        # Step 1: aggiorna shard del tenant sorgente
+        shard_from.execute(
+            "UPDATE ordini SET tenant_id = %s WHERE id = %s",
+            (to_tenant, order_id)
+        )
+        # Step 2: aggiorna shard del tenant destinazione
+        shard_to.execute(
+            "INSERT INTO ordini_log VALUES (%s, %s, NOW())",
+            (order_id, to_tenant)
+        )
+    except Exception as e:
+        # Compensating transaction: annulla step 1
+        shard_from.execute(
+            "UPDATE ordini SET tenant_id = %s WHERE id = %s",
+            (from_tenant, order_id)
+        )
+        raise
 
 ## Relazioni
 

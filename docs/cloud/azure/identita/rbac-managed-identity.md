@@ -9,7 +9,7 @@ related: [cloud/azure/identita/entra-id, cloud/azure/identita/governance, cloud/
 official_docs: https://learn.microsoft.com/azure/role-based-access-control/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Azure RBAC & Managed Identity
@@ -335,6 +335,120 @@ jobs:
           az deployment group create \
             --resource-group myapp-rg \
             --template-file main.bicep
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — "AuthorizationFailed" nonostante role assignment assegnato
+
+**Sintomo:** L'operazione Azure fallisce con `AuthorizationFailed: ... does not have authorization to perform action`.
+
+**Causa:** I role assignment richiedono fino a 5-10 minuti per propagarsi. In alternativa, il principal usa un token emesso *prima* dell'assignment (cache del token).
+
+**Soluzione:** Attendere la propagazione e riacquisire un nuovo token. Verificare che l'assignment esista davvero e sullo scope corretto.
+
+```bash
+# Verificare che l'assignment esista e sia sullo scope giusto
+az role assignment list \
+    --assignee $PRINCIPAL_ID \
+    --include-inherited \
+    --query "[].{Role:roleDefinitionName, Scope:scope}" \
+    --output table
+
+# Controllare effective permissions su una risorsa specifica
+az role assignment list \
+    --assignee $PRINCIPAL_ID \
+    --scope /subscriptions/$SUBSCRIPTION_ID/resourceGroups/myapp-rg \
+    --include-inherited \
+    --output table
+```
+
+---
+
+### Scenario 2 — Managed Identity non riesce ad autenticarsi (IMDS unreachable)
+
+**Sintomo:** Errore `ManagedIdentityCredential authentication unavailable` o timeout su `169.254.169.254`.
+
+**Causa:** L'endpoint IMDS (Instance Metadata Service) non è raggiungibile: tipico in ambienti container senza networking corretto, o se il servizio MI non è abilitato sulla risorsa.
+
+**Soluzione:** Verificare che la Managed Identity sia abilitata sulla risorsa e che l'endpoint IMDS sia accessibile.
+
+```bash
+# Verificare che la MI sia abilitata sulla VM
+az vm show \
+    --resource-group myapp-rg \
+    --name myvm \
+    --query "identity" \
+    --output json
+
+# Test diretto dell'endpoint IMDS dall'interno della risorsa
+curl -s 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/' \
+    -H 'Metadata: true'
+
+# Se mancante, abilitare system-assigned MI
+az vm identity assign \
+    --resource-group myapp-rg \
+    --name myvm
+```
+
+---
+
+### Scenario 3 — Workload Identity Federation fallisce su GitHub Actions
+
+**Sintomo:** `ClientAssertionCredentialAuthenticationError: AADSTS70021: No matching federated identity record found`.
+
+**Causa:** Il `subject` del federated credential non corrisponde al claim `sub` del token OIDC emesso da GitHub. Il soggetto varia in base a branch, PR o environment.
+
+**Soluzione:** Verificare il subject configurato nel federated credential e allinearlo al contesto di esecuzione del workflow.
+
+```bash
+# Listare federated credentials configurati sull'app registration
+az ad app federated-credential list --id $APP_ID --output json
+
+# Controllare il subject corretto:
+# Branch main:        repo:myorg/myrepo:ref:refs/heads/main
+# Pull Request:       repo:myorg/myrepo:pull_request
+# Environment:        repo:myorg/myrepo:environment:production
+# Tag:                repo:myorg/myrepo:ref:refs/tags/v1.0
+
+# Aggiornare il subject se errato
+az ad app federated-credential update \
+    --id $APP_ID \
+    --federated-credential-id $CRED_ID \
+    --parameters '{"subject": "repo:myorg/myrepo:ref:refs/heads/main"}'
+```
+
+---
+
+### Scenario 4 — Role assignment raggiunge il limite (2000 per subscription)
+
+**Sintomo:** Errore `RoleAssignmentLimitExceeded: The limit on the number of role assignments has been reached`.
+
+**Causa:** Azure impone un limite di 2000 role assignment per subscription. Assegnazioni granulari per-utente per-risorsa esauriscono rapidamente il limite.
+
+**Soluzione:** Consolidare assignment usando gruppi Entra ID invece di singoli utenti, e assegnare su scope più ampi (Resource Group invece di singola risorsa).
+
+```bash
+# Contare gli assignment nella subscription
+az role assignment list \
+    --subscription $SUBSCRIPTION_ID \
+    --query "length([])"
+
+# Trovare assignment ridondanti (stessa risorsa, scope multipli)
+az role assignment list \
+    --subscription $SUBSCRIPTION_ID \
+    --include-inherited \
+    --query "[].{Principal:principalName, Role:roleDefinitionName, Scope:scope}" \
+    --output table | sort
+
+# Assegnare a un gruppo invece che a singoli utenti
+az role assignment create \
+    --assignee-object-id "$(az ad group show --group Team-Backend --query id -o tsv)" \
+    --assignee-principal-type Group \
+    --role "Contributor" \
+    --resource-group myapp-rg
 ```
 
 ---

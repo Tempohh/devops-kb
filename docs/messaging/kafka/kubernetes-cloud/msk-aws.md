@@ -3,13 +3,13 @@ title: "Amazon MSK (Managed Streaming for Apache Kafka)"
 slug: msk-aws
 category: messaging
 tags: [kafka, aws, msk, managed, cloud, amazon]
-search_keywords: [amazon msk, managed kafka aws, msk provisioned, msk serverless, kafka aws, msk terraform, msk iam auth, msk connect, msk cloudwatch]
+search_keywords: [amazon msk, managed kafka aws, msk provisioned, msk serverless, kafka aws, msk terraform, msk iam auth, msk connect, msk cloudwatch, msk sasl scram, msk broker node, amazon managed streaming, msk vpc peering, msk encryption kms, msk upgrade versione, kafka managed service aws]
 parent: messaging/kafka/kubernetes-cloud
 related: [messaging/kafka/sicurezza/ssl-tls, messaging/kafka/operazioni/monitoring, messaging/kafka/kubernetes-cloud/strimzi-operator]
 official_docs: https://docs.aws.amazon.com/msk/latest/developerguide/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Amazon MSK (Managed Streaming for Apache Kafka)
@@ -484,42 +484,111 @@ Un cluster 3x `kafka.m5.xlarge` con 1TB storage per broker costa circa **$600-70
 
 ## Troubleshooting
 
-### Client non riesce a connettersi al cluster MSK
+### Scenario 1 — Client non riesce a connettersi al cluster MSK
+
+**Sintomo:** Il producer/consumer riceve `LEADER_NOT_AVAILABLE` o `Connection refused` al bootstrap. Timeout durante la fase di metadata fetch.
+
+**Causa:** Security group non permette le porte Kafka (9092/9094/9096/9098), oppure il client è in una VPC non raggiungibile dal cluster.
+
+**Soluzione:** Verificare la raggiungibilità di rete e i permessi del security group.
 
 ```bash
 # Verifica connettività al bootstrap broker
-telnet b-1.msk-production.eu-west-1.amazonaws.com 9098
+nc -zv b-1.msk-production.eu-west-1.amazonaws.com 9098
 
 # Controlla il security group: le porte 9092/9094/9096/9098 devono essere aperte
 aws ec2 describe-security-groups --group-ids sg-xyz789 \
   --query "SecurityGroups[0].IpPermissions"
 
-# Verifica che il client sia nella stessa VPC o connesso tramite VPC peering
+# Ottieni gli endpoint del cluster
+aws kafka get-bootstrap-brokers \
+  --cluster-arn arn:aws:kafka:eu-west-1:123456789:cluster/msk-production/...
 ```
 
-### Errore IAM Authentication
+### Scenario 2 — Errore IAM Authentication (`AuthorizationException`)
+
+**Sintomo:** Il client lancia `org.apache.kafka.common.errors.AuthorizationException` oppure `software.amazon.msk.auth.iam.MSKCredentialProvider` non trova credenziali valide.
+
+**Causa:** Il ruolo IAM associato al client non ha il permesso `kafka-cluster:Connect` sull'ARN del cluster, oppure manca `kafka-cluster:DescribeTopic`/`ReadData` per il topic specifico.
+
+**Soluzione:** Aggiungere le azioni IAM mancanti alla policy. Testare prima con `aws kafka describe-cluster`.
 
 ```bash
-# Testa i permessi IAM con aws-cli
+# Verifica che le credenziali IAM siano visibili dall'ambiente
+aws sts get-caller-identity
+
+# Testa accesso al cluster con le credenziali correnti
 aws kafka describe-cluster \
   --cluster-arn arn:aws:kafka:eu-west-1:123456789:cluster/msk-production/...
 
-# Verifica che il ruolo IAM abbia i permessi kafka-cluster:Connect
-# L'errore più comune è il mancato permesso kafka-cluster:Connect sull'ARN del cluster
+# Simula la policy IAM (richiede IAM Access Analyzer)
+aws iam simulate-principal-policy \
+  --policy-source-arn arn:aws:iam::123456789:role/MyAppRole \
+  --action-names kafka-cluster:Connect \
+  --resource-arns "arn:aws:kafka:eu-west-1:123456789:cluster/msk-production/*"
 ```
 
-### Consumer Lag in aumento
+### Scenario 3 — Consumer Lag in aumento costante
+
+**Sintomo:** La metrica CloudWatch `SumOffsetLag` o `EstimatedTimeLag` cresce nel tempo anche con consumer attivi. I consumer group sono in stato `Stable`.
+
+**Causa:** I consumer non riescono a stare al passo con il rate di produzione. Cause comuni: numero insufficiente di partizioni rispetto ai consumer, elaborazione lenta per batch troppo grandi, o `max.poll.interval.ms` troppo basso.
+
+**Soluzione:** Aumentare il parallelismo dei consumer o ridurre il tempo di elaborazione per poll.
 
 ```bash
-# Controlla il lag dei consumer group
-aws kafka list-client-vpcs \
-  --cluster-arn arn:aws:kafka:...
-
-# Usa kafka-consumer-groups.sh
+# Descrivi il lag dettagliato per consumer group
 kafka-consumer-groups.sh \
-  --bootstrap-server b-1...:9098 \
+  --bootstrap-server b-1.msk-production.eu-west-1.amazonaws.com:9098 \
   --command-config client.properties \
   --describe --group order-service-group
+
+# Controlla il numero di partizioni del topic
+kafka-topics.sh \
+  --bootstrap-server b-1.msk-production.eu-west-1.amazonaws.com:9098 \
+  --command-config client.properties \
+  --describe --topic ordini-v1
+
+# Cloudwatch: controlla EstimatedTimeLag per consumer group
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/Kafka \
+  --metric-name EstimatedTimeLag \
+  --dimensions Name="Cluster Name",Value=msk-production \
+               Name="Consumer Group",Value=order-service-group \
+               Name=Topic,Value=ordini-v1 \
+  --start-time $(date -u -d '1 hour ago' +%FT%TZ) \
+  --end-time $(date -u +%FT%TZ) \
+  --period 60 --statistics Maximum
+```
+
+### Scenario 4 — Storage broker quasi esaurito (`KafkaDataLogsDiskUsed` > 85%)
+
+**Sintomo:** L'allarme CloudWatch `KafkaDataLogsDiskUsed` supera l'85% su uno o più broker. MSK può diventare `read-only` per le partizioni di quel broker se raggiunge il 100%.
+
+**Causa:** Retention configurata troppo alta (`log.retention.hours`) o spike improvviso di produzione senza riduzione della retention. Con Provisioned Throughput disabilitato l'EBS può non stare al passo.
+
+**Soluzione:** Ridurre la retention oppure espandere lo storage EBS. MSK supporta l'espansione del volume senza downtime.
+
+```bash
+# Espandi lo storage EBS di tutti i broker (no downtime)
+aws kafka update-broker-storage \
+  --cluster-arn arn:aws:kafka:eu-west-1:123456789:cluster/msk-production/... \
+  --current-version <cluster-current-version> \
+  --target-broker-ebs-volume-info BrokerEBSVolumeInfo='[
+    {"KafkaBrokerNodeId": "ALL", "VolumeSizeGB": 2000}
+  ]'
+
+# Riduci la retention dei topic per liberare spazio immediatamente
+kafka-configs.sh \
+  --bootstrap-server b-1.msk-production.eu-west-1.amazonaws.com:9098 \
+  --command-config client.properties \
+  --alter --entity-type topics --entity-name ordini-v1 \
+  --add-config retention.ms=86400000  # 24h invece di 7 giorni
+
+# Controlla la versione corrente del cluster (necessaria per update-broker-storage)
+aws kafka describe-cluster \
+  --cluster-arn arn:aws:kafka:eu-west-1:123456789:cluster/msk-production/... \
+  --query "ClusterInfo.CurrentVersion"
 ```
 
 ---

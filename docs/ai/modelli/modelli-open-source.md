@@ -9,7 +9,7 @@ related: [ai/modelli/scelta-modello, ai/mlops/model-serving, ai/mlops/infrastrut
 official_docs: https://ollama.com/library
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-03-27
 ---
 
 # Modelli Open Source / Open Weight
@@ -351,6 +351,118 @@ model = AutoAWQForCausalLM.from_quantized(
 - **Q4_K_M come default**: per la maggior parte degli usi, Q4_K_M è il punto dolce tra qualità e risorse.
 - **Verifica la licenza**: Llama 3, Mistral, Gemma hanno licenze diverse. Apache 2.0 (Mistral 7B, Qwen) è la più permissiva.
 - **Modelli specializzati**: per coding usa Qwen2.5-Coder, per reasoning usa DeepSeek R1, per multilingua usa Qwen o BLOOM.
+
+## Troubleshooting
+
+### Scenario 1 — Ollama non usa la GPU (inferenza lenta su CPU)
+
+**Sintomo**: `ollama run` impiega minuti invece di secondi; `nvidia-smi` non mostra utilizzo GPU durante l'inferenza.
+
+**Causa**: Il driver NVIDIA non è rilevato da Ollama, oppure la versione di CUDA è incompatibile. Su Windows, può essere necessario installare la versione Ollama con supporto CUDA esplicito.
+
+**Soluzione**: Verificare che i driver NVIDIA siano aggiornati (≥525) e che CUDA sia installato. Controllare i log di Ollama per messaggi su GPU detection.
+
+```bash
+# Verifica che Ollama veda la GPU
+ollama run llama3.1:8b --verbose 2>&1 | grep -i gpu
+
+# Controlla i log di sistema Ollama
+# Linux/macOS:
+journalctl -u ollama -f
+# Windows: Event Viewer → Applications → Ollama
+
+# Forza l'uso GPU specificando il numero di layer da offloadare
+OLLAMA_NUM_GPU=35 ollama run llama3.1:8b  # Linux/macOS
+# Su Windows (PowerShell):
+$env:OLLAMA_NUM_GPU=35; ollama run llama3.1:8b
+
+# Controlla la VRAM disponibile e i layer caricati su GPU
+ollama ps  # mostra i modelli in esecuzione e la VRAM usata
+```
+
+---
+
+### Scenario 2 — OOM (Out of Memory) durante il caricamento del modello
+
+**Sintomo**: `ollama run` o `llama-cli` terminano con errore `CUDA out of memory`, `failed to allocate tensor`, o il processo viene killato dall'OS.
+
+**Causa**: Il modello (anche quantizzato) supera la VRAM disponibile. Un modello 7B in Q4_K_M richiede ~4.5 GB; in FP16 ne richiede ~14 GB.
+
+**Soluzione**: Passare a una quantizzazione più aggressiva, usare un modello più piccolo, oppure abilitare l'offload parziale su RAM (più lento).
+
+```bash
+# Controlla la VRAM disponibile prima di caricare
+nvidia-smi --query-gpu=memory.total,memory.free --format=csv
+
+# Usa una quantizzazione più leggera
+ollama pull llama3.1:8b-instruct-q4_0   # invece di q8_0
+ollama pull llama3.1:8b-instruct-q2_K   # se VRAM < 4GB
+
+# Con llama.cpp: offload parziale su RAM (layer GPU limitati)
+./build/bin/llama-cli \
+  -m model-Q4_K_M.gguf \
+  --n-gpu-layers 20 \   # carica solo 20 layer su GPU, resto su CPU
+  -p "Il tuo prompt"
+
+# Verifica VRAM usata dopo il caricamento
+ollama ps
+```
+
+---
+
+### Scenario 3 — Qualità degradata con quantizzazione aggressiva
+
+**Sintomo**: Il modello con Q2_K o Q3_K produce risposte incoerenti, ripetizioni, o allucinazioni evidenti assenti nelle versioni FP16/Q8.
+
+**Causa**: La quantizzazione a 2-3 bit causa perdita significativa di precisione nei pesi — i modelli piccoli (7B) soffrono più dei modelli grandi (70B) perché hanno meno ridondanza.
+
+**Soluzione**: Passare almeno a Q4_K_M (punto dolce qualità/VRAM). Per task critici, usare Q6_K o Q8_0. I modelli grandi (70B) tollerano meglio le quantizzazioni aggressive.
+
+```bash
+# Confronto qualitativo: stessa domanda con diverse quantizzazioni
+for quant in q2_K q4_K_M q6_K q8_0; do
+  echo "=== $quant ==="
+  ollama pull llama3.1:8b-instruct-$quant 2>/dev/null
+  echo "Spiega il CAP theorem in una frase" | ollama run llama3.1:8b-instruct-$quant
+done
+
+# Regola pratica: non scendere sotto Q4 per modelli ≤13B
+# Per modelli 70B+ Q3_K_M è ancora accettabile
+# IQ4_XS offre qualità simile a Q4_K_M con VRAM leggermente inferiore
+ollama pull llama3.1:8b-instruct-iq4_xs
+```
+
+---
+
+### Scenario 4 — Modelfile ignorato o parametri non applicati
+
+**Sintomo**: Dopo `ollama create`, il modello non usa il system prompt o i parametri (temperature, num_ctx) definiti nel Modelfile.
+
+**Causa**: Il nome del modello custom in `ollama run` non corrisponde al nome usato in `ollama create`, oppure il Modelfile contiene errori di sintassi silenziosi. Il parametro `num_ctx` richiede VRAM sufficiente — Ollama lo riduce silenziosamente se la memoria non è disponibile.
+
+**Soluzione**: Verificare che il modello sia stato creato correttamente con `ollama list` e ispezionare la configurazione effettiva con `ollama show`.
+
+```bash
+# Crea il modello dal Modelfile
+ollama create devops-assistant -f Modelfile
+
+# Verifica che il modello esista
+ollama list | grep devops-assistant
+
+# Ispeziona i parametri effettivamente applicati
+ollama show devops-assistant
+ollama show devops-assistant --modelfile   # mostra il Modelfile completo
+ollama show devops-assistant --parameters  # solo i parametri
+
+# Se num_ctx viene ridotto, verificare VRAM disponibile
+# Un context di 8192 token su un 8B Q4 richiede ~1-2 GB extra di VRAM
+# Ridurre num_ctx se necessario:
+# PARAMETER num_ctx 4096  (invece di 8192)
+
+# Ricreare il modello dopo modifiche al Modelfile
+ollama rm devops-assistant
+ollama create devops-assistant -f Modelfile
+```
 
 ## Riferimenti
 

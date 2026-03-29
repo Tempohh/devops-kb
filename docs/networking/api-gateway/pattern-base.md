@@ -9,7 +9,7 @@ related: [networking/api-gateway/kong, networking/api-gateway/rate-limiting, net
 official_docs: https://microservices.io/patterns/apigateway.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # API Gateway — Pattern e Concetti Base
@@ -334,6 +334,130 @@ spec:
 - **Versioning esplicito**: sempre versionare le API dall'inizio — cambiare schema senza versioning rompe i client
 - **Propagare il Request ID**: ogni richiesta deve avere un ID univoco propagato a tutti i servizi — indispensabile per il tracing distribuito
 - **Health check dell'API gateway stesso**: il gateway deve essere monitorato come qualsiasi altro componente critico
+
+## Troubleshooting
+
+### Scenario 1 — 401 Unauthorized anche con token valido
+
+**Sintomo:** Il client riceve `401 Unauthorized` nonostante invii un JWT valido verificabile esternamente.
+
+**Causa:** Il gateway non riesce a validare il JWT per uno di questi motivi: clock skew tra gateway e auth service (il token risulta expired), chiave pubblica non aggiornata (key rotation non propagata), oppure il token viene inviato senza prefisso `Bearer `.
+
+**Soluzione:** Verificare l'orario del gateway e dell'auth service, forzare il refresh delle chiavi pubbliche, controllare il formato dell'header.
+
+```bash
+# Verificare sincronizzazione orario sul gateway
+date && timedatectl status
+
+# Decodificare il JWT e controllare exp/iat
+echo "eyJ..." | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool | grep -E 'exp|iat|nbf'
+
+# Controllare i log del gateway per il motivo esatto del rifiuto
+kubectl logs -n ingress-nginx deployment/ingress-nginx-controller | grep -i "401\|unauthorized\|jwt"
+
+# Traefik: verificare configurazione forwardAuth
+kubectl describe middleware jwt-auth -n default
+```
+
+---
+
+### Scenario 2 — 429 Too Many Requests inatteso
+
+**Sintomo:** Il client riceve `429` molto prima di aver raggiunto il rate limit dichiarato. Il problema si manifesta in modo intermittente o solo in certi orari.
+
+**Causa:** Il rate limit è configurato per IP ma il gateway è dietro un proxy/load balancer che non propaga `X-Forwarded-For`. Tutti i client risultano con lo stesso IP (quello del proxy) e condividono il bucket.
+
+**Soluzione:** Configurare il gateway per leggere l'IP reale dall'header `X-Forwarded-For` o `X-Real-IP`, oppure basare il rate limit sul JWT claim `sub` invece che sull'IP.
+
+```nginx
+# Nginx: usare l'IP reale dal header X-Forwarded-For
+# In http block:
+set_real_ip_from 10.0.0.0/8;       # range del load balancer
+real_ip_header   X-Forwarded-For;
+real_ip_recursive on;
+
+# Verificare quale IP viene visto dal gateway
+# nei log: $remote_addr vs $http_x_forwarded_for
+log_format debug_ip '$remote_addr | $http_x_forwarded_for | $http_x_real_ip';
+```
+
+```bash
+# Kong: ispezionare il plugin rate-limiting e il consumer identificato
+curl -s http://localhost:8001/plugins | jq '.data[] | select(.name=="rate-limiting") | .config'
+
+# Verificare quale key viene usata per il rate limit
+curl -I https://api.example.com/api/users \
+  -H "Authorization: Bearer <token>" \
+  | grep -i 'x-ratelimit'
+```
+
+---
+
+### Scenario 3 — Latenza elevata sulle chiamate aggregate (Gateway Aggregation)
+
+**Sintomo:** Un endpoint di aggregazione risponde in 3-5 secondi, ma i singoli servizi backend rispondono in ~200ms ciascuno.
+
+**Causa:** Le chiamate ai microservizi vengono eseguite in sequenza invece che in parallelo. La latenza totale è la somma delle latenze invece del massimo.
+
+**Soluzione:** Riscrivere il handler di aggregazione per eseguire le chiamate in parallelo (`Promise.all` in Node.js, `asyncio.gather` in Python, goroutine in Go).
+
+```python
+# Python: aggregazione parallela con asyncio
+import asyncio
+import httpx
+
+async def aggregate_dashboard(user_id: str) -> dict:
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        # Esecuzione parallela — latenza = max(latenze) invece di sum(latenze)
+        user_task    = client.get(f"http://user-service/users/{user_id}")
+        orders_task  = client.get(f"http://order-service/orders?user={user_id}")
+        notif_task   = client.get(f"http://notif-service/unread?user={user_id}")
+
+        user_resp, orders_resp, notif_resp = await asyncio.gather(
+            user_task, orders_task, notif_task,
+            return_exceptions=True  # non fallire se uno fallisce
+        )
+
+    return {
+        "user":   user_resp.json() if not isinstance(user_resp, Exception) else None,
+        "orders": orders_resp.json() if not isinstance(orders_resp, Exception) else None,
+        "unread": notif_resp.json().get("count", 0) if not isinstance(notif_resp, Exception) else 0,
+    }
+```
+
+```bash
+# Diagnosticare: misurare latenza di ogni backend separatamente
+curl -w "\nTime: %{time_total}s\n" -s http://user-service/users/123 -o /dev/null
+curl -w "\nTime: %{time_total}s\n" -s http://order-service/orders?user=123 -o /dev/null
+
+# Se la somma ≈ latenza endpoint aggregato → le chiamate sono sequenziali
+```
+
+---
+
+### Scenario 4 — Circuit Breaker aperto in modo persistente (stato OPEN bloccato)
+
+**Sintomo:** Il backend è tornato healthy, ma il gateway continua a rispondere `503 Service Unavailable` e non invia traffico al servizio.
+
+**Causa:** Il circuit breaker è in stato OPEN e il tempo di half-open non scatta per via di una configurazione `probe-interval` troppo alto, oppure le probe requests in HALF-OPEN continuano a fallire per un motivo diverso dal problema originale (es. timeout troppo basso per le probe).
+
+**Soluzione:** Verificare lo stato del circuit breaker, aumentare il timeout delle probe, o forzare il reset manuale in emergenza.
+
+```bash
+# Kong: verificare stato del circuit breaker via Admin API
+curl -s http://localhost:8001/upstreams/<upstream-name>/health \
+  | jq '.data[] | {address, health, unhealthy_count}'
+
+# Forzare il reset di un target a "healthy" manualmente
+curl -X PUT http://localhost:8001/upstreams/<upstream-name>/targets/<target>/healthy
+
+# Nginx: non ha circuit breaker nativo — usare ngx_http_upstream_module
+# Controllare numero di failed attempts accumulati
+nginx -T | grep -E 'max_fails|fail_timeout'
+
+# Traefik: verificare stato circuit breaker (se abilitato)
+curl -s http://localhost:8080/api/http/middlewares | jq '.[] | select(.type=="CircuitBreaker")'
+```
 
 ## Relazioni
 

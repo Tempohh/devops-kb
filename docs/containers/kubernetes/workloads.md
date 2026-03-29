@@ -9,7 +9,7 @@ related: [containers/kubernetes/scheduling-avanzato, containers/kubernetes/stora
 official_docs: https://kubernetes.io/docs/concepts/workloads/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Kubernetes Workloads
@@ -551,6 +551,128 @@ spec:
 # Con 3 replicas e minAvailable=2:
 # kubectl drain worker-node → può evictare max 1 pod api alla volta
 # Il drain aspetta che il pod si riavvii altrove prima di continuare
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Pod bloccato in CrashLoopBackOff
+
+**Sintomo:** Il pod continua a riavviarsi con stato `CrashLoopBackOff`. `kubectl get pods` mostra `RESTARTS` in crescita.
+
+**Causa:** Il container esce con codice non-zero. Può essere: errore di configurazione, variabile d'ambiente mancante, dipendenza non raggiungibile, OOM kill.
+
+**Soluzione:** Leggere i log del container (anche del crash precedente con `--previous`), verificare exit code e risalire alla causa.
+
+```bash
+# Ispezionare lo stato e gli eventi del pod
+kubectl describe pod <pod-name> -n <namespace>
+
+# Log del container attuale
+kubectl logs <pod-name> -n <namespace> -c <container-name>
+
+# Log dell'ultimo container crashato
+kubectl logs <pod-name> -n <namespace> -c <container-name> --previous
+
+# Vedere exit code
+kubectl get pod <pod-name> -n <namespace> -o jsonpath='{.status.containerStatuses[0].lastState.terminated.exitCode}'
+# Exit 137 = OOM kill | Exit 1 = errore applicazione | Exit 143 = SIGTERM non gestito
+
+# Entrare nel container per debug (se ha una shell)
+kubectl exec -it <pod-name> -n <namespace> -- /bin/sh
+```
+
+---
+
+### Scenario 2 — Deployment bloccato: pod non raggiungono stato Ready
+
+**Sintomo:** `kubectl rollout status deployment/<name>` non completa. I pod sono in `Pending` o `Running` ma mai `Ready`.
+
+**Causa 1 (Pending):** Risorse insufficienti, nodo non disponibile, PVC non bound, toleration mancante.
+**Causa 2 (Running ma non Ready):** `readinessProbe` fallisce — l'applicazione non risponde all'endpoint `/ready` entro i threshold.
+
+**Soluzione:**
+
+```bash
+# Verificare lo stato del rollout e degli eventi
+kubectl rollout status deployment/<name> -n <namespace>
+kubectl describe deployment/<name> -n <namespace>
+
+# Verificare perché i pod non sono Ready
+kubectl get pods -n <namespace> -l app=<app-label>
+kubectl describe pod <pod-name> -n <namespace>
+# Sezione "Conditions" mostra Ready=False e il motivo
+
+# Se Pending: controllare eventi (scheduling failure, PVC, risorse)
+kubectl get events -n <namespace> --sort-by='.lastTimestamp' | grep <pod-name>
+
+# Rollback se il nuovo deploy è broken
+kubectl rollout undo deployment/<name> -n <namespace>
+
+# Verificare i PVC non bound
+kubectl get pvc -n <namespace>
+```
+
+---
+
+### Scenario 3 — StatefulSet: pod bloccato in Pending per PVC non provisioned
+
+**Sintomo:** `kubectl get pods` mostra `postgres-1` in `Pending`. Il PVC `data-postgres-1` è in stato `Pending`.
+
+**Causa:** Lo StorageClass non esiste, il provisioner non è attivo, oppure la zona di disponibilità del nodo non corrisponde a quella del volume.
+
+**Soluzione:**
+
+```bash
+# Verificare lo stato del PVC
+kubectl get pvc -n <namespace>
+kubectl describe pvc data-postgres-1 -n <namespace>
+# Cercare eventi come "no volume plugin matched" o "waiting for first consumer"
+
+# Verificare StorageClass disponibili e il provisioner attivo
+kubectl get storageclass
+kubectl describe storageclass <sc-name>
+
+# Verificare i pod del provisioner (es. EBS CSI driver)
+kubectl get pods -n kube-system | grep csi
+
+# Se lo StorageClass usa WaitForFirstConsumer (late binding):
+# Il PVC si provisionna solo quando il pod viene schedulato su un nodo
+# Verificare che il pod non sia bloccato per altri motivi (affinity, risorse)
+kubectl describe pod postgres-1 -n <namespace>
+```
+
+---
+
+### Scenario 4 — Job non completa: pod in errore con backoffLimit raggiunto
+
+**Sintomo:** `kubectl get jobs` mostra il job in stato `Failed`. I pod del job sono in `Error` o `OOMKilled`.
+
+**Causa:** Il comando del container esce con errore, il job ha superato `backoffLimit`, oppure il pod è stato OOM-killed prima del completamento.
+
+**Soluzione:**
+
+```bash
+# Stato del job e numero di tentativi
+kubectl describe job <job-name> -n <namespace>
+# Cercare: "Pods Statuses: X Failed"
+
+# Vedere i pod del job (includendo quelli terminati)
+kubectl get pods -n <namespace> --selector=job-name=<job-name>
+
+# Log dell'ultimo pod fallito
+kubectl logs -n <namespace> -l job-name=<job-name> --previous
+
+# Se OOM: aumentare memory limit nel job spec e rilanciare
+# Prima cancellare il job fallito
+kubectl delete job <job-name> -n <namespace>
+
+# Rilancio manuale (se non è un CronJob)
+kubectl apply -f job.yaml
+
+# Per un CronJob: forzare esecuzione manuale
+kubectl create job --from=cronjob/<cronjob-name> manual-run-$(date +%s) -n <namespace>
 ```
 
 ---

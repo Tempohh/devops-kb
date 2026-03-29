@@ -9,7 +9,7 @@ related: [cloud/azure/security/key-vault, cloud/azure/networking/vnet, cloud/azu
 official_docs: https://learn.microsoft.com/azure/postgresql/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-28
 ---
 
 # Azure Database — PostgreSQL, MySQL, Redis, Synapse
@@ -518,6 +518,133 @@ az mysql flexible-server create \
 # 3. Restore su MySQL
 mysql -h mysql-migrated-prod.mysql.database.azure.com \
   -u mysqladmin -p mydb < mydb_dump.sql
+```
+
+## Troubleshooting
+
+### Scenario 1 — PostgreSQL: too many connections / connessioni esaurite
+
+**Sintomo:** L'applicazione riceve errori `FATAL: remaining connection slots are reserved` oppure `too many clients already`.
+
+**Causa:** PostgreSQL ha un limite di connessioni (`max_connections`, default 100-200 su Flexible Server). Applicazioni senza connection pooling aprono connessioni per ogni richiesta.
+
+**Soluzione:** Abilitare PgBouncer (già integrato) oppure ridurre le connessioni attive.
+
+```bash
+# Verificare connessioni correnti
+az postgres flexible-server execute \
+  --resource-group $RG \
+  --name $PG_SERVER \
+  --database-name postgres \
+  --querytext "SELECT count(*), state FROM pg_stat_activity GROUP BY state;"
+
+# Abilitare PgBouncer (porta 6432, transaction pooling)
+az postgres flexible-server update \
+  --resource-group $RG \
+  --name $PG_SERVER \
+  --pgbouncer-enabled true
+
+# Aumentare max_connections (richiede restart)
+az postgres flexible-server parameter set \
+  --resource-group $RG \
+  --server-name $PG_SERVER \
+  --name max_connections \
+  --value 500
+```
+
+### Scenario 2 — Redis: OOM e eviction inattesa di chiavi
+
+**Sintomo:** L'applicazione riceve errori `OOM command not allowed when used memory > 'maxmemory'` oppure chiavi importanti vengono rimosse inaspettatamente.
+
+**Causa:** Memoria Redis esaurita. La policy `noeviction` blocca i write; policy LRU/LFU possono rimuovere dati non-cache.
+
+**Soluzione:** Verificare memory usage, scegliere la policy corretta, separare dati persistenti da cache.
+
+```bash
+# Verificare utilizzo memoria Redis
+az redis show \
+  --resource-group $RG \
+  --name redis-prod-2026 \
+  --query "[usedMemory, usedMemoryRss, maxmemory]" -o json
+
+# Connettersi con redis-cli e ispezionare
+redis-cli -h redis-prod-2026.redis.cache.windows.net -p 6380 \
+  --tls -a "$REDIS_KEY" INFO memory
+
+# Impostare policy volatile-lru (evicta solo chiavi con TTL)
+az redis update \
+  --resource-group $RG \
+  --name redis-prod-2026 \
+  --set redisConfiguration.maxmemory-policy=volatile-lru
+
+# Trovare chiavi senza TTL che consumano memoria
+redis-cli -h redis-prod-2026.redis.cache.windows.net -p 6380 \
+  --tls -a "$REDIS_KEY" --scan --pattern '*' | \
+  xargs -I{} redis-cli TTL {}
+```
+
+### Scenario 3 — Synapse Dedicated SQL Pool: query lente o bloccate
+
+**Sintomo:** Query analitiche impiegano ore o restano in stato `Suspended`/`Running` senza completare. Le query sul DWH degradano progressivamente.
+
+**Causa:** DWU insufficienti per il volume dati, statistiche obsolete, distribuzione dati sbilanciata (data skew), o blocchi da transazioni concorrenti.
+
+**Soluzione:** Identificare query bloccanti, aggiornare statistiche, scalare il pool se necessario.
+
+```sql
+-- Visualizzare query attive e stato
+SELECT r.request_id, r.status, r.submit_time, r.resource_class,
+       r.command
+FROM sys.dm_pdw_exec_requests r
+WHERE r.status NOT IN ('Completed', 'Failed', 'Cancelled')
+ORDER BY r.submit_time DESC;
+
+-- Identificare data skew per tabella distribuita
+DBCC PDW_SHOWSPACEUSED('dbo.SalesAnalytics');
+
+-- Aggiornare statistiche (eseguire periodicamente)
+UPDATE STATISTICS dbo.SalesAnalytics;
+
+-- Verificare blocchi
+SELECT * FROM sys.dm_pdw_waits WHERE state = 'Queued';
+```
+
+```bash
+# Scalare il Dedicated SQL Pool per gestire picchi
+az synapse sql pool update \
+  --resource-group $RG \
+  --workspace-name synapseWorkspaceProd2026 \
+  --name DWH_PROD \
+  --performance-level DW2000c
+```
+
+### Scenario 4 — PostgreSQL: failover HA lento o replica in ritardo
+
+**Sintomo:** Durante un failover zone-redundant il downtime supera i 60-120 secondi attesi, oppure le query sulla read replica restituiscono dati vecchi (replica lag elevato).
+
+**Causa:** Il failover automatico richiede che l'applicazione supporti retry sulla connessione. Il replica lag aumenta durante carichi di scrittura intensi o rete congestionata.
+
+**Soluzione:** Verificare il lag di replica, configurare i parametri di replica, usare connection retry nell'applicazione.
+
+```bash
+# Verificare stato HA e standby
+az postgres flexible-server show \
+  --resource-group $RG \
+  --name $PG_SERVER \
+  --query "highAvailability" -o json
+
+# Verificare replica lag (in secondi) dalla replica stessa
+az postgres flexible-server execute \
+  --resource-group $RG \
+  --name pg-replica-northeurope \
+  --database-name postgres \
+  --querytext "SELECT EXTRACT(EPOCH FROM (now() - pg_last_xact_replay_timestamp())) AS replica_lag_seconds;"
+
+# Forzare failover manuale (test)
+az postgres flexible-server restart \
+  --resource-group $RG \
+  --name $PG_SERVER \
+  --failover Planned
 ```
 
 ## Best Practices

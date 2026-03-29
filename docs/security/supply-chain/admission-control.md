@@ -9,7 +9,7 @@ related: [security/supply-chain/image-scanning, security/supply-chain/sbom-cosig
 official_docs: https://kyverno.io/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Admission Control — OPA Gatekeeper e Kyverno
@@ -403,6 +403,115 @@ kubectl describe k8srequiredresources required-resources
 - **Admission controller in HA**: i webhook di ammissione sono nel critical path — se il controller non risponde, il comportamento dipende da `failurePolicy` (Fail = blocca tutto, Ignore = permette tutto). In produzione usare 3 repliche e `failurePolicy: Fail`
 - **Policy as code con GitOps**: le policy devono stare in Git — PR review obbligatoria per qualsiasi modifica a una policy di sicurezza
 - **Non duplicare Pod Security Standards**: PSS built-in copre i casi base (privileged, host namespaces) — Gatekeeper/Kyverno per policy custom specifiche del tuo contesto
+
+## Troubleshooting
+
+### Scenario 1 — Pod bloccato con errore generico dall'admission webhook
+
+**Sintomo:** `kubectl apply` fallisce con `Error from server: error when creating "pod.yaml": admission webhook "validate.kyverno.svc" denied the request`
+
+**Causa:** Una policy Kyverno in `Enforce` mode ha rifiutato il Pod, ma il messaggio non indica quale regola ha violato.
+
+**Soluzione:** Recuperare il policy report del namespace o descrivere la policy violata.
+
+```bash
+# Visualizza tutte le violazioni nel namespace
+kubectl get policyreport -n production -o yaml | grep -A5 "result: fail"
+
+# Identifica la policy specifica
+kubectl get clusterpolicy -o wide
+# Colonna "READY" deve essere True, "BACKGROUND" mostra se audit attivo
+
+# Testa il manifest in dry-run contro tutte le policy attive
+kyverno apply . --resource mypod.yaml
+
+# Per Gatekeeper: elenca tutte le constraint violations
+kubectl get constraint -A
+kubectl describe <constraint-kind> <constraint-name>
+```
+
+---
+
+### Scenario 2 — Admission webhook timeout: API server non raggiunge il controller
+
+**Sintomo:** `kubectl apply` timeout dopo 30s con `context deadline exceeded`; eventi nel namespace mostrano `failed calling webhook`
+
+**Causa:** Il pod Kyverno/Gatekeeper non è healthy, oppure il `failurePolicy` è `Fail` e il webhook non risponde.
+
+**Soluzione:** Verificare lo stato del controller e, se necessario, impostare `failurePolicy: Ignore` temporaneamente.
+
+```bash
+# Stato pod Kyverno
+kubectl get pods -n kyverno
+kubectl logs -n kyverno -l app.kubernetes.io/component=admission-controller --tail=50
+
+# Stato pod Gatekeeper
+kubectl get pods -n gatekeeper-system
+kubectl logs -n gatekeeper-system -l control-plane=controller-manager --tail=50
+
+# Visualizza webhook configuration (failurePolicy)
+kubectl get validatingwebhookconfiguration kyverno-resource-validating-webhook-cfg -o yaml | grep failurePolicy
+
+# Emergenza: disabilita temporaneamente il webhook (SOLO in cluster di sviluppo!)
+# In produzione: scalare a 3 repliche invece di disabilitare
+kubectl scale deployment kyverno-admission-controller -n kyverno --replicas=3
+```
+
+---
+
+### Scenario 3 — Policy report non si aggiorna / background scan bloccato
+
+**Sintomo:** `kubectl get policyreport -A` restituisce risultati vecchi o vuoti; le violazioni esistenti non appaiono nel report.
+
+**Causa:** Il background controller di Kyverno non è attivo o ha permessi RBAC insufficienti per leggere le risorse del cluster.
+
+**Soluzione:** Verificare il background controller e i suoi log.
+
+```bash
+# Verifica che il background controller sia running
+kubectl get pods -n kyverno -l app.kubernetes.io/component=background-controller
+
+# Log del background controller
+kubectl logs -n kyverno -l app.kubernetes.io/component=background-controller --tail=100 | grep -E "ERROR|WARN"
+
+# Forza ricreazione dei policy report (elimina i vecchi, vengono rigenerati)
+kubectl delete policyreport -A --all
+kubectl delete clusterpolicyreport --all
+
+# Verifica RBAC del service account Kyverno
+kubectl auth can-i list pods --as=system:serviceaccount:kyverno:kyverno-background-controller -A
+```
+
+---
+
+### Scenario 4 — Gatekeeper ConstraintTemplate in stato "Not Ready"
+
+**Sintomo:** `kubectl get constrainttemplate` mostra `READY: False`; le Constraint associate non bloccano le violazioni.
+
+**Causa:** Errore di sintassi nel codice Rego, oppure il CRD generato dal template è in conflitto con una versione precedente.
+
+**Soluzione:** Descrivere il template per vedere l'errore Rego e, se necessario, cancellare e riapplicare.
+
+```bash
+# Visualizza l'errore di compilazione Rego
+kubectl describe constrainttemplate k8sallowedrepos
+# Cercare nel campo "Status.By Pod.Errors" il messaggio di errore
+
+# Testa la sintassi Rego localmente prima di applicare
+opa check ./rego_policy.rego
+
+# Se il CRD è corrotto, ricrearlo
+kubectl delete constrainttemplate k8sallowedrepos
+kubectl apply -f constraint-template.yaml
+
+# Verifica che la Constraint referenzi il template corretto
+kubectl get k8sallowedrepos -o yaml | grep -A3 "spec:"
+
+# Debug audit Gatekeeper — forza un ciclo di audit
+kubectl annotate configs.config.gatekeeper.sh config -n gatekeeper-system force-audit="$(date +%s)"
+```
+
+---
 
 ## Riferimenti
 

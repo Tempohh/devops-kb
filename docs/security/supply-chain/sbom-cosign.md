@@ -9,7 +9,7 @@ related: [security/supply-chain/image-scanning, security/supply-chain/admission-
 official_docs: https://docs.sigstore.dev/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # SBOM e Cosign — Firma e Provenienza degli Artifact
@@ -327,6 +327,129 @@ slsa-verifier verify-image \
 - **Verificare la firma prima del deploy**: integrare la verifica cosign nell'admission controller (vedi admission-control.md) — immagini non firmate non entrano in produzione
 - **SBOM in Dependency-Track**: caricare automaticamente ogni SBOM generato in CI su Dependency-Track → alert automatica quando una nuova CVE colpisce una dipendenza usata da qualsiasi servizio
 - **Rekor per audit trail**: ogni firma in Rekor è immutabile e pubblica — in caso di incidente, si può risalire esattamente quale workflow ha prodotto quale immagine e quando
+
+## Troubleshooting
+
+### Scenario 1 — `cosign verify` fallisce con "no matching signatures"
+
+**Sintomo**: Il comando `cosign verify` restituisce `Error: no matching signatures` nonostante l'immagine sia stata firmata in CI.
+
+**Causa**: Si sta verificando l'immagine tramite tag (`:latest`, `:1.2.3`) invece che tramite digest. I tag sono mutabili e potrebbe essere stato fatto un push successivo senza firma.
+
+**Soluzione**: Usare sempre il digest SHA256 per la verifica. Recuperarlo dal registry e verificare con quello.
+
+```bash
+# Recupera il digest dall'immagine con tag
+DIGEST=$(crane digest ghcr.io/myorg/myrepo:1.2.3)
+
+# Verifica tramite digest
+cosign verify \
+  --certificate-identity-regexp "^https://github.com/myorg/myrepo/.github/workflows/.*" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  ghcr.io/myorg/myrepo@${DIGEST}
+
+# Oppure ispeziona quali firme sono presenti
+cosign triangulate ghcr.io/myorg/myrepo:1.2.3
+```
+
+---
+
+### Scenario 2 — Keyless signing fallisce in GitHub Actions con "OIDC token error"
+
+**Sintomo**: Il passo di firma cosign fallisce con `Error: failed to get Fulcio roots` o `OIDC token: unauthorized`.
+
+**Causa**: Il workflow non ha il permesso `id-token: write` oppure `COSIGN_EXPERIMENTAL` non è impostato per le versioni cosign < 2.0.
+
+**Soluzione**: Verificare i permessi del workflow e la variabile d'ambiente richiesta.
+
+```yaml
+# Assicurarsi che il job abbia questi permessi
+permissions:
+  contents: read
+  id-token: write        # OBBLIGATORIO per keyless signing
+  packages: write        # Per push su GHCR
+
+# Nel passo di firma, per cosign >= 2.0 non serve più COSIGN_EXPERIMENTAL
+- name: Sign image
+  run: |
+    cosign sign --yes \
+      ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
+
+# Debug: verifica che il token OIDC sia disponibile
+- name: Check OIDC token
+  run: |
+    curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+      "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sigstore" | jq .value | cut -d. -f2 | \
+      base64 -d 2>/dev/null | jq .
+```
+
+---
+
+### Scenario 3 — `trivy sbom` genera SBOM incompleto (mancano dipendenze)
+
+**Sintomo**: Lo SBOM generato da Trivy ha un numero di componenti molto basso rispetto a quelli attesi; mancano dipendenze transitive.
+
+**Causa**: Trivy analizza l'immagine in modalità layer e potrebbe non trovare i file di lock (`package-lock.json`, `requirements.txt`, `go.sum`) se non sono inclusi nell'immagine finale (es. multi-stage build che copia solo i binari).
+
+**Soluzione**: Generare lo SBOM nella fase di build (dal filesystem) prima di costruire l'immagine, oppure abilitare il flag `--include-non-failures`.
+
+```bash
+# Genera SBOM dal filesystem PRIMA del docker build (cattura tutte le dipendenze)
+trivy fs \
+  --format cyclonedx \
+  --output sbom.json \
+  --scanners vuln,license \
+  ./
+
+# Verifica quanti componenti sono stati trovati
+cat sbom.json | jq '.components | length'
+
+# Per immagini multi-stage, analizza il contesto di build non l'immagine finale
+trivy image \
+  --format cyclonedx \
+  --output sbom.json \
+  --image-config-scanners secret \
+  myapp:builder   # usa lo stage intermedio con le dipendenze installate
+
+# Confronta componenti tra SBOM diversi
+diff <(cat sbom-v1.json | jq -r '.components[].name' | sort) \
+     <(cat sbom-v2.json | jq -r '.components[].name' | sort)
+```
+
+---
+
+### Scenario 4 — Admission controller blocca immagini firmate correttamente
+
+**Sintomo**: Il deployment in Kubernetes viene rifiutato con `image policy webhook` o `cosign policy controller` anche se la firma è valida (verificabile manualmente con `cosign verify`).
+
+**Causa**: Il `ClusterImagePolicy` usa un pattern di identità non corrispondente (es. regex errata nel campo `identities`) oppure il namespace non è stato etichettato per l'enforcement.
+
+**Soluzione**: Verificare la policy applicata al namespace e testare il match dell'identità separatamente.
+
+```bash
+# Verifica che il namespace sia sotto enforcement
+kubectl get namespace production --show-labels | grep cosign
+
+# Etichetta il namespace per abilitare la policy
+kubectl label namespace production policy.sigstore.dev/include=true
+
+# Controlla la ClusterImagePolicy attiva
+kubectl get clusterimagepolicy -o yaml
+
+# Debug: esegui la verifica con gli stessi parametri della policy
+cosign verify \
+  --certificate-identity "https://github.com/myorg/myrepo/.github/workflows/build.yml@refs/heads/main" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  ghcr.io/myorg/myrepo@sha256:abc123...
+
+# Log del webhook per vedere l'errore esatto
+kubectl logs -n cosign-system deployment/policy-controller-webhook --tail=50
+
+# Test dry-run di una policy senza enforcement
+kubectl apply --dry-run=server -f deployment.yaml
+```
+
+---
 
 ## Riferimenti
 

@@ -9,7 +9,7 @@ related: [networking/api-gateway/pattern-base, networking/api-gateway/rate-limit
 official_docs: https://docs.konghq.com/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Kong API Gateway
@@ -340,24 +340,107 @@ config:
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| `401 Unauthorized` | JWT mancante o invalido | Verificare plugin JWT e header `Authorization: Bearer ...` |
-| `429 Too Many Requests` | Rate limit superato | Verificare quota in Admin API: `GET /consumers/{id}/plugins` |
-| Route non trovata (`404`) | Path non corrisponde | `deck diff` per verificare config; verificare `strip_path` |
-| Backend non raggiungibile | Health check fallisce | `GET /upstreams/{name}/health` via Admin API |
-| Plugin non si applica | Plugin associato al Consumer invece che alla Route | Verificare scope del plugin |
+### Scenario 1 — 401 Unauthorized su ogni richiesta
+
+**Sintomo:** Tutte le richieste al proxy ricevono `HTTP 401 Unauthorized` con body `{"message":"Unauthorized"}`.
+
+**Causa:** Il plugin JWT è abilitato sulla Route o sul Service ma il client non invia il token, oppure il token è malformato/scaduto.
+
+**Soluzione:** Verificare che il token sia presente nell'header `Authorization: Bearer <token>`, che il Consumer abbia credenziali JWT valide e che il campo `exp` non sia scaduto.
 
 ```bash
-# Debug: verifica quale route viene matchata
-curl -I http://localhost:8000/api/v1/users \
-  -H "Kong-Debug: 1"  # Header debug (solo in dev)
+# Verifica plugin JWT configurato sul service
+curl http://localhost:8001/services/user-service/plugins | jq '.data[] | select(.name=="jwt")'
 
-# Stato health dei backend
-curl http://localhost:8001/upstreams/order-service/health | jq .
+# Verifica credenziali JWT del consumer
+curl http://localhost:8001/consumers/mobile-app/jwt | jq .
 
+# Test manuale con token
+curl -H "Authorization: Bearer <your-token>" http://localhost:8000/api/v1/users
+```
+
+### Scenario 2 — 429 Too Many Requests (rate limit prematuramente)
+
+**Sintomo:** Le richieste ricevono `HTTP 429` prima di raggiungere la soglia configurata, oppure il contatore non si azzera.
+
+**Causa:** Il plugin rate-limiting usa policy `local` (contatori per nodo) invece di `redis`, oppure Redis non è raggiungibile e il plugin fallisce in modo aperto o chiuso.
+
+**Soluzione:** Passare a policy `redis` per ambienti multi-istanza; verificare connettività Redis.
+
+```bash
+# Verifica configurazione rate-limiting
+curl http://localhost:8001/services/user-service/plugins | jq '.data[] | select(.name=="rate-limiting") | .config'
+
+# Controlla header di risposta per quota residua
+curl -I http://localhost:8000/api/v1/users -H "Authorization: Bearer <token>"
+# Cerca: X-RateLimit-Remaining-Minute, X-RateLimit-Limit-Minute
+
+# Test connettività Redis
+redis-cli -h redis ping
+```
+
+### Scenario 3 — Route non trovata (404) dopo deploy
+
+**Sintomo:** `HTTP 404 {"message":"no Route matched with those values"}` per un path che sembra corretto nella configurazione.
+
+**Causa:** Il path nella Route non corrisponde esattamente (case sensitive, trailing slash), oppure `strip_path` è configurato diversamente da quanto atteso, oppure la configurazione non è stata applicata (deck non eseguito).
+
+**Soluzione:** Verificare il matching esatto e usare `deck diff` per confrontare configurazione desiderata vs attuale.
+
+```bash
+# Verifica route configurate sul service
+curl http://localhost:8001/services/user-service/routes | jq '.data[] | {name, paths, strip_path, methods}'
+
+# Usa header debug per vedere quale route viene valutata (solo dev)
+curl -I http://localhost:8000/api/v1/users -H "Kong-Debug: 1"
+# Risposta includerà: Kong-Route-Id, Kong-Service-Id
+
+# Confronta config dichiarativa vs stato attuale
+deck diff --kong-addr http://localhost:8001 --state kong.yaml
+```
+
+### Scenario 4 — Backend non raggiungibile (502/503)
+
+**Sintomo:** `HTTP 502 Bad Gateway` o `503 Service Unavailable` per richieste che arrivano a Kong ma non raggiungono l'upstream.
+
+**Causa:** L'Upstream è marcato unhealthy dai health check, oppure il DNS del target non si risolve, oppure il Service punta a un URL errato.
+
+**Soluzione:** Verificare lo stato degli Upstream e i log di Kong per errori di connessione.
+
+```bash
+# Stato health degli upstream
+curl http://localhost:8001/upstreams/order-service/health | jq '.data[].health'
+
+# Dettaglio target con stato
+curl http://localhost:8001/upstreams/order-service/targets/all | jq '.data[] | {target, health}'
+
+# Forza target healthy (temporaneo per debug)
+curl -X PUT http://localhost:8001/upstreams/order-service/targets/<target-id>/healthy
+
+# Log errori Kong
+docker logs kong 2>&1 | grep -i "error\|upstream\|connect"
+```
+
+### Scenario 5 — Plugin non si applica a una richiesta specifica
+
+**Sintomo:** Un plugin (es. rate-limiting, jwt) configurato non viene eseguito su alcune richieste.
+
+**Causa:** Il plugin è associato al Consumer invece che alla Route/Service, oppure è scoped in modo errato (globale vs locale), oppure la priorità di esecuzione è sovrascritta da un altro plugin.
+
+**Soluzione:** Verificare lo scope del plugin e l'ordine di esecuzione.
+
+```bash
 # Lista plugin attivi su un service
 curl http://localhost:8001/services/user-service/plugins | jq '.data[].name'
+
+# Lista plugin attivi su una route specifica
+curl http://localhost:8001/routes/<route-id>/plugins | jq '.data[] | {name, enabled, config}'
+
+# Plugin globali (applicati a tutto il traffico)
+curl http://localhost:8001/plugins | jq '.data[] | select(.service == null and .route == null) | .name'
+
+# Verifica priorità esecuzione plugin (campo priority)
+curl http://localhost:8001/plugins/<plugin-id> | jq '{name: .name, enabled: .enabled}'
 ```
 
 ## Relazioni

@@ -12,7 +12,7 @@ related:
 official_docs: https://martinfowler.com/bliki/CQRS.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # CQRS con Kafka
@@ -476,6 +476,34 @@ kafka-consumer-groups.sh \
 
 # 4. Avvia il consumer con il nuovo group ID
 ```
+
+### Read-Your-Writes: Query Restituisce Dati Vecchi Subito dopo un Comando
+
+**Sintomo:** L'utente esegue un'operazione (es. aggiorna profilo), poi receve immediatamente i dati precedenti in risposta alla query successiva.
+
+**Causa:** Il read side non ha ancora consumato l'evento dal topic Kafka. Il lag può essere di decine di millisecondi anche in condizioni normali.
+
+**Soluzione:** Scegliere la strategia adatta al contesto.
+
+```bash
+# Verifica il lag corrente del consumer group
+kafka-consumer-groups.sh \
+  --bootstrap-server kafka:9092 \
+  --describe \
+  --group order-read-projection
+
+# Output atteso in condizioni normali (LAG vicino a 0):
+# TOPIC          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG
+# orders.events  0          10452           10452           0
+# orders.events  1          9871            9872            1  ← lag fisiologico
+
+# Se LAG è elevato (>100 con traffico basso), indagare lentezza del consumer
+```
+
+**Strategie:**
+1. **Versioning ottimistico**: il client include `expectedVersion` nella query; se la proiezione non ha ancora quella versione, ritorna `202 Retry-After: 1`
+2. **Polling lato client**: dopo un comando, il frontend fa polling per max N secondi finché il dato non cambia
+3. **Token di consistenza**: il write side restituisce l'offset Kafka scritto; il read side accetta query solo se ha consumato fino a quell'offset
 
 ## Riferimenti
 

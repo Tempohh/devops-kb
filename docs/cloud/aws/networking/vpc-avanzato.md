@@ -9,7 +9,7 @@ related: [cloud/aws/networking/vpc, cloud/aws/networking/route53, cloud/aws/secu
 official_docs: https://docs.aws.amazon.com/vpc/latest/peering/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # VPC Avanzato — Connectivity
@@ -333,6 +333,130 @@ aws ec2 authorize-client-vpn-ingress \
 ```
 
 **Costo:** $0.10/hr per endpoint + $0.05/hr per connessione attiva.
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — VPC Peering: traffico non fluisce dopo creazione
+
+**Sintomo:** La connessione peering è in stato `active` ma le istanze non si raggiungono.
+
+**Causa:** Le route tables dei VPC non sono state aggiornate con le rotte verso il CIDR remoto — il peering crea il canale ma non le rotte.
+
+**Soluzione:** Aggiungere le rotte in entrambe le route table (VPC-A verso CIDR di B e viceversa). Verificare anche i Security Group che permettano traffico da/verso il CIDR remoto.
+
+```bash
+# Verificare route table VPC-A
+aws ec2 describe-route-tables \
+    --route-table-ids rtb-AAAA \
+    --query 'RouteTables[0].Routes[?VpcPeeringConnectionId!=null]'
+
+# Aggiungere rotta mancante
+aws ec2 create-route \
+    --route-table-id rtb-AAAA \
+    --destination-cidr-block 10.1.0.0/16 \
+    --vpc-peering-connection-id pcx-xxxx
+
+# Verificare Security Group permetta il CIDR remoto
+aws ec2 describe-security-groups \
+    --group-ids sg-xxxx \
+    --query 'SecurityGroups[0].IpPermissions'
+```
+
+---
+
+### Scenario 2 — Transit Gateway: attachment in stato `pending` o `failed`
+
+**Sintomo:** L'attachment TGW-VPC rimane in stato `pending` o passa a `failed` dopo alcuni minuti.
+
+**Causa:** Le subnet selezionate per l'attachment non hanno una route verso il TGW, oppure non esistono subnet in tutte le AZ richieste. Un'altra causa comune: il TGW appartiene a un altro account e l'accettazione RAM è in sospeso.
+
+**Soluzione:** Verificare che le subnet dell'attachment siano in AZ diverse e che l'account destinatario abbia accettato la resource share RAM.
+
+```bash
+# Controllare stato attachment
+aws ec2 describe-transit-gateway-vpc-attachments \
+    --filters Name=transit-gateway-id,Values=$TGW_ID \
+    --query 'TransitGatewayVpcAttachments[*].[TransitGatewayAttachmentId,State,VpcId]' \
+    --output table
+
+# Controllare resource shares in sospeso (su account destinatario)
+aws ram get-resource-share-invitations \
+    --query 'resourceShareInvitations[?status==`PENDING`]'
+
+# Accettare invitation RAM
+aws ram accept-resource-share-invitation \
+    --resource-share-invitation-arn arn:aws:ram:...
+```
+
+---
+
+### Scenario 3 — Site-to-Site VPN: tunnel IPSec DOWN
+
+**Sintomo:** Uno o entrambi i tunnel VPN risultano `DOWN` nella console AWS; il traffico on-premises non raggiunge il VPC.
+
+**Causa:** Mismatch nei parametri IKE/IPSec tra router on-premises e AWS (algoritmi, DH group, lifetime), oppure il firewall on-premises blocca UDP 500/4500.
+
+**Soluzione:** Scaricare la configurazione AWS aggiornata, confrontare i parametri Phase 1/Phase 2 con il router, verificare la raggiungibilità degli IP dei tunnel AWS.
+
+```bash
+# Controllare stato tunnel VPN
+aws ec2 describe-vpn-connections \
+    --vpn-connection-ids vpn-xxxx \
+    --query 'VpnConnections[0].VgwTelemetry[*].[OutsideIpAddress,Status,StatusMessage]' \
+    --output table
+
+# Scaricare configurazione completa per il router
+aws ec2 describe-vpn-connections \
+    --vpn-connection-ids vpn-xxxx \
+    --query 'VpnConnections[0].CustomerGatewayConfiguration' \
+    --output text > vpn-config.xml
+
+# Verificare metriche tunnel su CloudWatch
+aws cloudwatch get-metric-statistics \
+    --namespace AWS/VPN \
+    --metric-name TunnelState \
+    --dimensions Name=VpnId,Value=vpn-xxxx \
+    --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
+    --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
+    --period 300 \
+    --statistics Average
+```
+
+---
+
+### Scenario 4 — PrivateLink Interface Endpoint: errore DNS o timeout di connessione
+
+**Sintomo:** Le istanze nella VPC consumer non riescono a risolvere il DNS dell'endpoint o ricevono timeout quando si connettono al servizio tramite PrivateLink.
+
+**Causa:** `enableDnsSupport` e `enableDnsHostnames` non sono abilitati nel VPC consumer, oppure il Security Group associato all'Interface Endpoint non permette il traffico sulla porta del servizio.
+
+**Soluzione:** Abilitare i flag DNS nel VPC e verificare che il Security Group dell'endpoint permetta il traffico in ingresso dalla subnet consumer.
+
+```bash
+# Verificare DNS support nel VPC consumer
+aws ec2 describe-vpc-attribute \
+    --vpc-id vpc-CONSUMER \
+    --attribute enableDnsSupport
+aws ec2 describe-vpc-attribute \
+    --vpc-id vpc-CONSUMER \
+    --attribute enableDnsHostnames
+
+# Abilitare se necessario
+aws ec2 modify-vpc-attribute --vpc-id vpc-CONSUMER --enable-dns-support '{"Value":true}'
+aws ec2 modify-vpc-attribute --vpc-id vpc-CONSUMER --enable-dns-hostnames '{"Value":true}'
+
+# Controllare Security Group dell'endpoint
+aws ec2 describe-vpc-endpoints \
+    --vpc-endpoint-ids vpce-xxxx \
+    --query 'VpcEndpoints[0].Groups'
+
+# Verificare che il SG permetta ingresso dalla subnet consumer
+aws ec2 describe-security-groups \
+    --group-ids sg-endpoint \
+    --query 'SecurityGroups[0].IpPermissions'
+```
 
 ---
 

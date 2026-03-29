@@ -9,7 +9,7 @@ related: [databases/fondamentali/transazioni-concorrenza, databases/fondamentali
 official_docs: https://www.postgresql.org/docs/current/mvcc.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # MVCC e Vacuum
@@ -238,6 +238,132 @@ FROM pg_stat_user_tables
 WHERE tablename = 'sessioni';
 -- hot_pct > 50% è buono
 ```
+
+## Troubleshooting
+
+### Scenario 1 — Tabella continua a crescere nonostante VACUUM
+
+**Sintomo:** `pg_total_relation_size()` non diminuisce dopo `VACUUM`; `n_dead_tup` resta alto.
+
+**Causa:** Una transazione idle-in-transaction o una replica in ritardo mantiene un snapshot vecchio. VACUUM non può rimuovere dead tuples visibili da transazioni attive.
+
+**Soluzione:** Identificare e terminare la transazione bloccante.
+
+```sql
+-- Trovare la transazione più vecchia che blocca VACUUM
+SELECT pid, usename, state, xact_start, now() - xact_start AS duration, query
+FROM pg_stat_activity
+WHERE state IN ('idle in transaction', 'active')
+ORDER BY xact_start ASC NULLS LAST
+LIMIT 10;
+
+-- Terminare la transazione bloccante (usare pg_cancel_query prima)
+SELECT pg_cancel_backend(pid);   -- Soft: cancella la query
+SELECT pg_terminate_backend(pid); -- Hard: disconnette la sessione
+
+-- Verificare replication slot che impedisce il cleanup
+SELECT slot_name, active, pg_current_wal_lsn() - restart_lsn AS lag_bytes
+FROM pg_replication_slots;
+-- Un replication slot inattivo con lag elevato blocca VACUUM globalmente
+-- Se non necessario: SELECT pg_drop_replication_slot('nome_slot');
+```
+
+---
+
+### Scenario 2 — Autovacuum non si attiva o è troppo lento
+
+**Sintomo:** `n_dead_tup` cresce oltre la soglia ma `last_autovacuum` non si aggiorna; oppure autovacuum è attivo ma non tiene il passo.
+
+**Causa 1:** Autovacuum è throttled dal `autovacuum_vacuum_cost_delay` (pausa I/O troppo alta). **Causa 2:** Soglie di scala troppo alte per tabelle grandi.
+
+**Soluzione:** Ridurre lo scale factor e aumentare il budget I/O per la tabella specifica.
+
+```sql
+-- Verificare stato autovacuum
+SELECT schemaname, tablename, n_dead_tup, n_live_tup,
+       round(100.0 * n_dead_tup / nullif(n_live_tup + n_dead_tup, 0), 1) AS dead_pct,
+       last_autovacuum
+FROM pg_stat_user_tables
+WHERE n_dead_tup > 10000
+ORDER BY n_dead_tup DESC;
+
+-- Tuning aggressivo per tabelle grandi
+ALTER TABLE ordini SET (
+    autovacuum_vacuum_scale_factor = 0.01,  -- 1% invece del 20%
+    autovacuum_vacuum_cost_delay = 0,       -- Nessuna pausa I/O (solo se lo puoi permettere)
+    autovacuum_vacuum_cost_limit = 800      -- Budget I/O doppio
+);
+
+-- Forzare VACUUM manuale se autovacuum non basta
+VACUUM (ANALYZE, VERBOSE) ordini;
+```
+
+---
+
+### Scenario 3 — Warning "database must be vacuumed" / rischio XID wraparound
+
+**Sintomo:** Nei log PostgreSQL appare `WARNING: database "mydb" must be vacuumed within N transactions`. In casi estremi, il database entra in modalità read-only.
+
+**Causa:** L'`age(datfrozenxid)` di un database o tabella si avvicina ai 2 miliardi. VACUUM FREEZE non è stato eseguito abbastanza spesso.
+
+**Soluzione:** Eseguire `VACUUM FREEZE` urgente sulle tabelle più vecchie, poi correggere i parametri di freeze.
+
+```sql
+-- Diagnosi immediata: distanza dal wraparound
+SELECT datname,
+       age(datfrozenxid) AS xid_age,
+       2000000000 - age(datfrozenxid) AS xids_rimanenti
+FROM pg_database
+ORDER BY xid_age DESC;
+
+-- Tabelle più critiche
+SELECT schemaname, tablename, age(relfrozenxid) AS xid_age
+FROM pg_class JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
+WHERE relkind = 'r'
+ORDER BY age(relfrozenxid) DESC
+LIMIT 10;
+
+-- Freeze urgente sulle tabelle critiche
+VACUUM FREEZE ANALYZE tabella_critica;
+
+-- Parametri da correggere in postgresql.conf
+-- vacuum_freeze_max_age = 150000000   (ridotto da 200M)
+-- autovacuum_freeze_max_age = 100000000
+```
+
+---
+
+### Scenario 4 — Bloat massivo e impossibilità di recuperare spazio
+
+**Sintomo:** `pg_total_relation_size()` è molto più grande del previsto; VACUUM libera le dead tuples ma non riduce la dimensione su disco.
+
+**Causa:** VACUUM standard non compatta le pagine né rilascia spazio al filesystem. Le pagine liberate restano riutilizzabili da PostgreSQL ma non vengono restituite all'OS.
+
+**Soluzione:** Usare `pg_repack` (non bloccante) invece di `VACUUM FULL` (bloccante).
+
+```bash
+# Installare pg_repack (richiede accesso superuser)
+# Su Debian/Ubuntu: apt install postgresql-xx-repack
+# Verificare estensione installata nel db
+psql -c "CREATE EXTENSION IF NOT EXISTS pg_repack;"
+
+# Stimare bloat prima dell'operazione
+psql -c "
+SELECT tablename,
+       pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS total,
+       pg_size_pretty(pg_relation_size(schemaname||'.'||tablename)) AS table_only
+FROM pg_stat_user_tables
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+LIMIT 10;"
+
+# Repack senza lock esclusivo
+pg_repack -h localhost -U postgres -d mydb -t tabella_bloated
+
+# Repack dell'intero schema (attenzione: lungo su DB grandi)
+pg_repack -h localhost -U postgres -d mydb --no-order
+```
+
+---
 
 ## Relazioni
 

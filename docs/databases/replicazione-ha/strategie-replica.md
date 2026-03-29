@@ -9,7 +9,7 @@ related: [databases/postgresql/replicazione, databases/fondamentali/acid-base-ca
 official_docs: https://www.postgresql.org/docs/current/warm-standby.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Strategie di Replica
@@ -243,6 +243,124 @@ SELECT
   for: 2m
   annotations:
     summary: "PostgreSQL replica lag {{ $value }}s — rischio RPO violato"
+```
+
+## Troubleshooting
+
+### Scenario 1 — Replica lag in crescita costante
+
+**Sintomo:** `replica_lag_seconds` aumenta nel tempo; le read replica servono dati sempre più vecchi; alert `ReplicationLagHigh` continuo.
+
+**Causa:** Il primary genera WAL più velocemente di quanto la standby riesca ad applicarlo. Cause tipiche: query pesanti sulla standby (hot standby conflict), I/O della standby saturo, standby sotto-dimensionata.
+
+**Soluzione:**
+```sql
+-- 1. Verificare il lag corrente e lo stato di replica
+SELECT client_addr, state, sync_state,
+       replay_lag, write_lag, flush_lag
+FROM pg_stat_replication;
+
+-- 2. Verificare conflitti hot standby sulla standby
+SELECT pid, wait_event_type, wait_event, query
+FROM pg_stat_activity
+WHERE wait_event_type = 'Lock';
+
+-- 3. Ridurre query analitiche pesanti sulla standby
+-- Oppure aumentare max_standby_streaming_delay (default 30s)
+-- In postgresql.conf della standby:
+-- max_standby_streaming_delay = 120s
+-- hot_standby_feedback = on   -- evita cancellazione vacum sul primary
+
+-- 4. Se la standby è I/O bound, verificare
+SELECT * FROM pg_stat_bgwriter;
+```
+
+---
+
+### Scenario 2 — Primary bloccato: standby sincrona non raggiungibile
+
+**Sintomo:** Tutti i COMMIT si bloccano indefinitamente. Nessun nuovo write riesce. La standby sincrona è offline o irraggiungibile dalla rete.
+
+**Causa:** Con `synchronous_commit = on`, il primary attende l'ACK di almeno una standby sincrona. Se nessuna standby è disponibile, il commit si blocca finché non ne ritorna una.
+
+**Soluzione:**
+```sql
+-- 1. Verificare quali standby sono connesse
+SELECT application_name, client_addr, state, sync_state
+FROM pg_stat_replication;
+
+-- 2. Fallback temporaneo: disabilitare replica sincrona
+-- (OPERAZIONE CRITICA: RPO > 0 fino al ripristino della standby)
+ALTER SYSTEM SET synchronous_standby_names = '';
+SELECT pg_reload_conf();
+
+-- 3. Verificare che i commit sbloccati
+-- Poi ripristinare la standby e riabilitare:
+ALTER SYSTEM SET synchronous_standby_names = 'standby1';
+SELECT pg_reload_conf();
+
+-- 4. Per evitare blocchi futuri: usare FIRST 1 (ANY) invece di ALL
+-- synchronous_standby_names = 'FIRST 1 (standby1, standby2)'
+```
+
+---
+
+### Scenario 3 — Replica slot inattivo: WAL accumulation e disco pieno
+
+**Sintomo:** Il disco del primary si riempie di file WAL. `pg_wal/` cresce senza stop. La standby associata allo slot non è connessa.
+
+**Causa:** I replication slot garantiscono che il WAL non venga rimosso finché la standby non lo consuma. Se la standby è offline a lungo, il WAL si accumula sul primary.
+
+**Soluzione:**
+```sql
+-- 1. Identificare gli slot inattivi e il WAL trattenuto
+SELECT slot_name, active, pg_size_pretty(
+    pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)
+) AS wal_retained
+FROM pg_replication_slots
+ORDER BY wal_retained DESC;
+
+-- 2. Se la standby non tornerà presto → droppare lo slot
+-- (la standby dovrà fare base backup + resync)
+SELECT pg_drop_replication_slot('nome_slot');
+
+-- 3. Prevenzione: impostare un limite di WAL trattenuto
+-- In postgresql.conf:
+-- max_slot_wal_keep_size = 10GB   -- PostgreSQL 13+
+-- Oltre questo limite lo slot viene invalidato automaticamente
+
+-- 4. Verificare che il WAL venga liberato dopo il drop
+SELECT pg_walfile_name(pg_current_wal_lsn());
+```
+
+---
+
+### Scenario 4 — Split-brain in topologia multi-master
+
+**Sintomo:** Due nodi master accettano write contemporaneamente su stesse righe. I dati divergono tra i nodi. Galera Cluster mostra `wsrep_cluster_size` < quorum.
+
+**Causa:** Partizione di rete tra i nodi master. Entrambi i lati credono di essere il primary valido (split-brain).
+
+**Soluzione:**
+```bash
+# 1. Verificare stato del cluster Galera
+mysql -e "SHOW STATUS LIKE 'wsrep_%';" | grep -E "cluster_size|local_state|ready"
+# wsrep_cluster_size deve essere >= quorum (N/2 + 1)
+
+# 2. Identificare il nodo con dati più aggiornati (seqno più alto)
+mysql -e "SHOW STATUS LIKE 'wsrep_last_committed';"
+
+# 3. Forzare il bootstrap dal nodo più aggiornato
+# Sul nodo con seqno più alto, editare /var/lib/mysql/grastate.dat:
+# safe_to_bootstrap: 1
+# Poi riavviare come bootstrap:
+galera_new_cluster   # oppure: mysqld --wsrep-new-cluster
+
+# 4. Aggiungere gli altri nodi (si sincronizzano via SST/IST)
+systemctl start mysql   # sui nodi secondari
+
+# 5. Prevenzione: usare numero dispari di nodi (3, 5) e un arbitro
+# per garantire sempre il quorum in caso di partizione
 ```
 
 ## Relazioni

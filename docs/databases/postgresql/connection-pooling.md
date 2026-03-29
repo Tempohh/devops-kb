@@ -9,7 +9,7 @@ related: [databases/postgresql/replicazione, databases/postgresql/mvcc-vacuum, d
 official_docs: https://www.pgbouncer.org/config.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Connection Pooling — PgBouncer
@@ -319,13 +319,145 @@ groups:
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| `ERROR: prepared statement already exists` | App usa named prepared statements in transaction mode | Passare a statement anonimi o abilitare `max_prepared_statements` |
-| `cl_waiting` alto | Pool saturo, query lente o pool_size troppo basso | Aumentare `default_pool_size` o trovare query lente con `pg_stat_statements` |
-| `ERROR: no more connections allowed` | `max_client_conn` raggiunto | Aumentare `max_client_conn` o ridurre connessioni dell'app |
-| `server_connect_timeout` ricorrente | PostgreSQL sovraccarico o irraggiungibile | Verificare `pg_stat_activity`, connessioni a PostgreSQL, `max_connections` |
-| `SHOW` restituisce `sv_idle=0` sempre | Pool non riesce a fare warm-up | Aumentare `min_pool_size`, verificare `server_idle_timeout` |
+### Scenario 1 — Prepared statement già esistente
+
+**Sintomo:** L'applicazione riceve `ERROR: prepared statement "stmt_X" already exists` in transaction mode.
+
+**Causa:** L'app usa named server-side prepared statements (es. via JDBC, libpq o driver ORM) che non vengono deallocati tra transazioni — in transaction mode la connessione server viene riassegnata a un altro client senza `DEALLOCATE`.
+
+**Soluzione:** Abilitare il tracking PgBouncer oppure usare statement anonimi lato driver.
+
+```ini
+# pgbouncer.ini — abilita il remapping dei prepared statement
+max_prepared_statements = 100   # PgBouncer traccia e traduce i named PS
+
+# Oppure, a livello driver (JDBC), disabilitare i server-side prepared statement:
+# jdbc:postgresql://host:5432/db?prepareThreshold=0
+```
+
+```sql
+-- Verifica prepared statement attivi sul server
+SELECT name, statement, prepare_time
+FROM pg_prepared_statements;
+
+-- Pulizia manuale se necessario
+DEALLOCATE ALL;
+```
+
+---
+
+### Scenario 2 — Pool saturo: `cl_waiting` alto
+
+**Sintomo:** `SHOW POOLS` riporta `cl_waiting > 0` in modo persistente; le query subiscono latenza insolita o timeout con `ERROR: query_wait_timeout`.
+
+**Causa:** `default_pool_size` è troppo basso rispetto al carico, oppure esistono query lente che tengono occupate le connessioni server.
+
+**Soluzione:** Diagnosticare prima se il problema è il pool size o le query lente.
+
+```sql
+-- 1. Controlla pool in tempo reale
+psql -h localhost -p 5432 -U pgbouncer_admin pgbouncer -c "SHOW POOLS;"
+
+-- 2. Identifica query lente su PostgreSQL
+SELECT pid, now() - pg_stat_activity.query_start AS duration, query, state
+FROM pg_stat_activity
+WHERE state != 'idle' AND query_start < now() - interval '5 seconds'
+ORDER BY duration DESC;
+
+-- 3. Top query per tempo totale (richiede pg_stat_statements)
+SELECT query, calls, total_exec_time/calls AS avg_ms, rows
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 20;
+```
+
+```ini
+# pgbouncer.ini — aumentare pool solo dopo aver escluso query lente
+default_pool_size = 40      # era 25
+reserve_pool_size = 10
+```
+
+---
+
+### Scenario 3 — Connessioni esaurite: `no more connections allowed`
+
+**Sintomo:** `ERROR: no more connections allowed (max_client_conn)` — nuovi client vengono rifiutati.
+
+**Causa:** Il totale di connessioni client ha raggiunto `max_client_conn`. Tipico con scaling orizzontale dell'app (molti pod Kubernetes) o connection leak.
+
+**Soluzione:** Verificare chi occupa le connessioni, poi agire su `max_client_conn` o ridurre i leak.
+
+```sql
+-- Verifica connessioni client correnti
+psql -h localhost -p 5432 -U pgbouncer_admin pgbouncer -c "SHOW CLIENTS;"
+
+-- Quante connessioni apre ogni pod applicativo?
+psql -h localhost -p 5432 -U pgbouncer_admin pgbouncer -c "SHOW STATS;"
+```
+
+```ini
+# pgbouncer.ini — aumentare il limite (verificare prima i limiti OS: ulimit -n)
+max_client_conn = 2000
+
+# Impostare anche un idle timeout per forzare la chiusura di connessioni abbandonate
+client_idle_timeout = 300   # 5 minuti
+```
+
+---
+
+### Scenario 4 — PostgreSQL irraggiungibile: `server_connect_timeout` ricorrente
+
+**Sintomo:** Log PgBouncer pieno di `server_connect_timeout`; `SHOW POOLS` mostra `sv_active=0, sv_idle=0`; l'app riceve errori di connessione.
+
+**Causa:** PostgreSQL ha raggiunto `max_connections`, è sovraccarico, o non è raggiungibile per problemi di rete/crash.
+
+**Soluzione:** Diagnosticare su PostgreSQL direttamente.
+
+```bash
+# Test connettività diretta (esclude PgBouncer dalla diagnosi)
+psql -h postgres-primary -p 5432 -U myapp_user myapp_db -c "SELECT 1;"
+
+# Verifica connessioni attive su PostgreSQL
+psql -h postgres-primary -U postgres -c "
+SELECT count(*), state, wait_event_type, wait_event
+FROM pg_stat_activity
+GROUP BY state, wait_event_type, wait_event
+ORDER BY count DESC;"
+
+# Verifica max_connections e uso corrente
+psql -h postgres-primary -U postgres -c "
+SELECT current_setting('max_connections')::int AS max_conn,
+       count(*) AS current_conn,
+       current_setting('max_connections')::int - count(*) AS available
+FROM pg_stat_activity;"
+```
+
+---
+
+### Scenario 5 — Pool mai in warm-up: `sv_idle=0` costante
+
+**Sintomo:** `SHOW POOLS` riporta sempre `sv_idle=0` anche a basso carico; ogni richiesta paga il costo di apertura connessione.
+
+**Causa:** `server_idle_timeout` troppo basso chiude le connessioni prima che vengano riutilizzate, oppure `min_pool_size=0` e il pool viene svuotato tra i burst.
+
+**Soluzione:** Aumentare `min_pool_size` e rivedere i timeout.
+
+```ini
+# pgbouncer.ini — mantieni connessioni pre-aperte
+min_pool_size = 5           # Connessioni server sempre attive nel pool
+server_idle_timeout = 600   # Non chiudere connessioni idle per almeno 10min (default)
+
+# Verifica la configurazione live senza restart
+# psql -h localhost -p 5432 -U pgbouncer_admin pgbouncer -c "SHOW CONFIG;"
+```
+
+```bash
+# Reload config senza restart (applica min_pool_size e timeout immediatamente)
+psql -h localhost -p 5432 -U pgbouncer_admin pgbouncer -c "RELOAD;"
+
+# Monitora il warm-up
+watch -n 2 'psql -h localhost -p 5432 -U pgbouncer_admin pgbouncer -c "SHOW POOLS;"'
+```
 
 ## Relazioni
 

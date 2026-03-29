@@ -9,7 +9,7 @@ related: [ai/tokens-context/tokenizzazione, ai/sviluppo/rag, ai/sviluppo/prompt-
 official_docs: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
 status: complete
 difficulty: advanced
-last_updated: 2026-02-27
+last_updated: 2026-03-28
 ---
 
 # Context Window e KV Cache
@@ -362,6 +362,168 @@ Mistral usa anche Layer Attention Alternata: alcuni layer hanno SWA, altri hanno
 - **Implementa il prompt caching**: se usi system prompt lunghi o context statici ripetuti, il caching riduce i costi del 70-90%.
 - **Testa con "needle in haystack"**: non assumere che il modello usi uniformemente il contesto. Verifica empiricamente per il tuo caso d'uso.
 - **Sliding window per applicazioni real-time**: in applicazioni con stream di eventi, mantieni solo una finestra recente di contesto invece di tutto lo storico.
+
+## Troubleshooting
+
+### Scenario 1 — Il modello tronca silenziosamente l'input
+
+**Sintomo:** Le risposte del modello sembrano ignorare informazioni fornite nel prompt. Nessun errore viene restituito dall'API.
+
+**Causa:** L'input supera la context window del modello. La maggior parte dei provider tronca i token in eccesso (spesso dall'inizio) senza lanciare eccezioni.
+
+**Soluzione:** Contare i token prima dell'invio e implementare una guardia esplicita.
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+def safe_create(messages: list, system: str, model: str = "claude-3-5-sonnet-20241022", max_context: int = 180_000):
+    """Lancia eccezione esplicita se l'input supera il limite."""
+    # Stima token: ~4 caratteri per token (approssimazione)
+    total_chars = sum(len(m["content"]) for m in messages) + len(system)
+    estimated_tokens = total_chars // 4
+
+    if estimated_tokens > max_context:
+        raise ValueError(
+            f"Input stimato ~{estimated_tokens} token supera il limite {max_context}. "
+            "Considera chunking, RAG o summarization."
+        )
+
+    return client.messages.create(
+        model=model,
+        max_tokens=4096,
+        system=system,
+        messages=messages
+    )
+```
+
+---
+
+### Scenario 2 — OOM / CUDA out of memory con context lunghi
+
+**Sintomo:** Inferenza locale con modelli open source (Llama, Mistral) termina con `CUDA out of memory` su input lunghi che funzionavano con input corti.
+
+**Causa:** Il KV cache cresce linearmente con la lunghezza del contesto. Per Llama 3.1 70B, 128K token richiedono ~40GB aggiuntivi di VRAM solo per il cache.
+
+**Soluzione:** Ridurre la context window massima in fase di caricamento del modello o usare quantizzazione del KV cache.
+
+```bash
+# Con vLLM: limitare la context window e usare KV cache quantizzato
+python -m vllm.entrypoints.openai.api_server \
+  --model meta-llama/Llama-3.1-70B-Instruct \
+  --max-model-len 32768 \          # riduci da 128K a 32K
+  --kv-cache-dtype fp8 \           # quantizza KV cache (fp16 → fp8, -50% VRAM)
+  --gpu-memory-utilization 0.90    # usa 90% della VRAM disponibile
+
+# Con Ollama: controllare il parametro num_ctx
+ollama run llama3.1 --num_ctx 16384
+```
+
+---
+
+### Scenario 3 — Il prompt caching non riduce i costi attesi
+
+**Sintomo:** I `cache_read_input_tokens` nell'usage response sono sempre 0 anche dopo più richieste consecutive con lo stesso system prompt.
+
+**Causa:** Il contenuto del prefisso cachato non è byte-for-byte identico tra le richieste (spazio extra, ordine diverso dei campi, contenuto dinamico inserito prima del breakpoint).
+
+**Soluzione:** Isolare la parte statica del system prompt, verificare l'identità esatta e posizionare il `cache_control` marker dopo il contenuto invariante.
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+# SBAGLIATO: il testo varia per ogni richiesta → cache miss
+def bad_request(user_id: str, docs: str):
+    return client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=1024,
+        system=[{
+            "type": "text",
+            "text": f"User: {user_id}\n" + docs,  # user_id cambia → cache miss!
+            "cache_control": {"type": "ephemeral"}
+        }],
+        messages=[{"role": "user", "content": "..."}]
+    )
+
+# CORRETTO: separa parte statica da parte dinamica
+def good_request(user_id: str, docs: str):
+    return client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=1024,
+        system=[
+            {
+                "type": "text",
+                "text": docs,                         # parte statica → cachata
+                "cache_control": {"type": "ephemeral"}
+            },
+            {
+                "type": "text",
+                "text": f"Utente corrente: {user_id}" # parte dinamica → non cachata
+            }
+        ],
+        messages=[{"role": "user", "content": "..."}]
+    )
+
+# Debug: verifica l'uso della cache nella risposta
+response = good_request("user123", load_docs())
+usage = response.usage
+print(f"Cache creation: {usage.cache_creation_input_tokens}")
+print(f"Cache read:     {usage.cache_read_input_tokens}")  # deve essere > 0 dalla seconda chiamata
+```
+
+---
+
+### Scenario 4 — Qualità degradata con contesti molto lunghi ("Lost in the Middle")
+
+**Sintomo:** Il modello ignora informazioni rilevanti fornite nel contesto, nonostante siano presenti e il contesto sia entro il limite della window. Il problema peggiora con contesti più lunghi.
+
+**Causa:** Primacy/recency bias: i modelli performano peggio quando l'informazione critica è posizionata al centro della context window (Liu et al., 2023).
+
+**Soluzione:** Riposizionare l'informazione critica all'inizio o alla fine del contesto. Verificare con il "Needle in a Haystack" test.
+
+```python
+def build_optimized_prompt(
+    critical_info: str,
+    background_docs: list[str],
+    user_question: str
+) -> list[dict]:
+    """
+    Struttura il prompt per massimizzare il recall dell'informazione critica.
+    L'info critica viene messa all'inizio (primacy) e ripetuta alla fine (recency).
+    """
+    docs_text = "\n\n---\n\n".join(background_docs)
+
+    return [
+        {
+            "role": "user",
+            "content": (
+                # ← PRIMACY: info critica subito dopo il system
+                f"Informazione chiave da tenere in considerazione:\n{critical_info}\n\n"
+                f"Documenti di contesto:\n{docs_text}\n\n"
+                # ← RECENCY: domanda alla fine, richiama l'info critica
+                f"Domanda (considera l'informazione chiave sopra indicata): {user_question}"
+            )
+        }
+    ]
+
+# Test empirico: "Needle in a Haystack"
+def needle_in_haystack_test(client, needle: str, haystack_chunks: list[str], position: int):
+    """Inserisce il needle in una posizione specifica e verifica se il modello lo trova."""
+    chunks = haystack_chunks.copy()
+    chunks.insert(position, f"INFORMAZIONE IMPORTANTE: {needle}")
+    context = "\n\n".join(chunks)
+    response = client.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=200,
+        messages=[{"role": "user", "content": f"{context}\n\nQual è l'informazione importante?"}]
+    )
+    found = needle.lower() in response.content[0].text.lower()
+    print(f"Position {position}/{len(haystack_chunks)}: {'✓ Found' if found else '✗ Lost'}")
+    return found
+```
 
 ## Riferimenti
 

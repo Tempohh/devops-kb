@@ -9,7 +9,7 @@ related: [cloud/aws/security/kms-secrets, cloud/aws/security/compliance-audit, c
 official_docs: https://docs.aws.amazon.com/waf/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # WAF, Shield, Network Firewall e Sicurezza di Rete AWS
@@ -657,36 +657,126 @@ aws ec2 describe-security-groups \
 
 ## Troubleshooting
 
-### WAF Blocca Traffico Legittimo
+### Scenario 1 — WAF Blocca Traffico Legittimo
+
+**Sintomo:** Richieste legitimate vengono bloccate con HTTP 403; utenti reali segnalano accesso negato.
+
+**Causa:** Una o più AWS Managed Rules generano falsi positivi su payload legittimi (es. corpo JSON con caratteri speciali, User-Agent non standard, header grandi).
+
+**Soluzione:** Passare la regola sospetta in COUNT mode per isolarla senza impatto, analizzare i sample requests, poi escludere la regola specifica o creare un'eccezione.
 
 ```bash
-# Analizzare i sample request bloccati
+# Analizzare i sample request bloccati dalla regola sospetta
 aws wafv2 get-sampled-requests \
-  --web-acl-arn arn:aws:wafv2:... \
+  --web-acl-arn arn:aws:wafv2:us-east-1:123456789012:regional/webacl/MyAppWebACL/abc123 \
   --rule-metric-name AWSManagedCommonRules \
   --scope REGIONAL \
   --time-window StartTime=$(date -d '1 hour ago' +%s),EndTime=$(date +%s) \
   --max-items 100
+
+# Elencare le regole della Web ACL per identificare quale escludere
+aws wafv2 get-web-acl \
+  --name "MyAppWebACL" \
+  --scope REGIONAL \
+  --id abc123 \
+  --query 'WebACL.Rules[*].[Name,Priority,OverrideAction,Action]' \
+  --output table
 ```
 
-Soluzioni:
-1. Aggiungere la regola in "Override to Count" per identificare il problema
-2. Escludere la specifica regola managed che causa falsi positivi
-3. Creare una rule group con Allow action prima delle Managed Rules
+Dopo aver identificato la regola: impostare `ExcludedRules` nel `ManagedRuleGroupStatement` per escluderla, oppure aggiungere una regola Allow con priorità più bassa che fa match sul traffico legittimo prima che arrivi alle Managed Rules.
 
-### Connettività EC2 Bloccata
+### Scenario 2 — Connettività EC2 Bloccata (Security Group / NACL)
+
+**Sintomo:** Un'istanza EC2 non è raggiungibile su una porta specifica nonostante il Security Group sembri corretto; `telnet` / `curl` timeout.
+
+**Causa:** NACL della subnet blocca il traffico (statefulness diversa rispetto ai SG), oppure il Security Group di destinazione non referenzia correttamente la sorgente, oppure mancano le porte effimere nel NACL outbound.
+
+**Soluzione:** Usare VPC Reachability Analyzer per individuare il blocco esatto nel path di rete.
 
 ```bash
-# Usare VPC Reachability Analyzer
-aws ec2 start-network-insights-analysis \
-  --network-insights-path-id nip-1234567890
-
-# Creare un path da analizzare
+# Creare un path di analisi da ENI sorgente a ENI destinazione
 aws ec2 create-network-insights-path \
   --source eni-1234567890 \
   --destination eni-abcdef1234 \
   --protocol TCP \
   --destination-port 443
+
+# Avviare l'analisi
+aws ec2 start-network-insights-analysis \
+  --network-insights-path-id nip-1234567890
+
+# Recuperare i risultati (attendere che lo stato diventi succeeded)
+aws ec2 describe-network-insights-analyses \
+  --network-insights-analysis-ids nia-1234567890 \
+  --query 'NetworkInsightsAnalyses[0].{Status:Status,Explanations:Explanations[0]}' \
+  --output json
+
+# Verifica rapida NACL della subnet
+aws ec2 describe-network-acls \
+  --filters Name=association.subnet-id,Values=subnet-1234567890 \
+  --query 'NetworkAcls[0].Entries[*].[RuleNumber,Protocol,RuleAction,CidrBlock,PortRange]' \
+  --output table
+```
+
+### Scenario 3 — Network Firewall Scarta Traffico Inatteso
+
+**Sintomo:** Dopo il deployment del Network Firewall il traffico verso/da alcune destinazioni viene droppato silenziosamente; la connettività era funzionante prima.
+
+**Causa:** Le route tables del VPC non sono state aggiornate correttamente per dirigere il traffico attraverso il Firewall Endpoint, oppure le stateful rules hanno `StatefulDefaultActions: aws:drop_established` che scarta connessioni non esplicitamente permesse.
+
+**Soluzione:** Verificare che le route tables usino il Firewall Endpoint come next-hop, e controllare i log ALERT/FLOW per identificare i pacchetti droppati.
+
+```bash
+# Verificare lo stato del Firewall e gli endpoint per ogni AZ
+aws network-firewall describe-firewall \
+  --firewall-name "MyVPCFirewall" \
+  --query 'FirewallStatus.SyncStates' \
+  --output json
+
+# Recuperare gli endpoint ID da usare nelle route tables
+aws network-firewall describe-firewall \
+  --firewall-name "MyVPCFirewall" \
+  --query 'FirewallStatus.SyncStates.*.Attachment.EndpointId' \
+  --output text
+
+# Cercare alert recenti nei log CloudWatch
+aws logs filter-log-events \
+  --log-group-name "/aws/network-firewall/alerts" \
+  --start-time $(date -d '30 minutes ago' +%s000) \
+  --filter-pattern "{ $.event.action = \"blocked\" }" \
+  --limit 50 \
+  --query 'events[*].message' \
+  --output text
+```
+
+### Scenario 4 — NACL Blocca Risposte TCP (Porte Effimere)
+
+**Sintomo:** Le connessioni TCP da una subnet verso risorse esterne si avviano ma non ricevono risposta; SYN inviato, mai SYN-ACK ricevuto o risposta droppata al ritorno.
+
+**Causa:** Le NACLs sono stateless: le risposte TCP tornano su porte effimere (1024–65535). Se la NACL di inbound non permette esplicitamente queste porte, le risposte vengono scartate anche se la connessione outbound era permessa.
+
+**Soluzione:** Aggiungere una regola NACL inbound che permette le porte effimere 1024–65535 dal CIDR di destinazione.
+
+```bash
+# Verificare le regole NACL della subnet (cercare porte effimere)
+NACL_ID=$(aws ec2 describe-network-acls \
+  --filters Name=association.subnet-id,Values=subnet-1234567890 \
+  --query 'NetworkAcls[0].NetworkAclId' --output text)
+
+aws ec2 describe-network-acls \
+  --network-acl-ids $NACL_ID \
+  --query 'NetworkAcls[0].Entries[?!Egress].[RuleNumber,Protocol,RuleAction,CidrBlock,PortRange]' \
+  --output table
+
+# Aggiungere regola per porte effimere (inbound) se mancante
+aws ec2 create-network-acl-entry \
+  --network-acl-id $NACL_ID \
+  --rule-number 900 \
+  --protocol tcp \
+  --port-range From=1024,To=65535 \
+  --cidr-block 0.0.0.0/0 \
+  --rule-action allow \
+  --ingress
 ```
 
 ---

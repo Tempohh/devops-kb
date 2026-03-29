@@ -9,7 +9,7 @@ related: [security/pki-certificati/pki-interna, security/pki-certificati/cert-ma
 official_docs: https://spiffe.io/docs/latest/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # mTLS e SPIFFE/SPIRE — Identità dei Workload
@@ -432,6 +432,127 @@ spire-agent run -joinToken <token>
 - **Separare trust domain per ambiente**: `prod.example.com`, `staging.example.com`, `dev.example.com` — un certificato di staging non funziona in produzione
 - **SPIRE in HA**: SPIRE Server deve essere deployato in modo HA (multi-replica con datastore PostgreSQL) — è un componente critico: se il Server è down, gli agenti continuano a funzionare con i SVID attuali finché non scadono
 - **Audit delle entries**: ogni SPIFFE ID registrato deve essere revisionato — un'entry non necessaria è una superficie di attacco
+
+## Troubleshooting
+
+### Scenario 1 — Workload non riceve SVID (attestation fallita)
+
+**Sintomo:** Il workload ottiene errore `no identity issued` o `no registration entries found` quando consulta la Workload API.
+
+**Causa:** Nessuna entry nel registry corrisponde ai selector del pod (namespace, service account, labels), oppure il SPIRE Agent non ha completato il node attestation.
+
+**Soluzione:**
+```bash
+# Verifica le entries registrate sul server
+kubectl exec -n spire spire-server-0 -- spire-server entry show
+
+# Controlla i log dell'agent per errori di attestation
+kubectl logs -n spire -l app=spire-agent --tail=50 | grep -E "error|warn|attestation"
+
+# Verifica che il pod abbia il service account corretto
+kubectl get pod <pod-name> -n production -o jsonpath='{.spec.serviceAccountName}'
+
+# Registra manualmente l'entry mancante
+kubectl exec -n spire spire-server-0 -- \
+  spire-server entry create \
+    -spiffeID "spiffe://example.com/ns/production/sa/my-service" \
+    -parentID "spiffe://example.com/k8s-cluster-prod/ns/spire/sa/spire-agent" \
+    -selector "k8s:ns:production" \
+    -selector "k8s:sa:my-service-account"
+```
+
+---
+
+### Scenario 2 — mTLS handshake fallisce (CERTIFICATE_VERIFY_FAILED)
+
+**Sintomo:** Connessione rifiutata con errore `certificate verify failed` o `PEER_CERTIFICATE_REQUIRED`; nei log Envoy appare `SSL handshake failed`.
+
+**Causa:** I certificati dei due workload sono stati emessi da trust domain diversi, oppure i bundle di fiducia non sono sincronizzati dopo una rotazione della CA radice.
+
+**Soluzione:**
+```bash
+# Recupera e ispeziona l'SVID corrente dal workload
+kubectl exec -n production <pod-name> -- \
+  spire-agent api fetch x509 \
+  -socketPath /tmp/spire-agent/public/api.sock \
+  -write /tmp/svid
+
+openssl x509 -in /tmp/svid/svid.0.pem -noout -text | grep -E "Subject|SAN|Issuer|Not After"
+
+# Verifica il trust bundle in uso sull'agent
+kubectl exec -n spire <spire-agent-pod> -- \
+  spire-agent api fetch bundle -socketPath /tmp/spire-agent/public/api.sock
+
+# In Istio: controlla il certificato del sidecar Envoy
+istioctl proxy-config secret <pod-name>.production
+```
+
+---
+
+### Scenario 3 — SPIRE Agent non raggiunge il Server (bootstrap failure)
+
+**Sintomo:** L'agent non parte; nei log appare `failed to dial server` o `node attestation failed: connection refused`.
+
+**Causa:** Il SPIRE Server non è raggiungibile per motivi di rete/DNS, il join token è scaduto (monouso), oppure il service account token proiettato non è disponibile.
+
+**Soluzione:**
+```bash
+# Verifica che il SPIRE Server sia running e raggiungibile
+kubectl get pods -n spire
+kubectl exec -n spire <spire-agent-pod> -- \
+  nc -zv spire-server 8081
+
+# Controlla la disponibilità del token proiettato sul DaemonSet
+kubectl exec -n spire <spire-agent-pod> -- \
+  cat /var/run/secrets/tokens/spire-agent
+
+# Rigenera un join token per l'on-premise (se scaduto)
+spire-server token generate \
+  -spiffeID spiffe://corp.example.com/agent/vm-prod-01 \
+  -ttl 600
+
+# Verifica i log del server per la fase di attestation
+kubectl logs -n spire spire-server-0 --tail=100 | grep -E "error|attestation|node"
+```
+
+---
+
+### Scenario 4 — mTLS STRICT rifiuta traffico legittimo in Istio
+
+**Sintomo:** Dopo aver impostato `PeerAuthentication` a `STRICT`, alcune chiamate HTTP tra servizi iniziano a fallire con `503` o `connection reset`.
+
+**Causa:** Uno o più servizi chiamanti non hanno il sidecar Envoy iniettato (mancano di mTLS), oppure c'è traffico diretto che bypassa il mesh (chiamate a IP esterni o porte non intercettate da Envoy).
+
+**Soluzione:**
+```yaml
+# Passo 1: usa PERMISSIVE per diagnosticare senza interrompere il traffico
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: production
+spec:
+  mtls:
+    mode: PERMISSIVE    # Permetti sia mTLS che plaintext durante l'analisi
+```
+```bash
+# Identifica i pod senza sidecar Envoy nel namespace
+kubectl get pods -n production \
+  -o jsonpath='{range .items[?(!@.spec.containers[*].name=="istio-proxy")]}{.metadata.name}{"\n"}{end}'
+
+# Abilita l'injection sul namespace e fai rolling restart
+kubectl label namespace production istio-injection=enabled
+kubectl rollout restart deployment -n production
+
+# Dopo la verifica, riporta a STRICT
+kubectl patch peerauthentication default -n production \
+  --type=merge -p '{"spec":{"mtls":{"mode":"STRICT"}}}'
+
+# Verifica lo stato mTLS con istioctl
+istioctl authn tls-check <pod-name>.production
+```
+
+---
 
 ## Riferimenti
 

@@ -9,7 +9,7 @@ related: [cloud/azure/compute/virtual-machines, cloud/azure/monitoring/monitor-l
 official_docs: https://learn.microsoft.com/azure/defender-for-cloud/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Defender for Cloud & Microsoft Sentinel
@@ -512,6 +512,175 @@ az sentinel alert-rule create \
 - Configura **Automation Rules** per triage automatico degli Incident di bassa severity
 - Monitora il **Secure Score** settimanalmente: ogni punto percentuale rappresenta riduzione di rischio misurabile
 - Usa **Workbooks** per reportistica mensile agli stakeholder executive
+
+## Troubleshooting
+
+### Scenario 1 — Defender for Cloud non mostra raccomandazioni dopo abilitazione
+
+**Sintomo:** Dopo aver abilitato un Defender Plan, il Secure Score non cambia e le raccomandazioni non compaiono per ore o giorni.
+
+**Causa:** L'agent (Azure Monitor Agent o MMA legacy) non è installato sulle VM, oppure le policy di iniziativa "Microsoft Defender for Cloud" non sono ancora propagate alla subscription.
+
+**Soluzione:** Verificare lo stato dell'agent e forzare la valutazione delle policy.
+
+```bash
+# Verificare che AMA sia installato sulle VM
+az vm extension list \
+  --resource-group $RG \
+  --vm-name $VM \
+  --output table
+
+# Installare Azure Monitor Agent se assente
+az vm extension set \
+  --resource-group $RG \
+  --vm-name $VM \
+  --name AzureMonitorWindowsAgent \
+  --publisher Microsoft.Azure.Monitor \
+  --version 1.0
+
+# Forzare ri-valutazione delle raccomandazioni
+az policy state trigger-scan \
+  --resource-group $RG
+
+# Controllare lo stato di conformità dopo ~15 minuti
+az security assessment list \
+  --resource-group $RG \
+  --output table
+```
+
+---
+
+### Scenario 2 — Sentinel riceve dati ma non genera Incident
+
+**Sintomo:** I log arrivano correttamente nel Log Analytics Workspace (verificabile con query KQL), ma nessuna Analytics Rule produce Incident.
+
+**Causa:** Le Analytics Rules sono disabilitate, il threshold è troppo alto, oppure la Fusion Detection ha silenziato gli alert correlati. In alternativa, la query KQL ha un errore silenzioso (nessun risultato).
+
+**Soluzione:** Validare la query e abilitare le regole.
+
+```kql
+// Verificare che i dati arrivino nel workspace
+SigninLogs
+| where TimeGenerated > ago(1h)
+| summarize Count = count() by bin(TimeGenerated, 5m)
+| order by TimeGenerated desc
+
+// Testare manualmente la query di una Analytics Rule
+// (eseguire nel Log Analytics workspace di Sentinel)
+Syslog
+| where TimeGenerated > ago(5m)
+| where Facility == "auth" and SeverityLevel == "err"
+| where SyslogMessage contains "Failed password"
+| summarize FailedAttempts = count() by extract(@"from\s+(\d+\.\d+\.\d+\.\d+)", 1, SyslogMessage)
+| where FailedAttempts >= 10
+```
+
+```bash
+# Listare Analytics Rules e verificare quelle disabilitate
+az sentinel alert-rule list \
+  --resource-group rg-security-prod \
+  --workspace-name law-sentinel-prod \
+  --output table \
+  --query "[?properties.enabled==\`false\`].{Name:name, Severity:properties.severity}"
+
+# Abilitare una regola specifica
+az sentinel alert-rule update \
+  --resource-group rg-security-prod \
+  --workspace-name law-sentinel-prod \
+  --alert-rule-id "brute-force-ssh-login" \
+  --enabled true
+```
+
+---
+
+### Scenario 3 — JIT Access non funziona: la richiesta viene rifiutata
+
+**Sintomo:** Quando si tenta di richiedere accesso JIT a una VM, l'operazione fallisce con errore `The resource is not configured for JIT access` o `Access denied`.
+
+**Causa 1:** La VM non ha una JIT policy associata. **Causa 2:** Il ruolo dell'utente richiedente non include `Microsoft.Security/locations/jitNetworkAccessPolicies/initiate/action`. **Causa 3:** L'NSG della VM ha regole permanenti che entrano in conflitto.
+
+**Soluzione:**
+
+```bash
+# Verificare se la VM ha una policy JIT associata
+az security jit-policy list \
+  --resource-group $RG \
+  --output table
+
+# Verificare che l'utente abbia i permessi necessari
+az role assignment list \
+  --assignee user@example.com \
+  --scope /subscriptions/$SUBSCRIPTION_ID \
+  --output table
+
+# Assegnare il ruolo Security Reader + permesso JIT (custom role o Security Admin)
+az role assignment create \
+  --assignee user@example.com \
+  --role "Security Admin" \
+  --scope /subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RG
+
+# Verificare le regole NSG in conflitto
+az network nsg rule list \
+  --resource-group $RG \
+  --nsg-name $NSG_NAME \
+  --output table
+```
+
+---
+
+### Scenario 4 — Falsi positivi eccessivi in Sentinel causano alert fatigue
+
+**Sintomo:** Il SOC riceve centinaia di Incident al giorno, la maggior parte falsi positivi. Gli analisti ignorano gli alert.
+
+**Causa:** Analytics Rules con threshold troppo bassi, mancanza di whitelist per IP/utenti interni, Automation Rules non configurate per il triage automatico.
+
+**Soluzione:** Aggiungere whitelist nelle query KQL e configurare Automation Rules per la chiusura automatica dei falsi positivi noti.
+
+```kql
+// Modificare la query per escludere IP interni e service account
+SigninLogs
+| where TimeGenerated > ago(1h)
+| where ResultType != "0"
+// Escludere service account e IP trusted
+| where UserPrincipalName !endswith "@serviceaccount.internal"
+| where IPAddress !in ("10.0.0.1", "192.168.1.100", "10.1.0.50")
+| summarize FailedCount = count() by UserPrincipalName, IPAddress, bin(TimeGenerated, 5m)
+| where FailedCount > 15  // alzare il threshold
+| order by FailedCount desc
+```
+
+```bash
+# Creare Automation Rule per chiudere automaticamente Incident di bassa severity
+# con determinate entità già note come false positive
+az sentinel automation-rule create \
+  --resource-group rg-security-prod \
+  --workspace-name law-sentinel-prod \
+  --automation-rule-id "close-known-fp" \
+  --display-name "Auto-Close Known False Positives" \
+  --order 100 \
+  --enabled true \
+  --conditions '[
+    {
+      "conditionType": "Property",
+      "conditionProperties": {
+        "propertyName": "IncidentSeverity",
+        "operator": "Equals",
+        "propertyValues": ["Informational", "Low"]
+      }
+    }
+  ]' \
+  --actions '[
+    {
+      "order": 1,
+      "actionType": "ModifyProperties",
+      "actionConfiguration": {
+        "status": "Closed",
+        "classification": "BenignPositive",
+        "classificationComment": "Auto-closed: known benign activity"
+      }
+    }
+  ]'
+```
 
 ## Riferimenti
 

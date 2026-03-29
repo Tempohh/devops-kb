@@ -9,7 +9,7 @@ related: [containers/docker/sicurezza, containers/kubernetes/sicurezza, containe
 official_docs: https://gvisor.dev/docs/
 status: complete
 difficulty: expert
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Sandboxing Avanzato
@@ -296,6 +296,122 @@ RUNTIME SELECTION
   Standard enterprise K8s cluster:
   → Mix: runc per workloads trusted, gVisor per untrusted,
          RuntimeClass per selezione per namespace/pod
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — gVisor: container non si avvia con `exec format error` o syscall non supportata
+
+**Sintomo:** Il container si avvia ma crasha immediatamente con errori tipo `Function not implemented` o `invalid argument`.
+
+**Causa:** Il workload usa syscall non implementate dal Sentry gVisor (implementa ~200 syscall su ~350+ del kernel Linux). Spesso: `io_uring`, `perf_event_open`, `bpf`.
+
+**Soluzione:** Verificare quali syscall mancano, valutare se usare Kata invece di gVisor per quel workload.
+
+```bash
+# Abilitare strace-like logging in gVisor per identificare le syscall non supportate
+# /etc/containerd/runsc.toml
+# [runsc_config]
+#   strace = true
+#   strace-syscalls = ""   # "" = tutte
+
+# Oppure avviare il container con debug logging
+runsc --debug --debug-log=/tmp/gvisor-debug.log run <container-id>
+
+# Cercare le syscall fallite nei log
+grep -i "unimplemented\|not implemented\|ENOSYS" /tmp/gvisor-debug.log
+
+# Lista ufficiale syscall supportate
+curl -s https://gvisor.dev/docs/user_guide/compatibility/linux/amd64/ | grep "Full support"
+```
+
+---
+
+### Scenario 2 — Kata Containers: `kata-runtime check` fallisce con KVM non disponibile
+
+**Sintomo:** `kata-runtime check` restituisce `ERROR: kernel module kvm requires root privileges` o `could not access /dev/kvm`.
+
+**Causa:** Nested virtualization non abilitata sul nodo (comune su VM cloud), oppure il modulo KVM non è caricato.
+
+**Soluzione:** Abilitare nested virt sul cloud provider o sul hypervisor host, oppure configurare Kata in modalità QEMU-TCG (più lento, senza KVM).
+
+```bash
+# Verifica moduli KVM
+lsmod | grep kvm
+cat /proc/cpuinfo | grep -E "vmx|svm"
+
+# Caricamento moduli (Intel / AMD)
+modprobe kvm_intel   # Intel
+modprobe kvm_amd     # AMD
+
+# AWS: abilitare nested virt sulla istanza EC2
+# L'istanza deve essere di tipo .metal o supportare nested virt
+
+# Verifica completa dell'ambiente Kata
+kata-runtime kata-env
+kata-runtime check --verbose
+
+# Alternativa: QEMU TCG (no KVM, solo per test)
+# configuration-qemu.toml: machine_type = "q35" + disable_nesting_checks = true
+```
+
+---
+
+### Scenario 3 — RuntimeClass non trovata o pod rimane in `Pending`
+
+**Sintomo:** Il pod resta in `Pending` con evento `Failed to create pod sandbox: no runtime for "kata-qemu" is configured`.
+
+**Causa:** La RuntimeClass è definita in Kubernetes ma il nodo non ha il runtime corrispondente configurato in containerd, oppure il nodo non ha il label corretto per il node selector.
+
+**Soluzione:** Verificare la configurazione containerd su tutti i nodi target e aggiungere node selector alla RuntimeClass.
+
+```bash
+# Verifica che la RuntimeClass esista
+kubectl get runtimeclass
+
+# Descrivi la RuntimeClass per vedere il node selector
+kubectl describe runtimeclass kata-qemu
+
+# Verifica la configurazione containerd sul nodo
+# Sul nodo:
+cat /etc/containerd/config.toml | grep -A5 "kata"
+
+# Riavvia containerd dopo modifiche
+systemctl restart containerd
+
+# Testa direttamente il runtime
+ctr run --runtime io.containerd.kata.v2 --rm docker.io/library/busybox:latest test sh -c "uname -r"
+
+# Evento del pod per il debug
+kubectl describe pod <pod-name> | grep -A10 "Events:"
+```
+
+---
+
+### Scenario 4 — Performance degradate con gVisor su I/O intensivo
+
+**Sintomo:** Workload con I/O elevato (database, log processing) è 5-10x più lento con gVisor rispetto a runc.
+
+**Causa:** Il filesystem Gofer in gVisor introduce overhead significativo per ogni operazione I/O. La modalità `shared` riduce l'overhead ma aumenta la superficie.
+
+**Soluzione:** Ottimizzare la configurazione del file-access oppure escludere i workloads I/O-intensivi da gVisor usando RuntimeClass selettive.
+
+```bash
+# /etc/containerd/runsc.toml — opzioni per ridurre overhead I/O
+# [runsc_config]
+#   file-access = "shared"    # shared = meno safe ma più veloce (default: exclusive)
+#   overlay = false           # disabilita overlay per ridurre syscall
+#   network = "host"          # network=host elimina il netstack overhead (richiede trust)
+
+# Benchmark per confrontare runc vs gVisor
+docker run --rm --runtime io.containerd.runc.v2 ubuntu dd if=/dev/zero of=/tmp/test bs=1M count=512 oflag=dsync
+docker run --rm --runtime io.containerd.runsc.v1 ubuntu dd if=/dev/zero of=/tmp/test bs=1M count=512 oflag=dsync
+
+# Usa RuntimeClass diversi per namespace differenti
+kubectl label namespace untrusted-workloads sandbox=gvisor
+# Poi usa un admission webhook o RuntimeClass nel workload spec
 ```
 
 ---

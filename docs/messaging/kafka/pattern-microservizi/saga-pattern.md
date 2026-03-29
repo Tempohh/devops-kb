@@ -12,7 +12,7 @@ related:
 official_docs: https://microservices.io/patterns/data/saga.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Saga Pattern
@@ -394,7 +394,7 @@ public class InventoryCompensationService {
 
 ## Troubleshooting
 
-### Saga Bloccata in Stato Intermedio
+### Scenario 1 — Saga Bloccata in Stato Intermedio
 
 **Sintomo:** La saga rimane in `AWAITING_PAYMENT` per ore.
 
@@ -422,13 +422,67 @@ public void detectStaleSagas() {
 }
 ```
 
-### Compensazioni Non nell'Ordine Corretto
+### Scenario 2 — Compensazioni Non nell'Ordine Corretto
 
 **Sintomo:** La compensazione di un passo viene eseguita prima che il passo sia completato.
 
 **Causa:** Race condition tra eventi publishati da servizi diversi.
 
 **Soluzione:** Nell'orchestration, eseguire le compensazioni nell'ordine inverso rispetto ai passi completati, aspettando la reply di ogni compensazione prima di avviare la successiva.
+
+### Scenario 3 — Saga Duplicata per Retry del Producer
+
+**Sintomo:** Due istanze della stessa saga vengono avviate per lo stesso ordine; entrambi i pagamenti vengono addebitati.
+
+**Causa:** Il producer ha ritrasmesso il comando `CreateOrderSaga` a causa di un timeout, ma la prima saga era già in esecuzione.
+
+**Soluzione:** Usare un idempotency key sull'evento di avvio (es. `orderId`) e verificare l'esistenza della saga prima di crearne una nuova.
+
+```java
+@Transactional
+public String startSaga(CreateOrderSagaData data) {
+    // Evita saga duplicata: verifica per idempotency key
+    Optional<SagaInstance> existing = sagaRepository
+        .findByIdempotencyKey(data.getOrderId());
+
+    if (existing.isPresent()) {
+        log.warn("Saga già esistente per orderId={}, skip duplicato",
+            data.getOrderId());
+        return existing.get().getSagaId();
+    }
+
+    String sagaId = UUID.randomUUID().toString();
+    SagaInstance saga = SagaInstance.builder()
+        .sagaId(sagaId)
+        .idempotencyKey(data.getOrderId())
+        .state(SagaState.STARTED)
+        .data(data)
+        .startedAt(Instant.now())
+        .build();
+
+    sagaRepository.save(saga);
+    // ... avvio primo passo
+    return sagaId;
+}
+```
+
+### Scenario 4 — Compensating Transaction Persa su Riavvio
+
+**Sintomo:** Dopo un crash dell'orchestratore durante la compensazione, alcune risorse rimangono riservate (es. credito bloccato, inventario non rilasciato).
+
+**Causa:** L'orchestratore ha inviato il comando di compensazione ma si è crashato prima di persistere il nuovo stato, quindi al riavvio ri-esegue il passo forward invece della compensazione.
+
+**Soluzione:** Persistere lo stato nel DB **prima** di inviare qualsiasi comando; al riavvio, l'orchestratore legge lo stato e riprende dal punto corretto.
+
+```sql
+-- Query per trovare saghe in stato di compensazione al riavvio
+SELECT saga_id, state, last_updated
+FROM saga_instances
+WHERE state IN ('COMPENSATING_PAYMENT', 'COMPENSATING_INVENTORY')
+  AND last_updated < NOW() - INTERVAL '5 minutes';
+
+-- Usare come base per un job di recovery all'avvio dell'applicazione
+```
 
 ## Riferimenti
 

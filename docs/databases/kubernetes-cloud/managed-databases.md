@@ -9,7 +9,7 @@ related: [databases/replicazione-ha/backup-pitr, databases/replicazione-ha/failo
 official_docs: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Managed Databases
@@ -285,13 +285,137 @@ az postgres flexible-server create \
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| RDS CPU alta durante backup | Backup window sovrapposto con peak traffic | Spostare backup window in orario off-peak |
-| Aurora replica lag alto | Replica instance undersized | Aumentare la classe dell'istanza replica |
-| DynamoDB `ProvisionedThroughputExceededException` | Throttling su partizione hot | Aumentare RCU/WCU, passare a on-demand, rivedere partition key |
-| Connessione RDS timeout da Lambda | Troppe connessioni Lambda esauriscono il pool | Usare RDS Proxy davanti a RDS |
-| Cloud SQL connection refused | IP non autorizzato in authorized networks | Aggiungere IP in Cloud SQL → Connections → Authorized networks |
+### Scenario 1 — Connessioni esaurite su RDS da Lambda/Container
+
+**Sintomo:** `FATAL: remaining connection slots are reserved for non-replication superuser connections` o timeout intermittenti su RDS.
+
+**Causa:** Lambda e container scalano orizzontalmente: ogni istanza apre nuove connessioni. RDS PostgreSQL ha un limite di `max_connections` basato sulla RAM dell'istanza (es. `db.r6g.large` ≈ 800 connessioni). Con molte Lambda parallele il pool si esaurisce.
+
+**Soluzione:** Introdurre RDS Proxy tra l'applicazione e RDS. RDS Proxy mantiene un pool persistente verso il database e moltiplica le connessioni in ingresso.
+
+```bash
+# Crea RDS Proxy
+aws rds create-db-proxy \
+  --db-proxy-name prod-postgres-proxy \
+  --engine-family POSTGRESQL \
+  --auth '[{"AuthScheme":"SECRETS","SecretArn":"arn:aws:secretsmanager:us-east-1:123:secret:db-creds","IAMAuth":"REQUIRED"}]' \
+  --role-arn arn:aws:iam::123:role/rds-proxy-role \
+  --vpc-subnet-ids subnet-aaa subnet-bbb \
+  --vpc-security-group-ids sg-xxx
+
+# Verifica stato proxy
+aws rds describe-db-proxies --db-proxy-name prod-postgres-proxy \
+  --query 'DBProxies[0].Status'
+
+# Monitora connessioni attive su RDS (da psql)
+SELECT count(*), state, wait_event_type, wait_event
+FROM pg_stat_activity
+GROUP BY state, wait_event_type, wait_event
+ORDER BY count DESC;
+```
+
+---
+
+### Scenario 2 — DynamoDB ProvisionedThroughputExceededException
+
+**Sintomo:** Errori `ProvisionedThroughputExceededException` in burst, latenza alta, retry loop nell'applicazione.
+
+**Causa:** La tabella ha una o più "hot partition" — partition key con distribuzione non uniforme (es. `user_id=admin` riceve l'80% del traffico). Ogni partizione DynamoDB ha un limite di ~3000 RCU e 1000 WCU.
+
+**Soluzione:** A breve termine: passare a on-demand mode. A lungo termine: rivedere la partition key per distribuire il carico.
+
+```bash
+# Switch immediato a on-demand (nessun downtime, nessun provisioning)
+aws dynamodb update-table \
+  --table-name Ordini \
+  --billing-mode PAY_PER_REQUEST
+
+# Analizza distribuzione partizioni (CloudWatch)
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/DynamoDB \
+  --metric-name ConsumedReadCapacityUnits \
+  --dimensions Name=TableName,Value=Ordini \
+  --start-time "$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)" \
+  --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --period 300 \
+  --statistics Sum
+
+# Verifica throttling attivo
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/DynamoDB \
+  --metric-name ThrottledRequests \
+  --dimensions Name=TableName,Value=Ordini \
+  --start-time "$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%SZ)" \
+  --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --period 60 --statistics Sum
+```
+
+---
+
+### Scenario 3 — Aurora Read Replica lag elevato
+
+**Sintomo:** Query sulle read replica restituiscono dati obsoleti; `ReplicaLag` in CloudWatch supera 1-5 secondi.
+
+**Causa:** Le replica instance sono sottodimensionate rispetto al writer, oppure c'è un burst di write che satura la capacità di apply del replica. Con Aurora il lag è solitamente < 100ms, valori > 1s indicano un problema di sizing.
+
+**Soluzione:** Aumentare la classe dell'istanza replica, oppure ridurre il numero di long-running transactions sul writer.
+
+```bash
+# Controlla replica lag corrente
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/RDS \
+  --metric-name AuroraReplicaLag \
+  --dimensions Name=DBInstanceIdentifier,Value=prod-aurora-reader-1 \
+  --start-time "$(date -u -d '30 minutes ago' +%Y-%m-%dT%H:%M:%SZ)" \
+  --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --period 60 --statistics Maximum
+
+# Scala up replica instance class
+aws rds modify-db-instance \
+  --db-instance-identifier prod-aurora-reader-1 \
+  --db-instance-class db.r6g.2xlarge \
+  --apply-immediately
+
+# Da psql sul writer: identifica long transactions che bloccano il WAL
+SELECT pid, now() - pg_stat_activity.query_start AS duration, query, state
+FROM pg_stat_activity
+WHERE state != 'idle'
+  AND now() - pg_stat_activity.query_start > interval '30 seconds'
+ORDER BY duration DESC;
+```
+
+---
+
+### Scenario 4 — RDS Failover non avviene o impiega troppo
+
+**Sintomo:** Dopo un'interruzione del primary RDS Multi-AZ, l'endpoint DNS non si aggiorna; le applicazioni restano in timeout per > 3 minuti.
+
+**Causa:** Il DNS TTL dell'endpoint RDS è 5 secondi, ma le applicazioni che cachano il DNS (JVM, alcune librerie) potrebbero non rispettarlo. Oppure il failover stesso è bloccato da connessioni non chiuse.
+
+**Soluzione:** Forzare il failover manuale per testarlo. Configurare le applicazioni per non cachare il DNS (JVM: `-Dsun.net.inetaddr.ttl=5`).
+
+```bash
+# Forza failover manuale (per test o manutenzione pianificata)
+aws rds reboot-db-instance \
+  --db-instance-identifier prod-postgres \
+  --force-failover
+
+# Monitora evento failover
+aws rds describe-events \
+  --source-identifier prod-postgres \
+  --source-type db-instance \
+  --duration 60 \
+  --query 'Events[*].[Date,Message]' \
+  --output table
+
+# Verifica quale AZ è diventata primary dopo failover
+aws rds describe-db-instances \
+  --db-instance-identifier prod-postgres \
+  --query 'DBInstances[0].{AZ:AvailabilityZone,Status:DBInstanceStatus,MultiAZ:MultiAZ}'
+
+# Test connettività sull'endpoint dopo failover
+pg_isready -h prod-postgres.xxx.us-east-1.rds.amazonaws.com -p 5432
+```
 
 ## Riferimenti
 

@@ -9,7 +9,7 @@ related: [networking/kubernetes/network-policies, networking/kubernetes/ingress,
 official_docs: https://www.cni.dev/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-03-29
 ---
 
 # CNI — Container Network Interface
@@ -232,24 +232,133 @@ kubectl get configmap calico-config -n kube-system -o yaml | grep mtu
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| Pod bloccato in `ContainerCreating` | CNI non installato o errore CNI | `kubectl describe pod`, log del CNI su `/var/log/` |
-| Pod non si parlano tra nodi diversi | Firewall blocca VXLAN (UDP 8472) o BGP (TCP 179) | Aprire le porte necessarie |
-| Packet loss intermittente | MTU mismatch | Ridurre MTU pod di 50-100 byte |
-| NetworkPolicy non applicata | CNI non supporta NetworkPolicy (Flannel) | Migrare a Calico o Cilium |
-| DNS lento | kube-dns/CoreDNS sovraccarico | Scalare CoreDNS, aggiungere NodeLocal DNSCache |
+### Scenario 1 — Pod bloccato in ContainerCreating
+
+**Sintomo:** Il pod resta in stato `ContainerCreating` indefinitamente, mai `Running`.
+
+**Causa:** Il CNI plugin non è installato, non è in esecuzione su quel nodo, o ha prodotto un errore durante la configurazione dell'interfaccia di rete del pod.
+
+**Soluzione:** Verificare lo stato dei pod CNI sul nodo e i log di kubelet per il messaggio di errore specifico.
 
 ```bash
-# Debug connettività con netshoot
-kubectl run netshoot --image=nicolaka/netshoot --rm -it -- bash
-# Inside: ping, traceroute, tcpdump, dig, nmap disponibili
+# Descrivi il pod per vedere l'errore CNI
+kubectl describe pod <pod-name>
+# Cercare: "failed to set up pod network" o "network plugin not ready"
 
-# Verifica log CNI
-journalctl -u kubelet | grep cni
+# Verifica che i pod CNI siano Running su TUTTI i nodi
+kubectl get pods -n kube-system -l k8s-app=flannel    # Flannel
+kubectl get pods -n calico-system                       # Calico
+kubectl get pods -n kube-system -l k8s-app=cilium      # Cilium
 
-# Traceroute tra pod
-kubectl exec pod-a -- traceroute $(kubectl get pod pod-b -o jsonpath='{.status.podIP}')
+# Log kubelet sul nodo problematico
+journalctl -u kubelet --since "10 min ago" | grep -i cni
+
+# Verifica presenza dei file CNI
+ls /etc/cni/net.d/   # Deve contenere *.conf o *.conflist
+ls /opt/cni/bin/     # Deve contenere i binari (bridge, flannel, calico, ecc.)
+```
+
+---
+
+### Scenario 2 — Pod su nodi diversi non si raggiungono
+
+**Sintomo:** `ping` tra pod su nodi diversi fallisce; pod sullo stesso nodo si raggiungono correttamente.
+
+**Causa:** Il firewall del cloud/OS blocca il traffico overlay (UDP 8472 per VXLAN) o BGP (TCP 179). In alternativa, le route BGP non vengono annunciate correttamente.
+
+**Soluzione:** Aprire le porte richieste dal CNI e verificare le route di rete tra nodi.
+
+```bash
+# Identifica gli IP dei pod in test
+kubectl get pods -o wide   # Colonna NODE e IP
+
+# Test ping diretto tra pod
+kubectl exec test-a -- ping -c3 <IP_POD_B>
+
+# Verifica route sul nodo (Calico BGP)
+ip route show | grep "10.244"
+# Atteso: 10.244.1.0/24 via <IP_NODE_2> dev eth0 proto bird
+
+# Testa connettività porta VXLAN (Flannel) tra nodi
+nc -zuv <IP_NODE_2> 8472
+
+# Verifica sessioni BGP attive (Calico)
+kubectl exec -n calico-system calico-node-<hash> -- birdcl show protocols
+# Tutte le sessioni BGP devono essere "Established"
+
+# Tcpdump per catturare traffico VXLAN
+tcpdump -i eth0 udp port 8472 -n
+```
+
+---
+
+### Scenario 3 — Packet loss intermittente e connessioni instabili
+
+**Sintomo:** Connessioni TCP si chiudono inaspettatamente; `ping` funziona ma con perdite sporadiche; download lenti o interrotti.
+
+**Causa:** MTU mismatch — il CNI overlay (VXLAN/Geneve) aggiunge overhead (~50 byte) ma la MTU dei pod non è stata ridotta di conseguenza. I pacchetti vengono frammentati o scartati.
+
+**Soluzione:** Ridurre la MTU delle interfacce pod (o configurare il CNI per farlo automaticamente).
+
+```bash
+# Verifica MTU su un pod
+kubectl exec <pod-name> -- ip link show eth0
+# "mtu 1500" con VXLAN è sbagliato — deve essere ~1450
+
+# Verifica MTU configurata in Calico
+kubectl get configmap calico-config -n kube-system -o yaml | grep -i mtu
+
+# Imposta MTU in Calico (veth MTU)
+kubectl patch configmap calico-config -n kube-system \
+  --type merge \
+  -p '{"data":{"veth_mtu":"1440"}}'
+
+# Verifica MTU nodo
+ip link show flannel.1   # Flannel: deve essere ~1450
+ip link show vxlan.calico  # Calico VXLAN: deve essere ~1450
+
+# Simula frammentazione (test)
+kubectl exec <pod-name> -- ping -M do -s 1450 <IP_altro_pod>
+# Se fallisce con "Frag needed": problema MTU confermato
+```
+
+---
+
+### Scenario 4 — NetworkPolicy non viene applicata
+
+**Sintomo:** Le `NetworkPolicy` create vengono ignorate; i pod comunicano liberamente nonostante le regole di deny.
+
+**Causa:** Il CNI installato non supporta NetworkPolicy (es. Flannel base) oppure il controller delle policy non è in esecuzione.
+
+**Soluzione:** Verificare che il CNI supporti NetworkPolicy; se si usa Flannel, affiancare Calico solo per le policy (Canal) oppure migrare a Calico/Cilium.
+
+```bash
+# Verifica se le NetworkPolicy sono presenti
+kubectl get networkpolicies -A
+
+# Test: crea policy default-deny e verifica se blocca traffico
+cat <<EOF | kubectl apply -f -
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: test-deny
+  namespace: default
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+EOF
+
+# Testa connettività (deve fallire se la policy funziona)
+kubectl exec test-a -- wget -T3 -q http://<IP_POD_B>:80
+# Se risponde: policy non applicata → CNI non la supporta
+
+# Per Cilium: verifica policy enforcement
+cilium policy get
+kubectl exec -n kube-system cilium-<hash> -- cilium policy trace \
+  --src-k8s-pod default:test-a --dst-k8s-pod default:test-b --dport 80
+
+# Cleanup test
+kubectl delete networkpolicy test-deny
 ```
 
 ## Relazioni

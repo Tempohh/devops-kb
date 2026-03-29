@@ -9,7 +9,7 @@ related: [ci-cd/jenkins/shared-libraries, ci-cd/jenkins/agent-infrastructure, ci
 official_docs: https://www.jenkins.io/doc/book/pipeline/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # Jenkins Pipeline — Fondamentali
@@ -692,6 +692,148 @@ node('master') {
                 returnStatus: true
             )
             return result == 0
+        }
+    }
+}
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — `NotSerializableException` durante la sospensione della pipeline
+
+**Sintomo:** La pipeline fallisce con `java.io.NotSerializableException` in corrispondenza di un oggetto come `Iterator`, `JsonSlurper`, `Stream` o una classe Java standard.
+
+**Causa:** Il CPS transformer tenta di serializzare lo stato della pipeline su disco (durability), ma l'oggetto in scope non implementa `Serializable`. Avviene tipicamente quando la pipeline viene sospesa (es. `input`, `sleep`, attesa di un lock).
+
+**Soluzione:** Spostare la logica non serializzabile in un metodo `@NonCPS` oppure raccogliere il risultato in una struttura serializzabile (List, Map) prima di qualsiasi step che potrebbe sospendere la pipeline.
+
+```groovy
+// ❌ causa NotSerializableException se la pipeline si sospende
+def slurper = new groovy.json.JsonSlurper()
+def data = slurper.parseText(readFile('config.json'))
+input 'Proceed?'    // sospensione — slurper non è serializzabile
+
+// ✅ usa @NonCPS per isolare la logica
+@NonCPS
+def parseConfig(String text) {
+    return new groovy.json.JsonSlurper().parseText(text)
+}
+def data = parseConfig(readFile('config.json'))
+input 'Proceed?'    // OK — data è una Map serializzabile
+```
+
+---
+
+### Scenario 2 — Stage `when` non valutato, stage eseguito inaspettatamente
+
+**Sintomo:** Uno stage viene eseguito anche quando la condizione `when { branch 'main' }` non dovrebbe essere soddisfatta, oppure l'agent viene allocato prima che la condizione sia valutata (spreco di risorse).
+
+**Causa:** Per default Jenkins alloca l'agent prima di valutare `when`. Senza `beforeAgent true`, l'agent viene acquisito e poi la condizione viene verificata, ma il comportamento sembra eseguire lo stage perché i log dell'allocazione appaiono comunque.
+
+**Soluzione:** Aggiungere `beforeAgent true` dentro il blocco `when` per valutare la condizione prima dell'allocazione dell'agent. Per debug, verificare `env.BRANCH_NAME` vs `env.GIT_BRANCH` (il primo è impostato dal plugin multibranch).
+
+```groovy
+stage('Deploy Production') {
+    when {
+        beforeAgent true           // valuta PRIMA di allocare l'agent
+        branch 'main'
+        not { changeRequest() }
+    }
+    agent { label 'deploy-prod' }
+    steps { sh './deploy.sh' }
+}
+
+// Debug: stampa le variabili di branch disponibili
+stage('Debug Branch') {
+    steps {
+        echo "BRANCH_NAME=${env.BRANCH_NAME}"
+        echo "GIT_BRANCH=${env.GIT_BRANCH}"
+        echo "CHANGE_ID=${env.CHANGE_ID}"
+    }
+}
+```
+
+---
+
+### Scenario 3 — Stash fallisce con `allowEmpty: false` o supera il limite di dimensione
+
+**Sintomo:** `ERROR: No files included in stash` oppure il controller Jenkins diventa lento/OOM dopo operazioni di stash su artefatti grandi.
+
+**Causa 1:** Il pattern `includes` non corrisponde a nessun file (es. build fallita prima, path errato). Con `allowEmpty: false` (default) lo stash genera errore. **Causa 2:** Lo stash viene conservato nel filesystem del controller Jenkins; artefatti grandi (>50-100 MB) sovraccaricano il controller.
+
+**Soluzione per Causa 1:** Verificare che la build produca i file prima dello stash; usare `allowEmpty: true` solo se il file è opzionale. **Soluzione per Causa 2:** Usare storage esterno (Nexus, Artifactory, S3) per artefatti grandi.
+
+```bash
+# Verifica pattern stash — esegui nell'agent per testare il glob
+find . -path './target/*.jar' -o -path './target/surefire-reports/**/*.xml'
+
+# Alternativa stash su S3 (plugin S3 Publisher)
+# In Jenkinsfile:
+```
+```groovy
+// Alternativa: upload su S3 invece di stash
+withAWS(credentials: 'aws-creds', region: 'eu-west-1') {
+    s3Upload(
+        bucket: 'ci-artifacts',
+        path: "builds/${env.BUILD_NUMBER}/",
+        includePathPattern: 'target/*.jar'
+    )
+}
+// Stage successivo: download da S3
+withAWS(credentials: 'aws-creds', region: 'eu-west-1') {
+    s3Download(
+        bucket: 'ci-artifacts',
+        path: "builds/${env.BUILD_NUMBER}/",
+        localPath: 'artifacts/'
+    )
+}
+```
+
+---
+
+### Scenario 4 — Parallel stage fallisce con `failFast` e causa abort prematuro
+
+**Sintomo:** Con `failFast true` (o `parallelsAlwaysFailFast()`), un singolo stage parallelo fallisce e causa l'abort degli altri stage in corso, perdendo i loro report (es. test results non pubblicati).
+
+**Causa:** `failFast` interrompe immediatamente tutti i branch paralleli al primo fallimento, prima che i `post { always { } }` dei branch abortiti vengano eseguiti.
+
+**Soluzione:** Usare `catchError` nei branch paralleli per catturare il fallimento senza propagarlo, raccogliere tutti i risultati, e poi fallire esplicitamente alla fine. Oppure spostare la pubblicazione dei report fuori dal blocco `parallel`.
+
+```groovy
+stage('Parallel Tests') {
+    failFast false    // disabilita failFast per raccogliere tutti i report
+    parallel {
+        stage('Suite A') {
+            steps {
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    sh 'mvn test -pl :module-a'
+                }
+            }
+            post {
+                always { junit 'module-a/target/surefire-reports/**/*.xml' }
+            }
+        }
+        stage('Suite B') {
+            steps {
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    sh 'mvn test -pl :module-b'
+                }
+            }
+            post {
+                always { junit 'module-b/target/surefire-reports/**/*.xml' }
+            }
+        }
+    }
+    // Fallisce esplicitamente se uno dei stage è FAILURE
+    post {
+        always {
+            script {
+                if (currentBuild.result == 'FAILURE') {
+                    error('One or more parallel stages failed — see individual reports')
+                }
+            }
         }
     }
 }

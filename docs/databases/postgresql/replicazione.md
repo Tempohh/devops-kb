@@ -9,7 +9,7 @@ related: [databases/replicazione-ha/strategie-replica, databases/replicazione-ha
 official_docs: https://www.postgresql.org/docs/current/high-availability.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # PostgreSQL Replicazione
@@ -266,7 +266,109 @@ patronictl -c /etc/patroni.yml failover postgres-cluster --master pg-node-1 --ca
 patronictl -c /etc/patroni.yml reinit postgres-cluster pg-node-1
 ```
 
-## Relazioni
+## Troubleshooting
+
+### Scenario 1 — Standby accumula lag e non recupera
+
+**Sintomo:** `replication_lag_bytes` in `pg_stat_replication` cresce costantemente; la standby è indietro di minuti o ore.
+
+**Causa:** La standby non riesce a applicare il WAL alla velocità con cui il primary lo genera. Possibili cause: I/O lento sulla standby, query long-running con `hot_standby_feedback = on` che blocca il vacuum sul primary, rete congestionata.
+
+**Soluzione:**
+1. Verificare I/O della standby e confrontare con il primary.
+2. Se `hot_standby_feedback = on`, valutare se disabilitarlo o accettare il conflitto.
+3. Aumentare `max_standby_streaming_delay` per ridurre i conflitti di recovery.
+
+```sql
+-- Sul primary: verifica lag per ogni standby
+SELECT client_addr, write_lag, flush_lag, replay_lag, sync_state
+FROM pg_stat_replication;
+
+-- Sulla standby: lag in secondi
+SELECT now() - pg_last_xact_replay_timestamp() AS lag_seconds;
+```
+
+---
+
+### Scenario 2 — Replication slot inattivo riempie il disco
+
+**Sintomo:** Disco del primary si riempie con WAL; `pg_replication_slots` mostra slot inattivi con `slot_lag` enorme.
+
+**Causa:** Un replication slot (fisico o logico) è rimasto attivo dopo la disconnessione del consumer. Il primary non può rimuovere il WAL finché lo slot non avanza.
+
+**Soluzione:** Se il consumer è permanentemente perso, eliminare lo slot. Prima verificare che nessun processo attivo lo stia usando.
+
+```sql
+-- Identifica slot inattivi con lag elevato
+SELECT slot_name, active, slot_type,
+       pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)) AS lag
+FROM pg_replication_slots
+ORDER BY pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) DESC;
+
+-- Elimina lo slot inattivo (irreversibile)
+SELECT pg_drop_replication_slot('nome_slot_inattivo');
+
+-- Imposta un limite massimo per prevenire il problema
+-- postgresql.conf:
+-- max_slot_wal_keep_size = 10GB
+```
+
+---
+
+### Scenario 3 — Errore di connessione WAL sender / receiver
+
+**Sintomo:** Log della standby riporta `could not connect to the primary server` o `FATAL: replication terminated by primary server`. La standby passa in stato `disconnected` in `pg_stat_replication`.
+
+**Causa:** Password errata, `pg_hba.conf` non include la standby, firewall, max_wal_senders raggiunto, o il WAL richiesto è già stato eliminato (slot non configurato e `wal_keep_size` troppo basso).
+
+**Soluzione:**
+
+```bash
+# Verifica connettività dalla standby verso il primary
+psql "host=primary-host user=replicator dbname=replication" -c "IDENTIFY_SYSTEM;" replication=1
+
+# Controlla i log della standby
+tail -f /var/log/postgresql/postgresql.log | grep -E "FATAL|ERROR|replication"
+
+# Verifica su primary che max_wal_senders non sia esaurito
+SELECT count(*) FROM pg_stat_replication;
+# Se uguale a max_wal_senders → aumentare il parametro e ricaricare
+```
+
+Se il WAL necessario non è più disponibile → reinizializzare la standby con `pg_basebackup`.
+
+---
+
+### Scenario 4 — Subscription logica bloccata / lag in crescita
+
+**Sintomo:** `pg_stat_subscription` mostra `received_lsn` fermo; il subscriber non applica nuovi cambiamenti. La tabella sul subscriber è ferma mentre il primary avanza.
+
+**Causa:** Errore di applicazione su una riga (es. violazione di constraint, chiave duplicata), worker della subscription crashato, o connessione interrotta senza riconnessione automatica.
+
+**Soluzione:**
+
+```sql
+-- Sul subscriber: stato di tutte le subscription
+SELECT subname, pid, received_lsn, latest_end_lsn, last_msg_receipt_time
+FROM pg_stat_subscription;
+
+-- Controlla errori nei log o in pg_subscription_rel
+SELECT srrelid::regclass, srsubstate, srsublsn
+FROM pg_subscription_rel;
+-- srsubstate: 'i'=initialize, 'd'=data copy, 's'=synced, 'r'=ready, 'e'=error
+
+-- Disabilita e riabilita la subscription per forzare riconnessione
+ALTER SUBSCRIPTION mia_subscription DISABLE;
+ALTER SUBSCRIPTION mia_subscription ENABLE;
+
+-- Se la causa è un conflitto di dati: risolverlo manualmente sulla tabella subscriber
+-- poi avanzare l'LSN per saltare la transazione problematica
+SELECT pg_replication_origin_advance('pg_24601', 'LSN_DA_SALTARE');
+```
+
+---
+
+
 
 ??? info "Strategie di Replica — Concetti generali"
     Sync vs async, trade-off RPO/RTO.

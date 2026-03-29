@@ -9,7 +9,7 @@ related: [cloud/azure/security/_index, cloud/azure/identita/_index]
 official_docs: https://learn.microsoft.com/azure/security/fundamentals/shared-responsibility
 status: complete
 difficulty: beginner
-last_updated: 2026-02-26
+last_updated: 2026-03-28
 ---
 
 # Modello di Responsabilità Condivisa Azure
@@ -137,6 +137,123 @@ az policy state list \
 | **Microsoft Purview** | Governance dati, classificazione, compliance |
 | **Azure Blueprints** (legacy) | Template ambiente conforme (sostituito da Template Specs + Policy) |
 | **Microsoft Compliance Manager** | Assessment compliance, action items, punteggio |
+
+```bash
+# Verificare il Secure Score corrente con Defender for Cloud
+az security secure-score list --output table
+
+# Elencare raccomandazioni attive di sicurezza
+az security task list --output table
+
+# Verificare le assegnazioni di Azure Policy su una subscription
+az policy assignment list --query "[].{Name:name, Scope:scope, Policy:policyDefinitionId}" --output table
+
+# Verificare risorse non conformi a una policy specifica
+az policy state list \
+    --filter "complianceState eq 'NonCompliant'" \
+    --query "[].{Resource:resourceId, Policy:policyDefinitionName}" \
+    --output table
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Risorse non conformi dopo assegnazione policy
+
+**Sintomo:** Dopo aver assegnato una Azure Policy, le risorse esistenti risultano `NonCompliant` nel dashboard.
+
+**Causa:** Le policy Azure hanno un ritardo di valutazione (fino a 30 minuti) e non si applicano retroattivamente in modo automatico alle risorse già esistenti senza un trigger di remediation.
+
+**Soluzione:** Avviare un task di remediation esplicito per applicare la policy alle risorse esistenti.
+
+```bash
+# Creare un task di remediation per risorse non conformi
+az policy remediation create \
+    --name "remediation-task-01" \
+    --policy-assignment "/subscriptions/<sub-id>/providers/Microsoft.Authorization/policyAssignments/<assignment-name>" \
+    --resource-discovery-mode ReEvaluateCompliance
+
+# Monitorare lo stato della remediation
+az policy remediation show \
+    --name "remediation-task-01" \
+    --query "{Status:provisioningState, Succeeded:deploymentStatus.successfulDeployments}" \
+    --output table
+```
+
+---
+
+### Scenario 2 — Defender for Cloud mostra raccomandazioni per servizi PaaS/SaaS
+
+**Sintomo:** Il Secure Score di Defender for Cloud segnala vulnerabilità su risorse PaaS (es. App Service, Azure SQL) che si ritenevano gestite da Microsoft.
+
+**Causa:** In PaaS, la responsabilità è condivisa: Microsoft gestisce OS e runtime, ma la configurazione dell'applicazione, le variabili d'ambiente, le connessioni e i permessi rimangono responsabilità del cliente.
+
+**Soluzione:** Verificare le raccomandazioni specifiche per categoria e applicare le correzioni sulle aree di competenza del cliente.
+
+```bash
+# Filtrare raccomandazioni per risorsa PaaS specifica (es. App Service)
+az security task list \
+    --query "[?contains(resourceId,'Microsoft.Web/sites')].{Task:name, Severity:severity, State:state}" \
+    --output table
+
+# Abilitare HTTPS-only su App Service (remediation tipica)
+az webapp update \
+    --name myapp \
+    --resource-group myapp-rg \
+    --https-only true
+```
+
+---
+
+### Scenario 3 — Confusione sulle responsabilità di backup in IaaS
+
+**Sintomo:** Dati persi su una VM Azure; si credeva che Azure gestisse automaticamente i backup.
+
+**Causa:** In IaaS il backup è responsabilità del cliente. Azure non abilita automaticamente Azure Backup sulle VM; l'infrastruttura di storage sottostante è protetta da Microsoft, ma i dati applicativi no.
+
+**Soluzione:** Abilitare Azure Backup per le VM critiche e verificare la policy di retention.
+
+```bash
+# Abilitare Azure Backup su una VM esistente
+az backup protection enable-for-vm \
+    --resource-group myapp-rg \
+    --vault-name myRecoveryVault \
+    --vm myVM \
+    --policy-name DefaultPolicy
+
+# Verificare lo stato di protezione di tutte le VM
+az backup item list \
+    --resource-group myapp-rg \
+    --vault-name myRecoveryVault \
+    --backup-management-type AzureIaasVM \
+    --query "[].{VM:name, Status:properties.currentProtectionState}" \
+    --output table
+```
+
+---
+
+### Scenario 4 — Accesso non autorizzato a dati in un servizio SaaS (Microsoft 365)
+
+**Sintomo:** Un utente ha acceduto a dati riservati in SharePoint Online pur non dovendo averne i permessi.
+
+**Causa:** In SaaS la gestione delle identità, dei gruppi e dei permessi di accesso è responsabilità del cliente. Microsoft fornisce la piattaforma ma non gestisce le autorizzazioni applicative.
+
+**Soluzione:** Rivedere i permessi via Microsoft Entra ID (ex Azure AD) e abilitare Conditional Access per imporre il principio del privilegio minimo.
+
+```bash
+# Verificare i membri di un gruppo di sicurezza in Entra ID (via Azure CLI)
+az ad group member list \
+    --group "SharePoint-Finance-Readers" \
+    --query "[].{Name:displayName, UPN:userPrincipalName}" \
+    --output table
+
+# Elencare le assegnazioni di ruolo su una risorsa Azure
+az role assignment list \
+    --scope "/subscriptions/<sub-id>" \
+    --query "[].{Principal:principalName, Role:roleDefinitionName, Scope:scope}" \
+    --output table
+```
 
 ---
 

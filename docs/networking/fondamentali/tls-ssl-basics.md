@@ -9,7 +9,7 @@ related: [networking/fondamentali/http-https, networking/sicurezza/firewall-waf,
 official_docs: https://www.rfc-editor.org/rfc/rfc8446
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # TLS/SSL — Basi
@@ -219,28 +219,111 @@ server {
 
 ## Troubleshooting
 
-| Errore | Causa | Soluzione |
-|--------|-------|-----------|
-| `certificate has expired` | Certificato scaduto | Rinnovare con certbot/cert-manager |
-| `certificate verify failed` | CA non fidata, self-signed | Aggiungere CA al trust store |
-| `hostname mismatch` | CN/SAN non corrisponde | Verificare il campo SAN (Subject Alternative Name — lista degli hostname per cui il certificato è valido) del certificato |
-| `SSL_ERROR_RX_RECORD_TOO_LONG` | HTTP su porta HTTPS | Verificare che il server parli TLS |
-| `handshake failure` | TLS version/cipher mismatch | Verificare configurazione TLS |
-| `OCSP stapling failed` | Resolver non raggiungibile | Verificare DNS del server |
+### Scenario 1 — Certificato scaduto
+
+**Sintomo:** Il browser mostra `NET::ERR_CERT_DATE_INVALID`; openssl restituisce `certificate has expired`.
+
+**Causa:** Il certificato ha superato la data di scadenza in `notAfter`. Frequente se il rinnovo automatico (certbot timer, cert-manager) è fallito silenziosamente.
+
+**Soluzione:** Rinnovare il certificato e verificare la pipeline di rinnovo automatico.
 
 ```bash
-# Debug TLS completo
-openssl s_client -connect example.com:443 \
-  -servername example.com \
-  -status \          # OCSP stapling
-  -showcerts \       # Mostra catena completa
-  2>&1 | head -50
+# Controlla scadenza del certificato remoto
+echo | openssl s_client -connect example.com:443 -servername example.com 2>/dev/null \
+  | openssl x509 -noout -dates
 
-# Verifica TLS version e cipher negoziati
-curl -v --tlsv1.3 https://example.com 2>&1 | grep -E "SSL|TLS|cipher"
+# Rinnova con certbot
+certbot renew --cert-name example.com --force-renewal
 
-# Testa con versione TLS specifica
-openssl s_client -connect example.com:443 -tls1_2
+# Verifica che il timer di rinnovo sia attivo
+systemctl status certbot.timer
+
+# In Kubernetes con cert-manager: forza il rinnovo
+kubectl annotate certificate example-cert -n mynamespace \
+  cert-manager.io/force-renewal="$(date +%s)"
+```
+
+### Scenario 2 — Verifica certificato fallita (CA non fidata)
+
+**Sintomo:** `certificate verify failed: unable to get local issuer certificate`; in curl `SSL certificate problem: unable to get local issuer certificate`.
+
+**Causa:** La CA che ha firmato il certificato non è nel trust store del client. Comune con CA aziendali interne, certificati self-signed, o catene incomplete (manca la CA intermedia).
+
+**Soluzione:** Aggiungere la CA al trust store oppure fornire esplicitamente la catena al client.
+
+```bash
+# Verifica la catena restituita dal server
+openssl s_client -connect example.com:443 -servername example.com -showcerts 2>/dev/null \
+  | grep -E "s:|i:"
+
+# Verifica con una CA specifica
+openssl verify -CAfile /path/to/ca-bundle.crt /path/to/server.crt
+
+# Aggiungi CA aziendale al trust store (Debian/Ubuntu)
+cp my-corporate-ca.crt /usr/local/share/ca-certificates/
+update-ca-certificates
+
+# Aggiungi CA al trust store (RHEL/CentOS)
+cp my-corporate-ca.crt /etc/pki/ca-trust/source/anchors/
+update-ca-trust extract
+
+# curl: specifica la CA senza modificare il sistema
+curl --cacert /path/to/ca.crt https://internal.example.com
+```
+
+### Scenario 3 — Handshake failure (versione TLS o cipher incompatibili)
+
+**Sintomo:** `SSL handshake failure`, `no shared cipher`, oppure connessione rifiutata senza errore TLS specifico. Frequente dopo aggiornamenti di configurazione server o durante migrazione a TLS 1.3.
+
+**Causa:** Il client e il server non hanno in comune nessuna versione TLS o cipher suite. Ad esempio: server configurato solo TLS 1.3, client legacy supporta solo TLS 1.2; oppure cipher suite rimosse per hardening.
+
+**Soluzione:** Identificare quale versione/cipher il client supporta e allineare la configurazione server.
+
+```bash
+# Testa quali versioni TLS il server accetta
+for ver in ssl3 tls1 tls1_1 tls1_2 tls1_3; do
+  echo -n "$ver: "
+  openssl s_client -connect example.com:443 -$ver 2>&1 | grep -E "Protocol|Cipher|handshake failure" | head -2
+done
+
+# Elenca le cipher suite supportate dal server
+nmap --script ssl-enum-ciphers -p 443 example.com
+
+# Verifica la configurazione attuale di Nginx
+nginx -T | grep -E "ssl_protocols|ssl_ciphers"
+
+# Test con cipher specifica
+openssl s_client -connect example.com:443 -cipher ECDHE-RSA-AES256-GCM-SHA384
+```
+
+### Scenario 4 — OCSP Stapling non funzionante
+
+**Sintomo:** Nginx log mostra `OCSP_basic_verify() failed`; `ssl_stapling` abilitato ma il browser non riceve la risposta OCSP. Latenza aggiuntiva sulle connessioni HTTPS.
+
+**Causa:** Il server non riesce a raggiungere il responder OCSP della CA (problema DNS o rete), oppure il resolver configurato in Nginx non è accessibile dal server.
+
+**Soluzione:** Verificare la connettività al responder OCSP e la configurazione del resolver.
+
+```bash
+# Ottieni l'URL del responder OCSP dal certificato
+openssl x509 -in /etc/ssl/server.crt -noout -ocsp_uri
+
+# Verifica manuale OCSP stapling
+openssl s_client -connect example.com:443 -servername example.com -status 2>/dev/null \
+  | grep -A 10 "OCSP response"
+
+# Test diretto del responder OCSP
+openssl ocsp -issuer /etc/ssl/intermediate.crt \
+             -cert /etc/ssl/server.crt \
+             -url http://ocsp.example-ca.com \
+             -resp_text
+
+# Verifica che il resolver Nginx raggiunga internet
+# In nginx.conf: resolver deve essere un DNS pubblico o interno funzionante
+nginx -t && grep resolver /etc/nginx/nginx.conf
+
+# Ricarica Nginx dopo la correzione
+nginx -s reload
 ```
 
 ## Relazioni

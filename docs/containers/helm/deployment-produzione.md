@@ -9,7 +9,7 @@ related: [containers/helm/_index, containers/helm/chart-avanzato, containers/ope
 official_docs: https://helm.sh/docs/helm/helm_upgrade/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Deployment in Produzione
@@ -505,38 +505,118 @@ Helm Production Checklist
 
 ---
 
-## Troubleshooting Comuni
+## Troubleshooting
+
+### Scenario 1 — Release bloccato in `pending-upgrade`
+
+**Sintomo:** `helm upgrade` fallisce con errore `another operation (install/upgrade/rollback) is in progress`.
+
+**Causa:** Un processo helm precedente è stato interrotto (SIGKILL, timeout CI, pod ucciso) mentre l'upgrade era in corso, lasciando il secret di stato in `pending-upgrade`.
+
+**Soluzione:** Verificare lo stato del secret Helm e forzare un rollback.
 
 ```bash
-# Helm release in stato "failed" — reset manuale
-helm rollback myapp -n production           # torna alla revisione precedente
+# Identificare il secret con stato pending
+kubectl get secret -n production \
+    -l owner=helm,status=pending-upgrade \
+    -o jsonpath='{.items[*].metadata.name}'
 
-# Helm release bloccato in "pending-upgrade"
-# (es. helm process interrotto durante upgrade)
-kubectl get secret -n production | grep myapp
-# sh.helm.release.v1.myapp.v3 → status=pending-upgrade
-# Soluzione: rollback o patch diretta al secret
+# Rollback alla revisione precedente (resetta lo stato)
 helm rollback myapp -n production
 
-# Debug template rendering
-helm template myapp ./mychart \
-    --values values.yaml \
-    --debug \
-    2>&1 | grep -A5 "Error"
+# Se rollback non è disponibile (primo deploy fallito), rimuovere il release
+helm uninstall myapp -n production --no-hooks
+```
 
-# Verificare values effettivi di un release
-helm get values myapp -n production           # values espliciti
-helm get values myapp -n production --all     # tutti i values (inclusi default)
+---
 
-# Esportare tutti i manifest applicati da un release
-helm get manifest myapp -n production
+### Scenario 2 — `helm upgrade --atomic` esegue rollback inatteso
 
-# Verificare note post-install
-helm get notes myapp -n production
+**Sintomo:** L'upgrade parte, i pod vengono creati ma dopo qualche minuto `--atomic` fa rollback automatico senza errori evidenti.
 
-# Helm con kubectl diff (alternativa a helm-diff per cluster)
-helm template myapp ./mychart --values values.yaml \
-    | kubectl diff -f -
+**Causa:** Uno o più pod non raggiungono lo stato `Ready` entro il `--timeout`. Può essere causato da probe liveness/readiness troppo stretti, immagine non disponibile, o risorse (CPU/memory) insufficienti.
+
+**Soluzione:** Investigare i pod prima che vengano rimossi dal rollback.
+
+```bash
+# Disabilitare --atomic temporaneamente per analisi
+helm upgrade myapp ./mychart \
+    --namespace production \
+    --values values.production.yaml \
+    --wait --timeout 10m
+    # NON aggiungere --atomic: il rollback non cancella i pod subito
+
+# Analizzare perché i pod non sono Ready
+kubectl get pods -n production -l app.kubernetes.io/name=myapp
+kubectl describe pod -n production -l app.kubernetes.io/name=myapp | grep -A20 "Events:"
+kubectl logs -n production -l app.kubernetes.io/name=myapp --previous
+
+# Verificare events del namespace
+kubectl get events -n production --sort-by='.lastTimestamp' | tail -20
+```
+
+---
+
+### Scenario 3 — Login OCI registry fallisce in CI
+
+**Sintomo:** `helm push` fallisce con `Error: failed to authorize: failed to fetch anonymous token` oppure `unauthorized: authentication required`.
+
+**Causa:** Il token di autenticazione al registry OCI non è configurato correttamente nella pipeline, oppure il robot account non ha i permessi di push.
+
+**Soluzione:** Verificare le credenziali e il path del registry.
+
+```bash
+# Test login manuale con debug
+helm registry login registry.company.com \
+    --username robot-ci \
+    --password "${HARBOR_TOKEN}" \
+    --debug
+
+# Per ECR: verificare che il token sia aggiornato (scade ogni 12h)
+aws ecr get-login-password --region eu-west-1 | \
+    helm registry login \
+        --username AWS \
+        --password-stdin \
+        123456789.dkr.ecr.eu-west-1.amazonaws.com
+
+# Verificare che il chart sia nel formato corretto prima del push
+helm show chart oci://registry.company.com/helm-charts/mychart 2>&1
+
+# Lista charts disponibili nel registry (Harbor API)
+curl -s -u "robot-ci:${HARBOR_TOKEN}" \
+    "https://registry.company.com/api/v2.0/projects/helm-charts/repositories" \
+    | jq '.[].name'
+```
+
+---
+
+### Scenario 4 — Helmfile sync fallisce per ordine dipendenze non rispettato
+
+**Sintomo:** `helmfile sync` fallisce con `Error: timed out waiting for the condition` su un release che dipende da CRD installate da un altro release (es. cert-manager).
+
+**Causa:** Helmfile non aspetta che i CRD siano registrati nell'API server prima di procedere con i release dipendenti, anche se `needs:` è configurato correttamente. I CRD richiedono tempo per la propagazione.
+
+**Soluzione:** Aggiungere un hook post-install per attendere i CRD, oppure usare `--concurrency 1`.
+
+```bash
+# Deploy sequenziale (più lento ma sicuro)
+helmfile -e production sync --concurrency 1
+
+# Deploy solo cert-manager prima, poi il resto
+helmfile -e production -l name=cert-manager sync
+helmfile -e production sync
+
+# Verificare che i CRD siano registrati prima di continuare
+kubectl wait --for=condition=Established \
+    crd/certificates.cert-manager.io \
+    crd/issuers.cert-manager.io \
+    --timeout=120s
+
+# Debug: vedere lo stato di tutti i release helmfile
+helmfile -e production status
+
+# Log dettagliato per identificare quale release fallisce
+helmfile -e production sync --log-level debug 2>&1 | grep -E "(ERROR|WARN|failed)"
 ```
 
 ---

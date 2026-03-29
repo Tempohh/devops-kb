@@ -9,7 +9,7 @@ related: [cloud/aws/iam/_index, cloud/aws/iam/organizations, cloud/aws/security/
 official_docs: https://docs.aws.amazon.com/iam/latest/userguide/access_policies.html
 status: complete
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-03-28
 ---
 
 # IAM Policies Avanzate
@@ -490,6 +490,141 @@ aws iam simulate-principal-policy \
 ```
 
 Il **IAM Policy Simulator** nella Console permette di testare policy prima di applicarle — indispensabile per debug di access denied.
+
+---
+
+## Best Practices
+
+- **Usa Explicit Deny per guardrail critici** — per restrizioni di sicurezza (es. blocco Region, require MFA) usa sempre Deny esplicito, mai affidarti all'assenza di Allow.
+- **Preferisci ABAC quando i team scalano** — se hai più di 5-10 team/progetti, ABAC con tag riduce drasticamente il numero di policy da mantenere.
+- **Applica Permission Boundaries in organizzazioni multi-team** — impedisce privilege escalation quando deleghi la creazione di role.
+- **Usa credenziali STS temporanee per CI/CD** — mai access key statiche nei workflow; OIDC è il pattern consigliato.
+- **Testa sempre con IAM Policy Simulator prima di applicare** — specialmente policy con Conditions complesse o cross-account.
+- **Limita `iam:PassRole` per servizio** — aggiungi sempre la Condition `iam:PassedToService` per evitare che il permesso sia più ampio del necessario.
+- **Usa `aws:SecureTransport` su tutte le resource policy S3** — forza HTTPS anche se il bucket non è pubblico.
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — AccessDenied nonostante la policy sembri corretta
+
+**Sintomo:** L'utente riceve `AccessDenied` ma la policy identity-based contiene un Allow per l'azione richiesta.
+
+**Causa:** Uno degli strati superiori nella evaluation logic sta bloccando la chiamata: SCP, Permission Boundary, o Session Policy. Basta che uno strato non abbia un Allow corrispondente perché il risultato finale sia Deny.
+
+**Soluzione:** Verificare ogni strato nell'ordine di evaluation. Controllare prima SCP tramite AWS Organizations, poi Permission Boundary, poi Session Policy.
+
+```bash
+# Simulare la policy dell'utente con contesto completo
+aws iam simulate-principal-policy \
+    --policy-source-arn arn:aws:iam::123456789012:user/alice \
+    --action-names s3:GetObject \
+    --resource-arns arn:aws:s3:::my-bucket/file.txt
+
+# Controllare i Permission Boundaries applicati
+aws iam get-user --user-name alice --query 'User.PermissionsBoundary'
+
+# Verificare gli SCP sull'account
+aws organizations list-policies-for-target \
+    --target-id <account-id> \
+    --filter SERVICE_CONTROL_POLICY
+```
+
+---
+
+### Scenario 2 — Condition non valutata come attesa (StringLike con wildcard)
+
+**Sintomo:** La policy usa `StringLike` con wildcard ma la Condition non si comporta come previsto — permettendo accessi non voluti o bloccando accessi legittimi.
+
+**Causa:** Errori comuni: uso di `StringEquals` invece di `StringLike` quando si intende usare wildcard (`*`, `?`); wildcard posizionata nel posto sbagliato nel pattern; case sensitivity (le Condition key di servizio come `s3:prefix` sono case-sensitive).
+
+**Soluzione:** Verificare l'operatore usato e testare con IAM Policy Simulator fornendo valori espliciti.
+
+```bash
+# Test con contesto: verifica che la Condition s3:prefix funzioni
+aws iam simulate-principal-policy \
+    --policy-source-arn arn:aws:iam::123456789012:role/DevRole \
+    --action-names s3:GetObject \
+    --resource-arns "arn:aws:s3:::my-bucket/dev/file.txt" \
+    --context-entries '[{
+        "ContextKeyName": "s3:prefix",
+        "ContextKeyValues": ["dev/file.txt"],
+        "ContextKeyType": "string"
+    }]'
+```
+
+---
+
+### Scenario 3 — STS AssumeRole fallisce con `AccessDenied`
+
+**Sintomo:** `aws sts assume-role` restituisce `AccessDenied` o `An error occurred (AccessDenied) when calling the AssumeRole operation`.
+
+**Causa possibile A:** La Trust Policy del role non include il principal che tenta l'assume.
+**Causa possibile B:** Manca `sts:AssumeRole` nell'identity policy del principal.
+**Causa possibile C:** L'`external-id` richiesto dalla Trust Policy non viene passato (comune in setup cross-account con third party).
+
+**Soluzione:** Verificare la Trust Policy del role target e la policy del principal chiamante.
+
+```bash
+# Verificare la Trust Policy del role
+aws iam get-role --role-name TargetRole \
+    --query 'Role.AssumeRolePolicyDocument'
+
+# Verificare chi sta chiamando (utile per debug di identità)
+aws sts get-caller-identity
+
+# Richiesta con external-id (se richiesto dalla Trust Policy)
+aws sts assume-role \
+    --role-arn arn:aws:iam::TARGET:role/TargetRole \
+    --role-session-name debug-session \
+    --external-id "expected-external-id"
+```
+
+---
+
+### Scenario 4 — GitHub Actions OIDC: `Could not assume role with OIDC`
+
+**Sintomo:** Il workflow GitHub Actions fallisce con errore OIDC durante `aws-actions/configure-aws-credentials`.
+
+**Causa possibile A:** La Trust Policy non ha la Condition corretta su `sub` (es. branch sbagliato, repo sbagliato, o pattern `StringLike` troppo restrittivo).
+**Causa possibile B:** Il workflow manca del permesso `id-token: write`.
+**Causa possibile C:** Il thumbprint dell'OIDC provider è scaduto o non corrisponde.
+
+**Soluzione:** Verificare la Trust Policy e i log del workflow. Il claim `sub` ha il formato `repo:<owner>/<repo>:ref:refs/heads/<branch>`.
+
+```bash
+# Verificare la Trust Policy del role GitHub Actions
+aws iam get-role --role-name GitHubActionsRole \
+    --query 'Role.AssumeRolePolicyDocument'
+
+# Verificare che l'OIDC provider esista
+aws iam list-open-id-connect-providers
+
+# Aggiornare thumbprint OIDC provider se scaduto
+aws iam update-open-id-connect-provider-thumbprint \
+    --open-id-connect-provider-arn arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com \
+    --thumbprint-list "6938fd4d98bab03faadb97b34396831e3780aea1"
+```
+
+---
+
+## Relazioni
+
+??? info "IAM — Fondamentali"
+    Users, Groups, Roles e policy base. Prerequisito per questo documento.
+
+    **Approfondimento completo →** [IAM Index](../iam/_index.md)
+
+??? info "AWS Organizations & SCP"
+    Le Service Control Policy (SCP) si posizionano sopra le identity-based policy nell'evaluation logic e possono bloccare anche gli admin dell'account.
+
+    **Approfondimento completo →** [Organizations](../iam/organizations.md)
+
+??? info "Compliance & Audit"
+    AWS Config e CloudTrail per verificare che le policy IAM rispettino i requisiti di compliance e per auditare le chiamate STS.
+
+    **Approfondimento completo →** [Compliance & Audit](../security/compliance-audit.md)
 
 ---
 

@@ -9,7 +9,7 @@ related: [ci-cd/jenkins/pipeline-fundamentals, ci-cd/jenkins/enterprise-patterns
 official_docs: https://www.jenkins.io/doc/book/pipeline/shared-libraries/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # Jenkins Shared Libraries
@@ -583,6 +583,96 @@ test {
 | **Usare `@Field` per costanti di modulo** | Evita ripetizioni nel codice della library |
 | **Non esporre dettagli infrastruttura in `vars/`** | L'astrazione nasconde dove il deploy avviene — i team dichiarano l'intenzione |
 | **Platform team review per ogni merge** | La library è infrastruttura condivisa — ogni cambiamento impatta tutti i team |
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — `No such DSL method` o step non trovato
+
+**Sintomo:** La pipeline fallisce con `java.lang.NoSuchMethodError` o `No such DSL method 'myStep' found among steps`.
+
+**Causa:** Il file in `vars/` non è stato caricato correttamente, oppure la `@Library` declaration è mancante o punta a una versione/branch che non contiene lo step.
+
+**Soluzione:** Verificare che la library sia dichiarata nel Jenkinsfile e che il branch/tag esista nel repository remoto. Controllare che il nome file in `vars/` corrisponda esattamente al nome dello step chiamato (case-sensitive).
+
+```groovy
+// Verifica la dichiarazione — deve essere la prima riga del Jenkinsfile
+@Library('company-pipeline-lib@v2.3.1') _
+
+// Verifica che il tag esista nel repo della library
+// (da terminale sul repo della library)
+git tag -l
+git ls-remote --tags origin
+```
+
+---
+
+### Scenario 2 — `NotSerializableException` durante l'esecuzione
+
+**Sintomo:** La pipeline fallisce con `java.io.NotSerializableException: com.company.jenkins.SomeClass` o su oggetti Groovy non serializzabili.
+
+**Causa:** Le pipeline Jenkins sono CPS-transformed (Continuation Passing Style) e richiedono che tutti gli oggetti persistano tra suspension point. Le classi in `src/` che non implementano `Serializable` causano questo errore.
+
+**Soluzione:** Assicurarsi che tutte le classi in `src/` implementino `Serializable`. Per oggetti non serializzabili (come connessioni HTTP), usare `@NonCPS` o wrappare dentro `script { }` con scope limitato.
+
+```groovy
+// CORRETTO — src/com/company/jenkins/MyHelper.groovy
+class MyHelper implements Serializable {
+    // ...
+}
+
+// Per metodi che usano oggetti non serializzabili
+@NonCPS
+def parseJson(String text) {
+    return new groovy.json.JsonSlurperClassic().parseText(text)
+}
+```
+
+---
+
+### Scenario 3 — Modifiche alla library non visibili nelle pipeline
+
+**Sintomo:** Dopo aver fatto un commit sulla library, le pipeline continuano a usare il vecchio codice.
+
+**Causa:** Jenkins cachea le Shared Libraries. Se la pipeline usa un branch (es. `@Library('lib@main')`), Jenkins non aggiorna automaticamente la cache ad ogni build.
+
+**Soluzione:** Forzare il refresh della cache dalla UI di Jenkins, oppure usare tag SemVer in produzione (i tag non vengono cachati allo stesso modo). In sviluppo, abilitare il fetch automatico.
+
+```bash
+# Opzione 1: Forza il refresh dalla UI Jenkins
+# Manage Jenkins → Global Tool Configuration → Shared Libraries → "Clear cache"
+
+# Opzione 2: Configura polling SCM nella library (JCasC)
+# Aggiungere nella config della library:
+#   includeInChangesets: true
+
+# Opzione 3: Usare tag SemVer — ogni tag è univoco, nessun caching problem
+git tag v2.4.0
+git push origin v2.4.0
+# Nel Jenkinsfile: @Library('lib@v2.4.0') _
+```
+
+---
+
+### Scenario 4 — `library resource not found` con `libraryResource()`
+
+**Sintomo:** La pipeline fallisce con `No library resource found with name: com/company/jenkins/template.yaml`.
+
+**Causa:** Il percorso passato a `libraryResource()` non corrisponde alla struttura reale della cartella `resources/`, oppure il file non è stato committato.
+
+**Soluzione:** Verificare che il path sia relativo alla cartella `resources/` (non includere `resources/` nel path). Controllare maiuscole/minuscole e che il file sia presente nel branch/tag usato dalla pipeline.
+
+```groovy
+// ERRATO — include il prefisso "resources/"
+def tpl = libraryResource('resources/com/company/jenkins/template.yaml')
+
+// CORRETTO — path relativo da dentro resources/
+def tpl = libraryResource('com/company/jenkins/template.yaml')
+
+// Debug: verificare struttura del repo library
+// git ls-tree -r HEAD --name-only | grep resources
+```
 
 ---
 

@@ -9,7 +9,7 @@ related: [security/supply-chain/sbom-cosign, security/supply-chain/admission-con
 official_docs: https://aquasecurity.github.io/trivy/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Container Image Scanning
@@ -275,6 +275,123 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 - **Bloccare solo CRITICAL con fix disponibile**: bloccare CVE senza fix costringe a restare su versioni vecchie. `--ignore-unfixed` + soglia CRITICAL è il bilanciamento corretto
 - **Base image da organizzazione**: gestire un catalogo di base image approvate e aggiornate — ogni team non deve scegliere la propria
 - **Trivy Operator per drift detection**: un'immagine sicura oggi può avere nuove CVE domani — il continual scanning nel cluster rileva il drift senza re-deploy
+
+## Troubleshooting
+
+### Scenario 1 — Trivy fallisce con exit code 1 in CI ma le CVE non hanno fix
+
+**Sintomo:** La pipeline si blocca su `trivy image` con exit code 1, ma esaminando i risultati tutte le CVE segnalate non hanno una versione fixed disponibile.
+
+**Causa:** Il flag `--ignore-unfixed` non è impostato. Trivy blocca anche le CVE senza patch disponibile, rendendo impossibile il deploy senza una base image aggiornata.
+
+**Soluzione:** Aggiungere `--ignore-unfixed` al comando (o `ignore-unfixed: true` in `trivy.yaml`). Le CVE senza fix sono ancora visibili in output ma non bloccano la pipeline.
+
+```bash
+# Corretto: ignora CVE senza fix, blocca solo quelle risolvibili
+trivy image \
+  --exit-code 1 \
+  --severity CRITICAL,HIGH \
+  --ignore-unfixed \
+  myapp:latest
+
+# Verifica quali CVE hanno fix e quali no
+trivy image --format json myapp:latest | \
+  jq '[.Results[].Vulnerabilities[] | select(.FixedVersion != null and .FixedVersion != "")]'
+```
+
+---
+
+### Scenario 2 — Trivy Operator non genera VulnerabilityReport per alcuni namespace
+
+**Sintomo:** `kubectl get vulnerabilityreports -A` non mostra report per uno o più namespace, anche se ci sono Pod in esecuzione.
+
+**Causa:** Il Trivy Operator usa un `nodeCollector` che richiede accesso al nodo. Se il namespace è escluso dalla configurazione o se il ServiceAccount del Operator non ha i permessi RBAC corretti, i report non vengono generati.
+
+**Soluzione:** Verificare la configurazione del namespace e i log del Trivy Operator.
+
+```bash
+# Controlla i log del Trivy Operator
+kubectl logs -n trivy-system -l app.kubernetes.io/name=trivy-operator --tail=100
+
+# Verifica se il namespace è nella excludeNamespaces list
+kubectl get configmap trivy-operator -n trivy-system -o yaml | grep -A5 excludeNamespaces
+
+# Se il namespace è escluso, rimuoverlo dalla ConfigMap
+kubectl edit configmap trivy-operator -n trivy-system
+# Rimuovere il namespace da: excludeNamespaces
+
+# Forzare il re-scan di un namespace
+kubectl delete vulnerabilityreports -n my-namespace --all
+```
+
+---
+
+### Scenario 3 — Troppi falsi positivi bloccano la pipeline
+
+**Sintomo:** La pipeline viene bloccata da decine di CVE HIGH/CRITICAL ma molte sono non applicabili al contesto (es. vulnerabilità in codice non raggiungibile, componenti non usati).
+
+**Causa:** Manca un file `.trivyignore` con le eccezioni documentate, o la policy è troppo rigida senza gestione dei casi limite.
+
+**Soluzione:** Creare un file `.trivyignore` con le eccezioni motivate e con scadenza. Ogni eccezione deve avere un commento esplicativo.
+
+```bash
+# Crea .trivyignore nella root del progetto
+cat > .trivyignore << 'EOF'
+# CVE-2023-44487 (HTTP/2 Rapid Reset) - libnghttp2 non usata direttamente
+# Fix: upgrade a libnghttp2 1.57+ non disponibile nella base image corrente
+# Workaround: HTTP/2 disabilitato sul load balancer
+# Review: 2026-06-01
+CVE-2023-44487
+
+# CVE-2023-4156 - glibc, non esposto a input non fidato
+# Applicabile solo a programmi setuid, non usati in questo container
+# Review: 2026-04-15
+CVE-2023-4156 exp:2026-04-15
+EOF
+
+# Verifica che le eccezioni siano applicate
+trivy image --ignorefile .trivyignore --severity CRITICAL,HIGH myapp:latest
+```
+
+---
+
+### Scenario 4 — Lo scan ECR restituisce risultati vuoti o incompleti
+
+**Sintomo:** `aws ecr describe-image-scan-findings` restituisce `findingSeverityCounts` vuoto o con soli `INFORMATIONAL`, anche per immagini con dipendenze note vulnerabili.
+
+**Causa 1:** Lo scan non è ancora completato (ECR Enhanced Scanning è asincrono). **Causa 2:** La configurazione dello scan è impostata su `BASIC` invece di `ENHANCED` — il basic scan usa solo il database OS di Clair e non scansiona le dipendenze applicative (npm, pip, etc.).
+
+**Soluzione:** Attendere il completamento dello scan e verificare il tipo di scan abilitato.
+
+```bash
+# Verifica lo stato dello scan
+aws ecr describe-image-scan-findings \
+  --repository-name my-app \
+  --image-id imageTag=latest \
+  --query 'imageScanStatus'
+# Output atteso: {"status": "COMPLETE"}
+# Se IN_PROGRESS, attendere e riprovare
+
+# Verifica il tipo di scan configurato
+aws ecr get-registry-scanning-configuration \
+  --query 'scanningConfiguration.scanType'
+# Se restituisce "BASIC" invece di "ENHANCED":
+
+# Abilita Enhanced Scanning (usa AWS Inspector)
+aws ecr put-registry-scanning-configuration \
+  --scan-type ENHANCED \
+  --rules '[{
+    "repositoryFilters": [{"filter": "*", "filterType": "WILDCARD"}],
+    "scanFrequency": "CONTINUOUS_SCAN"
+  }]'
+
+# Trigger manuale scan su un'immagine specifica
+aws ecr start-image-scan \
+  --repository-name my-app \
+  --image-id imageTag=latest
+```
+
+---
 
 ## Riferimenti
 

@@ -9,7 +9,7 @@ related: [containers/kubernetes/architettura, containers/openshift/operators-olm
 official_docs: https://kubernetes.io/docs/concepts/extend-kubernetes/operator/
 status: complete
 difficulty: expert
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Operators e CRD
@@ -442,7 +442,111 @@ PATTERN ESSENZIALI:
 
 ---
 
-## Riferimenti
+## Troubleshooting
+
+### Scenario 1 — CRD non registrata / "no kind is registered"
+
+**Sintomo:** `kubectl apply -f cr.yaml` ritorna `error: no kind "WebApplication" is registered for version "apps.company.com/v1"` oppure il controller logga `no kind is registered for the type`.
+
+**Causa:** La CRD non è stata installata nel cluster prima del CR, oppure il controller è stato avviato prima che la CRD fosse established.
+
+**Soluzione:** Installare prima la CRD e attendere che sia in stato `Established`.
+
+```bash
+# Installa CRD
+kubectl apply -f config/crd/bases/
+
+# Verifica che sia Established
+kubectl wait crd/webapplications.apps.company.com \
+    --for=condition=Established --timeout=30s
+
+# Controlla lo stato dettagliato
+kubectl get crd webapplications.apps.company.com -o jsonpath='{.status.conditions}'
+```
+
+---
+
+### Scenario 2 — Reconcile loop in crash continuo / CrashLoopBackOff del controller
+
+**Sintomo:** Il pod dell'operator è in `CrashLoopBackOff`. I log mostrano panic o errori di connessione all'API server al bootstrap.
+
+**Causa:** Permessi RBAC insufficienti, certificati webhook non validi, o impossibilità di connettersi all'API server.
+
+**Soluzione:**
+
+```bash
+# Verifica i log del controller
+kubectl logs -n webapp-operator-system \
+    deploy/webapp-operator-controller-manager \
+    --previous
+
+# Verifica i ClusterRole e i binding
+kubectl get clusterrolebinding -l app=webapp-operator
+kubectl auth can-i list webapplications \
+    --as=system:serviceaccount:webapp-operator-system:webapp-operator-controller-manager
+
+# Se usa webhook: verifica il Secret del certificato TLS
+kubectl get secret -n webapp-operator-system webhook-server-cert
+# Rigenera con cert-manager se scaduto
+kubectl delete secret -n webapp-operator-system webhook-server-cert
+```
+
+---
+
+### Scenario 3 — CR bloccata in Terminating (finalizer non rimosso)
+
+**Sintomo:** `kubectl delete` di una CR rimane bloccato. `kubectl get <cr>` mostra `Terminating` da minuti/ore.
+
+**Causa:** Il controller non riesce a completare il cleanup esterno (es. risorsa cloud non raggiungibile) e non rimuove il finalizer. Oppure il controller stesso è down.
+
+**Soluzione:**
+
+```bash
+# Verifica il finalizer presente
+kubectl get webapp production-db -o jsonpath='{.metadata.finalizers}'
+
+# Opzione 1: correggi il problema a monte e lascia che il controller rimuova il finalizer
+kubectl logs -n webapp-operator-system deploy/webapp-operator-controller-manager
+
+# Opzione 2 (emergenza): rimuovi il finalizer manualmente
+kubectl patch webapp production-db \
+    -p '{"metadata":{"finalizers":[]}}' \
+    --type=merge
+
+# Attenzione: le risorse esterne non verranno pulite automaticamente
+```
+
+---
+
+### Scenario 4 — Webhook rifiuta oggetti validi / timeout webhook
+
+**Sintomo:** `kubectl apply` ritorna `Error from server (InternalError): Internal error occurred: failed calling webhook` oppure `context deadline exceeded`.
+
+**Causa 1 — Timeout:** Il pod webhook non è raggiungibile (crashato, non schedulato) o risponde lentamente.
+**Causa 2 — failurePolicy: Fail:** Il webhook è configurato con `failurePolicy: Fail` e il service è irraggiungibile.
+
+**Soluzione:**
+
+```bash
+# Verifica stato del pod webhook
+kubectl get pods -n webapp-operator-system
+kubectl describe pod -n webapp-operator-system -l control-plane=controller-manager
+
+# Verifica il ValidatingWebhookConfiguration
+kubectl get validatingwebhookconfigurations webapp-validator.company.com -o yaml | \
+    grep -A3 failurePolicy
+
+# Bypass temporaneo di emergenza (solo in ambienti non-prod):
+kubectl patch validatingwebhookconfiguration webapp-validator.company.com \
+    --type=json \
+    -p='[{"op":"replace","path":"/webhooks/0/failurePolicy","value":"Ignore"}]'
+
+# Verifica connettività dal cluster al service webhook
+kubectl run debug --image=curlimages/curl --restart=Never -- \
+    curl -k https://webapp-operator-webhook-service.webapp-operator-system.svc/healthz
+```
+
+---
 
 - [Kubernetes Operators](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/)
 - [Kubebuilder Book](https://book.kubebuilder.io/)

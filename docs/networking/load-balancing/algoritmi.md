@@ -9,7 +9,7 @@ related: [networking/load-balancing/layer4-vs-layer7, networking/load-balancing/
 official_docs: https://nginx.org/en/docs/http/ngx_http_upstream_module.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Algoritmi di Load Balancing
@@ -200,12 +200,104 @@ Il LB inserisce un cookie nella risposta con l'ID del server. Le richieste succe
 
 ## Troubleshooting
 
-| Sintomo | Causa Probabile | Soluzione |
-|---------|-----------------|-----------|
-| Distribuzione sbilanciata con Round Robin | Connessioni persistenti (keep-alive) | Passare a Least Connections |
-| Stesso backend sempre sovraccarico con IP Hash | Molti client dietro NAT stesso IP | Passare a sticky cookie |
-| Client perde sessione dopo scaling | Session affinity non configurata | Implementare sessioni distribuite (Redis) o sticky cookie |
-| Canary riceve troppo traffico | Weight non proporzionale | Verificare calcolo: `weight/(sum of weights)` |
+### Scenario 1 — Distribuzione sbilanciata con Round Robin
+
+**Sintomo:** Un backend riceve molte più connessioni degli altri nonostante Round Robin sia configurato; il carico CPU/memoria è fortemente asimmetrico.
+
+**Causa:** Round Robin distribuisce le *nuove connessioni* equamente, ma le connessioni HTTP keep-alive rimangono aperte. Se i client riutilizzano le connessioni, alcune finiscono concentrate su pochi backend. Anche richieste con latenza molto diversa (alcune istantanee, altre lente) possono saturare un singolo server.
+
+**Soluzione:** Passare a Least Connections che bilancia sulle connessioni *attive* anziché sul conteggio delle nuove.
+
+```nginx
+upstream backend {
+    least_conn;
+    server 10.0.0.1:8080;
+    server 10.0.0.2:8080;
+    server 10.0.0.3:8080;
+}
+```
+
+```bash
+# Verificare distribuzione connessioni attive su Nginx
+nginx -T | grep -A5 "upstream"
+
+# HAProxy: controllare distribuzione tramite stats
+echo "show stat" | socat stdio /var/run/haproxy/admin.sock | cut -d',' -f1,2,48
+```
+
+### Scenario 2 — Backend sovraccarico con IP Hash (traffico NAT)
+
+**Sintomo:** Un singolo backend riceve il 70-90% del traffico; gli altri sono quasi idle. L'algoritmo è `ip_hash`.
+
+**Causa:** I client si trovano dietro un NAT aziendale o un proxy condiviso — decine/centinaia di utenti appaiono come un singolo IP pubblico. Hash di quell'IP punta sempre allo stesso backend.
+
+**Soluzione:** Sostituire IP Hash con sticky session basata su cookie, che distribuisce i client individualmente anche se provengono dallo stesso IP.
+
+```
+# HAProxy — Cookie sticky session
+backend app_pool
+    balance roundrobin
+    cookie SERVERID insert indirect nocache httponly secure
+    server s1 10.0.0.1:8080 check cookie s1
+    server s2 10.0.0.2:8080 check cookie s2
+    server s3 10.0.0.3:8080 check cookie s3
+```
+
+```bash
+# Diagnosticare distribuzione IP sorgente nei log Nginx
+awk '{print $1}' /var/log/nginx/access.log | sort | uniq -c | sort -rn | head -20
+```
+
+### Scenario 3 — Client perde la sessione dopo scale-out
+
+**Sintomo:** Dopo l'aggiunta di nuovi backend (o un riavvio rolling), alcuni utenti vengono disconnessi o perdono il carrello/login.
+
+**Causa:** La sessione HTTP è salvata in memoria locale del backend originale. Quando il load balancer manda la richiesta successiva a un server diverso (es. dopo scale-out che cambia il modulo di routing), la sessione non esiste.
+
+**Soluzione:** Spostare le sessioni su storage condiviso (Redis), oppure configurare session affinity per garantire che ogni client torni sempre sullo stesso backend.
+
+```bash
+# Verificare che il backend Redis sia raggiungibile
+redis-cli -h redis.internal ping
+
+# Controllare connessioni attive a Redis dall'applicazione
+ss -tn | grep :6379
+```
+
+```nginx
+# Nginx: abilitare sticky cookie (Nginx Plus)
+upstream backend {
+    sticky cookie srv_id expires=1h httponly secure;
+    server 10.0.0.1:8080;
+    server 10.0.0.2:8080;
+}
+```
+
+### Scenario 4 — Canary riceve traffico superiore al previsto
+
+**Sintomo:** Il backend canary (nuova versione) riceve il 20-30% del traffico invece dell'1-5% configurato.
+
+**Causa:** Il peso (weight) non è proporzionale alla somma totale dei pesi. Errore comune: `weight=1` su 3 server totali equivale a 33%, non all'1%.
+
+**Soluzione:** Calcolare i pesi in modo che la somma rifletta la percentuale desiderata. Per il 2% su 3 server: un server con `weight=98` e uno con `weight=2`.
+
+```nginx
+upstream backend {
+    # Canary al ~2%: 49+49+2 = 100 (proporzione diretta)
+    server 10.0.0.1:8080 weight=49;  # Versione stabile
+    server 10.0.0.2:8080 weight=49;  # Versione stabile
+    server 10.0.0.3:8080 weight=2;   # Canary ~2%
+}
+```
+
+```bash
+# Verificare distribuzione reale analizzando i log
+grep "upstream_addr" /var/log/nginx/access.log \
+  | awk '{print $NF}' | sort | uniq -c | sort -rn
+
+# Formula: percentuale canary = weight_canary / sum(all_weights)
+python3 -c "print(f'Canary: {2/(49+49+2)*100:.1f}%')"
+```
 
 ## Relazioni
 

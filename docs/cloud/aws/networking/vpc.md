@@ -9,7 +9,7 @@ related: [cloud/aws/networking/vpc-avanzato, cloud/aws/security/network-security
 official_docs: https://docs.aws.amazon.com/vpc/latest/userguide/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-09
+last_updated: 2026-03-28
 ---
 
 # VPC — Virtual Private Cloud
@@ -445,6 +445,132 @@ WHERE action = 'REJECT'
 GROUP BY srcaddr, dstaddr
 ORDER BY total_bytes DESC
 LIMIT 20;
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Istanza in subnet pubblica non raggiungibile da Internet
+
+**Sintomo:** Timeout su SSH o HTTP verso un'istanza EC2 in subnet pubblica; ping non risponde.
+
+**Causa:** Mancanza di uno o più dei seguenti elementi: Public IP / EIP assegnato, route `0.0.0.0/0 → IGW` nella route table, regola inbound nel Security Group, IGW non allegato al VPC.
+
+**Soluzione:** Verificare sistematicamente ogni livello:
+```bash
+# 1. Verificare che l'istanza abbia un Public IP
+aws ec2 describe-instances \
+    --instance-ids i-xxxx \
+    --query 'Reservations[0].Instances[0].PublicIpAddress'
+
+# 2. Verificare che la subnet abbia route verso IGW
+aws ec2 describe-route-tables \
+    --filters "Name=association.subnet-id,Values=subnet-xxxx" \
+    --query 'RouteTables[0].Routes'
+
+# 3. Verificare che l'IGW sia attached al VPC
+aws ec2 describe-internet-gateways \
+    --filters "Name=attachment.vpc-id,Values=vpc-xxxx" \
+    --query 'InternetGateways[0].Attachments'
+
+# 4. Verificare regole SG inbound
+aws ec2 describe-security-groups \
+    --group-ids sg-xxxx \
+    --query 'SecurityGroups[0].IpPermissions'
+```
+
+---
+
+### Scenario 2 — Istanza in subnet privata non ha accesso a Internet (aggiornamenti, API esterne)
+
+**Sintomo:** `curl https://...` da un'istanza privata restituisce timeout; `yum update` o `apt-get` falliscono.
+
+**Causa:** NAT Gateway assente, non raggiungibile, o route table privata non punta al NAT GW. Possibile anche: NAT GW in stato `failed` o nella stessa subnet privata invece che pubblica.
+
+**Soluzione:**
+```bash
+# 1. Verificare lo stato del NAT Gateway
+aws ec2 describe-nat-gateways \
+    --filter "Name=vpc-id,Values=vpc-xxxx" \
+    --query 'NatGateways[*].{ID:NatGatewayId,State:State,Subnet:SubnetId}'
+
+# 2. Verificare che la route table privata punti al NAT GW
+aws ec2 describe-route-tables \
+    --filters "Name=association.subnet-id,Values=subnet-private-xxxx" \
+    --query 'RouteTables[0].Routes[?DestinationCidrBlock==`0.0.0.0/0`]'
+
+# 3. Se il NAT GW è in stato failed, ricrearlo
+# (NAT GW è AZ-specific: verificare che sia nella stessa AZ della subnet privata)
+aws ec2 describe-nat-gateways \
+    --nat-gateway-ids nat-xxxx \
+    --query 'NatGateways[0].{State:State,FailureMessage:FailureMessage}'
+```
+
+---
+
+### Scenario 3 — Connessione tra due risorse nello stesso VPC bloccata
+
+**Sintomo:** Un'istanza app non riesce a connettersi al database RDS sulla porta 5432; la connessione va in timeout nonostante siano nello stesso VPC.
+
+**Causa:** Security Group del database non ha una regola inbound che permette traffico dalla sorgente corretta, oppure la regola referenzia un CIDR errato invece del Security Group dell'app.
+
+**Soluzione:**
+```bash
+# 1. Identificare il SG associato all'RDS
+aws rds describe-db-instances \
+    --db-instance-identifier mydb \
+    --query 'DBInstances[0].VpcSecurityGroups'
+
+# 2. Verificare le regole inbound del SG del DB
+aws ec2 describe-security-groups \
+    --group-ids sg-db-xxxx \
+    --query 'SecurityGroups[0].IpPermissions'
+
+# 3. Aggiungere regola mancante (source = SG dell'app, non CIDR)
+aws ec2 authorize-security-group-ingress \
+    --group-id sg-db-xxxx \
+    --protocol tcp \
+    --port 5432 \
+    --source-group sg-app-xxxx
+
+# 4. Usare VPC Flow Logs per confermare il blocco
+# Cercare REJECT con dstport=5432 nei flow logs
+```
+
+---
+
+### Scenario 4 — Traffico bloccato misteriosamente nonostante SG permissivo (NACL coinvolta)
+
+**Sintomo:** I Security Group sembrano corretti e permettono il traffico, ma le connessioni vengono comunque bloccate. I Flow Logs mostrano `REJECT`.
+
+**Causa:** Una NACL sulla subnet ha una regola Deny che precede numericamente la regola Allow, oppure mancano le regole per le **porte efimere** (1024-65535) nel traffico di risposta (le NACL sono stateless).
+
+**Soluzione:**
+```bash
+# 1. Verificare le NACL associate alle subnet coinvolte
+aws ec2 describe-network-acls \
+    --filters "Name=association.subnet-id,Values=subnet-xxxx" \
+    --query 'NetworkAcls[0].{Entries:Entries,Associations:Associations}'
+
+# 2. Le regole NACL vengono applicate in ordine numerico crescente.
+# Una regola DENY con numero basso (es. 50) sovrascrive una ALLOW con numero alto (es. 100).
+# Verificare l'ordine e aggiungere Allow per porte efimere se mancante:
+aws ec2 create-network-acl-entry \
+    --network-acl-id acl-xxxx \
+    --rule-number 900 \
+    --protocol 6 \
+    --port-range From=1024,To=65535 \
+    --cidr-block 0.0.0.0/0 \
+    --ingress \
+    --rule-action allow
+
+# 3. Analizzare i Flow Logs per identificare esattamente quale traffico viene rejected
+aws logs start-query \
+    --log-group-name /aws/vpc/flowlogs \
+    --start-time $(date -d '1 hour ago' +%s) \
+    --end-time $(date +%s) \
+    --query-string 'fields @timestamp, srcAddr, dstAddr, srcPort, dstPort, action | filter action="REJECT" | sort @timestamp desc | limit 50'
 ```
 
 ---

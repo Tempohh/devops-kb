@@ -9,7 +9,7 @@ related: [cloud/aws/networking/vpc, cloud/aws/networking/route53, cloud/aws/netw
 official_docs: https://aws.amazon.com/about-aws/global-infrastructure/
 status: complete
 difficulty: beginner
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # AWS Global Infrastructure
@@ -194,6 +194,94 @@ Request ──────────→ POP ────→ Fiber ────
 
 !!! warning "Esame CLF-C02"
     Ricordare: IAM è **globale** (non ha Region). Route 53 e CloudFront sono **globali**. S3 bucket ha nome globale univoco ma i dati risiedono in una specifica Region. EC2 è **regionale** (si sceglie AZ/Subnet al lancio).
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Servizio non disponibile nella Region scelta
+
+**Sintomo:** `InvalidClientTokenId` o errore "service not available in this region" quando si tenta di creare una risorsa.
+
+**Causa:** Non tutti i servizi AWS sono disponibili in tutte le Region. Le Region più recenti (es. `eu-south-1` Milano) hanno copertura parziale.
+
+**Soluzione:** Verificare la disponibilità del servizio nella Region target prima del deploy.
+
+```bash
+# Verificare i servizi disponibili in una Region specifica
+aws ssm get-parameters-by-path \
+    --path /aws/service/global-infrastructure/regions/eu-south-1/services \
+    --query 'Parameters[*].Name' --output text
+
+# In alternativa, controllare via CLI quale Region supporta un servizio
+aws ec2 describe-regions \
+    --filters "Name=opt-in-status,Values=opted-in,opt-in-not-required" \
+    --query 'Regions[*].RegionName' --output table
+```
+
+---
+
+### Scenario 2 — Latenza elevata tra servizi in AZ diverse
+
+**Sintomo:** Latenza inattesa tra istanze EC2 o tra un'EC2 e un RDS, nonostante entrambi siano nella stessa Region.
+
+**Causa:** I servizi sono in AZ diverse. La latenza inter-AZ è <10ms ma non è zero — per workload I/O intensivi può diventare rilevante. Oppure il mapping AZ (es. `eu-central-1a`) differisce tra account diversi.
+
+**Soluzione:** Verificare il placement effettivo delle risorse e consolidarle nella stessa AZ se necessario (attenzione: riduce la fault tolerance).
+
+```bash
+# Verificare in quale AZ si trovano le istanze EC2
+aws ec2 describe-instances \
+    --query 'Reservations[*].Instances[*].{ID:InstanceId,AZ:Placement.AvailabilityZone}' \
+    --output table
+
+# Verificare l'AZ di un'istanza RDS
+aws rds describe-db-instances \
+    --query 'DBInstances[*].{ID:DBInstanceIdentifier,AZ:AvailabilityZone,MultiAZ:MultiAZ}' \
+    --output table
+```
+
+---
+
+### Scenario 3 — Data residency violata: dati replicati fuori dalla Region
+
+**Sintomo:** Audit di compliance segnala dati in Region non autorizzate. Tipicamente S3 Cross-Region Replication o backup automatici configurati verso Region diverse.
+
+**Causa:** Feature di replication o backup cross-Region abilitate esplicitamente o per default in alcuni servizi (es. AWS Backup con vault policy, S3 CRR, RDS automated backups cross-region).
+
+**Soluzione:** Applicare SCP (Service Control Policy) a livello di AWS Organizations per bloccare azioni cross-Region non autorizzate.
+
+```bash
+# Verificare le regole di replication su un bucket S3
+aws s3api get-bucket-replication --bucket nome-bucket
+
+# Verificare le policy SCP applicate all'account
+aws organizations list-policies-for-target \
+    --target-id <account-id> \
+    --filter SERVICE_CONTROL_POLICY \
+    --query 'Policies[*].{Name:Name,Id:Id}' \
+    --output table
+```
+
+---
+
+### Scenario 4 — Outpost non raggiungibile: perdita di connettività con la Region parent
+
+**Sintomo:** Le risorse sull'Outpost diventano irraggiungibili o le API calls falliscono con timeout. Il management plane smette di rispondere.
+
+**Causa:** L'Outpost richiede connettività continua verso la Region parent tramite Service Link. Se la WAN o il Direct Connect si interrompe, il control plane perde contatto.
+
+**Soluzione:** Verificare lo stato del Service Link e della connettività di rete verso la Region parent. Le risorse già in esecuzione continuano a funzionare localmente, ma non è possibile gestirle tramite console/API.
+
+```bash
+# Verificare lo stato degli Outpost e del loro Service Link
+aws outposts list-outposts \
+    --query 'Outposts[*].{Name:Name,Id:OutpostId,SiteId:SiteId,LifeCycleStatus:LifeCycleStatus}' \
+    --output table
+
+# Verificare la connettività verso la Region parent (eseguire dall'Outpost)
+curl -I https://ec2.eu-central-1.amazonaws.com
+```
 
 ---
 

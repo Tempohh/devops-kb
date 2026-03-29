@@ -3,13 +3,13 @@ title: "Stack TCP/IP"
 slug: tcpip
 category: networking
 tags: [tcp-ip, networking, stack, internet, protocolli]
-search_keywords: [tcp/ip stack, internet protocol suite, tcp ip layers, network layer tcp/ip, transport layer tcp, application layer tcp/ip, ip datagram, rfc 1122]
+search_keywords: [tcp/ip stack, internet protocol suite, tcp ip layers, network layer tcp/ip, transport layer tcp, application layer tcp/ip, ip datagram, rfc 1122, three-way handshake, syn ack fin, udp connectionless, socket tcp, mtu maximum transmission unit, ttl time to live, icmp ping traceroute, protocollo internet]
 parent: networking/fondamentali
 related: [networking/fondamentali/modello-osi, networking/fondamentali/indirizzi-ip-subnetting]
 official_docs: https://www.ietf.org/
 status: complete
 difficulty: beginner
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Stack TCP/IP

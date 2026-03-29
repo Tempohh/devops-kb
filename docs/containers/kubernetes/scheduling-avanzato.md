@@ -9,7 +9,7 @@ related: [containers/kubernetes/workloads, containers/kubernetes/architettura]
 official_docs: https://kubernetes.io/docs/concepts/scheduling-eviction/
 status: complete
 difficulty: expert
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Scheduling Avanzato
@@ -509,6 +509,121 @@ kubectl get priorityclasses
 # NAME                          VALUE        GLOBAL-DEFAULT
 # system-cluster-critical       2000000000   false   ← kube-dns, coredns
 # system-node-critical          2000001000   false   ← kubelet, kube-proxy
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Pod bloccato in Pending: nodo non trovato dallo scheduler
+
+**Sintomo:** Il pod rimane in stato `Pending` per più di qualche secondo. `kubectl describe pod` mostra `0/N nodes are available`.
+
+**Causa:** Le resource requests del pod superano le risorse allocabili di tutti i nodi, oppure node affinity/taints impediscono il placement.
+
+**Soluzione:** Ispezionare il messaggio dell'evento e verificare risorse disponibili sui nodi.
+
+```bash
+kubectl describe pod <pod-name> -n <namespace>
+# Cercare: "Events:" in fondo — il messaggio indica la causa esatta
+
+# Verifica risorse allocabili sui nodi
+kubectl describe nodes | grep -A 5 "Allocated resources"
+
+# Verifica risorse residue per nodo
+kubectl top nodes
+
+# Verifica se ci sono taint che bloccano il pod
+kubectl describe node <node-name> | grep -i taint
+```
+
+---
+
+### Scenario 2 — HPA non scala: replica count invariato nonostante carico elevato
+
+**Sintomo:** Il deployment è sotto carico ma l'HPA non aumenta le repliche. `kubectl describe hpa` mostra `<unknown>` nelle metriche.
+
+**Causa:** Il metrics-server non è installato o non risponde, oppure i pod non hanno CPU requests definite (required per `Utilization` target).
+
+**Soluzione:** Verificare che metrics-server sia attivo e che i pod abbiano resource requests.
+
+```bash
+# Verifica stato HPA e metriche attuali
+kubectl describe hpa <hpa-name> -n <namespace>
+# Cercare: "Conditions:" e "Metrics:"
+
+# Verifica metrics-server
+kubectl get pods -n kube-system | grep metrics-server
+kubectl top pods -n <namespace>   # deve funzionare
+
+# Se metrics-server KO, reinstallarlo
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+# Verifica che i pod target abbiano resource requests
+kubectl get deployment <name> -o jsonpath='{.spec.template.spec.containers[*].resources}'
+```
+
+---
+
+### Scenario 3 — OOMKilled: container terminato per memory exceeded
+
+**Sintomo:** I pod si riavviano ciclicamente con `OOMKilled` come reason. `kubectl describe pod` mostra `Last State: Terminated, Reason: OOMKilled`.
+
+**Causa:** Il container ha superato il memory limit impostato. Il kernel termina il processo con SIGKILL.
+
+**Soluzione:** Aumentare il memory limit oppure identificare il memory leak tramite VPA recommendations.
+
+```bash
+# Verifica restart count e causa
+kubectl get pods -n <namespace>
+kubectl describe pod <pod-name> -n <namespace> | grep -A 3 "Last State"
+
+# Visualizza consumo memoria attuale
+kubectl top pods -n <namespace> --containers
+
+# Usa VPA in mode Off per ottenere recommendations senza impatto
+kubectl apply -f - <<EOF
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: debug-vpa
+  namespace: <namespace>
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: <deployment-name>
+  updatePolicy:
+    updateMode: "Off"
+EOF
+kubectl describe vpa debug-vpa -n <namespace>
+```
+
+---
+
+### Scenario 4 — Pod evicted: workload rimosso dal nodo per pressione risorse
+
+**Sintomo:** Pod in stato `Evicted`. Il cluster ha node pressure (DiskPressure, MemoryPressure).
+
+**Causa:** Il nodo ha esaurito le risorse (disco o memoria). Il kubelet evicts i pod con QoS class `BestEffort` prima, poi `Burstable`, poi `Guaranteed`.
+
+**Soluzione:** Assegnare resource requests/limits corretti per garantire QoS `Guaranteed`, e monitorare la pressione sui nodi.
+
+```bash
+# Verifica pod evicted
+kubectl get pods -n <namespace> --field-selector=status.phase=Failed | grep Evicted
+
+# Pulisci pod evicted (non hanno restart automatico)
+kubectl delete pods --field-selector=status.phase=Failed -n <namespace>
+
+# Verifica condizioni del nodo (pressione risorse)
+kubectl describe node <node-name> | grep -A 10 "Conditions:"
+
+# Verifica QoS class assegnata ai pod (Guaranteed richiede requests==limits)
+kubectl get pod <pod-name> -o jsonpath='{.status.qosClass}'
+
+# Imposta PriorityClass per proteggere i workload critici dall'eviction
+kubectl get priorityclasses
 ```
 
 ---

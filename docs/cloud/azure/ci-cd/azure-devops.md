@@ -9,7 +9,7 @@ related: [cloud/azure/ci-cd/arm-bicep, cloud/azure/identita/rbac-managed-identit
 official_docs: https://learn.microsoft.com/azure/devops/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-28
 ---
 
 # Azure DevOps
@@ -389,6 +389,117 @@ az artifacts universal publish \
 pip install keyring artifacts-keyring
 pip config set global.index-url \
     https://pkgs.dev.azure.com/myorg/ecommerce-platform/_packaging/myapp-packages/pypi/simple/
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Pipeline bloccata su "Waiting for agent"
+
+**Sintomo:** Il job rimane indefinitamente in stato `Waiting for agent` senza avviarsi.
+
+**Causa:** Nessun agente disponibile nel pool (Microsoft-hosted: limite parallel jobs raggiunto; self-hosted: agente offline o non registrato).
+
+**Soluzione:**
+- Per Microsoft-hosted: verificare il limite di parallel jobs nell'organizzazione e attendere o acquistare job aggiuntivi.
+- Per self-hosted: verificare che l'agente sia online e nel pool corretto.
+
+```bash
+# Verificare stato agenti nel pool via Azure DevOps CLI
+az pipelines agent list \
+    --pool-id <POOL_ID> \
+    --organization https://dev.azure.com/myorg \
+    --output table
+
+# Riavviare il servizio agente su Linux
+sudo ./svc.sh status
+sudo ./svc.sh stop && sudo ./svc.sh start
+```
+
+---
+
+### Scenario 2 — Service Connection non autorizzata: "Could not find a linked service"
+
+**Sintomo:** Il pipeline fallisce con errore `Could not find a linked service` o `Service connection not authorized for this pipeline`.
+
+**Causa:** La Service Connection non è autorizzata per la pipeline specifica o il progetto. Può verificarsi dopo una migrazione o con Service Connection a scope limitato.
+
+**Soluzione:**
+1. Aprire **Project Settings → Service connections**.
+2. Selezionare la Service Connection → **Edit** → **Security**.
+3. Abilitare **Grant access permission to all pipelines** oppure aggiungere la pipeline specifica.
+
+```bash
+# Verificare le Service Connection disponibili
+az devops service-endpoint list \
+    --project ecommerce-platform \
+    --organization https://dev.azure.com/myorg \
+    --output table
+
+# Verificare autorizzazioni su una connection specifica
+az devops service-endpoint show \
+    --id <ENDPOINT_ID> \
+    --project ecommerce-platform \
+    --organization https://dev.azure.com/myorg \
+    --query "isReady"
+```
+
+---
+
+### Scenario 3 — Environment Approval Gate non compare / deployment non richiede approvazione
+
+**Sintomo:** Il deployment in production avviene senza richiedere l'approvazione configurata nel portal.
+
+**Causa:** Il job usa `job:` invece di `deployment:`, oppure il campo `environment` nel YAML non corrisponde esattamente al nome dell'Environment configurato nel portal (case-sensitive).
+
+**Soluzione:**
+- Assicurarsi che il job sia di tipo `deployment:` (non `job:`).
+- Verificare che il nome nell'`environment:` del YAML corrisponda esattamente all'Environment nel portal.
+
+```yaml
+# ERRATO — job normale non usa Environments con approval gates
+jobs:
+- job: Deploy
+  steps:
+  - script: echo "deploy"
+
+# CORRETTO — deployment job con environment
+jobs:
+- deployment: DeployProd
+  environment: production        # deve corrispondere esattamente al nome nel portal
+  strategy:
+    runOnce:
+      deploy:
+        steps:
+        - script: echo "deploy"
+```
+
+---
+
+### Scenario 4 — Variable Group non inietta le variabili da Key Vault
+
+**Sintomo:** Le variabili del Variable Group collegato a Key Vault risultano vuote o `$(VAR_NAME)` non viene sostituito.
+
+**Causa:** La Service Connection usata dal Variable Group non ha i permessi `Get` e `List` sui secrets del Key Vault, oppure il Variable Group non è autorizzato per la pipeline.
+
+**Soluzione:**
+1. Verificare che la Managed Identity/Service Principal abbia il ruolo **Key Vault Secrets User** sul Key Vault.
+2. Aggiornare la lista dei segreti nel Variable Group (pulsante **Refresh**).
+3. Autorizzare il Variable Group per la pipeline specifica.
+
+```bash
+# Assegnare il ruolo Key Vault Secrets User al Service Principal
+az role assignment create \
+    --role "Key Vault Secrets User" \
+    --assignee $SERVICE_PRINCIPAL_ID \
+    --scope /subscriptions/$SUB_ID/resourceGroups/$RG/providers/Microsoft.KeyVault/vaults/$KV_NAME
+
+# Verificare i permessi esistenti
+az keyvault show \
+    --name $KV_NAME \
+    --query "properties.accessPolicies" \
+    --output table
 ```
 
 ---

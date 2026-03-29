@@ -9,7 +9,7 @@ related: [security/pki-certificati/cert-manager, security/autenticazione/mtls-sp
 official_docs: https://smallstep.com/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # PKI Interna — Progettazione e Implementazione
@@ -299,6 +299,131 @@ cfssl revoke -db-config=db-config.json \
   -serial="12345678" \
   -aki="aa:bb:cc:dd..." \
   -reason=superseded
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Certificato non trusted: `certificate signed by unknown authority`
+
+**Sintomo:** Client TLS riceve errore `x509: certificate signed by unknown authority` o `SSL_ERROR_UNKNOWN_CA`.
+
+**Causa:** Il root CA della PKI interna non è presente nel trust store del client (sistema operativo, JVM, container).
+
+**Soluzione:** Distribuire il root certificate nel trust store appropriato.
+
+```bash
+# Verifica quale CA ha firmato il certificato
+openssl s_client -connect orders.prod.svc.cluster.local:443 -showcerts 2>/dev/null | \
+  openssl x509 -noout -issuer -subject
+
+# Verifica se il root CA è nel trust store di sistema
+openssl verify -CApath /etc/ssl/certs orders-service.pem
+
+# Linux Debian/Ubuntu — aggiungi root CA
+sudo cp root-ca.pem /usr/local/share/ca-certificates/mycorp-root.crt
+sudo update-ca-certificates
+
+# Verifica che sia stato aggiunto
+grep -r "mycorp-root" /etc/ssl/certs/
+```
+
+---
+
+### Scenario 2 — Certificato scaduto sulla CA intermedia
+
+**Sintomo:** Tutti i certificati emessi da una CA intermedia vengono improvvisamente rifiutati con errore `certificate has expired`. I leaf cert sembrano validi ma la chain fallisce.
+
+**Causa:** La CA intermedia è scaduta. I client verificano l'intera chain — se una CA intermedia è scaduta, tutti i certificati da essa emessi diventano invalidi indipendentemente dalla loro scadenza.
+
+**Soluzione:** Emettere una nuova CA intermedia dalla Root CA e rinnovare i leaf cert.
+
+```bash
+# Controlla la scadenza di tutti i certificati nella chain
+openssl s_client -connect service.corp.internal:443 -showcerts 2>/dev/null | \
+  awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/' | \
+  openssl x509 -noout -dates
+
+# Controlla la scadenza della CA intermedia
+openssl x509 -in services-ca.pem -noout -dates -subject
+
+# Con cfssl: rigenera la CA intermedia (firma con root offline)
+cfssl gencert -ca=root-ca.pem -ca-key=root-ca-key.pem \
+  -config=ca-config.json -profile=intermediate \
+  services-ca-csr.json | cfssljson -bare services-ca-v2
+
+# Con step-ca: rilascia una nuova intermediate e riavvia
+step ca rekey --ca-url https://ca.corp.internal \
+  --root ~/.step/certs/root_ca.crt
+```
+
+---
+
+### Scenario 3 — OCSP responder non raggiungibile: handshake TLS lento o bloccato
+
+**Sintomo:** Connessioni TLS molto lente (timeout di 10-30s) o fallimento intermittente. L'errore a volte è `OCSP responder unreachable`.
+
+**Causa:** Il client prova a verificare la revoca via OCSP ma il responder è irraggiungibile (firewall, SPOF, manutenzione). Molti client in hard-fail mode bloccano la connessione.
+
+**Soluzione:** Abilitare OCSP Stapling sul server TLS, oppure configurare il client in soft-fail mode come soluzione temporanea.
+
+```bash
+# Verifica se il certificato ha un OCSP URL configurato
+openssl x509 -in orders-service.pem -noout -text | grep "OCSP"
+
+# Test del responder OCSP
+openssl ocsp \
+  -url "http://ocsp.corp.internal" \
+  -issuer services-ca.pem \
+  -cert orders-service.pem \
+  -text \
+  -timeout 5
+
+# Nginx — abilita OCSP Stapling (evita che il client contatti il responder)
+# ssl_stapling on;
+# ssl_stapling_verify on;
+# ssl_trusted_certificate /etc/ssl/certs/services-ca.pem;
+# resolver 8.8.8.8 valid=300s;
+
+# Debug OCSP stapling: verifica che il server lo fornisca
+openssl s_client -connect service.corp.internal:443 -status 2>/dev/null | \
+  grep -A 10 "OCSP Response"
+```
+
+---
+
+### Scenario 4 — step-ca: `provisioner not found` o errore ACME durante il rinnovo
+
+**Sintomo:** cert-manager o certbot ricevono `403 Forbidden` o `urn:ietf:params:acme:error:unauthorized` durante il rinnovo. Il log di step-ca mostra `provisioner not found`.
+
+**Causa:** Il provisioner ACME non è stato aggiunto, o il nome/URL directory usato dal client non corrisponde al provisioner configurato in step-ca.
+
+**Soluzione:** Verificare la lista provisioner e allineare la configurazione del client.
+
+```bash
+# Elenca i provisioner configurati in step-ca
+step ca provisioner list
+
+# Aggiunge il provisioner ACME se mancante
+step ca provisioner add acme --type ACME
+
+# Verifica l'URL della directory ACME (il nome del provisioner è nell'URL)
+# https://ca.corp.internal/acme/acme/directory
+#                                  ^^^^
+#                              nome provisioner
+
+# Controlla la configurazione del provisioner nel file ca.json
+cat ~/.step/config/ca.json | jq '.authority.provisioners'
+
+# Riavvia step-ca dopo modifiche ai provisioner
+systemctl restart step-ca
+
+# Test: ottieni un certificato manualmente per verificare il provisioner
+step ca certificate test.corp.internal test.crt test.key \
+  --provisioner acme \
+  --ca-url https://ca.corp.internal \
+  --root ~/.step/certs/root_ca.crt
 ```
 
 ---

@@ -9,7 +9,7 @@ related: [cloud/azure/compute/virtual-machines, cloud/azure/compute/aks-containe
 official_docs: https://learn.microsoft.com/azure/azure-monitor/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Azure Monitor & Log Analytics
@@ -540,6 +540,145 @@ az monitor log-analytics workspace update \
 - Imposta **daily quota** sul workspace per protezione da spike di ingestione
 - Usa **Archive tier** per log di compliance long-term invece di mantenere tutto nello interactive tier
 - Per alert, privilegia **Metric Alert** (valutazione ogni minuto) su **Log Alert** (minimum 5 minuti) quando possibile
+
+## Troubleshooting
+
+### Scenario 1 — I log non arrivano nel Log Analytics Workspace
+
+**Sintomo:** Le tabelle nel workspace sono vuote o mancano log attesi da una risorsa Azure (App Service, Key Vault, SQL, ecc.).
+
+**Causa:** Diagnostic Settings non configurati o configurati con categorie errate; latenza di ingestione fino a 15 minuti per log nuovi.
+
+**Soluzione:** Verificare che i Diagnostic Settings esistano e puntino al workspace corretto.
+
+```bash
+# Listare diagnostic settings su una risorsa
+az monitor diagnostic-settings list \
+  --resource $(az webapp show --resource-group rg-webapp-prod --name myapp-prod --query id -o tsv) \
+  --output table
+
+# Verificare che il workspace target sia corretto
+az monitor diagnostic-settings show \
+  --resource $(az webapp show --resource-group rg-webapp-prod --name myapp-prod --query id -o tsv) \
+  --name diag-appservice-prod \
+  --query "workspaceId" -o tsv
+
+# Query per controllare quando è arrivato l'ultimo log
+# (nel portale o via REST)
+# AppServiceHTTPLogs | summarize max(TimeGenerated) by _ResourceId
+```
+
+---
+
+### Scenario 2 — Azure Monitor Agent (AMA) non invia dati dalla VM
+
+**Sintomo:** La tabella `Perf` o `Syslog` non contiene dati per una VM specifica; `Heartbeat` non mostra la VM.
+
+**Causa:** Estensione AMA non installata o in errore; Data Collection Rule non associata alla VM; identità managed non configurata.
+
+**Soluzione:** Verificare lo stato dell'estensione e l'associazione DCR.
+
+```bash
+# Controllare stato estensione AMA
+az vm extension show \
+  --resource-group $RG \
+  --vm-name my-vm \
+  --name AzureMonitorLinuxAgent \
+  --query "{state: provisioningState, status: instanceView.statuses[0].displayStatus}"
+
+# Listare associazioni DCR per la VM
+az monitor data-collection rule association list \
+  --resource $(az vm show --resource-group $RG --name my-vm --query id -o tsv) \
+  --output table
+
+# Query KQL: heartbeat VM nell'ultima ora
+# Heartbeat | where Computer == "my-vm" | summarize max(TimeGenerated)
+
+# Re-installare AMA se in errore
+az vm extension delete --resource-group $RG --vm-name my-vm --name AzureMonitorLinuxAgent
+az vm extension set \
+  --resource-group $RG --vm-name my-vm \
+  --name AzureMonitorLinuxAgent \
+  --publisher Microsoft.Azure.Monitor \
+  --enable-auto-upgrade true
+```
+
+---
+
+### Scenario 3 — Un alert non scatta nonostante la condizione sia soddisfatta
+
+**Sintomo:** CPU alta o errori HTTP 500 visibili sui grafici, ma nessuna notifica dall'alert.
+
+**Causa:** Alert in stato `Disabled`; Action Group con email/webhook non validi; finestra di valutazione troppo larga; alert di tipo Log con query che non restituisce dati nel window.
+
+**Soluzione:** Verificare stato alert e testare l'Action Group.
+
+```bash
+# Listare metric alerts e il loro stato
+az monitor metrics alert list \
+  --resource-group $RG \
+  --output table
+
+# Verificare se l'alert è abilitato
+az monitor metrics alert show \
+  --resource-group $RG \
+  --name alert-cpu-high-my-vm \
+  --query "{enabled: enabled, severity: severity, fired: criteria}"
+
+# Testare l'Action Group inviando una notifica di test
+az monitor action-group test \
+  --resource-group $RG \
+  --name ag-ops-team \
+  --alert-type "Metric"
+
+# Per log alert: verificare che la query restituisca dati
+# Eseguire manualmente la query KQL nel workspace nel periodo di valutazione
+```
+
+---
+
+### Scenario 4 — Query KQL lente o senza risultati attesi
+
+**Sintomo:** Una query KQL impiega molto tempo o restituisce 0 righe nonostante i log esistano.
+
+**Causa:** Filtro `TimeGenerated` mancante o troppo ampio; tabella sbagliata (es. `AzureDiagnostics` vs tabella specifica); dati in archive tier non disponibili per query diretta.
+
+**Soluzione:** Ottimizzare la query con filtri temporali e verificare la tabella corretta.
+
+```kql
+// Verificare quali tabelle hanno dati recenti
+search * | summarize count() by $table | order by count_ desc | take 20
+
+// Controllare ultima riga inserita in una tabella
+AppServiceHTTPLogs | summarize max(TimeGenerated)
+
+// Query ottimizzata: metti sempre TimeGenerated PRIMA degli altri filtri
+AppServiceHTTPLogs
+| where TimeGenerated > ago(1h)   // filtro temporale PRIMA
+| where ScStatus >= 500           // poi altri filtri
+| take 50
+
+// Controllare se una tabella è in archive (non queryabile direttamente)
+// Nel portale: Log Analytics Workspace > Tables > verifica "Plan" (Analytics vs Basic vs Archive)
+```
+
+```bash
+# Listare tabelle con il loro piano (Analytics/Basic/Archive)
+az monitor log-analytics workspace table list \
+  --resource-group $RG \
+  --workspace-name $LAW_NAME \
+  --query "[].{name: name, plan: plan, retentionDays: retentionInDays}" \
+  --output table
+
+# Ripristinare dati da archive per query (restore job, costo aggiuntivo)
+az monitor log-analytics workspace table restore \
+  --resource-group $RG \
+  --workspace-name $LAW_NAME \
+  --name AuditLogs_RST \
+  --restore-source-table AuditLogs \
+  --start-restore-time "2025-01-01T00:00:00Z" \
+  --end-restore-time "2025-01-31T23:59:59Z"
+```
 
 ## Riferimenti
 

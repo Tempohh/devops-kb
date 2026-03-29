@@ -9,7 +9,7 @@ related: [ci-cd/strategie/_index, ci-cd/github-actions/enterprise, ci-cd/jenkins
 official_docs: https://slsa.dev/
 status: complete
 difficulty: expert
-last_updated: 2026-02-27
+last_updated: 2026-03-28
 ---
 
 # Pipeline Security — DevSecOps
@@ -830,6 +830,149 @@ warn contains msg if {
 | **Conftest** | Policy gates | Sì (Apache-2) | CI/CD | OPA policy per qualsiasi config |
 | **tfsec** / **tflint** | IaC SAST | Sì | CI/CD | Terraform security scanning |
 | **kube-bench** | K8s hardening | Sì (Apache-2) | CI/CD, cluster audit | CIS Kubernetes Benchmark |
+
+## Troubleshooting
+
+### Scenario 1 — gitleaks rileva falsi positivi bloccando la pipeline
+
+**Sintomo:** La pipeline fallisce per un "secret" rilevato che in realtà è un placeholder o un valore di test (es. `your-api-key-here`, valori in fixture di test).
+
+**Causa:** gitleaks usa regex agressive che possono colpire valori non reali presenti in documentazione, test fixtures o file di esempio.
+
+**Soluzione:** Aggiungere il pattern all'`allowlist` in `.gitleaks.toml`, oppure aggiungere un commento inline `# gitleaks:allow` per soppressioni puntuali.
+
+```toml
+# .gitleaks.toml — soppressione globale di placeholder noti
+[allowlist]
+  regexes = [
+    '''your-api-key-here''',
+    '''EXAMPLE_SECRET_DO_NOT_USE''',
+    '''<replace-with-real-value>''',
+  ]
+  paths = [
+    '''(^|/)tests?/fixtures?/''',
+    '''\.example$''',
+  ]
+```
+
+```bash
+# Soppressione inline (aggiungere al file sorgente)
+api_key = "your-api-key-here"  # gitleaks:allow
+
+# Verifica che il file .gitleaks.toml venga rilevato
+gitleaks detect --source . --config .gitleaks.toml --verbose
+```
+
+---
+
+### Scenario 2 — Cosign sign fallisce con errore OIDC / permission denied
+
+**Sintomo:** Il job di firma immagine fallisce con `error: getting ID token: failed to get token from GitHub Actions OIDC` o `403 Forbidden`.
+
+**Causa:** Il workflow non ha il permesso `id-token: write` necessario per il keyless signing tramite OIDC. Frequente dopo refactoring del workflow o quando il job di firma è estratto in un job separato senza ridichiarare i permessi.
+
+**Soluzione:** Aggiungere `id-token: write` ai permessi del job specifico che esegue `cosign sign`. I permessi si ereditano a livello workflow ma devono essere esplicitati per ogni job se il workflow usa la sezione `permissions` top-level.
+
+```yaml
+jobs:
+  build-sign:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write    # OBBLIGATORIO per keyless signing Cosign
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image
+        run: |
+          cosign sign --yes ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
+```
+
+```bash
+# Verifica locale che la firma sia stata registrata correttamente
+cosign verify \
+  --certificate-identity-regexp "https://github.com/my-org/my-repo/.*" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  ghcr.io/my-org/my-repo@sha256:<digest>
+```
+
+---
+
+### Scenario 3 — Trivy / Grype riportano vulnerabilità senza patch disponibile che bloccano la pipeline
+
+**Sintomo:** La pipeline fallisce su CVE che hanno `fix: not available` — non esiste ancora una versione corretta del pacchetto a monte.
+
+**Causa:** Il flag `--fail-on high` (o equivalente `exit-code: 1`) è applicato anche a vulnerabilità per cui non è disponibile alcuna patch, rendendo impossibile far passare la pipeline fino alla disponibilità della fix.
+
+**Soluzione:** Usare `--ignore-unfixed` per escludere le vulnerabilità senza patch dal blocco. Per CVE specifici con falso positivo documentato, aggiungere all'ignorelist.
+
+```yaml
+# Trivy: ignora vuln senza patch
+- name: Run Trivy
+  uses: aquasecurity/trivy-action@master
+  with:
+    image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+    severity: 'CRITICAL,HIGH'
+    exit-code: '1'
+    ignore-unfixed: true    # Non blocca su CVE senza patch
+```
+
+```bash
+# Grype: equivalente con --only-fixed
+grype ghcr.io/my-org/myapp:latest \
+  --fail-on high \
+  --only-fixed        # Considera solo le vuln con fix disponibile
+
+# Trivy: aggiungi CVE specifici da ignorare (falsi positivi documentati)
+# .trivyignore
+# CVE-2023-12345  # FP: libreria non raggiungibile nel runtime (commento obbligatorio)
+
+trivy image --ignorefile .trivyignore ghcr.io/my-org/myapp:latest
+```
+
+---
+
+### Scenario 4 — Semgrep genera troppi falsi positivi rallentando il processo di review
+
+**Sintomo:** Il SAST con Semgrep produce decine di finding irrilevanti per il contesto del progetto (es. regole Java su un progetto Python, o pattern troppo generici), rendendo difficile identificare le vulnerabilità reali.
+
+**Causa:** La config `--config auto` scarica l'intero ruleset automatico che include regole non pertinenti al linguaggio/framework del progetto. Oppure regole specifiche producono falsi positivi sistematici sul codebase.
+
+**Soluzione:** Passare da `--config auto` a configurazioni mirate per linguaggio e framework. Sopprimere le regole rumorose con `# nosemgrep` inline o con `paths` di ignore nel file di configurazione.
+
+```yaml
+# .semgrep.yml — configurazione mirata al posto di --config auto
+rules: []  # Nessuna regola custom locale
+
+# In GitHub Actions: usare ruleset specifici
+- name: Semgrep scan mirato
+  run: |
+    semgrep ci \
+      --config p/python \
+      --config p/django \
+      --config p/owasp-top-ten \
+      --severity ERROR \
+      --sarif \
+      --output semgrep.sarif
+```
+
+```bash
+# Soppressione inline per un finding specifico (documentare il motivo)
+result = eval(user_input)  # nosemgrep: dangerous-eval -- input validato upstream da schema JSON
+
+# Verifica quale regola genera un finding specifico
+semgrep --config auto --verbose src/app.py 2>&1 | grep "rule-id"
+
+# Escludere directory dalla scansione
+semgrep --config p/python \
+  --exclude "tests/" \
+  --exclude "migrations/" \
+  src/
+```
+
+---
 
 ## Relazioni
 

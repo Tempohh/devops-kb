@@ -9,7 +9,7 @@ related: [messaging/rabbitmq/architettura, messaging/rabbitmq/features-avanzate,
 official_docs: https://www.rabbitmq.com/docs/reliability
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Affidabilità e Durabilità
@@ -455,6 +455,110 @@ def idempotent_process(message_id: str, payload: dict) -> bool:
         # Rimuovi il lock per permettere retry
         deduplication_store.delete(lock_key)
         raise
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Publisher Confirms non ricevuti / timeout
+
+**Sintomo:** Il producer non riceve ack entro il timeout atteso; i messaggi sembrano persi o la connessione rimane in attesa indefinitamente.
+
+**Causa:** La modalità confirm non è stata abilitata con `confirm_select()` prima di pubblicare, oppure il canale è stato chiuso prima che tutti gli ack venissero processati. In ambienti ad alto carico, i batch di confirm possono accumularsi nel buffer TCP.
+
+**Soluzione:** Verificare che `confirm_select()` sia chiamato sul canale dopo l'apertura, e che `process_data_events()` venga invocato per scaricare la coda di eventi. In caso di timeout ricorrenti, aumentare il prefetch e usare async confirms.
+
+```bash
+# Verifica stato del canale e pending confirms tramite Management API
+curl -u guest:guest http://localhost:15672/api/channels | \
+  python3 -m json.tool | grep -E '"confirm"|"pending_raft_commands"'
+
+# Log broker per errori di publish
+docker logs rabbitmq 2>&1 | grep -i "confirm\|nack\|channel"
+```
+
+---
+
+### Scenario 2 — Messaggi persi al restart del broker
+
+**Sintomo:** Dopo un riavvio di RabbitMQ, la queue risulta vuota o contiene meno messaggi di quanti attesi.
+
+**Causa:** Uno dei due layer di persistenza non è configurato correttamente: la queue non è `durable=True` oppure i messaggi sono pubblicati con `delivery_mode=1` (transient). Con Classic Queues, i messaggi transient vengono tenuti in RAM e non sopravvivono al restart.
+
+**Soluzione:** Verificare entrambi i layer. Per Quorum Queues la persistenza è sempre abilitata. Per Classic Queues assicurarsi che queue e messaggi siano entrambi durable/persistent.
+
+```bash
+# Controlla la configurazione della queue via Management API
+curl -u guest:guest http://localhost:15672/api/queues/%2F/orders | \
+  python3 -m json.tool | grep -E '"durable"|"type"|"arguments"'
+
+# Verifica tipo e durabilità di tutte le queues
+rabbitmqctl list_queues name durable arguments type
+```
+
+---
+
+### Scenario 3 — Requeue loop infinito (poison message)
+
+**Sintomo:** Un consumer continua a ricevere lo stesso messaggio in loop, CPU al 100%, messaggi nella queue non decrescono mai.
+
+**Causa:** Il consumer usa `basic_nack(requeue=True)` per un messaggio che non può essere elaborato (dati corrotti, dipendenza mancante, bug nel codice). RabbitMQ rimette il messaggio in testa alla queue, dove viene immediatamente riconsegnato.
+
+**Soluzione:** Configurare `x-delivery-limit` sulle Quorum Queues per invio automatico al DLX dopo N tentativi. Per Classic Queues, implementare un contatore retry nell'header del messaggio e usare `requeue=False` dopo il limite.
+
+```python
+# Gestione esplicita del delivery count (Classic Queue)
+def consumer_callback(ch, method, properties, body):
+    headers = properties.headers or {}
+    retry_count = headers.get('x-retry-count', 0)
+
+    try:
+        process(body)
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+    except Exception:
+        if retry_count >= 3:
+            # Supera il limite → DLX, non rimettere in coda
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        else:
+            # Republica con incremento contatore
+            new_headers = {**headers, 'x-retry-count': retry_count + 1}
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            ch.basic_publish(
+                exchange='',
+                routing_key=method.routing_key,
+                body=body,
+                properties=pika.BasicProperties(headers=new_headers, delivery_mode=2)
+            )
+```
+
+```bash
+# Monitora messaggi in stato "unacknowledged" per identificare loop
+rabbitmqctl list_queues name messages messages_ready messages_unacknowledged
+```
+
+---
+
+### Scenario 4 — Quorum Queue non raggiunge il quorum / queue unavailable
+
+**Sintomo:** La queue restituisce errori `PRECONDITION_FAILED` o i publish bloccano; nella Management UI la queue appare in stato `stopped` o `minority`.
+
+**Causa:** Il cluster ha perso la maggioranza dei nodi che ospitano la quorum queue (es. 2 nodi su 3 sono down). Raft non può eleggere un leader senza il quorum, quindi la queue è temporaneamente indisponibile.
+
+**Soluzione:** Riportare online abbastanza nodi per ristabilire il quorum. Non forzare mai la rimozione di nodi che contengono dati committed senza un piano di recovery controllato.
+
+```bash
+# Stato del cluster e dei nodi
+rabbitmqctl cluster_status
+
+# Stato specifico delle quorum queues
+rabbitmq-diagnostics quorum_status <queue_name> -p <vhost>
+
+# Elenco dei membri e leader di ogni quorum queue
+rabbitmqctl list_quorum_queue_statuses
+
+# Se un nodo è temporaneamente offline e va rimosso (ATTENZIONE: dati potenzialmente persi)
+rabbitmqctl forget_cluster_node rabbit@node2
 ```
 
 ---

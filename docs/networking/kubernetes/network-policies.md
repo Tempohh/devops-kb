@@ -9,7 +9,7 @@ related: [networking/kubernetes/cni, networking/kubernetes/ingress, networking/s
 official_docs: https://kubernetes.io/docs/concepts/services-networking/network-policies/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-03-29
 ---
 
 # Network Policies
@@ -413,24 +413,98 @@ calicoctl get networkpolicies -n production
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| Tutto il traffico bloccato dopo default-deny | DNS non escluso | Aggiungere regola `egress: port 53 UDP` |
-| Policy non applicata | CNI non supporta NetworkPolicy | Verificare CNI (Flannel non la supporta) |
-| `AND` invece di `OR` nelle regole | Struttura YAML errata | Verificare indentazione `from:` con voci separate |
-| Prometheus non raggiunge le metriche | Egress del namespace monitoring bloccato | Aggiungere ingress rule sui pod applicativi per namespace monitoring |
-| Traffico bloccato ma policy sembra corretta | Label mismatch | `kubectl get pod -l app=frontend` — verificare le label effettive |
+### Scenario 1 — Tutto il traffico bloccato dopo default-deny (DNS mancante)
+
+**Sintomo:** Dopo aver applicato una policy `default-deny-egress`, i pod non riescono a risolvere i nomi DNS. Qualsiasi richiesta verso servizi interni fallisce con `name resolution failure` anche se la connessione diretta via IP funzionerebbe.
+
+**Causa:** La policy egress blocca anche il traffico verso il kube-dns sulla porta 53 UDP/TCP. Senza DNS, i pod non riescono a raggiungere nessun servizio tramite hostname.
+
+**Soluzione:** Aggiungere sempre una regola egress che permette la porta 53 prima di applicare default-deny. Verificare anche che `kube-system` non abbia un `namespaceSelector` che lo escluda.
 
 ```bash
-# Verifica label effettive di un pod
-kubectl get pod mypod -o jsonpath='{.metadata.labels}'
+# Verifica se il pod riesce a risolvere il DNS
+kubectl exec -n production mypod -- nslookup kubernetes.default.svc.cluster.local
 
-# Verifica quale NetworkPolicy si applica a un pod
-kubectl get networkpolicy -n production -o yaml | grep -A5 "podSelector"
+# Verifica le policy egress attive sul namespace
+kubectl get networkpolicy -n production -o yaml | grep -A10 "egress"
 
-# Simula flow con netshoot
-kubectl run test --image=nicolaka/netshoot -n production \
-  --labels="app=frontend" --rm -it -- bash
+# Applica la fix: aggiungi la regola DNS alla policy egress esistente
+# Nel manifest aggiungere sotto egress:
+# - ports:
+#   - port: 53
+#     protocol: UDP
+#   - port: 53
+#     protocol: TCP
+kubectl apply -f backend-egress-with-dns.yaml
+```
+
+### Scenario 2 — NetworkPolicy definita ma non applicata (CNI incompatibile)
+
+**Sintomo:** Si applica una NetworkPolicy senza errori (`kubectl apply` ha successo), ma il traffico che dovrebbe essere bloccato continua a passare indisturbato.
+
+**Causa:** Il CNI plugin installato nel cluster non supporta l'enforcement delle NetworkPolicy. Flannel, in particolare, ignora completamente le NetworkPolicy — le risorse vengono create in etcd ma non producono nessuna regola di firewall reale.
+
+**Soluzione:** Verificare il CNI in uso e, se necessario, migrare a Calico o Cilium che supportano le NetworkPolicy.
+
+```bash
+# Identifica il CNI installato
+kubectl get pods -n kube-system | grep -E "calico|cilium|flannel|weave"
+kubectl get daemonset -n kube-system
+
+# Verifica se Calico è attivo e operativo
+kubectl exec -n kube-system -l k8s-app=calico-node -- calico-node -version
+
+# Con Cilium: verifica lo stato dell'enforcement
+kubectl exec -n kube-system -l k8s-app=cilium -- cilium status
+kubectl exec -n kube-system -l k8s-app=cilium -- cilium policy get
+```
+
+### Scenario 3 — AND vs OR errato nelle regole (label mismatch logico)
+
+**Sintomo:** Una NetworkPolicy con `namespaceSelector` + `podSelector` nella stessa voce `from` non funziona come atteso: blocca traffico legittimo oppure permette traffico che dovrebbe essere bloccato.
+
+**Causa:** Confusione tra logica AND (selettori nella stessa voce della lista) e OR (selettori come voci separate). Un singolo elemento con entrambi i selettori applica AND — entrambe le condizioni devono essere vere contemporaneamente.
+
+**Soluzione:** Separare i selettori in voci distinte della lista `from` per ottenere OR, oppure mantenerli nella stessa voce per AND. Testare con netshoot prima di applicare in produzione.
+
+```bash
+# Test connettività con un pod temporaneo che simula le label del sorgente
+kubectl run netshoot --image=nicolaka/netshoot -n monitoring \
+  --labels="app=prometheus" --rm -it -- curl -v http://api-service.production:8080/health
+
+# Verifica le label effettive di un pod (fonte di mismatch frequente)
+kubectl get pod prometheus-0 -n monitoring -o jsonpath='{.metadata.labels}' | jq
+
+# Verifica le label del namespace
+kubectl get namespace monitoring --show-labels
+
+# Debug flow con Hubble (Cilium)
+hubble observe --namespace production --verdict DROPPED --follow
+```
+
+### Scenario 4 — Prometheus non raggiunge le metriche dei pod applicativi
+
+**Sintomo:** Dopo aver abilitato default-deny nel namespace `production`, Prometheus non riesce a fare scraping delle metriche dei pod (`/metrics`). I target risultano DOWN nella UI di Prometheus.
+
+**Causa:** La policy ingress sui pod applicativi non include una regola che permette il traffico in entrata dal namespace `monitoring`. Anche se Prometheus può uscire, i pod in `production` bloccano le sue connessioni entranti.
+
+**Soluzione:** Aggiungere una regola `ingress` sui pod applicativi che permette traffico dalla porta di metriche (tipicamente 9090 o 8080) dal namespace `monitoring`.
+
+```bash
+# Verifica lo stato dei target Prometheus
+kubectl port-forward -n monitoring svc/prometheus 9090:9090
+# Aprire http://localhost:9090/targets
+
+# Testa manualmente la connessione dal namespace monitoring
+kubectl run curl-test --image=curlimages/curl -n monitoring --rm -it \
+  --labels="app=prometheus" -- curl -v http://api-pod-ip:9090/metrics
+
+# Verifica tutte le ingress rules per i pod applicativi
+kubectl describe networkpolicy -n production | grep -A20 "Allowing ingress"
+
+# Applica la regola mancante
+kubectl patch networkpolicy api-policy -n production --type='json' \
+  -p='[{"op":"add","path":"/spec/ingress/-","value":{"from":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"monitoring"}}}],"ports":[{"port":9090,"protocol":"TCP"}]}}]'
 ```
 
 ## Relazioni

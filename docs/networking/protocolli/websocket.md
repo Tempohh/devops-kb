@@ -9,7 +9,7 @@ related: [networking/fondamentali/http-https, networking/protocolli/http2-http3,
 official_docs: https://www.rfc-editor.org/rfc/rfc6455
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-28
 ---
 
 # WebSocket
@@ -242,13 +242,134 @@ spec:
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| `101 non ricevuto` | Proxy non supporta Upgrade | Configurare `proxy_set_header Upgrade` in Nginx |
-| Connessione chiusa dopo 60s | Proxy timeout su connessione inattiva | Aumentare `proxy_read_timeout`, abilitare heartbeat |
-| Messaggi non consegnati su restart | Server stateless, client su altra istanza | Implementare message broker (Redis PubSub) |
-| Handshake fallisce su HTTPS | Usare `wss://` non `ws://` su HTTPS | Assicurarsi di usare `wss://` |
-| Alta latenza | Nagle algorithm attivo | Impostare `TCP_NODELAY` sul socket server |
+### Scenario 1 — Handshake fallisce: nessun `101 Switching Protocols`
+
+**Sintomo:** Il client riceve `200 OK` o `400 Bad Request` invece di `101 Switching Protocols`. La connessione WebSocket non si stabilisce mai.
+
+**Causa:** Il reverse proxy (Nginx, HAProxy, AWS ALB) non propaga gli header `Upgrade` e `Connection: upgrade`, oppure usa HTTP/2 che non supporta l'upgrade WebSocket.
+
+**Soluzione:** Aggiungere nella configurazione del proxy gli header obbligatori per il protocollo WebSocket upgrade, e forzare HTTP/1.1 sul backend.
+
+```nginx
+location /ws {
+    proxy_pass http://websocket_backend;
+    proxy_http_version 1.1;                        # WebSocket richiede HTTP/1.1
+    proxy_set_header Upgrade $http_upgrade;        # Propaga l'header Upgrade
+    proxy_set_header Connection "upgrade";         # Necessario per il cambio protocollo
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+Per verificare gli header inviati dal client:
+```bash
+curl -v \
+  -H "Upgrade: websocket" \
+  -H "Connection: Upgrade" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  -H "Sec-WebSocket-Version: 13" \
+  https://example.com/ws
+# Atteso nella risposta: HTTP/1.1 101 Switching Protocols
+```
+
+---
+
+### Scenario 2 — Connessione si chiude inaspettatamente dopo 60-120 secondi
+
+**Sintomo:** Il client riceve un evento `close` con codice `1006` (abnormal closure) dopo circa 60-120 secondi di inattività, anche senza che nessuno dei due lati abbia chiuso esplicitamente.
+
+**Causa:** I proxy intermedi (Nginx, AWS ELB, CDN) hanno timeout configurati per le connessioni "idle". Una connessione WebSocket senza traffico viene considerata morta e terminata.
+
+**Soluzione:** Combinare due azioni: aumentare i timeout sul proxy E abilitare il heartbeat ping/pong lato server.
+
+```nginx
+# Nginx: aumentare i timeout per connessioni WebSocket
+location /ws {
+    proxy_read_timeout  3600s;   # Default: 60s — insufficiente per WebSocket
+    proxy_send_timeout  3600s;
+    proxy_connect_timeout 10s;
+}
+```
+
+```javascript
+// Node.js ws: heartbeat ogni 30s per mantenere viva la connessione
+const interval = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) {
+      console.log('Client non risponde al ping — terminato');
+      return ws.terminate();
+    }
+    ws.isAlive = false;
+    ws.ping();  // Invia ping; il client risponde con pong automaticamente
+  });
+}, 30000);
+```
+
+---
+
+### Scenario 3 — Messaggi persi dopo scaling orizzontale o restart del server
+
+**Sintomo:** Con più istanze del server (pod Kubernetes, auto-scaling), i messaggi inviati da un client non raggiungono altri client connessi su istanze diverse. Oppure i messaggi si perdono durante un restart.
+
+**Causa:** Lo stato delle connessioni WebSocket è in-memory e locale a ciascuna istanza. Il broadcast `wss.clients.forEach(...)` raggiunge solo i client connessi alla stessa istanza.
+
+**Soluzione:** Aggiungere un message broker (Redis Pub/Sub è il più comune) come layer di distribuzione tra istanze.
+
+```javascript
+const Redis = require('ioredis');
+const pub = new Redis({ host: 'redis-host' });
+const sub = new Redis({ host: 'redis-host' });
+
+// Subscribe al canale condiviso
+sub.subscribe('broadcast-channel');
+sub.on('message', (channel, message) => {
+  // Distribuisci ai client locali di questa istanza
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+});
+
+// Quando un messaggio arriva da un client, pubblicalo su Redis
+ws.on('message', (message) => {
+  pub.publish('broadcast-channel', message);  // Tutte le istanze lo riceveranno
+});
+```
+
+Verifica la connettività Redis:
+```bash
+redis-cli -h redis-host ping
+redis-cli -h redis-host monitor  # Monitora i messaggi in transito
+```
+
+---
+
+### Scenario 4 — Handshake fallisce su HTTPS / `wss://` non funziona
+
+**Sintomo:** La connessione WebSocket funziona in locale (`ws://localhost`), ma fallisce in produzione su HTTPS con errore `Mixed Content` o `ERR_SSL_PROTOCOL_ERROR`.
+
+**Causa:** Su una pagina caricata via HTTPS, il browser blocca connessioni WebSocket non sicure (`ws://`). Bisogna usare `wss://` (WebSocket over TLS) che usa la stessa porta 443 e lo stesso certificato TLS del sito.
+
+**Soluzione:** Usare sempre `wss://` in produzione. Il certificato TLS viene gestito dal proxy (Nginx/ALB), non dall'applicazione WebSocket.
+
+```javascript
+// Sbagliato in produzione su HTTPS
+const ws = new WebSocket('ws://example.com/ws');
+
+// Corretto — usa lo schema della pagina corrente
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+```
+
+Verifica il certificato e la connessione TLS:
+```bash
+# Testa che wss:// funzioni (richiede websocat)
+websocat wss://example.com/ws
+
+# Oppure con openssl per verificare il certificato
+openssl s_client -connect example.com:443 -servername example.com
+```
 
 ## Relazioni
 

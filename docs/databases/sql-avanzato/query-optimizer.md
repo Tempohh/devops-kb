@@ -9,7 +9,7 @@ related: [databases/fondamentali/indici, databases/postgresql/mvcc-vacuum, datab
 official_docs: https://www.postgresql.org/docs/current/using-explain.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Query Optimizer e EXPLAIN
@@ -292,6 +292,127 @@ work_mem = '64MB'  -- Default 4MB — spesso troppo basso
 -- Per sessioni specifiche (es. report pesanti)
 SET work_mem = '512MB';
 ```
+
+## Troubleshooting
+
+### Scenario 1 — Seq Scan su tabella grande nonostante indice esistente
+
+**Sintomo:** `EXPLAIN` mostra `Seq Scan` su una tabella con milioni di righe anche se esiste un indice sulla colonna filtrata. Query lenta (>1s).
+
+**Causa:** Le statistiche sono obsolete e il planner sottostima la selectivity del filtro, oppure la query recupera una frazione troppo alta delle righe (>20-30%) rendendo il seq scan genuinamente preferibile, oppure il `random_page_cost` è troppo alto rispetto ai costi reali (SSD vs HDD).
+
+**Soluzione:**
+```sql
+-- 1. Aggiorna le statistiche
+ANALYZE nome_tabella;
+
+-- 2. Verifica se le statistiche sono davvero aggiornate
+SELECT last_analyze, last_autoanalyze, n_live_tup
+FROM pg_stat_user_tables
+WHERE tablename = 'nome_tabella';
+
+-- 3. Se usi SSD, abbassa random_page_cost
+SET random_page_cost = 1.1;  -- Default 4.0, troppo alto per SSD
+EXPLAIN ANALYZE SELECT ...;
+
+-- 4. Forza test con indice (solo debug)
+SET enable_seqscan = off;
+EXPLAIN ANALYZE SELECT ...;
+SET enable_seqscan = on;
+```
+
+---
+
+### Scenario 2 — Stima righe molto errata (rows stima vs actual rows)
+
+**Sintomo:** Nel piano EXPLAIN ANALYZE, il campo `rows=` stimato differisce di 10x o più rispetto ad `actual rows=`. Il piano risultante usa join o scan inefficienti.
+
+**Causa:** Le statistiche non catturano la distribuzione reale dei dati (colonna con valori molto skewed), correlazioni tra colonne non modellate, o `statistics target` troppo basso.
+
+**Soluzione:**
+```sql
+-- 1. Aumenta la granularità delle statistiche sulla colonna problematica
+ALTER TABLE ordini ALTER COLUMN status SET STATISTICS 500;
+ANALYZE ordini;
+
+-- 2. Per correlazioni tra più colonne (PostgreSQL 14+)
+CREATE STATISTICS stat_col1_col2 ON col1, col2 FROM tabella;
+ANALYZE tabella;
+
+-- 3. Verifica le statistiche attuali sulla colonna
+SELECT attname, n_distinct, correlation
+FROM pg_stats
+WHERE tablename = 'ordini' AND attname = 'status';
+
+-- 4. Verifica extended statistics create
+SELECT stxname, stxkind, stxkeys FROM pg_statistic_ext;
+```
+
+---
+
+### Scenario 3 — Hash Join con spill a disco (Batches > 1)
+
+**Sintomo:** `EXPLAIN ANALYZE` mostra `Batches: N` con N > 1 in un nodo Hash Join, oppure `Sort Method: external merge Disk`. Query usa molto I/O e risulta lenta.
+
+**Causa:** `work_mem` insufficiente per contenere la hash table o il sort in memoria. Il planner crea file temporanei su disco.
+
+**Soluzione:**
+```sql
+-- 1. Conferma il problema
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT ... FROM a JOIN b ON ...;
+-- Cerca: Batches: N (N > 1) oppure "external merge Disk"
+
+-- 2. Aumenta work_mem per la sessione e ri-esegui
+SET work_mem = '256MB';
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT ... FROM a JOIN b ON ...;
+-- Verifica che Batches torni a 1
+
+-- 3. Se risolve, valuta aumento permanente in postgresql.conf
+-- work_mem = '64MB'  -- Il default 4MB è spesso troppo basso
+-- ATTENZIONE: work_mem si moltiplica per numero sessioni × nodi nel piano
+
+-- 4. Alternativa: partition pruning o riscrivere la query
+-- per ridurre il dataset prima del join
+```
+
+---
+
+### Scenario 4 — Query lenta non identificabile senza EXPLAIN
+
+**Sintomo:** L'applicazione segnala query lente ma non è chiaro quale. Non c'è accesso diretto ai log.
+
+**Causa:** Mancanza di visibilità sulle query eseguite e sui loro piani.
+
+**Soluzione:**
+```sql
+-- 1. Abilita pg_stat_statements se non attivo
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+-- Aggiungi shared_preload_libraries = 'pg_stat_statements' in postgresql.conf e riavvia
+
+-- 2. Trova le query con maggior tempo totale
+SELECT
+    round(total_exec_time::numeric, 2) AS total_ms,
+    calls,
+    round(mean_exec_time::numeric, 2) AS avg_ms,
+    left(query, 120) AS query
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 10;
+
+-- 3. Configura auto_explain per loggare i piani automaticamente
+-- In postgresql.conf:
+-- shared_preload_libraries = 'auto_explain'
+-- auto_explain.log_min_duration = '500ms'
+-- auto_explain.log_analyze = true
+-- auto_explain.log_buffers = true
+
+-- 4. Reset statistiche dopo aver applicato fix
+SELECT pg_stat_statements_reset();
+```
+
+---
 
 ## Relazioni
 

@@ -9,7 +9,7 @@ related: [cloud/azure/ci-cd/azure-devops, cloud/azure/identita/rbac-managed-iden
 official_docs: https://learn.microsoft.com/azure/azure-resource-manager/bicep/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-28
 ---
 
 # ARM Templates & Bicep
@@ -527,6 +527,109 @@ terraform init
 terraform plan -var-file=prod.tfvars -out=tfplan
 terraform apply tfplan
 terraform destroy
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Deployment fallisce con "Conflict" su risorsa esistente
+
+**Sintomo:** `az deployment group create` restituisce errore `409 Conflict` su una risorsa già presente nel Resource Group.
+
+**Causa:** La risorsa esiste ma con proprietà incompatibili (es. SKU non modificabile dopo creazione, o nome già preso da altra subscription).
+
+**Soluzione:** Verificare lo stato della risorsa con `az resource show`, usare `what-if` per identificare i conflitti prima del deploy. Per risorse non modificabili, eliminare e ricreare.
+
+```bash
+# Identificare la risorsa in conflitto
+az resource show \
+    --ids /subscriptions/<SUB>/resourceGroups/<RG>/providers/Microsoft.Web/serverfarms/<NAME>
+
+# What-if per vedere differenze senza applicare
+az deployment group what-if \
+    --resource-group myapp-rg \
+    --template-file main.bicep \
+    --parameters @prod.parameters.json
+
+# Se necessario: eliminare e ricreare la risorsa problematica
+az resource delete \
+    --ids /subscriptions/<SUB>/resourceGroups/<RG>/providers/Microsoft.Web/serverfarms/<NAME>
+```
+
+---
+
+### Scenario 2 — Errore "BCP057: The name does not exist in the current context"
+
+**Sintomo:** `az bicep build` fallisce con errore `BCP057` riferito a un simbolo non trovato (es. variabile, resource, modulo).
+
+**Causa:** Riferimento a una risorsa o variabile definita dopo il punto di utilizzo, oppure typo nel nome simbolico. Bicep richiede che le dipendenze siano dichiarate nello stesso scope.
+
+**Soluzione:** Controllare l'ordine delle dichiarazioni, verificare i nomi esatti (case-sensitive), usare `dependsOn` esplicito se necessario.
+
+```bash
+# Compilare e vedere tutti gli errori
+az bicep build --file main.bicep
+
+# Linting con regole estese
+az bicep lint --file main.bicep
+
+# Installare/aggiornare Bicep CLI
+az bicep upgrade
+az bicep version
+```
+
+---
+
+### Scenario 3 — What-if mostra "NoChange" ma le risorse non vengono create
+
+**Sintomo:** Il comando `what-if` non mostra modifiche, ma le risorse attese non esistono nel Resource Group.
+
+**Causa:** Spesso dovuto a condizioni `if (...)` nel template che valutano a `false` per i parametri forniti, oppure il deployment punta al Resource Group sbagliato.
+
+**Soluzione:** Verificare i parametri passati, controllare le condizioni nei blocchi `if`, e confermare il Resource Group target.
+
+```bash
+# Verificare che il Resource Group sia quello corretto
+az group show --name myapp-rg
+
+# Controllare i parametri effettivi del deployment
+az deployment group show \
+    --resource-group myapp-rg \
+    --name deploy-20260226-143000 \
+    --query properties.parameters
+
+# Elencare tutte le risorse nel RG per confronto
+az resource list --resource-group myapp-rg --output table
+```
+
+---
+
+### Scenario 4 — Terraform: "Error acquiring the state lock"
+
+**Sintomo:** `terraform plan` o `terraform apply` fallisce con `Error acquiring the state lock` su Azure Blob Storage.
+
+**Causa:** Un precedente processo Terraform è terminato in modo anomalo lasciando un lock attivo sul blob, oppure un altro utente/pipeline sta eseguendo operazioni in parallelo.
+
+**Soluzione:** Verificare che non ci siano operazioni Terraform attive in altre pipeline, poi rimuovere il lock manualmente se orfano.
+
+```bash
+# Verificare lo stato del lock (nel container tfstate)
+az storage blob show \
+    --account-name tfstatemycompany \
+    --container-name tfstate \
+    --name "production/main.tfstate.lock" \
+    --auth-mode login
+
+# Forzare sblocco (solo se si è certi che nessun altro processo è attivo)
+terraform force-unlock <LOCK_ID>
+
+# In alternativa: eliminare il blob di lock direttamente
+az storage blob delete \
+    --account-name tfstatemycompany \
+    --container-name tfstate \
+    --name "production/main.tfstate.lock" \
+    --auth-mode login
 ```
 
 ---

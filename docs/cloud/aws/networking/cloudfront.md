@@ -9,7 +9,7 @@ related: [cloud/aws/storage/s3, cloud/aws/security/network-security, cloud/aws/n
 official_docs: https://docs.aws.amazon.com/cloudfront/latest/APIReference/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # CloudFront — CDN Global
@@ -376,6 +376,120 @@ aws cloudfront create-realtime-log-config \
 # Requests, BytesDownloaded, BytesUploaded
 # 4xxErrorRate, 5xxErrorRate, TotalErrorRate
 # CacheHitRate → obiettivo: >80%
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Cache Miss Rate troppo alta (CacheHitRate < 50%)
+
+**Sintomo:** CloudWatch mostra `CacheHitRate` sotto il 50%, latenza elevata, costi origin alti.
+
+**Causa:** Query string, cookies o headers non necessari vengono inoltrati all'origin e differenziano la cache key, frammentando le cache entries.
+
+**Soluzione:** Verificare la Cache Policy associata al Cache Behavior e rimuovere dalla cache key i parametri non necessari.
+
+```bash
+# Ispezionare cache behavior e policy associata
+aws cloudfront get-distribution --id EDFDVBD6EXAMPLE \
+    --query 'Distribution.DistributionConfig.DefaultCacheBehavior'
+
+# Controllare quali parametri sono inclusi nella cache key
+aws cloudfront get-cache-policy --id 658327ea-f89d-4fab-a63d-7e88639e58f6
+
+# Verificare CacheHitRate con CloudWatch
+aws cloudwatch get-metric-statistics \
+    --namespace AWS/CloudFront \
+    --metric-name CacheHitRate \
+    --dimensions Name=DistributionId,Value=EDFDVBD6EXAMPLE \
+    --start-time 2026-03-27T00:00:00Z \
+    --end-time 2026-03-28T00:00:00Z \
+    --period 3600 \
+    --statistics Average
+```
+
+---
+
+### Scenario 2 — 403 Forbidden su oggetti S3
+
+**Sintomo:** CloudFront restituisce `403 Forbidden` per risorse statiche servite da S3; l'oggetto esiste nel bucket.
+
+**Causa:** La Bucket Policy non include la Distribution corretta come `SourceArn`, oppure l'OAC non è configurato nella distribution, oppure il bucket ha ancora un OAI (Origin Access Identity) deprecato.
+
+**Soluzione:** Verificare che OAC sia configurato correttamente e che la Bucket Policy faccia riferimento all'ARN della distribution.
+
+```bash
+# Verificare OAC associato all'origin
+aws cloudfront get-distribution --id EDFDVBD6EXAMPLE \
+    --query 'Distribution.DistributionConfig.Origins.Items[*].{Id:Id,OAC:OriginAccessControlId}'
+
+# Verificare Bucket Policy su S3
+aws s3api get-bucket-policy --bucket my-static-bucket | python -m json.tool
+
+# La condizione deve essere:
+# "AWS:SourceArn": "arn:aws:cloudfront::ACCOUNT_ID:distribution/EDFDVBD6EXAMPLE"
+
+# Invalidare cache dopo correzione della policy
+aws cloudfront create-invalidation \
+    --distribution-id EDFDVBD6EXAMPLE \
+    --paths "/*"
+```
+
+---
+
+### Scenario 3 — Certificato SSL non trovato / ERR_SSL_PROTOCOL_ERROR
+
+**Sintomo:** Browser restituisce errore SSL quando si accede al dominio custom (`www.company.com`). La distribution ha un Alternate Domain Name configurato.
+
+**Causa:** Il certificato ACM non è stato creato in `us-east-1` (CloudFront richiede certificati solo da quella region), oppure il dominio nel certificato non corrisponde all'alias configurato.
+
+**Soluzione:** Creare o importare il certificato ACM in `us-east-1` e associarlo alla distribution.
+
+```bash
+# Verificare che il certificato sia in us-east-1
+aws acm list-certificates --region us-east-1 \
+    --query 'CertificateSummaryList[*].{Domain:DomainName,Arn:CertificateArn}'
+
+# Controllare lo stato del certificato
+aws acm describe-certificate \
+    --region us-east-1 \
+    --certificate-arn arn:aws:acm:us-east-1:123456789012:certificate/xxx \
+    --query 'Certificate.Status'
+# Deve essere "ISSUED", non "PENDING_VALIDATION"
+
+# Verificare alias e certificato sulla distribution
+aws cloudfront get-distribution --id EDFDVBD6EXAMPLE \
+    --query 'Distribution.DistributionConfig.{Aliases:Aliases.Items,Cert:ViewerCertificate.AcmCertificateArn}'
+```
+
+---
+
+### Scenario 4 — Invalidazione non propagata / contenuto vecchio ancora servito
+
+**Sintomo:** Dopo `create-invalidation`, gli utenti ricevono ancora la versione precedente del file. Il sito mostra contenuto stale anche a distanza di minuti.
+
+**Causa:** L'invalidazione può richiedere fino a 15 minuti per propagarsi a tutti gli Edge. Oppure il browser sta cachando localmente il file (Cache-Control lato client), o l'invalidazione ha usato un path errato (case sensitive, mancanza di `/`).
+
+**Soluzione:** Verificare lo stato dell'invalidazione, testare bypassando la cache del browser, e controllare gli header di risposta.
+
+```bash
+# Verificare stato invalidazione
+aws cloudfront list-invalidations --distribution-id EDFDVBD6EXAMPLE \
+    --query 'InvalidationList.Items[0].{Id:Id,Status:Status,CreateTime:CreateTime}'
+
+# Attendere completamento (polling)
+aws cloudfront wait invalidation-completed \
+    --distribution-id EDFDVBD6EXAMPLE \
+    --id INVALIDATION_ID
+
+# Testare response headers direttamente dall'edge (bypass browser cache)
+curl -I -H "Cache-Control: no-cache" https://www.company.com/index.html
+# Cercare: X-Cache: Miss from cloudfront (cache miss = contenuto aggiornato)
+# X-Cache: Hit from cloudfront (ancora in cache)
+
+# Forzare cache miss aggiungendo query string temporanea
+curl -I "https://www.company.com/index.html?v=$(date +%s)"
 ```
 
 ---

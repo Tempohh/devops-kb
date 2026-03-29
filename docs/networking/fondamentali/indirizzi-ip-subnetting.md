@@ -5,11 +5,11 @@ category: networking
 tags: [ip, subnetting, cidr, ipv4, ipv6, networking]
 search_keywords: [indirizzi ip, ipv4 classi, subnetting cidr, subnet mask calcolo, vlsm variable length subnet mask, ipv6 notation, indirizzi privati rfc1918, 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16, supernetting, network address, broadcast address]
 parent: networking/fondamentali
-related: [networking/fondamentali/tcpip]
+related: [networking/fondamentali/tcpip, networking/fondamentali/http-https, cloud/aws/networking/vpc, cloud/aws/networking/vpc-avanzato, cloud/azure/networking/vnet, containers/kubernetes/architettura]
 official_docs: https://www.rfc-editor.org/rfc/rfc4632
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Indirizzi IP e Subnetting

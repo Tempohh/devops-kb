@@ -41,10 +41,10 @@ $PID | Out-File -FilePath $LockFile -Encoding ASCII -NoNewline
 
 # -- Configurazione ----------------------------------------------------------
 
-$RunInterval        = 120   # secondi tra run normali
+$RunInterval        = 30    # secondi tra run normali (ridotto da 120 → 30)
 $RateLimitWaitStart = 300   # primo tentativo dopo 5 min
 $RateLimitWaitMax   = 1800  # massimo 30 min tra tentativi
-$ErrorWait          = 300   # secondi attesa errore generico
+$ErrorWait          = 60    # secondi attesa errore generico (ridotto da 300 → 60)
 
 # -- Rilevamento claude.exe --------------------------------------------------
 

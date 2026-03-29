@@ -9,7 +9,7 @@ related: [cloud/aws/messaging/sqs-sns, cloud/aws/compute/lambda, cloud/aws/stora
 official_docs: https://docs.aws.amazon.com/eventbridge/latest/userguide/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # EventBridge, Kinesis & MSK
@@ -839,6 +839,153 @@ Hai già Kafka o team Kafka?
 
 Kafka senza gestione infrastruttura?
   └── MSK Serverless
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — EventBridge rule non triggera il target
+
+**Sintomo:** eventi pubblicati sul bus ma il target (Lambda, SQS, ecc.) non viene invocato.
+
+**Causa:** il pattern della rule non corrisponde all'evento (mismatch su `source`, `detail-type`, o campi del `detail`), oppure manca la resource-based policy sul target.
+
+**Soluzione:**
+1. Usare **Test event pattern** dalla console EventBridge per verificare il match tra pattern e payload.
+2. Controllare i **CloudWatch Metrics** della rule: `MatchedEvents` vs `TriggeredRules`.
+3. Verificare che il target abbia la permission policy corretta.
+
+```bash
+# Testare event pattern via CLI
+aws events test-event-pattern \
+    --event-pattern '{"source":["myapp.orders"],"detail-type":["order.created"]}' \
+    --event '{"source":"myapp.orders","detail-type":"order.created","detail":{"orderId":"ORD-001"}}'
+
+# Verificare metriche della rule
+aws cloudwatch get-metric-statistics \
+    --namespace AWS/Events \
+    --metric-name FailedInvocations \
+    --dimensions Name=RuleName,Value=process-order-created \
+    --start-time 2026-03-28T00:00:00Z \
+    --end-time 2026-03-28T23:59:00Z \
+    --period 3600 \
+    --statistics Sum
+
+# Controllare policy Lambda
+aws lambda get-policy --function-name ProcessOrder
+```
+
+---
+
+### Scenario 2 — Kinesis: ProvisionedThroughputExceededException
+
+**Sintomo:** il producer riceve `ProvisionedThroughputExceededException`; record non vengono inseriti.
+
+**Causa:** il volume di scrittura supera il limite di 1 MB/s o 1000 record/s per shard. Shard-key non distribuita uniformemente (hot shard).
+
+**Soluzione:**
+1. Distribuire le partition key su valori ad alta cardinalità (UUID, hash del userId).
+2. Aggiungere shard con `split-shard` o passare a modalità ON_DEMAND.
+3. Implementare retry con exponential backoff nel producer.
+
+```bash
+# Controllare le metriche per shard
+aws cloudwatch get-metric-statistics \
+    --namespace AWS/Kinesis \
+    --metric-name WriteProvisionedThroughputExceeded \
+    --dimensions Name=StreamName,Value=app-events \
+    --start-time 2026-03-28T00:00:00Z \
+    --end-time 2026-03-28T23:59:00Z \
+    --period 300 --statistics Sum
+
+# Aggiungere shard (split shard al centro del range hash)
+aws kinesis split-shard \
+    --stream-name app-events \
+    --shard-to-split shardId-000000000000 \
+    --new-starting-hash-key "170141183460469231731687303715884105728"
+
+# Passare a modalità ON_DEMAND per auto-scaling
+aws kinesis update-stream-mode \
+    --stream-arn arn:aws:kinesis:eu-central-1:123456789012:stream/app-events \
+    --stream-mode-details StreamMode=ON_DEMAND
+```
+
+---
+
+### Scenario 3 — Firehose: dati non arrivano su S3 (o arrivano con molto ritardo)
+
+**Sintomo:** il delivery stream sembra attivo ma i file non compaiono in S3 entro i tempi attesi; oppure compaiono nella cartella `errors/`.
+
+**Causa 1:** il buffer (size o interval) non è ancora stato raggiunto — Firehose accumula prima di fare flush.
+**Causa 2:** la Lambda di trasformazione ritorna `ProcessingFailed` su alcuni record — finiscono nel prefix `ErrorOutputPrefix`.
+**Causa 3:** il ruolo IAM del delivery stream manca dei permessi `s3:PutObject`.
+
+**Soluzione:**
+
+```bash
+# Controllare errori di delivery nel log group del delivery stream
+aws logs filter-log-events \
+    --log-group-name /firehose/app-logs-to-s3 \
+    --filter-pattern "ERROR" \
+    --start-time 1743120000000
+
+# Verificare metriche di delivery (record consegnati vs falliti)
+aws cloudwatch get-metric-statistics \
+    --namespace AWS/Firehose \
+    --metric-name DeliveryToS3.Records \
+    --dimensions Name=DeliveryStreamName,Value=app-logs-to-s3 \
+    --start-time 2026-03-28T00:00:00Z \
+    --end-time 2026-03-28T23:59:00Z \
+    --period 300 --statistics Sum
+
+# Abbassare il buffer per test (flush ogni 1 minuto o 1 MB)
+aws firehose update-destination \
+    --delivery-stream-name app-logs-to-s3 \
+    --current-delivery-stream-version-id 1 \
+    --destination-id destinationId-000000000001 \
+    --s3-destination-update '{"BufferingHints":{"SizeInMBs":1,"IntervalInSeconds":60}}'
+```
+
+---
+
+### Scenario 4 — MSK: consumer bloccato su un offset (lag crescente)
+
+**Sintomo:** il consumer group accumula lag su alcune partizioni; i messaggi non vengono consumati nonostante il consumer sia attivo.
+
+**Causa 1:** il consumer è bloccato in un retry loop su un messaggio velenoso (poison pill) che causa sempre eccezione.
+**Causa 2:** rebalance loop: il consumer impiega più tempo del `max.poll.interval.ms` a elaborare un batch, causando l'uscita dal gruppo e riassegnazione continua.
+
+**Soluzione:**
+
+```bash
+# Verificare il lag per consumer group
+kafka-consumer-groups.sh \
+    --bootstrap-server broker1:9098 \
+    --describe \
+    --group order-processor
+
+# Identificare l'offset del messaggio problematico
+kafka-console-consumer.sh \
+    --bootstrap-server broker1:9098 \
+    --topic order-events \
+    --partition 3 \
+    --offset 12345 \
+    --max-messages 1
+
+# Saltare il messaggio velenoso (spostare offset avanti di 1)
+kafka-consumer-groups.sh \
+    --bootstrap-server broker1:9098 \
+    --group order-processor \
+    --topic order-events:3 \
+    --reset-offsets \
+    --to-offset 12346 \
+    --execute
+
+# Aumentare max.poll.interval.ms nel consumer (se il problema è il rebalance)
+# Nel codice Python kafka-python:
+# max_poll_interval_ms=600000,   # 10 minuti
+# max_poll_records=50            # ridurre batch size
 ```
 
 ---

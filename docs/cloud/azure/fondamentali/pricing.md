@@ -9,7 +9,7 @@ related: [cloud/azure/fondamentali/well-architected, cloud/azure/compute/virtual
 official_docs: https://azure.microsoft.com/pricing/
 status: complete
 difficulty: beginner
-last_updated: 2026-02-26
+last_updated: 2026-03-28
 ---
 
 # Azure Pricing & Cost Management
@@ -232,6 +232,133 @@ Billing Account (Azienda)
     └── Invoice Section (Progetto / Team)
         └── Subscription
 ```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Budget Alert non arriva
+
+**Sintomo:** Il budget ha superato la soglia configurata ma non arrivano email di notifica.
+
+**Causa:** Latenza del Cost Management (dati aggiornati ogni 8-24h) oppure email finita in spam; in alcuni casi il budget è stato creato su subscription sbagliata o con `--end-date` già scaduta.
+
+**Soluzione:** Verificare configurazione budget e testare manualmente l'alert.
+
+```bash
+# Verificare budget esistenti e relative notifiche
+az consumption budget list \
+    --query "[].{Name:name, Amount:amount, CurrentSpend:currentSpend.amount, Notifications:notifications}" \
+    --output json
+
+# Controllare che la subscription sia corretta
+az account show --query "{Name:name, ID:id}" --output table
+
+# Revocare e ricreare il budget se la configurazione è corrotta
+az consumption budget delete --budget-name prod-monthly
+```
+
+---
+
+### Scenario 2 — Costi imprevisti su Spot VM non interrotte
+
+**Sintomo:** Le Spot VM non vengono evicted anche quando il prezzo Spot supera il `--max-price` impostato.
+
+**Causa:** Con `--max-price -1` non c'è cap di prezzo — Azure non evitta mai per prezzo, solo per recupero capacità. L'eviction per prezzo si attiva SOLO se si specifica un `max-price` positivo.
+
+**Soluzione:** Impostare un max-price esplicito oppure accettare il comportamento predefinito.
+
+```bash
+# Verificare max-price corrente di una Spot VM
+az vm show \
+    --resource-group myapp-rg \
+    --name spot-worker \
+    --query "billingProfile.maxPrice" \
+    --output tsv
+
+# Aggiornare max-price (richiede deallocate prima)
+az vm deallocate --resource-group myapp-rg --name spot-worker
+az vm update \
+    --resource-group myapp-rg \
+    --name spot-worker \
+    --max-price 0.05    # 0.05 USD/ora — se spot supera, VM viene evicted
+az vm start --resource-group myapp-rg --name spot-worker
+```
+
+---
+
+### Scenario 3 — Reserved Instance non applicata alle VM
+
+**Sintomo:** Le VM continuano a essere fatturate a tariffa PAYG nonostante una RI acquistata.
+
+**Causa:** La RI è stata acquistata con scope `Single subscription` e la VM gira su subscription diversa; oppure il `VM size` o la `region` non corrispondono esattamente alla RI; oppure la RI è scaduta.
+
+**Soluzione:** Verificare scope, size e regione della RI.
+
+```bash
+# Elenco RI con scope e dettagli
+az consumption reservations list \
+    --query "[].{Name:name, Region:location, VMSize:sku.name, Scope:properties.appliedScopes, Expiry:properties.expiryDate}" \
+    --output table
+
+# Cambiare scope da single a shared (copre tutte le subscription del billing account)
+# Eseguibile dal portal: Reservations → seleziona RI → Change scope → Shared
+```
+
+---
+
+### Scenario 4 — Tag non propagati alle risorse figlie
+
+**Sintomo:** Il Cost Analysis mostra risorse senza tag `CostCenter` o `Team` nonostante il Resource Group sia correttamente taggato.
+
+**Causa:** Azure non propaga i tag da Resource Group alle risorse automaticamente; le risorse create prima della policy non vengono remediate in automatico.
+
+**Soluzione:** Usare Azure Policy con `deployIfNotExists` o `modify` effect per ereditare tag, poi eseguire remediation task.
+
+```bash
+# Verificare policy assignments attive sul resource group
+az policy assignment list \
+    --resource-group myapp-rg \
+    --query "[].{Name:name, Policy:policyDefinitionId, Effect:parameters.effect.value}" \
+    --output table
+
+# Avviare remediation task per applicare la policy retroattivamente
+az policy remediation create \
+    --name remediate-costcenter \
+    --policy-assignment require-costcenter-tag \
+    --resource-group myapp-rg
+
+# Monitorare stato remediation
+az policy remediation show \
+    --name remediate-costcenter \
+    --resource-group myapp-rg \
+    --query "provisioningState" \
+    --output tsv
+```
+
+---
+
+## Best Practices
+
+- **Tag strategy prima del giorno 1:** definire uno schema di tag obbligatori (`Environment`, `Team`, `CostCenter`, `Application`) e applicarlo via Azure Policy prima di creare le prime risorse.
+- **RI su baseline, Savings Plan su variabilità:** acquistare RI per workload stabili e prevedibili (DB, VM production); usare Compute Savings Plan per copertura flessibile su picchi imprevedibili.
+- **Budget su ogni subscription non solo sul billing account:** un budget a livello subscription blocca la sorpresa; un budget a livello EA/MCA offre visibilità aggregata ma non granularità.
+- **Advisor Cost settimanale:** eseguire regolarmente `az advisor recommendation list --category Cost` per intercettare RI inutilizzate, VM undersized e risorse orfane (disk, IP pubblici, ecc.).
+- **Dev/Test subscription separata:** usare subscription Dev/Test per ambienti non-prod — prezzi scontati fino al 55% su Windows VM e servizi PaaS.
+
+---
+
+## Relazioni
+
+??? info "Azure Well-Architected Framework — Cost Optimization Pillar"
+    Il pilastro Cost Optimization del WAF definisce i principi di governance della spesa cloud (tagging, rightsizing, RI/Savings Plan). I modelli di pricing descritti qui sono gli strumenti operativi per applicare quell'ottimizzazione.
+
+    **Approfondimento completo →** [Azure Well-Architected Framework](../fondamentali/well-architected.md)
+
+??? info "Virtual Machines — Sizing e costi compute"
+    La scelta della VM size è il principale driver di costo per i workload IaaS. Conoscere la differenza tra PAYG, RI e Spot è fondamentale per scegliere la modalità di acquisto corretta per ogni workload.
+
+    **Approfondimento completo →** [Azure Virtual Machines](../compute/virtual-machines.md)
 
 ---
 

@@ -9,7 +9,7 @@ related: [ci-cd/github-actions/workflow-avanzati, ci-cd/jenkins/agent-infrastruc
 official_docs: https://docs.github.com/en/actions/hosting-your-own-runners
 status: complete
 difficulty: expert
-last_updated: 2026-02-27
+last_updated: 2026-03-28
 ---
 
 # GitHub Actions — Enterprise & Self-Hosted Runners
@@ -625,6 +625,135 @@ workflow_job.in_progress             # Job avviato (con runner info)
 workflow_run.completed               # Workflow completato (con status)
 secret.access                        # Secret acceduto (GHES Enterprise)
 ```
+
+## Troubleshooting
+
+### Scenario 1 — Runner offline o stuck in "Idle"
+
+**Sintomo:** Il runner appare come offline nella UI GitHub oppure rimane in stato "Idle" indefinitamente senza eseguire job.
+
+**Causa:** Il processo runner non riesce a raggiungere i server GitHub (problemi di rete, proxy, firewall), oppure il token di registrazione è scaduto (validità 1 ora).
+
+**Soluzione:** Verificare la connettività e il processo runner; se il token è scaduto, rigenerare dalle Settings.
+
+```bash
+# Verificare connettività agli endpoint GitHub richiesti
+curl -v https://api.github.com
+curl -v https://pipelines.actions.githubusercontent.com
+
+# Controllare il processo runner e i log
+sudo ./svc.sh status
+tail -f _diag/Runner_*.log
+
+# Se il runner è registrato ma non risponde, rimuoverlo e re-registrarlo
+./config.sh remove --token <NEW_TOKEN>
+./config.sh --url https://github.com/my-org/my-repo --token <NEW_TOKEN> --name my-runner
+
+# Per ambienti con proxy, assicurarsi che le variabili siano esposte al servizio
+sudo systemctl edit actions.runner.my-org.my-runner.service
+# Aggiungere nel file di override:
+# [Service]
+# Environment="https_proxy=http://proxy.internal:8080"
+# Environment="no_proxy=github.mycompany.internal"
+```
+
+---
+
+### Scenario 2 — ARC (Actions Runner Controller) non scala i runner
+
+**Sintomo:** Job in coda su GitHub Actions, ma i Pod runner non vengono creati su Kubernetes. `minRunners: 0` e nessun pod attivo.
+
+**Causa:** Problemi di autenticazione della GitHub App, RBAC insufficiente per l'operatore ARC, o namespace non configurato correttamente.
+
+**Soluzione:** Verificare i Secret Kubernetes e i log dell'operatore ARC.
+
+```bash
+# Verificare lo stato del controller ARC
+kubectl -n arc-systems get pods
+kubectl -n arc-systems logs deploy/arc-gha-runner-scale-set-controller
+
+# Verificare la RunnerScaleSet
+kubectl -n arc-runners get runnerscaleset
+kubectl -n arc-runners describe runnerscaleset arc-runner-k8s
+
+# Controllare che il Secret con le credenziali GitHub App sia corretto
+kubectl -n arc-runners get secret arc-github-secret -o jsonpath='{.data}' | base64 -d
+
+# Verificare gli eventi Kubernetes per errori
+kubectl -n arc-runners get events --sort-by='.lastTimestamp' | tail -20
+
+# Reinstallare il chart se la configurazione è corrotta
+helm upgrade arc-runner-set \
+  oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+  --namespace arc-runners \
+  --values arc-runner-scale-set.yml
+```
+
+---
+
+### Scenario 3 — Secret scanning blocca un push legittimo (falso positivo)
+
+**Sintomo:** Git push respinto con messaggio "Push blocked due to detected secrets". Il contenuto segnalato è un valore di test, un placeholder, o una stringa che assomiglia a un segreto ma non lo è.
+
+**Causa:** Il pattern di secret scanning di GitHub ha rilevato una corrispondenza su un valore che non è un segreto reale (es. fixture di test, documentazione, chiavi di esempio).
+
+**Soluzione:** Bypassare il blocco tramite UI GitHub con giustificazione, oppure via API, e aggiungere il percorso ai path-ignore.
+
+```bash
+# Bypass via API con giustificazione (registrato nell'audit log)
+curl -X PATCH \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  https://api.github.com/repos/my-org/my-repo/secret-scanning/alerts/42 \
+  -d '{"state": "dismissed", "resolution": "false_positive", "resolution_comment": "Test fixture - not a real credential"}'
+
+# Prevenire future segnalazioni: aggiungere il path a .github/secret_scanning.yml
+cat >> .github/secret_scanning.yml << 'EOF'
+paths-ignore:
+  - "tests/fixtures/**"
+  - "**/*.example"
+  - "docs/examples/**"
+EOF
+
+git add .github/secret_scanning.yml
+git commit -m "chore: exclude test fixtures from secret scanning"
+git push
+```
+
+---
+
+### Scenario 4 — Job fallisce con "No runner matching labels found"
+
+**Sintomo:** Il job rimane in coda con messaggio "Waiting for a runner to pick up this job" o fallisce immediatamente con "No runner matching the specified labels was found".
+
+**Causa:** Nessun runner attivo ha le label richieste dal job, oppure il runner group non include il repository che ha avviato il workflow.
+
+**Soluzione:** Verificare le label del runner, la disponibilità del runner group, e la configurazione di visibilità del gruppo.
+
+```bash
+# Elencare i runner dell'organizzazione e le loro label
+curl -H "Authorization: Bearer $GITHUB_TOKEN" \
+  https://api.github.com/orgs/my-org/actions/runners | \
+  jq '.runners[] | {name: .name, status: .status, labels: [.labels[].name]}'
+
+# Verificare i runner group e i repository autorizzati
+curl -H "Authorization: Bearer $GITHUB_TOKEN" \
+  https://api.github.com/orgs/my-org/actions/runner-groups | \
+  jq '.runner_groups[] | {name: .name, visibility: .visibility, restricted_to_workflows: .restricted_to_workflows}'
+
+# Aggiungere un repository a un runner group
+curl -X PUT \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  https://api.github.com/orgs/my-org/actions/runner-groups/1/repositories/123456789
+
+# Aggiungere label mancante a un runner esistente
+curl -X POST \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  https://api.github.com/orgs/my-org/actions/runners/42/labels \
+  -d '{"labels": ["gpu", "large"]}'
+```
+
+---
 
 ## Relazioni
 

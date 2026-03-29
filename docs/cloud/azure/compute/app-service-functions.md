@@ -9,7 +9,7 @@ related: [cloud/azure/security/key-vault, cloud/azure/networking/vnet, cloud/azu
 official_docs: https://learn.microsoft.com/azure/app-service/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-28
 ---
 
 # App Service & Azure Functions
@@ -580,8 +580,19 @@ az webapp config set \
 
 ## Troubleshooting
 
+### Scenario 1 — App Service restituisce HTTP 503 Service Unavailable
+
+**Sintomo:** Le richieste all'app restituiscono 503 intermittenti o costanti; il portale mostra istanze unhealthy.
+
+**Causa:** Istanza avviata ma processo applicativo crashato; Health Check rileva l'endpoint `/health` non raggiungibile. Oppure il piano Free/Shared ha esaurito la quota ore CPU giornaliera.
+
+**Soluzione:** Verificare i log applicativi, aumentare il tier se la quota è esaurita, correggere l'applicazione.
+
 ```bash
-# Streaming log real-time
+# Verificare quota e stato piano
+az appservice plan show --resource-group $RG --name $PLAN_NAME --query "[sku, status]"
+
+# Streaming log real-time per identificare crash
 az webapp log tail \
   --resource-group $RG \
   --name $APP_NAME
@@ -594,16 +605,115 @@ az webapp log config \
   --level verbose \
   --web-server-logging filesystem
 
-# Scaricare log
+# Riavviare app dopo fix
+az webapp restart --resource-group $RG --name $APP_NAME
+```
+
+### Scenario 2 — Azure Function non si attiva (cold start / trigger silenzioso)
+
+**Sintomo:** La Function non viene eseguita nonostante messaggi in coda o eventi; nessun log di invocazione visibile in Application Insights.
+
+**Causa:** Nel Consumption Plan le istanze si scalano a zero. Se lo storage account associato è irraggiungibile o la connection string `AzureWebJobsStorage` è errata, l'host Function non parte e i trigger restano silenti.
+
+**Soluzione:** Verificare la connessione allo storage, controllare che l'host sia in esecuzione, passare al Premium Plan se il cold start è inaccettabile.
+
+```bash
+# Verificare le app settings della Function App
+az functionapp config appsettings list \
+  --resource-group $RG \
+  --name func-processor-prod \
+  --query "[?name=='AzureWebJobsStorage']"
+
+# Verificare lo stato host della Function App
+az functionapp show \
+  --resource-group $RG \
+  --name func-processor-prod \
+  --query "{state:state, hostNames:defaultHostName}"
+
+# Visualizzare log recenti dell'host
+az functionapp log tail \
+  --resource-group $RG \
+  --name func-processor-prod
+
+# SSH nel container per debug in-process (Linux)
+az webapp ssh --resource-group $RG --name func-processor-prod
+```
+
+### Scenario 3 — Deployment Slot Swap causa downtime o 500 dopo swap
+
+**Sintomo:** Dopo un `slot swap` l'app di produzione restituisce 500 o risponde lentamente per alcuni minuti.
+
+**Causa:** L'app non ha un health check configurato o l'endpoint `/health` non valida correttamente il warm-up. Azure esegue il swap prima che la nuova istanza sia pronta, oppure le sticky settings non sono configurate e lo slot porta in produzione credenziali di staging.
+
+**Soluzione:** Configurare Health Check, assicurarsi che le impostazioni ambiente-specifiche siano marcate sticky, usare `--preserve-vnet` se rilevante.
+
+```bash
+# Configurare health check endpoint (warm-up)
+az webapp config set \
+  --resource-group $RG \
+  --name $APP_NAME \
+  --generic-configurations '{"healthCheckPath": "/health"}'
+
+# Verificare quali settings sono sticky (slot settings)
+az webapp config appsettings list \
+  --resource-group $RG \
+  --name $APP_NAME \
+  --slot staging \
+  --query "[?slotSetting==true].{name:name}"
+
+# Marcare DB_URL come sticky PRIMA dello swap
+az webapp config appsettings set \
+  --resource-group $RG \
+  --name $APP_NAME \
+  --slot staging \
+  --slot-settings DATABASE_URL="postgres://staging-db..."
+
+# Swap con verifica manuale (auto-swap off)
+az webapp deployment slot swap \
+  --resource-group $RG \
+  --name $APP_NAME \
+  --slot staging \
+  --target-slot production
+```
+
+### Scenario 4 — VNet Integration non funziona: app non raggiunge risorse private
+
+**Sintomo:** L'App Service non riesce a connettersi al database o ad altri servizi all'interno della VNet; timeout di connessione nei log.
+
+**Causa:** La subnet delegata non ha la delega `Microsoft.Web/serverFarms`, il routing non è configurato correttamente (`WEBSITE_VNET_ROUTE_ALL` mancante), oppure il Network Security Group (NSG) sulla subnet blocca il traffico uscente.
+
+**Soluzione:** Verificare la delega della subnet, le regole NSG, e le app settings di routing.
+
+```bash
+# Verificare VNet integration attiva
+az webapp vnet-integration list \
+  --resource-group $RG \
+  --name $APP_NAME
+
+# Verificare delega sulla subnet
+az network vnet subnet show \
+  --resource-group $RG \
+  --vnet-name vnet-prod \
+  --name snet-appservice-outbound \
+  --query "delegations[].serviceName"
+
+# Verificare NSG sulla subnet
+az network nsg rule list \
+  --resource-group $RG \
+  --nsg-name nsg-appservice \
+  --output table
+
+# Forzare routing attraverso VNet (necessario per raggiungere risorse private)
+az webapp config appsettings set \
+  --resource-group $RG \
+  --name $APP_NAME \
+  --settings WEBSITE_VNET_ROUTE_ALL=1
+
+# Scaricare log per analisi offline
 az webapp log download \
   --resource-group $RG \
   --name $APP_NAME \
   --log-file webapp_logs.zip
-
-# SSH nel container (solo Linux)
-az webapp ssh \
-  --resource-group $RG \
-  --name $APP_NAME
 ```
 
 ## Riferimenti

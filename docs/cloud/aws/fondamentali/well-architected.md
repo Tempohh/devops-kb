@@ -9,7 +9,7 @@ related: [cloud/aws/fondamentali/shared-responsibility, cloud/aws/monitoring/clo
 official_docs: https://aws.amazon.com/architecture/well-architected/
 status: complete
 difficulty: beginner
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # AWS Well-Architected Framework
@@ -248,6 +248,108 @@ Il **Well-Architected Tool** è un servizio gratuito in AWS Console per condurre
 | **Allow for evolutionary architectures** | Design for change, non per stabilità eterna |
 | **Drive architectures using data** | Metriche → decisioni |
 | **Improve through game days** | Simulazioni di failure regolari |
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Well-Architected Review rivela troppi High Risk Items (HRI)
+
+**Sintomo:** Dopo una review con il Well-Architected Tool, il report mostra 10+ HRI e il team non sa da dove iniziare.
+
+**Causa:** La review copre tutti i pilastri contemporaneamente su un workload maturo mai revisionato prima.
+
+**Soluzione:** Prioritizzare HRI per impatto di business, non per pilastro. Attaccare prima Reliability e Security (impatto operativo diretto), poi Cost e Performance. Creare milestone nel Improvement Plan del tool.
+
+```bash
+# Visualizzare HRI per workload via CLI
+aws wellarchitected list-answers \
+  --workload-id <workload-id> \
+  --lens-alias arn:aws:wellarchitected::aws:lens/wellarchitected \
+  --pillar-id reliability \
+  --query "AnswerSummaries[?Risk=='HIGH']"
+
+# Ottenere lista workload
+aws wellarchitected list-workloads --query "WorkloadSummaries[*].[WorkloadId,WorkloadName,RiskCounts]"
+```
+
+---
+
+### Scenario 2 — Costi AWS superiori al budget senza causa apparente
+
+**Sintomo:** Il costo mensile supera il budget del 30-50%, ma non ci sono nuove risorse visibili nel dashboard principale.
+
+**Causa:** Risorse orfane (snapshot EBS, Load Balancer inutilizzati, NAT Gateway), traffico data transfer inter-region, o istanze over-provisioned.
+
+**Soluzione:** Usare Cost Explorer con granularità servizio, verificare i suggerimenti di Trusted Advisor e Compute Optimizer.
+
+```bash
+# Identificare risorse costose per servizio nell'ultimo mese
+aws ce get-cost-and-usage \
+  --time-period Start=2026-02-01,End=2026-03-01 \
+  --granularity MONTHLY \
+  --metrics "UnblendedCost" \
+  --group-by Type=DIMENSION,Key=SERVICE \
+  --query "ResultsByTime[0].Groups[?Metrics.UnblendedCost.Amount > '10']" \
+  --output table
+
+# Verificare snapshot EBS non associati a volumi attivi
+aws ec2 describe-snapshots --owner-ids self \
+  --query "Snapshots[?State=='completed'].[SnapshotId,VolumeSize,StartTime]" \
+  --output table
+```
+
+---
+
+### Scenario 3 — Applicazione non resiliente a failure di singola AZ
+
+**Sintomo:** Durante una manutenzione AWS su un'AZ, l'applicazione va offline invece di fare failover automatico.
+
+**Causa:** Risorse deployate in una sola AZ (EC2 singola, RDS senza Multi-AZ, ELB senza subnets in più AZ).
+
+**Soluzione:** Distribuire risorse su almeno 2 AZ, abilitare RDS Multi-AZ, configurare Auto Scaling Group con AZ multipli.
+
+```bash
+# Verificare distribuzione EC2 per AZ
+aws ec2 describe-instances \
+  --query "Reservations[*].Instances[*].[InstanceId,Placement.AvailabilityZone,State.Name]" \
+  --output table
+
+# Verificare se RDS ha Multi-AZ abilitato
+aws rds describe-db-instances \
+  --query "DBInstances[*].[DBInstanceIdentifier,MultiAZ,AvailabilityZone]" \
+  --output table
+
+# Abilitare Multi-AZ su RDS esistente (causa breve downtime)
+aws rds modify-db-instance \
+  --db-instance-identifier <db-id> \
+  --multi-az \
+  --apply-immediately
+```
+
+---
+
+### Scenario 4 — Security Hub segnala findings critici ignorati
+
+**Sintomo:** Security Hub accumula centinaia di findings, il team li considera rumore di fondo e smette di monitorarli.
+
+**Causa:** Nessun processo di triage, findings non assegnati a owner, mancanza di integrazione con ticket system.
+
+**Soluzione:** Filtrare per severity CRITICAL/HIGH, sopprimere finding non applicabili con giustificazione, integrare con EventBridge → Lambda → Jira/ServiceNow per auto-ticketing.
+
+```bash
+# Elencare finding critici attivi in Security Hub
+aws securityhub get-findings \
+  --filters '{"SeverityLabel":[{"Value":"CRITICAL","Comparison":"EQUALS"}],"RecordState":[{"Value":"ACTIVE","Comparison":"EQUALS"}]}' \
+  --query "Findings[*].[Title,AwsAccountId,UpdatedAt]" \
+  --output table
+
+# Sopprimere finding non applicabile (con nota)
+aws securityhub batch-update-findings \
+  --finding-identifiers Id=<finding-arn>,ProductArn=<product-arn> \
+  --workflow Status=SUPPRESSED \
+  --note Text="Non applicabile: ambiente sandbox senza dati sensibili",UpdatedBy=security-team
+```
 
 ---
 

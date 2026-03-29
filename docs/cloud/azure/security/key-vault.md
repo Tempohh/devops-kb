@@ -9,7 +9,7 @@ related: [cloud/azure/compute/app-service-functions, cloud/azure/compute/aks-con
 official_docs: https://learn.microsoft.com/azure/key-vault/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Azure Key Vault
@@ -515,25 +515,155 @@ print(f"Signature valid: {verify_result.is_valid}")
 
 ## Troubleshooting
 
+### Scenario 1 — Access Denied (403) da Managed Identity
+
+**Sintomo:** L'applicazione riceve `403 Forbidden` o `ForbiddenByPolicy` quando tenta di leggere un segreto.
+
+**Causa:** La Managed Identity non ha un Role Assignment sul Key Vault, oppure il RBAC non è abilitato e si usa ancora Access Policies senza aggiornamento.
+
+**Soluzione:** Verificare l'assegnazione del ruolo e aggiungerla se mancante.
+
 ```bash
-# Verificare che la Managed Identity abbia accesso
+# Ottenere l'object ID della Managed Identity
+MI_OBJECT_ID=$(az identity show \
+  --resource-group rg-webapp-prod \
+  --name mi-myapp \
+  --query principalId -o tsv)
+
+# Verificare ruoli assegnati sul Key Vault
 az role assignment list \
   --scope $KV_ID \
+  --assignee $MI_OBJECT_ID \
   --output table
 
-# Testare accesso con identità specifica
+# Se non ci sono assegnazioni, aggiungere Key Vault Secrets User
+az role assignment create \
+  --assignee-object-id $MI_OBJECT_ID \
+  --assignee-principal-type ServicePrincipal \
+  --role "Key Vault Secrets User" \
+  --scope $KV_ID
+
+# Attendere propagazione (1-5 min) poi testare
 az keyvault secret show \
   --vault-name $KV_NAME \
-  --name my-secret \
-  --auth-mode login  # usa le credenziali dell'utente corrente
+  --name my-secret
+```
 
-# Verificare log di accesso in Log Analytics
-# Query KQL:
-# AzureDiagnostics
-# | where ResourceType == "VAULTS"
-# | where OperationName == "SecretGet"
-# | project TimeGenerated, CallerIPAddress, identity_claim_upn_s, requestUri_s, ResultType
-# | order by TimeGenerated desc
+---
+
+### Scenario 2 — Key Vault Reference non risolta in App Service
+
+**Sintomo:** L'App Setting mostra `@Microsoft.KeyVault(...)` come stringa letterale invece del valore del segreto. Il portale mostra l'icona di errore accanto al setting.
+
+**Causa:** La System-Assigned Managed Identity dell'App Service non è abilitata, oppure non ha il ruolo `Key Vault Secrets User`, oppure la sintassi della reference è errata.
+
+**Soluzione:**
+
+```bash
+# 1. Abilitare System-Assigned Identity sull'App Service
+az webapp identity assign \
+  --resource-group rg-webapp-prod \
+  --name myapp-prod
+
+APP_PRINCIPAL_ID=$(az webapp identity show \
+  --resource-group rg-webapp-prod \
+  --name myapp-prod \
+  --query principalId -o tsv)
+
+# 2. Assegnare il ruolo
+az role assignment create \
+  --assignee-object-id $APP_PRINCIPAL_ID \
+  --assignee-principal-type ServicePrincipal \
+  --role "Key Vault Secrets User" \
+  --scope $KV_ID
+
+# 3. Verificare lo stato delle reference (portale o REST API)
+az webapp config appsettings list \
+  --resource-group rg-webapp-prod \
+  --name myapp-prod \
+  --query "[?contains(value, 'KeyVault')]" \
+  --output table
+
+# 4. Forzare refresh riavviando l'app
+az webapp restart \
+  --resource-group rg-webapp-prod \
+  --name myapp-prod
+```
+
+---
+
+### Scenario 3 — Impossibile eliminare permanentemente un segreto (purge)
+
+**Sintomo:** `az keyvault secret purge` restituisce errore `Conflict` o `SecretIsPurgeProtected`.
+
+**Causa:** La purge protection è abilitata sul vault. Con purge protection attiva i segreti soft-deleted non possono essere eliminati permanentemente prima dello scadere del retention period (default 90 giorni).
+
+**Soluzione:** Attendere il retention period oppure, se il vault non è in produzione e si vuole eliminarlo completamente, procedere alla cancellazione del vault intero dopo il retention period.
+
+```bash
+# Verificare se purge protection è attiva
+az keyvault show \
+  --name $KV_NAME \
+  --query "{softDelete:properties.enableSoftDelete, purgeProtection:properties.enablePurgeProtection}" \
+  --output json
+
+# Verificare i segreti nel deleted state
+az keyvault secret list-deleted \
+  --vault-name $KV_NAME \
+  --output table
+
+# Recuperare la data di scadenza per il purge
+az keyvault secret show-deleted \
+  --vault-name $KV_NAME \
+  --name my-secret \
+  --query "scheduledPurgeDate"
+
+# Se purge protection NON è attiva, si può forzare il purge
+az keyvault secret purge \
+  --vault-name $KV_NAME \
+  --name my-secret
+```
+
+---
+
+### Scenario 4 — Timeout di connessione al Key Vault da VM o AKS
+
+**Sintomo:** L'applicazione imposta un timeout cercando di raggiungere `https://<vault>.vault.azure.net`. L'errore è di tipo network (connection refused o DNS resolution failure).
+
+**Causa:** Il vault ha `--public-network-access Disabled` e non è configurato il Private Endpoint o le network rules per la subnet del caller. Oppure il DNS non risolve il private endpoint.
+
+**Soluzione:**
+
+```bash
+# 1. Verificare le network rules del vault
+az keyvault show \
+  --name $KV_NAME \
+  --query "properties.networkAcls" \
+  --output json
+
+# 2. Aggiungere la subnet del caller alle network rules
+az keyvault network-rule add \
+  --resource-group $RG \
+  --name $KV_NAME \
+  --vnet-name vnet-prod \
+  --subnet snet-app
+
+# 3. Verificare la risoluzione DNS dal pod/VM (deve puntare all'IP privato)
+# Da dentro il cluster/VM:
+# nslookup kv-prod-myapp-2026.vault.azure.net
+# Deve restituire un IP in 10.x.x.x (private endpoint IP), non un IP pubblico
+
+# 4. Verificare che il Private DNS Zone Link sia configurato
+az network private-dns link vnet list \
+  --resource-group $RG \
+  --zone-name "privatelink.vaultcore.azure.net" \
+  --output table
+
+# 5. Verificare log diagnostici
+az monitor log-analytics query \
+  --workspace $(az monitor log-analytics workspace list --resource-group $RG --query "[0].id" -o tsv) \
+  --analytics-query "AzureDiagnostics | where ResourceType == 'VAULTS' | where OperationName == 'SecretGet' | project TimeGenerated, CallerIPAddress, ResultType | order by TimeGenerated desc | take 20" \
+  --output table
 ```
 
 ## Riferimenti

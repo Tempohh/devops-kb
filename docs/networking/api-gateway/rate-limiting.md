@@ -9,7 +9,7 @@ related: [networking/api-gateway/pattern-base, networking/api-gateway/kong, netw
 official_docs: https://nginx.org/en/docs/http/ngx_http_limit_req_module.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Rate Limiting
@@ -331,13 +331,110 @@ Content-Type: application/json
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| Rate limit diversi su istanze diverse | Ogni istanza ha contatore locale | Usare Redis come store condiviso |
-| Burst legittimi bloccati | Burst troppo basso | Aumentare il burst, usare Token Bucket |
-| Rate limiting non applicato | Redis non raggiungibile, fallback permissivo | Configurare circuit breaker su Redis |
-| Client non rispetta Retry-After | Client non legge l'header | Documentare e verificare implementazione client |
-| Limite troppo stringente | Calibrazione errata | Analizzare access log per distribuzione delle richieste |
+### Scenario 1 — Rate limit incoerente tra istanze
+
+**Sintomo:** Alcuni client ricevono 429 su un pod ma non su un altro per lo stesso volume di traffico. I limiti sembrano applicati in modo casuale.
+
+**Causa:** Ogni istanza del gateway mantiene il proprio contatore in memoria locale. In un deployment multi-pod, le richieste vengono distribuite dal load balancer e ogni pod vede solo la sua porzione del traffico.
+
+**Soluzione:** Configurare Redis come store condiviso. Tutti i pod leggono e scrivono sullo stesso contatore atomico.
+
+```bash
+# Verifica che il rate limiter usi Redis e non memoria locale
+# Esempio: Kong verifica configurazione plugin
+kubectl exec -n api-gateway deploy/kong -- kong config get | grep -A5 rate-limiting
+
+# Controlla la connettività Redis dai pod
+kubectl exec -n api-gateway deploy/kong -- redis-cli -h redis-service ping
+# Expected: PONG
+
+# Ispeziona il contatore in Redis per un client specifico
+redis-cli -h redis-host KEYS "rate:*:user123*"
+redis-cli -h redis-host ZCARD "rate:user123:1234567890"
+```
+
+---
+
+### Scenario 2 — Burst legittimi bloccati (429 su richieste valide)
+
+**Sintomo:** Utenti legittimi ricevono 429 durante operazioni normali (caricamento pagina, sync iniziale, chiamate batch). Il limite sembra troppo restrittivo.
+
+**Causa:** La configurazione non tiene conto dei burst naturali del traffico reale. Ad esempio, un caricamento pagina può generare 10-20 richieste parallele in meno di un secondo.
+
+**Soluzione:** Aumentare il burst o passare a Token Bucket che gestisce meglio i picchi controllati. Analizzare prima il pattern reale con i log.
+
+```bash
+# Analizza la distribuzione delle richieste per secondo negli access log
+awk '{print $4}' /var/log/nginx/access.log | \
+  awk -F: '{print $1":"$2":"$3}' | sort | uniq -c | sort -rn | head -20
+
+# Nginx: aumenta il burst e usa nodelay per non accodare
+# Prima: limit_req zone=per_token burst=5 nodelay;
+# Dopo:  limit_req zone=per_token burst=20 nodelay;
+
+# Verifica il tasso effettivo richieste al secondo per un client
+redis-cli -h redis-host ZCOUNT "rate:user123" \
+  "$(date -d '1 second ago' +%s%3N)" "$(date +%s%3N)"
+```
+
+---
+
+### Scenario 3 — Rate limiting non applicato (Redis irraggiungibile)
+
+**Sintomo:** Dopo un'interruzione Redis, il rate limiting smette di funzionare e tutto il traffico passa senza limiti. Oppure, viceversa, tutto il traffico viene bloccato.
+
+**Causa:** Il codice non gestisce l'errore Redis: o fa fallback permissivo (lascia passare tutto) o fallback restrittivo (blocca tutto). Nessuno dei due è il comportamento corretto in produzione.
+
+**Soluzione:** Implementare un circuit breaker su Redis con fallback a rate limiting locale degradato. Il comportamento atteso durante outage Redis: applicare un limite locale più permissivo, loggare l'anomalia.
+
+```bash
+# Verifica lo stato di Redis
+redis-cli -h redis-host ping
+redis-cli -h redis-host info replication | grep role
+
+# Controlla gli errori di connessione nei log del gateway
+kubectl logs -n api-gateway deploy/api-gateway --since=10m | grep -i "redis\|rate.*error\|circuit"
+
+# Monitora le metriche di connessione Redis in Prometheus (se disponibile)
+curl -s http://gateway:9090/metrics | grep redis_pool_connections
+
+# Test di resilienza: simula outage Redis
+kubectl exec -n redis deploy/redis -- redis-cli DEBUG SLEEP 30
+# Osserva il comportamento del gateway durante questi 30 secondi
+```
+
+---
+
+### Scenario 4 — Calibrazione errata del limite (troppo stringente o troppo permissivo)
+
+**Sintomo:** Il limite configurato non riflette il traffico reale. Troppo basso: utenti legittimi bloccati. Troppo alto: protezione inefficace contro abusi.
+
+**Causa:** Il limite è stato impostato arbitrariamente senza analisi del traffico storico. I pattern variano molto tra endpoint (login vs. GET /products).
+
+**Soluzione:** Estrarre la distribuzione percentile delle richieste dagli access log, impostare il limite al p95 o p99 del traffico legittimo, e usare limiti diversi per endpoint diversi.
+
+```bash
+# Estrai richieste per minuto per client dagli access log Nginx
+# (assumendo formato: IP - - [timestamp] "METHOD path" status bytes)
+awk '{print $1, substr($4,2,17)}' /var/log/nginx/access.log | \
+  awk '{print $1, substr($2,1,16)}' | sort | uniq -c | \
+  awk '{print $1}' | sort -n | awk '
+    BEGIN { n=0 }
+    { vals[n++]=$1 }
+    END {
+      print "p50:", vals[int(n*0.50)]
+      print "p95:", vals[int(n*0.95)]
+      print "p99:", vals[int(n*0.99)]
+      print "max:", vals[n-1]
+    }
+  '
+
+# Esempio output per calibrazione:
+# p50: 12   → utente medio: 12 req/min
+# p95: 67   → limite ragionevole: 100 req/min
+# p99: 234  → burst legittimi: burst=50
+# max: 1840 → probabili abusi: bloccare sopra 500 req/min
+```
 
 ## Relazioni
 

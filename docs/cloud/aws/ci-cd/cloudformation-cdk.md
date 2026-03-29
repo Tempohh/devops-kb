@@ -9,7 +9,7 @@ related: [cloud/aws/ci-cd/code-services, cloud/aws/compute/lambda, cloud/aws/con
 official_docs: https://docs.aws.amazon.com/cloudformation/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # CloudFormation, CDK & SAM
@@ -922,6 +922,143 @@ CloudFormation/CDK Best Practices
   ✓ CDK Aspects per tag e policy trasversali
   ✓ Test con fine-grained assertions (non solo snapshot)
   ✓ CDK Pipelines per self-mutating CI/CD
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Stack bloccato in ROLLBACK_IN_PROGRESS o UPDATE_ROLLBACK_FAILED
+
+**Sintomo:** Lo stack rimane bloccato in `UPDATE_ROLLBACK_FAILED` e non è possibile eseguire ulteriori update o delete.
+
+**Causa:** Una o più risorse non possono essere ripristinate al loro stato precedente (es. risorsa eliminata manualmente fuori da CloudFormation, policy IAM che impedisce il rollback).
+
+**Soluzione:** Usare `continue-update-rollback` con l'opzione di skip delle risorse problematiche.
+
+```bash
+# Identificare le risorse che bloccano il rollback
+aws cloudformation describe-stack-events \
+    --stack-name myapp-prod \
+    --query 'StackEvents[?ResourceStatus==`UPDATE_ROLLBACK_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
+    --output table
+
+# Riprendere rollback saltando le risorse problematiche
+aws cloudformation continue-update-rollback \
+    --stack-name myapp-prod \
+    --resources-to-skip LogicalResourceId1 LogicalResourceId2
+
+# Se lo stack è in DELETE_FAILED, forzare eliminazione saltando risorse
+aws cloudformation delete-stack \
+    --stack-name myapp-prod \
+    --retain-resources LogicalResourceId1
+```
+
+---
+
+### Scenario 2 — Errore CAPABILITY_IAM / CAPABILITY_NAMED_IAM al deploy
+
+**Sintomo:** Il deploy fallisce con `InsufficientCapabilitiesException: Requires capabilities: [CAPABILITY_IAM]` o `[CAPABILITY_NAMED_IAM]`.
+
+**Causa:** Il template crea o modifica risorse IAM (Role, Policy, InstanceProfile). CloudFormation richiede conferma esplicita perché le risorse IAM possono avere impatti di sicurezza.
+
+**Soluzione:** Aggiungere le capability corrette al comando di deploy.
+
+```bash
+# Per risorse IAM con nomi automatici
+aws cloudformation deploy \
+    --stack-name myapp-prod \
+    --template-file template.yaml \
+    --capabilities CAPABILITY_IAM
+
+# Per risorse IAM con nomi espliciti (es. RoleName: "my-specific-role")
+aws cloudformation deploy \
+    --stack-name myapp-prod \
+    --template-file template.yaml \
+    --capabilities CAPABILITY_NAMED_IAM
+
+# Per template con Transforms (SAM, Macros)
+aws cloudformation deploy \
+    --stack-name myapp-prod \
+    --template-file template.yaml \
+    --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
+
+# In CDK — configurare nel cdk.json o passare al deploy
+cdk deploy --require-approval never   # non raccomandato in prod
+```
+
+---
+
+### Scenario 3 — CDK Bootstrap mancante o versione incompatibile
+
+**Sintomo:** `cdk deploy` fallisce con `This stack uses assets, so the toolkit stack must be deployed to the environment` oppure `CDK toolkit version X is not compatible`.
+
+**Causa:** L'environment AWS (account + region) non è stato bootstrappato, oppure il bootstrap è obsoleto rispetto alla versione CDK usata.
+
+**Soluzione:** Eseguire o aggiornare il bootstrap CDK.
+
+```bash
+# Verificare se il bootstrap esiste
+aws cloudformation describe-stacks \
+    --stack-name CDKToolkit \
+    --region eu-central-1 \
+    --query 'Stacks[0].{Status:StackStatus,Outputs:Outputs}' \
+    --output json
+
+# Bootstrap iniziale o aggiornamento
+cdk bootstrap aws://ACCOUNT_ID/REGION
+
+# Bootstrap cross-account (da account CI verso account target)
+cdk bootstrap \
+    --profile prod-account \
+    --cloudformation-execution-policies arn:aws:iam::aws:policy/AdministratorAccess \
+    --trust DEPLOY_ACCOUNT_ID \
+    aws://PROD_ACCOUNT_ID/eu-central-1
+
+# Forzare aggiornamento bootstrap all'ultima versione
+cdk bootstrap --force aws://ACCOUNT_ID/REGION
+```
+
+---
+
+### Scenario 4 — Drift detection segnala risorse modificate manualmente
+
+**Sintomo:** `describe-stack-resource-drifts` mostra risorse in stato `MODIFIED` o `DELETED` dopo modifiche manuali via Console o CLI.
+
+**Causa:** Le risorse sono state modificate fuori dal ciclo CloudFormation, creando divergenza tra il template (stato desiderato) e lo stato reale.
+
+**Soluzione:** Riconciliare manualmente o importare le risorse nello stack.
+
+```bash
+# Avviare drift detection
+DETECTION_ID=$(aws cloudformation detect-stack-drift \
+    --stack-name myapp-prod \
+    --query StackDriftDetectionId --output text)
+
+# Attendere completamento
+aws cloudformation wait stack-drift-detection-complete \
+    --stack-drift-detection-id $DETECTION_ID
+
+# Vedere dettaglio delle differenze
+aws cloudformation describe-stack-resource-drifts \
+    --stack-name myapp-prod \
+    --stack-resource-drift-status-filters MODIFIED DELETED \
+    --query 'StackResourceDrifts[*].{Resource:LogicalResourceId,Status:StackResourceDriftStatus,Expected:ExpectedProperties,Actual:ActualProperties}'
+
+# Opzione A: riallineare applicando il template attuale (sovrascrive le modifiche manuali)
+aws cloudformation update-stack \
+    --stack-name myapp-prod \
+    --use-previous-template \
+    --capabilities CAPABILITY_IAM
+
+# Opzione B: importare risorse esistenti nello stack (se create fuori da CF)
+# Richiede che la risorsa supporti CloudFormation Resource Import
+aws cloudformation create-change-set \
+    --stack-name myapp-prod \
+    --change-set-name import-resources \
+    --change-set-type IMPORT \
+    --resources-to-import ResourceType=AWS::S3::Bucket,LogicalResourceId=MyBucket,ResourceIdentifier={BucketName=existing-bucket-name} \
+    --template-body file://template.yaml
 ```
 
 ---

@@ -9,7 +9,7 @@ related: [cloud/aws/iam/_index, cloud/aws/security/_index, cloud/aws/fondamental
 official_docs: https://aws.amazon.com/compliance/shared-responsibility-model/
 status: complete
 difficulty: beginner
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # Shared Responsibility Model
@@ -169,6 +169,119 @@ Anche la **compliance** segue il modello condiviso:
 
     **Domanda tipo:** "Chi è responsabile del patching del sistema operativo su EC2?"
     **Risposta:** Il cliente (EC2 è IaaS — il cliente ha accesso root all'OS)
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — S3 bucket accessibile pubblicamente per errore
+
+**Sintomo:** Dati esposti pubblicamente; alert da AWS Security Hub o Trusted Advisor: "S3 bucket is publicly accessible".
+
+**Causa:** Il cliente ha configurato erroneamente la bucket policy o non ha attivato il "Block Public Access" — responsabilità del cliente secondo il modello condiviso.
+
+**Soluzione:** Attivare immediatamente il blocco accesso pubblico e rivedere la policy.
+
+```bash
+# Blocca accesso pubblico su un bucket specifico
+aws s3api put-public-access-block \
+  --bucket my-bucket \
+  --public-access-block-configuration \
+    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+
+# Verifica lo stato
+aws s3api get-public-access-block --bucket my-bucket
+
+# Audit: trova tutti i bucket pubblici nell'account
+aws s3api list-buckets --query 'Buckets[].Name' --output text | \
+  xargs -I {} aws s3api get-public-access-block --bucket {}
+```
+
+---
+
+### Scenario 2 — EC2 compromessa: OS non aggiornato
+
+**Sintomo:** Notifica da Amazon Inspector o GuardDuty di vulnerabilità critica su istanza EC2; exploit noto sull'OS.
+
+**Causa:** Il patching del sistema operativo su EC2 è responsabilità del cliente (IaaS). Il cliente non aveva attivato patch management automatico.
+
+**Soluzione:** Applicare patch immediatamente tramite AWS Systems Manager Patch Manager.
+
+```bash
+# Esegui patching immediato via SSM su istanza specifica
+aws ssm send-command \
+  --instance-ids "i-0123456789abcdef0" \
+  --document-name "AWS-RunPatchBaseline" \
+  --parameters '{"Operation":["Install"]}' \
+  --comment "Emergency security patching"
+
+# Verifica stato patch
+aws ssm describe-instance-patch-states \
+  --instance-ids "i-0123456789abcdef0"
+
+# Configura patching automatico (baseline di default)
+aws ssm create-patch-baseline \
+  --name "AutoPatchBaseline" \
+  --operating-system "AMAZON_LINUX_2" \
+  --approval-rules '{"PatchRules":[{"PatchFilterGroup":{"PatchFilters":[{"Key":"SEVERITY","Values":["Critical","Important"]}]},"ApproveAfterDays":7}]}'
+```
+
+---
+
+### Scenario 3 — Credenziali IAM esposte in un repository pubblico
+
+**Sintomo:** Alert di AWS (email o GuardDuty) per utilizzo anomalo di access key; oppure chiave trovata in commit GitHub.
+
+**Causa:** La gestione delle credenziali IAM è responsabilità esclusiva del cliente. AWS non può impedire che il cliente esponga le proprie chiavi.
+
+**Soluzione:** Revocare immediatamente la chiave compromessa, analizzare l'accesso, e ruotare le credenziali.
+
+```bash
+# 1. Disabilita immediatamente la chiave compromessa
+aws iam update-access-key \
+  --access-key-id AKIAIOSFODNN7EXAMPLE \
+  --status Inactive \
+  --user-name my-user
+
+# 2. Verifica le azioni eseguite con la chiave (ultimi 90 giorni)
+aws cloudtrail lookup-events \
+  --lookup-attributes AttributeKey=AccessKeyId,AttributeValue=AKIAIOSFODNN7EXAMPLE \
+  --max-results 50
+
+# 3. Elimina la chiave compromessa e creane una nuova
+aws iam delete-access-key \
+  --access-key-id AKIAIOSFODNN7EXAMPLE \
+  --user-name my-user
+
+aws iam create-access-key --user-name my-user
+```
+
+---
+
+### Scenario 4 — Confusione su chi gestisce il patching di RDS
+
+**Sintomo:** Il team di sicurezza segnala che il database engine RDS non è aggiornato all'ultima versione; si chiede chi deve agire.
+
+**Causa:** Fraintendimento del modello condiviso: per RDS (PaaS), AWS gestisce il patching del database engine e dell'OS sottostante. Il cliente non ha accesso diretto all'OS.
+
+**Soluzione:** Verificare la versione e la policy di manutenzione automatica; per aggiornamenti di versione major, il cliente deve pianificare la migrazione.
+
+```bash
+# Verifica versione engine e prossimo maintenance window
+aws rds describe-db-instances \
+  --query 'DBInstances[*].{ID:DBInstanceIdentifier,Engine:Engine,Version:EngineVersion,AutoMinorUpgrade:AutoMinorVersionUpgrade,MaintenanceWindow:PreferredMaintenanceWindow}'
+
+# Attiva aggiornamenti automatici per minor versions (responsabilità configurazione: cliente)
+aws rds modify-db-instance \
+  --db-instance-identifier my-db \
+  --auto-minor-version-upgrade \
+  --apply-immediately
+
+# Verifica gli aggiornamenti pending
+aws rds describe-db-instances \
+  --db-instance-identifier my-db \
+  --query 'DBInstances[0].PendingModifiedValues'
+```
 
 ---
 

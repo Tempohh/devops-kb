@@ -9,7 +9,7 @@ related: [cloud/azure/fondamentali/shared-responsibility, cloud/azure/networking
 official_docs: https://azure.microsoft.com/global-infrastructure/
 status: complete
 difficulty: beginner
-last_updated: 2026-02-26
+last_updated: 2026-03-28
 ---
 
 # Infrastruttura Globale Azure
@@ -173,6 +173,116 @@ az network watcher connection-monitor create \
     --location italynorth \
     --source-resource myvm \
     --dest-resource myvm-westeurope
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Il servizio non è disponibile nella region selezionata
+
+**Sintomo:** Al momento del deploy di una risorsa (es. VM SKU, servizio PaaS) compare l'errore `The requested size is not available in the location`.
+
+**Causa:** Non tutti i servizi o SKU sono disponibili in tutte le region. Le region più recenti (es. Italy North) hanno disponibilità limitata rispetto alle region mature.
+
+**Soluzione:** Verificare la disponibilità del servizio nella region target e, se necessario, usare la region pair come alternativa.
+
+```bash
+# Verificare quali SKU VM sono disponibili in una region
+az vm list-skus \
+    --location italynorth \
+    --query "[?resourceType=='virtualMachines'].{Name:name, Restrictions:restrictions}" \
+    --output table
+
+# Verificare disponibilità di un servizio specifico per region
+az provider show \
+    --namespace Microsoft.Sql \
+    --query "resourceTypes[?resourceType=='servers'].locations" \
+    --output table
+```
+
+---
+
+### Scenario 2 — VM deployata in una zona non corrisponde alle aspettative di HA
+
+**Sintomo:** Due VM dello stesso tier vengono deployate nella stessa zona fisica, vanificando la ridondanza di zona.
+
+**Causa:** Se non si specifica esplicitamente la zona durante il deploy, Azure assegna la zona automaticamente, potendo posizionare più VM nella stessa.
+
+**Soluzione:** Specificare sempre zone diverse esplicitamente per ciascuna VM critica.
+
+```bash
+# Deploy VM in zone diverse (zona 1 e zona 2)
+az vm create \
+    --resource-group myapp-rg \
+    --name myvm-zone1 \
+    --image Ubuntu2204 \
+    --zone 1 \
+    --size Standard_D2s_v3
+
+az vm create \
+    --resource-group myapp-rg \
+    --name myvm-zone2 \
+    --image Ubuntu2204 \
+    --zone 2 \
+    --size Standard_D2s_v3
+
+# Verificare la zona assegnata a ciascuna VM
+az vm list \
+    --resource-group myapp-rg \
+    --query "[].{Name:name, Zone:zones}" \
+    --output table
+```
+
+---
+
+### Scenario 3 — Geo-redundant storage non replica nella region attesa
+
+**Sintomo:** I dati di uno storage account GRS non risultano nella region pair prevista (es. Italy North → Germany West Central).
+
+**Causa:** La region pair viene assegnata da Microsoft e non è configurabile dall'utente. In alcuni casi la replica potrebbe essere in ritardo o la region pair è diversa da quella attesa.
+
+**Soluzione:** Verificare la region pair reale tramite CLI e controllare il lag di replica.
+
+```bash
+# Verificare la region pair di uno storage account
+az storage account show \
+    --name mystorageaccount \
+    --resource-group myapp-rg \
+    --query "{PrimaryLocation:primaryLocation, SecondaryLocation:secondaryLocation, ReplicationStatus:statusOfPrimary}" \
+    --output table
+
+# Ottenere la region pair di una location
+az account list-locations \
+    --query "[?name=='italynorth'].{Name:name, PairedRegion:metadata.pairedRegion[0].name}" \
+    --output table
+```
+
+---
+
+### Scenario 4 — Accesso a Azure Government o Azure China fallisce con credenziali globali
+
+**Sintomo:** Il login con `az login` riesce ma i comandi falliscono con `AuthorizationFailed` o resource non trovate quando si tenta di accedere a risorse sovereign cloud.
+
+**Causa:** Azure Government e Azure China sono endpoint separati dal cloud globale. Le credenziali e i token del cloud globale non sono validi nei sovereign cloud.
+
+**Soluzione:** Effettuare il login specificando l'ambiente corretto con `--environment`.
+
+```bash
+# Login su Azure Government
+az cloud set --name AzureUSGovernment
+az login
+
+# Login su Azure China (21Vianet)
+az cloud set --name AzureChinaCloud
+az login
+
+# Verificare l'ambiente attivo
+az cloud show --query name --output tsv
+
+# Tornare al cloud pubblico globale
+az cloud set --name AzureCloud
+az login
 ```
 
 ---

@@ -9,7 +9,7 @@ related: [containers/docker/sicurezza, containers/registry/_index, containers/do
 official_docs: https://docs.docker.com/reference/dockerfile/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Dockerfile Avanzato
@@ -487,6 +487,122 @@ docker buildx build \
 # Verifica il manifest multi-platform
 docker buildx imagetools inspect registry.company.com/app:1.0.0
 ```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — La cache BuildKit non viene riutilizzata tra build
+
+**Sintomo:** Ogni `docker build` reinstalla le dipendenze da zero anche se `requirements.txt` / `package.json` non è cambiato. Il log mostra `[no cache]` su layer che dovrebbero essere cached.
+
+**Causa:** Le cause più comuni sono: (a) il build context include file che cambiano spesso e vengono copiati troppo presto con `COPY . .`; (b) si usa un builder diverso tra run (ad es. `docker build` vs `docker buildx build --builder custom`); (c) i `--mount=type=cache` sono condivisi con `id` diversi.
+
+**Soluzione:** Verificare l'ordine dei layer (dipendenze prima del codice), usare sempre lo stesso builder, e fissare l'id del cache mount.
+
+```bash
+# Ispeziona quali layer vengono invalidati
+docker build --progress=plain . 2>&1 | grep -E "(CACHED|no cache|RUN)"
+
+# Verifica builder attivo
+docker buildx ls
+
+# Pulisce la cache BuildKit per ripartire da zero
+docker builder prune --filter type=exec.cachemount
+```
+
+---
+
+### Scenario 2 — Errore "failed to solve: secret not found" durante il build
+
+**Sintomo:** Il build fallisce con `failed to solve: secret not found: <id>` quando si usa `--mount=type=secret`.
+
+**Causa:** Il secret dichiarato nel Dockerfile con `--mount=type=secret,id=<nome>` non è stato passato al comando `docker buildx build` tramite `--secret`.
+
+**Soluzione:** Abbinare il parametro `--secret` al corrispondente `id` nel Dockerfile. Verificare che il file sorgente esista e sia leggibile.
+
+```bash
+# Il Dockerfile usa: --mount=type=secret,id=pypi_token
+# Il comando build DEVE includere:
+docker buildx build \
+    --secret id=pypi_token,src=${HOME}/.secrets/pypi_token \
+    .
+
+# Verifica che il file sorgente esista
+ls -la ${HOME}/.secrets/pypi_token
+
+# Alternativa: passare il secret da variabile d'ambiente
+docker buildx build \
+    --secret id=pypi_token,env=PYPI_TOKEN \
+    .
+```
+
+---
+
+### Scenario 3 — Immagine multi-platform produce errore "exec format error" su ARM
+
+**Sintomo:** Il container si avvia su `linux/amd64` ma fallisce con `exec /server: exec format error` su `linux/arm64` o viceversa.
+
+**Causa:** Il builder multi-platform non è configurato o non ha i QEMU emulators installati. Oppure il binario è stato compilato staticamente per una sola architettura ma spinto come manifest multi-platform.
+
+**Soluzione:** Configurare correttamente `buildx` con il driver `docker-container` e installare `binfmt` per QEMU.
+
+```bash
+# Installa emulatori QEMU per cross-compilation
+docker run --privileged --rm tonistiigi/binfmt --install all
+
+# Crea builder con driver container (supporta multi-platform)
+docker buildx create \
+    --name multiarch \
+    --driver docker-container \
+    --use
+
+docker buildx inspect --bootstrap
+
+# Verifica piattaforme supportate
+docker buildx inspect multiarch | grep Platforms
+
+# Build e verifica manifest
+docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    --push \
+    -t registry.company.com/app:1.0.0 .
+
+docker buildx imagetools inspect registry.company.com/app:1.0.0
+```
+
+---
+
+### Scenario 4 — Build lento per build context troppo grande
+
+**Sintomo:** Il trasferimento del build context impiega decine di secondi prima che inizi il primo step. Il log mostra `Sending build context to Docker daemon  500MB`.
+
+**Causa:** Manca o è incompleto il file `.dockerignore`. Cartelle come `node_modules/`, `.git/`, `dist/`, file di test o binari compilati vengono inclusi nel context anche se non usati nel Dockerfile.
+
+**Soluzione:** Aggiungere un `.dockerignore` completo e verificare la dimensione del context prima del build.
+
+```bash
+# Misura la dimensione del build context senza fare il build
+# (simula cosa viene inviato al daemon)
+tar -czh . | wc -c
+
+# Alternativa: usa un Dockerfile temporaneo per vedere i file nel context
+docker build -f - . <<'EOF'
+FROM alpine
+COPY . /ctx
+RUN du -sh /ctx && find /ctx -type f | head -50
+EOF
+
+# Verifica che .dockerignore sia applicato correttamente
+cat .dockerignore
+
+# Dopo aver aggiunto .dockerignore, confronta la dimensione
+tar -czh --exclude-from=.dockerignore . | wc -c
+```
+
+!!! tip "Usa --file per build context minimo"
+    Se il Dockerfile è in una sottocartella o vuoi limitare il context, specifica la directory esplicitamente:
+    `docker build -f docker/Dockerfile ./src` invia solo `./src` come context.
 
 ---
 

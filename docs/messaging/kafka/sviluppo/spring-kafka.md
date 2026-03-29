@@ -3,13 +3,13 @@ title: "Spring Kafka"
 slug: spring-kafka
 category: messaging
 tags: [kafka, spring, java, spring-boot, producer, consumer]
-search_keywords: [spring kafka, spring boot kafka, kafkatemplate, kafkalistener, spring kafka producer, spring kafka consumer, embedded kafka test, spring kafka error handler, DLT dead letter topic]
+search_keywords: [spring kafka, spring boot kafka, kafkatemplate, kafkalistener, spring kafka producer, spring kafka consumer, embedded kafka test, spring kafka error handler, DLT dead letter topic, ConcurrentMessageListenerContainer, DefaultErrorHandler, RetryableTopic, spring kafka transaction, kafka consumer group spring, spring kafka serializer]
 parent: messaging/kafka/sviluppo
 related: [messaging/kafka/sviluppo/quarkus-kafka, messaging/kafka/sviluppo/exactly-once-semantics, messaging/kafka/sviluppo/transazioni, messaging/kafka/schema-registry/avro]
 official_docs: https://spring.io/projects/spring-kafka
 status: complete
 difficulty: advanced
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Spring Kafka
@@ -506,32 +506,91 @@ class OrderServiceIntegrationTest {
 
 ## Troubleshooting
 
-### Consumer si disconnette frequentemente (poll timeout)
+### Scenario 1 — Consumer si disconnette frequentemente (poll timeout)
+
+**Sintomo:** Il consumer viene espulso dal gruppo con errore `Member ... has failed, removing it from the group` o `max.poll.interval.ms` superato. Il consumer viene continuamente riassegnato.
+
+**Causa:** L'elaborazione di un batch di messaggi supera `max.poll.interval.ms` (default 5 minuti). Il broker considera il consumer morto e avvia un rebalance.
+
+**Soluzione:** Ridurre il numero di record per poll oppure aumentare il timeout. Per elaborazioni lunghe, delegare a thread asincroni e gestire l'ACK separatamente.
 
 ```yaml
-# Aumentare il timeout se l'elaborazione è lenta
 spring:
   kafka:
     consumer:
       properties:
         max.poll.interval.ms: 600000  # 10 minuti
         max.poll.records: 10          # Ridurre i record per poll
+        session.timeout.ms: 60000
+        heartbeat.interval.ms: 10000
 ```
 
-### Messaggi duplicati dopo restart
+---
 
-```bash
-# Verificare che enable-auto-commit sia false
-# Verificare che l'ACK venga chiamato dopo ogni elaborazione
-# Controllare i log per "Offset commit failed"
+### Scenario 2 — Messaggi duplicati dopo restart
+
+**Sintomo:** Gli stessi messaggi vengono elaborati più volte dopo un riavvio dell'applicazione.
+
+**Causa:** `enable-auto-commit: true` commita gli offset in background prima che l'elaborazione sia completata. Se l'app crasha tra il commit automatico e la fine del processing, i messaggi non vengono ri-consumati; viceversa, se il commit avviene dopo il crash, vengono duplicati.
+
+**Soluzione:** Disabilitare l'auto-commit e chiamare `acknowledgment.acknowledge()` esplicitamente solo dopo il completamento dell'elaborazione.
+
+```yaml
+spring:
+  kafka:
+    consumer:
+      enable-auto-commit: false
 ```
-
-### KafkaTemplate non trova il broker
 
 ```java
-// Aggiungere log verboso per debugging
+// Nel listener: chiamare acknowledge() solo a elaborazione completata
+acknowledgment.acknowledge();
+```
+
+---
+
+### Scenario 3 — DeserializationException blocca il consumer
+
+**Sintomo:** Il consumer si blocca su un messaggio con `org.springframework.kafka.support.serializer.DeserializationException` e non processa i messaggi successivi.
+
+**Causa:** Il messaggio non è deserializzabile (schema cambiato, payload corrotto). `DefaultErrorHandler` per default riprova, ma `DeserializationException` deve essere marcata come non-retriable.
+
+**Soluzione:** Configurare `ErrorHandlingDeserializer` come wrapper e aggiungere l'eccezione alla lista `notRetryable`.
+
+```java
+errorHandler.addNotRetryableExceptions(
+    DeserializationException.class
+);
+
+// In ConsumerFactory, wrappare il deserializer:
+config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+    ErrorHandlingDeserializer.class);
+config.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS,
+    JsonDeserializer.class.getName());
+```
+
+---
+
+### Scenario 4 — KafkaTemplate non raggiunge il broker
+
+**Sintomo:** `TimeoutException` o `NetworkException` al send, oppure l'applicazione si avvia ma i messaggi non vengono mai consegnati.
+
+**Causa:** `bootstrap-servers` punta a un indirizzo non raggiungibile, o il certificato SSL non è valido/scaduto, o i firewall bloccano la porta.
+
+**Soluzione:** Verificare connettività, poi abilitare log DEBUG per diagnosticare la fase esatta del fallimento.
+
+```bash
+# Test connettività al broker
+kafka-broker-api-versions.sh --bootstrap-server kafka:9092
+
+# Verifica certificato SSL
+openssl s_client -connect kafka:9093 -tls1_2
+```
+
+```properties
+# application.properties — aumentare verbosità per debug
 logging.level.org.springframework.kafka=DEBUG
-logging.level.org.apache.kafka=INFO
+logging.level.org.apache.kafka.clients=INFO
 ```
 
 ---

@@ -9,7 +9,7 @@ related: [containers/kubernetes/workloads, containers/kubernetes/operators-crd]
 official_docs: https://kubernetes.io/docs/concepts/overview/components/
 status: complete
 difficulty: expert
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Architettura Kubernetes
@@ -469,6 +469,136 @@ HA Control Plane — 3+ Master Node
   # NAME                       HOLDER                    AGE
   # kube-controller-manager    master-1_...             7d
   # kube-scheduler             master-1_...             7d
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — API server non raggiungibile
+
+**Sintomo:** `kubectl` restituisce `Unable to connect to the server` o `connection refused` sulla porta 6443.
+
+**Causa:** Il processo `kube-apiserver` è crashato, il certificato è scaduto, o il load balancer non instrada correttamente verso i master.
+
+**Soluzione:**
+
+```bash
+# Verifica stato del pod statico apiserver (kubeadm)
+sudo crictl ps | grep kube-apiserver
+sudo crictl logs <container-id>
+
+# Controlla i log del kubelet che lancia i pod statici
+journalctl -u kubelet -n 100 | grep apiserver
+
+# Verifica validità certificati (scadenza)
+sudo openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -dates
+# Rinnovo certificati con kubeadm
+sudo kubeadm certs check-expiration
+sudo kubeadm certs renew all
+
+# Se HA: verifica health di tutti gli endpoint
+for ip in 10.0.0.1 10.0.0.2 10.0.0.3; do
+  curl -sk https://$ip:6443/healthz && echo " $ip OK" || echo " $ip FAILED"
+done
+```
+
+---
+
+### Scenario 2 — Pod bloccato in Pending: nessun nodo idoneo
+
+**Sintomo:** `kubectl get pods` mostra il Pod in stato `Pending` da più di qualche secondo. `kubectl describe pod <name>` riporta eventi come `0/3 nodes are available`.
+
+**Causa:** Lo scheduler non trova nodi che superino la fase di filtering: risorse insufficienti, taints non tollerati, node affinity non soddisfatta, o PVC non legabile.
+
+**Soluzione:**
+
+```bash
+# Leggi i motivi di Pending
+kubectl describe pod <pod-name> -n <namespace> | grep -A 20 Events
+
+# Verifica risorse disponibili sui nodi
+kubectl describe nodes | grep -A 5 "Allocated resources"
+kubectl top nodes
+
+# Controlla taints presenti
+kubectl get nodes -o custom-columns=NAME:.metadata.name,TAINTS:.spec.taints
+
+# Verifica se il PVC è Bound
+kubectl get pvc -n <namespace>
+
+# Simula scheduling senza eseguire (dry-run)
+kubectl debug node/<node-name> --image=busybox -- sleep 1
+```
+
+---
+
+### Scenario 3 — etcd degradato: cluster in quorum perso
+
+**Sintomo:** Operazioni `kubectl` restituiscono `etcdserver: request timed out` o `context deadline exceeded`. Il cluster smette di accettare scritture.
+
+**Causa:** Uno o più nodi etcd sono down e il quorum non è più raggiunto (es. 2 nodi su 3 sono offline).
+
+**Soluzione:**
+
+```bash
+# Verifica health di tutti i membri etcd
+ETCDCTL_API=3 etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  endpoint health --cluster
+
+# Lista dei membri e loro stato
+etcdctl member list -w table
+
+# Se un nodo è irrecuperabile: rimuovilo e riaggiungi
+etcdctl member remove <member-id>
+etcdctl member add etcd-new --peer-urls=https://10.0.0.4:2380
+
+# Restore da snapshot (caso estremo — cluster completamente down)
+etcdctl snapshot restore /backup/etcd-snapshot.db \
+  --name etcd-1 \
+  --initial-cluster "etcd-1=https://10.0.0.1:2380" \
+  --initial-cluster-token etcd-cluster-1 \
+  --initial-advertise-peer-urls https://10.0.0.1:2380 \
+  --data-dir /var/lib/etcd-new
+```
+
+---
+
+### Scenario 4 — Pods evicted / nodo NotReady
+
+**Sintomo:** Nodo passa a stato `NotReady`, i Pod vengono evicted o riassegnati. `kubectl describe node <name>` mostra condizioni come `MemoryPressure`, `DiskPressure`, o `KubeletNotReady`.
+
+**Causa:** Il kubelet non invia heartbeat all'API server entro `node-monitor-grace-period` (default 40s). Cause tipiche: pressione di risorse, problema di rete, kubelet crashato.
+
+**Soluzione:**
+
+```bash
+# Stato dettagliato del nodo
+kubectl describe node <node-name> | grep -A 10 Conditions
+
+# Accedi al nodo e verifica kubelet
+ssh <node-ip>
+systemctl status kubelet
+journalctl -u kubelet --since "15m ago" | grep -E "error|Error|failed"
+
+# Verifica pressione risorse
+df -h /var/lib/kubelet   # DiskPressure
+free -h                  # MemoryPressure
+
+# Pulisci immagini e container non usati
+crictl rmi --prune
+crictl rm $(crictl ps -a -q --state Exited)
+
+# Riavvia kubelet se necessario
+systemctl restart kubelet
+
+# Dal control plane: forza drain per manutenzione
+kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
+kubectl uncordon <node-name>   # quando il nodo è pronto
 ```
 
 ---

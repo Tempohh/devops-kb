@@ -1,0 +1,53 @@
+approved_at: '2026-03-29'
+description: "Il file docs/networking/service-mesh/istio.md ha due problemi nel frontmatter:\n\
+  \n**1. Broken link nel campo related:**\n```yaml\nrelated: [networking/service-mesh/concetti-base,\
+  \ networking/service-mesh/envoy, networking/api-gateway/ingress-controller]\n```\n\
+  Il path `networking/api-gateway/ingress-controller` non esiste in tutta la KB.\n\
+  Il file sull'Ingress Kubernetes è a `networking/kubernetes/ingress`.\nCorrezione:\
+  \ sostituire `networking/api-gateway/ingress-controller` con `networking/kubernetes/ingress`.\n\
+  \n**2. search_keywords sparse (13 entries — sotto la soglia qualitativa):**\nLe\
+  \ keyword attuali coprono solo funzionalità core. Mancano termini di ricerca comuni:\n\
+  - Versioni Istio (1.20, 1.21, ambient mesh)\n- Concetti avanzati: EnvoyFilter, WasmPlugin,\
+  \ WorkloadEntry, ServiceEntry\n- Integrazione: istio-prometheus, kiali graph, jaeger\
+  \ tracing istio\n- Confronto: istio vs linkerd vs cilium\n- Errori comuni: 503 upstream\
+  \ reset, pilot-discovery, istiod crashloopbackoff\n\n**3. Relazioni mancanti con\
+  \ la nuova categoria dev/:**\nIl circuit breaker di Istio (DestinationRule outlierDetection)\
+  \ è descritto in istio.md\nma non c'è un link alla controparte applicativa in dev/resilienza/circuit-breaker,\n\
+  che ha una sezione dedicata \"App vs Service Mesh\" che fa riferimento esplicito\
+  \ a Istio.\nAggiungere: `dev/resilienza/circuit-breaker` nel campo related.\n\n\
+  Modifiche complete da applicare:\n```yaml\nrelated:\n  - networking/service-mesh/concetti-base\n\
+  \  - networking/service-mesh/envoy\n  - networking/kubernetes/ingress        # FIX:\
+  \ era networking/api-gateway/ingress-controller\n  - networking/kubernetes/network-policies\n\
+  \  - dev/resilienza/circuit-breaker       # NUOVO: sezione \"App vs Service Mesh\"\
+  \nsearch_keywords: [... aggiungere 10+ keyword mancanti ...]\nlast_updated: 2026-03-29\n\
+  ```\n"
+discovered_via: campionamento KB — campo related contiene path inesistente
+effort: small
+id: prop-006
+last_analyzed: 2026-03-29
+priority: medium
+rationale: 'Un link broken nel campo related degrada la navigabilità della KB: un
+  editor che
+
+  genera un grafo delle relazioni o uno script di verifica troverà un dangling reference.
+
+  La relazione con dev/resilienza/circuit-breaker è semanticamente importante: istio.md
+
+  descrive il circuit breaking a livello mesh, circuit-breaker.md lo descrive a livello
+
+  applicativo, e il file dev esplicita il confronto "App vs Service Mesh" — il collegamento
+
+  bidirezionale è essenziale per chi deve scegliere l''approccio.
+
+  '
+status: approved
+tags:
+- networking
+- service-mesh
+- istio
+- broken-link
+- fix-relation
+- search-keywords
+target_file: docs/networking/service-mesh/istio.md
+title: Fix broken link in istio.md + enrich related
+type: fix-relation

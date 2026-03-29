@@ -9,7 +9,7 @@ related: [messaging/rabbitmq/affidabilita, messaging/rabbitmq/deployment, messag
 official_docs: https://www.rabbitmq.com/docs/clustering
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Clustering e High Availability
@@ -444,6 +444,138 @@ rabbitmqctl revive       # rimuove il drain
 rabbitmqctl node_health_check    # verifica i componenti del nodo
 rabbitmq-diagnostics check_port_connectivity   # verifica connettività porte
 rabbitmq-diagnostics check_if_node_is_mirror_sync_critical  # check quorum
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Nodo non si unisce al cluster (join_cluster fallisce)
+
+**Sintomo:** `rabbitmqctl join_cluster rabbit@node-1` restituisce errore `{error, {cannot_connect_to_node, rabbit@node-1}}` oppure `badrpc, nodedown`.
+
+**Causa:** Cookie Erlang diverso tra i nodi, hostname non risolvibile, porta 25672 bloccata, o epmd non raggiungibile.
+
+**Soluzione:**
+1. Verificare che il cookie sia identico su tutti i nodi.
+2. Verificare che gli hostname si risolvano (DNS o `/etc/hosts`).
+3. Verificare che la porta 25672 sia aperta tra i nodi.
+
+```bash
+# Verifica cookie (deve essere identico su tutti i nodi)
+cat ~/.erlang.cookie
+
+# Verifica connettività Erlang Distribution
+rabbitmq-diagnostics check_port_connectivity
+
+# Verifica che epmd risponda e veda il nodo target
+epmd -names
+
+# Test hostname resolution
+ping node-1
+telnet node-1 25672
+
+# Log di dettaglio per il problema di join
+tail -f /var/log/rabbitmq/rabbit@node-2.log
+```
+
+---
+
+### Scenario 2 — Partizione di rete rilevata, cluster in stato `partitioned`
+
+**Sintomo:** `rabbitmqctl cluster_status` mostra `{partitions, [{rabbit@node-1, [rabbit@node-2, rabbit@node-3]}]}`. I consumer vedono comportamento anomalo o messaggi duplicati.
+
+**Causa:** I nodi hanno perso connettività temporaneamente e ora hanno divergito (split-brain). Con strategia `ignore` o `autoheal` il cluster ha continuato ad operare in entrambe le partizioni.
+
+**Soluzione:** Decidere quale partizione è "ground truth", poi fare rejoin dei nodi della partizione perdente.
+
+```bash
+# 1. Verificare lo stato della partizione
+rabbitmqctl cluster_status
+
+# 2. Identificare quale partizione ha i messaggi più recenti
+# (ispezionare queue depths con management API)
+curl -u guest:guest http://rabbitmq:15672/api/queues | jq '.[] | {name, messages}'
+
+# 3. Sul nodo da "resettare" (partizione perdente):
+rabbitmqctl stop_app
+rabbitmqctl reset        # ATTENZIONE: perde messaggi Classic Queue locali
+rabbitmqctl join_cluster rabbit@node-majority
+rabbitmqctl start_app
+
+# 4. Verificare che la partizione sia risolta
+rabbitmqctl cluster_status
+# "Partitions: []" indica cluster sano
+```
+
+!!! warning "Dati Classic Queues"
+    Il `reset` cancella i messaggi nelle Classic Queues del nodo resettato. Le Quorum Queues si risincronizzano automaticamente dopo il rejoin senza perdita di dati committed.
+
+---
+
+### Scenario 3 — Quorum Queue degradata: insufficiente quorum di membri online
+
+**Sintomo:** Publish sulla queue fallisce con `{error, quorum_not_reached}` oppure la queue è in stato `minority` nel management UI. I consumer non ricevono messaggi.
+
+**Causa:** Più della metà dei membri della quorum queue sono offline (es. 2 nodi su 3 sono down). Senza quorum (majority), Raft non può committare nuove operazioni.
+
+**Soluzione:** Riportare online almeno `(N/2)+1` nodi del cluster.
+
+```bash
+# Verificare lo stato dei membri della quorum queue
+rabbitmqctl quorum_status <queue_name>
+# Output: mostra ogni membro e se è online/offline/leader
+
+# Verificare quali nodi sono online
+rabbitmqctl cluster_status
+
+# Riavviare i nodi down (esempio con systemd)
+systemctl start rabbitmq-server  # sul nodo offline
+
+# Dopo il restart, verificare che il nodo si sia risincronizzato
+rabbitmqctl cluster_status
+rabbitmqctl quorum_status <queue_name>
+
+# Se un nodo non si riconnette e la queue è "stuck":
+# Forzare la sostituzione di un membro offline con uno nuovo
+rabbitmqctl add_member <queue_name> rabbit@new-node
+rabbitmqctl delete_member <queue_name> rabbit@offline-node
+```
+
+---
+
+### Scenario 4 — Nodo rimosso dal cluster non rientra correttamente (mnesia stale)
+
+**Sintomo:** Un nodo riavviato dopo una lunga assenza non riesce a fare rejoin: log mostra `mnesia_table_error` o il nodo risulta `not_clustered` nonostante abbia già un cookie valido. `rabbitmqctl cluster_status` non lo mostra nella lista dei running nodes.
+
+**Causa:** Il database Mnesia locale del nodo ha dati obsoleti o corrotti, incompatibili con lo stato attuale del cluster. Questo accade tipicamente dopo un crash brutale o dopo che il cluster ha subito modifiche strutturali mentre il nodo era offline.
+
+**Soluzione:** Reset completo del nodo e rejoin.
+
+```bash
+# 1. Verificare i log per confermare il problema Mnesia
+tail -100 /var/log/rabbitmq/rabbit@nodename.log | grep -i "mnesia\|error\|crash"
+
+# 2. Fermare completamente il nodo
+rabbitmqctl stop
+
+# 3. Rimuovere i dati Mnesia corrotti
+# Directory tipica: /var/lib/rabbitmq/mnesia/
+ls /var/lib/rabbitmq/mnesia/
+# Rinominare (non eliminare, per sicurezza) la directory del nodo
+mv /var/lib/rabbitmq/mnesia/rabbit@nodename /var/lib/rabbitmq/mnesia/rabbit@nodename.bak
+
+# 4. Riavviare come nodo standalone
+systemctl start rabbitmq-server
+
+# 5. Fare join al cluster
+rabbitmqctl stop_app
+rabbitmqctl join_cluster rabbit@healthy-node
+rabbitmqctl start_app
+
+# 6. Verificare
+rabbitmqctl cluster_status
+# Il nodo deve apparire in "Disc Nodes" e "Running Nodes"
 ```
 
 ---

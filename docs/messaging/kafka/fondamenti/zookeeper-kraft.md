@@ -3,13 +3,13 @@ title: "ZooKeeper e KRaft"
 slug: zookeeper-kraft
 category: messaging
 tags: [kafka, zookeeper, kraft, metadata, controller, quorum]
-search_keywords: [kafka zookeeper, kafka kraft, kip-500, kafka metadata, controller quorum, kafka senza zookeeper, kafka raft protocol]
+search_keywords: [kafka zookeeper, kafka kraft, kip-500, kafka metadata, controller quorum, kafka senza zookeeper, kafka raft protocol, kraft migration, metadata quorum, raft consensus, controller failover, zookeeper deprecation, kafka 3.3, kafka 4.0]
 parent: messaging/kafka/fondamenti
-related: [messaging/kafka/fondamenti/broker-cluster]
+related: [messaging/kafka/fondamenti/broker-cluster, messaging/kafka/fondamenti/architettura, messaging/kafka/fondamenti/topics-partizioni]
 official_docs: https://kafka.apache.org/documentation/#kraft
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # ZooKeeper e KRaft
@@ -214,17 +214,102 @@ kafka-metadata-quorum.sh \
 
 ## Troubleshooting
 
-**`kafka-storage.sh format` fallisce con "already formatted"**
-- Eliminare la directory `log.dirs` oppure aggiungere `--ignore-formatted`
+### Scenario 1 — `kafka-storage.sh format` fallisce con "already formatted"
 
-**Controller leader non eletto**
-- Verificare che tutti i controller nel quorum siano raggiungibili
-- Controllare `controller.quorum.voters` — deve essere identico su tutti i nodi
-- Verificare che la porta controller (default 9093) non sia bloccata
+**Sintomo:** Il comando di format restituisce `Log directory ... is already formatted`.
 
-**Broker non si connette ai controller**
-- Verificare `controller.quorum.voters` sul broker
-- Assicurarsi che `CONTROLLER` sia nel `listener.security.protocol.map`
+**Causa:** La directory `log.dirs` contiene già un metadata log da una precedente inizializzazione (anche fallita o di un cluster diverso).
+
+**Soluzione:** Pulire la directory e riformattare, oppure usare `--ignore-formatted` se si vuole riutilizzare uno stato esistente.
+
+```bash
+# Opzione 1: pulire e riformattare
+rm -rf /tmp/kraft-logs/*
+kafka-storage.sh format \
+  --config /opt/kafka/config/kraft/server.properties \
+  --cluster-id "$KAFKA_CLUSTER_ID"
+
+# Opzione 2: forzare ignorando lo stato esistente
+kafka-storage.sh format \
+  --config /opt/kafka/config/kraft/server.properties \
+  --cluster-id "$KAFKA_CLUSTER_ID" \
+  --ignore-formatted
+```
+
+---
+
+### Scenario 2 — Controller leader non eletto, cluster non parte
+
+**Sintomo:** I broker non partono e nei log compare `TimeoutException: Timed out waiting for a node assignment` o `No brokers found in metadata`.
+
+**Causa:** Il quorum Raft non riesce a eleggere un active controller. Cause tipiche: `controller.quorum.voters` configurato in modo inconsistente tra i nodi, porta 9093 non raggiungibile, o cluster ID diverso tra i controller.
+
+**Soluzione:** Verificare configurazione e connettività del quorum.
+
+```bash
+# Verificare che il quorum sia raggiungibile
+kafka-metadata-quorum.sh \
+  --bootstrap-server localhost:9092 \
+  describe --status
+
+# Controllare i log del controller per errori Raft
+grep -i "raft\|quorum\|leader\|election" /var/log/kafka/server.log | tail -50
+
+# Verificare che tutti i controller voters siano raggiungibili
+nc -zv ctrl1 9093
+nc -zv ctrl2 9093
+nc -zv ctrl3 9093
+```
+
+---
+
+### Scenario 3 — Broker non si connette ai controller
+
+**Sintomo:** Il broker parte ma non si registra: log contiene `BrokerRegistrationRequestData` timeout o `UNKNOWN_SERVER_ERROR` durante la registrazione.
+
+**Causa:** Il broker non riesce a raggiungere i controller. Possibili cause: `controller.quorum.voters` mancante o errato sul broker, `CONTROLLER` listener non mappato nel `listener.security.protocol.map`, firewall sulla porta 9093.
+
+**Soluzione:**
+
+```bash
+# Verificare la configurazione del broker
+grep -E "controller.quorum.voters|listener.security.protocol.map|controller.listener.names" \
+  /opt/kafka/config/kraft/broker.properties
+
+# La configurazione corretta deve includere:
+# controller.quorum.voters=1@ctrl1:9093,2@ctrl2:9093,3@ctrl3:9093
+# listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+# controller.listener.names=CONTROLLER
+
+# Verificare la connettività dalla macchina broker
+telnet ctrl1 9093
+```
+
+---
+
+### Scenario 4 — Migrazione da ZooKeeper a KRaft fallisce o si blocca
+
+**Sintomo:** Il processo di migrazione si blocca in fase `MIGRATION` o il cluster diventa irraggiungibile dopo il roll del first controller.
+
+**Causa:** La migrazione ZK→KRaft è un processo in più fasi; un cluster ID mismatch, un broker non aggiornato alla versione compatibile, o un metadata snapshot incompleto possono bloccarla.
+
+**Soluzione:** Verificare lo stato della migrazione e i prerequisiti.
+
+```bash
+# Controllare la versione Kafka (richiede >= 3.4 per migrazione stabile)
+kafka-broker-api-versions.sh --bootstrap-server localhost:9092 | head -5
+
+# Verificare lo stato della migrazione tramite ZooKeeper
+zookeeper-shell.sh localhost:2181 get /controller_epoch
+
+# Monitorare il metadata log durante la migrazione
+kafka-metadata-quorum.sh \
+  --bootstrap-server localhost:9092 \
+  describe --replication
+
+# In caso di blocco: non riavviare i broker manualmente —
+# consultare la KRaft Migration Guide ufficiale prima di intervenire
+```
 
 ## Riferimenti
 

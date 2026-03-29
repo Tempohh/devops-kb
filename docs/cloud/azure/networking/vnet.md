@@ -9,7 +9,7 @@ related: [cloud/azure/networking/load-balancing, cloud/azure/networking/connetti
 official_docs: https://learn.microsoft.com/azure/virtual-network/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Azure Virtual Network (VNet)
@@ -352,6 +352,134 @@ az network bastion ssh \
     --resource-group myapp-rg \
     --target-resource-id /subscriptions/.../resourceGroups/myapp-rg/providers/Microsoft.Compute/virtualMachines/myvm \
     --auth-type "AAD"              # AAD (Entra ID), password, ssh-key
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — VM non raggiunge Internet (o servizi esterni)
+
+**Sintomo:** La VM invia richieste HTTP/HTTPS ma non riceve risposta. `curl` o `ping` verso IP pubblici falliscono.
+
+**Causa:** NSG in uscita blocca il traffico (regola deny esplicita), oppure una UDR instrada il traffico verso un NVA/Firewall spento o mal configurato, oppure il forced tunneling è attivo senza un gateway funzionante.
+
+**Soluzione:** Verificare le effective routes e le effective NSG rules sulla NIC della VM:
+
+```bash
+# Verificare le route attive sulla NIC
+az network nic show-effective-route-table \
+    --resource-group myapp-rg \
+    --name myvm-nic \
+    --output table
+
+# Verificare le regole NSG effettive sulla NIC
+az network nic list-effective-nsg \
+    --resource-group myapp-rg \
+    --name myvm-nic \
+    --output table
+
+# Usare Network Watcher per tracciare il flusso
+az network watcher test-connectivity \
+    --source-resource /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.Compute/virtualMachines/myvm \
+    --dest-address 8.8.8.8 \
+    --dest-port 443
+```
+
+---
+
+### Scenario 2 — VNet Peering in stato "Disconnected" o traffico non fluisce
+
+**Sintomo:** Il peering è visibile nel portale ma lo stato è `Disconnected` o `Initiated` (non `Connected`). Le VM nelle due VNet non si raggiungono.
+
+**Causa:** Il peering è unidirezionale — è stato creato solo su una delle due VNet, oppure una delle due VNet è stata eliminata e ricreata invalidando il riferimento remoto.
+
+**Soluzione:** Verificare lo stato del peering su entrambi i lati e ricreare quello mancante:
+
+```bash
+# Verificare stato peering su entrambe le VNet
+az network vnet peering list \
+    --resource-group hub-rg \
+    --vnet-name hub-vnet \
+    --output table
+
+az network vnet peering list \
+    --resource-group prod-rg \
+    --vnet-name production-vnet \
+    --output table
+
+# Se un lato è "Disconnected", eliminarlo e ricrearlo
+az network vnet peering delete \
+    --resource-group hub-rg \
+    --name hub-to-production \
+    --vnet-name hub-vnet
+
+# Ricreare il peering (vedere sezione VNet Peering)
+```
+
+---
+
+### Scenario 3 — Private Endpoint creato ma la risoluzione DNS restituisce IP pubblico
+
+**Sintomo:** Il Private Endpoint è in stato `Succeeded` ma la connessione al servizio PaaS (es. Azure SQL) avviene ancora via IP pubblico. `nslookup mydb-server.database.windows.net` restituisce un IP pubblico invece del `10.x.x.x` privato.
+
+**Causa:** La Private DNS Zone non è collegata alla VNet (`vnet link` mancante), oppure il `dns-zone-group` sul PE non è stato creato, oppure si usa un DNS resolver custom che non forwarda verso i DNS di Azure.
+
+**Soluzione:** Verificare il link DNS e il gruppo DNS del PE:
+
+```bash
+# Verificare i VNet links sulla Private DNS Zone
+az network private-dns link vnet list \
+    --resource-group myapp-rg \
+    --zone-name "privatelink.database.windows.net" \
+    --output table
+
+# Verificare il dns-zone-group sul PE
+az network private-endpoint dns-zone-group list \
+    --resource-group myapp-rg \
+    --endpoint-name sql-private-endpoint \
+    --output table
+
+# Test risoluzione DNS dall'interno della VNet (via Bastion o VM)
+# Dalla VM: nslookup mydb-server.database.windows.net
+# Atteso: alias → mydb-server.privatelink.database.windows.net → 10.x.x.x
+```
+
+---
+
+### Scenario 4 — NSG nega traffico inaspettatamente (falso positivo)
+
+**Sintomo:** Una connessione legittima tra due subnet o verso un servizio Azure viene bloccata nonostante la regola NSG sembri corretta. I log di NSG mostrano `DenyAllInBound` come regola applicata.
+
+**Causa:** La priorità della regola allow è più alta (numero maggiore) rispetto a una regola deny più specifica, oppure l'NSG è applicato sia alla subnet che alla NIC e la combinazione blocca il traffico in uno dei due punti.
+
+**Soluzione:** Usare Network Watcher IP Flow Verify per identificare la regola che blocca:
+
+```bash
+# IP Flow Verify: testa se un flusso specifico è permesso o bloccato
+az network watcher test-ip-flow \
+    --vm myvm \
+    --resource-group myapp-rg \
+    --direction Inbound \
+    --protocol TCP \
+    --local-ip 10.1.2.10 \
+    --local-port 8080 \
+    --remote-ip 10.1.1.5 \
+    --remote-port 54321
+
+# Abilitare NSG Flow Logs per diagnostica continua
+az network watcher flow-log create \
+    --location italynorth \
+    --name web-nsg-flowlog \
+    --nsg web-nsg \
+    --storage-account mystorageaccount \
+    --enabled true \
+    --retention 7
+
+# Verificare effective NSG rules (mostra NSG subnet + NIC combinati)
+az network nic list-effective-nsg \
+    --resource-group myapp-rg \
+    --name myvm-nic
 ```
 
 ---

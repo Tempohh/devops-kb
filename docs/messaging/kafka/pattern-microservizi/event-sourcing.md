@@ -12,7 +12,7 @@ related:
 official_docs: https://martinfowler.com/eaaDev/EventSourcing.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-23
+last_updated: 2026-03-29
 ---
 
 # Event Sourcing
@@ -403,6 +403,65 @@ public void handleCommand(PlaceOrderCommand cmd) {
 **Causa:** La versione sequenziale degli eventi non viene rispettata durante il replay.
 
 **Soluzione:** Verificare che il `loadEvents` ordini sempre per `version ASC` e che non ci siano gap nella sequenza delle versioni.
+
+```sql
+-- Verificare gap nella sequenza degli eventi
+SELECT aggregate_id, version,
+       LAG(version) OVER (PARTITION BY aggregate_id ORDER BY version) AS prev_version,
+       version - LAG(version) OVER (PARTITION BY aggregate_id ORDER BY version) AS gap
+FROM event_store
+WHERE aggregate_id = 'ORD-001'
+ORDER BY version;
+
+-- Trovare tutti gli aggregate con gap nella versione
+SELECT DISTINCT aggregate_id
+FROM (
+  SELECT aggregate_id, version,
+         version - LAG(version) OVER (PARTITION BY aggregate_id ORDER BY version) AS gap
+  FROM event_store
+) t
+WHERE gap > 1;
+```
+
+### Schema di Evoluzione degli Eventi Incompatibile
+
+**Sintomo:** `SerializationException` o campi `null` inattesi durante il replay di eventi storici.
+
+**Causa:** Il payload di un evento è stato modificato (campi rinominati o rimossi) senza implementare un upcaster, rendendo il replay degli eventi vecchi incompatibile con la classe corrente.
+
+**Soluzione:**
+1. Non modificare mai la struttura degli eventi pubblicati — aggiungere solo campi opzionali
+2. Implementare un upcaster per ogni versione incompatibile
+3. Verificare la presenza di upcaster per tutte le versioni nel registro eventi
+
+```java
+// Registrare l'upcaster nell'event store
+@Component
+public class OrderPlacedEventUpcaster implements SingleEventUpcaster {
+
+    @Override
+    public boolean canUpcast(IntermediateEventRepresentation event) {
+        return event.getType().getName().equals("OrderPlacedEvent")
+            && event.getType().getRevision().map("1"::equals).orElse(false);
+    }
+
+    @Override
+    public IntermediateEventRepresentation doUpcast(IntermediateEventRepresentation event) {
+        return event.upcastPayload(
+            MetaData.emptyInstance(),
+            XStreamSerializer.builder().build(),
+            Document.class,
+            doc -> {
+                // Aggiungere campo mancante con default per eventi storici
+                if (!doc.containsKey("currency")) {
+                    doc.put("currency", "EUR");
+                }
+                return doc;
+            }
+        );
+    }
+}
+```
 
 ## Riferimenti
 

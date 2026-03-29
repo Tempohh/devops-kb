@@ -9,7 +9,7 @@ related: [cloud/azure/monitoring/_index, cloud/azure/security/_index]
 official_docs: https://learn.microsoft.com/azure/well-architected/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-26
+last_updated: 2026-03-28
 ---
 
 # Azure Well-Architected Framework
@@ -235,6 +235,122 @@ az advisor recommendation list \
 | Performance vs Cost | Provisioned throughput vs serverless auto-scale |
 | Security vs Performance | TLS inspection = overhead ma sicurezza |
 | Reliability vs Performance | Multi-region = latenza write aggiuntiva |
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — SLA composito inferiore alle aspettative
+
+**Sintomo:** Il calcolo dell'SLA composito del workload è significativamente più basso del target (es. 99.9% desiderato ma reale è 99.7%).
+
+**Causa:** Il prodotto degli SLA dei singoli componenti abbassa l'SLA complessivo; un componente non zone-redundant rompe la catena.
+
+**Soluzione:** Identificare i componenti con SLA basso o non zone-redundant e aggiornarli. Usare Azure Advisor per evidenziare i single point of failure.
+
+```bash
+# Verificare le raccomandazioni di alta disponibilità
+az advisor recommendation list \
+    --category HighAvailability \
+    --query "[].{Titolo:shortDescription.problem, Impatto:impact, Risorsa:resourceMetadata.resourceId}" \
+    --output table
+
+# Verificare le zone di una VMSS
+az vmss show \
+    --resource-group myapp-rg \
+    --name myapp-vmss \
+    --query "zones"
+```
+
+---
+
+### Scenario 2 — Costi anomali non attesi
+
+**Sintomo:** La fattura mensile supera il budget previsto senza una causa apparente; gli alert di budget non sono scattati.
+
+**Causa:** Risorse lasciate in esecuzione (VM stopped ma non deallocate, dischi orfani), mancanza di tag per il chargeback, budget alert configurati male.
+
+**Soluzione:** Usare Cost Management per analizzare la spesa per risorsa; deallocare VM ferme; cercare dischi non collegati.
+
+```bash
+# Trovare VM ferme ma non deallocate (continuano a costare)
+az vm list \
+    --query "[?powerState=='VM stopped'].{Nome:name, RG:resourceGroup}" \
+    --show-details \
+    --output table
+
+# Trovare dischi non collegati a nessuna VM
+az disk list \
+    --query "[?diskState=='Unattached'].{Nome:name, RG:resourceGroup, SizeGB:diskSizeGb}" \
+    --output table
+
+# Analisi spesa ultimi 7 giorni
+az consumption usage list \
+    --start-date $(date -d "-7 days" +%Y-%m-%d) \
+    --end-date $(date +%Y-%m-%d) \
+    --query "sort_by([].{Risorsa:instanceName, Costo:pretaxCost}, &Costo) | reverse(@)" \
+    --output table
+```
+
+---
+
+### Scenario 3 — Deployment fallisce dopo introduzione di policy di sicurezza
+
+**Sintomo:** Le pipeline CI/CD iniziano a fallire con errori `RequestDisallowedByPolicy` dopo l'applicazione di nuove Azure Policy.
+
+**Causa:** Le Azure Policy nel pilastro Security bloccano la creazione di risorse non conformi (es. VM senza crittografia, storage senza HTTPS, risorse in region non autorizzate).
+
+**Soluzione:** Identificare la policy violata, correggere la definizione IaC, oppure richiedere un'esenzione temporanea se la policy è troppo restrittiva.
+
+```bash
+# Vedere le policy non conformi nella subscription
+az policy state list \
+    --filter "complianceState eq 'NonCompliant'" \
+    --query "[].{Policy:policyDefinitionName, Risorsa:resourceId, Causa:complianceReasonCode}" \
+    --output table
+
+# Dettagli su un'assegnazione di policy specifica
+az policy assignment show \
+    --name <assignment-name> \
+    --query "{Nome:displayName, Scope:scope, Parametri:parameters}"
+
+# Verificare se un'operazione verrebbe bloccata (what-if policy)
+az policy state summarize \
+    --resource-group myapp-rg \
+    --output table
+```
+
+---
+
+### Scenario 4 — Autoscaling non interviene sotto carico
+
+**Sintomo:** Il VMSS o AKS non scala durante i picchi di traffico; la CPU rimane alta per minuti senza aumentare le istanze.
+
+**Causa:** Regole di autoscaling troppo conservative (cooldown troppo lungo, soglie troppo alte), metriche non configurate correttamente, limite `max-count` raggiunto.
+
+**Soluzione:** Rivedere le regole di autoscale, verificare i log di scaling, abbassare il cooldown period, aumentare il limite massimo.
+
+```bash
+# Vedere la configurazione autoscale attuale
+az monitor autoscale show \
+    --resource-group myapp-rg \
+    --name cpu-autoscale \
+    --query "{Min:profiles[0].capacity.minimum, Max:profiles[0].capacity.maximum, Regole:profiles[0].rules}" \
+    --output json
+
+# Log degli eventi di scaling
+az monitor activity-log list \
+    --resource-group myapp-rg \
+    --start-time $(date -d "-1 hour" --iso-8601) \
+    --query "[?contains(operationName.value,'autoscale')].{Ora:eventTimestamp, Operazione:operationName.value, Status:status.value}" \
+    --output table
+
+# Aggiornare cooldown a 2 minuti (default è 5)
+az monitor autoscale rule update \
+    --resource-group myapp-rg \
+    --autoscale-name cpu-autoscale \
+    --scale-cool-down 2
+```
 
 ---
 

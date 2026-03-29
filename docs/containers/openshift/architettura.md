@@ -9,7 +9,7 @@ related: [containers/kubernetes/architettura, containers/openshift/operators-olm
 official_docs: https://docs.openshift.com/container-platform/latest/architecture/architecture.html
 status: complete
 difficulty: expert
-last_updated: 2026-03-03
+last_updated: 2026-03-29
 ---
 
 # Architettura OpenShift
@@ -279,6 +279,128 @@ oc debug node/master-0.cluster.internal -- \
 oc exec -n openshift-etcd etcd-master-0 -c etcd -- \
     etcdctl endpoint health \
     --endpoints=https://master-0:2379,https://master-1:2379,https://master-2:2379
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Cluster Operator in stato DEGRADED
+
+**Sintomo:** `oc get clusteroperators` mostra `DEGRADED=True` per uno o più operator.
+
+**Causa:** Errori di configurazione, risorse insufficienti, dipendenze non soddisfatte, o problemi di rete tra componenti del control plane.
+
+**Soluzione:** Ispezionare i Conditions dell'operator degraded per ottenere il messaggio di errore specifico.
+
+```bash
+# Identificare l'operator degraded
+oc get clusteroperators | grep -v "True.*False.*False"
+
+# Leggere i Conditions con il messaggio di errore
+oc describe clusteroperator <nome-operator>
+# Cercare: Conditions → Type: Degraded → Message
+
+# Ispezionare i pod del componente (es. per ingress operator)
+oc get pods -n openshift-ingress-operator
+oc logs -n openshift-ingress-operator deployment/ingress-operator --tail=100
+
+# Forzare la riconciliazione dell'operator (rimuovere la cache)
+oc delete pod -n openshift-ingress-operator -l name=ingress-operator
+```
+
+---
+
+### Scenario 2 — MachineConfigPool bloccato in UPDATING
+
+**Sintomo:** `oc get mcp` mostra `UPDATING=True` da molto tempo; i nodi non completano il drain/reboot.
+
+**Causa:** Un nodo non riesce a fare il drain (pod non evictable con PodDisruptionBudget troppo restrittivo, pod con `terminationGracePeriodSeconds` elevato), oppure il nodo non riesce ad avviarsi dopo il reboot.
+
+**Soluzione:** Identificare il nodo bloccato e diagnosticare la causa specifica.
+
+```bash
+# Trovare il nodo che sta causando il blocco
+oc get nodes
+# Cercare nodi in stato SchedulingDisabled (drain in corso) o NotReady
+
+# Verificare gli eventi sul nodo
+oc describe node <nome-nodo> | grep -A 20 Events
+
+# Se il drain è bloccato, vedere quali pod impediscono l'eviction
+oc get pods --all-namespaces --field-selector spec.nodeName=<nome-nodo>
+
+# Se il nodo è in loop di reboot, accedere via debug
+oc debug node/<nome-nodo>
+chroot /host journalctl -u kubelet --since "30 minutes ago"
+
+# Sbloccare forzatamente (solo se sicuro)
+oc adm uncordon <nome-nodo>
+```
+
+---
+
+### Scenario 3 — Upgrade del cluster bloccato (CVO)
+
+**Sintomo:** `oc get clusterversion` mostra `PROGRESSING=True` da ore senza avanzare, o percentuale ferma.
+
+**Causa:** Un Cluster Operator prerequisito non riesce ad aggiornarsi, un nodo non completa il reboot post-MCO, o il download del release payload fallisce.
+
+**Soluzione:** Seguire il grafo delle dipendenze del CVO: prima si aggiornano i componenti del control plane, poi MCO aggiorna i nodi.
+
+```bash
+# Stato dettagliato del cluster version con history
+oc describe clusterversion version
+
+# Identificare quale operator è bloccato
+oc get clusteroperators | grep -E "False|True.*True"
+
+# Leggere i log del CVO
+oc logs -n openshift-cluster-version \
+    deployment/cluster-version-operator --tail=200
+
+# Se un nodo non completa il reboot (MCO phase)
+oc get nodes | grep -v Ready
+oc get machineconfigpools
+
+# Verificare lo stato della macchina sul cloud provider
+oc get machines -n openshift-machine-api | grep -v Running
+
+# In caso di upgrade fallito, annullare e tornare alla versione precedente
+oc adm upgrade --allow-not-recommended --to=<versione-precedente>
+```
+
+---
+
+### Scenario 4 — Machine API: nodi non vengono provisionati
+
+**Sintomo:** Un MachineSet ha `replicas` aumentate ma le nuove `Machine` rimangono in fase `Provisioning` o `Failed` indefinitamente.
+
+**Causa:** Credenziali cloud insufficienti, quota cloud esaurita, subnet/security group non trovati, AMI/image non disponibile nella regione/zona.
+
+**Soluzione:** Ispezionare i log del machine-api-controller e i messaggi di errore sulla risorsa Machine.
+
+```bash
+# Verificare lo stato delle Machine
+oc get machines -n openshift-machine-api
+# Cercare Phase: Failed o Provisioning da troppo tempo
+
+# Leggere i messaggi di errore sulla Machine specifica
+oc describe machine <nome-machine> -n openshift-machine-api
+# Cercare: Status → ErrorMessage, ErrorReason
+
+# Log del controller machine-api
+oc logs -n openshift-machine-api \
+    deployment/machine-api-controllers \
+    -c machine-controller --tail=200
+
+# Verificare le credenziali cloud (CloudCredential operator)
+oc get cloudcredential cluster -o yaml
+oc get clusteroperator cloud-credential
+
+# Verificare quota AWS (se su AWS)
+oc get machineset <nome-machineset> -n openshift-machine-api -o yaml
+# Controllare instanceType e availability zone
 ```
 
 ---

@@ -9,7 +9,7 @@ related: [messaging/rabbitmq/affidabilita, messaging/rabbitmq/features-avanzate,
 official_docs: https://www.rabbitmq.com/tutorials/amqp-concepts
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Architettura AMQP
@@ -580,6 +580,143 @@ rabbitmqctl set_permissions -p /production read-only-user \
    - Consumer chiama basic_ack(delivery_tag)
 
 5. Broker riceve ack → rimuove il messaggio dalla queue (e dal disco se persistent)
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Consumer riceve messaggi ma non li processa (stuck delivery)
+
+**Sintomo:** I messaggi rimangono nello stato "Unacked" nella management UI. Il consumer è attivo ma non processa. La coda non si svuota.
+
+**Causa:** `prefetch_count` troppo alto combinato con consumer lento, oppure il consumer ha chiamato `basic_consume` senza ack manuale e senza `auto_ack=True`. Frequente anche se il consumer è bloccato in un'operazione I/O con `auto_ack=False`.
+
+**Soluzione:** Ridurre `prefetch_count`, verificare che ogni messaggio venga ackato o nackato, controllare i thread bloccati.
+
+```bash
+# Verificare messaggi unacked per queue
+rabbitmqctl list_queues name messages messages_ready messages_unacknowledged
+
+# Verificare i consumer attivi e il loro prefetch
+rabbitmqctl list_consumers queue_name channel_pid consumer_tag prefetch_count
+
+# Se i consumer sono bloccati: forzare la chiusura del channel per rimettere in coda i msg
+rabbitmqctl close_connection <conn-name> "stuck consumer cleanup"
+```
+
+---
+
+### Scenario 2 — Messaggi persi dopo restart del broker
+
+**Sintomo:** Dopo il riavvio di RabbitMQ, alcune o tutte le code risultano vuote. I messaggi pubblicati prima del restart sono scomparsi.
+
+**Causa:** Queue o messaggi non durable/persistent. Una queue dichiarata con `durable=False` viene eliminata al restart. Messaggi pubblicati con `delivery_mode=1` (transient) non vengono scritti su disco anche su queue durable.
+
+**Soluzione:** Verificare la combinazione durable (queue) + persistent (messaggio). Entrambi devono essere abilitati per la persistenza.
+
+```python
+# Queue durable
+channel.queue_declare(queue='orders', durable=True)
+
+# Messaggio persistent (delivery_mode=2)
+channel.basic_publish(
+    exchange='',
+    routing_key='orders',
+    body=payload,
+    properties=pika.BasicProperties(delivery_mode=2)  # persistent
+)
+```
+
+```bash
+# Verificare se la queue è durable
+rabbitmqctl list_queues name durable auto_delete
+```
+
+---
+
+### Scenario 3 — Exchange non recapita messaggi (silent drop)
+
+**Sintomo:** Il producer pubblica senza errori, ma il consumer non riceve nulla. La queue rimane vuota. Nessuna eccezione lato producer.
+
+**Causa:** Mancata corrispondenza tra routing key del messaggio e binding key dell'exchange. Per direct/topic exchange, un mismatch silenzioso scarta il messaggio. Altra causa: la queue non è legata all'exchange corretto, o è legata a un vhost diverso.
+
+**Soluzione:** Verificare binding nella management UI o via CLI. Abilitare `mandatory=True` per ricevere un `basic.return` se nessuna queue fa match.
+
+```bash
+# Ispezionare i binding di un exchange
+rabbitmqctl list_bindings -p /production
+
+# Oppure filtrare per exchange specifico
+rabbitmqctl list_bindings -p /production | grep "orders"
+
+# Verificare exchange esistenti e tipo
+rabbitmqctl list_exchanges -p /production name type durable
+```
+
+```python
+# mandatory=True: il broker ritorna il messaggio se non trova binding
+channel.basic_publish(
+    exchange='orders',
+    routing_key='eu.high',
+    body=payload,
+    mandatory=True   # genera basic.return se nessun binding fa match
+)
+
+# Handler per messaggi ritornati
+channel.add_on_return_callback(lambda ch, method, props, body:
+    logger.error(f"Message returned: {method.reply_text}")
+)
+```
+
+---
+
+### Scenario 4 — Too many connections / channel error 504
+
+**Sintomo:** L'applicazione riceve errori `AMQPChannelError: channel error; protocol method: (Channel.Close) reply-code=504` oppure il broker rifiuta nuove connessioni con `connection refused` o limiti superati.
+
+**Causa:** Apertura di una nuova connection per ogni messaggio/thread invece di riutilizzare le connessioni. Oppure channel non chiusi correttamente dopo l'uso. RabbitMQ ha un limite di connessioni configurabile (default 65536, ma spesso il sistema operativo limita prima).
+
+**Soluzione:** Implementare un connection pool, riutilizzare channels, monitorare le connessioni attive.
+
+```bash
+# Monitorare connessioni attive
+rabbitmqctl list_connections name peer_host peer_port state channels
+
+# Numero totale connessioni
+rabbitmqctl list_connections | wc -l
+
+# Chiudere connessioni idle da un host specifico
+rabbitmqctl list_connections name peer_host | grep "10.0.0.5" | \
+  awk '{print $1}' | xargs -I{} rabbitmqctl close_connection {} "cleanup"
+
+# Verificare limite connessioni nel broker
+rabbitmqctl environment | grep max_connections
+```
+
+```python
+# Pattern corretto: una connection, channel per operazione
+import pika
+from contextlib import contextmanager
+
+_connection = None
+
+def get_connection():
+    global _connection
+    if _connection is None or _connection.is_closed:
+        _connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host='rabbitmq', heartbeat=60)
+        )
+    return _connection
+
+@contextmanager
+def get_channel():
+    conn = get_connection()
+    channel = conn.channel()
+    try:
+        yield channel
+    finally:
+        channel.close()  # sempre chiudere il channel
 ```
 
 ---

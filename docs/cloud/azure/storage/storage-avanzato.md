@@ -9,7 +9,7 @@ related: [cloud/azure/compute/virtual-machines, cloud/azure/security/key-vault, 
 official_docs: https://learn.microsoft.com/azure/storage/files/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-26
+last_updated: 2026-03-29
 ---
 
 # Azure Storage Avanzato
@@ -517,6 +517,156 @@ StorageBlobLogs
 | where StatusCode >= 400 and StatusCode < 500
 | project TimeGenerated, CallerIpAddress, AuthenticationType, StatusText, Uri
 | order by TimeGenerated desc
+```
+
+## Troubleshooting
+
+### Scenario 1 — Mount SMB fallisce con errore 13 (Permission Denied) o 115
+
+**Sintomo:** `mount -t cifs` ritorna `mount error(13): Permission denied` oppure `mount error(115): Operation now in progress`.
+
+**Causa:** La porta 445 (SMB) è bloccata dall'ISP o dal firewall. Oppure le credenziali (storage key) non sono corrette.
+
+**Soluzione:** Verificare connettività porta 445 e le credenziali.
+
+```bash
+# Verificare se la porta 445 è raggiungibile
+nc -zv mystorageaccount2026.file.core.windows.net 445
+
+# Verificare che la storage key sia corretta
+az storage account keys list \
+  --resource-group $RG \
+  --account-name $SA_NAME \
+  --query "[0].value" -o tsv
+
+# Se la porta è bloccata, usare VPN o Azure File Sync come alternativa
+# Verificare che il servizio sia abilitato per il protocollo SMB
+az storage account show \
+  --resource-group $RG \
+  --name $SA_NAME \
+  --query "primaryEndpoints.file"
+```
+
+### Scenario 2 — Storage Firewall blocca accessi imprevisti dopo abilitazione
+
+**Sintomo:** Dopo aver impostato `--default-action Deny`, Azure Monitor smette di ricevere log, i backup automatici falliscono, o le Azure Functions non riescono ad accedere allo storage.
+
+**Causa:** Il flag `--bypass AzureServices` non è stato incluso, oppure la subnet della risorsa non è stata aggiunta alle network rules.
+
+**Soluzione:** Aggiungere il bypass per i servizi Azure trusted e/o la subnet mancante.
+
+```bash
+# Aggiornare il firewall per includere il bypass AzureServices
+az storage account update \
+  --resource-group $RG \
+  --name $SA_NAME \
+  --default-action Deny \
+  --bypass AzureServices Logging Metrics
+
+# Verificare le regole attuali
+az storage account network-rule list \
+  --resource-group $RG \
+  --account-name $SA_NAME \
+  --output json
+
+# Aggiungere la subnet mancante (es: subnet dove gira App Service/Functions)
+az storage account network-rule add \
+  --resource-group $RG \
+  --account-name $SA_NAME \
+  --vnet-name vnet-prod \
+  --subnet snet-functions
+```
+
+### Scenario 3 — CMK: crittografia non si abilita, errore "Key Vault key not found" o accesso negato
+
+**Sintomo:** Il comando `az storage account update --encryption-key-source Microsoft.Keyvault` fallisce con `KeyVaultKeyNotFound` o `AuthorizationFailed`.
+
+**Causa:** La Managed Identity dello storage account non ha il ruolo corretto sul Key Vault, oppure soft-delete/purge-protection non sono abilitati sul Key Vault.
+
+**Soluzione:** Verificare i permessi della Managed Identity e i prerequisiti del Key Vault.
+
+```bash
+# Verificare che soft-delete e purge-protection siano abilitati
+az keyvault show \
+  --name mykeyvault-cmk \
+  --query "{softDelete:properties.enableSoftDelete, purgeProtection:properties.enablePurgeProtection}"
+
+# Verificare che la Managed Identity esista sullo storage account
+az storage account show \
+  --resource-group $RG \
+  --name $SA_NAME \
+  --query "identity"
+
+# Riassegnare il ruolo se mancante
+STORAGE_MI=$(az storage account show --resource-group $RG --name $SA_NAME --query identity.principalId -o tsv)
+az role assignment create \
+  --assignee $STORAGE_MI \
+  --role "Key Vault Crypto Service Encryption User" \
+  --scope $(az keyvault show --name mykeyvault-cmk --query id -o tsv)
+
+# Verificare che la chiave sia nello stato "Enabled"
+az keyvault key show \
+  --vault-name mykeyvault-cmk \
+  --name storage-encryption-key \
+  --query "attributes.enabled"
+```
+
+### Scenario 4 — Queue Storage: messaggi rimangono in coda indefinitamente (poison messages)
+
+**Sintomo:** Alcuni messaggi nella queue non vengono mai elaborati e continuano a riapparire dopo il visibility timeout, causando retry loop infiniti.
+
+**Causa:** Il consumer lancia un'eccezione durante l'elaborazione, non elimina il messaggio, e non gestisce i messaggi "velenosi" (poison messages) che superano un certo numero di tentativi.
+
+**Soluzione:** Implementare un contatore di tentativi e spostare i messaggi problematici in una dead-letter queue separata.
+
+```python
+from azure.storage.queue import QueueClient
+from azure.identity import DefaultAzureCredential
+import json, base64, logging
+
+credential = DefaultAzureCredential()
+queue_client = QueueClient(
+    account_url=f"https://{STORAGE_ACCOUNT_NAME}.queue.core.windows.net",
+    queue_name="task-queue",
+    credential=credential
+)
+dlq_client = QueueClient(
+    account_url=f"https://{STORAGE_ACCOUNT_NAME}.queue.core.windows.net",
+    queue_name="task-queue-dlq",
+    credential=credential
+)
+
+MAX_RETRIES = 5
+
+messages = queue_client.receive_messages(visibility_timeout=60)
+for msg in messages:
+    # dequeue_count > MAX_RETRIES → spostare in DLQ
+    if msg.dequeue_count > MAX_RETRIES:
+        dlq_client.send_message(msg.content)
+        queue_client.delete_message(msg)
+        logging.warning(f"Poison message moved to DLQ: {msg.id}")
+        continue
+    try:
+        data = json.loads(base64.b64decode(msg.content).decode())
+        process_task(data)
+        queue_client.delete_message(msg)
+    except Exception as e:
+        logging.error(f"Attempt {msg.dequeue_count}/{MAX_RETRIES} failed: {e}")
+        # Non eliminare → riapparirà dopo visibility timeout
+```
+
+```bash
+# Verificare messaggi in coda e stimare messaggi bloccati
+az storage queue show \
+  --account-name $SA_NAME \
+  --name task-queue \
+  --auth-mode login
+
+# Controllare se la DLQ esiste, crearla se necessario
+az storage queue create \
+  --account-name $SA_NAME \
+  --name task-queue-dlq \
+  --auth-mode login
 ```
 
 ## Best Practices

@@ -9,7 +9,7 @@ related: [ai/sviluppo/_index, ai/modelli/claude, ai/sviluppo/prompt-engineering,
 official_docs: https://docs.anthropic.com/en/api/getting-started
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-03-27
 ---
 
 # Integrazione API LLM — Anthropic, OpenAI e Pattern di Sviluppo
@@ -607,6 +607,105 @@ def get_rotating_api_key() -> str:
         _key_expiry = time.time() + 3600  # refresh ogni ora
     return _cached_key
 ```
+
+## Troubleshooting
+
+### Scenario 1 — Rate Limit 429 / Overloaded 529
+
+**Sintomo:** Le chiamate API falliscono con `RateLimitError` (429) o `APIStatusError` con status 529 in modo intermittente.
+
+**Causa:** Superamento del limite di richieste al minuto (RPM) o di token al minuto (TPM) assegnato al tier corrente; oppure carico elevato sui server Anthropic (529).
+
+**Soluzione:** Implementare exponential backoff rispettando l'header `retry-after`. Per 529 usare backoff con jitter. Ridurre la concorrenza con `asyncio.Semaphore`.
+
+```python
+import time, random
+
+def backoff_wait(attempt: int, base: float = 2.0, max_wait: float = 60.0) -> float:
+    jitter = random.uniform(0, 1)
+    wait = min(base ** attempt + jitter, max_wait)
+    time.sleep(wait)
+    return wait
+
+# Verifica il tuo tier e i limiti attuali
+# https://console.anthropic.com/settings/limits
+```
+
+---
+
+### Scenario 2 — `max_tokens` raggiunto (stop_reason: "max_tokens")
+
+**Sintomo:** La risposta viene troncata e `response.stop_reason == "max_tokens"`. Il testo finisce a metà frase.
+
+**Causa:** Il valore di `max_tokens` impostato è insufficiente per il task corrente. Non ha nulla a che fare con il context window.
+
+**Soluzione:** Aumentare `max_tokens` oppure suddividere il task in sotto-richieste più piccole. Monitorare `stop_reason` sistematicamente.
+
+```python
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=4096,  # aumenta il limite di output
+    messages=[...]
+)
+
+if response.stop_reason == "max_tokens":
+    # La risposta è troncata — gestisci il caso
+    print("WARNING: risposta troncata, considera di aumentare max_tokens o spezzare il prompt")
+```
+
+---
+
+### Scenario 3 — `InvalidRequestError` 400 — Context troppo lungo
+
+**Sintomo:** `APIStatusError` con status 400 e messaggio `"prompt is too long"` o `"context_length_exceeded"`.
+
+**Causa:** Il totale di token (system + messages history + strumenti) supera il context window del modello (200K token per Claude 3+).
+
+**Soluzione:** Usare `count_tokens` per monitorare prima della chiamata. Applicare trimming/summarization della history.
+
+```python
+# Verifica preventiva del context
+token_count = client.messages.count_tokens(
+    model="claude-sonnet-4-6",
+    system=system_prompt,
+    messages=messages
+)
+
+MAX_INPUT_TOKENS = 180_000  # margine di sicurezza
+
+if token_count.input_tokens > MAX_INPUT_TOKENS:
+    # Applica trimming prima di chiamare
+    conv_manager.trim_to_last_n(10)
+    # oppure
+    conv_manager.summarize_and_trim(keep_last=4)
+```
+
+---
+
+### Scenario 4 — Tool Use: il modello non chiama il tool atteso
+
+**Sintomo:** Con `tool_choice={"type": "auto"}` il modello risponde in testo invece di invocare il tool. L'output non è nel formato strutturato atteso.
+
+**Causa:** Il modello ha deciso autonomamente che il testo era una risposta migliore, oppure la descrizione del tool è ambigua.
+
+**Soluzione:** Usare `tool_choice={"type": "tool", "name": "nome_tool"}` per forzare l'invocazione. Migliorare la `description` del tool con istruzioni esplicite su quando usarlo.
+
+```python
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    tools=[extraction_tool],
+    tool_choice={"type": "tool", "name": "extract_data"},  # forza il tool
+    messages=[{"role": "user", "content": testo}]
+)
+
+# Verifica che il blocco tool_use sia presente
+tool_blocks = [b for b in response.content if b.type == "tool_use"]
+if not tool_blocks:
+    raise ValueError(f"Tool non invocato. Stop reason: {response.stop_reason}. Content: {response.content}")
+```
+
+---
 
 ## Riferimenti
 

@@ -9,7 +9,7 @@ related: [containers/openshift/gitops-pipelines, containers/registry/_index]
 official_docs: https://docs.openshift.com/container-platform/latest/cicd/builds/understanding-buildconfigs.html
 status: complete
 difficulty: advanced
-last_updated: 2026-02-25
+last_updated: 2026-03-29
 ---
 
 # Build e ImageStream
@@ -355,6 +355,119 @@ spec:
         - ref: github-push-binding
       template:
         ref: build-deploy-template
+```
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Build bloccato in stato `New` o `Pending`
+
+**Sintomo:** `oc get builds` mostra il build fermo in `New` o `Pending` per diversi minuti senza avanzare.
+
+**Causa:** Nessun nodo disponibile con risorse sufficienti per il build pod, oppure il pull della builder image sta fallendo per problemi di autenticazione al registry.
+
+**Soluzione:**
+
+```bash
+# Controlla lo stato del build e descrivi il pod
+oc describe build myapp-1 -n production
+
+# Trova il build pod e controlla gli eventi
+BUILD_POD=$(oc get pods -n production | grep "myapp-1-build" | awk '{print $1}')
+oc describe pod $BUILD_POD -n production | grep -A 10 Events
+
+# Verifica che il pull secret sia correttamente configurato
+oc get buildconfig myapp -o jsonpath='{.spec.strategy.sourceStrategy.pullSecret}' -n production
+
+# Forza il re-import della builder image
+oc import-image python:3.12 -n openshift --confirm
+```
+
+---
+
+### Scenario 2 — Build fallisce con errore `assemble` script (S2I)
+
+**Sintomo:** Il log del build mostra errori durante la fase `assemble`, ad esempio dipendenze non trovate o errori di compilazione.
+
+**Causa:** Dipendenze mancanti nel sorgente, versione incompatibile della builder image, o variabili d'ambiente S2I non configurate (es. `PIP_INDEX_URL` sbagliato).
+
+**Soluzione:**
+
+```bash
+# Visualizza il log completo del build
+oc logs build/myapp-1 -n production --follow
+
+# Verifica le env vars configurate nel BuildConfig
+oc get bc myapp -o jsonpath='{.spec.strategy.sourceStrategy.env}' -n production
+
+# Avvia un build con override della builder image per test
+oc start-build myapp \
+    --build-env PIP_INDEX_URL=https://pypi.org/simple \
+    --follow -n production
+
+# Debug interattivo: esegui un pod con la builder image per testare assemble
+oc run debug-s2i --image=registry.access.redhat.com/ubi9/python-312 \
+    --rm -it --restart=Never -- bash
+```
+
+---
+
+### Scenario 3 — ImageStream non propaga il trigger al Deployment
+
+**Sintomo:** Dopo `oc tag myapp:staging myapp:production`, il Deployment non fa rollout automatico. I pod continuano a girare con la vecchia immagine.
+
+**Causa:** Il Deployment non ha un `ImageChange` trigger configurato, oppure il trigger punta a un nome ImageStreamTag errato. Con Deployment (non DeploymentConfig), il trigger va configurato esplicitamente.
+
+**Soluzione:**
+
+```bash
+# Verifica i trigger sul DeploymentConfig
+oc get dc myapp -o jsonpath='{.spec.triggers}' -n production | python3 -m json.tool
+
+# Per Deployment standard: aggiungi l'annotation di trigger ImageStream
+oc set triggers deploy/myapp \
+    --from-image=myapp:production \
+    --containers=myapp \
+    -n production
+
+# Controlla che l'ImageStreamTag sia stato aggiornato correttamente
+oc get istag myapp:production -n production \
+    -o jsonpath='{.image.metadata.name}'
+
+# Forza rollout manuale se necessario
+oc rollout latest dc/myapp -n production
+# oppure per Deployment:
+oc rollout restart deploy/myapp -n production
+```
+
+---
+
+### Scenario 4 — Pipeline Tekton fallisce con errore `permission denied` su Buildah
+
+**Sintomo:** Il task `buildah` nella Tekton Pipeline fallisce con `Error: error creating build container: Error response from daemon: permission denied` o `error mounting /proc`.
+
+**Causa:** Il ServiceAccount della Pipeline non ha i privilegi necessari per eseguire build privilegiate, oppure manca la SCC `privileged` (o `anyuid`) nel namespace.
+
+**Soluzione:**
+
+```bash
+# Verifica il ServiceAccount usato dalla Pipeline
+oc get pipelinerun myapp-run-1 -o jsonpath='{.spec.serviceAccountName}' -n production
+
+# Concedi la SCC privileged al service account della pipeline
+oc adm policy add-scc-to-user privileged \
+    -z pipeline \
+    -n production
+
+# Alternativa: usa buildah in modalità rootless con overlay storage
+# Nel task Buildah, aggiungi:
+# params:
+#   - name: STORAGE_DRIVER
+#     value: vfs   # usa vfs invece di overlay se non c'è kernel support
+
+# Verifica che OpenShift Pipelines operator sia aggiornato
+oc get csv -n openshift-pipelines | grep pipelines
 ```
 
 ---

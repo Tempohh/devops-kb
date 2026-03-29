@@ -9,7 +9,7 @@ related: [databases/sql-avanzato/query-optimizer, databases/sql-avanzato/partiti
 official_docs: https://www.postgresql.org/docs/current/tutorial-window.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Window Functions
@@ -289,6 +289,112 @@ SELECT
 FROM vendite;
 -- → considerare materializzare i risultati con CTE se il costo è alto
 ```
+
+## Troubleshooting
+
+### Scenario 1 — ERROR: window function calls cannot be nested
+
+**Sintomo:** `ERROR: window function calls cannot be nested` quando si tenta di usare una window function dentro un'altra.
+
+**Causa:** PostgreSQL non permette window function annidate direttamente — non puoi usare `SUM(...) OVER (...)` come argomento di un'altra `OVER()`.
+
+**Soluzione:** Materializzare il risultato intermedio in una CTE o subquery, poi applicare la seconda window function.
+
+```sql
+-- SBAGLIATO
+SELECT SUM(SUM(importo) OVER (PARTITION BY categoria)) OVER (ORDER BY data);
+
+-- CORRETTO: CTE intermedia
+WITH step1 AS (
+    SELECT data, categoria,
+           SUM(importo) OVER (PARTITION BY categoria) AS sum_cat
+    FROM vendite
+)
+SELECT data, categoria, sum_cat,
+       SUM(sum_cat) OVER (ORDER BY data) AS sum_cumulato
+FROM step1;
+```
+
+---
+
+### Scenario 2 — LAST_VALUE restituisce il valore della riga corrente, non dell'ultima
+
+**Sintomo:** `LAST_VALUE()` ritorna sempre lo stesso valore della riga corrente invece dell'ultimo elemento della partizione.
+
+**Causa:** Il frame predefinito è `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` — la "finestra" si espande fino alla riga corrente, quindi `LAST_VALUE` corrisponde sempre alla riga attuale.
+
+**Soluzione:** Specificare un frame esplicito che copra l'intera partizione.
+
+```sql
+-- SBAGLIATO (frame default)
+SELECT prodotto, prezzo,
+       LAST_VALUE(prodotto) OVER (ORDER BY prezzo) AS prodotto_economico;
+-- → restituisce sempre il prodotto della riga corrente
+
+-- CORRETTO: frame esplicito
+SELECT prodotto, prezzo,
+       LAST_VALUE(prodotto) OVER (
+           ORDER BY prezzo
+           ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+       ) AS prodotto_piu_economico;
+```
+
+---
+
+### Scenario 3 — Query con window function molto lenta su tabelle grandi
+
+**Sintomo:** Query con più `OVER()` diversi impiega decine di secondi, `EXPLAIN ANALYZE` mostra più `WindowAgg` node in sequenza.
+
+**Causa:** Ogni `OVER()` distinto richiede una passata separata sui dati (sort + scan). Troppe window con partizioni diverse moltiplicano il costo.
+
+**Soluzione:** Consolidare le window con stessa definizione, usare `WINDOW` alias, e materializzare risultati intermedi con CTE quando la stessa finestra è riutilizzata.
+
+```sql
+-- Diagnostica: verificare quanti WindowAgg node ci sono
+EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
+SELECT
+    SUM(importo) OVER w1,
+    AVG(importo) OVER w2,
+    COUNT(*) OVER w1
+FROM vendite
+WINDOW w1 AS (PARTITION BY categoria ORDER BY data),
+       w2 AS (PARTITION BY regione);
+
+-- Se le window sono costose, materializzare con CTE
+WITH base AS (
+    SELECT *, SUM(importo) OVER (PARTITION BY categoria) AS sum_cat
+    FROM vendite
+)
+SELECT *, AVG(importo) OVER (PARTITION BY regione) AS avg_reg
+FROM base;
+```
+
+---
+
+### Scenario 4 — NTH_VALUE restituisce NULL per righe fuori dal frame
+
+**Sintomo:** `NTH_VALUE(col, 2)` ritorna `NULL` per molte righe anche quando la partizione ha più di 2 elementi.
+
+**Causa:** Con il frame default (`UNBOUNDED PRECEDING AND CURRENT ROW`) le prime righe della partizione non hanno ancora visto il 2° elemento. `NTH_VALUE` è sensibile al frame.
+
+**Soluzione:** Usare `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING` per garantire che tutte le righe vedano l'intera partizione.
+
+```sql
+-- SBAGLIATO: NTH_VALUE NULL per le prime righe
+SELECT ordine_id, prodotto, prezzo,
+       NTH_VALUE(prodotto, 2) OVER (
+           PARTITION BY ordine_id ORDER BY prezzo DESC
+       ) AS secondo_prodotto;
+
+-- CORRETTO: frame completo
+SELECT ordine_id, prodotto, prezzo,
+       NTH_VALUE(prodotto, 2) OVER (
+           PARTITION BY ordine_id ORDER BY prezzo DESC
+           ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+       ) AS secondo_prodotto;
+```
+
+---
 
 ## Relazioni
 

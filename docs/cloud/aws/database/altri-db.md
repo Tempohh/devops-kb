@@ -9,7 +9,7 @@ related: [cloud/aws/database/rds-aurora, cloud/aws/database/dynamodb, cloud/aws/
 official_docs: https://aws.amazon.com/products/databases/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-03-28
 ---
 
 # Altri Database AWS — ElastiCache, Redshift, Neptune, DocumentDB e altri
@@ -734,7 +734,7 @@ QLDB (Quantum Ledger Database) è un database ledger completamente managed, immu
 
 ## Troubleshooting
 
-### ElastiCache: Alta Latenza
+### Scenario 1 — ElastiCache: Alta Latenza
 
 ```bash
 # Verificare metriche Redis in CloudWatch
@@ -753,7 +753,7 @@ Cause comuni:
 - Connessioni esaurite — aumentare `maxclients` o usare connection pooling
 - Memory piena + eviction → aumentare dimensione nodo o aggiungere shard
 
-### Redshift: Query Lente
+### Scenario 2 — Redshift: Query Lente
 
 ```sql
 -- Identificare query lente
@@ -772,6 +772,64 @@ FROM stv_blocklist
 WHERE tbl = (SELECT id FROM stv_tbl_perm WHERE name = 'my_table')
 GROUP BY slice
 ORDER BY slice;
+```
+
+### Scenario 3 — DocumentDB: Errori di Connessione TLS
+
+**Sintomo:** L'applicazione riceve `SSL handshake failed` o `SSL certificate verify failed` durante la connessione a DocumentDB.
+
+**Causa:** DocumentDB richiede TLS e il bundle CA di Amazon. Le librerie che si connettono senza il certificato corretto o con `retryWrites=True` falliscono perché DocumentDB non supporta retryWrites.
+
+**Soluzione:**
+1. Scaricare il bundle CA globale di Amazon
+2. Passare `tlsCAFile` al client e impostare `retryWrites=False`
+3. Verificare che il Security Group permetta la porta 27017
+
+```bash
+# Scaricare il bundle CA Amazon per DocumentDB
+curl -o global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+
+# Verificare la connettività TCP verso il cluster (da un'istanza nella stessa VPC)
+nc -zv my-docdb-cluster.cluster-xxxxxxx.us-east-1.docdb.amazonaws.com 27017
+
+# Testare la connessione con mongo shell
+mongosh --tls --tlsCAFile global-bundle.pem \
+  "mongodb://admin:password@my-docdb-cluster.cluster-xxxxxxx.us-east-1.docdb.amazonaws.com:27017/?tls=true&replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false"
+```
+
+### Scenario 4 — Redshift: Errori nel Comando COPY
+
+**Sintomo:** Il comando COPY termina con errore o carica 0 righe. `stl_load_errors` mostra record rifiutati.
+
+**Causa:** Problemi comuni: formato dati non corrispondente allo schema, delimitatori errati, encoding non corretto, permessi IAM mancanti su S3.
+
+**Soluzione:**
+1. Interrogare `stl_load_errors` per il dettaglio riga/colonna dell'errore
+2. Verificare che il ruolo IAM abbia `s3:GetObject` e `s3:ListBucket` sul bucket sorgente
+3. Aggiungere `MAXERROR N` per tollerare un numero limitato di righe errate in sviluppo
+
+```sql
+-- Identificare gli errori di caricamento
+SELECT
+  filename,
+  line_number,
+  colname,
+  raw_field_value,
+  err_reason
+FROM stl_load_errors
+WHERE query = pg_last_copy_id()
+ORDER BY line_number
+LIMIT 50;
+
+-- Verificare i diritti IAM associati al cluster
+SELECT iam_roles FROM svv_attached_masking_policy;
+
+-- Rieseguire il COPY con MAXERROR per isolare il problema
+COPY my_table
+FROM 's3://my-bucket/data/'
+IAM_ROLE 'arn:aws:iam::123456789012:role/RedshiftS3Role'
+FORMAT AS PARQUET
+MAXERROR 10;
 ```
 
 ---

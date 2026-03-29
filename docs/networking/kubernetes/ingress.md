@@ -9,7 +9,7 @@ related: [networking/kubernetes/network-policies, networking/kubernetes/cni, net
 official_docs: https://kubernetes.io/docs/concepts/services-networking/ingress/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-03-29
 ---
 
 # Ingress e Ingress Controller
@@ -299,30 +299,101 @@ spec:
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| `404` su path corretto | IngressClass sbagliata o path typo | `kubectl describe ingress`, verificare `ingressClassName` |
-| `502 Bad Gateway` | Service o pod non disponibile | `kubectl get endpoints <service>` |
-| Certificato scaduto o non generato | cert-manager issue | `kubectl describe certificate`, `kubectl describe certificaterequest` |
-| `ERR_TOO_MANY_REDIRECTS` | Loop redirect HTTP↔HTTPS | Verificare annotazione `ssl-redirect` e header `X-Forwarded-Proto` |
-| Ingress ignorato | Multiple Ingress Controller, nessuna IngressClass | Aggiungere `spec.ingressClassName: nginx` |
+### Scenario 1 — 404 su path configurato correttamente
+
+**Sintomo:** Le richieste a un path definito nell'Ingress restituiscono `404 Not Found` anche se il service backend è attivo.
+
+**Causa:** `ingressClassName` mancante o sbagliata, oppure il controller non ha recepito la risorsa Ingress. Con più Ingress Controller nel cluster, un Ingress senza IngressClass viene ignorato da tutti.
+
+**Soluzione:** Verificare che `spec.ingressClassName` corrisponda al controller installato e controllare gli eventi della risorsa.
 
 ```bash
-# Verifica che l'Ingress sia recepito dal controller
-kubectl get ingress -A
-kubectl describe ingress my-ingress
+kubectl describe ingress my-ingress -n production
+# Controllare il campo "Class" e la sezione "Events"
 
-# Verifica events
-kubectl get events --field-selector reason=Sync
+kubectl get ingressclass
+# Lista le IngressClass disponibili nel cluster
 
-# Log del controller
-kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx --tail=100
+kubectl get events -n production --field-selector reason=Sync
+# Events emessi dal controller durante la sincronizzazione
+```
+
+---
+
+### Scenario 2 — 502 Bad Gateway
+
+**Sintomo:** L'Ingress risponde `502 Bad Gateway` per uno o più path.
+
+**Causa:** Il Service backend non ha endpoint attivi — i pod sono in CrashLoop, non hanno superato il readiness probe, oppure il Service seleziona label sbagliate.
+
+**Soluzione:** Verificare che gli endpoint del Service siano popolati e che i pod siano in Running/Ready.
+
+```bash
+kubectl get endpoints <service-name> -n production
+# Se "Endpoints: <none>" il Service non trova pod matching
+
+kubectl get pods -n production -l app=my-app
+# Verifica stato pod
+
+kubectl describe pod <pod-name> -n production
+# Controllare eventi e readiness probe failures
+
+# Log del controller per dettagli sull'errore upstream
+kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx --tail=50 | grep "502\|upstream"
+```
+
+---
+
+### Scenario 3 — Certificato TLS non generato o scaduto
+
+**Sintomo:** Il browser mostra "Connessione non sicura" o il certificato è scaduto/autofirmato nonostante cert-manager sia installato.
+
+**Causa:** cert-manager non riesce a completare la challenge ACME (HTTP-01 o DNS-01), oppure la `ClusterIssuer` non è configurata correttamente, oppure manca l'annotazione `cert-manager.io/cluster-issuer` nell'Ingress.
+
+**Soluzione:** Ispezionare la catena di risorse cert-manager: Certificate → CertificateRequest → Order → Challenge.
+
+```bash
+kubectl get certificate -n production
+# Verificare colonna "READY" — deve essere True
+
+kubectl describe certificate example-tls -n production
+# Sezione "Events" mostra il motivo del fallimento
+
+kubectl describe certificaterequest -n production
+# Dettagli sulla richiesta verso Let's Encrypt
+
+kubectl get challenges -n production
+# Challenge in pending = problema di raggiungibilità HTTP-01
+
+# Verifica annotazione nell'Ingress
+kubectl get ingress my-ingress -n production -o yaml | grep cert-manager
+```
+
+---
+
+### Scenario 4 — ERR_TOO_MANY_REDIRECTS (loop HTTP↔HTTPS)
+
+**Sintomo:** Il browser va in loop di redirect e mostra `ERR_TOO_MANY_REDIRECTS`. Il problema si verifica tipicamente dopo aver abilitato `ssl-redirect`.
+
+**Causa:** Il load balancer termina TLS e passa traffico HTTP al controller senza il header `X-Forwarded-Proto: https`. Il controller vede HTTP e continua a fare redirect verso HTTPS all'infinito.
+
+**Soluzione:** Configurare il controller per fidarsi dell'header `X-Forwarded-Proto` dal load balancer, oppure usare `use-forwarded-headers: "true"` nella ConfigMap.
+
+```bash
+# Verifica header ricevuti dal controller
+kubectl exec -n ingress-nginx <nginx-pod> -- curl -sI http://localhost/healthz
+
+# Abilita proxy headers nella ConfigMap del controller
+kubectl edit configmap ingress-nginx-controller -n ingress-nginx
+# Aggiungere: use-forwarded-headers: "true"
+#             compute-full-forwarded-for: "true"
+
+# Oppure, per Ingress specifico, disabilitare ssl-redirect se il LB gestisce già TLS
+kubectl annotate ingress my-ingress -n production \
+  nginx.ingress.kubernetes.io/ssl-redirect="false"
 
 # Verifica configurazione nginx generata
-kubectl exec -n ingress-nginx <nginx-pod> -- nginx -T | grep -A5 "server_name"
-
-# Test certificato
-curl -v https://app.example.com 2>&1 | grep -E "SSL|issuer|expire"
+kubectl exec -n ingress-nginx <nginx-pod> -- nginx -T | grep -A3 "ssl_redirect"
 ```
 
 ## Relazioni
