@@ -1,0 +1,86 @@
+approved_at: '2026-04-04'
+auto_approved: true
+description: "Creare guida operativa su Falco per il rilevamento di minacce runtime\
+  \ in Kubernetes.\nsecurity/runtime/ ha solo seccomp-apparmor.md. Falco è il tool\
+  \ open source\nstandard de facto per runtime threat detection nei cluster Kubernetes.\n\
+  \n## Architettura Falco\n- Kernel driver (eBPF o kernel module) → System call capture\n\
+  - Falco engine: valuta rules sugli eventi catturati in real-time\n- Falco Sidekick:\
+  \ fan-out degli alert verso SIEM, Slack, PagerDuty, Elasticsearch\n- Deploy: DaemonSet\
+  \ (un pod per nodo) con privilegi kernel\n\n## Installazione via Helm\n```bash\n\
+  helm repo add falcosecurity https://falcosecurity.github.io/charts\nhelm install\
+  \ falco falcosecurity/falco \\\n  --namespace falco --create-namespace \\\n  --set\
+  \ driver.kind=ebpf \\\n  --set falcosidekick.enabled=true \\\n  --set falcosidekick.config.slack.webhookurl=\"\
+  https://hooks.slack.com/...\"\n```\n- `driver.kind=ebpf`: consigliato (no kernel\
+  \ module, nessuna compilazione)\n- Falco Operator: alternativa CRD-based per gestione\
+  \ dichiarativa\n\n## Rules — struttura e custom rules\n```yaml\n- rule: Spawn Shell\
+  \ in Container\n  desc: Un processo shell è stato avviato in un container\n  condition:\
+  \ >\n    container.id != host and\n    proc.name in (shell_binaries) and\n    container.privileged\
+  \ = false\n  output: >\n    Shell in container (user=%user.name container=%container.name\n\
+  \    image=%container.image.repository:%container.image.tag\n    cmd=%proc.cmdline)\n\
+  \  priority: WARNING\n  tags: [container, shell, mitre_execution]\n```\n- Condition:\
+  \ espressione su campi Falco (proc.*, container.*, fd.*, net.*)\n- Output: template\
+  \ per il messaggio dell'alert\n- Priority: EMERGENCY, ALERT, CRITICAL, ERROR, WARNING,\
+  \ NOTICE, INFO, DEBUG\n- Override rules built-in: `override.condition`, `override.output`\n\
+  \n## Regole built-in più importanti\n- `Terminal shell in container`: exec shell\
+  \ in running container\n- `Contact K8S API Server From Container`: accesso anomalo\
+  \ all'API server\n- `Read sensitive file`: lettura /etc/shadow, /etc/passwd da processo\
+  \ non privilegiato\n- `Write below root`: scrittura in / fuori dai path attesi\n\
+  - `Outbound connection to C2 servers`: comunicazione verso IP sospetti (threat intel\
+  \ feed)\n\n## Falco Sidekick — output e integrazione SIEM\n```yaml\n# values.yaml\
+  \ Helm\nfalcosidekick:\n  config:\n    elasticsearch:\n      hostport: \"http://elasticsearch:9200\"\
+  \n      index: \"falco\"\n    slack:\n      webhookurl: \"https://hooks.slack.com/...\"\
+  \n      minimumpriority: \"warning\"\n    pagerduty:\n      routingkey: \"xxxxxxxx\"\
+  \n      minimumpriority: \"critical\"\n```\n- Filtering per priority: non inondare\
+  \ Slack con eventi NOTICE\n- Custom webhook: integrazione con SIEM proprietario\n\
+  \n## Tuning e riduzione falsi positivi\n- Macro: definire condizioni riutilizzabili\
+  \ (es. `trusted_containers`)\n- List: insiemi di valori (es. `shell_binaries: [bash,\
+  \ sh, zsh]`)\n- exceptions: whitelist per rule specifiche senza disabilitarle\n\
+  ```yaml\n- rule: Spawn Shell in Container\n  exceptions:\n    - name: trusted_debug_containers\n\
+  \      fields: [container.image.repository]\n      values: [[my-company/debug-tools]]\n\
+  ```\n\n## Confronto con seccomp/AppArmor\n- seccomp/AppArmor: prevenzione (blocca\
+  \ syscall/azioni prima che avvengano)\n- Falco: detection (osserva e allerta DOPO\
+  \ che l'azione è avvenuta)\n- Pattern complementare: seccomp riduce la superficie,\
+  \ Falco rileva il bypass\n"
+effort: medium
+id: prop-020
+last_analyzed: 2026-04-04
+priority: high
+rationale: 'security/runtime/ ha solo seccomp-apparmor.md — un file su prevenzione.
+
+  Falco è il tool standard per il rilevamento runtime in Kubernetes, raccomandato
+
+  da CNCF, CIS Kubernetes Benchmark e NSA Kubernetes Hardening Guide.
+
+  Un security engineer che deve implementare runtime threat detection non trova
+
+  nulla nella KB. Il gap è critico: seccomp/AppArmor e Falco sono complementari,
+
+  non alternativi — entrambi servono in una postura di sicurezza matura.
+
+  '
+status: approved
+tags:
+- falco
+- runtime-security
+- kubernetes
+- threat-detection
+- ebpf
+- sidekick
+- siem
+- compliance
+target_file: docs/security/runtime/falco.md
+title: Falco — Runtime Threat Detection su Kubernetes
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, deploya Falco via Helm con driver eBPF, disabilita i false
+    positive per i container fidati tramite exceptions, configura Falco Sidekick per
+    inviare CRITICAL a PagerDuty e WARNING a Slack, e aggiunge custom rule per il
+    proprio threat model
+  reader: Platform engineer o Security engineer che gestisce cluster Kubernetes in
+    produzione con requisiti di compliance (SOC2, ISO 27001)
+  scenario: L'audit di sicurezza richiede evidenza di runtime threat detection per
+    i container. Deve implementare Falco, configurare alert per le minacce più critiche
+    (shell exec, privilege escalation), e integrare con il SIEM aziendale
+  score: high
+  without_kb: Dovrebbe leggere falco.org/docs, falco.org/docs/rules, github.com/falcosecurity/falcosidekick
+    — documentazione frammentata in 5+ pagine separate senza contesto operativo

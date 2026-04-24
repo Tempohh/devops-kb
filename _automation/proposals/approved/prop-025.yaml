@@ -1,0 +1,74 @@
+approved_at: '2026-04-04'
+auto_approved: true
+description: "Creare guida su OpenTofu, il fork open-source di Terraform mantenuto\
+  \ dalla\nLinux Foundation dopo il cambio di licenza di HashiCorp (agosto 2023: da\
+  \ MPL 2.0\na Business Source License BSL 1.1).\n\nStruttura suggerita:\n- **Contesto\
+  \ storico**: perché esiste OpenTofu — la controversia BSL, fork ufficiale\n  CNCF/Linux\
+  \ Foundation (settembre 2023), GA v1.6 (gennaio 2024)\n- **Compatibilità**: OpenTofu\
+  \ è drop-in replacement per Terraform fino a v1.5.x,\n  nessuna modifica ai `.tf`\
+  \ esistenti per la migrazione base\n- **Differenze chiave rispetto a Terraform**:\n\
+  \  - Provider registry: `registry.opentofu.org` invece di `registry.terraform.io`\n\
+  \    (anche Terraform registry funziona, ma OpenTofu ha il proprio)\n  - State encryption\
+  \ nativa (feature non presente in Terraform): protegge\n    lo state file con AES-GCM\
+  \ o PBKDF2\n  - `provider_meta` esteso\n  - Loops e iterazioni più potenti (early\
+  \ evaluation)\n- **Migrazione da Terraform**:\n```bash\n# Installa OpenTofu\nbrew\
+  \ install opentofu   # macOS\n# oppure\nwget https://github.com/opentofu/opentofu/releases/download/v1.8.0/tofu_1.8.0_linux_amd64.zip\n\
+  \n# Verifica compatibilità\ntofu version\n# Rimpiazza il binario terraform con tofu\
+  \ (alias o PATH)\nalias terraform=tofu\n\n# Migrazione state: nessuna azione necessaria\
+  \ per state locali\n# Per backend remoto: aggiorna terraform_backend se usi Terraform\
+  \ Cloud\n# (OpenTofu supporta solo backend open: S3, GCS, Azure Blob, Consul, etc.)\n\
+  ```\n- **State encryption** (feature esclusiva):\n```hcl\nterraform {\n  encryption\
+  \ {\n    key_provider \"pbkdf2\" \"my_passphrase\" {\n      passphrase = var.state_passphrase\n\
+  \    }\n    method \"aes_gcm\" \"my_method\" {\n      keys = key_provider.pbkdf2.my_passphrase\n\
+  \    }\n    state {\n      method = method.aes_gcm.my_method\n      enforced = true\n\
+  \    }\n  }\n}\n```\n- **Quando scegliere OpenTofu vs Terraform**: tabella decisionale\
+  \ basata su\n  licensing constraints, Terraform Cloud dependency, compliance requirements\n\
+  - **CI/CD con OpenTofu**: GitHub Actions (setup-opentofu action), GitLab CI\n- **Tooling\
+  \ compatibile**: Atlantis, Terragrunt, Infracost — tutti supportano OpenTofu\n"
+effort: small
+id: prop-025
+last_analyzed: 2026-04-04
+priority: high
+rationale: 'Il cambio di licenza di Terraform (agosto 2023) è stato il singolo evento
+  più
+
+  controverso nell''ecosistema IaC degli ultimi anni. Molte organizzazioni hanno
+
+  dovuto valutare la migrazione a OpenTofu per evitare vincoli legali BSL.
+
+  La KB copre Terraform ma non menziona OpenTofu in nessun file — un DevOps che
+
+  consulta la KB per decidere se migrare non trova nessuna guida. OpenTofu è già
+
+  alla v1.8, GA stabile, usato in produzione da migliaia di organizzazioni.
+
+  Il file può vivere in `docs/iac/terraform/` come argomento correlato piuttosto
+
+  che in una cartella separata, per mantenerlo vicino ai file Terraform esistenti.
+
+  '
+status: approved
+tags:
+- opentofu
+- terraform
+- iac
+- licensing
+- bsl
+- migration
+- open-source
+target_file: docs/iac/terraform/opentofu.md
+title: OpenTofu — Fork Open Source di Terraform
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, produce un'analisi consapevole delle differenze tecniche
+    e legali, stima l'effort di migrazione come basso (alias + registry update), e
+    può testare con `tofu plan` su un modulo esistente senza modifiche
+  reader: DevOps/Platform Engineer che usa Terraform in azienda e deve valutare se
+    migrare a OpenTofu dopo il cambio BSL
+  scenario: 'Il legal team ha sollevato dubbi sulla licenza BSL di Terraform. Il DevOps
+    deve presentare un''analisi: cosa cambia, quanto costa migrare, ci sono rischi
+    tecnici, quali tool sono compatibili'
+  score: high
+  without_kb: Dovrebbe leggere il blog HashiCorp (di parte), il sito opentofu.org,
+    le discussioni GitHub del fork, e articoli terze parti per costruire un quadro
+    completo — 3-4h di ricerca frammentata su fonti con bias diversi

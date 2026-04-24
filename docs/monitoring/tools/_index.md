@@ -19,3 +19,6 @@ Gli strumenti principali per metriche, visualizzazione e log nell'ecosistema clo
 - [Prometheus](prometheus.md) — Scraping, PromQL, TSDB, alerting rules
 - [Grafana](grafana.md) — Dashboard, visualizzazione, alerting multi-source
 - [Loki](loki.md) — Log aggregation con labels, LogQL, stack PLG
+- [Jaeger & Tempo](jaeger-tempo.md) — Backend distributed tracing, OTLP, sampling
+- [OTel Collector su Kubernetes](otel-collector-kubernetes.md) — DaemonSet/Gateway pattern, pipeline receivers/processors/exporters, Operator
+- [Prometheus: Scalabilità e Long-term Storage](prometheus-scalabilita.md) — Thanos, VictoriaMetrics, Grafana Mimir, remote write tuning, multi-cluster

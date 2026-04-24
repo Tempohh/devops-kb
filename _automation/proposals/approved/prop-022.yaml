@@ -1,0 +1,83 @@
+approved_at: '2026-04-04'
+auto_approved: true
+description: "Creare guida operativa su cost visibility e chargeback per Kubernetes\
+  \ con\nKubecost e OpenCost. cloud/finops/ ha solo fondamentali.md — nessun file\n\
+  su come misurare e allocare i costi in ambienti Kubernetes multi-team.\n\n## Il\
+  \ problema del costo Kubernetes\n- Cloud bill aggregata: impossibile sapere quale\
+  \ team/namespace costa cosa\n- CPU e memoria condivisi: costi proporzionali all'utilizzo\
+  \ reale vs richiesto\n- Costi nascosti: egress, persistent volumes, load balancer\
+  \ per namespace\n- Obiettivo FinOps: cost allocation per team → chargeback / showback\n\
+  \n## OpenCost — standard CNCF open source\n```bash\n# Installazione OpenCost (CNCF\
+  \ Sandbox project)\nhelm repo add opencost https://opencost.github.io/opencost-helm-chart\n\
+  helm install opencost opencost/opencost \\\n  --namespace opencost --create-namespace\
+  \ \\\n  --set opencost.exporter.cloudProviderApiKey=\"...\"\n```\n- Espone metriche\
+  \ Prometheus: `container_cpu_allocation`, `container_memory_allocation`\n- API REST:\
+  \ query costi per namespace/label/deployment/pod su finestra temporale\n```bash\n\
+  curl \"http://opencost:9003/allocation?window=7d&aggregate=namespace&accumulate=false\"\
+  \n```\n- Integrazione Grafana: dashboard pre-built su grafana.com/grafana/dashboards\n\
+  \n## Kubecost — funzionalità enterprise\n```bash\nhelm install cost-analyzer kubecost/cost-analyzer\
+  \ \\\n  --namespace kubecost --create-namespace \\\n  --set global.prometheus.enabled=false\
+  \ \\\n  --set global.prometheus.fqdn=\"http://prometheus:9090\"\n```\n- Cost Allocation:\
+  \ costo per namespace, label, controller, pod con granularità oraria\n- Savings\
+  \ Insights: rightsizing raccomandazioni (CPU/Memory request over-provisioned)\n\
+  - Anomaly detection: spike di costo automaticamente rilevati\n- Budget alerts: notifica\
+  \ quando namespace supera budget mensile\n\n## Cost Allocation per team — chargeback\
+  \ pratico\n```yaml\n# Kubecost — configurazione allocation by label\n# Ogni team\
+  \ etichetta i propri workload\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n\
+  \  labels:\n    team: payments\n    cost-center: CC-1234\n    environment: prod\n\
+  ```\n- Report settimanale: costo per `team` label → inviato via Slack/email al team\
+  \ lead\n- Showback: visibilità senza addebitare (cultura first, poi chargeback)\n\
+  - Chargeback: integrazione con sistema di billing interno via API Kubecost\n\n##\
+  \ Ottimizzazione — rightsizing raccomandazioni\n- Request vs actual: Kubecost confronta\
+  \ `resources.requests` con utilizzo P95\n- Over-provisioned: CPU request 4 core,\
+  \ utilizzo P95 0.5 core → suggerisce 0.7 core\n- Under-provisioned: container OOMKilled\
+  \ → aumentare memory limit\n```bash\n# Kubecost API — raccomandazioni rightsizing\n\
+  curl \"http://kubecost:9090/savings/requestSizing?window=7d&targetUtilization=0.8\"\
+  \n```\n\n## Integrazione con FinOps fondamentali\n- Unit economics: costo per richiesta\
+  \ API = (costo namespace / numero richieste)\n- Benchmark tra ambienti: costo staging\
+  \ vs prod (staging non deve costare come prod)\n- Cloud provider discount: OpenCost\
+  \ integra AWS Spot pricing, Reserved Instance savings\n"
+effort: medium
+id: prop-022
+last_analyzed: 2026-04-04
+priority: medium
+rationale: 'cloud/finops/fondamentali.md introduce la disciplina FinOps ma non dà
+  strumenti
+
+  concreti per chi gestisce Kubernetes. Kubecost (freemium) e OpenCost (CNCF open
+  source)
+
+  sono i tool standard per cost allocation in K8s. Un Platform engineer che riceve
+
+  dal CFO la richiesta "quanto costa il team payments?" non ha nulla nella KB per
+
+  rispondere operativamente. Il file colma il gap tra teoria FinOps e pratica
+
+  Kubernetes — un collegamento critico per chi gestisce piattaforme multi-team.
+
+  '
+status: approved
+tags:
+- kubecost
+- opencost
+- finops
+- kubernetes
+- cost-allocation
+- chargeback
+- rightsizing
+- cncf
+target_file: docs/cloud/finops/kubernetes-cost.md
+title: Kubecost / OpenCost — FinOps per Kubernetes
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, installa OpenCost o Kubecost, configura label di team
+    sui workload esistenti, genera il primo report di costo per namespace, e imposta
+    alert di budget per i namespace più costosi
+  reader: Platform engineer che gestisce un cluster Kubernetes multi-team (5-10 namespace
+    distinti) e deve rispondere a domande di costo dal management
+  scenario: Il CFO chiede un report mensile dei costi per team. Il cluster è su AWS
+    EKS, ogni team ha un namespace. Non c'è nessun sistema di cost visibility attuale
+  score: medium
+  without_kb: Dovrebbe leggere kubecost.com/docs (documentazione estesa), opencost.io/docs,
+    e capire quale tool scegliere tra i due — senza un confronto diretto che mappa
+    il problema alle soluzioni

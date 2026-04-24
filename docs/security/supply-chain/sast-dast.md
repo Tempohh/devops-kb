@@ -5,11 +5,11 @@ category: security
 tags: [sast, dast, application-security, sonarqube, semgrep, owasp-zap, nuclei, shift-left, devsecops]
 search_keywords: [sast, dast, static analysis, dynamic analysis, application security testing, sonarqube, semgrep, owasp zap, nuclei, shift left security, devsecops, code scanning, vulnerability testing, penetration testing automation, iast, rasp, sca, taint analysis]
 parent: security/supply-chain/_index
-related: [security/supply-chain/image-scanning, security/supply-chain/sbom-cosign, security/supply-chain/admission-control, ci-cd/pipeline/github-actions]
+related: [security/supply-chain/image-scanning, security/supply-chain/sbom-cosign, security/supply-chain/admission-control, ci-cd/github-actions/workflow-avanzati, ci-cd/strategie/pipeline-security]
 official_docs: https://owasp.org/www-community/Source_Code_Analysis_Tools
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-03-29
 ---
 
 # SAST e DAST — Application Security Testing

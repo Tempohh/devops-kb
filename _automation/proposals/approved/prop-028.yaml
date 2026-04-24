@@ -1,0 +1,76 @@
+approved_at: '2026-04-04'
+auto_approved: true
+description: "Creare guida sul performance/load testing automatizzato integrato in\
+  \ pipeline CI/CD.\nci-cd/testing ha test-strategy.md (piramide dei test, unit/integration/e2e)\
+  \ e\ncontract-testing.md ma nessuna copertura del performance testing — gap\nnella\
+  \ piramide: un DevOps che legge test-strategy.md trova raccomandazione\ndi \"aggiungere\
+  \ load test\" senza guida su come farlo.\n\nStruttura suggerita:\n- **Tipi di test**:\
+  \ load test, stress test, soak test, spike test — definizioni\n  operative con quando\
+  \ usarli (non solo accademia)\n- **k6** (strumento principale — Go, scripting JavaScript,\
+  \ CLI-friendly per CI):\n```javascript\n// script.js\nimport http from 'k6/http';\n\
+  import { check, sleep } from 'k6';\n\nexport const options = {\n  stages: [\n  \
+  \  { duration: '2m', target: 100 },   // ramp-up\n    { duration: '5m', target:\
+  \ 100 },   // steady state\n    { duration: '2m', target: 0 },     // ramp-down\n\
+  \  ],\n  thresholds: {\n    http_req_duration: ['p(95)<500'],   // 95% < 500ms\n\
+  \    http_req_failed: ['rate<0.01'],     // <1% errori\n  },\n};\n\nexport default\
+  \ function () {\n  const res = http.get('https://api.example.com/users');\n  check(res,\
+  \ { 'status 200': (r) => r.status === 200 });\n  sleep(1);\n}\n```\n- **k6 in GitHub\
+  \ Actions**:\n```yaml\n- name: Run k6 load test\n  uses: grafana/k6-action@v0.3.0\n\
+  \  with:\n    filename: tests/performance/load-test.js\n    flags: --out json=results.json\n\
+  - name: Check thresholds\n  run: |\n    # k6 exit code 99 se thresholds falliti\n\
+  \    # Il job GitHub Actions fallisce automaticamente\n```\n- **Gatling** (alternativa\
+  \ JVM — report HTML, DSL Scala/Java): quando preferirlo\n  (ambienti enterprise\
+  \ Java, report più ricchi)\n- **Metriche chiave**: p50/p95/p99 latency, throughput\
+  \ (req/s), error rate,\n  concurrent users — come leggere i risultati\n- **Baseline\
+  \ e regressione**: come salvare baseline, confrontare run successivi,\n  fail automatico\
+  \ su regressione >10%\n- **Ambienti isolati**: perché NON fare load test su produzione,\
+  \ come configurare\n  un ambiente staging rappresentativo\n- **Anti-pattern**: test\
+  \ da laptop (rete non controllata), test senza warm-up,\n  interpretare p99 senza\
+  \ guardare p95\n- **Grafana k6 Cloud** (menzione): per test distribuiti da multiple\
+  \ location\n"
+effort: medium
+id: prop-028
+last_analyzed: 2026-04-04
+priority: medium
+rationale: 'ci-cd/testing/test-strategy.md menziona i performance test nella piramide
+  ma
+
+  non li approfondisce — rimanda implicitamente a un file che non esiste.
+
+  Un DevOps che deve aggiungere load testing alla pipeline CI trova la KB incompleta
+
+  proprio dove ne avrebbe bisogno: esempi k6, thresholds configurabili, integrazione
+
+  GitHub Actions. k6 è diventato il tool standard per questo uso (CNCF project,
+
+  acquisito da Grafana Labs, CLI-first progettato per CI) e manca completamente
+
+  dalla KB.
+
+  '
+status: approved
+tags:
+- k6
+- gatling
+- performance-testing
+- load-testing
+- ci-cd
+- github-actions
+- thresholds
+target_file: docs/ci-cd/testing/performance-testing.md
+title: Performance Testing — k6, Gatling e Load Testing in CI
+type: new-file
+utility_test:
+  outcome: Crea uno script k6 con thresholds configurabili, lo integra nel workflow
+    GitHub Actions come job pre-deploy, ottiene fail automatico su regressione, e
+    salva la baseline JSON per confronti storici
+  reader: DevOps/QA Engineer che deve validare le performance di un'API REST prima
+    di ogni release e integrare il check in pipeline GitHub Actions
+  scenario: Il team ha avuto un incidente di regressione performance (endpoint degradato
+    da 200ms a 2s dopo una modifica DB) che non è stato rilevato dai test funzionali.
+    Ora vuole aggiungere un gate di performance in CI che fallisca automaticamente
+    se p95 supera 500ms
+  score: medium
+  without_kb: Deve leggere la documentazione k6.io (buona ma non orientata a CI),
+    cercare esempi GitHub Actions per k6, capire come impostare thresholds e interpretare
+    i risultati — 3-4h tra setup e comprensione del workflow completo

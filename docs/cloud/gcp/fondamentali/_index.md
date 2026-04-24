@@ -24,4 +24,8 @@ I fondamentali GCP coprono i concetti base per operare su Google Cloud — dalla
 
     Progetti, IAM, billing, regioni/zone, Google Cloud SDK — la base imprescindibile
 
+- :material-check-all: **[Google Cloud Architecture Framework](well-architected.md)**
+
+    6 pilastri (System Design, Operational Excellence, Security, Reliability, Cost Optimization, Performance) — framework per architetture cloud solide
+
 </div>

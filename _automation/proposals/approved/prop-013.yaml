@@ -1,0 +1,80 @@
+approved_at: '2026-03-30'
+description: "Creare guida operativa per deployare e configurare OpenTelemetry Collector\
+  \ su\nKubernetes come infrastructure layer per la pipeline di osservabilità\n(metrics\
+  \ → Prometheus, traces → Tempo/Jaeger, logs → Loki). La KB ha\nmonitoring/fondamentali/opentelemetry.md\
+  \ (teoria) e dev/resilienza/observability-code.md\n(lato applicazione) ma manca\
+  \ il layer infrastrutturale.\n\n## Topologie di deployment su K8s\n- DaemonSet:\
+  \ un collector per nodo (raccolta log da hostPath, metriche infra)\n- Deployment:\
+  \ collector centralizzato (gateway per processing, batching, export)\n- Sidecar:\
+  \ collector per pod (use case: agenti legacy, isolamento tenant)\n- Pattern raccomandato:\
+  \ DaemonSet (agent) + Deployment (gateway) per produzione\n\n## Operator vs Helm\
+  \ Chart\n- OpenTelemetry Operator (cert-manager richiesto): auto-inject sidecar,\n\
+  \  gestione CRD `OpenTelemetryCollector`, `Instrumentation`\n- Helm chart `open-telemetry/opentelemetry-collector`:\
+  \ più semplice, meno funzionalità\n- Snippet: installazione Operator via Helm +\
+  \ CR `OpenTelemetryCollector` base\n\n## Configurazione Collector: Receivers, Processors,\
+  \ Exporters\nStruttura tipo config per il pattern DaemonSet + Gateway:\n\n```yaml\n\
+  # Agent DaemonSet\nreceivers:\n  otlp:           # riceve da app via SDK\n    protocols:\
+  \ {grpc: {}, http: {}}\n  kubeletstats:   # metriche nodi K8s\n  filelog:      \
+  \  # log dai container via /var/log/pods\n    include: [/var/log/pods/*/*/*.log]\n\
+  processors:\n  memory_limiter: {}\n  k8sattributes:  # arricchisce con namespace,\
+  \ pod, node\n  batch: {}\nexporters:\n  otlp/gateway:   # forwarda al gateway centralizzato\n\
+  \    endpoint: otel-gateway:4317\n\n# Gateway Deployment\nreceivers:\n  otlp: {}\n\
+  processors:\n  batch:\n    send_batch_size: 1000\n    timeout: 1s\n  resourcedetection:\
+  \ {}\nexporters:\n  prometheusremotewrite:\n    endpoint: http://prometheus:9090/api/v1/write\n\
+  \  otlp/tempo:\n    endpoint: http://tempo:4317\n  loki:\n    endpoint: http://loki:3100/loki/api/v1/push\n\
+  ```\n\n## K8s Attributes Processor\n- Arricchire ogni segnale con `k8s.namespace.name`,\
+  \ `k8s.pod.name`,\n  `k8s.deployment.name`, `k8s.node.name`\n- RBAC necessario:\
+  \ ClusterRole per list/watch pods/namespaces\n- ServiceAccount dedicato per il collector\n\
+  \n## Auto-Instrumentation con Operator\n- CRD `Instrumentation` per linguaggio (Java,\
+  \ Python, Go, .NET, Node.js)\n- Annotation sul namespace o deployment: `instrumentation.opentelemetry.io/inject-java:\
+  \ \"true\"`\n- Zero-code instrumentation per app Spring Boot, FastAPI, etc.\n\n\
+  ## Resource Sizing e Memory Limiter\n- `memory_limiter` obbligatorio: previene OOM\
+  \ del collector\n- Regola: `limit_mib = container_memory_limit * 0.8`\n- DaemonSet:\
+  \ 100-200m CPU, 256-512Mi memory tipicamente\n- Gateway: size in base al throughput\
+  \ (batch tuning)\n\n## Troubleshooting\n- `kubectl logs -l app=otel-collector -n\
+  \ monitoring`\n- Endpoint diagnostici: `http://collector:55679/debug/tracez`\n-\
+  \ Metriche interne: `otelcol_receiver_accepted_spans`, `otelcol_exporter_send_failed_metric_points`\n"
+effort: medium
+id: prop-013
+last_analyzed: 2026-03-30
+priority: high
+rationale: 'La KB ha monitoring/fondamentali/opentelemetry.md (principi OTEL, SDK,
+  segnali)
+
+  e dev/resilienza/observability-code.md (come strumentare il codice).
+
+  Manca il layer infrastrutturale: come deployare il Collector su K8s,
+
+  configurare la pipeline receivers-processors-exporters, e connettere
+
+  Prometheus + Tempo + Loki in modo coerente. Questo è il gap operativo più
+
+  frequente: un DevOps sa cosa è OTEL ma non sa come deployarlo su K8s in
+
+  modo production-ready.
+
+  '
+status: approved
+tags:
+- opentelemetry
+- otel-collector
+- kubernetes
+- prometheus
+- tempo
+- loki
+- observability
+- monitoring
+target_file: docs/monitoring/tools/otel-collector-kubernetes.md
+title: OTEL Collector su Kubernetes — Pipeline di Osservabilità
+type: new-file
+utility_test:
+  outcome: 'Ha un blueprint funzionante: DaemonSet + Gateway pattern, config YAML
+    per ogni pipeline, RBAC, auto-instrumentation via Operator + Annotation'
+  reader: DevOps/Platform engineer che deve unificare l'osservabilità di un cluster
+    K8s con Prometheus, Grafana Tempo, e Loki già installati
+  scenario: Vuole deployare OTEL Collector per centralizzare raccolta metriche, trace,
+    e log — con auto-inject sui pod Java senza modificare le app
+  score: high
+  without_kb: Dovrebbe leggere la documentazione OTEL Collector (receivers/processors/
+    exporters), la guida K8s Operator, e la documentazione degli exporter per Prometheus/Tempo/Loki
+    — almeno 6-8 pagine separate

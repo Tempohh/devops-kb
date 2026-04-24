@@ -1,0 +1,74 @@
+approved_at: '2026-04-04'
+auto_approved: true
+description: "Creare guida sulla scalabilità di Prometheus oltre il singolo nodo/cluster.\n\
+  monitoring/tools/prometheus.md copre la configurazione base, ma non affronta\nil\
+  \ problema reale di chi ha 10+ cluster o retention >15 giorni: Prometheus single\n\
+  node non scala. I due approcci dominanti sono Thanos e VictoriaMetrics.\n\nStruttura\
+  \ suggerita:\n- **Perché Prometheus da solo non basta**: limiti reali (RAM per alta\
+  \ cardinality,\n  storage locale, no HA nativa, no query cross-cluster)\n- **Thanos**:\
+  \ architettura a componenti (Sidecar, Query, Store, Compactor, Ruler)\n```\n[Prometheus\
+  \ + Sidecar] → [Object Store: S3/GCS/Azure Blob]\n       ↑                     \
+  \         ↑\n[Thanos Query] ← ← ← ← ← [Thanos Store Gateway]\n       ↓\n[Thanos\
+  \ Compactor] (dedup + downsampling)\n```\n- **Installazione Thanos Sidecar** (pattern\
+  \ più comune):\n```yaml\n# prometheus.yaml aggiunta\ncontainers:\n  - name: thanos-sidecar\n\
+  \    image: quay.io/thanos/thanos:v0.36.0\n    args:\n      - sidecar\n      - --tsdb.path=/prometheus\n\
+  \      - --prometheus.url=http://localhost:9090\n      - --objstore.config-file=/etc/thanos/objstore.yaml\n\
+  ```\n- **VictoriaMetrics**: alternativa drop-in, singolo binario, 7-10x più efficiente\n\
+  \  in storage rispetto a Prometheus, compatibile con PromQL e remote_write\n```bash\n\
+  # Single-node VictoriaMetrics (replace Prometheus per cluster singolo)\ndocker run\
+  \ -v /path/to/storage:/victoria-metrics-data \\\n  victoriametrics/victoria-metrics:v1.101.0\
+  \ \\\n  -storageDataPath=/victoria-metrics-data \\\n  -retentionPeriod=1y   # retention\
+  \ annuale senza problemi\n\n# Scrape config invariata rispetto a Prometheus\n# remote_write\
+  \ da Prometheus a VictoriaMetrics\nremote_write:\n  - url: http://victoriametrics:8428/api/v1/write\n\
+  ```\n- **Confronto Thanos vs VictoriaMetrics**: tabella (complessità, HA, multi-tenancy,\n\
+  \  cardinality, compatibilità Grafana, licensing)\n- **VictoriaMetrics Cluster**:\
+  \ per multi-tenant o volume estremo\n- **Grafana Mimir** (menzione): terza opzione\
+  \ cloud-native di Grafana Labs\n- **Quando usare cosa**: decision tree basato su\
+  \ numero cluster, retention, budget ops\n- **Remote write tuning**: come configurare\
+  \ Prometheus per remote_write senza\n  perdere campioni sotto carico\n"
+effort: medium
+id: prop-026
+last_analyzed: 2026-04-04
+priority: high
+rationale: 'monitoring/tools/prometheus.md non menziona scalabilità. Un SRE che ha
+  bisogno
+
+  di Prometheus su più cluster (microservizi federati, multi-AZ) o con retention
+
+  lunga trova un gap completo nella KB. Thanos è lo standard de facto per Prometheus
+
+  HA/multi-cluster (CNCF Incubating), VictoriaMetrics è l''alternativa più efficiente
+
+  per chi non vuole la complessità Thanos. Entrambi sono usati massicciamente in
+
+  produzione. Il file si collega a prometheus.md esistente e a monitoring/sre/
+
+  per il contesto SRE.
+
+  '
+status: approved
+tags:
+- prometheus
+- thanos
+- victoriametrics
+- monitoring
+- scalabilita
+- object-store
+- ha
+- multi-cluster
+target_file: docs/monitoring/tools/prometheus-scalabilita.md
+title: Thanos e VictoriaMetrics — Prometheus su Scala
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, implementa Thanos Sidecar su ogni cluster con S3 come
+    object store, configura Thanos Query per query federate, oppure valuta la migrazione
+    a VictoriaMetrics single-node per un cluster a bassa complessità
+  reader: SRE/Platform Engineer che gestisce Prometheus su 5+ cluster Kubernetes con
+    necessità di query cross-cluster e retention di 6+ mesi
+  scenario: Prometheus su ogni cluster consuma troppa RAM per l'alta cardinality dei
+    pod, la retention locale è limitata a 15 giorni, e non c'è modo di fare query
+    aggregate su tutti i cluster dal Grafana centrale
+  score: high
+  without_kb: Dovrebbe leggere la documentazione Thanos (complessa, poco operativa),
+    confrontare Thanos/VictoriaMetrics/Mimir su articoli terze parti, e fare esperimenti
+    su un cluster test — 1-2 giorni di setup e comprensione

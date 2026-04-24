@@ -5,11 +5,11 @@ category: security
 tags: [zero-trust, micro-segmentation, beyondcorp, service-mesh, network-security, mtls, identity]
 search_keywords: [zero trust architecture, never trust always verify, zero trust network access ztna, beyondcorp google, nist 800-207, micro-segmentation, software defined perimeter sdp, identity centric security, continuous verification, least privilege access, zero trust workloads, zero trust kubernetes, istio zero trust, cilium network policy, network microsegmentation, zero trust cloud, implicit trust, perimeter security obsolete, east west traffic security, lateral movement prevention, policy enforcement point pep, policy decision point pdp, zero trust maturity model, cisa zero trust, bnd modello zero trust, conditional access zero trust, sase secure access service edge]
 parent: security/network/_index
-related: [security/autenticazione/mtls-spiffe, security/autorizzazione/opa, security/pki-certificati/pki-interna, security/autorizzazione/rbac-abac-rebac, security/supply-chain/admission-control]
+related: [security/autenticazione/mtls-spiffe, security/autorizzazione/opa, security/pki-certificati/pki-interna, security/autorizzazione/rbac-abac-rebac, security/supply-chain/admission-control, networking/sicurezza/zero-trust]
 official_docs: https://csrc.nist.gov/publications/detail/sp/800-207/final
 status: complete
 difficulty: advanced
-last_updated: 2026-03-25
+last_updated: 2026-03-29
 ---
 
 # Zero Trust Architecture
@@ -568,6 +568,11 @@ Zero Trust è un principio trasversale che coinvolge molteplici componenti della
     Le policy di Admission Control (Kyverno, OPA Gatekeeper) garantiscono che solo workload conformi — con i label corretti, senza privilegi eccessivi, con le annotation SPIFFE — possano essere deployati nel cluster.
 
     **Approfondimento completo →** [Admission Control](../supply-chain/admission-control.md)
+
+??? info "Zero Trust Networking — ZTNA per Utenti e Roadmap di Migrazione"
+    Questo file copre Zero Trust dal punto di vista dei workload Kubernetes. Per l'implementazione dal punto di vista di rete e accesso utente — ZTNA con Cloudflare Access, IAP, device posture, e roadmap di migrazione da VPN a Zero Trust — vedi il file complementare nella sezione networking.
+
+    **Approfondimento →** [Zero Trust Networking](../../networking/sicurezza/zero-trust.md)
 
 ---
 

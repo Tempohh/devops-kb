@@ -1,0 +1,77 @@
+approved_at: '2026-04-03'
+auto_approved: true
+description: "Creare guida operativa per scrivere alert rules e recording rules Prometheus\n\
+  di qualità production. La KB ha prometheus.md (architettura, scraping, PromQL base)\n\
+  e alertmanager.md (routing, notifiche) ma manca il componente centrale:\ncome scrivere\
+  \ regole di alerting efficaci.\n\n## Struttura di una alert rule\n```yaml\ngroups:\n\
+  \  - name: app.rules\n    interval: 30s    # override dello scrape interval per\
+  \ questo gruppo\n    rules:\n      - alert: HighErrorRate\n        expr: |\n   \
+  \       rate(http_requests_total{status=~\"5..\"}[5m])\n          / rate(http_requests_total[5m])\
+  \ > 0.05\n        for: 5m       # durata prima di firing (evita flap)\n        labels:\n\
+  \          severity: critical\n          team: backend\n        annotations:\n \
+  \         summary: \"High error rate on {{ $labels.service }}\"\n          description:\
+  \ \"Error rate is {{ $value | humanizePercentage }}\"\n          runbook_url: \"\
+  https://runbooks.company.com/high-error-rate\"\n```\n- Campo `for`: perché è critico\
+  \ (evita alert per spike brevi)\n- Labels: severity (page/ticket/warning), team\
+  \ (per routing Alertmanager)\n- Annotations: summary breve + description con valore,\
+  \ runbook_url obbligatorio\n\n## Recording Rules — ottimizzazione PromQL\n- Quando\
+  \ usarle: espressioni costose usate in più alert/dashboard\n- Naming convention:\
+  \ `level:metric:operation` (es. `job:http_requests:rate5m`)\n- Esempio pratico:\
+  \ pre-computare rate per 5 servizi riduce carico di 5x\n```yaml\n- record: job:http_requests_total:rate5m\n\
+  \  expr: rate(http_requests_total[5m])\n```\n\n## Alert di qualità — criteri e anti-pattern\n\
+  - Anti-pattern: alert senza `for` (flapping), alert su metriche raw senza aggregazione\n\
+  - Anti-pattern: severity:critical per tutto → alert fatigue\n- Pattern: USE method\
+  \ (Utilization, Saturation, Errors) per infra\n- Pattern: RED method (Rate, Errors,\
+  \ Duration) per servizi\n- Pattern: SLO-based alerting (burn rate alerts) collegato\
+  \ a monitoring/sre/slo-sla-sli.md\n\n## SLO-based burn rate alerts\n- Concetto:\
+  \ alert quando il budget di errori si esaurisce troppo velocemente\n- Multi-window,\
+  \ multi-burn-rate: finestra lunga (1h) + finestra breve (5m)\n```yaml\n- alert:\
+  \ SLOBudgetBurnHigh\n  expr: |\n    (job:http_errors:rate1h / job:http_requests:rate1h\
+  \ > 14.4 * 0.001)\n    and\n    (job:http_errors:rate5m / job:http_requests:rate5m\
+  \ > 14.4 * 0.001)\n  labels:\n    severity: critical\n```\n\n## Organizzazione e\
+  \ tooling\n- `promtool check rules rules.yml` — validazione sintassi\n- `promtool\
+  \ test rules tests.yml` — unit test per alert rules\n- Struttura file: un file per\
+  \ dominio (kubernetes.rules.yml, app.rules.yml)\n- Integrare validazione in CI/CD\
+  \ prima del deploy\n"
+effort: medium
+id: prop-015
+last_analyzed: 2026-03-31
+priority: high
+rationale: 'La KB ha prometheus.md (come funziona lo scraping, tipi di metriche) e
+
+  alertmanager.md (come configurare routing e notifiche). Il gap operativo
+
+  più frequente è nel mezzo: come scrivere alert rules efficaci, evitare
+
+  alert fatigue, usare recording rules per ottimizzare, e fare SLO-based alerting.
+
+  Un SRE che ha Prometheus + Alertmanager installati ma non sa scrivere buone
+
+  regole è bloccato — e questo file è il ponte mancante.
+
+  '
+status: approved
+tags:
+- prometheus
+- alerting
+- alert-rules
+- recording-rules
+- slo
+- promql
+- sre
+- monitoring
+target_file: docs/monitoring/alerting/prometheus-rules.md
+title: Prometheus — Alert Rules e Recording Rules
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, scrive un file .rules.yml completo con alert e recording
+    rules, lo valida con promtool, capisce come assegnare severity per routing corretto
+    su Alertmanager
+  reader: SRE o DevOps che ha già Prometheus + Alertmanager su Kubernetes e sa fare
+    query PromQL base ma non ha mai scritto alert rules in produzione
+  scenario: 'Deve creare alert per un set di microservizi: error rate, latency P99,
+    pod crash loops — e collegarlo a PagerDuty per severity critical'
+  score: high
+  without_kb: Dovrebbe leggere la guida Prometheus best practices (5 pagine), la guida
+    Google SRE sui burn rate alerts (capitolo dedicato), e sperimentare per evitare
+    pattern sbagliati comuni come l'assenza di `for`

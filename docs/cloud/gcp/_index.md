@@ -47,6 +47,14 @@ GCP vs AWS vs Azure — differenziatori chiave
 
     BigQuery — data warehouse serverless, slot pricing, partitioning, clustering, BQML
 
+- :material-chart-line: **[Monitoring & Observability](monitoring/_index.md)**
+
+    Cloud Monitoring, Cloud Logging, Managed Prometheus (MSP), alerting policy, SLO nativi, Cloud Trace, integrazione OTEL
+
+- :material-bucket: **[Storage](storage/_index.md)**
+
+    Cloud Storage (GCS) — object storage, storage class, lifecycle policy, versioning, IAM, Terraform state backend
+
 </div>
 
 ---

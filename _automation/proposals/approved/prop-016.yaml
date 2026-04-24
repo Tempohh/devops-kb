@@ -1,0 +1,78 @@
+approved_at: '2026-04-03'
+auto_approved: true
+description: "Creare guida operativa per GCP Cloud Monitoring (ex Stackdriver) con\
+  \ copertura\ndi metriche, logging, alerting e integrazione con workload GKE/Cloud\
+  \ Run.\nAWS ha cloudwatch.md + observability.md; Azure ha monitor-log-analytics.md\
+  \ +\napplication-insights.md. GCP non ha nulla — gap simmetrico bloccante.\n\n##\
+  \ Cloud Monitoring — Metriche\n- Tipi di metriche: GCP system metrics (gce_instance,\
+  \ k8s_container, cloud_run_revision)\n  vs custom metrics vs external metrics (Prometheus\
+  \ via managed collection)\n- Workspaces: scope metrics da più progetti in un unico\
+  \ workspace\n- Metric Explorer: query builder vs MQL (Monitoring Query Language)\n\
+  - Managed Prometheus: raccolta Prometheus-native su GKE senza infra aggiuntiva\n\
+  \  ```bash\n  gcloud container clusters update CLUSTER --enable-managed-prometheus\n\
+  \  ```\n\n## Cloud Logging\n- Log Router: sink verso BigQuery, Cloud Storage, Pub/Sub\
+  \ per retention a lungo termine\n- Log-based metrics: creare metriche custom da\
+  \ pattern nei log\n  ```bash\n  gcloud logging metrics create http_500_errors \\\
+  \n    --description=\"Count 500 errors\" \\\n    --log-filter='resource.type=\"\
+  k8s_container\" severity=ERROR httpRequest.status=500'\n  ```\n- Log Explorer: query\
+  \ con Logging Query Language (LQL)\n- _Required e _Default log bucket: retention,\
+  \ costi, CMEK\n\n## Alerting Policy\n- Struttura: Condition + Notification Channel\
+  \ + Documentation\n- Condition types: metric threshold, log-based metric, uptime\
+  \ check, SLO\n- Notification channels: PagerDuty, Slack, email, Pub/Sub (per custom\
+  \ webhook)\n- Alert fatigue: alignment period, duration, aggregation appropriati\n\
+  ```bash\n# Creare alert via gcloud\ngcloud alpha monitoring policies create \\\n\
+  \  --policy-from-file=alert-policy.json\n```\n- IaC: Terraform resource `google_monitoring_alert_policy`\n\
+  \n## SLOs nativi GCP\n- Request-based SLO: good_total_ratio su Cloud Run/GKE\n-\
+  \ Window-based SLO: disponibilità uptime check\n- Burn rate alert integrato (GCP\
+  \ lo genera automaticamente dal SLO)\n- Dashboard SLO nativa in Cloud Monitoring\n\
+  \n## GKE Observability\n- GKE System metrics: nodo, pod, container (auto-raccolta)\n\
+  - Managed Service for Prometheus (MSP): zero-infra Prometheus su GKE\n- Application\
+  \ Signals (preview): distributed tracing automatico con OTEL\n- Cloud Trace: tracing\
+  \ distribuito, integrazione con Cloud Run e GKE\n\n## Integrazione con OTEL\n- OTEL\
+  \ Collector → Google Cloud Exporter (metriche, trace, log)\n- `googlemanagedprometheus`\
+  \ exporter per MSP\n- Confronto con approccio self-managed OTEL Collector KB esistente\n"
+effort: medium
+id: prop-016
+last_analyzed: 2026-03-31
+priority: high
+rationale: 'La KB ha copertura completa per AWS (cloudwatch.md + observability.md)
+  e Azure
+
+  (monitor-log-analytics.md + application-insights.md). GCP non ha nulla sull''observability
+
+  nativa — un DevOps che ha già letto cloud/gcp/ per IAM, VPC, GKE non trova
+
+  nessun riferimento per il monitoring. Il gap è strutturale e asimmetrico rispetto
+
+  agli altri provider. Cloud Monitoring è obbligatorio per qualsiasi workload GCP
+
+  production.
+
+  '
+status: approved
+tags:
+- gcp
+- cloud-monitoring
+- stackdriver
+- alerting
+- logging
+- prometheus
+- gke
+- slo
+- observability
+target_file: docs/cloud/gcp/monitoring/cloud-monitoring.md
+title: GCP Cloud Monitoring — Metriche, Log, Alert
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, abilita Managed Prometheus, crea alert policy per error
+    rate via log-based metric, configura notification channel PagerDuty, e imposta
+    un SLO nativo con burn rate alert — tutto via gcloud o Terraform
+  reader: DevOps/Platform engineer che gestisce applicazioni su GKE e Cloud Run con
+    background AWS (ha già usato CloudWatch)
+  scenario: 'Deve configurare alerting per un''applicazione GKE: error rate, latency,
+    pod OOM — e collegarlo a PagerDuty. Ha già il cluster GKE ma non ha mai configurato
+    Cloud Monitoring'
+  score: high
+  without_kb: Dovrebbe leggere cloud.google.com/monitoring (10+ pagine), cloud.google.com/logging,
+    la guida MSP per GKE, senza un riferimento che mappi i concetti familiari da AWS/Azure
+    al corrispondente GCP

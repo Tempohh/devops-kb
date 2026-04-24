@@ -1,0 +1,79 @@
+approved_at: '2026-04-03'
+auto_approved: true
+description: "Creare guida strategica per la test pyramid applicata a microservizi\
+  \ con\nintegrazione concreta nella pipeline CI/CD. La KB ha contract-testing.md\
+  \ (Pact)\nma manca la mappa generale: quando usare ogni tipo di test, come strutturarli\n\
+  nei job CI, e come bilanciare velocità vs copertura.\n\n## La Test Pyramid per microservizi\n\
+  - Layer 1 — Unit tests: logica di business isolata, mock di dipendenze esterne\n\
+  \  - Quando: per ogni funzione di business, algoritmo, validazione\n  - Target:\
+  \ >80% coverage, <1min di esecuzione totale\n- Layer 2 — Integration tests: DB reale,\
+  \ message broker reale (Testcontainers)\n  - Quando: repository layer, Kafka consumer/producer,\
+  \ transazioni DB\n  - Tool: Testcontainers (Java/Go/Python), embedded H2 solo per\
+  \ casi semplici\n- Layer 3 — Contract tests: verifica interfacce tra servizi (già\
+  \ coperto KB)\n- Layer 4 — E2E tests: happy path critici, pochi e stabili\n  - Anti-pattern:\
+  \ E2E per tutto → lenti, fragili, difficili da mantenere\n\n## Testcontainers —\
+  \ Integration testing pratico\n```java\n@Testcontainers\nclass OrderRepositoryTest\
+  \ {\n    @Container\n    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(\"\
+  postgres:16\");\n\n    @Test\n    void shouldSaveOrder() {\n        // test con\
+  \ DB reale, nessun mock\n    }\n}\n```\n- Pattern: `@DynamicPropertySource` per\
+  \ iniettare URL DB nel contesto Spring\n- Reuse container tra test della stessa\
+  \ suite: `withReuse(true)`\n- Testcontainers Cloud per CI senza Docker-in-Docker\n\
+  \n## Struttura pipeline CI\n```yaml\n# GitHub Actions example\njobs:\n  unit-tests:\n\
+  \    timeout-minutes: 5\n    # Solo JVM, nessun Docker\n  integration-tests:\n \
+  \   timeout-minutes: 15\n    services:\n      postgres: {image: postgres:16}\n \
+  \   # oppure Testcontainers\n  contract-tests:\n    needs: [integration-tests]\n\
+  \    # Pact verify — ref a contract-testing.md\n  e2e-tests:\n    needs: [contract-tests]\n\
+  \    if: github.ref == 'refs/heads/main'\n    # Solo su main, non su ogni PR\n```\n\
+  - Parallelizzazione: unit e integration in parallelo se indipendenti\n- Test splitting:\
+  \ `--shard` in Jest, `--split-by=timing` in GitHub Actions\n- Fail fast: unit tests\
+  \ prima, E2E solo su main\n\n## Mutation testing — misurare qualità dei test\n-\
+  \ Perché coverage % è fuorviante: codice coperto ≠ codice testato\n- Tool: PIT (Java),\
+  \ mutmut (Python), go-mutesting (Go)\n- Mutation score target: >60% per critical\
+  \ paths\n\n## Anti-pattern da evitare\n- Test dell'implementazione invece del comportamento\
+  \ (brittle tests)\n- Mock eccessivo: mock di tutto → test che non trovano bug reali\n\
+  - Shared mutable state tra test: ordine di esecuzione non deterministico\n- Sleep/wait\
+  \ fissi: usare Awaitility o polling con timeout\n- Test troppo grandi: un test deve\
+  \ testare una sola cosa\n"
+effort: medium
+id: prop-017
+last_analyzed: 2026-03-31
+priority: high
+rationale: 'La sezione ci-cd/testing/ ha solo contract-testing.md. Un Tech Lead che
+  deve
+
+  definire la strategia di test per un nuovo progetto microservizi, o un DevOps
+
+  che vuole strutturare la pipeline CI/CD per la qualità, non trova un punto
+
+  di riferimento. Il tema è trasversale: collega testing/, strategie/,
+
+  e la sezione dev/ — è un documento hub che aggiunge connettività alla KB.
+
+  '
+status: approved
+tags:
+- testing
+- test-strategy
+- microservices
+- testcontainers
+- unit-test
+- integration-test
+- ci-cd
+- pipeline
+target_file: docs/ci-cd/testing/test-strategy.md
+title: Test Strategy per Microservizi — Piramide e Pipeline CI
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, ristruttura il progetto con Testcontainers per integration
+    tests, configura la pipeline CI con job separati per tier, introduce contract
+    testing con Pact per le API critiche — e ha un framework per decidere quale tipo
+    di test usare per ogni scenario
+  reader: Tech Lead o DevOps senior che avvia un nuovo progetto microservizi in Java/Spring
+    Boot o Go e deve definire la strategia di test e la struttura della pipeline CI
+  scenario: Il team scrive solo unit test con mock ovunque, la code coverage è alta
+    ma continuano a trovare bug in produzione legati all'integrazione con DB e con
+    altri servizi
+  score: high
+  without_kb: Dovrebbe leggere il libro 'Testing Microservices' di Sam Newman, la
+    documentazione Testcontainers, e diversi blog post sul test pyramid — almeno 4-6h
+    per avere un framework completo e operativo

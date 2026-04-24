@@ -688,13 +688,25 @@ def cmd_list_proposals():
         print(json.dumps({"count": 0, "proposals": []}, ensure_ascii=False))
         return
 
+    from datetime import date, datetime as dt
+
+    def _json_safe(obj):
+        """Converte ricorsivamente date/datetime in stringhe ISO per JSON."""
+        if isinstance(obj, dict):
+            return {k: _json_safe(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_json_safe(i) for i in obj]
+        if isinstance(obj, (date, dt)):
+            return obj.isoformat()
+        return obj
+
     proposals = []
     for f in sorted(pending_dir.glob("*.yaml")):
         try:
             with open(f, encoding="utf-8") as fp:
                 data = yaml.safe_load(fp) or {}
             data["_file"] = f.stem
-            proposals.append(data)
+            proposals.append(_json_safe(data))
         except Exception:
             pass
 
@@ -816,6 +828,123 @@ def cmd_reject_proposal(prop_id):
     print(json.dumps({"status": "error", "message": f"Proposta '{prop_id}' non trovata"}, ensure_ascii=False))
 
 
+def cmd_auto_approve_proposals():
+    """
+    Approva automaticamente tutte le proposte in proposals/pending/.
+    Chiamato dal loop dopo EmptyBeforeAutoApprove run consecutive senza intervento utente.
+    """
+    import shutil
+    pending_dir  = PROPOSALS_DIR / "pending"
+    approved_dir = PROPOSALS_DIR / "approved"
+    approved_dir.mkdir(parents=True, exist_ok=True)
+
+    if not pending_dir.exists():
+        print(json.dumps({"status": "ok", "approved": 0}))
+        return
+
+    state    = load_state()
+    queue    = state.get("queue", [])
+    max_id   = max(
+        (int(str(t.get("id", 0))) for t in queue if str(t.get("id", "")).isdigit()),
+        default=0
+    )
+
+    type_map = {
+        "new-file": "new_topic", "new_topic": "new_topic",
+        "extend-section": "expand", "extend": "expand", "expand": "expand",
+        "fix-relation": "audit", "fix-link": "audit", "audit": "audit", "consolidate": "audit",
+    }
+    priority_map = {"high": "P1", "medium": "P2", "low": "P3"}
+
+    approved_count = 0
+    for prop_file in sorted(pending_dir.glob("*.yaml")):
+        try:
+            with open(prop_file, encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+        except Exception:
+            continue
+
+        raw_target = data.get("target_file", data.get("target_files", ""))
+        if isinstance(raw_target, list):
+            raw_target = raw_target[0] if raw_target else ""
+        path = raw_target.lstrip("/") if raw_target else ""
+
+        raw_type = data.get("type", "expand")
+        task_type = type_map.get(raw_type, "expand")
+        raw_prio  = str(data.get("priority", "medium")).lower()
+        task_prio = priority_map.get(raw_prio, "P2")
+
+        max_id += 1
+        task = {
+            "id": str(max_id),
+            "type": task_type,
+            "path": path,
+            "category": path.split("/")[1] if path and "/" in path else "meta",
+            "priority": task_prio,
+            "status": "pending",
+            "reason": data.get("description", data.get("title", "")),
+            "proposal_id": prop_file.stem,
+        }
+        queue.append(task)
+
+        # Sposta in approved/
+        data["status"] = "approved"
+        data["approved_at"] = datetime.now(timezone.utc).date().isoformat()
+        data["auto_approved"] = True
+        with open(approved_dir / prop_file.name, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+        prop_file.unlink()
+
+        _write_log(f"[PROPOSAL] auto-approved: {prop_file.stem} -> task {task['id']}")
+        approved_count += 1
+
+    state["queue"] = queue
+    state["total_ops"] = state.get("total_ops", 0) + approved_count
+    save_state(state)
+    print(json.dumps({"status": "ok", "approved": approved_count}))
+
+
+def cmd_inject_proposal_task():
+    """
+    Inietta un task di tipo 'proposal' nella coda.
+    Usato dal loop quando la coda è vuota da troppo tempo e non ci sono
+    proposte pendenti. Evita duplicati: non aggiunge se esiste già un task
+    proposal pending.
+    """
+    state = load_state()
+    queue = state.get("queue", [])
+
+    # Evita duplicati: non iniettare se c'è già un proposal pending
+    already = any(
+        t.get("type") == "proposal" and t.get("status") == "pending"
+        for t in queue
+    )
+    if already:
+        print(json.dumps({"status": "skipped", "reason": "proposal task gia' in coda"}))
+        return
+
+    max_id = max(
+        (int(str(t.get("id", 0))) for t in queue if str(t.get("id", "")).isdigit()),
+        default=0
+    )
+    task = {
+        "id": str(max_id + 1),
+        "type": "proposal",
+        "path": "_automation/proposals",
+        "category": "meta",
+        "priority": "P2",
+        "status": "pending",
+        "reason": "Sessione di analisi strategica: generazione nuove proposte per la KB.",
+    }
+    queue.append(task)
+    state["queue"] = queue
+    state["total_ops"] = state.get("total_ops", 0) + 1
+    save_state(state)
+
+    _write_log(f"[PROPOSAL] inject: task {task['id']} aggiunto alla coda")
+    print(json.dumps({"status": "ok", "task_id": task["id"]}))
+
+
 def cmd_maintain():
     """
     Manutenzione periodica: rotazione log, pulizia proposte archiviate.
@@ -919,6 +1048,10 @@ if __name__ == "__main__":
         cmd_reject_proposal(sys.argv[2])
     elif cmd == "maintain":
         cmd_maintain()
+    elif cmd == "inject-proposal-task":
+        cmd_inject_proposal_task()
+    elif cmd == "auto-approve-proposals":
+        cmd_auto_approve_proposals()
     else:
         print(f"Comando sconosciuto: {cmd}", file=sys.stderr)
         sys.exit(1)

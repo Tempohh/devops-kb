@@ -1,0 +1,113 @@
+approved_at: '2026-04-03'
+auto_approved: true
+description: 'Creare guida operativa per strutturare un progetto Ansible enterprise
+  con roles,
+
+  collections, Galaxy e Vault. La KB ha già ansible/fondamentali.md (playbook base,
+
+  inventory, handlers) ma manca completamente il layer di riutilizzo.
+
+
+  ## Struttura di un role Ansible
+
+  - Directory layout standard: tasks/, handlers/, templates/, files/, vars/, defaults/,
+  meta/
+
+  - Snippet `ansible-galaxy init myrole` con spiegazione di ogni cartella
+
+  - Differenza tra vars/ (alta priorità, non override) vs defaults/ (bassa priorità,
+  override-friendly)
+
+  - Meta/main.yml: dependencies tra roles
+
+  - Esempio completo: role "nginx" con template Jinja2 + handler reload
+
+
+  ## Ansible Galaxy e Collections
+
+  - Differenza role (singolo strumento) vs collection (namespace di roles + modules
+  + plugins)
+
+  - `ansible-galaxy role install geerlingguy.nginx`
+
+  - `ansible-galaxy collection install community.postgresql`
+
+  - requirements.yml: pinning versioni per riproducibilità
+
+  - Private Automation Hub (Red Hat) vs Galaxy pubblico
+
+
+  ## Ansible Vault — Gestione segreti
+
+  - `ansible-vault encrypt_string` vs file vault
+
+  - Vault password file vs vault-id multipli (prod/dev separati)
+
+  - Integrazione con CI: ANSIBLE_VAULT_PASSWORD_FILE env var
+
+  - Pattern sicuro: vault_password in variabile ambiente, mai in file committato
+
+
+  ## Pattern enterprise
+
+  - Struttura progetto multi-environment: inventories/production/, inventories/staging/
+
+  - Group vars e host vars con override gerarchico
+
+  - Dynamic inventory: script Python o plugin AWS/Azure/GCP
+
+  - Tagging strategy: `ansible-playbook -t config` per eseguire solo task specifici
+
+  - Idempotency check: `--check --diff` in CI prima del merge
+
+
+  ## Testing roles con Molecule
+
+  - `molecule init scenario` con driver Docker
+
+  - Test file YAML: converge → idempotency check → verify
+
+  - Pipeline CI per role: lint (ansible-lint) → molecule test
+
+  '
+effort: medium
+id: prop-014
+last_analyzed: 2026-03-31
+priority: high
+rationale: 'iac/ansible/fondamentali.md copre playbook, inventory, ad-hoc commands,
+  Vault base.
+
+  Ma un DevOps che deve mantenere automazione su 20+ server in ambienti multipli
+
+  (dev/staging/prod) si trova subito a dover strutturare il codice in modo riutilizzabile.
+
+  La documentazione ufficiale Ansible è frammentata tra 15+ pagine. Questo file
+
+  raccoglie il pattern completo in un''unica guida operativa.
+
+  '
+status: approved
+tags:
+- ansible
+- iac
+- roles
+- collections
+- galaxy
+- vault
+- molecule
+- testing
+- configuration-management
+target_file: docs/iac/ansible/roles-collections.md
+title: Ansible — Roles, Collections e Galaxy
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, crea la struttura del progetto con roles, requirements.yml
+    pinnato, vault per ambiente, e un job CI che lancia molecule test + ansible-lint
+    prima del merge
+  reader: DevOps mid-senior che ha già usato Ansible con playbook flat e deve ristrutturare
+    l'automazione aziendale per supportare 3 ambienti e 50+ server
+  scenario: Deve estrarre un playbook di 400 righe in roles riutilizzabili, gestire
+    segreti per ambiente, e integrare il testing in CI/CD
+  score: high
+  without_kb: Dovrebbe leggere docs.ansible.com/roles, docs.ansible.com/vault, molecule.readthedocs.io
+    e numerosi blog post — circa 2h di lettura per avere il quadro completo

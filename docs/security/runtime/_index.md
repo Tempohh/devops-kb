@@ -21,4 +21,6 @@ La **runtime security** comprende i meccanismi di hardening che operano a livell
 
 - **[seccomp e AppArmor](seccomp-apparmor.md)** — Syscall filtering (seccomp) e Mandatory Access Control (AppArmor): i due meccanismi fondamentali di sandboxing a runtime per container Linux.
 
+- **[Falco](falco.md)** — Runtime threat detection: intercetta system call via eBPF e valuta regole in tempo reale per rilevare comportamenti anomali in container e pod Kubernetes.
+
 </div>

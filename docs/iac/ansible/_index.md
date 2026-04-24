@@ -20,6 +20,7 @@ Ansible è lo strumento di configuration management agentless più diffuso nel s
 | Argomento | Contenuto |
 |---|---|
 | [Fondamentali](fondamentali.md) | Playbook, inventory, moduli, roles, vault, template Jinja2, best practices |
+| [Roles, Collections e Pattern Enterprise](roles-collections.md) | Role layout, ansible-galaxy init, collections, requirements.yml, Vault multi-ambiente, dynamic inventory, Molecule testing |
 
 ## Quando Usare Ansible
 

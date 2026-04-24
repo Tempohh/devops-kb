@@ -59,7 +59,19 @@ if (-not (Get-Command "claude" -ErrorAction SilentlyContinue)) {
     }
 }
 
-$pythonBin = if (Get-Command "python3" -ErrorAction SilentlyContinue) { "python3" } else { "python" }
+# Trova Python verificando che funzioni davvero (gli alias Store rispondono a Get-Command ma falliscono all'uso)
+$pythonBin = $null
+foreach ($candidate in @("py", "python", "python3")) {
+    $test = & $candidate --version 2>&1
+    if ($LASTEXITCODE -eq 0 -and $test -match "Python \d") {
+        $pythonBin = $candidate
+        break
+    }
+}
+if (-not $pythonBin) {
+    Write-Host "  ERRORE: nessun interprete Python funzionante trovato (py/python/python3)." -ForegroundColor Red
+    Read-Host "  Premi INVIO per chiudere"; exit 1
+}
 
 # check-mkdocs e' costoso (~20s). Eseguilo ogni N run.
 $MkdocsCheckInterval = 3
@@ -154,6 +166,14 @@ function Start-Countdown {
 # -- Loop principale ---------------------------------------------------------
 
 try {
+    # Contatore run consecutive con coda vuota.
+    # Governa due soglie:
+    #   EmptyBeforeProposal  : dopo N run senza task e senza proposte → genera proposte
+    #   EmptyBeforeAutoApprove: dopo N run con proposte pendenti non approvate → auto-approva
+    $emptyRuns               = 0
+    $EmptyBeforeProposal     = 1    # 1 run vuota → genera subito proposte (~30s)
+    $EmptyBeforeAutoApprove  = 3    # 3 run con proposte pending → auto-approva (~90s finestra utente)
+
     while ($true) {
 
         $sessionRuns++
@@ -161,13 +181,21 @@ try {
         Write-Host ""
         Write-Host "  [$timestamp] Run #$sessionRuns" -ForegroundColor Cyan
 
-        # -- Estrai e scrivi task --------------------------------------------
+        # -- Estrai prossimo task --------------------------------------------
 
-        $taskJson = & $pythonBin $StatePy next-task 2>&1
+        $rawNext  = & $pythonBin $StatePy next-task 2>&1
+        # Isola solo la riga JSON valida (gestisce warnings/deprecations su stderr catturate da 2>&1)
+        $taskJson = ($rawNext | Out-String).Trim()
+        # Se output contiene righe multiple, prendi solo quella che inizia con { o e' "null"
+        $lines    = $taskJson -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
+        $jsonLine = $lines | Where-Object { $_ -eq "null" -or $_ -match '^\{' } | Select-Object -Last 1
+        if ($jsonLine) { $taskJson = $jsonLine }
 
         if ($taskJson -eq "null" -or [string]::IsNullOrWhiteSpace($taskJson)) {
 
-            # Controlla se serve una nuova analisi KB
+            $emptyRuns++
+
+            # ── 1. Analisi periodica KB (ogni 7 giorni) ───────────────────
             $analysisJson = & $pythonBin $StatePy analysis-status 2>&1
             try   { $analysisObj = $analysisJson | ConvertFrom-Json }
             catch { $analysisObj = $null }
@@ -177,46 +205,91 @@ try {
                 $initJson = & $pythonBin $StatePy init-analysis 2>&1
                 try { $initObj = $initJson | ConvertFrom-Json } catch { $initObj = $null }
                 if ($initObj -and $initObj.status -eq "ok") {
-                    Write-Host "  [ANALISI] $($initObj.tasks_created) task creati: $($initObj.audit_tasks) audit + $($initObj.proposal_tasks) proposal su $($initObj.total_kb_files) file" -ForegroundColor Cyan
+                    Write-Host "  [ANALISI] $($initObj.tasks_created) task creati su $($initObj.total_kb_files) file" -ForegroundColor Cyan
                     Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] ANALYSIS_INIT tasks=$($initObj.tasks_created) files=$($initObj.total_kb_files)" -Encoding UTF8
                 } else {
-                    Write-Host "  [!] init-analysis fallito. Output: $initJson" -ForegroundColor Red
+                    Write-Host "  [!] init-analysis fallito: $initJson" -ForegroundColor Red
                 }
-                # Rilancia il loop: la coda e' ora popolata con task di analisi
+                $emptyRuns = 0
                 continue
             }
 
-            # Analisi non necessaria: mostra eventuali proposte pendenti
-            $proposalsJson = & $pythonBin $StatePy list-proposals 2>&1
+            # ── 2. Controlla proposte pendenti ────────────────────────────
+            $rawProposals  = & $pythonBin $StatePy list-proposals 2>&1
+            # Rimuovi righe di warning Python prima del JSON (es. DeprecationWarning da stderr)
+            $allLines      = ($rawProposals | Out-String) -split "`n"
+            $jsonStart     = -1
+            for ($i = 0; $i -lt $allLines.Count; $i++) {
+                if ($allLines[$i].Trim() -match '^\{') { $jsonStart = $i; break }
+            }
+            $proposalsJson = if ($jsonStart -ge 0) { ($allLines[$jsonStart..($allLines.Count-1)] -join "`n").Trim() } `
+                             else { ($rawProposals | Out-String).Trim() }
             try { $proposalsObj = $proposalsJson | ConvertFrom-Json } catch { $proposalsObj = $null }
+            $pendingCount = if ($proposalsObj -and $proposalsObj.count) { [int]$proposalsObj.count } else { 0 }
 
-            if ($proposalsObj -and $proposalsObj.count -gt 0) {
+            if ($pendingCount -gt 0) {
+
+                $runsLeft = $EmptyBeforeAutoApprove - $emptyRuns
+
                 Write-Host ""
-                Write-Host "  ===== $($proposalsObj.count) PROPOSTE IN ATTESA DI APPROVAZIONE =====" -ForegroundColor Yellow
+                Write-Host "  ===== $pendingCount PROPOSTE IN ATTESA =====" -ForegroundColor Yellow
                 foreach ($prop in $proposalsObj.proposals) {
-                    Write-Host "  [$($prop._file)]  $($prop.title)" -ForegroundColor White
-                    Write-Host "    File     : $($prop.path)  |  Tipo: $($prop.type)  |  Priorita': $($prop.priority)" -ForegroundColor DarkGray
-                    $desc = if ($prop.description) { ($prop.description -split "`n" | Select-Object -First 2) -join " " } else { "" }
-                    if ($desc) { Write-Host "    Dettaglio: $desc" -ForegroundColor DarkGray }
-                    Write-Host ""
+                    Write-Host "  >> $($prop.title)" -ForegroundColor White
+                    Write-Host "     $($prop.priority)  $($prop.type)  $($prop.target_file)" -ForegroundColor DarkGray
                 }
-                Write-Host "  Approva : python _automation/manage-state.py approve-proposal <id>" -ForegroundColor DarkGray
-                Write-Host "  Rifiuta : python _automation/manage-state.py reject-proposal <id>" -ForegroundColor DarkGray
-                Write-Host "  ========================================================" -ForegroundColor Yellow
                 Write-Host ""
+
+                if ($runsLeft -le 0) {
+                    # Tempo scaduto: auto-approva tutte le proposte pending
+                    Write-Host "  [AUTO-APPROVA] Approvazione automatica in corso..." -ForegroundColor Magenta
+                    $autoResult = & $pythonBin $StatePy auto-approve-proposals 2>&1
+                    try { $autoObj = $autoResult | ConvertFrom-Json } catch { $autoObj = $null }
+                    $approved = if ($autoObj -and $autoObj.approved) { $autoObj.approved } else { 0 }
+                    Write-Host "  [AUTO-APPROVA] $approved proposte approvate — task aggiunti alla coda" -ForegroundColor Magenta
+                    Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] AUTO_APPROVE count=$approved" -Encoding UTF8
+                    $emptyRuns = 0
+                    continue
+                } else {
+                    Write-Host "  Auto-approvazione tra $runsLeft run (~$($runsLeft * $RunInterval)s) — review-proposals.bat per decidere ora." -ForegroundColor DarkGray
+                    Write-Host "  =============================================" -ForegroundColor Yellow
+                }
+
+            } elseif ($emptyRuns -ge $EmptyBeforeProposal) {
+                # ── 3. Nessuna proposta e coda vuota: genera proposte
+                Write-Host "  [PROPOSTE] Coda vuota — avvio sessione proposte strategica..." -ForegroundColor Magenta
+                $injectResult = & $pythonBin $StatePy inject-proposal-task 2>&1
+                try { $injectObj = $injectResult | ConvertFrom-Json } catch { $injectObj = $null }
+                if ($injectObj -and $injectObj.status -eq "ok") {
+                    Write-Host "  [PROPOSTE] Task $($injectObj.task_id) iniettato — Claude analizzera' la KB" -ForegroundColor Magenta
+                    Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] PROPOSAL_INJECT task=$($injectObj.task_id)" -Encoding UTF8
+                } elseif ($injectObj -and $injectObj.status -eq "skipped") {
+                    # Proposta gia' in coda (pending), non aggiungere duplicati
+                    Write-Host "  [PROPOSTE] Task proposal gia' in coda." -ForegroundColor DarkGray
+                } else {
+                    Write-Host "  [!] inject-proposal-task: $injectResult" -ForegroundColor Red
+                }
+                $emptyRuns = 0
+                continue
+            } else {
+                Write-Host "  [WAIT] Queue vuota — prossima run tra ${RunInterval}s" -ForegroundColor DarkGray
+                Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] QUEUE_EMPTY" -Encoding UTF8
             }
 
-            Write-Host "  [DONE] Queue vuota - KB aggiornata." -ForegroundColor Green
-            Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] QUEUE_EMPTY" -Encoding UTF8
-            Write-Host "  Attendo ${RunInterval}s prima di ricontrollare..." -ForegroundColor DarkGray
+            Write-Host "  Attendo ${RunInterval}s..." -ForegroundColor DarkGray
             Start-Sleep -Seconds $RunInterval
             continue
         }
 
+        # Task trovato: reset contatore empty
+        $emptyRuns = 0
+
         try { $task = $taskJson | ConvertFrom-Json }
         catch {
-            Write-Host "  [X] Errore parsing task JSON" -ForegroundColor Red
+            $preview = ($taskJson | Out-String).Substring(0, [Math]::Min(300, ($taskJson | Out-String).Length)).Trim()
+            Write-Host "  [X] Errore parsing task JSON: $preview" -ForegroundColor Red
+            Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [ERR] JSON_PARSE_FAIL raw=[$preview]" -Encoding UTF8
             $sessionErrors++
+            & $pythonBin $StatePy force-complete "UNKNOWN" | Out-Null
             Start-Sleep -Seconds $ErrorWait
             continue
         }

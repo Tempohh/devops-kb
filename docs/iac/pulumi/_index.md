@@ -20,6 +20,7 @@ Pulumi è un framework IaC che consente di definire l'infrastruttura cloud usand
 | Argomento | Contenuto |
 |---|---|
 | [Fondamentali](fondamentali.md) | Project, Stack, Resources, Outputs, Config, Secrets, Automation API, testing |
+| [Stacks e Multi-Ambiente](stacks-ambienti.md) | Workflow multi-ambiente, Stack Reference, config/segreti per stack, state management, CI/CD, Automation API |
 
 ## Quando Scegliere Pulumi
 

@@ -1,0 +1,71 @@
+approved_at: '2026-03-30'
+description: "Creare documentazione operativa su Cloud Pub/Sub come equivalente GCP\
+  \ di SQS/SNS\ne Kafka per pattern di messaggistica asincrona. Struttura:\n\n## Panoramica\
+  \ e Modello\n- Pub/Sub come managed messaging globale (multi-region by default)\n\
+  - Topic, Subscription, Message: modello base\n- At-least-once delivery (default)\
+  \ vs Exactly-once delivery (abilitabile)\n- Differenze chiave vs Kafka: no partizioni\
+  \ esplicite, retention fissa, pull vs push\n\n## Subscription Types\n- Pull Subscription:\
+  \ consumer chiede messaggi attivamente\n  - `gcloud pubsub subscriptions pull --limit=10\
+  \ my-sub`\n  - StreamingPull per throughput alto (gRPC bidirezionale)\n- Push Subscription:\
+  \ Pub/Sub chiama un endpoint HTTP/HTTPS\n  - Configurazione: push endpoint, auth\
+  \ OIDC, retry policy\n  - Ideal per Cloud Run, Cloud Functions\n- BigQuery Subscription:\
+  \ scrive direttamente su tabella BQ (no codice consumer)\n- Cloud Storage Subscription:\
+  \ dump messaggi su bucket GCS\n\n## Configurazione Pratica\n- Creare topic: `gcloud\
+  \ pubsub topics create my-topic`\n- Creare subscription: `gcloud pubsub subscriptions\
+  \ create my-sub --topic=my-topic`\n- Dead Letter Topic (DLT): configura `--dead-letter-topic`\
+  \ e `--max-delivery-attempts`\n- Message ordering: `--enable-message-ordering` e\
+  \ ordering key\n- Retention: `--message-retention-duration` (default 7 giorni, max\
+  \ 31)\n- Snapshot e seek: replay messaggi passati\n\n## IAM su Pub/Sub\n- Ruoli:\
+  \ `roles/pubsub.publisher`, `roles/pubsub.subscriber`, `roles/pubsub.viewer`\n-\
+  \ Principio minimo privilegio: publisher non può leggere, subscriber non può scrivere\n\
+  - Workload Identity per publisher/subscriber da GKE\n\n## Pattern di Integrazione\n\
+  - Pub/Sub → Cloud Run: trigger serverless su messaggi (equivalente SQS → Lambda)\n\
+  - Pub/Sub → Dataflow: pipeline di trasformazione streaming\n- Pub/Sub → BQ: analytics\
+  \ in near-realtime senza consumer custom\n- Fan-out: un topic, multiple subscription\
+  \ per consumer diversi\n\n## Monitoring e Troubleshooting\n- Metriche chiave: `subscription/num_undelivered_messages`,\
+  \ `subscription/oldest_unacked_message_age`\n- Alert su oldest_unacked_message_age\
+  \ > soglia = consumer in ritardo\n- Subscription seek per re-processare messaggi\n\
+  \n## Confronto con AWS/Azure\n| Feature | Pub/Sub | SQS | Kafka |\n|---------|---------|-----|-------|\n\
+  | Retention | 31 giorni max | 14 giorni | Illimitata |\n| Partizioni | Automatiche\
+  \ | N/A | Manuali |\n| Replay | Snapshot+seek | No | Offset |\n| Multi-region |\
+  \ Default | Cross-region manual | Mirror Maker |\n"
+effort: medium
+id: prop-011
+last_analyzed: 2026-03-30
+priority: high
+rationale: 'AWS ha `cloud/aws/messaging/sqs-sns.md` e `eventbridge-kinesis.md`.
+
+  Azure ha `cloud/azure/messaging/service-bus-event-grid.md` e `event-hubs.md`.
+
+  GCP non ha ancora nessun file di messaging. Cloud Pub/Sub è il servizio
+
+  di messaggistica principale su GCP — qualsiasi architettura event-driven su GCP
+
+  lo usa. Il confronto con SQS/SNS e Kafka è particolarmente utile per chi
+
+  arriva da altri cloud.
+
+  '
+status: approved
+tags:
+- gcp
+- pubsub
+- messaging
+- event-driven
+- cloud-run
+- kafka
+- sqs
+target_file: docs/cloud/gcp/messaging/pubsub.md
+title: GCP Pub/Sub — Messaging asincrono su Google Cloud
+type: new-file
+utility_test:
+  outcome: Configura topic, push subscription su Cloud Run, DLT, e IAM con Workload
+    Identity — senza usare chiavi SA e con monitoring configurato
+  reader: Backend/DevOps engineer che conosce SQS e deve implementare messaging su
+    GCP
+  scenario: 'Deve costruire una pipeline event-driven: microservizio producer su GKE
+    pubblica eventi, Cloud Run li consuma, fallimenti vanno in dead letter topic'
+  score: high
+  without_kb: Dovrebbe leggere la Pub/Sub overview, la guida push subscriptions, la
+    documentazione DLT, e la guida Workload Identity separatamente per assemblare
+    questa configurazione

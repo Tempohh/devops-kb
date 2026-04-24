@@ -23,6 +23,7 @@ Terraform è lo strumento IaC più usato per il provisioning di infrastruttura c
 | [State Management](state-management.md) | Remote state, locking, backend, workspace, import |
 | [Moduli](moduli.md) | Riuso, Terraform Registry, composizione |
 | [Testing e Quality Gate](testing.md) | Terratest, tflint, checkov, conftest/OPA, pre-commit hooks |
+| [Workflow CI/CD](ci-cd.md) | Atlantis, GitHub Actions, multi-ambiente, drift detection, OIDC |
 
 ## Quando Usare Terraform
 

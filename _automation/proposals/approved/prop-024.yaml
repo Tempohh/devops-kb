@@ -1,0 +1,59 @@
+approved_at: '2026-04-04'
+auto_approved: true
+description: "Creare la guida fondamentali di Kustomize che al momento manca completamente.\n\
+  La KB ha solo `avanzato.md` (JSON 6902 patch, KRM functions, Helm inflator) ma\n\
+  nessuna introduzione ai concetti base. Un DevOps che inizia con Kustomize atterra\n\
+  direttamente su materiale avanzato senza le fondamenta.\n\nStruttura suggerita:\n\
+  - **Cos'è Kustomize e perché non è Helm**: differenza filosofica (no templating,\n\
+  \  pure overlay), integrazione nativa kubectl (`kubectl apply -k`)\n- **Struttura\
+  \ base**: `kustomization.yaml`, `resources`, `bases`\n- **Overlays**: `base/`, `overlays/dev/`,\
+  \ `overlays/prod/` — il pattern standard\n- **Patches**: Strategic Merge Patch (la\
+  \ più comune) vs JSON Patch (rimanda ad avanzato)\n- **ConfigMap e Secret generators**:\
+  \ `configMapGenerator`, `secretGenerator`,\n  hash suffix per rolling update automatico\n\
+  - **Trasformazioni comuni**: `namePrefix`, `nameSuffix`, `commonLabels`,\n  `commonAnnotations`,\
+  \ `images` (override tag immagine senza toccare i manifest)\n- **Esempio completo**:\
+  \ deploy di una app con 3 overlays (dev/staging/prod)\n  con diversi replicas, resource\
+  \ limits, e image tag per ambiente\n```yaml\n# overlays/prod/kustomization.yaml\n\
+  bases:\n  - ../../base\nnamePrefix: prod-\ncommonLabels:\n  env: production\nimages:\n\
+  \  - name: myapp\n    newTag: v1.2.3\npatches:\n  - path: replicas-patch.yaml\n\
+  ```\n- **Workflow CI/CD**: come usare `kustomize build | kubectl apply -f -` in\
+  \ pipeline\n- **Troubleshooting**: errori comuni (`resource not found in base`,\
+  \ loop di overlay)\n"
+effort: small
+id: prop-024
+last_analyzed: 2026-04-04
+priority: high
+rationale: 'La KB ha un file `avanzato.md` ma nessun file `fondamentali.md` per Kustomize.
+
+  Questo crea un percorso di apprendimento rotto: chi arriva per la prima volta
+
+  al tool trova direttamente JSON 6902 patch e KRM functions — materiale da expert.
+
+  Kustomize è integrato in kubectl da v1.14, è il default in molti cluster GitOps
+
+  con ArgoCD e Flux, e la sua adozione cresce su quei cluster dove Helm è eccessivo.
+
+  Un file fondamentali risolve il gap di entry-point e rende avanzato.md davvero utile.
+
+  '
+status: approved
+tags:
+- kustomize
+- kubernetes
+- gitops
+- overlays
+- configuration-management
+target_file: docs/containers/kustomize/fondamentali.md
+title: Kustomize — Fondamentali e Basi Operative
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, crea la struttura base/overlays/, applica una patch di
+    replicas e override dell'immagine per prod, e integra `kustomize build` nella
+    pipeline
+  reader: DevOps junior/mid che deve gestire config Kubernetes per ambienti multipli
+  scenario: Sta cercando un modo per gestire dev/staging/prod senza duplicare manifest
+    YAML, ha sentito di Kustomize ma non sa da dove iniziare
+  score: high
+  without_kb: Dovrebbe leggere la documentazione ufficiale kubectl (verbose e poco
+    pratica), cercare tutorial su Medium, e sperimentare per capire la struttura corretta
+    — 2-3h solo per un setup funzionante di base

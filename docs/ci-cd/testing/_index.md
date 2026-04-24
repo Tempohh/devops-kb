@@ -18,4 +18,5 @@ Strategie e strumenti per integrare i test nella pipeline CI/CD, con focus sulla
 
 ## Argomenti
 
+- [Test Strategy](test-strategy.md) — Test pyramid per microservizi, Testcontainers, mutation testing
 - [Contract Testing](contract-testing.md) — Pact e Consumer-Driven Contracts per microservizi

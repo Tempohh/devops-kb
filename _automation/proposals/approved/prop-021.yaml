@@ -1,0 +1,92 @@
+approved_at: '2026-04-04'
+auto_approved: true
+description: "Creare guida operativa per il workflow CI/CD con Terraform: PR-based\
+  \ plan/apply\ncon Atlantis, GitHub Actions, e pattern di promozione tra ambienti.\n\
+  iac/terraform/ ha fondamentali, state-management, moduli, testing — ma nessun\n\
+  file su come strutturare il workflow CI/CD in team.\n\n## Il problema del Terraform\
+  \ collaborativo\n- `terraform apply` manuale da locale: nessun audit, stato divergente,\
+  \ errori umani\n- Plan non rivisto: cambiamenti distruttivi (destroy) passano inosservati\n\
+  - State lock contention: due ingegneri applicano in contemporanea\n- Soluzione:\
+  \ PR-based workflow con plan automatico e apply protetto\n\n## Atlantis — Piano\
+  \ su PR, Apply su Merge\n```yaml\n# atlantis.yaml — configurazione per repo multi-workspace\n\
+  version: 3\nprojects:\n  - name: networking-prod\n    dir: infra/networking\n  \
+  \  workspace: prod\n    autoplan:\n      when_modified: [\"*.tf\", \"../modules/**/*.tf\"\
+  ]\n      enabled: true\n    apply_requirements: [approved, mergeable]\n```\n- `autoplan`:\
+  \ Atlantis commenta il plan su ogni PR che tocca file .tf\n- `apply_requirements`:\
+  \ apply solo dopo approvazione review + PR mergeable\n- Workflow: push → plan automatico\
+  \ → commento PR → revisione → `/atlantis apply`\n- Self-hosted su Kubernetes: Helm\
+  \ chart `runatlantis/atlantis`\n\n## GitHub Actions — Plan su PR, Apply su Main\n\
+  ```yaml\njobs:\n  plan:\n    if: github.event_name == 'pull_request'\n    steps:\n\
+  \      - uses: hashicorp/setup-terraform@v3\n      - run: terraform init -backend-config=backend-prod.hcl\n\
+  \      - id: plan\n        run: terraform plan -out=tfplan -no-color\n        continue-on-error:\
+  \ true\n      - uses: actions/github-script@v7\n        with:\n          script:\
+  \ |\n            const output = `#### Terraform Plan \U0001F4D6\n            \\\
+  `\\`\\`\\n${{ steps.plan.outputs.stdout }}\\`\\`\\``;\n            github.rest.issues.createComment({\n\
+  \              issue_number: context.issue.number,\n              body: output\n\
+  \            })\n\n  apply:\n    if: github.ref == 'refs/heads/main' && github.event_name\
+  \ == 'push'\n    environment: production  # richiede approval manuale in GitHub\n\
+  \    steps:\n      - run: terraform apply -auto-approve tfplan\n```\n- `environment:\
+  \ production`: protezione nativa GitHub con required reviewers\n- Plan artifact:\
+  \ passare `tfplan` da job plan a job apply (stessa versione)\n\n## Pattern multi-ambiente\
+  \ con workspace\n```bash\n# Promozione dev → staging → prod\nterraform workspace\
+  \ select dev && terraform plan -var-file=dev.tfvars\nterraform workspace select\
+  \ staging && terraform plan -var-file=staging.tfvars\n# Apply staging solo dopo\
+  \ test su dev\nterraform workspace select prod && terraform apply -var-file=prod.tfvars\n\
+  ```\n- Alternativa: directory separate per ambiente (più esplicito, meno errori)\n\
+  - Terragrunt `run-all`: orchestrare plan/apply su più moduli con dipendenze\n\n\
+  ## Drift detection automatica\n```yaml\n# Scheduled job GitHub Actions — rilevare\
+  \ drift\nschedule:\n  - cron: '0 8 * * 1-5'  # ogni giorno lavorativo alle 8:00\n\
+  jobs:\n  drift-detection:\n    steps:\n      - run: terraform plan -detailed-exitcode\n\
+  \        # exit code 2 = drift rilevato\n      - name: Alert on drift\n        if:\
+  \ steps.plan.outputs.exitcode == '2'\n        run: |\n          curl -X POST $SLACK_WEBHOOK\
+  \ -d '{\"text\":\"⚠️ Terraform drift detected in prod!\"}'\n```\n\n## Security nel\
+  \ CI/CD Terraform\n- OIDC per AWS/Azure/GCP: no long-lived credentials nel CI\n\
+  - Checkov / tfsec: static analysis nel plan job (blocca risorse non conformi)\n\
+  - Sentinel (Terraform Cloud): policy as code per bloccare apply non conformi\n-\
+  \ Least privilege: service account CI con solo permessi necessari per l'ambiente\n"
+effort: medium
+id: prop-021
+last_analyzed: 2026-04-04
+priority: high
+rationale: 'iac/terraform/ è la sezione IaC più ricca (fondamentali, state-management,
+  moduli,
+
+  testing) ma manca completamente il workflow collaborativo. Un team di 3+ DevOps
+
+  che gestisce infrastruttura Terraform senza un processo CI/CD strutturato è
+
+  un rischio operativo: apply manuali, nessun audit trail, stato inconsistente.
+
+  Atlantis è lo strumento più diffuso per questo uso, e GitHub Actions è
+
+  l''alternativa senza infrastruttura aggiuntiva. Questo file chiude il cerchio
+
+  della sezione Terraform e la rende completa per un team reale.
+
+  '
+status: approved
+tags:
+- terraform
+- ci-cd
+- atlantis
+- github-actions
+- gitops
+- iac
+- drift-detection
+- multi-ambiente
+target_file: docs/iac/terraform/ci-cd.md
+title: Terraform CI/CD — Atlantis e GitOps Workflow
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, sceglie tra Atlantis (infra dedicata) o GitHub Actions
+    (no infra), configura plan automatico su PR con commento del diff, imposta apply
+    protetto su main con environment approval, e aggiunge drift detection schedulata
+    per rilevare modifiche manuali
+  reader: DevOps senior o Platform engineer che gestisce IaC Terraform per un team
+    di 4-6 ingegneri su ambiente AWS multi-account
+  scenario: Il team fa terraform apply da locale, non c'è revisione dei plan, un ingegnere
+    ha accidentalmente distrutto una RDS in staging. L'obiettivo è implementare un
+    workflow con PR review obbligatoria e apply automatizzato protetto
+  score: high
+  without_kb: Dovrebbe leggere runatlantis.io/docs (ampia), blog post HashiCorp su
+    Terraform CI/CD, GitHub Actions docs — almeno 5-6h per un setup completo e sicuro

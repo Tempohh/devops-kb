@@ -5,11 +5,11 @@ category: networking
 tags: [linkerd, service-mesh, kubernetes, mtls, rust, sidecar, osservabilità]
 search_keywords: [linkerd2, linkerd service mesh, rust proxy, linkerd-proxy, ultra-light, mTLS automatico, golden signals, latency percentiles, linkerd viz, multicluster, policy, serviceprofile, traffic split, retries, timeouts, cncf, buoyant]
 parent: networking/service-mesh/_index
-related: [networking/service-mesh/istio, networking/service-mesh/concetti-base, networking/kubernetes/network-policies]
+related: [networking/service-mesh/istio, networking/service-mesh/concetti-base, networking/kubernetes/network-policies, dev/resilienza/circuit-breaker]
 official_docs: https://linkerd.io/2.x/overview/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-03-29
 ---
 
 # Linkerd

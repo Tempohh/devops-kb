@@ -5,11 +5,11 @@ category: networking
 tags: [zero-trust, sicurezza, identità, ztna, microsegmentazione, mtls, iam]
 search_keywords: [zero trust network, ztna, zero trust architecture, never trust always verify, identity aware proxy, iap, beyondcorp, nist 800-207, software defined perimeter, sdp, micro-segmentation, conditional access, device posture, continuous verification, service mesh mtls, bpf, sidecar proxy, identity provider, okta, azure ad, google workspace]
 parent: networking/sicurezza/_index
-related: [networking/sicurezza/vpn-ipsec, networking/sicurezza/firewall-waf, networking/service-mesh/istio, networking/kubernetes/network-policies]
+related: [networking/sicurezza/vpn-ipsec, networking/sicurezza/firewall-waf, networking/service-mesh/istio, networking/kubernetes/network-policies, security/network/zero-trust]
 official_docs: https://csrc.nist.gov/publications/detail/sp/800-207/final
 status: complete
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-03-29
 ---
 
 # Zero Trust Networking
@@ -333,6 +333,11 @@ kubectl exec mypod -- cat /var/run/secrets/... | openssl x509 -noout -text | gre
     Le Kubernetes Network Policies sono un elemento Zero Trust per il cluster.
 
     **Approfondimento →** [Network Policies](../kubernetes/network-policies.md)
+
+??? info "Zero Trust Architecture — Implementazione per Workload Kubernetes"
+    Questo file copre Zero Trust dal punto di vista del networking e dell'accesso utente (ZTNA). Per l'implementazione profonda lato workload — Kubernetes Network Policy, Istio AuthorizationPolicy, Cilium L7, OPA come PDP, SPIFFE/SPIRE e troubleshooting dettagliato — vedi il file complementare nella sezione security.
+
+    **Approfondimento →** [Zero Trust Architecture](../../security/network/zero-trust.md)
 
 ## Riferimenti
 

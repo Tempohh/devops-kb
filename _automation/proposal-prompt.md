@@ -1,99 +1,70 @@
 # Sessione di Analisi Strategica — Generazione Proposte KB
 
-Stai eseguendo un'analisi strategica della Knowledge Base DevOps. Questa sessione è
-diversa dall'audit di qualità: non guarda i singoli file ma l'utilità complessiva della
-KB come strumento. Le proposte che generi vengono presentate al proprietario per
-approvazione — nessun file di contenuto viene modificato.
+Sei un agente CLI con accesso completo al filesystem tramite strumenti Read, Write, Glob.
+**Devi USARE gli strumenti — non descrivere cosa faresti, FALLO adesso.**
+**Non scrivere output testuale prima di aver completato le fasi operative.**
 
-**Regola fondamentale:** Una proposta vale solo se risponde alla domanda
-"Chi è il lettore concreto che ne beneficia, e cosa gli permette di fare che prima
-non riusciva a fare?" Se non riesci a rispondere, la proposta non va creata.
+Regola fondamentale: una proposta vale solo se risponde a
+"Chi è il lettore concreto che ne beneficia, e cosa gli permette di fare?"
 
 ---
 
-## Fase 1 — Censimento strutturale della KB
+## PASSO 1 — Censimento strutturale (AZIONE IMMEDIATA)
 
-Prima di tutto, mappa la struttura reale con Glob:
+**Chiama subito Glob con `docs/**/*.md`** per ottenere tutti i file KB.
+
+Poi per ogni categoria principale (cloud, containers, networking, ci-cd, databases,
+messaging, security, monitoring, ai, dev), conta i file esistenti leggendo solo
+le prime 15 righe (frontmatter) di un campione.
+
+---
+
+## PASSO 2 — Analisi approfondita (AZIONE IMMEDIATA)
+
+**Leggi esattamente 10 file** scelti tra:
+1. File in categorie con pochi file (priorità a categorie sottosviluppate)
+2. File con `status: needs-review` o `status: draft`
+3. File che sembrano hub di navigazione (frontmatter con molti `related`)
+
+Per ogni file valuta:
+- **Utilità pratica**: risolve un problema operativo reale?
+- **Completezza**: un DevOps potrebbe usarlo come guida autonoma?
+- **Connettività**: ha `related` ricchi o è un'isola?
+
+---
+
+## PASSO 3 — Identificazione gap (ANALISI MENTALE)
+
+Per ogni gap identificato, applica il test:
 
 ```
-docs/**/_index.md    → categorie e sottocategorie esistenti
-docs/**/*.md         → tutti i file (escludi _index.md e tags.md)
+Reader: [chi è — ruolo, contesto]
+Scenario: [problema che ha]
+Outcome: [cosa riesce a fare dopo — CONCRETO]
+Without_KB: [dove troverebbe info senza questo file?]
+Score: high | medium | low
 ```
 
-Per ogni categoria principale (cloud, containers, networking, ci-cd, databases,
-messaging, security, monitoring, ai, dev), conta:
-- Quanti file esistenti
-- Quali sottocategorie hanno _index.md
-- Eventuali file `status: draft` o `status: needs-review` (leggi solo frontmatter)
+**Scarta** se: il lettore troverebbe la stessa info nella documentazione ufficiale
+in 2 click. Scarta se è solo simmetria formale tra provider cloud senza gap reale.
 
-**Non leggere il contenuto completo** in questa fase — solo frontmatter (prime 20 righe).
+**Tieni** se: colma un gap trasversale, aggiunge connettività mancante,
+risolve un problema operativo documentato e non banale.
 
 ---
 
-## Fase 2 — Analisi strategica del valore (NON audit tecnico)
+## PASSO 4 — Generazione proposte (AZIONE: SCRIVI FILE YAML)
 
-Leggi **8-12 file** scelti tra:
-1. File che sembrano essere hub di navigazione (molti `related`)
-2. File in categorie recenti o poco sviluppate
-3. File che il frontmatter segnala come `needs-review`
+**Crea i file YAML in `_automation/proposals/pending/`.**
 
-Per ogni file letto, valuta:
-- **Utilità**: il contenuto risolve un problema reale? O è documentazione per documentazione?
-- **Completezza pratica**: un DevOps potrebbe usare questo file come guida autonoma?
-- **Connettività**: è ben collegato al resto della KB o è un'isola?
+Prima leggi i file esistenti in `_automation/proposals/pending/` e
+`_automation/proposals/approved/` per trovare l'ultimo numero progressivo usato.
 
----
+**Devi generare almeno 3 proposte** (max 6). Se dopo l'analisi hai trovato meno
+di 3 proposte `score: high`, includi proposte `score: medium` o `score: low`
+piuttosto che non generare nulla — il sistema richiede sempre output.
 
-## Fase 3 — Identificazione opportunità con test di utilità
-
-Per ogni potenziale proposta che stai considerando, applica questo test prima di scriverla:
-
-### Test di utilità (obbligatorio per ogni proposta)
-
-```
-Scenario: [Descrivi il lettore — ruolo, contesto, problema che ha]
-Azione: [Cosa fa con questo contenuto — lo legge, lo usa come riferimento, lo segue]
-Risultato: [Cosa riesce a fare dopo che prima non riusciva]
-Alternativa: [Dove troverebbe questa info senza la KB? Quanto è difficile?]
-Incremento: [Quanto valore aggiunge rispetto all'alternativa?]
-```
-
-**Scarta la proposta se:**
-- "Alternativa" è la documentazione ufficiale che il lettore leggerebbe comunque
-- "Risultato" è "sa cosa è X" senza un'applicazione pratica
-- Stai solo completando una simmetria formale (es. "GCP ha questo, AWS pure, aggiungiamo")
-  senza una reale lacuna di copertura tematica
-
-**Tieni la proposta se:**
-- Colma un gap trasversale (un tema che taglia più sezioni e non è coperto da nessuna)
-- Aggiunge connettività mancante (pattern relazione A↔B non documentata)
-- Risolve un problema operativo reale (troubleshooting, decision-making, configuration)
-
----
-
-## Fase 4 — Valutazione saturazione della KB
-
-Prima di generare proposte, rispondi a queste domande nella tua analisi interna:
-
-1. **Coverage**: La KB copre in modo adeguato i problemi quotidiani di un DevOps mid-senior?
-   Stima la percentuale di copertura per categoria (es. "Kubernetes: 85%, GCP: 40%").
-
-2. **Depth**: I file esistenti hanno profondità pratica o sono solo panoramiche?
-   Identifica le categorie dove la profondità è insufficiente.
-
-3. **Segnale di saturazione**: Stai trovando proposte solo perché "mancano" file,
-   o perché c'è una reale esigenza non coperta? Se le ultime 3 proposte che hai
-   pensato non passano il test di utilità, probabilmente la KB è vicina alla
-   saturazione in quella categoria — segnalalo.
-
-4. **Priorità strategica**: Quali sono i 3 temi dove un'ora di lavoro porta il
-   massimo beneficio al lettore? Solo quelli meritano proposta P1.
-
----
-
-## Fase 5 — Generazione proposte (formato obbligatorio)
-
-Crea file YAML in `_automation/proposals/pending/`. Usa questo formato:
+Formato file `prop-NNN.yaml`:
 
 ```yaml
 id: prop-NNN
@@ -103,39 +74,28 @@ priority: high         # high | medium | low
 target_file: docs/categoria/sottocategoria/file.md
 effort: small          # small (<2h) | medium (2-4h) | large (>4h)
 description: |
-  Descrizione dettagliata: cosa aggiungere, struttura suggerita, esempi concreti.
-  Minimo 5 righe. Include: sezioni specifiche, esempi di codice/comandi da aggiungere,
-  riferimenti tecnici (strumenti, versioni, pattern specifici).
+  Cosa aggiungere: struttura suggerita, esempi concreti, sezioni specifiche.
+  Minimo 5 righe. Include: comandi reali, strumenti, versioni, pattern specifici.
 rationale: |
-  Motivazione strategica: chi è il lettore, quale problema risolve, perché ora.
-  Include il risultato del test di utilità (scenario + risultato concreto).
+  Chi è il lettore, quale problema risolve, perché è utile ora.
 utility_test:
   reader: "DevOps mid-senior che lavora con [tecnologia]"
   scenario: "Sta cercando di risolvere [problema specifico]"
   outcome: "Dopo aver letto, riesce a [azione concreta]"
-  without_kb: "Senza questo file dovrebbe [alternativa complessa]"
-  score: high | medium | low   # valutazione soggettiva del tuo test
+  without_kb: "Senza questo file dovrebbe [alternativa più complessa/lenta]"
+  score: high | medium | low
 tags: [tag1, tag2, tag3]
-last_analyzed: YYYY-MM-DD
+last_analyzed: 2026-03-30
 ```
-
-**Naming file:** `prop-NNN.yaml` (usa il numero progressivo dopo l'ultimo esistente)
-
-**Limiti:**
-- Massimo **6 proposte** per sessione (meno è meglio se le idee sono davvero forti)
-- `priority: high` solo se `utility_test.score: high` E il tema è assente dalla KB
-- Non creare proposte solo per completare simmetrie formali tra provider cloud
-- Se la KB è satura in una categoria, non forzare proposte — segnala la saturazione
 
 ---
 
-## Fase 6 — Analisi di saturazione e riflessione
+## PASSO 5 — Report di saturazione (AZIONE: SCRIVI FILE)
 
-Dopo aver generato le proposte, scrivi un breve report di saturazione in
-`_automation/proposals/kb-saturation-report.md`:
+**Scrivi `_automation/proposals/kb-saturation-report.md`** con questo contenuto:
 
 ```markdown
-# KB Saturation Report — YYYY-MM-DD
+# KB Saturation Report — 2026-03-30
 
 ## Copertura stimata per categoria
 
@@ -144,34 +104,28 @@ Dopo aver generato le proposte, scrivi un breve report di saturazione in
 | ...       | ...   | ...        | ...   | ...  |
 
 ## Categorie vicine alla saturazione
-[Elenco con motivazione]
+[elenco con motivazione]
 
 ## Categorie con gap reali
-[Elenco con motivazione]
+[elenco con motivazione]
 
-## Prossima sessione di proposte consigliata
-[Data suggerita + focus tematico raccomandato]
-
-## Segnale di stop
-[Se la KB è complessivamente completa per il suo scopo, dichiaralo esplicitamente]
+## Prossima sessione consigliata
+[data + focus tematico]
 ```
 
 ---
 
-## Output finale (obbligatorio)
+## Output finale (breve)
+
+Dopo aver scritto tutti i file, produci questo summary:
 
 ```
-PROPOSAL SESSION STRATEGICA
-File analizzati: [numero]
-Proposte generate: [numero]
+PROPOSAL SESSION
+File analizzati: [N]
+Proposte generate: [N] in _automation/proposals/pending/
 
-Proposte:
-  - [prop-NNN] [priority] [type] [effort] — [titolo]
-  - ...
+  - [prop-NNN] [priority] [type] — [titolo]
 
-Saturazione stimata KB: [breve valutazione, es. "70% coverage, depth adeguata in 6/10 categorie"]
-Categorie prioritarie per future proposte: [lista]
-Categorie sature (no nuove proposte utili): [lista]
-
-Report salvato in: _automation/proposals/kb-saturation-report.md
+Saturazione KB: [breve valutazione]
+Report: _automation/proposals/kb-saturation-report.md
 ```

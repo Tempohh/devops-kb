@@ -5,11 +5,11 @@ category: cloud
 tags: [finops, cost-optimization, cloud-economics, tagging, rightsizing, chargeback, showback, unit-economics, reserved-instances, spot, savings-plans]
 search_keywords: [FinOps, Financial Operations, ottimizzazione costi cloud, cloud cost management, cloud cost optimization, unit economics, rightsizing, tagging strategy, cost allocation, chargeback, showback, cost center, Reserved Instances, Savings Plans, Spot Instances, FinOps Foundation, CNCF FinOps, cloud financial management, CFM, cost governance, cloud spend, cloud billing, anomaly detection, budget alert, cloud waste, idle resources, over-provisioned, costi cloud, gestione finanziaria cloud, cost visibility, forecasting cloud, cost per feature, cost per customer]
 parent: cloud/finops/_index
-related: [cloud/aws/fondamentali/billing-pricing, cloud/azure/fondamentali/pricing]
+related: [cloud/aws/fondamentali/billing-pricing, cloud/azure/fondamentali/pricing, cloud/gcp/fondamentali/panoramica]
 official_docs: https://www.finops.org/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-25
+last_updated: 2026-03-29
 ---
 
 # FinOps — Fondamentali
@@ -267,6 +267,52 @@ az advisor recommendation list \
   --output table
 ```
 
+**Rightsizing con GCP Recommender:**
+
+Il servizio [Cloud Recommender](https://cloud.google.com/recommender) analizza l'utilizzo delle istanze Compute Engine e produce raccomandazioni automatiche con risparmio stimato. I due tipi rilevanti per FinOps sono:
+
+- `compute.googleapis.com/instance/idle` — istanza non utilizzata: nessun traffico significativo nelle ultime 2 settimane
+- `compute.googleapis.com/instance/overprovisioned` — istanza over-sized: CPU e/o memoria sistematicamente sotto-utilizzate
+
+```bash
+# Listare raccomandazioni idle instances per un progetto
+gcloud recommender recommendations list \
+  --project=my-project-id \
+  --location=europe-west1 \
+  --recommender=google.compute.instance.IdleResourceRecommender \
+  --format="table(name.basename(), content.overview.resourceName, \
+    primaryImpact.costProjection.cost.units, \
+    stateInfo.state)"
+
+# Listare raccomandazioni rightsizing (over-provisioned)
+gcloud recommender recommendations list \
+  --project=my-project-id \
+  --location=europe-west1 \
+  --recommender=google.compute.instance.MachineTypeRecommender \
+  --format="table(name.basename(), \
+    content.overview.resourceName, \
+    content.overview.recommendedMachineType.name, \
+    primaryImpact.costProjection.cost.units)"
+
+# Applicare una raccomandazione (dopo review manuale)
+gcloud recommender recommendations mark-claimed \
+  --project=my-project-id \
+  --location=europe-west1 \
+  --recommender=google.compute.instance.MachineTypeRecommender \
+  --recommendation=RECOMMENDATION_ID \
+  --etag=ETAG
+
+# Analisi aggregata multi-progetto tramite Asset Inventory
+gcloud asset search-all-resources \
+  --scope=organizations/ORG_ID \
+  --asset-types=compute.googleapis.com/Instance \
+  --query="labels.Team:*" \
+  --format="table(name, location, labels)"
+```
+
+!!! tip "Recommender via BigQuery"
+    Per analisi aggregate su molti progetti, esportare le raccomandazioni in BigQuery usando l'API `recommender.googleapis.com` e interrogarle con SQL. Questo è più efficiente di chiamate `gcloud` progetto per progetto.
+
 ---
 
 ## Configurazione & Pratica
@@ -373,13 +419,113 @@ az costmanagement export create \
   --recurrence-period from=2026-03-01 to=2026-12-31
 ```
 
+### Setup Minimo FinOps — GCP
+
+```bash
+# ---------------------------------------------------------------
+# Prerequisito: abilitare la Billing API e il progetto di billing
+# ---------------------------------------------------------------
+gcloud services enable billingbudgets.googleapis.com
+gcloud services enable bigquery.googleapis.com
+
+# Recuperare il Billing Account ID
+gcloud billing accounts list --format="table(name, displayName, open)"
+# Output: BILLING_ACCOUNT_ID = billingAccounts/012345-ABCDEF-GHIJKL
+
+BILLING_ACCOUNT="billingAccounts/012345-ABCDEF-GHIJKL"
+
+# Step 1: Budget mensile con alert a 50%, 80%, 100% (actual) e 110% (forecast)
+gcloud billing budgets create \
+  --billing-account="$BILLING_ACCOUNT" \
+  --display-name="monthly-total" \
+  --budget-amount=5000USD \
+  --threshold-rule=percent=0.5,basis=CURRENT_SPEND \
+  --threshold-rule=percent=0.8,basis=CURRENT_SPEND \
+  --threshold-rule=percent=1.0,basis=CURRENT_SPEND \
+  --threshold-rule=percent=1.1,basis=FORECASTED_SPEND \
+  --notifications-rule-pubsub-topic=projects/my-project-id/topics/billing-alerts \
+  --calendar-period=MONTH
+
+# Creare il topic Pub/Sub per ricevere le notifiche budget
+gcloud pubsub topics create billing-alerts --project=my-project-id
+
+# Step 2: Label enforcement tramite Organization Policy
+# Richiedere il label "team" su tutte le risorse Compute Engine
+gcloud org-policies set-policy - <<'EOF'
+name: organizations/ORG_ID/policies/compute.disableSerialPortAccess
+spec:
+  rules:
+  - enforce: true
+EOF
+
+# Policy custom per label obbligatori (richiede Custom Org Policy — disponibile da GA 2024)
+gcloud org-policies set-policy label-policy.yaml --organization=ORG_ID
+
+# label-policy.yaml (esempio):
+# name: organizations/ORG_ID/policies/custom.requireLabels
+# spec:
+#   rules:
+#   - condition:
+#       expression: >
+#         resource.type == "compute.googleapis.com/Instance" &&
+#         !has(resource.labels.team)
+#     enforce: true
+
+# Step 3: BigQuery Billing Export — esportare i dati di costo per analisi avanzata
+# Da Console: Billing → Billing Export → BigQuery Export → Enable
+# Via gcloud (richiede un dataset BigQuery già esistente):
+bq mk --dataset \
+  --location=EU \
+  --description "GCP Billing Export" \
+  my-project-id:billing_export
+
+# Abilitare Standard Usage Cost Export (da Console o API Billing)
+gcloud billing accounts get-iam-policy "$BILLING_ACCOUNT"
+
+# Step 4: Analisi costi con gcloud CLI
+# Costo per servizio dell'ultimo mese (via BigQuery — dopo export attivo)
+bq query --use_legacy_sql=false '
+SELECT
+  service.description AS service,
+  ROUND(SUM(cost), 2) AS monthly_cost_usd,
+  ROUND(SUM(cost) / SUM(SUM(cost)) OVER () * 100, 1) AS pct_total
+FROM `my-project-id.billing_export.gcp_billing_export_v1_*`
+WHERE DATE(_PARTITIONTIME) BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+  AND CURRENT_DATE()
+GROUP BY service.description
+ORDER BY monthly_cost_usd DESC
+LIMIT 10'
+
+# Costo per label "team" (cost allocation)
+bq query --use_legacy_sql=false '
+SELECT
+  (SELECT value FROM UNNEST(labels) WHERE key = "team") AS team,
+  ROUND(SUM(cost), 2) AS monthly_cost_usd
+FROM `my-project-id.billing_export.gcp_billing_export_v1_*`
+WHERE DATE(_PARTITIONTIME) BETWEEN DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+  AND CURRENT_DATE()
+GROUP BY team
+ORDER BY monthly_cost_usd DESC'
+```
+
+!!! note "BigQuery Export vs Standard Reports"
+    GCP offre due tipi di export BigQuery: **Standard Usage Cost** (aggregato giornaliero, gratuito) e **Detailed Usage Cost** (granularità per risorsa, include crediti e sconti, necessario per analisi avanzate). Per un programma FinOps, abilitare entrambi fin dall'inizio — retroattivi non sono disponibili.
+
+!!! tip "Committed Use Discounts (CUD)"
+    L'equivalente GCP dei Reserved Instances è il **Committed Use Discount**: 1 o 3 anni su vCPU e memoria, con sconto fino al 57% (3 anni) rispetto al prezzo on-demand. A differenza di AWS, i CUD GCP si applicano automaticamente a tutte le VM idonee nel progetto, senza scegliere un'istanza specifica.
+
 ### Strumenti FinOps Multi-Cloud
 
 | Strumento | Tipo | Forza principale |
 |-----------|------|-----------------|
 | **AWS Cost Explorer** | Native AWS | RI/SP recommendations, forecasting |
 | **Azure Cost Management** | Native Azure | Budget alerts, cost analysis per tag |
-| **GCP Billing** | Native GCP | Committed Use Discounts, BigQuery export |
+| **GCP Billing Console** | Native GCP | Dashboard costi, budget alerts, CUD tracking |
+| **GCP Cloud Billing API** | Native GCP | Automazione report costi, export programmatico |
+| **GCP Cost Table Reports** | Native GCP | Vista tabulare per progetto/servizio/SKU |
+| **GCP Cost Breakdown Reports** | Native GCP | Analisi sconti (CUD, SUD), crediti separati dai costi lordi |
+| **BigQuery Billing Export** | Native GCP | Analisi avanzata con SQL, retention illimitata, join con dati business |
+| **GCP Recommender** | Native GCP | Rightsizing automatico VM, idle resource detection |
 | **CloudHealth (VMware)** | Commerciale multi-cloud | Policy automation, chargeback avanzato |
 | **Apptio Cloudability** | Commerciale multi-cloud | Unit economics, forecasting, FinOps workflow |
 | **OpenCost** | Open source (CNCF) | Cost allocation Kubernetes, self-hosted |
@@ -474,6 +620,42 @@ aws ec2 describe-snapshots \
   --owner-ids self \
   --query "Snapshots[?StartTime<='2025-12-25'].{ID:SnapshotId, Size:VolumeSize, Date:StartTime, Desc:Description}" \
   --output table
+```
+
+```bash
+# GCP: trovare VM in stato TERMINATED (ferme ma con disco ancora fatturato)
+gcloud compute instances list \
+  --filter="status=TERMINATED" \
+  --format="table(name, zone, machineType, status, labels.team)"
+
+# GCP: trovare dischi persistenti non collegati a nessuna VM
+gcloud compute disks list \
+  --filter="NOT users:*" \
+  --format="table(name, zone, sizeGb, type, labels.team)" \
+  --sort-by=~sizeGb
+
+# GCP: trovare static IP (indirizzi esterni) non utilizzati
+# Gli static IP non associati costano ~$0.010/ora ciascuno
+gcloud compute addresses list \
+  --filter="status=RESERVED AND addressType=EXTERNAL" \
+  --format="table(name, region, address, status)"
+
+# GCP: trovare snapshot più vecchi di 90 giorni
+gcloud compute snapshots list \
+  --filter="creationTimestamp < $(date -d '90 days ago' +%Y-%m-%d)" \
+  --format="table(name, diskSizeGb, creationTimestamp, storageBytes)"
+
+# GCP: trovare Load Balancer (forwarding rules) senza backend configurati
+gcloud compute forwarding-rules list \
+  --format="table(name, region, IPAddress, target, loadBalancingScheme)"
+
+# GCP: Cloud NAT — verificare il traffico (equivalente NAT Gateway AWS)
+# I Cloud NAT addebitano per porta-minuto allocata e per GB processato
+gcloud compute routers list \
+  --format="table(name, region, network)"
+# Per il traffico dettagliato, usare Cloud Logging o BigQuery billing export:
+# SELECT service.description, SUM(cost) FROM billing_export
+# WHERE service.description LIKE '%Cloud NAT%'
 ```
 
 ### Spot & Preemptible — Pattern di Utilizzo
@@ -696,6 +878,11 @@ aws ec2 create-vpc-endpoint \
     Strumenti nativi Azure: Cost Analysis, Budgets, Advisor recommendations, Reserved Instances, Azure Hybrid Benefit.
 
     **Approfondimento completo →** [Azure Pricing & Cost Management](../azure/fondamentali/pricing.md)
+
+??? info "GCP Billing & Pricing — Approfondimento strumenti GCP"
+    Strumenti nativi GCP per cost management: Cloud Billing Console, BigQuery Billing Export, Cloud Billing API, GCP Recommender, Committed Use Discounts (CUD), Sustained Use Discounts (SUD), Budget Alerts via Pub/Sub.
+
+    **Approfondimento completo →** [GCP Billing & Pricing](../gcp/fondamentali/billing-pricing.md)
 
 ---
 

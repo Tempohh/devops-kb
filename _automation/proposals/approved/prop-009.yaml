@@ -1,0 +1,56 @@
+approved_at: '2026-03-30'
+description: "Creare documentazione completa su GCP IAM focalizzata sugli scenari\
+  \ operativi più\nfrequenti in DevOps. Struttura suggerita:\n\n## Concetti Chiave\n\
+  - Gerarchia IAM: Organization > Folder > Project > Resource\n- Differenza Service\
+  \ Account vs User Account\n- Types of service accounts: user-managed, Google-managed,\
+  \ default SA\n- Principio del minimo privilegio su GCP: IAM conditions, deny policies\n\
+  \n## Service Account operativi\n- Creazione SA con `gcloud iam service-accounts\
+  \ create`\n- Assegnare ruoli: `gcloud projects add-iam-policy-binding`\n- SA Keys\
+  \ vs keyless authentication (preferenza keyless)\n- Impersonation: `gcloud auth\
+  \ impersonate-service-account`\n\n## Workload Identity (GKE)\n- Binding tra K8s\
+  \ ServiceAccount e GCP Service Account\n- Annotazione `iam.gke.io/gcp-service-account`\n\
+  - Setup passo-passo: abilita WIF pool, binding, annotazione, test\n- Snippet YAML\
+  \ per PodSpec con SA annotato\n- Vantaggi vs SA key files: no key rotation, auditabilità\
+  \ migliore\n\n## Organization Policies\n- Vincoli predefiniti più usati: `constraints/compute.requireShieldedVm`,\n\
+  \  `constraints/iam.disableServiceAccountKeyCreation`\n- Custom org policies (GA\
+  \ dal 2024)\n- Policy inheritance e override per folder/project\n\n## IAM Conditions\n\
+  - Accesso temporaneo con date conditions\n- Condition su resource attributes (storage\
+  \ bucket prefix, etc.)\n\n## Best Practices & Anti-pattern\n- MAI usare il default\
+  \ Compute SA per applicazioni\n- MAI creare SA keys se Workload Identity è disponibile\n\
+  - Auditare SA non usati con `gcloud asset search-all-iam-policies`\n"
+effort: medium
+id: prop-009
+last_analyzed: 2026-03-30
+priority: high
+rationale: 'AWS ha un''intera sezione `cloud/aws/iam/` con organizations.md e policies-avanzate.md.
+
+  Azure ha `cloud/azure/identita/` con entra-id.md, rbac-managed-identity.md, governance.md.
+
+  GCP non ha ancora nessun file IAM. Per un DevOps che vuole operare su GCP
+
+  in modo sicuro, l''IAM è il primo prerequisito — prima di compute, networking,
+
+  qualsiasi servizio. Il gap è strutturale e bloccante.
+
+  '
+status: approved
+tags:
+- gcp
+- iam
+- workload-identity
+- service-accounts
+- kubernetes
+- security
+target_file: docs/cloud/gcp/iam/iam-service-accounts.md
+title: GCP IAM — Service Accounts, Workload Identity, Org Policies
+type: new-file
+utility_test:
+  outcome: Dopo aver letto, configura Workload Identity Federation in meno di 30 minuti,
+    capisce il binding K8s SA → GCP SA, e sa come auditare i permessi
+  reader: DevOps mid-senior che ha già esperienza AWS IAM e deve onboardarsi su GCP
+  scenario: Deve configurare GKE con accesso a Cloud Storage e Secret Manager senza
+    usare SA key files (richiesto dalla security review)
+  score: high
+  without_kb: Dovrebbe leggere 4-5 pagine separate della documentazione GCP (WIF,
+    service accounts, GKE security, IAM roles) senza una guida unificata che mostri
+    il quadro completo e i comandi operativi

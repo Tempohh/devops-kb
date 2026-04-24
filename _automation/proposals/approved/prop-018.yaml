@@ -1,0 +1,81 @@
+approved_at: '2026-04-03'
+auto_approved: true
+description: "Creare guida operativa per la gestione multi-ambiente con Pulumi: stacks,\n\
+  configurazione per ambiente, secrets, state management, e integrazione CI/CD.\n\
+  fondamentali.md copre il concetto base ma non il workflow reale per team\nche devono\
+  \ gestire dev/staging/prod in modo sicuro e riproducibile.\n\n## Stack e progetto\
+  \ Pulumi — architettura multi-ambiente\n- Stack = istanza di deployment (dev, staging,\
+  \ prod)\n- `pulumi stack init organization/project/dev`\n- Stack reference: leggere\
+  \ output di un altro stack (es. networking → app)\n```typescript\nconst networkStack\
+  \ = new pulumi.StackReference(\"org/networking/prod\");\nconst vpcId = networkStack.getOutput(\"\
+  vpcId\");\n```\n- Struttura progetto consigliata: un Pulumi.yaml per progetto, stack\
+  \ separati per ambiente\n\n## Configurazione per stack\n```bash\n# Configurazione\
+  \ non-secret\npulumi config set aws:region eu-west-1 --stack prod\npulumi config\
+  \ set instanceType t3.medium --stack prod\npulumi config set instanceType t3.micro\
+  \ --stack dev\n\n# Segreti cifrati nello stack state\npulumi config set --secret\
+  \ dbPassword s3cr3t --stack prod\n```\n- `pulumi.Config()` nel codice: lettura type-safe\
+  \ della configurazione\n- Secrets providers: Pulumi Cloud (default), AWS KMS, Azure\
+  \ Key Vault, HashiCorp Vault\n- Rotazione segreti: `pulumi config refresh` + `pulumi\
+  \ up`\n\n## State management\n- Pulumi Cloud (SaaS): history, diffs, concurrency\
+  \ lock, team access\n- Self-managed: S3 bucket + DynamoDB lock (simile Terraform)\n\
+  \  ```bash\n  pulumi login s3://my-pulumi-state-bucket\n  ```\n- Migrazione state:\
+  \ `pulumi stack export | pulumi stack import`\n- Stack locking: prevenire deploy\
+  \ concorrenti in CI\n\n## CI/CD Integration\n### GitHub Actions\n```yaml\n- uses:\
+  \ pulumi/actions@v5\n  with:\n    command: up\n    stack-name: org/project/prod\n\
+  \    cloud-url: s3://pulumi-state\n  env:\n    PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN\
+  \ }}\n    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}\n```\n- Preview su\
+  \ PR: `command: preview` con commento automatico sul diff\n- Up su merge in main:\
+  \ deploy automatico con approval gate\n- Pulumi Deployments (SaaS): trigger da Git,\
+  \ audit log, rollback\n\n## Automation API — IaC programmatico\n- Eseguire Pulumi\
+  \ da codice Python/Go/TS senza CLI\n```python\nfrom pulumi.automation import LocalWorkspace,\
+  \ UpOptions\n\nstack = LocalWorkspace.create_or_select_stack(\n    stack_name=\"\
+  dev\",\n    project_name=\"myinfra\",\n    program=pulumi_program\n)\nresult = stack.up(on_output=print)\n\
+  ```\n- Use case: provisioning self-service, test infra (create→test→destroy)\n\n\
+  ## Confronto con Terraform per team\n- Vantaggi Pulumi: linguaggio reale (loops,\
+  \ conditionals nativi), type safety, testing\n- Quando preferire Terraform: team\
+  \ che conosce HCL, moduli pubblici Terraform più maturi\n- Interoperabilità: `pulumi\
+  \ convert --from terraform` per migrare HCL esistente\n"
+effort: medium
+id: prop-018
+last_analyzed: 2026-03-31
+priority: medium
+rationale: 'iac/pulumi/fondamentali.md copre concetti base, tipi di risorse, stack
+  intro.
+
+  Un team che adotta Pulumi per produzione si trova subito a dover gestire
+
+  ambienti multipli, segreti, state remoto, e CI/CD — nessuno di questi aspetti
+
+  è coperto in KB. Pulumi è in forte crescita come alternativa a Terraform
+
+  (soprattutto dopo le modifiche di licenza BSL), quindi la richiesta di questo
+
+  contenuto è in aumento nel target DevOps.
+
+  '
+status: approved
+tags:
+- pulumi
+- iac
+- stacks
+- environments
+- ci-cd
+- secrets
+- state-management
+- automation-api
+target_file: docs/iac/pulumi/stacks-ambienti.md
+title: Pulumi — Stacks, Ambienti e CI/CD Integration
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, configura S3 come state backend con lock DynamoDB, usa
+    config per separare le variabili per stack, imposta GitHub Actions con preview
+    su PR e up su main con approval, e capisce quando usare Stack References
+  reader: DevOps senior che conosce Terraform e sta migrando o valutando Pulumi per
+    un progetto con 3 ambienti (dev/staging/prod) e un team di 4 persone
+  scenario: 'Ha deployato risorse AWS con Pulumi in locale ma non sa come strutturare
+    il workflow per il team: dove mettere lo state, come gestire i segreti per ambiente,
+    come fare preview su PR senza deploy accidentali'
+  score: medium
+  without_kb: Dovrebbe leggere docs.pulumi.com/concepts/stacks, /concepts/config,
+    /concepts/secrets, /docs/using-pulumi/continuous-delivery/github-actions — 4+
+    pagine separate senza contesto operativo unificato

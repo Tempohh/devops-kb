@@ -1,0 +1,72 @@
+approved_at: '2026-03-30'
+description: "Creare documentazione operativa su RabbitMQ coprendo il modello AMQP,\
+  \ i pattern\ndi routing principali, e la gestione in ambienti production. La sezione\n\
+  messaging/rabbitmq esiste (solo _index.md) ma non ha contenuto reale.\n\n## Modello\
+  \ AMQP: Exchange, Queue, Binding\n- Producer → Exchange → (Binding + Routing Key)\
+  \ → Queue → Consumer\n- Differenza concettuale vs Kafka: RabbitMQ è push-based,\
+  \ Kafka è pull-based\n- Exchange types:\n  - Direct: routing key esatta (pattern\
+  \ request/reply, task queues)\n  - Fanout: broadcast a tutte le queue legate (events,\
+  \ notifications)\n  - Topic: pattern con wildcard `*` e `#` (routing flessibile)\n\
+  \  - Headers: routing su headers AMQP (raro, performance peggiore)\n- Queue properties:\
+  \ durable, auto-delete, exclusive, x-arguments\n\n## Pattern Operativi Fondamentali\n\
+  - Work Queue (Task Queue): distribuzione round-robin tra consumer\n  - `basicQos(prefetchCount=1)`\
+  \ per fair dispatch\n- Publish/Subscribe: fanout exchange per notifiche broadcast\n\
+  - Routing: direct/topic per instradamento selettivo\n- Dead Letter Queue (DLX):\
+  \ `x-dead-letter-exchange`, `x-message-ttl`\n- Priority Queue: `x-max-priority`\
+  \ (1-255)\n\n## Configurazione Production\n- Quorum Queues vs Classic Queues: sempre\
+  \ Quorum in produzione\n  - `\"x-queue-type\": \"quorum\"` — durabilità raft-based,\
+  \ no mirror\n- Clustering: 3 nodi minimo, quorum majority\n- Policy per High Availability:\
+  \ `rabbitmqctl set_policy ha-all`\n- TLS: configurazione `ssl_options` in rabbitmq.conf\n\
+  - vhost per isolamento multi-tenant\n- `rabbitmqctl list_queues name messages consumers`\n\
+  \n## Consumer Best Practices\n- Manual ack vs auto-ack: sempre manual in produzione\n\
+  - `basic.ack` dopo processing, `basic.nack` con requeue=false su errori permanenti\n\
+  - Consumer cancellation notification\n- Prefetch tuning: basso per task lunghi,\
+  \ alto per task brevi\n- Idempotenza: i messaggi possono essere re-deliverd dopo\
+  \ crash\n\n## Monitoring\n- Management UI: `http://localhost:15672` (plugin abilitato\
+  \ di default)\n- Metriche Prometheus: rabbitmq_exporter o prometheus plugin nativo\
+  \ (>= 3.8)\n- Alert critici: `rabbitmq_queue_messages_ready` alto, consumer count\
+  \ = 0\n- Health check: `rabbitmq-diagnostics check_running`\n\n## Confronto con\
+  \ Kafka\n| Aspetto | RabbitMQ | Kafka |\n|---------|----------|-------|\n| Modello\
+  \ | Push (smart broker) | Pull (dumb broker) |\n| Retention | Messaggio eliminato\
+  \ dopo ack | Retention temporale/size |\n| Replay | No (default) | Sì (offset) |\n\
+  | Throughput | Moderato (50k-100k msg/s) | Alto (>1M msg/s) |\n| Use case | Task\
+  \ queue, routing complesso | Stream, event log, analytics |\n"
+effort: medium
+id: prop-012
+last_analyzed: 2026-03-30
+priority: medium
+rationale: 'Kafka nella KB è coperto in modo eccezionale (20+ file su tutti gli aspetti).
+
+  RabbitMQ ha solo un _index.md vuoto, nonostante sia il message broker più usato
+
+  per task queues e pattern di routing complesso in architetture microservizi moderate.
+
+  Il dev/integrazioni/rabbitmq-client.md esiste (lato codice) ma manca la guida
+
+  infrastrutturale su come configurare RabbitMQ stesso.
+
+  '
+status: approved
+tags:
+- rabbitmq
+- messaging
+- amqp
+- task-queue
+- exchange
+- quorum-queue
+- production
+target_file: docs/messaging/rabbitmq/fondamentali.md
+title: RabbitMQ — Fondamentali operativi per ambienti production
+type: new-file
+utility_test:
+  outcome: 'Ha una guida completa da _index a production: exchange types giusti per
+    ogni use case, Quorum Queue vs Classic, monitoring configurato, best practice
+    per ack/nack'
+  reader: DevOps/backend engineer che deve mettere in produzione RabbitMQ per un'app
+    di e-commerce con code di ordini, notifiche, e task di background
+  scenario: 'Deve configurare: work queue per ordini (fair dispatch), fanout per notifiche
+    email/push, DLQ per errori, cluster 3 nodi con Quorum Queues'
+  score: medium
+  without_kb: Kafka è ben documentato nella KB ma non è adatto per task queue semplici;
+    dovrebbe leggere la documentazione RabbitMQ ufficiale frammentata tra tutorials,
+    production deployment, e best practices

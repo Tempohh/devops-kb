@@ -1,0 +1,91 @@
+approved_at: '2026-04-04'
+auto_approved: true
+description: "Creare guida operativa su Kubernetes Gateway API (GA da K8s 1.28+).\n\
+  networking/kubernetes/ ha cni.md, ingress.md, network-policies.md — ma non\ncopre\
+  \ Gateway API, che è il successore ufficiale di Ingress con feature\navanzate e\
+  \ model role-based. Molti team stanno già migrando.\n\n## Perché Gateway API sostituisce\
+  \ Ingress\n- Ingress limiti: un solo spec per tutti i casi (HTTP base), annotations\
+  \ vendor-specific\n- Gateway API: types separati per ruoli diversi, role-based (infra\
+  \ team vs app team)\n- Status: GA (stable) per core features in K8s 1.28, supporto\
+  \ in Istio/Traefik/nginx/Cilium\n\n## Tre risorse chiave\n```\nGatewayClass → Gateway\
+  \ → HTTPRoute/TCPRoute/GRPCRoute\n```\n- **GatewayClass**: definisce il controller\
+  \ (nginx, istio, traefik, cilium) — gestita da infra team\n- **Gateway**: istanza\
+  \ di listener (porta, protocollo, TLS) — gestita da platform team\n- **HTTPRoute**:\
+  \ regole di routing per applicazioni — gestita da app team\n\n## Esempio completo\
+  \ NGINX Gateway Fabric\n```bash\n# Installazione NGINX Gateway Fabric\nkubectl apply\
+  \ -f https://github.com/nginxinc/nginx-gateway-fabric/releases/download/v1.4.0/crds.yaml\n\
+  helm install ngf oci://ghcr.io/nginxinc/charts/nginx-gateway-fabric \\\n  --namespace\
+  \ nginx-gateway --create-namespace\n```\n\n```yaml\n# GatewayClass (infra team —\
+  \ una volta sola)\napiVersion: gateway.networking.k8s.io/v1\nkind: GatewayClass\n\
+  metadata:\n  name: nginx\nspec:\n  controllerName: gateway.nginx.org/nginx-gateway-controller\n\
+  \n# Gateway (platform team — per ambiente/namespace)\napiVersion: gateway.networking.k8s.io/v1\n\
+  kind: Gateway\nmetadata:\n  name: prod-gateway\n  namespace: infra\nspec:\n  gatewayClassName:\
+  \ nginx\n  listeners:\n    - name: https\n      port: 443\n      protocol: HTTPS\n\
+  \      tls:\n        mode: Terminate\n        certificateRefs:\n          - name:\
+  \ wildcard-cert\n            namespace: infra\n      allowedRoutes:\n        namespaces:\n\
+  \          from: Selector\n          selector:\n            matchLabels:\n     \
+  \         gateway-access: \"true\"\n\n# HTTPRoute (app team — nel namespace dell'applicazione)\n\
+  apiVersion: gateway.networking.k8s.io/v1\nkind: HTTPRoute\nmetadata:\n  name: orders-route\n\
+  \  namespace: orders\nspec:\n  parentRefs:\n    - name: prod-gateway\n      namespace:\
+  \ infra\n  hostnames:\n    - \"orders.example.com\"\n  rules:\n    - matches:\n\
+  \        - path:\n            type: PathPrefix\n            value: /api/v1\n   \
+  \   backendRefs:\n        - name: orders-service\n          port: 8080\n       \
+  \   weight: 100\n```\n\n## Traffic management avanzato\n```yaml\n# Canary release:\
+  \ 10% traffico su v2\nrules:\n  - backendRefs:\n      - name: orders-v1\n      \
+  \  port: 8080\n        weight: 90\n      - name: orders-v2\n        port: 8080\n\
+  \        weight: 10\n\n# Header-based routing: route per team di test\n- matches:\n\
+  \    - headers:\n        - name: X-Canary\n          value: \"true\"\n  backendRefs:\n\
+  \    - name: orders-v2\n      port: 8080\n```\n\n## Confronto con Ingress\n| Feature\
+  \ | Ingress | Gateway API |\n|---------|---------|-------------|\n| TLS passthrough\
+  \ | annotation vendor | `TLSRoute` nativo |\n| Traffic splitting | annotation nginx\
+  \ | spec nativo `weight` |\n| Header routing | annotation nginx | spec nativo |\n\
+  | Role-based management | monolitico | GatewayClass/Gateway/Route separati |\n|\
+  \ TCP/UDP routing | non supportato | `TCPRoute`/`UDPRoute` |\n| gRPC | non supportato\
+  \ | `GRPCRoute` nativo |\n\n## Migrazione da Ingress esistente\n```bash\n# Tool\
+  \ di migrazione automatica\nkubectl-gateway-api-migrate --from-ingress --namespace\
+  \ production\n# Genera HTTPRoute equivalenti agli Ingress esistenti\n```\n- Migrazione\
+  \ graduale: Gateway API e Ingress coesistono sullo stesso cluster\n- Supporto controller:\
+  \ nginx-ingress, Traefik v3, Istio, Cilium supportano entrambi\n"
+effort: medium
+id: prop-023
+last_analyzed: 2026-04-04
+priority: medium
+rationale: 'networking/kubernetes/ ha ingress.md ma non Gateway API, che è lo standard
+
+  futuro ufficiale per il routing in Kubernetes (GA da 1.28, raccomandato da CNCF).
+
+  Un Platform engineer che configura un nuovo cluster K8s nel 2025-2026 dovrebbe
+
+  usare Gateway API invece di Ingress — ma la KB lo manda ancora verso l''approccio
+
+  obsoleto. Il gap diventerà sempre più critico man mano che i controller
+
+  (nginx, Traefik, Istio, Cilium) completano la deprecazione di Ingress.
+
+  '
+status: approved
+tags:
+- kubernetes
+- gateway-api
+- networking
+- ingress
+- httproute
+- gatewayclass
+- traffic-management
+- canary
+target_file: docs/networking/kubernetes/gateway-api.md
+title: Kubernetes Gateway API — Successor a Ingress
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, installa NGINX Gateway Fabric, crea GatewayClass/Gateway
+    gestiti dal team infra, e permette ai team applicativi di creare HTTPRoute autonomamente
+    nel proprio namespace con traffic splitting nativo per canary release
+  reader: Platform engineer che gestisce Kubernetes 1.28+ e sta configurando il routing
+    HTTP per un cluster multi-team
+  scenario: Deve permettere ai team applicativi di gestire le proprie regole di routing
+    senza dare accesso a configurazioni di infrastruttura. Con Ingress non riesce
+    a delegare in modo sicuro — ogni modifica richiede intervento del team platform
+  score: medium
+  without_kb: Dovrebbe leggere gateway-api.sigs.k8s.io (documentazione ampia), comparare
+    controller (nginx vs istio vs traefik vs cilium), cercare esempi di migrazione
+    da Ingress — almeno 4-5h per capire l'architettura e scegliere il controller

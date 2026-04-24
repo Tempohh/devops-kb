@@ -1159,7 +1159,7 @@ resilience4j.retry.instances.myService:
     Questo file si concentra sull'implementazione specifica del circuit breaker. Per la visione d'insieme di tutti i pattern di resilienza (timeout, retry con backoff, bulkhead, rate limiter) e la loro composizione corretta, vedi il documento di overview. → [Resilienza](../_index.md)
 
 ??? info "Networking / Service Mesh / Istio — Circuit breaker infrastrutturale"
-    Istio implementa il circuit breaker tramite `DestinationRule.outlierDetection`. A differenza di quello applicativo, opera a livello di host e non di singola operazione. I due livelli sono complementari ma vanno coordinati per evitare amplificazione dei retry. → [Istio](../../../networking/service-mesh/istio.md)
+    Istio implementa il circuit breaker tramite `DestinationRule.outlierDetection`. A differenza di quello applicativo, opera a livello di host e non di singola operazione. I due livelli sono complementari ma vanno coordinati per evitare amplificazione dei retry. → [Istio](../../networking/service-mesh/istio.md)
 
 ??? info "Dev / Linguaggi / Java Spring Boot — Integrazione con Spring ecosystem"
     Configurazione di Resilience4j in contesti Spring Boot 3.x: Actuator health indicators, Micrometer auto-configuration, testing con `@SpringBootTest` e Testcontainers. → [Java Spring Boot](../linguaggi/java-spring-boot.md)

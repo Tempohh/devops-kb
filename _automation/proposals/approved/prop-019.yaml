@@ -1,0 +1,99 @@
+approved_at: '2026-04-04'
+auto_approved: true
+description: "Creare guida operativa su REST API design e specifica OpenAPI 3.x.\n\
+  dev/api/ ha solo _index.md senza nessun contenuto. È una delle categorie\ndev/ più\
+  \ consultate in assoluto — ogni backend developer progetta API REST.\n\n## Principi\
+  \ REST — vincoli architetturali\n- Stateless: ogni richiesta contiene tutta l'informazione\
+  \ necessaria\n- Uniform Interface: URL come sostantivi, metodi HTTP come verbi\n\
+  - Resource Representation: JSON come default, content negotiation con Accept header\n\
+  - HATEOAS: link di navigazione nella risposta (opzionale ma utile per API discovery)\n\
+  \n## URL Design — convenzioni pratiche\n```\n# Corretti\nGET    /v1/orders     \
+  \         # lista ordini\nPOST   /v1/orders              # crea ordine\nGET    /v1/orders/{id}\
+  \         # ordine specifico\nPUT    /v1/orders/{id}         # replace completo\n\
+  PATCH  /v1/orders/{id}         # update parziale\nDELETE /v1/orders/{id}       \
+  \  # elimina ordine\n\n# Filtri, paginazione, sorting\nGET /v1/orders?status=pending&sort=-created_at&page=2&limit=20\n\
+  \n# Sub-risorse\nGET /v1/orders/{id}/items      # items di un ordine\n```\n- Nouns,\
+  \ not verbs: `/v1/orders` non `/v1/getOrders`\n- Plural: `/orders` non `/order`\n\
+  - kebab-case per URL multi-parola: `/order-items` non `/orderItems`\n\n## HTTP Status\
+  \ Codes — uso corretto\n```\n200 OK            - GET/PUT/PATCH riuscito\n201 Created\
+  \       - POST riuscito (con Location header)\n204 No Content    - DELETE riuscito,\
+  \ nessun body\n400 Bad Request   - validazione fallita, body malformato\n401 Unauthorized\
+  \  - non autenticato\n403 Forbidden     - autenticato ma non autorizzato\n404 Not\
+  \ Found     - risorsa non esiste\n409 Conflict      - stato inconsistente (es. ordine\
+  \ già processato)\n422 Unprocessable - validazione semantica fallita\n429 Too Many\
+  \ Requests - rate limiting\n500 Internal Server Error - bug server, non esporre\
+  \ dettagli\n```\n\n## Versioning — strategie\n```bash\n# URL versioning (più comune,\
+  \ esplicito)\n/v1/orders, /v2/orders\n\n# Header versioning (cleaner URL, meno visibile)\n\
+  Accept: application/vnd.myapi.v2+json\n\n# Query parameter (deprecazione graduale)\n\
+  /orders?api-version=2024-01-01\n```\n- Semantic versioning per breaking changes:\
+  \ v1→v2 solo se breaking\n- Deprecation header: `Deprecation: true`, `Sunset: Sat,\
+  \ 31 Dec 2025 00:00:00 GMT`\n\n## Error Response — formato standard\n```json\n{\n\
+  \  \"type\": \"https://api.example.com/errors/validation-failed\",\n  \"title\"\
+  : \"Validation Failed\",\n  \"status\": 400,\n  \"detail\": \"Il campo 'email' non\
+  \ è un indirizzo email valido\",\n  \"instance\": \"/v1/users/register\",\n  \"\
+  errors\": [\n    {\"field\": \"email\", \"message\": \"formato non valido\"},\n\
+  \    {\"field\": \"password\", \"message\": \"minimo 8 caratteri\"}\n  ]\n}\n```\n\
+  - RFC 7807 Problem Details: standard per error response REST\n- Mai esporre stack\
+  \ trace o dettagli interni in produzione\n\n## OpenAPI 3.x — specifica pratica\n\
+  ```yaml\nopenapi: 3.1.0\ninfo:\n  title: Orders API\n  version: 1.0.0\npaths:\n\
+  \  /v1/orders:\n    get:\n      summary: Lista ordini\n      parameters:\n     \
+  \   - name: status\n          in: query\n          schema:\n            type: string\n\
+  \            enum: [pending, processing, completed]\n      responses:\n        '200':\n\
+  \          content:\n            application/json:\n              schema:\n    \
+  \            $ref: '#/components/schemas/OrderList'\n        '401':\n          $ref:\
+  \ '#/components/responses/Unauthorized'\ncomponents:\n  schemas:\n    Order:\n \
+  \     type: object\n      required: [id, status, total]\n      properties:\n   \
+  \     id: {type: string, format: uuid}\n        status: {type: string, enum: [pending,\
+  \ processing, completed]}\n        total: {type: number, format: decimal}\n```\n\
+  - API-first: scrivere la spec prima del codice\n- Code generation: openapi-generator\
+  \ per client SDK in 40+ linguaggi\n- Validation: schema validation automatica dal\
+  \ spec (middleware)\n- Documentation: Swagger UI, Redoc, Scalar\n\n## Paginazione\
+  \ — pattern\n- Offset pagination: `page=2&limit=20` — semplice, problemi con dataset\
+  \ che cambiano\n- Cursor pagination: `after=eyJpZCI6MTIzfQ==` — stabile, raccomandato\
+  \ per feed real-time\n- Link header: `Link: </v1/orders?page=3>; rel=\"next\"` —\
+  \ standard HTTP\n"
+effort: medium
+id: prop-019
+last_analyzed: 2026-04-04
+priority: high
+rationale: 'dev/api/ è una categoria completamente vuota (solo _index.md). REST API
+  design
+
+  è uno dei temi più trasversali nella KB: tocca dev/, security/ (authn/authz),
+
+  ci-cd/ (API testing), networking/ (gateway). Ogni backend developer progetta API,
+
+  ogni DevOps le espone tramite API gateway. OpenAPI è il formato standard per
+
+  contract-first development e code generation. Questo file è un hub naturale
+
+  che crea connettività tra più sezioni della KB.
+
+  '
+status: approved
+tags:
+- rest
+- openapi
+- api-design
+- swagger
+- versioning
+- http
+- json
+- microservizi
+- backend
+target_file: docs/dev/api/rest-openapi.md
+title: REST API Design e OpenAPI 3.x — Guida Operativa
+type: new-file
+utility_test:
+  outcome: Dopo la lettura, scrive la specifica OpenAPI 3.x con schema corretto, sceglie
+    la strategia di versioning appropriata, imposta il formato di error response RFC
+    7807, e configura la validazione automatica tramite il file spec
+  reader: Backend developer o DevOps engineer che deve progettare o revisionare una
+    REST API per un nuovo microservizio
+  scenario: Deve definire la struttura URL, i codici di risposta, la gestione degli
+    errori e la specifica OpenAPI per un'API ordini che verrà consumata da 3 team
+    diversi
+  score: high
+  without_kb: Dovrebbe leggere REST API Best Practices (vari blog), swagger.io/specification/,
+    RFC 7807 — fonti sparse senza un riferimento coerente che copra sia design che
+    spec in un documento operativo

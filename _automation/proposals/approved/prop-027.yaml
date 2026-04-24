@@ -1,0 +1,69 @@
+approved_at: '2026-04-04'
+auto_approved: true
+description: "Creare guida su GCP Cloud Storage, il servizio di object storage di\
+  \ GCP.\nLa sezione cloud/gcp ha GKE, BigQuery, Cloud Run e Pub/Sub ma nessun file\n\
+  su Cloud Storage — servizio fondamentale usato come backend per quasi ogni\nworkload\
+  \ GCP (Terraform state, log export, backup, data lake, ML datasets).\n\nStruttura\
+  \ suggerita:\n- **Panoramica**: bucket, oggetti, URL (`gs://`), classi di storage\n\
+  - **Storage classes**: Standard, Nearline (>30gg), Coldline (>90gg), Archive (>365gg)\n\
+  \  con confronto costi e retrieval latency — tabella con use case\n- **IAM e accesso**:\
+  \ uniform bucket-level access (raccomandato) vs legacy ACL,\n  service account con\
+  \ ruoli `storage.objectViewer`, `storage.objectCreator`\n- **Comandi gsutil/gcloud**:\n\
+  ```bash\n# Crea bucket con storage class e location\ngcloud storage buckets create\
+  \ gs://my-bucket \\\n  --location=europe-west1 \\\n  --default-storage-class=STANDARD\
+  \ \\\n  --uniform-bucket-level-access\n\n# Upload/download\ngcloud storage cp ./file.txt\
+  \ gs://my-bucket/path/\ngcloud storage rsync -r ./local-dir gs://my-bucket/backup/\n\
+  \n# Lifecycle management (auto-delete/transition)\ngcloud storage buckets update\
+  \ gs://my-bucket \\\n  --lifecycle-file=lifecycle.json\n```\n- **Lifecycle policies**:\
+  \ transition automatica tra storage class, delete automatico\n  dopo N giorni —\
+  \ JSON config con esempi\n- **Versioning**: enable/disable, recupero versioni precedenti\n\
+  - **Terraform state backend**:\n```hcl\nterraform {\n  backend \"gcs\" {\n    bucket\
+  \ = \"my-tf-state\"\n    prefix = \"terraform/state\"\n  }\n}\n```\n- **Accesso\
+  \ da Kubernetes (Workload Identity)**: come montare credenziali GCS\n  in pod GKE\
+  \ senza service account key file — pattern raccomandato\n- **Integrazione con altri\
+  \ servizi GCP**: BigQuery external tables da GCS,\n  Cloud Functions trigger su\
+  \ nuovi oggetti, Cloud Logging export\n- **Confronto con AWS S3**: mapping concettuale\
+  \ (bucket=bucket, object=object,\n  gsutil=aws s3 cp) per chi conosce S3\n"
+effort: small
+id: prop-027
+last_analyzed: 2026-04-04
+priority: medium
+rationale: 'GCP Cloud Storage è il servizio GCP più usato trasversalmente — quasi
+  ogni
+
+  workload su GCP lo usa in qualche forma (state Terraform, artifact storage,
+
+  log export, dataset ML, backup). La sezione cloud/gcp è già underrepresented
+
+  rispetto ad AWS/Azure, e manca proprio il servizio più fondamentale del layer
+
+  storage. Il gap è particolarmente visibile per chi conosce AWS S3 e cerca
+
+  l''equivalente GCP — la KB non ha risposta.
+
+  '
+status: approved
+tags:
+- gcp
+- cloud-storage
+- object-storage
+- gcs
+- iam
+- workload-identity
+- lifecycle
+target_file: docs/cloud/gcp/storage/cloud-storage.md
+title: GCP Cloud Storage — Object Storage Fondamentali
+type: new-file
+utility_test:
+  outcome: Crea bucket con le storage class corrette, configura lifecycle policies
+    per i log, imposta Workload Identity per l'accesso da GKE senza service account
+    key, e usa GCS come backend Terraform state
+  reader: DevOps/Cloud Engineer che lavora su un progetto GCP e deve configurare storage
+    per Terraform state, artifact registry e log export
+  scenario: Deve scegliere la storage class giusta per ogni use case (state Terraform,
+    log a lungo termine, dataset ML temporanei), configurare IAM correttamente senza
+    usare service account key file, e integrare con GKE tramite Workload Identity
+  score: medium
+  without_kb: Deve navigare la documentazione GCP (ben fatta ma dispersiva), cercare
+    tutorial separati per IAM, lifecycle, e Workload Identity — 2-3h per capire le
+    best practice rispetto alla semplice API di base

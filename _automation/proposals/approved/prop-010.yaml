@@ -1,0 +1,65 @@
+approved_at: '2026-03-30'
+description: "Creare documentazione operativa su GCP Networking coprendo VPC, subnet,\
+  \ Cloud NAT\ne load balancing — gli elementi fondamentali per qualsiasi workload\
+  \ GCP. Struttura:\n\n## VPC su GCP — Differenze da AWS/Azure\n- VPC globale (non\
+  \ regionale come AWS): le subnet sono regionali ma il VPC no\n- Shared VPC: centralizzare\
+  \ rete tra progetti (equivalente AWS RAM / Azure peering)\n- VPC Peering vs Shared\
+  \ VPC: quando usare quale\n- Custom mode vs Auto mode: sempre custom mode in produzione\n\
+  - Comandi: `gcloud compute networks create`, `gcloud compute networks subnets create`\n\
+  \n## Private Google Access e Cloud NAT\n- Private Google Access: accesso a API Google\
+  \ senza IP pubblico\n- Cloud NAT: outbound internet per VM senza IP pubblico\n \
+  \ - Setup: `gcloud compute routers create` + `gcloud compute routers nats create`\n\
+  \  - Log NAT per troubleshooting\n- PSC (Private Service Connect): accesso privato\
+  \ a servizi GCP managed\n\n## Firewall Rules\n- GCP firewall è distribuito (applicato\
+  \ a ogni VM, non al perimetro)\n- Priority, direction, target (service account vs\
+  \ tag)\n- Best practice: prefer SA-based firewall rules vs tag-based\n- Firewall\
+  \ Policy vs Firewall Rules: differenze e quando usare\n- `gcloud compute firewall-rules\
+  \ list --filter=\"network=my-vpc\"`\n\n## Load Balancing su GCP — Tassonomia\n-\
+  \ Application LB (HTTP/S) — Global vs Regional\n- Network LB (TCP/UDP) — Pass-through\n\
+  - Internal Application LB — per traffico interno GKE/servizi\n- NEG (Network Endpoint\
+  \ Group): integrazione con GKE, Cloud Run\n- Backend Service, Health Check, URL\
+  \ Map: struttura logica ALB\n- Snippet YAML per Ingress GKE con GCE Ingress class\n\
+  \n## Troubleshooting\n- VPC Flow Logs: abilitazione e analisi\n- Connectivity Tests:\
+  \ `gcloud network-connectivity tests create`\n- Firewall Insights per regole non\
+  \ usate\n"
+effort: medium
+id: prop-010
+last_analyzed: 2026-03-30
+priority: high
+rationale: 'AWS ha `cloud/aws/networking/vpc.md` + vpc-avanzato.md + route53.md +
+  cloudfront.md.
+
+  Azure ha `cloud/azure/networking/vnet.md` + load-balancing.md + dns-cdn.md + connettivita.md.
+
+  GCP non ha ancora nessun file di networking. La VPC GCP ha differenze architetturali
+
+  significative rispetto ad AWS (VPC globale, firewall distribuito, NEG per GKE)
+
+  che non sono intuibili da chi arriva da AWS — serve una guida che evidenzi
+
+  le differenze e dia i comandi operativi.
+
+  '
+status: approved
+tags:
+- gcp
+- networking
+- vpc
+- cloud-nat
+- load-balancing
+- firewall
+- gke
+target_file: docs/cloud/gcp/networking/vpc.md
+title: GCP Networking — VPC, Cloud NAT, Load Balancing
+type: new-file
+utility_test:
+  outcome: Capisce la differenza tra VPC globale GCP vs regionale AWS, configura Cloud
+    NAT correttamente, e integra il GKE Ingress con NEG per il load balancer
+  reader: DevOps engineer che conosce AWS VPC e deve configurare GCP per un cluster
+    GKE
+  scenario: Deve creare una VPC custom con subnet private, Cloud NAT per le VM, e
+    un Internal Application LB davanti ai pod GKE — senza IP pubblici sui nodi
+  score: high
+  without_kb: Dovrebbe leggere la GCP networking overview, la guida Cloud NAT, la
+    documentazione NEG, e la sezione GKE Ingress separatamente, senza una vista unificata
+    delle interdipendenze
