@@ -113,40 +113,66 @@
       return { text: c.text, href: c.href, subs: findDirectChildren(c.href) };
     });
 
-    // Always use mega-menu layout for consistency across all categories.
-    // Items with sub-children show a header + grid; leaf items show header only.
-    // This guarantees identical chrome regardless of how deep the content tree is.
     var drop = document.createElement('div');
     drop.className = 'kbdrop kbdrop--mega';
     drop.setAttribute('data-kb-drop', '');
 
-    sections.forEach(function (s) {
+    // Un child con sotto-pagine → header di sezione + grid.
+    // Un child SENZA sotto-pagine (pagina singola completa, es. "Data Layer",
+    // "Testing", "Pipeline") → NON un header vuoto, ma un link in una grid
+    // compatta raggruppata a fondo menu.
+    var withSubs = sections.filter(function (s) { return s.subs.length; });
+    var leaves   = sections.filter(function (s) { return !s.subs.length; });
+
+    withSubs.forEach(function (s) {
       var section = document.createElement('div');
       section.className = 'kbdrop__section';
 
-      // Section header — links to the section index page
       var header        = document.createElement('a');
       header.className  = 'kbdrop__section-header';
       header.href       = s.href;
       header.textContent = s.text;
       section.appendChild(header);
 
-      if (s.subs.length) {
-        var grid = document.createElement('ul');
-        grid.className = 'kbdrop__section-items';
-        s.subs.forEach(function (sub) {
-          var li = document.createElement('li');
-          var a  = document.createElement('a');
-          a.href        = sub.href;
-          a.textContent = sub.text;
-          li.appendChild(a);
-          grid.appendChild(li);
-        });
-        section.appendChild(grid);
-      }
-
+      var grid = document.createElement('ul');
+      grid.className = 'kbdrop__section-items';
+      s.subs.forEach(function (sub) {
+        var li = document.createElement('li');
+        var a  = document.createElement('a');
+        a.href        = sub.href;
+        a.textContent = sub.text;
+        li.appendChild(a);
+        grid.appendChild(li);
+      });
+      section.appendChild(grid);
       drop.appendChild(section);
     });
+
+    if (leaves.length) {
+      var lsection = document.createElement('div');
+      lsection.className = 'kbdrop__section kbdrop__section--leaves';
+
+      // Etichetta discreta solo se ci sono anche sezioni vere, per separarle.
+      if (withSubs.length) {
+        var lhead = document.createElement('span');
+        lhead.className = 'kbdrop__section-header kbdrop__section-header--plain';
+        lhead.textContent = 'Pagine';
+        lsection.appendChild(lhead);
+      }
+
+      var lgrid = document.createElement('ul');
+      lgrid.className = 'kbdrop__section-items';
+      leaves.forEach(function (l) {
+        var li = document.createElement('li');
+        var a  = document.createElement('a');
+        a.href        = l.href;
+        a.textContent = l.text;
+        li.appendChild(a);
+        lgrid.appendChild(li);
+      });
+      lsection.appendChild(lgrid);
+      drop.appendChild(lsection);
+    }
 
     return drop;
   }

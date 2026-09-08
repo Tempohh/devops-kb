@@ -105,11 +105,31 @@ html {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Nav: categories pushed to the right of the tab bar
+   Nav tab bar — usa tutta la larghezza da sinistra e non taglia le ultime
+   voci. Prima `margin-left: auto` spingeva tutte le categorie nella metà
+   destra: con label lunghe sforavano il bordo e la barra non scrollava.
    ────────────────────────────────────────────────────────────────────────── */
 
 .md-tabs__item--category-start {
-  margin-left: auto;
+  margin-left: 0.6rem;   /* piccola separazione visiva da Home/Tags */
+}
+
+/* Rete di sicurezza: se le tab eccedono comunque la larghezza (desktop
+   stretto sopra il breakpoint dei tab, o label lunghe), la barra scorre in
+   orizzontale invece di nascondere le ultime voci. Altezza invariata. */
+.md-tabs__list {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.md-tabs__item {
+  flex-shrink: 0;   /* le tab non si comprimono: causano scroll, non ellissi */
+}
+.md-tabs__list::-webkit-scrollbar {
+  height: 3px;
+}
+.md-tabs__list::-webkit-scrollbar-thumb {
+  background: var(--md-default-fg-color--lighter);
+  border-radius: 3px;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -217,6 +237,21 @@ html {
 
 .kbdrop__section-header:hover {
   opacity: 0.75;
+}
+
+/* Etichetta "Pagine" sopra il gruppo di pagine singole — non è un link */
+.kbdrop__section-header--plain {
+  cursor: default;
+}
+.kbdrop__section-header--plain:hover {
+  opacity: 1;
+}
+
+/* Gruppo delle pagine singole (child senza sotto-pagine): grid di link
+   compatta, senza il trattamento "header di sezione vuoto". */
+.kbdrop__section--leaves .kbdrop__section-items li a {
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 /* Sub-items grid — fills available width, columns at least 150px */
