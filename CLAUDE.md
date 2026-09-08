@@ -263,10 +263,18 @@ subito una modifica grande — usa `needs-review`.
 La KB si mantiene anche da sola. Documento autoritativo: **`_automation/AUTOMATION.md`**.
 Sintesi:
 
-- **Esecuzione**: GitHub Actions schedulato (`.github/workflows/kb-maintenance.yml`,
-  cron 6h) esegue una iterazione bounded via `_automation/run_once.py`; in locale
+- **Esecuzione**: GitHub Actions (`.github/workflows/kb-maintenance.yml`) esegue una
+  iterazione bounded via `_automation/run_once.py` **alle 00/06/12/18 ora di Roma**
+  tutto l'anno (due righe cron UTC estate/inverno + gate orario nello step *Gate*;
+  un run che GitHub ritarda oltre l'ora piena viene saltato). In locale
   `KB_Aggiorna_Sicuro.bat` fa lo stesso per 1 task. Il deploy del sito
   (`deploy.yml` → `mkdocs gh-deploy`) parte su push a `master`.
+- **Pausa** (interruttore, solo owner del repo): Actions variable
+  `KB_MAINTENANCE_ENABLED`. `false`/`0`/`off`/`no` → lo step *Gate* esce
+  `enabled=false` e cron + *Run workflow* fanno no-op pulito; assente o altro valore
+  → attiva (default). `gh variable set KB_MAINTENANCE_ENABLED --body false|true`.
+  Input dispatch `force: true` = un giro ignorando la pausa. `run_once.py` onora lo
+  stesso nome come env var (pausa locale). Dettagli in `_automation/AUTOMATION.md` §2.
 - **Coda**: `_automation/state.yaml` (gestita SOLO da `manage-state.py` — un agente
   di contenuto non la tocca mai). Priorità P0>P1>P2>P3; `interrupted_task` per il
   recovery.
@@ -310,6 +318,10 @@ scrivere `_automation/state.yaml`**; fermati dopo un task.
 - **2026-09-08**: Aggiunta sezione "Layer di automazione"; ciclo di vita `status`
   esplicito con `reviewed`/`last_verified`; gerarchia aggiornata a 11 categorie;
   registro criticità #3. → applicata
+- **2026-09-08**: Schedule `kb-maintenance` ancorato a 00/06/12/18 ora di Roma
+  (cron UTC estate/inverno + gate); interruttore di pausa owner-only
+  `KB_MAINTENANCE_ENABLED` (Actions variable + env var per `run_once.py`);
+  collaboratore `danipalu03` rimosso (owner unico controllo). → applicata
 
 ---
 
@@ -330,6 +342,11 @@ mkdocs gh-deploy --force
 python _automation/run_once.py --max-tasks 1
 python _automation/manage-state.py stats
 python _automation/manage-state.py stats-doc write   # rigenera la tabella in docs/index.md
+
+# Automazione CI — pausa / ripresa (solo owner del repo):
+gh variable set KB_MAINTENANCE_ENABLED --body false   # STOP  (effetto dal tick successivo)
+gh variable set KB_MAINTENANCE_ENABLED --body true    # RIPRENDI
+gh workflow disable "KB maintenance"   # hard-kill alternativo (ferma anche il dispatch)
 ```
 
 ---
