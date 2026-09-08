@@ -9,7 +9,7 @@ protocolli *di contenuto*; questo file descrive *come la KB si mantiene da sola*
 
 | Modo | Come si avvia | Quando usarlo |
 |---|---|---|
-| **CI schedulata** (raccomandato) | `.github/workflows/kb-maintenance.yml` — cron ogni 6h + *Run workflow* | Manutenzione continua "a PC spento". Nessuna dipendenza dalla macchina locale. |
+| **CI schedulata** (raccomandato) | `.github/workflows/kb-maintenance.yml` — ogni 6h, ancorata a **00/06/12/18 ora di Roma** (due righe cron UTC estate/inverno + gate orario) + *Run workflow* | Manutenzione continua "a PC spento". Nessuna dipendenza dalla macchina locale. |
 | **Locale — 1 task** | doppio click su `KB_Aggiorna_Sicuro.bat` (→ `kb-safe.ps1` → `run_once.py --max-tasks 1`) | Eseguire un singolo task al volo su Windows, con la stessa logica della CI. |
 | **Locale — loop infinito** | `KB_Aggiorna_Infinito.bat` (→ `kb-infinite.ps1`) | Sessioni intensive locali. **Non** applica la policy modello di `config.yaml`. Legacy. |
 

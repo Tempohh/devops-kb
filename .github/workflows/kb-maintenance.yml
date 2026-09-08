@@ -8,7 +8,13 @@ name: KB maintenance
 
 on:
   schedule:
-    - cron: "0 */6 * * *"   # ogni 6 ore
+    # Obiettivo: esecuzione alle 00:00 / 06:00 / 12:00 / 18:00 ORA DI ROMA,
+    # stabile tutto l'anno. Il cron di GitHub Actions e' SEMPRE in UTC e non
+    # conosce l'ora legale, quindi servono due righe (offset estivo e invernale);
+    # lo step "Gate" piu' sotto tiene solo lo slot che, convertito in ora di
+    # Roma, cade davvero su 00/06/12/18 e scarta l'altro.
+    - cron: "0 22,4,10,16 * * *"   # = 00/06/12/18 Europe/Rome con ora legale (CEST, UTC+2)
+    - cron: "0 23,5,11,17 * * *"   # = 00/06/12/18 Europe/Rome in ora solare (CET, UTC+1)
   workflow_dispatch:
     inputs:
       max_tasks:
@@ -28,14 +34,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Check maintenance token
+      - name: Gate — secret + finestra oraria (00/06/12/18 Europe/Rome)
         id: gate
         run: |
-          if [ -n "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}" ]; then
+          # --- Finestra oraria ---------------------------------------------
+          # Ci sono due righe cron (offset estate/inverno): qui si tiene solo
+          # lo slot che, convertito in ora di Roma, cade su 00/06/12/18.
+          # L'altro slot (ora sbagliata) viene scartato. Il trigger manuale
+          # (workflow_dispatch) passa sempre, a qualunque ora.
+          ROME_HOUR=$(TZ="Europe/Rome" date +%-H)
+          IN_WINDOW=false
+          case "${{ github.event_name }}" in
+            workflow_dispatch) IN_WINDOW=true ;;
+            *) case "$ROME_HOUR" in 0|00|6|06|12|18) IN_WINDOW=true ;; esac ;;
+          esac
+          if [ "$IN_WINDOW" != "true" ]; then
+            echo "::notice title=KB maintenance::Slot cron a ora di Roma ${ROME_HOUR}:00 - fuori da 00/06/12/18, run saltato."
+          fi
+
+          # --- Secret -----------------------------------------------------
+          HAS_TOKEN=true
+          if [ -z "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}" ]; then
+            HAS_TOKEN=false
+            echo "::notice title=KB maintenance::CLAUDE_CODE_OAUTH_TOKEN non configurato - run saltato. Aggiungilo in Settings > Secrets per attivare l'automazione."
+          fi
+
+          if [ "$IN_WINDOW" = "true" ] && [ "$HAS_TOKEN" = "true" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=KB maintenance::CLAUDE_CODE_OAUTH_TOKEN non configurato - run saltato. Aggiungilo in Settings > Secrets per attivare l'automazione."
           fi
 
       - uses: actions/checkout@v4
