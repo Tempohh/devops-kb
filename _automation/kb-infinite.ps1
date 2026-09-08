@@ -1,6 +1,12 @@
 ﻿# KB Update - Modalita' Infinita
 # Loop continuo. Su rate limit attende il ripristino.
 # Ctrl+C per interrompere (stato sempre salvato su disco).
+#
+# NOTA: da questa revisione la modalita' raccomandata e' la pipeline GitHub Actions
+# (.github/workflows/kb-maintenance.yml), che gira "a PC spento" ed esegue una
+# iterazione bounded via _automation/run_once.py. Questo script resta valido per
+# l'uso locale intensivo su Windows ma NON applica la policy modello di config.yaml.
+# Vedi _automation/AUTOMATION.md.
 
 $Host.UI.RawUI.WindowTitle = "KB Update - Infinito"
 

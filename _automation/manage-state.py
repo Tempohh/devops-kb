@@ -1007,6 +1007,197 @@ def cmd_maintain():
     print(json.dumps(report, ensure_ascii=False))
 
 
+# ── Governance: config, saturazione, review, stats-doc ───────────────────────
+
+CONFIG_FILE = Path(__file__).parent / "config.yaml"
+
+
+def _load_automation_config():
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except Exception:
+        return {}
+
+
+def _read_frontmatter(text: str) -> dict:
+    """Parser minimale del frontmatter YAML in testa a un file .md."""
+    if not text.startswith("---"):
+        return {}
+    end = text.find("\n---", 3)
+    if end < 0:
+        return {}
+    try:
+        return yaml.safe_load(text[3:end]) or {}
+    except Exception:
+        return {}
+
+
+def cmd_resolve_interrupted():
+    """Pulisce un interrupted_task stale (task bloccato da un'interruzione vecchia)."""
+    state = load_state()
+    it = state.get("interrupted_task")
+    if not it:
+        print(json.dumps({"status": "ok", "message": "nessun interrupted_task"}))
+        return
+    tid = it.get("id")
+    changed = False
+    for item in state.get("queue", []):
+        if item.get("id") == tid and item.get("status") in ("pending", "in_progress"):
+            item["status"] = "skipped"
+            item["skip_reason"] = "interrupted_task stale — risolto da resolve-interrupted"
+            changed = True
+            break
+    state["interrupted_task"] = None
+    save_state(state)
+    _write_log(f"[GOV] resolve-interrupted: {tid} (queue aggiornata: {changed})")
+    print(json.dumps({"status": "ok", "resolved": tid, "queue_updated": changed}, ensure_ascii=False))
+
+
+def cmd_saturation_gate():
+    """
+    Stato di saturazione della KB: numero file vs target configurato.
+    Il proposal-prompt lo consulta prima di generare proposte di espansione.
+    """
+    cfg    = _load_automation_config()
+    sat    = cfg.get("saturation") or {}
+    target = int(sat.get("target_file_count", 330))
+    files  = find_kb_content_files()
+    n      = len(files)
+    print(json.dumps({
+        "file_count": n,
+        "target": target,
+        "over_target": n >= target,
+        "headroom": target - n,
+        "category_saturated_pct": sat.get("category_saturated_pct", 85),
+        "allow_zero_proposals": bool(sat.get("allow_zero_proposals", True)),
+        "guidance": (
+            "Oltre il target: proponi SOLO new-file con score=high e gap esplicito. "
+            "Preferisci proposte currency/consolidate/review."
+            if n >= target else
+            "Sotto il target: proposte di espansione ammesse se superano il test di utilita'."
+        ),
+    }, ensure_ascii=False))
+
+
+def cmd_review_candidates(n):
+    """Elenca gli n file di contenuto verificati meno di recente (last_verified, poi last_updated)."""
+    n = int(n)
+    scored = []
+    for rel in find_kb_content_files():
+        p = Path(__file__).parent.parent / rel
+        try:
+            fm = _read_frontmatter(p.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            fm = {}
+        lv = str(fm.get("last_verified") or "0000-00-00")
+        lu = str(fm.get("last_updated") or "0000-00-00")
+        scored.append((lv, lu, rel))
+    scored.sort()
+    print(json.dumps({"candidates": [r for _, _, r in scored[:n]]}, ensure_ascii=False))
+
+
+def cmd_inject_review_tasks(n):
+    """Crea fino a n task 'review' (P3) per i file verificati meno di recente."""
+    n = int(n)
+    state = load_state()
+    queued = {i.get("path") for i in state.get("queue", [])}
+    max_id = 0
+    for item in state.get("queue", []):
+        digits = "".join(c for c in str(item.get("id", "0")) if c.isdigit())
+        if digits:
+            max_id = max(max_id, int(digits))
+
+    scored = []
+    for rel in find_kb_content_files():
+        if rel in queued:
+            continue
+        p = Path(__file__).parent.parent / rel
+        try:
+            fm = _read_frontmatter(p.read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            fm = {}
+        lv = str(fm.get("last_verified") or "0000-00-00")
+        scored.append((lv, rel))
+    scored.sort()
+
+    created = []
+    for _, rel in scored[:n]:
+        max_id += 1
+        state["queue"].append({
+            "id": str(max_id), "type": "review", "path": rel,
+            "category": rel.split("/")[1] if len(rel.split("/")) > 1 else "unknown",
+            "priority": "P3", "status": "pending",
+            "reason": "Passaggio di review: correttezza, attualita', valore. Aggiorna last_verified.",
+        })
+        created.append(rel)
+    state["total_ops"] = state.get("total_ops", 0) + len(created)
+    save_state(state)
+    _write_log(f"[GOV] inject-review-tasks: {len(created)} task")
+    print(json.dumps({"status": "ok", "created": created}, ensure_ascii=False))
+
+
+def cmd_stats_doc(write_mode=False):
+    """
+    Genera la tabella 'Stato del Progetto' per docs/index.md.
+    Con 'write' sostituisce il blocco tra <!-- STATS:BEGIN --> e <!-- STATS:END -->.
+    """
+    root = Path(__file__).parent.parent
+    cats = {}
+    total_files = total_lines = 0
+    latest = "0000-00-00"
+    for rel in find_kb_content_files():
+        parts = rel.split("/")
+        if len(parts) < 3:      # file top-level (docs/index.md, docs/tags.md) — non e' una categoria
+            continue
+        top = parts[1]
+        p = root / rel
+        try:
+            txt = p.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        lines = txt.count("\n") + 1
+        c = cats.setdefault(top, {"files": 0, "lines": 0})
+        c["files"] += 1
+        c["lines"] += lines
+        total_files += 1
+        total_lines += lines
+        fm = _read_frontmatter(txt)
+        lu = str(fm.get("last_updated") or "")
+        if len(lu) == 10 and lu > latest:
+            latest = lu
+
+    rows = "\n".join(
+        f"| {k} | {v['files']} | {v['lines']:,} |".replace(",", ".")
+        for k, v in sorted(cats.items(), key=lambda x: -x[1]["files"])
+    )
+    today = datetime.now(timezone.utc).date().isoformat()
+    block = (
+        "<!-- STATS:BEGIN — generato da `python _automation/manage-state.py stats-doc write` -->\n"
+        f"| Categoria | File di contenuto | Righe |\n"
+        f"|-----------|-------------------|-------|\n"
+        f"{rows}\n"
+        f"| **Totale** | **{total_files}** | **{total_lines:,}** |".replace(",", ".") + "\n\n"
+        f"*Ultimo argomento aggiornato: {latest} · snapshot rigenerato: {today}*\n"
+        "<!-- STATS:END -->"
+    )
+
+    if not write_mode:
+        print(block)
+        return
+
+    idx = root / "docs" / "index.md"
+    txt = idx.read_text(encoding="utf-8")
+    m = re.search(r"<!-- STATS:BEGIN.*?<!-- STATS:END -->", txt, re.DOTALL)
+    if not m:
+        print(json.dumps({"status": "error",
+                          "message": "marker STATS:BEGIN/END assenti in docs/index.md"}))
+        return
+    idx.write_text(txt[:m.start()] + block + txt[m.end():], encoding="utf-8")
+    _write_log("[GOV] stats-doc: docs/index.md aggiornato")
+    print(json.dumps({"status": "ok", "files": total_files, "lines": total_lines}, ensure_ascii=False))
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -1052,6 +1243,16 @@ if __name__ == "__main__":
         cmd_inject_proposal_task()
     elif cmd == "auto-approve-proposals":
         cmd_auto_approve_proposals()
+    elif cmd == "resolve-interrupted":
+        cmd_resolve_interrupted()
+    elif cmd == "saturation-gate":
+        cmd_saturation_gate()
+    elif cmd == "review-candidates":
+        cmd_review_candidates(sys.argv[2] if len(sys.argv) >= 3 else 3)
+    elif cmd == "inject-review-tasks":
+        cmd_inject_review_tasks(sys.argv[2] if len(sys.argv) >= 3 else 3)
+    elif cmd == "stats-doc":
+        cmd_stats_doc(write_mode=(len(sys.argv) >= 3 and sys.argv[2] == "write"))
     else:
         print(f"Comando sconosciuto: {cmd}", file=sys.stderr)
         sys.exit(1)

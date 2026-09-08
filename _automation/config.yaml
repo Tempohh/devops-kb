@@ -1,0 +1,46 @@
+# Configurazione del sistema di automazione KB.
+# Letta da run_once.py (CI + locale) e dagli script .ps1.
+
+version: 1
+
+# ---------------------------------------------------------------------------
+# Policy modello / livello di ragionamento per tipo di task.
+#   model  -> passato come `--model` a `claude -p`
+#   effort -> intento documentato. Claude Code CLI non espone `--effort` in tutte
+#             le versioni: se pass_effort_flag=true run_once.py prova a passarlo,
+#             altrimenti resta solo come riferimento.
+# ---------------------------------------------------------------------------
+pass_effort_flag: false
+
+models:
+  new_topic:   { model: claude-sonnet-5,  effort: high }    # file lungo e strutturato, ma templato
+  expand:      { model: claude-sonnet-5,  effort: medium }  # additivo, limitato
+  audit:       { model: claude-haiku-4-5, effort: low }     # riempi sezione mancante, keyword
+  currency:    { model: claude-sonnet-5,  effort: high }    # ricontrollo vs fonti upstream
+  consolidate: { model: claude-sonnet-5,  effort: high }    # fusione file + chirurgia link
+  review:      { model: claude-opus-5,    effort: high }    # giudizio correttezza/attualita'/valore
+  proposal:    { model: claude-opus-5,    effort: high }    # ragionamento sull'intera KB
+  default:     { model: claude-sonnet-5,  effort: medium }
+
+# ---------------------------------------------------------------------------
+# Freno di saturazione — impedisce la crescita indefinita del numero di argomenti.
+# ---------------------------------------------------------------------------
+saturation:
+  target_file_count: 330       # oltre: solo proposte score=high con gap esplicito nel report
+  category_saturated_pct: 85   # categoria >= questa % coverage: niente proposte di espansione
+  allow_zero_proposals: true   # proposal-prompt puo' restituire lista vuota con motivazione
+
+# ---------------------------------------------------------------------------
+# Cadenze (giorni) e dimensioni campione.
+# ---------------------------------------------------------------------------
+cadence:
+  analysis_interval_days: 7
+  currency_interval_days: 30
+  review_sample_size: 3
+
+# ---------------------------------------------------------------------------
+# Comportamento del loop headless (run_once.py).
+# ---------------------------------------------------------------------------
+loop:
+  auto_approve_proposals: true   # in CI non c'e' un umano: le proposte pendenti vengono approvate
+  rate_limit_is_soft: true       # su rate limit esce 0 (il prossimo cron ritenta), task resta pending
