@@ -39,19 +39,36 @@ Stato: `[ ]` da fare · `[~]` in corso · `[x]` fatto
 - [x] E2 sfoltisci `.claude/settings.local.json`
 
 ## Fase F — Test
-- [ ] F1 `mkdocs build --strict` pulito
-- [ ] F2 `py_compile` su `_automation/*.py`
-- [ ] F3 YAML valido su workflow + config
-- [ ] F4 scansione broken-link
+- [x] F1 `mkdocs build --strict` pulito
+- [x] F2 `py_compile` su `_automation/*.py`
+- [x] F3 YAML valido su workflow + config
+- [x] F4 scansione broken-link
 
 ## Fase G — Deploy + verifica
-- [ ] G1 push unico
-- [ ] G2 `gh workflow run deploy.yml`
-- [ ] G3 `gh run watch`
-- [ ] G4 WebFetch homepage + pagine profonde
-- [ ] G5 diagnosi/fix se necessario
+- [x] G1 push unico
+- [x] G2 `gh workflow run deploy.yml`
+- [x] G3 `gh run watch`
+- [x] G4 WebFetch homepage + pagine profonde
+- [x] G5 diagnosi/fix se necessario
 
 ## Fase H — Analisi finale + memoria
-- [ ] H1 riepilogo
-- [ ] H2 memorie
-- [ ] H3 checklist Chrome per l'utente
+- [x] H1 riepilogo
+- [x] H2 memorie
+- [x] H3 checklist Chrome per l'utente
+
+
+---
+
+## Esito (2026-09-08)
+
+Commit `331844b`..`187d133` su `master`, pushati. 5 commit.
+
+- `deploy.yml`: run #34220794169 **success** (1m3s) → gh-pages → Pages `built`.
+- `pages-build-deployment`: **success**. Live: https://tempohh.github.io/devops-kb/ → 200.
+- `kb-maintenance.yml`: dispatch #34221099582 **success** — clean-skip (secret assente), notice informativo.
+- Verifica contenuto (WebFetch): `/ai/modelli/claude/` mostra famiglia Claude 5 + adaptive thinking + pricing corretti; homepage stats generate (295 file / 171.851 righe / 11 cat); `/tags/` rende l'indice (no `[TAGS]`).
+
+### Da fare (utente)
+1. Repo Settings → Secrets → Actions → `CLAUDE_CODE_OAUTH_TOKEN` (da `claude setup-token`) per attivare la manutenzione schedulata.
+2. Verifica visiva Chrome (checklist in chat).
+3. D3 `modelli-open-source.md`: non editato a mano, è fra i 12 task `currency` in coda.
