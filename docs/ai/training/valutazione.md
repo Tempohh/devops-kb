@@ -7,9 +7,10 @@ search_keywords: [valutazione LLM, benchmark AI, MMLU, HumanEval, MATH, GPQA, MT
 parent: ai/training/_index
 related: [ai/training/_index, ai/training/fine-tuning, ai/modelli/scelta-modello, ai/sviluppo/rag, ai/mlops/pipeline-ml]
 official_docs: https://docs.ragas.io/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-09-08
+last_verified: 2026-09-08
 ---
 
 # Valutazione LLM — Benchmark e Evals
@@ -111,11 +112,16 @@ Valutazione: i test di regressione devono passare
 Size: 2294 task (SWE-bench), 500 (SWE-bench Verified)
 Metrica: % di task risolti
 
-Risultati 2024-2025:
+Risultati storici (2024-2025, alla release dei modelli citati):
 - Claude 3.5 Sonnet: ~49% (SWE-bench Verified)
 - GPT-4o: ~38%
 - Llama 3.1 70B: ~12%
 ```
+
+!!! note "Punteggi in rapida evoluzione"
+    I punteggi SWE-bench Verified dei modelli frontier sono saliti molto rispetto al 2024-2025
+    (i modelli più recenti superano ampiamente questi valori). Non affidarti a numeri statici:
+    consulta il [leaderboard live](https://www.swebench.com/) per i valori aggiornati.
 
 ### MATH — Competition Mathematics
 
@@ -131,6 +137,11 @@ Punteggi indicativi (2024):
 - Llama 3.1 70B: ~68%
 ```
 
+!!! note "MATH ormai saturo"
+    Dal 2024 i modelli frontier superano stabilmente il 90% su MATH, rendendolo poco utile come
+    differenziatore. Benchmark più recenti e difficili come **FrontierMath** (Epoch AI) hanno
+    preso il suo posto per misurare il ragionamento matematico avanzato.
+
 ### GPQA — Graduate-Level Science Q&A
 
 ```
@@ -145,6 +156,11 @@ Punteggi indicativi (2024):
 - Humani esperti: ~65%
 ```
 
+!!! note "Punteggi in rapida evoluzione"
+    Anche su GPQA Diamond i modelli frontier più recenti hanno superato ampiamente questi valori
+    del 2024, avvicinandosi al tetto del benchmark. Verifica i punteggi correnti sui leaderboard
+    pubblici invece di affidarti a numeri statici.
+
 ### MT-Bench — Multi-Turn Conversation Quality
 
 ```
@@ -158,6 +174,12 @@ Prompt example (turno 1):
 Prompt example (turno 2 — deve ricordare il turno 1):
 "Now describe the image you just wrote about as if you were explaining it to someone who has never heard of kawaii."
 ```
+
+!!! note "MT-Bench ormai saturo ai vertici"
+    Sui modelli frontier MT-Bench è ormai saturo (i punteggi si concentrano vicino al massimo)
+    ed è usato più come sanity-check per modelli piccoli/open-weight che per confrontare i top
+    model. **Arena-Hard Auto** e la **LMSYS Chatbot Arena** sono oggi i riferimenti più usati per
+    la valutazione multi-turn/di preferenza sui modelli frontier.
 
 ### Tabella Benchmark — Overview
 
@@ -327,7 +349,7 @@ def run_eval_suite(eval_cases: list[EvalCase], models: list[str]) -> dict:
 # Utilizzo
 results = run_eval_suite(
     eval_cases,
-    models=["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"]
+    models=["claude-sonnet-5", "claude-haiku-4-5"]
 )
 print(json.dumps(results, indent=2))
 ```
@@ -398,7 +420,7 @@ Assegna da 1 a 5 basandoti sul numero di criteri soddisfatti.
 
 # Esempio
 judgment = llm_judge_eval(
-    judge_model="claude-3-5-sonnet-20241022",  # modello giudice
+    judge_model="claude-sonnet-5",  # modello giudice
     question="Come si configura un Horizontal Pod Autoscaler in Kubernetes?",
     response_to_evaluate=model_response,
     rubric=DEVOPS_RUBRIC
@@ -419,13 +441,22 @@ print(f"Score: {judgment['score']}/5 — Verdict: {judgment['verdict']}")
 
 RAGAS (RAG Assessment) è un framework per valutare sistemi RAG su 4 metriche.
 
+!!! note "Migrazione RAGAS v0.4"
+    Dalla v0.4 RAGAS ha deprecato gli import in stile funzione da `ragas.metrics`
+    (`faithfulness`, `answer_relevancy`, ...) a favore delle classi in
+    `ragas.metrics.collections` (`Faithfulness`, `AnswerRelevancy`, ...). `ragas.llms.LangchainLLMWrapper`
+    è a sua volta deprecato in favore di `ragas.llms.llm_factory(...)`, che resta comunque
+    compatibile con l'integrazione LangChain mostrata sotto. Consulta la
+    [guida di migrazione ufficiale](https://docs.ragas.io/en/stable/howtos/migrations/migrate_from_v03_to_v04/)
+    prima di aggiornare codice esistente.
+
 ```python
-from ragas import evaluate
-from ragas.metrics import (
-    faithfulness,      # La risposta è supportata dai documenti recuperati?
-    answer_relevancy,  # La risposta è pertinente alla domanda?
-    context_precision, # Il contesto recuperato è preciso (poca ridondanza)?
-    context_recall,    # Il contesto recuperato contiene tutte le info necessarie?
+from ragas import evaluate  # deprecato dalla v0.4 ma ancora funzionante
+from ragas.metrics.collections import (
+    Faithfulness,      # La risposta è supportata dai documenti recuperati?
+    AnswerRelevancy,   # La risposta è pertinente alla domanda?
+    ContextPrecision,  # Il contesto recuperato è preciso (poca ridondanza)?
+    ContextRecall,     # Il contesto recuperato contiene tutte le info necessarie?
 )
 from datasets import Dataset
 
@@ -452,7 +483,7 @@ ragas_data = {
 dataset = Dataset.from_dict(ragas_data)
 result = evaluate(
     dataset,
-    metrics=[faithfulness, answer_relevancy, context_precision, context_recall]
+    metrics=[Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall]
 )
 
 print(result)
@@ -567,8 +598,8 @@ npm install -g promptfoo
 # promptfooconfig.yaml
 cat > promptfooconfig.yaml << 'EOF'
 providers:
-  - anthropic:claude-3-5-sonnet-20241022
-  - anthropic:claude-3-5-haiku-20241022
+  - anthropic:messages:claude-sonnet-5
+  - anthropic:messages:claude-haiku-4-5
 
 prompts:
   - id: devops-reviewer
@@ -611,16 +642,20 @@ promptfoo view  # apre UI comparativa nel browser
 
 **Sintomo:** La pipeline LLM eval fallisce con regressione > threshold anche senza modifiche ai prompt.
 
-**Causa:** Il modello API può avere variazioni di comportamento tra versioni minori (es. `claude-3-5-sonnet-20241022` vs un aggiornamento silenzioso), oppure c'è non-determinismo con `temperature > 0`.
+**Causa:** Il modello API può avere variazioni di comportamento tra versioni (es. un alias short-form come `claude-sonnet-5`, che punta sempre all'ultima versione del modello, rispetto a uno snapshot pinnato con data), oppure c'è non-determinismo residuo anche a `temperature` di default.
 
-**Soluzione:** Fissa `temperature=0` per eval deterministici e aggiungi il checksum della versione modello al report.
+**Soluzione:** Traccia sempre la versione modello effettiva nel report (campo `response.model`), così una regressione dopo un aggiornamento silenzioso dell'alias è distinguibile da una regressione nel prompt.
+
+!!! warning "`temperature`/`top_p`/`top_k` non più regolabili su alcuni modelli"
+    Su Claude Sonnet 5 e sulla famiglia Opus 4.7/4.8 i parametri di sampling non-default
+    (`temperature`, `top_p`, `top_k`) restituiscono un errore 400 — non sono più un modo per
+    ottenere determinismo. Se serve determinismo, usa un modello che ancora li supporta o
+    accetta la variabilità e traccia la versione modello nel report.
 
 ```python
-# Forza determinismo negli eval
 response = client.messages.create(
-    model="claude-3-5-sonnet-20241022",
+    model="claude-sonnet-5",
     max_tokens=2048,
-    temperature=0,          # deterministico
     system=eval_case.input.get("system", ""),
     messages=[{"role": "user", "content": eval_case.input["user"]}]
 )
@@ -683,18 +718,19 @@ result = response.content[0].input  # sempre JSON strutturato
 
 ```python
 from ragas import evaluate
-from ragas.llms import LangchainLLMWrapper
-from langchain_anthropic import ChatAnthropic
+from ragas.llms import llm_factory  # sostituisce LangchainLLMWrapper dalla v0.4
+from anthropic import AsyncAnthropic
 
 # Usa Claude invece di OpenAI come modello RAGAS
-claude_llm = LangchainLLMWrapper(ChatAnthropic(
-    model="claude-3-5-haiku-20241022",  # modello economico per eval
-    api_key="<ANTHROPIC_API_KEY>"
-))
+claude_llm = llm_factory(
+    "claude-haiku-4-5",  # modello economico per eval
+    provider="anthropic",
+    client=AsyncAnthropic(api_key="<ANTHROPIC_API_KEY>"),
+)
 
 result = evaluate(
     dataset,
-    metrics=[faithfulness, answer_relevancy, context_precision, context_recall],
+    metrics=[Faithfulness, AnswerRelevancy, ContextPrecision, ContextRecall],
     llm=claude_llm
 )
 
