@@ -74,17 +74,15 @@ jobs:
         run: |
           python _automation/run_once.py --max-tasks "${{ github.event.inputs.max_tasks || '1' }}"
 
-      - name: Push content changes
-        if: steps.gate.outputs.enabled == 'true'
-        run: |
-          if ! git diff --quiet HEAD -- ':!site'; then
-            git push origin HEAD:master
-          else
-            echo "Nessuna modifica di contenuto da pubblicare."
-          fi
-
-      - name: Rebuild and deploy site
+      - name: Push and redeploy if run_once.py produced a commit
         if: steps.gate.outputs.enabled == 'true'
         env:
           PYTHONUTF8: "1"
-        run: mkdocs gh-deploy --force --strict
+        run: |
+          git fetch origin master
+          if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)" ]; then
+            echo "run_once.py non ha prodotto commit (coda vuota o rate limit) - niente push/deploy."
+            exit 0
+          fi
+          git push origin HEAD:master
+          mkdocs gh-deploy --force --strict
