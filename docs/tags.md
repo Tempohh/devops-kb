@@ -6,4 +6,4 @@ title: Tags
 
 Tutti gli argomenti organizzati per tag.
 
-[TAGS]
+<!-- material/tags -->

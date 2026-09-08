@@ -1,0 +1,48 @@
+name: Deploy site
+
+# Costruisce il sito MkDocs e lo pubblica sul branch gh-pages
+# (GitHub Pages e' configurato in modalita' "legacy" con source = gh-pages).
+# Nessun secret richiesto: usa il GITHUB_TOKEN automatico.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "requirements.txt"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-pages
+  cancel-in-progress: false
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Build and deploy to gh-pages
+        env:
+          PYTHONUTF8: "1"
+        run: mkdocs gh-deploy --force --strict

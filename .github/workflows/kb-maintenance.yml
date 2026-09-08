@@ -1,0 +1,90 @@
+name: KB maintenance
+
+# Esegue UNA iterazione bounded del loop di manutenzione della KB
+# (equivalente headless di KB_Aggiorna_Sicuro.bat) e ripubblica il sito.
+#
+# Richiede il secret di repo CLAUDE_CODE_OAUTH_TOKEN (da `claude setup-token`).
+# Se il secret non e' configurato il job si salta in modo pulito (nessun errore).
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # ogni 6 ore
+  workflow_dispatch:
+    inputs:
+      max_tasks:
+        description: "Numero massimo di task da processare in questo run"
+        default: "1"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kb-maintenance
+  cancel-in-progress: false
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check maintenance token
+        id: gate
+        run: |
+          if [ -n "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=KB maintenance::CLAUDE_CODE_OAUTH_TOKEN non configurato - run saltato. Aggiungilo in Settings > Secrets per attivare l'automazione."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.enabled == 'true'
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          pip install -r requirements.txt
+          npm install -g @anthropic-ai/claude-code
+
+      - name: Configure git identity
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Run one maintenance iteration
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          PYTHONUTF8: "1"
+        run: |
+          python _automation/run_once.py --max-tasks "${{ github.event.inputs.max_tasks || '1' }}"
+
+      - name: Push content changes
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          if ! git diff --quiet HEAD -- ':!site'; then
+            git push origin HEAD:master
+          else
+            echo "Nessuna modifica di contenuto da pubblicare."
+          fi
+
+      - name: Rebuild and deploy site
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          PYTHONUTF8: "1"
+        run: mkdocs gh-deploy --force --strict
