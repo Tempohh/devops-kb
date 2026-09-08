@@ -1144,7 +1144,7 @@ def cmd_inject_review_tasks(n):
     """Crea fino a n task 'review' (P3) per i file verificati meno di recente."""
     n = int(n)
     state = load_state()
-    queued = {i.get("path") for i in state.get("queue", [])}
+    queued = {i.get("path") for i in state.get("queue", []) if i.get("status") == "pending"}
     max_id = 0
     for item in state.get("queue", []):
         digits = "".join(c for c in str(item.get("id", "0")) if c.isdigit())
@@ -1178,6 +1178,65 @@ def cmd_inject_review_tasks(n):
     save_state(state)
     _write_log(f"[GOV] inject-review-tasks: {len(created)} task")
     print(json.dumps({"status": "ok", "created": created}, ensure_ascii=False))
+
+
+STALE_MODEL_RE = re.compile(
+    r"claude-sonnet-4-6|claude-opus-4-6|claude-3-5|claude-3\.5|Claude 3\.5|"
+    r"Claude 4\.6|Sonnet 4\.6|Opus 4\.6|claude-3-opus|claude-3-sonnet|"
+    r"GPT-4o|gpt-4o|Gemini 1\.5|computer_20241022|"
+    r"\bbudget_tokens\b|web_search_20250305"
+)
+
+
+def cmd_inject_currency_tasks(limit=20):
+    """
+    Coda task 'currency' (P2) per i file di contenuto che contengono stringhe
+    di modello/API notoriamente datate. Idempotente: salta i path gia' in coda.
+    """
+    limit = int(limit)
+    state = load_state()
+    queued = {i.get("path") for i in state.get("queue", []) if i.get("status") == "pending"}
+    max_id = 0
+    for item in state.get("queue", []):
+        digits = "".join(c for c in str(item.get("id", "0")) if c.isdigit())
+        if digits:
+            max_id = max(max_id, int(digits))
+
+    from datetime import date, timedelta
+    fresh_cutoff = (date.today() - timedelta(days=14)).isoformat()
+
+    hits = []
+    for rel in find_kb_content_files():
+        if rel in queued:
+            continue
+        try:
+            txt = (Path(__file__).parent.parent / rel).read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        fm = _read_frontmatter(txt)
+        if str(fm.get("last_verified") or "") >= fresh_cutoff:
+            continue  # verificato di recente: salta
+        n = len(STALE_MODEL_RE.findall(txt))
+        if n:
+            hits.append((n, rel))
+    hits.sort(reverse=True)
+
+    created = []
+    for n, rel in hits[:limit]:
+        max_id += 1
+        state["queue"].append({
+            "id": str(max_id), "type": "currency", "path": rel,
+            "category": rel.split("/")[1] if len(rel.split("/")) > 1 else "unknown",
+            "priority": "P2", "status": "pending",
+            "reason": f"Currency check: {n} riferimenti modello/API potenzialmente datati.",
+        })
+        created.append(rel)
+    state["total_ops"] = state.get("total_ops", 0) + len(created)
+    save_state(state)
+    _write_log(f"[GOV] inject-currency-tasks: {len(created)} task")
+    print(json.dumps({"status": "ok", "created": created,
+                      "skipped_already_queued": sorted(set(r for _, r in hits) & queued)},
+                     ensure_ascii=False))
 
 
 def cmd_stats_doc(write_mode=False):
@@ -1294,6 +1353,8 @@ if __name__ == "__main__":
         cmd_review_candidates(sys.argv[2] if len(sys.argv) >= 3 else 3)
     elif cmd == "inject-review-tasks":
         cmd_inject_review_tasks(sys.argv[2] if len(sys.argv) >= 3 else 3)
+    elif cmd == "inject-currency-tasks":
+        cmd_inject_currency_tasks(sys.argv[2] if len(sys.argv) >= 3 else 20)
     elif cmd == "stats-doc":
         cmd_stats_doc(write_mode=(len(sys.argv) >= 3 and sys.argv[2] == "write"))
     else:

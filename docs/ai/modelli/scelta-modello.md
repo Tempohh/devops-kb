@@ -7,9 +7,10 @@ search_keywords: [scegliere modello AI, model selection, quale LLM usare, Claude
 parent: ai/modelli/_index
 related: [ai/modelli/_index, ai/modelli/modelli-open-source, ai/sviluppo/prompt-engineering, ai/training/valutazione]
 official_docs: https://artificialanalysis.ai/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-27
+last_updated: 2026-09-08
+last_verified: 2026-09-08
 ---
 
 # Guida alla Scelta del Modello
@@ -55,40 +56,40 @@ Inizio
 │
 ├── I dati sono sensibili/riservati?
 │   ├── SÌ → On-premise obbligatorio
-│   │         → Llama 3.x (70B per qualità, 8B per costo)
+│   │         → Llama 3.x / 4 (taglia grande per qualità, piccola per costo)
 │   │         → Mistral / Mixtral (Apache 2.0)
-│   │         → Qwen 2.5 (per coding/math)
+│   │         → Qwen 2.5 / 3 (per coding/math)
 │   └── NO → Continua
 │
-├── Il task è prevalentemente di coding?
-│   ├── SÌ → Claude 3.5 Sonnet (migliore per SWE-bench)
-│   │         → GPT-4o (alternativa)
-│   │         → Qwen2.5-Coder (open, eccellente per coding)
+├── Il task è prevalentemente di coding / agentic?
+│   ├── SÌ → Claude Opus 5 (o Sonnet 5 per costo), effort xhigh
+│   │         → GPT serie 5 (alternativa)
+│   │         → Qwen-Coder (open, eccellente per coding)
 │   └── NO → Continua
 │
-├── Richiede context molto lungo (>50K token)?
-│   ├── SÌ → Claude 3.5 (200K context)
-│   │         → Gemini 1.5 Pro / 2.0 (1M context)
+├── Richiede context molto lungo (>200K token)?
+│   ├── SÌ → Claude Sonnet 5 / Opus 5 (1M context)
+│   │         → Gemini serie 2.x/3 (1M+ context)
 │   └── NO → Continua
 │
-├── Task richiede reasoning complesso / matematica?
-│   ├── SÌ → DeepSeek R1 / o1 (thinking models)
-│   │         → Claude 3 Opus
+├── Task richiede reasoning complesso / long-horizon?
+│   ├── SÌ → Claude Fable 5, oppure Opus 5 con effort xhigh/max
+│   │         → modelli reasoning: DeepSeek R1, o-series OpenAI
 │   └── NO → Continua
 │
 ├── Latenza molto bassa richiesta (<500ms)?
-│   ├── SÌ → Claude 3.5 Haiku / GPT-4o-mini / Gemini 2.0 Flash
-│   │         → Open: Llama 3.2 3B su GPU locale
+│   ├── SÌ → Claude Haiku 4.5 / varianti mini di GPT / Gemini Flash
+│   │         → Open: modello piccolo (3-8B) su GPU locale
 │   └── NO → Continua
 │
 ├── Volume alto (>1M token/giorno) e budget limitato?
-│   ├── SÌ → Self-hosted open weight (Llama 3.1 8B o 70B)
-│   │         → Claude Haiku / GPT-4o-mini per API managed
+│   ├── SÌ → Claude Sonnet 5 o Haiku 4.5 (managed) + prompt caching + Batch API
+│   │         → Self-hosted open weight (8B-70B)
 │   └── NO → Continua
 │
 └── Task generico, nessun vincolo specifico
-    └── → Claude 3.5 Sonnet (miglior balance qualità/costo)
-        → GPT-4o (alternativa)
+    └── → Claude Sonnet 5 (miglior balance qualità/costo)
+        → Claude Opus 5 se la qualità conta più del costo
 ```
 
 ## Trade-off Matrix
@@ -105,29 +106,29 @@ Inizio
 | **Compliance** | Dipende dalla regione | On-premise → compliance totale |
 | **Aggiornamenti modello** | Automatici (può rompere behavior) | Controllati |
 
-## Pricing dei Principali Modelli API (Febbraio 2026)
+## Pricing dei Principali Modelli API (2026)
 
 !!! warning "Prezzi soggetti a cambiamento"
-    I prezzi cambiano frequentemente. Verificare sempre i prezzi aggiornati sui siti ufficiali.
+    I prezzi cambiano frequentemente. Verificare sempre sui siti ufficiali e su [Artificial Analysis](https://artificialanalysis.ai/).
 
 | Modello | Input ($/M token) | Output ($/M token) | Note |
 |---------|------------------|---------------------|------|
-| Claude 3.5 Sonnet | $3.00 | $15.00 | Cache: $0.30/M |
-| Claude 3.5 Haiku | $0.80 | $4.00 | Cache: $0.08/M |
-| Claude 3 Opus | $15.00 | $75.00 | Task molto complessi |
-| GPT-4o | $2.50 | $10.00 | |
-| GPT-4o-mini | $0.15 | $0.60 | Economicissimo |
-| Gemini 1.5 Pro | $1.25 | $5.00 | 1M context |
-| Gemini 2.0 Flash | $0.10 | $0.40 | Molto veloce |
-| Mistral Large | $2.00 | $6.00 | Alternativa EU |
-| Mistral Nemo | $0.15 | $0.15 | Economico EU |
+| Claude Fable 5 | $10.00 | $50.00 | Reasoning estremo / agentic long-horizon |
+| Claude Opus 5 | $5.00 | $25.00 | Top tier intelligenza/coding; 1M context |
+| Claude Sonnet 5 | $2.00 | $10.00 | Standard di produzione; 1M context |
+| Claude Haiku 4.5 | $1.00 | $5.00 | Veloce / economico; 200K context |
+| GPT serie 5 | varia | varia | Tier standard e varianti mini/nano |
+| Gemini serie 2.x/3 | da ~$0.10 | da ~$0.40 | Flash economico, Pro per qualità; 1M+ |
+| Mistral Large | ~$2.00 | ~$6.00 | Alternativa EU |
+
+Il prompt caching (~90% di sconto sul prefisso ripetuto) e la Batch API (~50%) cambiano il costo effettivo più della scelta del tier.
 
 **Costo self-hosted (stima):**
 
 | Modello | GPU Richiesta | Cloud ($/ora) | Token/s | Costo effettivo/M token |
 |---------|-------------|---------------|---------|------------------------|
-| Llama 3.1 8B Q4 | 1× RTX 4090 (24GB) | ~$0.5 | ~50 | ~$2.7 (con GPU cloud) |
-| Llama 3.1 70B FP16 | 4× A100 80GB | ~$12 | ~20 | ~$83 |
+| Llama ~8B Q4 | 1x RTX 4090 (24GB) | ~$0.5 | ~50 | ~$2.7 (con GPU cloud) |
+| Llama ~70B FP16 | 4x A100 80GB | ~$12 | ~20 | ~$83 |
 | Mixtral 8×7B | 2× A100 40GB | ~$6 | ~30 | ~$55 |
 
 !!! tip "Break-even self-hosted vs API"
@@ -156,7 +157,7 @@ Inizio
 
 **Requisiti:** qualità alta, context fino a ~50K (PR grandi), latenza <30s, no dati sensibili preferito.
 
-**Scelta:** Claude 3.5 Sonnet (migliore qualità su SWE-bench, segue istruzioni precise). Alternativa open: Qwen2.5-Coder 32B.
+**Scelta:** Claude Sonnet 5 (migliore qualità su SWE-bench, segue istruzioni precise). Alternativa open: Qwen-Coder (~30B).
 
 ```python
 # Esempio integrazione GitHub Actions
@@ -172,7 +173,7 @@ Formato: JSON con campi severity (critical/high/medium/low), description, line."
 
 **Requisiti:** alta accuratezza sintattica, conoscenza provider cloud, output JSON/YAML strutturato.
 
-**Scelta:** Claude 3.5 Sonnet o GPT-4o. Per on-premise: Llama 3.1 70B.
+**Scelta:** Claude Sonnet 5 o GPT serie 5. Per on-premise: Llama 3.x/4 (taglia ~70B).
 
 **Tip:** Poche righe di few-shot examples con esempi di output corretto riducono drasticamente gli errori sintattici.
 
@@ -181,9 +182,9 @@ Formato: JSON con campi severity (critical/high/medium/low), description, line."
 **Requisiti:** bassa latenza (idealmente <2s per alert), volume alto, pattern recognition.
 
 **Scelta:**
-- Per classificazione rapida: Claude 3.5 Haiku / GPT-4o-mini (veloce, economico)
-- Per analisi root cause complessa: Claude 3.5 Sonnet
-- Per on-premise ad alto volume: Llama 3.1 8B quantizzato
+- Per classificazione rapida: Claude Haiku 4.5 / una variante mini di GPT (veloce, economico)
+- Per analisi root cause complessa: Claude Sonnet 5
+- Per on-premise ad alto volume: Llama 3.x/4 (taglia ~8B) quantizzato
 
 ```python
 # Pattern: prima classificazione veloce, poi analisi profonda se necessario
@@ -203,21 +204,21 @@ async def analyze_alert(alert_text: str) -> dict:
 
 **Requisiti:** qualità output testuale, seguire template specifico, contesto lungo (log + metriche).
 
-**Scelta:** Claude 3.5 Sonnet (eccellente per testo strutturato, segue template XML). Haiku per bozze, Sonnet per review finale.
+**Scelta:** Claude Sonnet 5 (eccellente per testo strutturato, segue template XML). Haiku per bozze, Sonnet per review finale.
 
 ### Incident Analysis Agent
 
 **Requisiti:** reasoning multi-step, tool use, context lungo, qualità alta.
 
-**Scelta:** Claude 3.5 Sonnet (miglior agentic performance), GPT-4o come alternativa. Open: Llama 3.1 70B per on-premise.
+**Scelta:** Claude Sonnet 5 (miglior agentic performance), GPT serie 5 come alternativa. Open: Llama 3.x/4 (taglia ~70B) per on-premise.
 
 ### Chatbot Interno su Documentazione
 
 **Requisiti:** RAG su knowledge base interna, privacy (dati interni), volume medio.
 
 **Scelta:**
-- Se privacy critica: self-hosted Llama 3.1 8B o 70B + RAG locale (Qdrant)
-- Se privacy non vincolante: Claude 3.5 Haiku (economico, veloce) + RAG
+- Se privacy critica: self-hosted Llama 3.x/4 (taglia ~8B) o 70B + RAG locale (Qdrant)
+- Se privacy non vincolante: Claude Haiku 4.5 (economico, veloce) + RAG
 
 ## Valutazione Sistematica
 
@@ -296,7 +297,7 @@ promptfoo view  # UI comparativa
 
 ### Scenario 1 — Qualità output insoddisfacente nonostante modello frontier
 
-**Sintomo**: Il modello scelto (es. Claude Sonnet, GPT-4o) produce output imprecisi, incompleti o fuori formato su task DevOps specifici (IaC, log analysis).
+**Sintomo**: Il modello scelto (es. Claude Sonnet, GPT serie 5) produce output imprecisi, incompleti o fuori formato su task DevOps specifici (IaC, log analysis).
 
 **Causa**: Il problema raramente è il modello — nella maggior parte dei casi è il prompt. System prompt vago, assenza di few-shot examples, o `temperature` troppo alta per task deterministici.
 

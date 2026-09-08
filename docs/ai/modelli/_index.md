@@ -3,13 +3,14 @@ title: "Modelli LLM"
 slug: modelli-llm
 category: ai
 tags: [llm-models, claude, gpt, llama, mistral, gemini, benchmark]
-search_keywords: [large language model, modelli linguistici, GPT-4, Claude, Llama, Mistral, Gemini, open weight, open source, closed source, MMLU, HumanEval, benchmark LLM, foundation model, modelli AI, API LLM]
+search_keywords: [large language model, modelli linguistici, GPT, Claude, Llama, Mistral, Gemini, DeepSeek, Qwen, open weight, open source, closed source, MMLU, HumanEval, SWE-bench, benchmark LLM, foundation model, modelli AI, API LLM, reasoning model]
 parent: ai/_index
 related: [ai/fondamentali/_index, ai/modelli/modelli-open-source, ai/modelli/scelta-modello, ai/tokens-context/_index, ai/sviluppo/prompt-engineering]
 official_docs: https://artificialanalysis.ai/
-status: complete
+status: reviewed
 difficulty: beginner
-last_updated: 2026-02-27
+last_updated: 2026-09-08
+last_verified: 2026-09-08
 ---
 
 # Modelli LLM
@@ -25,33 +26,41 @@ Il panorama dei modelli si divide in due grandi famiglie: **closed** (accessibil
 ```
 LLM
 ├── Closed (pesi non pubblici, solo API)
-│   ├── Claude (Anthropic) — Claude 3.5 Sonnet, Claude 3.5 Haiku, Claude 3 Opus
-│   ├── GPT-4o, GPT-4o-mini (OpenAI)
-│   ├── Gemini 1.5 Pro, Gemini 2.0 Flash (Google)
+│   ├── Claude (Anthropic) — famiglia 5: Fable 5, Opus 5, Sonnet 5; Haiku 4.5
+│   ├── GPT (OpenAI) — serie 5 (+ varianti mini/nano), modelli reasoning "o-series"
+│   ├── Gemini (Google) — serie 2.x / 3, Flash e Pro
 │   └── Grok (xAI)
 ├── Open Weight (pesi pubblici, licenza non sempre commerciale)
-│   ├── Llama 3.x (Meta) — licenza Llama 3 (semi-open)
+│   ├── Llama (Meta) — Llama 3.x e 4 (licenza community Meta)
 │   ├── Mistral / Mixtral (Mistral AI) — Apache 2.0 / licenza commerciale
-│   ├── Gemma 2 (Google) — licenza Gemma
-│   ├── Qwen 2.5 (Alibaba) — Apache 2.0
-│   └── DeepSeek V3/R1 — licenza DeepSeek (aperta per ricerca)
+│   ├── Gemma (Google) — licenza Gemma
+│   ├── Qwen (Alibaba) — Qwen 2.5 / 3, Apache 2.0
+│   └── DeepSeek V3 / R1 — licenza DeepSeek (MoE, reasoning)
 └── Open Source (pesi + codice + dati)
     ├── OLMo (Allen AI)
     ├── Falcon (TII)
     └── BLOOM (BigScience)
 ```
 
+!!! note "Nomi commerciali in movimento"
+    Le versioni puntuali dei modelli closed cambiano di frequente. Per gli ID
+    esatti e le capacità correnti dei modelli Claude vedi [Claude](claude.md) e la
+    [pagina modelli Anthropic](https://docs.anthropic.com/en/docs/about-claude/models/overview);
+    per il confronto cross-provider aggiornato usa [Artificial Analysis](https://artificialanalysis.ai/)
+    e [LMArena](https://lmarena.ai/).
+
 ## Panoramica Modelli — Tabella Comparativa
+
+> I modelli closed evolvono in fretta: la tabella indica il **posizionamento**, non l'ultima versione puntuale. Numeri live: [Artificial Analysis](https://artificialanalysis.ai/).
 
 | Modello | Provider | Parametri | Context | Multimodal | Licenza | Ottimale per |
 |---------|----------|-----------|---------|------------|---------|-------------|
-| **Claude 3.5 Sonnet** | Anthropic | Non divulgato | 200K | Testo+Immagini | API | Coding, analisi, agentic tasks |
-| **Claude 3.5 Haiku** | Anthropic | Non divulgato | 200K | Testo+Immagini | API | Velocità, costo, RAG |
-| **Claude 3 Opus** | Anthropic | Non divulgato | 200K | Testo+Immagini | API | Task complessi, lunga catena di ragionamento |
-| **GPT-4o** | OpenAI | Non divulgato | 128K | Testo+Img+Audio | API | Versatilità generale |
-| **GPT-4o-mini** | OpenAI | Non divulgato | 128K | Testo+Immagini | API | Costo ridotto |
-| **Gemini 1.5 Pro** | Google | Non divulgato | 1M | Testo+Img+Video | API | Context ultra-long, multimediale |
-| **Gemini 2.0 Flash** | Google | Non divulgato | 1M | Testo+Img+Audio | API | Velocità, costo, real-time |
+| **Claude Opus 5** | Anthropic | Non divulgato | 1M | Testo+Immagini | API | Coding, agentic, reasoning complesso |
+| **Claude Sonnet 5** | Anthropic | Non divulgato | 1M | Testo+Immagini | API | Produzione ad alto volume, analisi, RAG |
+| **Claude Haiku 4.5** | Anthropic | Non divulgato | 200K | Testo+Immagini | API | Velocità, costo, classificazione |
+| **Claude Fable 5** | Anthropic | Non divulgato | 1M | Testo+Immagini | API | Reasoning estremo, run autonomi lunghi |
+| **GPT serie 5** | OpenAI | Non divulgato | grande | Testo+Img+Audio | API | Versatilità generale |
+| **Gemini serie 2.x/3** | Google | Non divulgato | 1M+ | Testo+Img+Video | API | Context ultra-long, multimediale |
 | **Llama 3.3 70B** | Meta | 70B | 128K | Testo | Llama 3 | Best open-weight per qualità |
 | **Llama 3.2 3B** | Meta | 3B | 128K | Testo | Llama 3 | Edge deployment, on-device |
 | **Mistral Large 2** | Mistral | ~123B | 128K | Testo | MRL | Alternativa API europea |
@@ -66,16 +75,17 @@ LLM
 
 I benchmark sono test standardizzati per misurare le capacità dei modelli. Attenzione: i benchmark possono essere "contaminati" (il modello ha visto i test durante il training).
 
-| Benchmark | Cosa Misura | Formato | Punteggio Top (2025) |
-|-----------|-------------|---------|---------------------|
-| **MMLU** | Conoscenza su 57 domini accademici | Multiple choice, 0-shot/5-shot | ~90% (Claude 3 Opus, GPT-4) |
-| **HumanEval** | Coding Python (pass@1) | Completamento funzione | ~90% (GPT-4o, Claude 3.5) |
-| **MATH** | Problemi matematica competition | Risposta aperta | ~75-90% (modelli reasoning) |
-| **GPQA** | Science livello PhD ("Google-Proof") | Multiple choice | ~60-70% |
-| **MT-Bench** | Qualità conversazione multi-turn | Giudice GPT-4, 1-10 | ~9.0 (Claude 3.5, GPT-4o) |
-| **LMSYS Arena** | ELO da preferenze umane | Confronto blind | Rankings live su lmsys.org |
-| **BigBench Hard** | 23 task difficili (reasoning) | Vari | Ancora molto duro per tutti |
-| **SWE-bench** | Fix di bug in repo GitHub reali | Pass/fail | ~50% (Claude 3.5 Sonnet) |
+I punteggi assoluti invecchiano a ogni release: qui contano il **cosa misura** e l'ordine di grandezza. Numeri correnti: [Artificial Analysis](https://artificialanalysis.ai/), [LMArena](https://lmarena.ai/).
+
+| Benchmark | Cosa Misura | Formato | Ordine di grandezza (frontier) |
+|-----------|-------------|---------|--------------------------------|
+| **MMLU / MMLU-Pro** | Conoscenza su decine di domini accademici | Multiple choice | frontier ~90% (MMLU), più basso su Pro |
+| **HumanEval** | Coding Python (pass@1) | Completamento funzione | saturato (~95%+) — poco discriminante |
+| **MATH** | Problemi matematica competition | Risposta aperta | alto per i modelli reasoning |
+| **GPQA Diamond** | Science livello PhD ("Google-Proof") | Multiple choice | frontier ~70-85% |
+| **LMArena** | ELO da preferenze umane | Confronto blind | ranking live |
+| **SWE-bench Verified** | Fix di bug in repo GitHub reali | Pass/fail | frontier ~70-80% e in crescita |
+| **Terminal-Bench / agentic** | Task multi-step in ambiente reale | Pass/fail | metrica chiave per l'uso agentico |
 
 !!! note "Interpretazione benchmark"
     Un modello con MMLU 85% non è necessariamente migliore di uno con 82% per il tuo caso d'uso specifico. I benchmark generali non sostituiscono l'evaluation sul task reale. Per scegliere il modello, costruisci un eval set con i tuoi casi d'uso specifici.
