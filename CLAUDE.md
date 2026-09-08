@@ -176,20 +176,23 @@ last_updated: YYYY-MM-DD
 
 ```
 docs/
-├── cloud/              → Provider e servizi cloud
-│   ├── aws/            → Amazon Web Services
-│   ├── azure/          → Microsoft Azure
-│   └── gcp/            → Google Cloud Platform (futuro)
-├── networking/         → Reti, protocolli, architetture di rete
-├── messaging/          → Message broker, streaming, event-driven
-├── databases/          → SQL, NoSQL, managed databases
-├── security/           → Autenticazione, certificati, compliance, IAM
-├── ci-cd/              → Pipeline, automazione, tools CI/CD
-├── containers/         → Container runtime, orchestration, registry
-└── ai/                 → AI/ML services, MLOps
+├── cloud/              → Provider cloud (aws, azure, gcp) + finops/
+├── containers/         → docker, kubernetes, openshift, helm, kustomize, container-runtime, registry
+├── networking/         → fondamentali, protocolli, load-balancing, service-mesh, api-gateway, kubernetes, sicurezza
+├── messaging/          → kafka, rabbitmq
+├── databases/          → fondamentali, postgresql, nosql, sql-avanzato, replicazione-ha, kubernetes-cloud
+├── security/           → autenticazione, autorizzazione, pki-certificati, secret-management, supply-chain, runtime, network, compliance
+├── ci-cd/              → jenkins, github-actions, gitlab-ci, gitops, strategie, testing, tools, platform-engineering
+├── iac/                → terraform (+ opentofu), pulumi, ansible
+├── monitoring/         → fondamentali, tools, alerting, sre
+├── ai/                 → fondamentali, modelli, agents, sviluppo, tokens-context, training, mlops
+└── dev/                → linguaggi, runtime, resilienza, sicurezza, api, data, integrazioni, processi, testing
 ```
 
-**Regola:** Se un argomento non rientra in nessuna categoria → creare una nuova cartella. Le categorie sono estensibili.
+Riferimento completo (sottocategorie + tag): `docs/_metadata/taxonomy.yml`.
+
+**Regola:** Se un argomento non rientra in nessuna categoria → creare una nuova cartella
+e aggiungerla a `taxonomy.yml`. Le categorie sono estensibili.
 
 ---
 
@@ -205,9 +208,23 @@ docs/
 - `slug`: identico al nome file senza estensione
 - `tags`: lowercase, inglese, plurale dove sensato
 - `search_keywords`: includere SEMPRE acronimi, sinonimi italiani e inglesi
-- `status`: `draft` → `in-progress` → `complete` → `needs-review`
 - `difficulty`: `beginner` | `intermediate` | `advanced` | `expert`
 - `related`: percorsi relativi dalla root docs, es. `networking/tcp`
+- `last_updated`: cambia **solo** su modifica sostanziale del contenuto
+- `last_verified`: data dell'ultimo controllo di correttezza/attualità (segnale di freschezza)
+
+#### Ciclo di vita `status`
+
+| valore | significato | chi lo assegna |
+|---|---|---|
+| `draft` | bozza incompleta | autore iniziale |
+| `complete` | supera il gate meccanico (≥150 righe utili, ≥2 code-block, sezione Troubleshooting, ≥10 `search_keywords`, ≥2 `related`) | task `new_topic` / `audit` |
+| `needs-review` | modifica significativa (sezione intera o >30% del contenuto) o review non conclusa | task `expand`, o l'autore di una modifica grande |
+| `reviewed` | un modello ad alto ragionamento ha giudicato il file **corretto, attuale e utile**; imposta anche `last_verified` | task `review` / `currency` |
+
+`complete` **non** implica "revisionato": è solo la soglia meccanica. La qualità
+reale la certifica `reviewed`. Non impostare `complete` a mano su un file che ha
+subito una modifica grande — usa `needs-review`.
 
 ### Contenuto
 - Titoli H1 solo per il titolo principale (1 per file)
@@ -241,6 +258,36 @@ docs/
 
 ---
 
+## 🤖 LAYER DI AUTOMAZIONE
+
+La KB si mantiene anche da sola. Documento autoritativo: **`_automation/AUTOMATION.md`**.
+Sintesi:
+
+- **Esecuzione**: GitHub Actions schedulato (`.github/workflows/kb-maintenance.yml`,
+  cron 6h) esegue una iterazione bounded via `_automation/run_once.py`; in locale
+  `KB_Aggiorna_Sicuro.bat` fa lo stesso per 1 task. Il deploy del sito
+  (`deploy.yml` → `mkdocs gh-deploy`) parte su push a `master`.
+- **Coda**: `_automation/state.yaml` (gestita SOLO da `manage-state.py` — un agente
+  di contenuto non la tocca mai). Priorità P0>P1>P2>P3; `interrupted_task` per il
+  recovery.
+- **Tipi di task e prompt**: `new_topic`→`run-prompt.md`, `expand`→`expand-prompt.md`,
+  `audit`→`audit-prompt.md`, `review`→`review-prompt.md`, `currency`→`currency-prompt.md`,
+  `consolidate`→`consolidate-prompt.md`, `proposal`→`proposal-prompt.md`.
+- **Policy modello** (`_automation/config.yaml`): audit→Haiku/low, new_topic·expand→
+  Sonnet, review·proposal→Opus/high. `run_once.py` passa `--model` di conseguenza.
+- **Freno di saturazione**: `manage-state.py saturation-gate` + `kb-saturation-report.md`.
+  Oltre `target_file_count` niente nuovi argomenti salvo gap `score: high`. Le
+  sessioni proposal possono restituire **zero** proposte.
+- **Quality revisioning**: ogni ciclo di analisi (7g) inietta N task `review` sui
+  file con `last_verified` più vecchio; `review`/`currency` possono retrocedere lo
+  `status` o aprire una proposta di follow-up.
+
+**Quando lavori come agente di contenuto** (protocolli 1–5): il task è in
+`_automation/current-task.json`; segui il prompt indicato; **non leggere né
+scrivere `_automation/state.yaml`**; fermati dopo un task.
+
+---
+
 ## ⚠️ CRITICITÀ E LEZIONI APPRESE
 
 > **ISTRUZIONE:** Questa sezione DEVE essere letta all'inizio di OGNI richiesta.
@@ -252,14 +299,17 @@ docs/
 |---|------|-----------|---------------------|----------------|-------|
 | 1 | 2025-02-23 | Progetto inizializzato | N/A | N/A | ✅ Chiuso |
 | 2 | 2026-02-23 | Sequenze di escape letterali (es. `\n`) nei diagrammi/schemi renderizzate come testo invece che come caratteri di controllo | Aggiunto pattern da evitare; usare sempre newline reali o attributi XML appropriati nei file `.drawio.svg` | CLAUDE.md | ✅ Chiuso |
+| 3 | 2026-09-08 | `status: complete` privo di significato (404/407 file "complete"); gate qualità solo meccanico; nessun freno alla crescita; automazione non documentata in CLAUDE.md; sezione AI indietro di una generazione (Claude 4.6 vs famiglia Claude 5); `mkdocs build --strict` rotto; automazione dipendente dal PC acceso | Ciclo di stato reale con `reviewed`/`last_verified`; task type `review`/`currency`/`consolidate`; freno di saturazione; sezione "Layer di automazione"; CI GitHub Actions (deploy + manutenzione schedulata); fix config tags; sweep attualità sezione AI | CLAUDE.md, `_automation/*`, `.github/workflows/*`, `mkdocs.yml`, `docs/ai/modelli/*`, `docs/index.md`, `docs/_metadata/taxonomy.yml` | ✅ Chiuso |
 
 ### Pattern da Evitare
 
 - **[ESCAPE LETTERALI NEI DIAGRAMMI]**: Quando si generano file `.drawio.svg` o altri formati schema, non usare mai sequenze di escape testuali come `\n`, `\t`, `\r` all'interno dei valori delle celle/label. Questi vengono renderizzati letteralmente come stringa invece che essere interpretati come caratteri di controllo. → Usare newline XML reali (`&#xa;`) per i ritorni a capo nelle label Draw.io, oppure suddividere il testo su più elementi distinti.
 
 ### Miglioramenti al CLAUDE.md
-<!-- Aggiungere qui migliorie proposte o applicate a questo file -->
 <!-- Formato: - **[DATA]**: Descrizione miglioria → Stato (proposta/applicata) -->
+- **2026-09-08**: Aggiunta sezione "Layer di automazione"; ciclo di vita `status`
+  esplicito con `reviewed`/`last_verified`; gerarchia aggiornata a 11 categorie;
+  registro criticità #3. → applicata
 
 ---
 
@@ -269,11 +319,17 @@ docs/
 # Preview locale del sito
 mkdocs serve
 
-# Build del sito statico
-mkdocs build
+# Build (strict = fallisce su link rotti; è quello che gira in CI)
+mkdocs build --strict
 
-# Deploy su GitHub Pages
-mkdocs gh-deploy
+# Deploy: automatico su push a master (.github/workflows/deploy.yml).
+# Manuale/fallback locale:
+mkdocs gh-deploy --force
+
+# Automazione — un task dalla coda (stessa logica della CI):
+python _automation/run_once.py --max-tasks 1
+python _automation/manage-state.py stats
+python _automation/manage-state.py stats-doc write   # rigenera la tabella in docs/index.md
 ```
 
 ---

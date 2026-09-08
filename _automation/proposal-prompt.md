@@ -9,6 +9,26 @@ Regola fondamentale: una proposta vale solo se risponde a
 
 ---
 
+## PASSO 0 — Freno di saturazione (AZIONE IMMEDIATA)
+
+Esegui **subito**:
+```
+python _automation/manage-state.py saturation-gate
+```
+e leggi anche `_automation/proposals/kb-saturation-report.md` (se esiste).
+
+Regole che ne derivano:
+- Se `over_target` è `true` **o** una categoria è ≥ `category_saturated_pct` nel
+  report: NON proporre `new-file` per quella categoria salvo `score: high` con un
+  gap operativo esplicito e non banale. Preferisci proposte
+  `currency` / `consolidate` / `extend-section` / `review`.
+- **È ammesso restituire ZERO proposte** se nulla supera il test di utilità.
+  In quel caso scrivi comunque il report di saturazione e un summary che spiega
+  perché la KB è considerata satura in questo ciclo. Non inventare proposte per
+  "riempire".
+
+---
+
 ## PASSO 1 — Censimento strutturale (AZIONE IMMEDIATA)
 
 **Chiama subito Glob con `docs/**/*.md`** per ottenere tutti i file KB.
@@ -60,16 +80,16 @@ risolve un problema operativo documentato e non banale.
 Prima leggi i file esistenti in `_automation/proposals/pending/` e
 `_automation/proposals/approved/` per trovare l'ultimo numero progressivo usato.
 
-**Devi generare almeno 3 proposte** (max 6). Se dopo l'analisi hai trovato meno
-di 3 proposte `score: high`, includi proposte `score: medium` o `score: low`
-piuttosto che non generare nulla — il sistema richiede sempre output.
+**Genera da 0 a 6 proposte.** Qualità sopra quantità: una proposta debole è un
+costo (genera lavoro a basso valore), non un guadagno. Se il PASSO 0 indica
+saturazione e non trovi gap reali, va bene **zero** — spiega il perché nel summary.
 
 Formato file `prop-NNN.yaml`:
 
 ```yaml
 id: prop-NNN
 title: "Titolo descrittivo (max 80 caratteri)"
-type: new-file         # new-file | extend-section | fix-relation | consolidate
+type: new-file         # new-file | extend-section | fix-relation | consolidate | currency | review
 priority: high         # high | medium | low
 target_file: docs/categoria/sottocategoria/file.md
 effort: small          # small (<2h) | medium (2-4h) | large (>4h)

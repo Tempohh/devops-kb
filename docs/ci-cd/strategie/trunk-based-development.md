@@ -364,7 +364,7 @@ git push origin release/2.3 --tags
 ??? info "Feature Flags — L'abilitatore chiave di TBD"
     Senza feature flags, TBD è applicabile solo per modifiche complete e non rischiose. Con i feature flags, è possibile integrare qualsiasi lavoro in corso senza rischio per la produzione. Feature flags e TBD sono quasi inseparabili a scala.
 
-    **Approfondimento completo →** [Deployment Strategies — Feature Flags](./deployment-strategies.md#feature-flags)
+    **Approfondimento completo →** [Feature Flags](./feature-flags.md)
 
 ??? info "GitOps — TBD come fondamento"
     I sistemi GitOps (ArgoCD, Flux) si basano sul trunk come source of truth. TBD è il modello di branching naturale per GitOps: ogni commit sul trunk scatena riconciliazione nel cluster.

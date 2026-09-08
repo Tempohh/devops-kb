@@ -421,7 +421,7 @@ def cmd_analysis_status():
     """
     state = load_state()
     queue = state.get("queue", [])
-    analysis_types = ("audit", "expand", "proposal")
+    analysis_types = ("audit", "expand", "proposal", "review", "currency", "consolidate")
     pending_analysis = [i for i in queue if i.get("status") == "pending" and i.get("type") in analysis_types]
 
     analysis = state.get("analysis", {})
@@ -464,10 +464,18 @@ def cmd_analysis_status():
     except Exception:
         days_since = 999
 
+    interval = 7
+    try:
+        interval = int(((_load_automation_config().get("cadence") or {})
+                        .get("analysis_interval_days", 7)))
+    except Exception:
+        pass
+
     print(json.dumps({
-        "needs_analysis": days_since >= 7,
-        "reason": f"Ultima analisi completata {days_since} giorni fa",
+        "needs_analysis": days_since >= interval,
+        "reason": f"Ultima analisi completata {days_since} giorni fa (soglia {interval}g)",
         "days_since": days_since,
+        "interval_days": interval,
         "last_completed": last_completed
     }, ensure_ascii=False))
 
@@ -560,6 +568,37 @@ def cmd_init_analysis():
             "reason": "Analisi trasversale KB: genera proposte di miglioramento per approvazione utente"
         })
 
+    # N task 'review' (P3) sui file verificati meno di recente — "quality revisioning"
+    try:
+        sample = int(((_load_automation_config().get("cadence") or {})
+                      .get("review_sample_size", 3)))
+    except Exception:
+        sample = 3
+    reviewed_scored = []
+    for rel in kb_files:
+        if rel in queued_paths:
+            continue
+        try:
+            fm = _read_frontmatter((Path(__file__).parent.parent / rel)
+                                   .read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            fm = {}
+        reviewed_scored.append((str(fm.get("last_verified") or "0000-00-00"), rel))
+    reviewed_scored.sort()
+    review_n = 0
+    for _, rel in reviewed_scored[:sample]:
+        review_n += 1
+        new_tasks.append({
+            "id": str(max_id + len(new_tasks) + 1),
+            "type": "review",
+            "path": rel,
+            "category": rel.split("/")[1] if len(rel.split("/")) > 1 else "unknown",
+            "priority": "P3",
+            "status": "pending",
+            "reason": "Review critica: correttezza, attualita', valore. Aggiorna last_verified.",
+        })
+        queued_paths.add(rel)
+
     state["queue"].extend(new_tasks)
     state["total_ops"] = state.get("total_ops", 0) + len(new_tasks)
 
@@ -571,12 +610,13 @@ def cmd_init_analysis():
 
     save_state(state)
     audit_n = len([t for t in new_tasks if t["type"] == "audit"])
-    _write_log(f"[ANALYSIS] init: {len(new_tasks)} task ({audit_n} audit + 1 proposal), {auto_completed} auto-ok su {len(kb_files)} file KB")
+    _write_log(f"[ANALYSIS] init: {len(new_tasks)} task ({audit_n} audit + {review_n} review + 1 proposal), {auto_completed} auto-ok su {len(kb_files)} file KB")
 
     print(json.dumps({
         "status": "ok",
         "tasks_created": len(new_tasks),
         "audit_tasks":    audit_n,
+        "review_tasks":   review_n,
         "proposal_tasks": 1,
         "auto_completed": auto_completed,
         "total_kb_files": len(kb_files)
@@ -773,7 +813,9 @@ def cmd_approve_proposal(prop_id):
         "fix-relation":   "audit",
         "fix-link":       "audit",
         "audit":          "audit",
-        "consolidate":    "audit",
+        "consolidate":    "consolidate",
+        "currency":        "currency",
+        "review":          "review",
     }
     raw_type = target_data.get("type", "expand")
     task_type = type_map.get(raw_type, "expand")
@@ -852,7 +894,8 @@ def cmd_auto_approve_proposals():
     type_map = {
         "new-file": "new_topic", "new_topic": "new_topic",
         "extend-section": "expand", "extend": "expand", "expand": "expand",
-        "fix-relation": "audit", "fix-link": "audit", "audit": "audit", "consolidate": "audit",
+        "fix-relation": "audit", "fix-link": "audit", "audit": "audit",
+        "consolidate": "consolidate", "currency": "currency", "review": "review",
     }
     priority_map = {"high": "P1", "medium": "P2", "low": "P3"}
 

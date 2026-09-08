@@ -354,10 +354,13 @@ try {
 
         # Selezione prompt in base al tipo di task
         $activePromptFile = switch ($task.type) {
-            "audit"    { Join-Path $AutoDir "audit-prompt.md" }
-            "expand"   { Join-Path $AutoDir "expand-prompt.md" }
-            "proposal" { Join-Path $AutoDir "proposal-prompt.md" }
-            default    { $PromptFile }
+            "audit"       { Join-Path $AutoDir "audit-prompt.md" }
+            "expand"      { Join-Path $AutoDir "expand-prompt.md" }
+            "proposal"    { Join-Path $AutoDir "proposal-prompt.md" }
+            "review"      { Join-Path $AutoDir "review-prompt.md" }
+            "currency"    { Join-Path $AutoDir "currency-prompt.md" }
+            "consolidate" { Join-Path $AutoDir "consolidate-prompt.md" }
+            default       { $PromptFile }
         }
         if (-not (Test-Path $activePromptFile)) { $activePromptFile = $PromptFile }
         Write-Host "  Prompt   : $(Split-Path $activePromptFile -Leaf)" -ForegroundColor DarkGray

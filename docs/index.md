@@ -4,7 +4,8 @@ slug: index
 search_keywords: [devops, knowledge base, documentazione, wiki, cloud, kubernetes, docker, ci-cd, pipeline, networking, database, security, ai, llm, aws, azure, containers, automation, infrastruttura, infrastructure, iac, gitops, mlops, sre, platform-engineering, monitoring, observability, prometheus, grafana, opentelemetry, microservizi, java, spring-boot, quarkus, go, dotnet]
 related: [cloud/_index, containers/_index, ci-cd/_index, networking/_index, databases/_index, security/_index, ai/_index, messaging/_index, monitoring/_index, dev/_index]
 status: complete
-last_updated: 2026-03-29
+last_updated: 2026-09-08
+last_verified: 2026-09-08
 ---
 
 # DevOps Knowledge Base
@@ -103,20 +104,24 @@ Documentazione tecnica completa, scalabile e organizzata per il mondo DevOps Eng
 
 ## 📊 Stato del Progetto
 
-| Sezione | Sottocategorie | Articoli | Righe | Note |
-|---------|---------------|---------|-------|------|
-| ☁️ Cloud / AWS | 10 | 29 | 18.705 | EC2, EKS, S3, RDS, IAM, Security, Messaging, CI/CD |
-| ☁️ Cloud / Azure | 10 | 27 | 12.223 | Entra ID, AKS, Bicep, Service Bus, Defender, Sentinel |
-| 📨 Messaging | 2 | 43 | 16.656 | Kafka (8 categorie, 37 file) + RabbitMQ |
-| 🤖 AI & LLM | 7 | 19 | 11.470 | ML, Transformer, Claude, Agenti, RAG, Fine-Tuning, MLOps |
-| 🐳 Containers | 7 | 23 | 11.725 | Docker, Kubernetes, OpenShift, Helm, Kustomize, Registry |
-| ⚙️ CI/CD | 5 | 12 | 10.656 | Jenkins (5 file enterprise), GitHub Actions, GitLab CI, GitOps, Strategie |
-| 🌐 Networking | 7 | 28 | 9.621 | Fondamentali, K8s networking, Service Mesh, Load Balancing, API Gateway |
-| 🗄️ Databases | 6 | 20 | 6.512 | PostgreSQL, NoSQL (Redis/Mongo/Cassandra), SQL avanzato, HA, K8s/Cloud |
-| 🔒 Security | 6 | 13 | 5.564 | Autenticazione, Autorizzazione, PKI, Secret Management, Supply Chain |
-| 📈 Monitoring & Observability | 4 | 15 | — | OpenTelemetry, Prometheus, Grafana, Loki, Jaeger/Tempo, Alertmanager, SRE |
-| 💻 Sviluppo Microservizi | 5 | 14 | — | Java Spring Boot, Quarkus, .NET, Go, JVM Tuning, Circuit Breaker, TLS da codice |
-| **Totale** | **70** | **243** | **103.000+** | **3,5 MB di documentazione tecnica** |
+<!-- STATS:BEGIN — generato da `python _automation/manage-state.py stats-doc write` -->
+| Categoria | File di contenuto | Righe |
+|-----------|-------------------|-------|
+| cloud | 71 | 45.111 |
+| messaging | 43 | 18.230 |
+| networking | 31 | 12.279 |
+| containers | 30 | 17.676 |
+| databases | 21 | 9.222 |
+| ci-cd | 20 | 15.956 |
+| ai | 19 | 12.616 |
+| dev | 18 | 16.634 |
+| security | 17 | 9.344 |
+| monitoring | 15 | 8.026 |
+| iac | 10 | 6.757 |
+| **Totale** | **295** | **171.851** |
+
+*Ultimo argomento aggiornato: 2026-04-04 · snapshot rigenerato: 2026-09-08*
+<!-- STATS:END -->
 
 ### Copertura per Livello di Profondità
 
@@ -127,17 +132,6 @@ Documentazione tecnica completa, scalabile e organizzata per il mondo DevOps Eng
 | `advanced` | Kafka internals, PostgreSQL MVCC, Jenkins enterprise, Transformer architecture |
 | `expert` | Kafka Streams/KSQLdb, QLoRA fine-tuning, Jenkins security governance, vLLM serving |
 
-### Metriche Tecniche
-
-| Metrica | Valore |
-|---------|--------|
-| File Markdown totali | 296 (inclusi _index e root) |
-| File di contenuto | 215 |
-| File _index (landing page sezioni) | 79 |
-| Righe di documentazione | 103.294 |
-| Dimensione totale | 3,5 MB |
-| Ultimo aggiornamento | 2026-02-27 |
-
 ---
 
 ## ⚡ Quick Start
@@ -146,18 +140,21 @@ Per avviare il sito in locale o eseguire il build:
 
 ```bash
 # Installare le dipendenze (una tantum)
-pip install mkdocs-material
+pip install -r requirements.txt
 
 # Avviare il server di sviluppo locale (hot-reload)
 mkdocs serve
 # → http://127.0.0.1:8000
 
-# Build del sito statico in ./site/
-mkdocs build
-
-# Deploy su GitHub Pages
-mkdocs gh-deploy
+# Build del sito statico in ./site/ (strict = fallisce sui link rotti)
+mkdocs build --strict
 ```
+
+Il **deploy su GitHub Pages è automatico**: ogni push su `master` che tocca
+`docs/`, `mkdocs.yml` o `requirements.txt` fa girare il workflow
+`.github/workflows/deploy.yml` che ricostruisce e pubblica il sito. Deploy
+manuale: *Actions → Deploy site → Run workflow*. Dettagli in
+[`_automation/AUTOMATION.md`](https://github.com/Tempohh/devops-kb/blob/master/_automation/AUTOMATION.md).
 
 Per aggiungere un nuovo argomento alla KB:
 
