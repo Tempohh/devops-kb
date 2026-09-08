@@ -113,14 +113,14 @@ Documentazione tecnica completa, scalabile e organizzata per il mondo DevOps Eng
 | containers | 30 | 17.676 |
 | databases | 21 | 9.222 |
 | ci-cd | 20 | 15.956 |
-| ai | 19 | 12.616 |
+| ai | 19 | 12.354 |
 | dev | 18 | 16.634 |
 | security | 17 | 9.344 |
 | monitoring | 15 | 8.026 |
 | iac | 10 | 6.757 |
-| **Totale** | **295** | **171.851** |
+| **Totale** | **295** | **171.589** |
 
-*Ultimo argomento aggiornato: 2026-04-04 · snapshot rigenerato: 2026-09-08*
+*Ultimo argomento aggiornato: 2026-09-08 · snapshot rigenerato: 2026-09-08*
 <!-- STATS:END -->
 
 ### Copertura per Livello di Profondità

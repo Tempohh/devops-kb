@@ -350,7 +350,8 @@ def main() -> int:
     if not args.dry_run and processed > 0:
         state("check-mkdocs")
         state("maintain")
-        # eventuali P0 da broken link appena creati: committali
+        state("stats-doc", "write")   # rigenera la tabella in docs/index.md
+        # eventuali P0 da broken link + tabella stats aggiornata: committali
         git("add", "-A", "--", ":!site")
         if git("diff", "--cached", "--quiet").returncode != 0:
             git("commit", "-m", "kb: post-run maintenance (auto)",
