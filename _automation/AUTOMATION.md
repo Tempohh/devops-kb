@@ -33,6 +33,22 @@ Il token resta sui limiti del piano Claude esistente: su rate limit il run
 termina "soft" (exit 0, task ancora `pending`) e il cron successivo riprende.
 `state.yaml` rende ogni run ripartibile.
 
+### Pausa / ripresa
+
+Interruttore: la **Actions variable** `KB_MAINTENANCE_ENABLED` (repo → *Settings →
+Secrets and variables → Actions → Variables*). Modificabile **solo dall'owner**
+del repo — non esistono altri collaboratori.
+
+| Vuoi | Comando | Effetto |
+|---|---|---|
+| Mettere in pausa | `gh variable set KB_MAINTENANCE_ENABLED --body false` | lo step *Gate* di `kb-maintenance.yml` esce con `enabled=false`: cron e *Run workflow* fanno il no-op pulito |
+| Riprendere | `gh variable set KB_MAINTENANCE_ENABLED --body true` (o `gh variable delete`) | default: se assente o diversa da `false/0/off/no` l'automazione gira |
+| Giro singolo in pausa | *Actions → KB maintenance → Run workflow* con `force: true` | esegue un'iterazione ignorando la pausa (il token resta comunque richiesto) |
+
+In locale la stessa variabile come **env var** ferma `run_once.py` /
+`KB_Aggiorna_Sicuro.bat`: `setx KB_MAINTENANCE_ENABLED false` (persistente) o
+`set KB_MAINTENANCE_ENABLED=false` per la sola shell corrente.
+
 ---
 
 ## 3. Anatomia di un run (`run_once.py`)

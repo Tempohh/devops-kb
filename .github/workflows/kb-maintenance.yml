@@ -5,6 +5,14 @@ name: KB maintenance
 #
 # Richiede il secret di repo CLAUDE_CODE_OAUTH_TOKEN (da `claude setup-token`).
 # Se il secret non e' configurato il job si salta in modo pulito (nessun errore).
+#
+# Interruttore di pausa: la Actions variable KB_MAINTENANCE_ENABLED.
+#   false | 0 | off | no  -> automazione in pausa (cron e manuale = no-op pulito)
+#   assente o altro        -> attiva (default)
+# Toggle (solo owner del repo):
+#   gh variable set KB_MAINTENANCE_ENABLED --body false   # pausa
+#   gh variable set KB_MAINTENANCE_ENABLED --body true    # riattiva
+# Un giro singolo mentre e' in pausa: Run workflow con input force=true.
 
 on:
   schedule:
@@ -21,6 +29,10 @@ on:
         description: "Numero massimo di task da processare in questo run"
         default: "1"
         required: false
+      force:
+        description: "Esegui anche se l'automazione e' in pausa (KB_MAINTENANCE_ENABLED=false)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -34,9 +46,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Gate — secret + finestra oraria (00/06/12/18 Europe/Rome)
+      - name: Gate — pausa + secret + finestra oraria (00/06/12/18 Europe/Rome)
         id: gate
+        env:
+          KB_MAINTENANCE_ENABLED: ${{ vars.KB_MAINTENANCE_ENABLED }}
+          FORCE_INPUT: ${{ github.event.inputs.force }}
         run: |
+          # --- Interruttore di pausa (Actions variable) -------------------
+          # KB_MAINTENANCE_ENABLED = false|0|off|no  -> pausa. Assente o altro
+          # valore -> attiva (default). force=true da Run workflow bypassa.
+          PAUSED=false
+          case "$(printf '%s' "$KB_MAINTENANCE_ENABLED" | tr '[:upper:]' '[:lower:]')" in
+            false|0|off|no) PAUSED=true ;;
+          esac
+          FORCE=false
+          [ "$FORCE_INPUT" = "true" ] && FORCE=true
+          if [ "$PAUSED" = "true" ] && [ "$FORCE" != "true" ]; then
+            echo "::notice title=KB maintenance::Automazione in PAUSA (KB_MAINTENANCE_ENABLED=$KB_MAINTENANCE_ENABLED). Riattiva con: gh variable set KB_MAINTENANCE_ENABLED --body true"
+          fi
+
           # --- Finestra oraria ---------------------------------------------
           # Ci sono due righe cron (offset estate/inverno): qui si tiene solo
           # lo slot che, convertito in ora di Roma, cade su 00/06/12/18.
@@ -59,7 +87,9 @@ jobs:
             echo "::notice title=KB maintenance::CLAUDE_CODE_OAUTH_TOKEN non configurato - run saltato. Aggiungilo in Settings > Secrets per attivare l'automazione."
           fi
 
-          if [ "$IN_WINDOW" = "true" ] && [ "$HAS_TOKEN" = "true" ]; then
+          # --- Decisione -------------------------------------------------
+          if [ "$IN_WINDOW" = "true" ] && [ "$HAS_TOKEN" = "true" ] \
+             && { [ "$PAUSED" != "true" ] || [ "$FORCE" = "true" ]; }; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"

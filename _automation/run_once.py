@@ -315,6 +315,14 @@ def main() -> int:
     if not STATE_PY.exists():
         log("manage-state.py non trovato"); return 1
 
+    # Interruttore di pausa — stesso nome/valori della Actions variable usata
+    # dalla CI. Utile per fermare KB_Aggiorna_Sicuro.bat in locale:
+    #   setx KB_MAINTENANCE_ENABLED false   (Windows, persistente)
+    if os.environ.get("KB_MAINTENANCE_ENABLED", "").strip().lower() in {"false", "0", "off", "no"} and not args.dry_run:
+        log("automazione in pausa (KB_MAINTENANCE_ENABLED) — nessun task eseguito")
+        print(json.dumps({"processed": 0, "stop_reason": "paused"}, ensure_ascii=False))
+        return 0
+
     cfg = load_config()
 
     claude_bin = None
