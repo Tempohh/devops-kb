@@ -6,10 +6,11 @@ tags: [api, anthropic, openai, sdk, integration, streaming, error-handling, cost
 search_keywords: [anthropic api, openai api, llm api integration, python sdk anthropic, messages api, claude api python, openai python sdk, litellm, llm gateway, api key management, token counting, cost estimation, retry logic, exponential backoff, streaming llm, async llm, llm middleware, structured output, json mode, function calling integration]
 parent: ai/sviluppo/_index
 related: [ai/sviluppo/_index, ai/modelli/claude, ai/sviluppo/prompt-engineering, ai/agents/agent-patterns, ai/tokens-context/context-window]
-official_docs: https://docs.anthropic.com/en/api/getting-started
-status: complete
+official_docs: https://platform.claude.com/docs/en/api/getting-started
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-27
+last_updated: 2026-09-08
+last_verified: 2026-09-08
 ---
 
 # Integrazione API LLM — Anthropic, OpenAI e Pattern di Sviluppo
@@ -39,7 +40,7 @@ client = anthropic.Anthropic(
 
 # Chiamata base
 response = client.messages.create(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5",
     max_tokens=1024,
     system="Sei un esperto DevOps. Rispondi in modo conciso e tecnico.",
     messages=[
@@ -96,7 +97,7 @@ results = asyncio.run(process_many_requests(["domanda 1", "domanda 2", "domanda 
 class ConversationManager:
     """Gestisce conversazioni multi-turn con Claude."""
 
-    def __init__(self, model: str = "claude-sonnet-4-6", system: str = ""):
+    def __init__(self, model: str = "claude-sonnet-5", system: str = ""):
         self.client = anthropic.Anthropic()
         self.model = model
         self.system = system
@@ -174,7 +175,7 @@ from typing import Optional
 # Pattern 1: JSON nel prompt (semplice ma meno affidabile)
 def extract_json_simple(text: str, schema_description: str) -> dict:
     response = client.messages.create(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         max_tokens=1024,
         system="Estrai sempre dati in formato JSON. Non includere testo fuori dal JSON.",
         messages=[{
@@ -203,7 +204,7 @@ def extract_structured(text: str, pydantic_model: type[BaseModel]) -> dict:
     }
 
     response = client.messages.create(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         max_tokens=1024,
         tools=[extraction_tool],
         tool_choice={"type": "tool", "name": "extract_data"},  # forza uso del tool
@@ -250,7 +251,7 @@ openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 # Chiamata base OpenAI
 response = openai_client.chat.completions.create(
-    model="gpt-4o",
+    model="gpt-5.6-terra",
     messages=[
         {"role": "system", "content": "Sei un assistente DevOps."},
         {"role": "user", "content": "Spiega il pattern Circuit Breaker."}
@@ -272,21 +273,21 @@ from litellm import completion
 
 # Claude via LiteLLM
 response = completion(
-    model="anthropic/claude-sonnet-4-6",
+    model="anthropic/claude-sonnet-5",
     messages=[{"role": "user", "content": "Spiega Kubernetes in 3 frasi."}],
     max_tokens=512
 )
 
-# GPT-4o via LiteLLM (stessa interfaccia)
+# GPT via LiteLLM (stessa interfaccia)
 response = completion(
-    model="gpt-4o",
+    model="gpt-5.6-terra",
     messages=[{"role": "user", "content": "Spiega Kubernetes in 3 frasi."}],
     max_tokens=512
 )
 
 # Gemini via LiteLLM
 response = completion(
-    model="gemini/gemini-1.5-pro",
+    model="gemini/gemini-2.5-pro",
     messages=[{"role": "user", "content": "Spiega Kubernetes in 3 frasi."}],
     max_tokens=512
 )
@@ -300,8 +301,8 @@ response = completion(
 
 # Fallback automatico
 response = completion(
-    model="claude-sonnet-4-6",
-    fallbacks=["gpt-4o", "gemini/gemini-1.5-pro"],  # se Claude fallisce, prova questi
+    model="claude-sonnet-5",
+    fallbacks=["gpt-5.6-terra", "gemini/gemini-2.5-pro"],  # se Claude fallisce, prova questi
     messages=[{"role": "user", "content": "Domanda"}]
 )
 ```
@@ -315,12 +316,12 @@ Per ambienti enterprise con più team, LiteLLM Proxy centralizza routing, loggin
 model_list:
   - model_name: claude-sonnet
     litellm_params:
-      model: anthropic/claude-sonnet-4-6
+      model: anthropic/claude-sonnet-5
       api_key: os.environ/ANTHROPIC_API_KEY
 
-  - model_name: gpt-4o
+  - model_name: gpt-5.6-terra
     litellm_params:
-      model: openai/gpt-4o
+      model: openai/gpt-5.6-terra
       api_key: os.environ/OPENAI_API_KEY
 
   - model_name: llama-local
@@ -366,7 +367,7 @@ client = anthropic.Anthropic()
 def estimate_cost(
     messages: list[dict],
     system: str = "",
-    model: str = "claude-sonnet-4-6"
+    model: str = "claude-sonnet-5"
 ) -> dict:
     """Stima il costo prima di fare la chiamata."""
 
@@ -379,14 +380,14 @@ def estimate_cost(
 
     # Pricing (dollari per milione di token)
     pricing = {
-        "claude-opus-4-6":        {"input": 15.00, "output": 75.00},
-        "claude-sonnet-4-6":      {"input": 3.00,  "output": 15.00},
-        "claude-haiku-4-5-20251001": {"input": 0.25, "output": 1.25},
+        "claude-opus-5":             {"input": 5.00, "output": 25.00},
+        "claude-sonnet-5":           {"input": 2.00, "output": 10.00},
+        "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
         # Cache write: +25% rispetto a input price
         # Cache read:  input_price * 0.10
     }
 
-    p = pricing.get(model, {"input": 3.00, "output": 15.00})
+    p = pricing.get(model, {"input": 2.00, "output": 10.00})
     input_cost = (token_count.input_tokens / 1_000_000) * p["input"]
 
     return {
@@ -406,9 +407,9 @@ class CostTracker:
 
     def track(self, response: anthropic.types.Message, model: str):
         pricing = {
-            "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
+            "claude-sonnet-5": {"input": 2.00, "output": 10.00},
         }
-        p = pricing.get(model, {"input": 3.00, "output": 15.00})
+        p = pricing.get(model, {"input": 2.00, "output": 10.00})
 
         input_cost  = (response.usage.input_tokens  / 1_000_000) * p["input"]
         output_cost = (response.usage.output_tokens / 1_000_000) * p["output"]
@@ -445,7 +446,7 @@ class LLMClient:
     def complete(
         self,
         messages: list[dict],
-        model: str = "claude-sonnet-4-6",
+        model: str = "claude-sonnet-5",
         max_tokens: int = 2048,
         system: str = "",
         max_retries: int = 5,
@@ -551,7 +552,7 @@ CONFIGS = {
         log_requests=True,     # log tutto in dev
     ),
     Environment.STAGING: LLMConfig(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         max_tokens=2048,
         temperature=0.5,
         max_retries=3,
@@ -560,7 +561,7 @@ CONFIGS = {
         log_requests=True,
     ),
     Environment.PRODUCTION: LLMConfig(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         max_tokens=4096,
         temperature=0.3,
         max_retries=5,
@@ -643,7 +644,7 @@ def backoff_wait(attempt: int, base: float = 2.0, max_wait: float = 60.0) -> flo
 
 ```python
 response = client.messages.create(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5",
     max_tokens=4096,  # aumenta il limite di output
     messages=[...]
 )
@@ -659,14 +660,14 @@ if response.stop_reason == "max_tokens":
 
 **Sintomo:** `APIStatusError` con status 400 e messaggio `"prompt is too long"` o `"context_length_exceeded"`.
 
-**Causa:** Il totale di token (system + messages history + strumenti) supera il context window del modello (200K token per Claude 3+).
+**Causa:** Il totale di token (system + messages history + strumenti) supera il context window del modello (1M token sui modelli correnti — Sonnet 5, Opus 5, Fable; 200K per Claude Haiku 4.5).
 
 **Soluzione:** Usare `count_tokens` per monitorare prima della chiamata. Applicare trimming/summarization della history.
 
 ```python
 # Verifica preventiva del context
 token_count = client.messages.count_tokens(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5",
     system=system_prompt,
     messages=messages
 )
@@ -692,7 +693,7 @@ if token_count.input_tokens > MAX_INPUT_TOKENS:
 
 ```python
 response = client.messages.create(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5",
     max_tokens=1024,
     tools=[extraction_tool],
     tool_choice={"type": "tool", "name": "extract_data"},  # forza il tool
