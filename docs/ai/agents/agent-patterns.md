@@ -7,9 +7,10 @@ search_keywords: [ai agent, agentic ai, react pattern, reasoning and acting, too
 parent: ai/agents/_index
 related: [ai/agents/_index, ai/agents/claude-agent-sdk, ai/agents/frameworks, ai/modelli/claude, ai/sviluppo/api-integration]
 official_docs: https://docs.anthropic.com/en/docs/build-with-claude/agents
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-27
+last_updated: 2026-09-09
+last_verified: 2026-09-09
 ---
 
 # Pattern Agentici — ReAct, Tool Use, Multi-Agent
@@ -130,7 +131,7 @@ Quando hai abbastanza informazioni per rispondere, rispondi direttamente senza u
 
     for iteration in range(max_iterations):
         response = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5",
             max_tokens=4096,
             system=system,
             tools=tools,
@@ -177,7 +178,7 @@ Quando hai abbastanza informazioni per rispondere, rispondi direttamente senza u
 ```python
 # Zero-shot CoT: basta aggiungere "Ragiona step by step"
 response = client.messages.create(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5",
     max_tokens=2048,
     messages=[{
         "role": "user",
@@ -200,17 +201,16 @@ def calculate_average(numbers):
 )
 ```
 
-### Extended Thinking (Claude 3.7+)
+### Thinking Adattivo ed Effort
 
-Claude supporta **extended thinking**: un budget di token dedicato al ragionamento interno prima di rispondere. Il thinking è visibile ma non fa parte dell'output normale.
+Sui modelli attuali (Claude Sonnet 5, Opus 5, Fable 5.1) il thinking è **adattivo**: il modello decide da sé quanto e quando ragionare prima di rispondere, senza un budget di token da impostare esplicitamente. La profondità si controlla con il parametro `effort` (`low` | `medium` | `high` | `xhigh` | `max`, default `high`), che influenza sia il thinking sia l'intera risposta (tool call incluse). Il vecchio meccanismo manuale `thinking={"type": "enabled", "budget_tokens": ...}` resta utilizzabile solo sui modelli precedenti alla generazione 4.6 (es. Opus 4.5); sui modelli successivi (incluso Sonnet 5 e Opus 5) non è accettato.
 
 ```python
 response = client.messages.create(
-    model="claude-sonnet-4-6",  # o opus-4-6 per massimo reasoning
+    model="claude-opus-5",  # o sonnet-5 per il miglior bilanciamento costo/qualità
     max_tokens=16000,
-    thinking={
-        "type": "enabled",
-        "budget_tokens": 10000  # quanto thinking interno permettere
+    output_config={
+        "effort": "high"  # low | medium | high | xhigh | max — profondità del thinking adattivo
     },
     messages=[{
         "role": "user",
@@ -218,7 +218,7 @@ response = client.messages.create(
     }]
 )
 
-# Il contenuto include i thinking blocks
+# Il contenuto include i thinking blocks quando il modello decide di pensare
 for block in response.content:
     if block.type == "thinking":
         print(f"[Thinking] {block.thinking[:500]}...")
@@ -238,7 +238,7 @@ def plan_and_execute(goal: str) -> str:
     """
     # FASE 1: PIANIFICAZIONE
     plan_response = client.messages.create(
-        model="claude-opus-4-6",  # usa il modello più capace per la pianificazione
+        model="claude-opus-5",  # usa il modello più capace per la pianificazione
         max_tokens=2048,
         system="""Sei un pianificatore esperto. Dato un obiettivo, genera un piano
 dettagliato con step atomici e verificabili. Ogni step deve:
@@ -271,7 +271,7 @@ Rispondi SOLO con JSON: {"steps": [{"id": 1, "task": "...", "tool": "...", "succ
 
         # Verifica criterio di successo
         verification = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5",
             max_tokens=256,
             messages=[{
                 "role": "user",
@@ -286,7 +286,7 @@ Lo step è stato completato con successo? Rispondi SOLO: YES o NO: <motivo>"""
 
     # FASE 3: SINTESI
     synthesis = client.messages.create(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         max_tokens=2048,
         messages=[{
             "role": "user",
@@ -347,8 +347,8 @@ In sistemi complessi, più agenti con ruoli specializzati collaborano. Questo pe
 class MultiAgentSystem:
     def __init__(self):
         self.client = anthropic.Anthropic()
-        self.orchestrator_model = "claude-opus-4-6"
-        self.worker_model = "claude-sonnet-4-6"
+        self.orchestrator_model = "claude-opus-5"
+        self.worker_model = "claude-sonnet-5"
 
     def orchestrate(self, task: str) -> str:
         """Orchestratore che decompone task e coordina worker."""
@@ -444,7 +444,7 @@ def generate_with_critique(task: str, iterations: int = 3) -> str:
 
     # Generazione iniziale
     response = client.messages.create(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         max_tokens=4096,
         system=system,
         messages=[{"role": "user", "content": task}]
@@ -454,7 +454,7 @@ def generate_with_critique(task: str, iterations: int = 3) -> str:
     for i in range(iterations):
         # Critique
         critique_response = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5",
             max_tokens=1024,
             messages=[{
                 "role": "user",
@@ -480,7 +480,7 @@ Sii specifico e costruttivo."""
 
         # Revision basata sulla critica
         revision_response = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5",
             max_tokens=4096,
             system=system,
             messages=[
@@ -537,7 +537,7 @@ def agent_with_human_gate(task: str, high_risk_actions: list[str]) -> str:
 
     for _ in range(20):
         response = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5",
             max_tokens=4096,
             tools=tools,
             messages=messages
