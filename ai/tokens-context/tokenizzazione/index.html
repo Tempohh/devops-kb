@@ -1319,7 +1319,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -1344,7 +1344,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -23735,10 +23735,28 @@
 <td>tiktoken</td>
 </tr>
 <tr>
-<td>Claude (Anthropic)</td>
+<td>GPT-4o, GPT-4.1, o-series (OpenAI)</td>
+<td>o200k_base</td>
+<td>~200K (199.997)</td>
+<td>tiktoken</td>
+</tr>
+<tr>
+<td>Claude (Anthropic, ≤4.6)</td>
 <td>Proprietario (simile cl100k)</td>
 <td>~100K</td>
 <td>anthropic SDK</td>
+</tr>
+<tr>
+<td>Claude (Anthropic, 4.7+)</td>
+<td>Proprietario (nuova generazione)</td>
+<td>non pubblicato</td>
+<td>anthropic SDK</td>
+</tr>
+<tr>
+<td>Llama 4</td>
+<td>Llama 4 Tokenizer</td>
+<td>202.048</td>
+<td>tiktoken-based / transformers</td>
 </tr>
 <tr>
 <td>Llama 3.x</td>
@@ -23759,16 +23777,16 @@
 <td>sentencepiece</td>
 </tr>
 <tr>
-<td>Gemma 2</td>
+<td>Gemma 3</td>
 <td>Gemma Tokenizer</td>
-<td>256.000</td>
+<td>262.144</td>
 <td>sentencepiece</td>
 </tr>
 <tr>
-<td>Qwen 2.5</td>
-<td>Qwen Tokenizer (tiktoken-based)</td>
-<td>151.936</td>
-<td>tiktoken</td>
+<td>Qwen 3</td>
+<td>Qwen Tokenizer</td>
+<td>151.643</td>
+<td>tiktoken-based</td>
 </tr>
 <tr>
 <td>GPT-2 (storico)</td>
@@ -23781,6 +23799,10 @@
 <div class="admonition note">
 <p class="admonition-title">Perché vocab size più grande è meglio</p>
 <p>Un vocabolario più grande significa che sequenze comuni vengono compresse in meno token. Llama 3 con 128K vocab tokenizza il codice e le lingue non-latine in ~20% meno token rispetto a Llama 2 con 32K vocab. Meno token = meno costo, più contesto disponibile, inferenza più veloce.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Claude 4.7+ usa un nuovo tokenizer</p>
+<p>A partire da Claude Opus/Sonnet 4.7, Anthropic ha introdotto un tokenizer di nuova generazione che, a parità di testo, produce circa il 30% di token in più rispetto ai modelli Claude 4.6 e precedenti (che usano ancora il tokenizer "simile a cl100k"). L'aumento esatto dipende dal contenuto. Impatto pratico: le stime di costo e di occupazione del context window vanno ricalcolate quando si migra da un modello ≤4.6 a uno ≥4.7. Fonte: <a href="https://platform.claude.com/docs/en/about-claude/pricing#model-pricing">Anthropic Pricing — nota tokenizer</a>.</p>
 </div>
 <h2 id="3-differenze-per-lingua-e-tipo-di-contenuto">3. Differenze per Lingua e Tipo di Contenuto<a class="headerlink" href="#3-differenze-per-lingua-e-tipo-di-contenuto" title="Permanent link">&para;</a></h2>
 <h3 id="efficienza-per-lingua">Efficienza per Lingua<a class="headerlink" href="#efficienza-per-lingua" title="Permanent link">&para;</a></h3>
@@ -23939,7 +23961,7 @@
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Conta token prima dell'invio (senza consumare l'API per la risposta)</span>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">messages</span><span class="o">.</span><span class="n">count_tokens</span><span class="p">(</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">model</span><span class="o">=</span><span class="s2">"claude-3-5-sonnet-20241022"</span><span class="p">,</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">model</span><span class="o">=</span><span class="s2">"claude-sonnet-5"</span><span class="p">,</span>
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">system</span><span class="o">=</span><span class="s2">"Sei un esperto DevOps senior."</span><span class="p">,</span>
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">messages</span><span class="o">=</span><span class="p">[</span>
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>        <span class="p">{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"Analizza questo Dockerfile:</span><span class="se">\n</span><span class="s2">```</span><span class="se">\n</span><span class="s2">FROM ubuntu:22.04</span><span class="se">\n</span><span class="s2">...</span><span class="se">\n</span><span class="s2">```"</span><span class="p">}</span>
@@ -23979,10 +24001,10 @@
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>    <span class="n">output_cost</span> <span class="o">=</span> <span class="p">(</span><span class="n">output_tokens</span> <span class="o">/</span> <span class="mi">1_000_000</span><span class="p">)</span> <span class="o">*</span> <span class="n">output_price_per_million</span>
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>    <span class="k">return</span> <span class="n">input_cost</span> <span class="o">+</span> <span class="n">output_cost</span>
 </span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># Prezzi di esempio (Feb 2026) — verificare i prezzi aggiornati!</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># Prezzi di esempio (set 2026, verificati su platform.claude.com/docs — controllare comunque i prezzi aggiornati!)</span>
 </span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="n">PRICING</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>    <span class="s2">"claude-3-5-sonnet"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"input"</span><span class="p">:</span> <span class="mf">3.00</span><span class="p">,</span> <span class="s2">"output"</span><span class="p">:</span> <span class="mf">15.00</span><span class="p">},</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>    <span class="s2">"claude-3-5-haiku"</span><span class="p">:</span>  <span class="p">{</span><span class="s2">"input"</span><span class="p">:</span> <span class="mf">0.80</span><span class="p">,</span> <span class="s2">"output"</span><span class="p">:</span> <span class="mf">4.00</span><span class="p">},</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>    <span class="s2">"claude-sonnet-5"</span><span class="p">:</span>   <span class="p">{</span><span class="s2">"input"</span><span class="p">:</span> <span class="mf">2.00</span><span class="p">,</span> <span class="s2">"output"</span><span class="p">:</span> <span class="mf">10.00</span><span class="p">},</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>    <span class="s2">"claude-haiku-4-5"</span><span class="p">:</span>  <span class="p">{</span><span class="s2">"input"</span><span class="p">:</span> <span class="mf">1.00</span><span class="p">,</span> <span class="s2">"output"</span><span class="p">:</span> <span class="mf">5.00</span><span class="p">},</span>
 </span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>    <span class="s2">"gpt-4o"</span><span class="p">:</span>            <span class="p">{</span><span class="s2">"input"</span><span class="p">:</span> <span class="mf">2.50</span><span class="p">,</span> <span class="s2">"output"</span><span class="p">:</span> <span class="mf">10.00</span><span class="p">},</span>
 </span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>    <span class="s2">"gpt-4o-mini"</span><span class="p">:</span>       <span class="p">{</span><span class="s2">"input"</span><span class="p">:</span> <span class="mf">0.15</span><span class="p">,</span> <span class="s2">"output"</span><span class="p">:</span> <span class="mf">0.60</span><span class="p">},</span>
 </span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="p">}</span>
@@ -24009,11 +24031,11 @@
 </span><span id="__span-9-39"><a id="__codelineno-9-39" name="__codelineno-9-39" href="#__codelineno-9-39"></a>    <span class="p">}</span>
 </span><span id="__span-9-40"><a id="__codelineno-9-40" name="__codelineno-9-40" href="#__codelineno-9-40"></a>
 </span><span id="__span-9-41"><a id="__codelineno-9-41" name="__codelineno-9-41" href="#__codelineno-9-41"></a><span class="c1"># Esempio: chatbot con 1000 richieste/giorno, prompt 500 token, risposta 300 token</span>
-</span><span id="__span-9-42"><a id="__codelineno-9-42" name="__codelineno-9-42" href="#__codelineno-9-42"></a><span class="nb">print</span><span class="p">(</span><span class="n">estimate_monthly_cost</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">500</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="s2">"claude-3-5-sonnet"</span><span class="p">))</span>
-</span><span id="__span-9-43"><a id="__codelineno-9-43" name="__codelineno-9-43" href="#__codelineno-9-43"></a><span class="c1"># {'daily_usd': 6.0, 'monthly_usd': 180.0, ...}</span>
+</span><span id="__span-9-42"><a id="__codelineno-9-42" name="__codelineno-9-42" href="#__codelineno-9-42"></a><span class="nb">print</span><span class="p">(</span><span class="n">estimate_monthly_cost</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">500</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="s2">"claude-sonnet-5"</span><span class="p">))</span>
+</span><span id="__span-9-43"><a id="__codelineno-9-43" name="__codelineno-9-43" href="#__codelineno-9-43"></a><span class="c1"># {'daily_usd': 4.0, 'monthly_usd': 120.0, ...}</span>
 </span><span id="__span-9-44"><a id="__codelineno-9-44" name="__codelineno-9-44" href="#__codelineno-9-44"></a>
-</span><span id="__span-9-45"><a id="__codelineno-9-45" name="__codelineno-9-45" href="#__codelineno-9-45"></a><span class="nb">print</span><span class="p">(</span><span class="n">estimate_monthly_cost</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">500</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="s2">"claude-3-5-haiku"</span><span class="p">))</span>
-</span><span id="__span-9-46"><a id="__codelineno-9-46" name="__codelineno-9-46" href="#__codelineno-9-46"></a><span class="c1"># {'daily_usd': 1.6, 'monthly_usd': 48.0, ...}</span>
+</span><span id="__span-9-45"><a id="__codelineno-9-45" name="__codelineno-9-45" href="#__codelineno-9-45"></a><span class="nb">print</span><span class="p">(</span><span class="n">estimate_monthly_cost</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">500</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="s2">"claude-haiku-4-5"</span><span class="p">))</span>
+</span><span id="__span-9-46"><a id="__codelineno-9-46" name="__codelineno-9-46" href="#__codelineno-9-46"></a><span class="c1"># {'daily_usd': 2.0, 'monthly_usd': 60.0, ...}</span>
 </span></code></pre></div>
 <h2 id="6-token-budget-planning">6. Token Budget Planning<a class="headerlink" href="#6-token-budget-planning" title="Permanent link">&para;</a></h2>
 <h3 id="distribuzione-consigliata-del-context">Distribuzione Consigliata del Context<a class="headerlink" href="#distribuzione-consigliata-del-context" title="Permanent link">&para;</a></h3>
@@ -24090,7 +24112,7 @@
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">client</span> <span class="o">=</span> <span class="n">anthropic</span><span class="o">.</span><span class="n">Anthropic</span><span class="p">()</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
 </span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">messages</span><span class="o">.</span><span class="n">count_tokens</span><span class="p">(</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">model</span><span class="o">=</span><span class="s2">"claude-3-5-sonnet-20241022"</span><span class="p">,</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">model</span><span class="o">=</span><span class="s2">"claude-sonnet-5"</span><span class="p">,</span>
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="n">testo</span><span class="p">}]</span>
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="p">)</span>
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Token reali per Claude: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">input_tokens</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
@@ -24106,7 +24128,7 @@
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>
 </span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">call_with_token_logging</span><span class="p">(</span><span class="n">messages</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">system</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 </span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">messages</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>        <span class="n">model</span><span class="o">=</span><span class="s2">"claude-3-5-sonnet-20241022"</span><span class="p">,</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>        <span class="n">model</span><span class="o">=</span><span class="s2">"claude-sonnet-5"</span><span class="p">,</span>
 </span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>        <span class="n">max_tokens</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
 </span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>        <span class="n">system</span><span class="o">=</span><span class="n">system</span><span class="p">,</span>
 </span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>        <span class="n">messages</span><span class="o">=</span><span class="n">messages</span>
