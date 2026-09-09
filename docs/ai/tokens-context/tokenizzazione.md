@@ -7,9 +7,10 @@ search_keywords: [tokenizzazione LLM, Byte Pair Encoding, BPE, tiktoken, vocab s
 parent: ai/tokens-context/_index
 related: [ai/tokens-context/context-window, ai/sviluppo/prompt-engineering, ai/modelli/_index]
 official_docs: https://github.com/openai/tiktoken
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-09-09
+last_verified: 2026-09-09
 ---
 
 # Tokenizzazione — BPE, Vocab e Costo Token
@@ -88,16 +89,22 @@ for token_id in tokens:
 | Modello | Tokenizer | Vocab Size | Libreria |
 |---------|-----------|-----------|---------|
 | GPT-4, GPT-3.5 | cl100k_base | 100.277 | tiktoken |
-| Claude (Anthropic) | Proprietario (simile cl100k) | ~100K | anthropic SDK |
+| GPT-4o, GPT-4.1, o-series (OpenAI) | o200k_base | ~200K (199.997) | tiktoken |
+| Claude (Anthropic, ≤4.6) | Proprietario (simile cl100k) | ~100K | anthropic SDK |
+| Claude (Anthropic, 4.7+) | Proprietario (nuova generazione) | non pubblicato | anthropic SDK |
+| Llama 4 | Llama 4 Tokenizer | 202.048 | tiktoken-based / transformers |
 | Llama 3.x | Llama 3 Tokenizer | 128.256 | sentencepiece / transformers |
 | Llama 2 | Llama 2 Tokenizer | 32.000 | sentencepiece |
 | Mistral 7B | Mistral Tokenizer | 32.000 | sentencepiece |
-| Gemma 2 | Gemma Tokenizer | 256.000 | sentencepiece |
-| Qwen 2.5 | Qwen Tokenizer (tiktoken-based) | 151.936 | tiktoken |
+| Gemma 3 | Gemma Tokenizer | 262.144 | sentencepiece |
+| Qwen 3 | Qwen Tokenizer | 151.643 | tiktoken-based |
 | GPT-2 (storico) | gpt2 | 50.257 | tiktoken |
 
 !!! note "Perché vocab size più grande è meglio"
     Un vocabolario più grande significa che sequenze comuni vengono compresse in meno token. Llama 3 con 128K vocab tokenizza il codice e le lingue non-latine in ~20% meno token rispetto a Llama 2 con 32K vocab. Meno token = meno costo, più contesto disponibile, inferenza più veloce.
+
+!!! warning "Claude 4.7+ usa un nuovo tokenizer"
+    A partire da Claude Opus/Sonnet 4.7, Anthropic ha introdotto un tokenizer di nuova generazione che, a parità di testo, produce circa il 30% di token in più rispetto ai modelli Claude 4.6 e precedenti (che usano ancora il tokenizer "simile a cl100k"). L'aumento esatto dipende dal contenuto. Impatto pratico: le stime di costo e di occupazione del context window vanno ricalcolate quando si migra da un modello ≤4.6 a uno ≥4.7. Fonte: [Anthropic Pricing — nota tokenizer](https://platform.claude.com/docs/en/about-claude/pricing#model-pricing).
 
 ## 3. Differenze per Lingua e Tipo di Contenuto
 
@@ -234,7 +241,7 @@ client = anthropic.Anthropic()
 
 # Conta token prima dell'invio (senza consumare l'API per la risposta)
 response = client.messages.count_tokens(
-    model="claude-3-5-sonnet-20241022",
+    model="claude-sonnet-5",
     system="Sei un esperto DevOps senior.",
     messages=[
         {"role": "user", "content": "Analizza questo Dockerfile:\n```\nFROM ubuntu:22.04\n...\n```"}
@@ -281,10 +288,10 @@ def calculate_cost(
     output_cost = (output_tokens / 1_000_000) * output_price_per_million
     return input_cost + output_cost
 
-# Prezzi di esempio (Feb 2026) — verificare i prezzi aggiornati!
+# Prezzi di esempio (set 2026, verificati su platform.claude.com/docs — controllare comunque i prezzi aggiornati!)
 PRICING = {
-    "claude-3-5-sonnet": {"input": 3.00, "output": 15.00},
-    "claude-3-5-haiku":  {"input": 0.80, "output": 4.00},
+    "claude-sonnet-5":   {"input": 2.00, "output": 10.00},
+    "claude-haiku-4-5":  {"input": 1.00, "output": 5.00},
     "gpt-4o":            {"input": 2.50, "output": 10.00},
     "gpt-4o-mini":       {"input": 0.15, "output": 0.60},
 }
@@ -311,11 +318,11 @@ def estimate_monthly_cost(
     }
 
 # Esempio: chatbot con 1000 richieste/giorno, prompt 500 token, risposta 300 token
-print(estimate_monthly_cost(1000, 500, 300, "claude-3-5-sonnet"))
-# {'daily_usd': 6.0, 'monthly_usd': 180.0, ...}
+print(estimate_monthly_cost(1000, 500, 300, "claude-sonnet-5"))
+# {'daily_usd': 4.0, 'monthly_usd': 120.0, ...}
 
-print(estimate_monthly_cost(1000, 500, 300, "claude-3-5-haiku"))
-# {'daily_usd': 1.6, 'monthly_usd': 48.0, ...}
+print(estimate_monthly_cost(1000, 500, 300, "claude-haiku-4-5"))
+# {'daily_usd': 2.0, 'monthly_usd': 60.0, ...}
 ```
 
 ## 6. Token Budget Planning
@@ -410,7 +417,7 @@ import anthropic
 client = anthropic.Anthropic()
 
 response = client.messages.count_tokens(
-    model="claude-3-5-sonnet-20241022",
+    model="claude-sonnet-5",
     messages=[{"role": "user", "content": testo}]
 )
 print(f"Token reali per Claude: {response.input_tokens}")
@@ -433,7 +440,7 @@ client = anthropic.Anthropic()
 
 def call_with_token_logging(messages: list, system: str = "") -> str:
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-sonnet-5",
         max_tokens=1024,
         system=system,
         messages=messages
