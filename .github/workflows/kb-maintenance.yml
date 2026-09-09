@@ -7,7 +7,7 @@ name: KB maintenance
 # Se il secret non e' configurato il job si salta in modo pulito (nessun errore).
 #
 # Interruttore di pausa: la Actions variable KB_MAINTENANCE_ENABLED.
-#   false | 0 | off | no  -> automazione in pausa (cron e manuale = no-op pulito)
+#   false | 0 | off | no  -> automazione in pausa (dispatch e manuale = no-op pulito)
 #   assente o altro        -> attiva (default)
 # Toggle (solo owner del repo):
 #   gh variable set KB_MAINTENANCE_ENABLED --body false   # pausa
@@ -15,14 +15,12 @@ name: KB maintenance
 # Un giro singolo mentre e' in pausa: Run workflow con input force=true.
 
 on:
-  schedule:
-    # Obiettivo: esecuzione alle 00:00 / 06:00 / 12:00 / 18:00 ORA DI ROMA,
-    # stabile tutto l'anno. Il cron di GitHub Actions e' SEMPRE in UTC e non
-    # conosce l'ora legale, quindi servono due righe (offset estivo e invernale);
-    # lo step "Gate" piu' sotto tiene solo lo slot che, convertito in ora di
-    # Roma, cade davvero su 00/06/12/18 e scarta l'altro.
-    - cron: "0 22,4,10,16 * * *"   # = 00/06/12/18 Europe/Rome con ora legale (CEST, UTC+2)
-    - cron: "0 23,5,11,17 * * *"   # = 00/06/12/18 Europe/Rome in ora solare (CET, UTC+1)
+  # UNICO trigger: workflow_dispatch. Lo scheduling puntuale alle 00/06/12/18
+  # ora di Roma e' delegato a uno scheduler ESTERNO (cron-job.org, timezone
+  # Europe/Rome) che chiama l'endpoint REST `actions/workflows/.../dispatches`.
+  # Il cron nativo di GitHub Actions e' stato RIMOSSO: partiva con 1-4 h di
+  # ritardo e lo step Gate scartava sistematicamente ogni run.
+  # Setup dello scheduler esterno: _automation/AUTOMATION.md sezione 2.
   workflow_dispatch:
     inputs:
       max_tasks:
@@ -46,12 +44,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Gate — pausa + secret + finestra oraria (00/06/12/18 Europe/Rome)
+      - name: Gate — pausa + secret
         id: gate
         env:
           KB_MAINTENANCE_ENABLED: ${{ vars.KB_MAINTENANCE_ENABLED }}
           FORCE_INPUT: ${{ github.event.inputs.force }}
         run: |
+          # Nessun controllo orario: il workflow parte SOLO su workflow_dispatch
+          # e lo scheduler esterno lo chiama gia' agli orari giusti (00/06/12/18
+          # ora di Roma). Qui restano solo pausa e presenza del secret.
+
           # --- Interruttore di pausa (Actions variable) -------------------
           # KB_MAINTENANCE_ENABLED = false|0|off|no  -> pausa. Assente o altro
           # valore -> attiva (default). force=true da Run workflow bypassa.
@@ -65,21 +67,6 @@ jobs:
             echo "::notice title=KB maintenance::Automazione in PAUSA (KB_MAINTENANCE_ENABLED=$KB_MAINTENANCE_ENABLED). Riattiva con: gh variable set KB_MAINTENANCE_ENABLED --body true"
           fi
 
-          # --- Finestra oraria ---------------------------------------------
-          # Ci sono due righe cron (offset estate/inverno): qui si tiene solo
-          # lo slot che, convertito in ora di Roma, cade su 00/06/12/18.
-          # L'altro slot (ora sbagliata) viene scartato. Il trigger manuale
-          # (workflow_dispatch) passa sempre, a qualunque ora.
-          ROME_HOUR=$(TZ="Europe/Rome" date +%-H)
-          IN_WINDOW=false
-          case "${{ github.event_name }}" in
-            workflow_dispatch) IN_WINDOW=true ;;
-            *) case "$ROME_HOUR" in 0|00|6|06|12|18) IN_WINDOW=true ;; esac ;;
-          esac
-          if [ "$IN_WINDOW" != "true" ]; then
-            echo "::notice title=KB maintenance::Slot cron a ora di Roma ${ROME_HOUR}:00 - fuori da 00/06/12/18, run saltato."
-          fi
-
           # --- Secret -----------------------------------------------------
           HAS_TOKEN=true
           if [ -z "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}" ]; then
@@ -88,7 +75,7 @@ jobs:
           fi
 
           # --- Decisione -------------------------------------------------
-          if [ "$IN_WINDOW" = "true" ] && [ "$HAS_TOKEN" = "true" ] \
+          if [ "$HAS_TOKEN" = "true" ] \
              && { [ "$PAUSED" != "true" ] || [ "$FORCE" = "true" ]; }; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else

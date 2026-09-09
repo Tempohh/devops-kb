@@ -264,15 +264,18 @@ La KB si mantiene anche da sola. Documento autoritativo: **`_automation/AUTOMATI
 Sintesi:
 
 - **Esecuzione**: GitHub Actions (`.github/workflows/kb-maintenance.yml`) esegue una
-  iterazione bounded via `_automation/run_once.py` **alle 00/06/12/18 ora di Roma**
-  tutto l'anno (due righe cron UTC estate/inverno + gate orario nello step *Gate*;
-  un run che GitHub ritarda oltre l'ora piena viene saltato). In locale
-  `KB_Aggiorna_Sicuro.bat` fa lo stesso per 1 task. Il deploy del sito
+  iterazione bounded via `_automation/run_once.py`. Trigger **solo `workflow_dispatch`**:
+  lo scheduling puntuale **alle 00/06/12/18 ora di Roma** è delegato a uno scheduler
+  **ESTERNO** (cron-job.org, timezone Europe/Rome) che chiama l'endpoint REST
+  `actions/workflows/.../dispatches`. Il cron nativo di Actions è stato rimosso:
+  partiva con 1–4 h di ritardo e il gate orario scartava sistematicamente ogni run.
+  Setup dello scheduler esterno (PAT fine-grained + cron-job.org): `_automation/AUTOMATION.md` §2.
+  In locale `KB_Aggiorna_Sicuro.bat` fa lo stesso per 1 task. Il deploy del sito
   (`deploy.yml` → `mkdocs gh-deploy`) parte su push a `master`.
 - **Pausa** (interruttore, solo owner del repo): Actions variable
   `KB_MAINTENANCE_ENABLED`. `false`/`0`/`off`/`no` → lo step *Gate* esce
-  `enabled=false` e cron + *Run workflow* fanno no-op pulito; assente o altro valore
-  → attiva (default). `gh variable set KB_MAINTENANCE_ENABLED --body false|true`.
+  `enabled=false` e dispatch esterno + *Run workflow* fanno no-op pulito; assente o
+  altro valore → attiva (default). `gh variable set KB_MAINTENANCE_ENABLED --body false|true`.
   Input dispatch `force: true` = un giro ignorando la pausa. `run_once.py` onora lo
   stesso nome come env var (pausa locale). Dettagli in `_automation/AUTOMATION.md` §2.
 - **Coda**: `_automation/state.yaml` (gestita SOLO da `manage-state.py` — un agente
@@ -308,6 +311,7 @@ scrivere `_automation/state.yaml`**; fermati dopo un task.
 | 1 | 2025-02-23 | Progetto inizializzato | N/A | N/A | ✅ Chiuso |
 | 2 | 2026-02-23 | Sequenze di escape letterali (es. `\n`) nei diagrammi/schemi renderizzate come testo invece che come caratteri di controllo | Aggiunto pattern da evitare; usare sempre newline reali o attributi XML appropriati nei file `.drawio.svg` | CLAUDE.md | ✅ Chiuso |
 | 3 | 2026-09-08 | `status: complete` privo di significato (404/407 file "complete"); gate qualità solo meccanico; nessun freno alla crescita; automazione non documentata in CLAUDE.md; sezione AI indietro di una generazione (Claude 4.6 vs famiglia Claude 5); `mkdocs build --strict` rotto; automazione dipendente dal PC acceso | Ciclo di stato reale con `reviewed`/`last_verified`; task type `review`/`currency`/`consolidate`; freno di saturazione; sezione "Layer di automazione"; CI GitHub Actions (deploy + manutenzione schedulata); fix config tags; sweep attualità sezione AI | CLAUDE.md, `_automation/*`, `.github/workflows/*`, `mkdocs.yml`, `docs/ai/modelli/*`, `docs/index.md`, `docs/_metadata/taxonomy.yml` | ✅ Chiuso |
+| 4 | 2026-09-09 | Il cron nativo di GitHub Actions per `kb-maintenance` partiva con 1–4 h di ritardo (o veniva droppato): lo step *Gate* con finestra oraria di 1 h scartava **ogni** run schedulato (`ora di Roma fuori da 00/06/12/18`). Da quando lo schedule fu ancorato: zero iterazioni reali dell'automazione via cron. | Rimosso `schedule:` dal workflow (trigger solo `workflow_dispatch`); scheduling puntuale 00/06/12/18 ora di Roma delegato a scheduler esterno (cron-job.org, timezone Europe/Rome, PAT fine-grained con permesso *Actions: RW*) che chiama l'endpoint `dispatches`; gate ridotto a pausa + secret; runbook in `AUTOMATION.md` §2 | `.github/workflows/kb-maintenance.yml`, `_automation/AUTOMATION.md`, CLAUDE.md | ✅ Chiuso |
 
 ### Pattern da Evitare
 
@@ -322,6 +326,10 @@ scrivere `_automation/state.yaml`**; fermati dopo un task.
   (cron UTC estate/inverno + gate); interruttore di pausa owner-only
   `KB_MAINTENANCE_ENABLED` (Actions variable + env var per `run_once.py`);
   collaboratore `danipalu03` rimosso (owner unico controllo). → applicata
+- **2026-09-09**: `kb-maintenance` migrato da cron nativo a **scheduler esterno**
+  (cron-job.org → endpoint `dispatches`); il cron di Actions arrivava troppo in
+  ritardo e il gate orario azzerava il throughput (criticità #4). Workflow con
+  trigger solo `workflow_dispatch`, gate ridotto a pausa + secret. → applicata
 
 ---
 

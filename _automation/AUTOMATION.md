@@ -9,13 +9,20 @@ protocolli *di contenuto*; questo file descrive *come la KB si mantiene da sola*
 
 | Modo | Come si avvia | Quando usarlo |
 |---|---|---|
-| **CI schedulata** (raccomandato) | `.github/workflows/kb-maintenance.yml` — ogni 6h, ancorata a **00/06/12/18 ora di Roma** (due righe cron UTC estate/inverno + gate orario) + *Run workflow* | Manutenzione continua "a PC spento". Nessuna dipendenza dalla macchina locale. |
+| **CI su dispatch** (raccomandato) | `.github/workflows/kb-maintenance.yml` — trigger **solo `workflow_dispatch`**; lo scheduling **00/06/12/18 ora di Roma** e' delegato a uno scheduler ESTERNO (cron-job.org) che chiama l'endpoint REST `dispatches`. Anche *Actions → Run workflow* a mano. | Manutenzione continua "a PC spento". Nessuna dipendenza dalla macchina locale. |
 | **Locale — 1 task** | doppio click su `KB_Aggiorna_Sicuro.bat` (→ `kb-safe.ps1` → `run_once.py --max-tasks 1`) | Eseguire un singolo task al volo su Windows, con la stessa logica della CI. |
 | **Locale — loop infinito** | `KB_Aggiorna_Infinito.bat` (→ `kb-infinite.ps1`) | Sessioni intensive locali. **Non** applica la policy modello di `config.yaml`. Legacy. |
 
 Deploy del sito: `.github/workflows/deploy.yml` (build + `mkdocs gh-deploy`) parte
 a ogni push su `master` che tocca `docs/`, `mkdocs.yml`, `requirements.txt`.
 `kb-maintenance.yml` ripubblica anche da solo dopo aver committato contenuto.
+
+> **Perche' uno scheduler esterno e non `schedule:` nel workflow?** Il cron di
+> GitHub Actions sui runner condivisi parte con 30 min – 4 h di ritardo (o viene
+> droppato) nelle fasce di carico. Con il vecchio gate a finestra di 1 h **ogni
+> run schedulato finiva scartato** (`ora di Roma fuori da 00/06/12/18`): da quando
+> lo schedule fu ancorato, zero iterazioni reali. cron-job.org (timezone
+> `Europe/Rome`, gestisce da se' CEST/CET) chiama l'API al minuto giusto.
 
 ---
 
@@ -30,8 +37,45 @@ a ogni push su `master` che tocca `docs/`, `mkdocs.yml`, `requirements.txt`.
 3. (Opzionale) *Actions → KB maintenance → Run workflow* per un giro immediato.
 
 Il token resta sui limiti del piano Claude esistente: su rate limit il run
-termina "soft" (exit 0, task ancora `pending`) e il cron successivo riprende.
+termina "soft" (exit 0, task ancora `pending`) e il dispatch successivo riprende.
 `state.yaml` rende ogni run ripartibile.
+
+### Scheduler esterno (cron-job.org) — setup una tantum
+
+Serve un servizio puntuale che chiami l'endpoint `dispatches` di GitHub alle
+00/06/12/18 ora di Roma. Passi (repo `Tempohh/devops-kb`):
+
+1. **Fine-grained PAT** — GitHub → *Settings → Developer settings → Personal
+   access tokens → Fine-grained tokens → Generate new token*
+   - *Resource owner*: `Tempohh` · *Repository access*: **Only select repositories → `devops-kb`**
+   - *Permissions → Repository → Actions*: **Read and write** (unico permesso necessario)
+   - *Expiration*: max consentito; **promemoria in calendario per la rotazione**
+2. **Verifica il token** (una riga, sostituisci `$PAT`):
+   ```bash
+   curl -sS -X POST \
+     -H "Authorization: Bearer $PAT" \
+     -H "Accept: application/vnd.github+json" \
+     -H "X-GitHub-Api-Version: 2022-11-28" \
+     https://api.github.com/repos/Tempohh/devops-kb/actions/workflows/kb-maintenance.yml/dispatches \
+     -d '{"ref":"master","inputs":{"max_tasks":"1"}}' -w '%{http_code}\n'
+   ```
+   Atteso: **`204`** e un nuovo run *workflow_dispatch* in *Actions*.
+3. **cron-job.org** (account gratuito) → *Create cronjob*:
+   - *URL*: `https://api.github.com/repos/Tempohh/devops-kb/actions/workflows/kb-maintenance.yml/dispatches`
+   - *Request method*: **POST**
+   - *Headers*:
+     - `Authorization: Bearer <PAT>`
+     - `Accept: application/vnd.github+json`
+     - `X-GitHub-Api-Version: 2022-11-28`
+   - *Request body*: `{"ref":"master","inputs":{"max_tasks":"1"}}`
+   - *Schedule*: minuto `0`, ore `0,6,12,18`, ogni giorno · **timezone `Europe/Rome`**
+     (cron-job.org applica da se' il passaggio CEST/CET)
+   - *Notifications*: attiva "on failure" — se il dispatch smette di partire,
+     l'automazione si ferma **in silenzio** (nessun run = nessuna notice).
+4. **Salvaguardia**: se cron-job.org o il PAT muoiono, la KB smette di aggiornarsi
+   senza errori. Controllo veloce: `gh run list --workflow=kb-maintenance.yml -L 5`
+   deve mostrare run `workflow_dispatch` recenti. In alternativa si puo' aggiungere
+   al workflow un `schedule:` giornaliero *senza* gate orario come rete di sicurezza.
 
 ### Pausa / ripresa
 
@@ -41,7 +85,7 @@ del repo — non esistono altri collaboratori.
 
 | Vuoi | Comando | Effetto |
 |---|---|---|
-| Mettere in pausa | `gh variable set KB_MAINTENANCE_ENABLED --body false` | lo step *Gate* di `kb-maintenance.yml` esce con `enabled=false`: cron e *Run workflow* fanno il no-op pulito |
+| Mettere in pausa | `gh variable set KB_MAINTENANCE_ENABLED --body false` | lo step *Gate* di `kb-maintenance.yml` esce con `enabled=false`: dispatch esterno e *Run workflow* fanno il no-op pulito |
 | Riprendere | `gh variable set KB_MAINTENANCE_ENABLED --body true` (o `gh variable delete`) | default: se assente o diversa da `false/0/off/no` l'automazione gira |
 | Giro singolo in pausa | *Actions → KB maintenance → Run workflow* con `force: true` | esegue un'iterazione ignorando la pausa (il token resta comunque richiesto) |
 
