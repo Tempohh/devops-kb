@@ -1569,7 +1569,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -1594,7 +1594,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -23521,7 +23521,7 @@
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">langchain_core.runnables</span><span class="w"> </span><span class="kn">import</span> <span class="n">RunnablePassthrough</span><span class="p">,</span> <span class="n">RunnableLambda</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># LLM</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">llm</span> <span class="o">=</span> <span class="n">ChatAnthropic</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"claude-3-5-sonnet-20241022"</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">llm</span> <span class="o">=</span> <span class="n">ChatAnthropic</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"claude-sonnet-5"</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Chain semplice: prompt | llm | parser</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">prompt</span> <span class="o">=</span> <span class="n">ChatPromptTemplate</span><span class="o">.</span><span class="n">from_messages</span><span class="p">([</span>
@@ -23634,6 +23634,10 @@
 <p class="admonition-title">Versioning LangChain</p>
 <p>LangChain ha una storia di breaking changes tra versioni minori. Specifica sempre la versione esatta in <code>requirements.txt</code>. Considera se la dependency vale il rischio per la tua applicazione.</p>
 </div>
+<div class="admonition note">
+<p class="admonition-title">LangChain 1.0 e la nuova agent API</p>
+<p>Da LangChain 1.0 gli agenti sono costruiti sopra <strong>LangGraph</strong> tramite la nuova API <code>create_agent</code> (harness minimale e componibile su model/tools/prompt/middleware), che sostituisce <code>create_tool_calling_agent</code> + <code>AgentExecutor</code> mostrati sopra. Gli esempi restano funzionanti ma per progetti nuovi valuta <code>create_agent</code>; sopra <code>create_agent</code> esistono anche i "Deep Agents", pensati per task lunghi con compressione automatica del contesto.</p>
+</div>
 <h2 id="2-llamaindex">2. LlamaIndex<a class="headerlink" href="#2-llamaindex" title="Permanent link">&para;</a></h2>
 <p>LlamaIndex è focalizzato su RAG e data indexing. Dove LangChain è generalista, LlamaIndex eccelle nel connettere LLM a sorgenti dati strutturate e non strutturate.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">llama_index.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">VectorStoreIndex</span><span class="p">,</span> <span class="n">SimpleDirectoryReader</span><span class="p">,</span> <span class="n">Settings</span>
@@ -23641,7 +23645,7 @@
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">llama_index.embeddings.openai</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenAIEmbedding</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Configura LLM e embeddings</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">Settings</span><span class="o">.</span><span class="n">llm</span> <span class="o">=</span> <span class="n">Anthropic</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"claude-3-5-sonnet-20241022"</span><span class="p">)</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">Settings</span><span class="o">.</span><span class="n">llm</span> <span class="o">=</span> <span class="n">Anthropic</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"claude-sonnet-5"</span><span class="p">)</span>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">Settings</span><span class="o">.</span><span class="n">embed_model</span> <span class="o">=</span> <span class="n">OpenAIEmbedding</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"text-embedding-3-small"</span><span class="p">)</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># Carica e indicizza documenti</span>
@@ -23685,13 +23689,17 @@
 - Meno flessibile per workflow non-RAG</p>
 <h2 id="3-autogen-microsoft">3. AutoGen (Microsoft)<a class="headerlink" href="#3-autogen-microsoft" title="Permanent link">&para;</a></h2>
 <p>AutoGen è un framework per <strong>conversazioni multi-agente</strong>. La premessa: invece di un singolo agente che fa tutto, più agenti specializzati si passano messaggi e collaborano.</p>
+<div class="admonition warning">
+<p class="admonition-title">AutoGen è in maintenance mode</p>
+<p>Microsoft ha messo AutoGen in <strong>maintenance mode</strong>: non riceve più nuove feature ed è mantenuto dalla community. Il successore ufficiale è <strong>Microsoft Agent Framework (MAF)</strong>, disponibile in versione 1.0 con supporto a lungo termine e guida di migrazione da AutoGen v0.2. Per nuovi progetti multi-agente in ambito Microsoft valuta MAF invece di AutoGen; gli esempi seguenti restano validi per chi lavora già su codebase AutoGen esistenti.</p>
+</div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">autogen</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># Configurazione LLM</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">llm_config</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="s2">"config_list"</span><span class="p">:</span> <span class="p">[</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="p">{</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>            <span class="s2">"model"</span><span class="p">:</span> <span class="s2">"claude-3-5-sonnet-20241022"</span><span class="p">,</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>            <span class="s2">"model"</span><span class="p">:</span> <span class="s2">"claude-sonnet-5"</span><span class="p">,</span>
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>            <span class="s2">"api_key"</span><span class="p">:</span> <span class="s2">"sk-ant-..."</span><span class="p">,</span>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>            <span class="s2">"api_type"</span><span class="p">:</span> <span class="s2">"anthropic"</span>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="p">}</span>
@@ -23789,7 +23797,7 @@
 </span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>    <span class="n">goal</span><span class="o">=</span><span class="s2">"Raccogliere informazioni aggiornate su best practice DevOps"</span><span class="p">,</span>
 </span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    <span class="n">backstory</span><span class="o">=</span><span class="s2">"Hai 15 anni di esperienza in DevOps e cloud native. Sei metodico e cerchi sempre le fonti primarie."</span><span class="p">,</span>
 </span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>    <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">search_tool</span><span class="p">],</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="n">llm</span><span class="o">=</span><span class="s2">"claude-3-5-sonnet-20241022"</span><span class="p">,</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="n">llm</span><span class="o">=</span><span class="s2">"claude-sonnet-5"</span><span class="p">,</span>
 </span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
 </span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="p">)</span>
 </span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
@@ -23798,7 +23806,7 @@
 </span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>    <span class="n">goal</span><span class="o">=</span><span class="s2">"Scrivere documentazione tecnica chiara e completa"</span><span class="p">,</span>
 </span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>    <span class="n">backstory</span><span class="o">=</span><span class="s2">"Hai scritto documentazione tecnica per Google, AWS e altri top tech company."</span><span class="p">,</span>
 </span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>    <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">file_tool</span><span class="p">],</span>
-</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>    <span class="n">llm</span><span class="o">=</span><span class="s2">"claude-3-5-haiku-20241022"</span><span class="p">,</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>    <span class="n">llm</span><span class="o">=</span><span class="s2">"claude-haiku-4-5-20251001"</span><span class="p">,</span>
 </span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>    <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span>
 </span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="p">)</span>
 </span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>
@@ -23851,7 +23859,7 @@
 </span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="n">final_report</span><span class="p">:</span> <span class="nb">str</span>
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
 </span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># LLM</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="n">llm</span> <span class="o">=</span> <span class="n">ChatAnthropic</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"claude-3-5-sonnet-20241022"</span><span class="p">)</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="n">llm</span> <span class="o">=</span> <span class="n">ChatAnthropic</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"claude-sonnet-5"</span><span class="p">)</span>
 </span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>
 </span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="c1"># Nodi del grafo</span>
 </span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="k">def</span><span class="w"> </span><span class="nf">analyze_alert</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">AgentState</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
@@ -24104,9 +24112,9 @@
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="https://python.langchain.com/docs/">LangChain Documentation</a> — Documentazione ufficiale e cookbook</li>
-<li><a href="https://docs.llamaindex.ai/">LlamaIndex Documentation</a> — Guide e tutorial</li>
-<li><a href="https://github.com/microsoft/autogen">AutoGen GitHub</a> — Framework Microsoft multi-agent</li>
+<li><a href="https://docs.langchain.com/oss/python/langchain/overview">LangChain Documentation</a> — Documentazione ufficiale e cookbook</li>
+<li><a href="https://developers.llamaindex.ai/python/framework/">LlamaIndex Documentation</a> — Guide e tutorial</li>
+<li><a href="https://github.com/microsoft/autogen">AutoGen GitHub</a> — Framework Microsoft multi-agent, in maintenance mode: vedi <a href="https://github.com/microsoft/agent-framework">Microsoft Agent Framework</a> come successore</li>
 <li><a href="https://docs.crewai.com/">CrewAI Documentation</a> — Framework role-based</li>
 <li><a href="https://langchain-ai.github.io/langgraph/">LangGraph Documentation</a> — Workflow stateful</li>
 <li><a href="https://docs.litellm.ai/">LiteLLM</a> — Proxy unificato, agnostico dal framework</li>
