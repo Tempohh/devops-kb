@@ -6,10 +6,11 @@ tags: [langchain, llamaindex, autogen, crewai, langgraph, frameworks]
 search_keywords: [LangChain, LlamaIndex, AutoGen, CrewAI, LangGraph, framework agentici, orchestrazione LLM, LCEL, LangChain Expression Language, multi-agent framework, agentic workflow, RAG framework, chain LangChain]
 parent: ai/agents/_index
 related: [ai/agents/_index, ai/agenti/claude-agent-sdk, ai/sviluppo/rag, ai/sviluppo/prompt-engineering]
-official_docs: https://python.langchain.com/docs/
-status: complete
+official_docs: https://docs.langchain.com/oss/python/langchain/overview
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-27
+last_updated: 2026-09-10
+last_verified: 2026-09-10
 ---
 
 # Framework Agentici — LangChain, LlamaIndex, AutoGen
@@ -33,7 +34,7 @@ from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 
 # LLM
-llm = ChatAnthropic(model="claude-3-5-sonnet-20241022", temperature=0)
+llm = ChatAnthropic(model="claude-sonnet-5", temperature=0)
 
 # Chain semplice: prompt | llm | parser
 prompt = ChatPromptTemplate.from_messages([
@@ -154,6 +155,9 @@ print(result["output"])
 !!! warning "Versioning LangChain"
     LangChain ha una storia di breaking changes tra versioni minori. Specifica sempre la versione esatta in `requirements.txt`. Considera se la dependency vale il rischio per la tua applicazione.
 
+!!! note "LangChain 1.0 e la nuova agent API"
+    Da LangChain 1.0 gli agenti sono costruiti sopra **LangGraph** tramite la nuova API `create_agent` (harness minimale e componibile su model/tools/prompt/middleware), che sostituisce `create_tool_calling_agent` + `AgentExecutor` mostrati sopra. Gli esempi restano funzionanti ma per progetti nuovi valuta `create_agent`; sopra `create_agent` esistono anche i "Deep Agents", pensati per task lunghi con compressione automatica del contesto.
+
 ## 2. LlamaIndex
 
 LlamaIndex è focalizzato su RAG e data indexing. Dove LangChain è generalista, LlamaIndex eccelle nel connettere LLM a sorgenti dati strutturate e non strutturate.
@@ -164,7 +168,7 @@ from llama_index.llms.anthropic import Anthropic
 from llama_index.embeddings.openai import OpenAIEmbedding
 
 # Configura LLM e embeddings
-Settings.llm = Anthropic(model="claude-3-5-sonnet-20241022")
+Settings.llm = Anthropic(model="claude-sonnet-5")
 Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")
 
 # Carica e indicizza documenti
@@ -216,6 +220,9 @@ response = sub_question_engine.query(
 
 AutoGen è un framework per **conversazioni multi-agente**. La premessa: invece di un singolo agente che fa tutto, più agenti specializzati si passano messaggi e collaborano.
 
+!!! warning "AutoGen è in maintenance mode"
+    Microsoft ha messo AutoGen in **maintenance mode**: non riceve più nuove feature ed è mantenuto dalla community. Il successore ufficiale è **Microsoft Agent Framework (MAF)**, disponibile in versione 1.0 con supporto a lungo termine e guida di migrazione da AutoGen v0.2. Per nuovi progetti multi-agente in ambito Microsoft valuta MAF invece di AutoGen; gli esempi seguenti restano validi per chi lavora già su codebase AutoGen esistenti.
+
 ```python
 import autogen
 
@@ -223,7 +230,7 @@ import autogen
 llm_config = {
     "config_list": [
         {
-            "model": "claude-3-5-sonnet-20241022",
+            "model": "claude-sonnet-5",
             "api_key": "sk-ant-...",
             "api_type": "anthropic"
         }
@@ -330,7 +337,7 @@ researcher = Agent(
     goal="Raccogliere informazioni aggiornate su best practice DevOps",
     backstory="Hai 15 anni di esperienza in DevOps e cloud native. Sei metodico e cerchi sempre le fonti primarie.",
     tools=[search_tool],
-    llm="claude-3-5-sonnet-20241022",
+    llm="claude-sonnet-5",
     verbose=True
 )
 
@@ -339,7 +346,7 @@ writer = Agent(
     goal="Scrivere documentazione tecnica chiara e completa",
     backstory="Hai scritto documentazione tecnica per Google, AWS e altri top tech company.",
     tools=[file_tool],
-    llm="claude-3-5-haiku-20241022",
+    llm="claude-haiku-4-5-20251001",
     verbose=True
 )
 
@@ -398,7 +405,7 @@ class AgentState(TypedDict):
     final_report: str
 
 # LLM
-llm = ChatAnthropic(model="claude-3-5-sonnet-20241022")
+llm = ChatAnthropic(model="claude-sonnet-5")
 
 # Nodi del grafo
 def analyze_alert(state: AgentState) -> dict:
@@ -640,9 +647,9 @@ Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small")  # deve e
 
 ## Riferimenti
 
-- [LangChain Documentation](https://python.langchain.com/docs/) — Documentazione ufficiale e cookbook
-- [LlamaIndex Documentation](https://docs.llamaindex.ai/) — Guide e tutorial
-- [AutoGen GitHub](https://github.com/microsoft/autogen) — Framework Microsoft multi-agent
+- [LangChain Documentation](https://docs.langchain.com/oss/python/langchain/overview) — Documentazione ufficiale e cookbook
+- [LlamaIndex Documentation](https://developers.llamaindex.ai/python/framework/) — Guide e tutorial
+- [AutoGen GitHub](https://github.com/microsoft/autogen) — Framework Microsoft multi-agent, in maintenance mode: vedi [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) come successore
 - [CrewAI Documentation](https://docs.crewai.com/) — Framework role-based
 - [LangGraph Documentation](https://langchain-ai.github.io/langgraph/) — Workflow stateful
 - [LiteLLM](https://docs.litellm.ai/) — Proxy unificato, agnostico dal framework
