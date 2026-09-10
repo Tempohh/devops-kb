@@ -7,9 +7,10 @@ search_keywords: [context window LLM, finestra di contesto, KV cache, key value 
 parent: ai/tokens-context/_index
 related: [ai/tokens-context/tokenizzazione, ai/sviluppo/rag, ai/sviluppo/prompt-engineering, ai/mlops/infrastruttura-gpu]
 official_docs: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-09-10
+last_verified: 2026-09-10
 ---
 
 # Context Window e KV Cache
@@ -231,7 +232,7 @@ async def update_conversation_summary(
     client,
     current_summary: str,
     new_messages: list[dict],
-    model: str = "claude-3-5-haiku-20241022"
+    model: str = "claude-haiku-4-5-20251001"
 ) -> str:
     """Aggiorna il sommario della conversazione con i nuovi messaggi."""
     prompt = f"""
@@ -307,9 +308,9 @@ import anthropic
 client = anthropic.Anthropic()
 
 # Con prompt caching: il system prompt viene cached
-# La prima richiesta è normale, le successive pagano solo $0.30/M (vs $3.00/M)
+# La prima richiesta è normale, le successive pagano solo $0.20/M (vs $2.00/M) — Claude Sonnet 5
 response = client.messages.create(
-    model="claude-3-5-sonnet-20241022",
+    model="claude-sonnet-5",
     max_tokens=1024,
     system=[
         {
@@ -333,9 +334,9 @@ print(f"Cache read: {response.usage.cache_read_input_tokens}")
 **Regole del prompt caching:**
 - Il prefisso da cachare deve essere identico byte-per-byte tra le richieste
 - Il `cache_control` marker deve essere sullo stesso breakpoint nella struttura del messaggio
-- La cache dura 5 minuti per default (ephemeral)
-- Massimo 4 breakpoints di cache per richiesta
-- Risparmio: token in cache costano 10% del prezzo normale (90% di sconto)
+- La cache dura 5 minuti per default (ephemeral); è disponibile anche un TTL esteso a 1 ora impostando `"ttl": "1h"` nel `cache_control`, a fronte di uno scrittura cache più cara (2× il prezzo base invece di 1.25×)
+- Massimo 4 breakpoints di cache per richiesta (1 automatico + 3 espliciti, oppure 4 espliciti)
+- Risparmio: token letti dalla cache costano 10% del prezzo di input normale (90% di sconto) sulla maggior parte dei modelli
 
 ## 7. Sliding Window Attention
 
@@ -378,7 +379,7 @@ import anthropic
 
 client = anthropic.Anthropic()
 
-def safe_create(messages: list, system: str, model: str = "claude-3-5-sonnet-20241022", max_context: int = 180_000):
+def safe_create(messages: list, system: str, model: str = "claude-sonnet-5", max_context: int = 180_000):
     """Lancia eccezione esplicita se l'input supera il limite."""
     # Stima token: ~4 caratteri per token (approssimazione)
     total_chars = sum(len(m["content"]) for m in messages) + len(system)
@@ -438,7 +439,7 @@ client = anthropic.Anthropic()
 # SBAGLIATO: il testo varia per ogni richiesta → cache miss
 def bad_request(user_id: str, docs: str):
     return client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-sonnet-5",
         max_tokens=1024,
         system=[{
             "type": "text",
@@ -451,7 +452,7 @@ def bad_request(user_id: str, docs: str):
 # CORRETTO: separa parte statica da parte dinamica
 def good_request(user_id: str, docs: str):
     return client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-sonnet-5",
         max_tokens=1024,
         system=[
             {
@@ -516,7 +517,7 @@ def needle_in_haystack_test(client, needle: str, haystack_chunks: list[str], pos
     chunks.insert(position, f"INFORMAZIONE IMPORTANTE: {needle}")
     context = "\n\n".join(chunks)
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-sonnet-5",
         max_tokens=200,
         messages=[{"role": "user", "content": f"{context}\n\nQual è l'informazione importante?"}]
     )
