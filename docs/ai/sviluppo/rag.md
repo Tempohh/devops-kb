@@ -7,9 +7,10 @@ search_keywords: [RAG, Retrieval-Augmented Generation, vector database, embeddin
 parent: ai/sviluppo/_index
 related: [ai/sviluppo/_index, ai/sviluppo/prompt-engineering, ai/tokens-context/context-window, ai/training/valutazione]
 official_docs: https://qdrant.tech/documentation/
-status: needs-review
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-09-10
+last_verified: 2026-09-10
 ---
 
 # RAG — Retrieval-Augmented Generation
@@ -96,7 +97,7 @@ def rag_query(query: str, k: int = 5) -> str:
 
     # Generate
     response = claude.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-sonnet-5",
         max_tokens=2048,
         system="""Rispondi alle domande basandoti ESCLUSIVAMENTE sulla documentazione fornita.
 Cita sempre la fonte (es. "Secondo [Documento 2]...").
@@ -524,7 +525,7 @@ def hyde_search(query: str, k: int = 5) -> list[str]:
 
     # Step 1: LLM genera una risposta ipotetica (senza recupero)
     hypothetical_doc = claude.messages.create(
-        model="claude-3-5-haiku-20241022",
+        model="claude-haiku-4-5",
         max_tokens=500,
         messages=[{
             "role": "user",
@@ -563,7 +564,7 @@ Restituisci SOLO le 3 query, una per riga.
 Query originale: {query}"""
 
     variants_text = claude.messages.create(
-        model="claude-3-5-haiku-20241022",
+        model="claude-haiku-4-5",
         max_tokens=200,
         messages=[{"role": "user", "content": variants_prompt}]
     ).content[0].text
@@ -793,7 +794,7 @@ class DevOpsKnowledgeBase:
 
         # Generate
         response = self.client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-5",
             max_tokens=2048,
             system="""Sei un assistente tecnico per team DevOps.
 Rispondi basandoti ESCLUSIVAMENTE sulla documentazione fornita.
