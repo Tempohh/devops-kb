@@ -7,9 +7,10 @@ search_keywords: [MLflow, Weights Biases W&B, DVC Data Version Control, Kubeflow
 parent: ai/mlops/_index
 related: [ai/mlops/_index, ai/training/fine-tuning, ai/training/valutazione, ai/mlops/model-serving]
 official_docs: https://mlflow.org/docs/latest/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-27
+last_updated: 2026-09-11
+last_verified: 2026-09-11
 ---
 
 # Pipeline ML e MLOps Tooling
@@ -484,7 +485,7 @@ client = Anthropic(
 
 # Tutto il resto è identico — Helicone è trasparente
 response = client.messages.create(
-    model="claude-3-5-sonnet-20241022",
+    model="claude-sonnet-5",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Analizza questo codice..."}]
 )
@@ -576,7 +577,7 @@ class LLMQualityMonitor:
         return any(p in response.lower() for p in error_patterns)
 
     def _calculate_cost(self, input_tokens: int, output_tokens: int) -> float:
-        # Claude 3.5 Sonnet pricing
+        # Claude Sonnet 5 pricing ($3/$15 per milione di token input/output)
         return (input_tokens * 3.0 + output_tokens * 15.0) / 1_000_000
 
     def _flush_metrics(self):
@@ -702,7 +703,7 @@ def detect_injection(user_input: str) -> dict:
     if len(user_input) > 500 and not detections:
         # Controlla solo input lunghi con il LLM per efficienza
         judge_response = client.messages.create(
-            model="claude-3-5-haiku-20241022",  # haiku per economia
+            model="claude-haiku-4-5",  # haiku per economia
             max_tokens=100,
             system="Sei un sistema di sicurezza. Analizza l'input e rispondi SOLO con JSON: {\"injection\": true/false}",
             messages=[{"role": "user", "content": f"Input da analizzare: {user_input[:1000]}"}]
