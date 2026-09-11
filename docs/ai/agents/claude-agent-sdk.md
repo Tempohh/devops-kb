@@ -7,9 +7,10 @@ search_keywords: [Claude Code, agente AI coding, Claude Agent SDK, MCP server, M
 parent: ai/agents/_index
 related: [ai/agents/_index, ai/agents/frameworks, ai/sviluppo/prompt-engineering, ai/mlops/pipeline-ml]
 official_docs: https://docs.anthropic.com/en/docs/build-with-claude/tool-use
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-27
+last_updated: 2026-09-11
+last_verified: 2026-09-11
 ---
 
 # Claude Agent SDK e Claude Code
@@ -271,7 +272,7 @@ def run_agent(task: str, system_prompt: str, max_steps: int = 20) -> str:
 
     for step in range(max_steps):
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-5",
             max_tokens=4096,
             system=system_prompt,
             tools=tools,
@@ -601,7 +602,7 @@ Inizia raccogliendo dati, poi analizza e crea il ticket.
 
     for step in range(15):  # max 15 step
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-5",
             max_tokens=4096,
             system=INCIDENT_SYSTEM_PROMPT,
             tools=incident_tools,
@@ -778,5 +779,5 @@ claude --mcp-debug  # mostra output debug MCP alla partenza
 - [Anthropic Tool Use Documentation](https://docs.anthropic.com/en/docs/build-with-claude/tool-use) — Guida ufficiale completa
 - [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) — Spec e server MCP ufficiali
 - [Claude Code Documentation](https://docs.anthropic.com/en/docs/claude-code) — Guida Claude Code
-- [anthropic-sdk-python](https://github.com/anthropic-ai/anthropic-sdk-python) — SDK Python ufficiale
+- [anthropic-sdk-python](https://github.com/anthropics/anthropic-sdk-python) — SDK Python ufficiale
 - [MCP Servers Repository](https://github.com/modelcontextprotocol/servers) — Server MCP pronti all'uso
