@@ -7,9 +7,10 @@ search_keywords: [transformer architecture, attention mechanism, self-attention,
 parent: ai/fondamentali/_index
 related: [ai/tokens-context/tokenizzazione, ai/tokens-context/context-window, ai/modelli/claude, ai/training/fine-tuning]
 official_docs: https://arxiv.org/abs/1706.03762
-status: complete
+status: reviewed
 difficulty: advanced
 last_updated: 2026-03-27
+last_verified: 2026-09-11
 ---
 
 # Architettura LLM — Transformer, Attention e Pre-training
@@ -363,7 +364,7 @@ I LLM generano token basandosi su pattern statistici, non su conoscenza verifica
 
 ### Knowledge Cutoff
 
-Il modello non sa nulla di eventi successivi alla data di cutoff del training. Claude 4.6 ha cutoff **agosto 2025**.
+Il modello non sa nulla di eventi successivi alla data di cutoff del training. Il cutoff varia per modello e generazione: ad esempio, tra i modelli Claude attuali, Claude Sonnet 5 ha training data cutoff **gennaio 2026** e Claude Opus 5 **maggio 2026** (fonte: documentazione ufficiale Anthropic).
 
 ## Troubleshooting
 
