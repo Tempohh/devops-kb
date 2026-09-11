@@ -3,20 +3,21 @@ title: "Modelli Open Source / Open Weight"
 slug: modelli-open-source
 category: ai
 tags: [open-source, llama, mistral, gemma, qwen, deepseek, ollama, quantization]
-search_keywords: [open weight model, Llama 3, Mistral 7B, Mixtral MoE, Gemma 2, Qwen 2.5, DeepSeek V3, DeepSeek R1, Phi-4, Ollama, llama.cpp, GGUF, GPTQ, AWQ, quantizzazione, local inference, self-hosted LLM, on-premise AI]
+search_keywords: [open weight model, Llama 4, Llama 3, Mistral Large 3, Mixtral MoE, Gemma 3, Gemma 4, Qwen3, DeepSeek V3.2, DeepSeek V4, DeepSeek R1, Phi-4, Ollama, llama.cpp, GGUF, GPTQ, AWQ, quantizzazione, local inference, self-hosted LLM, on-premise AI]
 parent: ai/modelli/_index
 related: [ai/modelli/scelta-modello, ai/mlops/model-serving, ai/mlops/infrastruttura-gpu, ai/training/fine-tuning]
 official_docs: https://ollama.com/library
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-27
+last_updated: 2026-09-11
+last_verified: 2026-09-11
 ---
 
 # Modelli Open Source / Open Weight
 
 ## Panoramica
 
-I modelli "open weight" rendono pubblici i pesi del modello addestrato, permettendo di scaricarli, eseguirli localmente, fare fine-tuning e deployarli su infrastruttura propria. Questo si contrappone ai modelli closed (Claude, GPT-4) accessibili solo tramite API. La distinzione "open weight" vs "open source" è importante: i modelli open source condividono anche il codice di training e i dati, mentre la maggior parte dei modelli "open" condivide solo i pesi.
+I modelli "open weight" rendono pubblici i pesi del modello addestrato, permettendo di scaricarli, eseguirli localmente, fare fine-tuning e deployarli su infrastruttura propria. Questo si contrappone ai modelli closed (Claude, GPT-5) accessibili solo tramite API. La distinzione "open weight" vs "open source" è importante: i modelli open source condividono anche il codice di training e i dati, mentre la maggior parte dei modelli "open" condivide solo i pesi.
 
 Il vantaggio principale dell'open weight è il controllo totale: privacy dei dati, nessuna dipendenza da terze parti, possibilità di fine-tuning su dati proprietari, e costo variabile in base all'utilizzo invece che per token. Lo svantaggio è l'onere operativo: serve infrastruttura GPU, expertise in ML, e le performance sono inferiori ai migliori modelli closed per task complessi.
 
@@ -24,31 +25,27 @@ Il vantaggio principale dell'open weight è il controllo totale: privacy dei dat
 
 | Tipo | Pesi | Codice Training | Dati Training | Esempio |
 |------|------|-----------------|---------------|---------|
-| **Closed** | No | No | No | Claude, GPT-4, Gemini Pro |
-| **Open Weight** | Si | No/Parziale | No | Llama 3, Mistral, Gemma |
+| **Closed** | No | No | No | Claude, GPT-5, Gemini |
+| **Open Weight** | Si | No/Parziale | No | Llama 4, Mistral, Gemma |
 | **Open Source** | Si | Si | Si/Parziale | OLMo, Falcon, BLOOM |
 
 !!! warning "Licenze — leggere sempre"
-    "Open" non significa necessariamente "libero per uso commerciale". Llama 3 ha una licenza che limita l'uso per servizi con >700M utenti mensili. Mistral Large usa "MRL" (proprietaria). Sempre verificare la licenza prima del deployment in produzione.
+    "Open" non significa necessariamente "libero per uso commerciale". Llama 4 usa la Llama 4 Community License, che limita l'uso per servizi con >700M utenti mensili attivi (serve una licenza separata da Meta). Mistral, invece, dalla generazione Large 3/Small 4 è passata ad Apache 2.0 su gran parte della gamma. Sempre verificare la licenza prima del deployment in produzione.
 
-## Llama 3 (Meta)
+## Llama 4 (Meta)
 
-Llama 3 è la famiglia di modelli open weight di riferimento dal 2024. La terza generazione ha fatto un salto qualitativo significativo rispetto a Llama 2.
+Llama 4 (agosto 2026) è la generazione attuale della famiglia Llama, nativamente multimodale (testo, immagini, audio/video) fin dal training, a differenza di Llama 3 dove il supporto immagini era stato aggiunto in un secondo momento. Usa architettura Mixture of Experts.
 
-**Architettura:** Transformer decoder-only con GQA (Grouped Query Attention), RoPE, SwiGLU, RMSNorm. Tokenizer con vocab 128K (il doppio di Llama 2).
+| Variante | Parametri Totali | Parametri Attivi | Context | Use Case |
+|----------|------------------|-------------------|---------|---------|
+| Llama 4 Scout | 109B (16 esperti) | 17B | 10M | Context lunghissimo, il più grande dell'ecosistema open |
+| Llama 4 Maverick | 400B (128 esperti) | 17B | 1M | Frontier open weight, multimodale |
+| Llama 4 Behemoth | ~2T (teacher, non rilasciato pubblicamente) | — | — | Modello usato per la distillazione di Scout/Maverick |
 
-| Variante | Parametri | Context | Use Case |
-|----------|-----------|---------|---------|
-| Llama 3.2 1B | 1B | 128K | Edge, mobile, IoT |
-| Llama 3.2 3B | 3B | 128K | On-device, task semplici |
-| Llama 3.1 8B | 8B | 128K | Deployment economico, buona qualità |
-| Llama 3.1 70B | 70B | 128K | Near-frontier, ottimo rapporto qualità/costo |
-| Llama 3.1 405B | 405B | 128K | Frontier open weight |
-| Llama 3.2 11B | 11B | 128K | Multimodal (testo + immagini) |
-| Llama 3.2 90B | 90B | 128K | Multimodal high-quality |
-| Llama 3.3 70B | 70B | 128K | Versione aggiornata 70B (Dec 2024) |
+**Licenza:** Llama 4 Community License — libero per la maggior parte degli usi commerciali, limitazioni per servizi con >700M MAU (serve licenza separata da Meta).
 
-**Licenza:** Llama 3 Community License — libero per la maggior parte degli usi commerciali, limitazioni per servizi molto grandi (>700M MAU).
+!!! note "Llama 3 resta rilevante"
+    La generazione Llama 3.1/3.2/3.3 (8B, 70B, 405B, varianti edge 1B/3B e multimodali 11B/90B) è ancora ampiamente distribuita, ben documentata e più leggera da eseguire in locale rispetto a Llama 4. Per deployment con vincoli di VRAM stretti o dove il context multi-milione non serve, resta una scelta valida.
 
 ## Mistral / Mixtral (Mistral AI)
 
@@ -89,69 +86,75 @@ Licenza: Apache 2.0 (pienamente libero per uso commerciale).
 
 ### Mixtral 8×22B
 
-141B parametri totali, ~39B attivi. Vicino a GPT-3.5 per qualità. 64K context.
+141B parametri totali, ~39B attivi. 64K context. Architettura ormai superata dalle generazioni successive, ma ancora in uso per deployment esistenti.
 
-### Mistral Large 2
+### Mistral Large 3 e Small 4 (generazione attuale)
 
-Il modello flagship di Mistral con ~123B parametri. Non open-weight completo (licenza MRL, uso commerciale ristretto). 128K context.
+Da fine 2025 Mistral ha spostato l'intera linea flagship su licenza **Apache 2.0**, superando la vecchia licenza proprietaria MRL di Mistral Large 2.
 
-## Gemma 2 (Google)
+| Modello | Parametri Totali | Parametri Attivi | Context | Licenza |
+|---------|-------------------|-------------------|---------|---------|
+| Mistral Large 3 (dic 2025) | 675B (MoE granulare) | 41B | 256K | Apache 2.0 |
+| Mistral Small 4 (mar 2026) | 24B (denso) | — | 128K | Apache 2.0 |
 
-Gemma 2 è la famiglia di modelli piccoli ma capaci di Google, ottimizzati per efficienza su hardware consumer.
+Mistral Large 3 è quindi, a differenza di Mistral Large 2, pienamente open weight e riutilizzabile in produzione senza restrizioni di licenza.
+
+## Gemma 3 / Gemma 4 (Google)
+
+Gemma 2 è stata superata da Gemma 3 (marzo 2025) e poi da Gemma 4 (aprile 2026), che hanno risolto il principale limite della generazione 2 — il context window ridotto — e aggiunto multimodalità.
 
 | Variante | Parametri | Context | Note |
 |----------|-----------|---------|------|
-| Gemma 2 2B | 2B | 8K | Ideale on-device, Pixel, Android |
-| Gemma 2 9B | 9B | 8K | Ottimo per il suo size |
-| Gemma 2 27B | 27B | 8K | Near-frontier per modelli consumer |
+| Gemma 3 1B / 270M | 1B / 270M | 32K | Micro, on-device |
+| Gemma 3 4B / 12B / 27B | 4B–27B | 128K | Multimodale (testo + immagini), 140+ lingue |
+| Gemma 4 E2B / E4B | 2B–4B | 128K | Multimodale con audio |
+| Gemma 4 12B / 26B-A4B / 31B | 12B–31B | 256K | Near-frontier per modelli consumer, MoE su 26B-A4B |
 
-**Innovazioni architetturali Gemma 2:**
+**Innovazioni architetturali (ereditate da Gemma 2 e ampliate):**
 - Sliding Window Attention alternata con Global Attention
 - Logit soft-capping (stabilità training)
-- Knowledge distillation: i modelli piccoli sono stati distillati da modelli più grandi
-
-!!! note "Context window limitata"
-    Gemma 2 ha context window di soli 8K token — molto meno di Llama 3 (128K). Per task con documenti lunghi, Llama 3 è preferibile.
+- Knowledge distillation: i modelli piccoli sono distillati da modelli più grandi
+- Da Gemma 3: input multimodale (testo + immagini); da Gemma 4: anche audio sui modelli E2B/E4B/12B
 
 **Licenza:** Google Gemma Terms of Use — uso commerciale consentito.
 
-## Qwen 2.5 (Alibaba)
+## Qwen3 (Alibaba)
 
-La famiglia Qwen 2.5 di Alibaba si distingue per performance eccellenti in coding, matematica e lingue diverse dall'inglese (cinese in particolare).
+Qwen 2.5 è stata soppiantata da Qwen3, con dual-mode "thinking/non-thinking" nello stesso modello e supporto esteso a 100+ lingue. Alibaba ha poi iterato rapidamente nel 2026 con Qwen3.5, 3.6, 3.7 e 3.8 (in parte open weight, in parte proprietari Max/Plus/Flash).
 
 | Variante | Parametri | Context | Note |
 |----------|-----------|---------|------|
-| Qwen2.5 0.5B | 0.5B | 32K | Micro, on-device |
-| Qwen2.5 1.5B | 1.5B | 32K | Edge |
-| Qwen2.5 3B | 3B | 32K | Mobile |
-| Qwen2.5 7B | 7B | 128K | Consumer GPU |
-| Qwen2.5 14B | 14B | 128K | Consumer/workstation |
-| Qwen2.5 32B | 32B | 128K | Near-frontier |
-| Qwen2.5 72B | 72B | 128K | Frontier open weight |
-| Qwen2.5-Coder 32B | 32B | 128K | Specializzato per coding |
-| Qwen2.5-Math 72B | 72B | 128K | Specializzato per matematica |
+| Qwen3 0.6B / 1.7B / 4B | 0.6B–4B | 32K | Micro/edge/mobile |
+| Qwen3 8B / 14B / 32B (denso) | 8B–32B | 128K | Consumer/workstation |
+| Qwen3-30B-A3B (MoE) | 30B totali, 3B attivi | 128K | Efficienza MoE su hardware consumer |
+| Qwen3-235B-A22B (MoE) | 235B totali, 22B attivi | 128K | Frontier open weight |
+| Qwen3-Coder / Qwen3-Max (varianti successive) | variabile | 128K+ | Specializzato coding; Max/Plus/Flash sono per lo più proprietari via API |
 
-**Licenza:** Apache 2.0 per la maggior parte delle varianti.
+**Licenza:** Apache 2.0 per l'intera linea Qwen3 open weight (dense e MoE).
 
-## DeepSeek V3 e R1
+## DeepSeek: da V3/R1 a V3.2 e V4
 
-DeepSeek è un'azienda cinese che ha rilasciato modelli con performance frontier a costi di training drasticamente ridotti.
+DeepSeek è un'azienda cinese che ha rilasciato modelli con performance frontier a costi di training drasticamente ridotti. La linea V3 (general-purpose) e R1 (reasoning) del 2024-2025 sono state superate da V3.1/V3.2 (2025) e infine unificate in V4 (aprile 2026).
 
-### DeepSeek V3
+### DeepSeek V3 (2024) e R1 (gen 2025) — generazione precedente
 
-- **671B parametri totali, 37B attivi** (MoE con 256 esperti, 8 attivi per token)
-- **Training cost**: circa $6M (vs centinaia di milioni per modelli simili)
-- **Performance**: vicino o superiore a GPT-4o su molti benchmark
-- **Multi-Token Prediction (MTP)**: predice più token futuri simultaneamente
-- **Licenza**: DeepSeek License — libero per ricerca, uso commerciale consentito
+- **DeepSeek V3**: 671B parametri totali, 37B attivi (MoE con 256 esperti, 8 attivi per token); training cost ~$6M; Multi-Token Prediction (MTP)
+- **DeepSeek R1**: modello di reasoning con lunghe chain-of-thought, training con RL puro senza SFT iniziale; R1-Distill in versioni 7B/14B/32B/70B
+- Restano ampiamente usate per il distillato R1 (ancora un riferimento per i modelli di reasoning piccoli), ma la linea principale è stata soppiantata dalle versioni successive.
 
-### DeepSeek R1
+### DeepSeek V3.2 (dic 2025)
 
-Modello di **reasoning** con capacità simili a o1 di OpenAI:
-- Genera lunghe chain-of-thought prima della risposta finale
-- Training con RL puro senza SFT iniziale (innovazione tecnica rilevante)
-- Eccelle su matematica, coding, problemi scientifici
-- R1-Distill: versioni distillate in modelli più piccoli (7B, 14B, 32B, 70B) che mantengono le capacità di reasoning
+- Stessa base architetturale di V3, con l'aggiunta di **DeepSeek Sparse Attention (DSA)**: indexer + selezione fine-grained dei token per efficienza su context lunghi
+- Context window: 163.840 token
+- **Licenza**: MIT (più permissiva della DeepSeek License precedente)
+
+### DeepSeek V4 (apr 2026) — generazione attuale
+
+- Unifica per la prima volta le linee V-series (general) e R-series (reasoning) in un unico modello che alloca dinamicamente la profondità di ragionamento in base al task
+- **V4-Flash**: 284B totali, 13B attivi — **V4-Pro**: 1.6T totali, 49B attivi
+- Attenzione ibrida (Compressed Sparse Attention + Heavily Compressed Attention) per context fino a 1M token
+- **Licenza**: MIT
+- Aggiornamento successivo: **V4.1-Flash** (set 2026), che supera V4-Pro su performance/costo/velocità per molti carichi di lavoro
 
 ```python
 # Esempio interazione con DeepSeek R1 via Ollama
@@ -167,6 +170,7 @@ ollama run deepseek-r1:7b "Risolvi: se x² + 5x + 6 = 0, trova le radici"
 - Addestrato su dati sintetici di alta qualità (approccio "quality over quantity")
 - Performance sorprendenti per la sua dimensione, sopra modelli 2-3× più grandi
 - **Licenza**: MIT — pienamente libero
+- La famiglia si è ampliata con **Phi-4-reasoning** / **Phi-4-reasoning-plus** (focus su matematica/reasoning), **Phi-4-mini** (3.8B, testuale) e **Phi-4-multimodal** (speech + vision + testo) — tutti MIT, dimensioni tra 3.8B e 15B
 
 ## Deployment Locale
 
@@ -349,8 +353,8 @@ model = AutoAWQForCausalLM.from_quantized(
 - **llama.cpp per deployment CPU**: se non hai GPU, Q4_K_M offre il miglior rapporto qualità/velocità.
 - **vLLM per produzione**: per serving ad alta concorrenza, usa vLLM (vedi [model-serving](../mlops/model-serving.md)).
 - **Q4_K_M come default**: per la maggior parte degli usi, Q4_K_M è il punto dolce tra qualità e risorse.
-- **Verifica la licenza**: Llama 3, Mistral, Gemma hanno licenze diverse. Apache 2.0 (Mistral 7B, Qwen) è la più permissiva.
-- **Modelli specializzati**: per coding usa Qwen2.5-Coder, per reasoning usa DeepSeek R1, per multilingua usa Qwen o BLOOM.
+- **Verifica la licenza**: Llama, Gemma hanno licenze proprietarie con soglie MAU; Mistral (da Large 3/Small 4) e Qwen3 sono interamente Apache 2.0, la più permissiva.
+- **Modelli specializzati**: per coding usa Qwen3-Coder, per reasoning usa DeepSeek V4 (o R1-Distill per footprint ridotto), per multilingua usa Qwen3 o BLOOM.
 
 ## Troubleshooting
 
