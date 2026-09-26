@@ -583,10 +583,10 @@ def cmd_init_analysis():
                                    .read_text(encoding="utf-8", errors="replace"))
         except Exception:
             fm = {}
-        reviewed_scored.append((str(fm.get("last_verified") or "0000-00-00"), rel))
+        reviewed_scored.append((_focus_rank(rel), str(fm.get("last_verified") or "0000-00-00"), rel))
     reviewed_scored.sort()
     review_n = 0
-    for _, rel in reviewed_scored[:sample]:
+    for _, _, rel in reviewed_scored[:sample]:
         review_n += 1
         new_tasks.append({
             "id": str(max_id + len(new_tasks) + 1),
@@ -1063,6 +1063,12 @@ def _load_automation_config():
         return {}
 
 
+def _focus_rank(rel: str) -> int:
+    """0 se il file ricade nei path_prefixes di config.focus, altrimenti 1 (ordina prima i focus)."""
+    prefixes = ((_load_automation_config().get("focus") or {}).get("path_prefixes") or [])
+    return 0 if any(rel.startswith(p) for p in prefixes) else 1
+
+
 def _read_frontmatter(text: str) -> dict:
     """Parser minimale del frontmatter YAML in testa a un file .md."""
     if not text.startswith("---"):
@@ -1135,9 +1141,9 @@ def cmd_review_candidates(n):
             fm = {}
         lv = str(fm.get("last_verified") or "0000-00-00")
         lu = str(fm.get("last_updated") or "0000-00-00")
-        scored.append((lv, lu, rel))
+        scored.append((_focus_rank(rel), lv, lu, rel))
     scored.sort()
-    print(json.dumps({"candidates": [r for _, _, r in scored[:n]]}, ensure_ascii=False))
+    print(json.dumps({"candidates": [r for _, _, _, r in scored[:n]]}, ensure_ascii=False))
 
 
 def cmd_inject_review_tasks(n):
@@ -1161,11 +1167,11 @@ def cmd_inject_review_tasks(n):
         except Exception:
             fm = {}
         lv = str(fm.get("last_verified") or "0000-00-00")
-        scored.append((lv, rel))
+        scored.append((_focus_rank(rel), lv, rel))
     scored.sort()
 
     created = []
-    for _, rel in scored[:n]:
+    for _, _, rel in scored[:n]:
         max_id += 1
         state["queue"].append({
             "id": str(max_id), "type": "review", "path": rel,
@@ -1219,7 +1225,7 @@ def cmd_inject_currency_tasks(limit=20):
         n = len(STALE_MODEL_RE.findall(txt))
         if n:
             hits.append((n, rel))
-    hits.sort(reverse=True)
+    hits.sort(key=lambda h: (_focus_rank(h[1]), -h[0], h[1]))
 
     created = []
     for n, rel in hits[:limit]:

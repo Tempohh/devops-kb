@@ -71,6 +71,11 @@ in 2 click. Scarta se è solo simmetria formale tra provider cloud senza gap rea
 **Tieni** se: colma un gap trasversale, aggiunge connettività mancante,
 risolve un problema operativo documentato e non banale.
 
+**Focus tematico corrente:** `docs/networking/` e `docs/cloud/aws/`. A parità di
+score, dai la precedenza ai gap in queste due aree e dedica loro la maggior parte
+delle proposte. Le altre categorie restano ammesse solo con `score: high`. Il freno
+di saturazione (PASSO 0) resta vincolante: il focus non lo scavalca.
+
 ---
 
 ## PASSO 4 — Generazione proposte (AZIONE: SCRIVI FILE YAML)
