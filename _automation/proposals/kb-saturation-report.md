@@ -38,3 +38,6 @@ Dopo esecuzione di prop-029/030. Nessuna nuova espansione salvo gap score: high.
 
 ## Sessione proposal 2026-09-26 (quinquies, task 497)
 Gate eseguito con `py` (non `python`): `file_count` 299, target 330, `over_target: false`, headroom 31. I report precedenti (411 file, "over_target dedotto true") erano errati: stima da Glob/conteggio non allineata al gate. Generate 2 proposte: prop-031 (BGP, medium) e prop-032 (IPv6/dual-stack AWS, high). Gap verificato via Grep: IPv6 solo panoramica in `indirizzi-ip-subnetting.md`; BGP senza file dedicato (sparso in cni, ddos, vpc-avanzato, azure connettivita). Analisi approfondita di 10 file non eseguita.
+
+## Sessione proposal 2026-09-26 (sexies, task 500)
+Gate eseguito con `py`: `file_count` 301, target 330, `over_target: false`, headroom 29. `pending/` vuota, ultimo id prop-032 (BGP e IPv6 dual-stack presenti). Gap verificati via find/grep: nessun file dedicato a NGINX/HAProxy (citati in 12 file networking) e a WireGuard (4 file). Generate 2 proposte: prop-033 (nginx-haproxy, high) e prop-034 (wireguard, medium). Analisi approfondita di 10 file non eseguita: gap emersi da ricerca mirata.
