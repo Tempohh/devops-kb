@@ -7,9 +7,10 @@ search_keywords: [AWS CloudFormation, AWS CDK, Cloud Development Kit, SAM, Serve
 parent: cloud/aws/ci-cd/_index
 related: [cloud/aws/ci-cd/code-services, cloud/aws/compute/lambda, cloud/aws/containers-ecs-eks]
 official_docs: https://docs.aws.amazon.com/cloudformation/
-status: complete
+status: reviewed
 difficulty: advanced
 last_updated: 2026-03-28
+last_verified: 2026-09-26
 ---
 
 # CloudFormation, CDK & SAM
@@ -248,6 +249,8 @@ Outputs:
 
 ```bash
 # Creare stack con parametri
+# Meglio: nel template MasterUserPassword: '{{resolve:secretsmanager:myapp/db-password:SecretString}}'
+# o ManageMasterUserPassword: true su RDS, così la password non transita dal parametro
 aws cloudformation create-stack \
     --stack-name myapp-prod \
     --template-body file://template.yaml \
@@ -354,7 +357,7 @@ aws cloudformation update-stack \
 aws cloudformation create-stack-set \
     --stack-set-name security-baseline \
     --template-body file://security-baseline.yaml \
-    --permission-model SERVICE_MANAGED \    # o SELF_MANAGED
+    --permission-model SERVICE_MANAGED \
     --auto-deployment Enabled=true,RetainStacksOnAccountRemoval=false
 
 # Deployare in OU specifica (tutti gli account nell'OU)
@@ -535,6 +538,8 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as ecs_patterns from 'aws-cdk-lib/aws-ecs-patterns';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 
 export class MyappInfraStack extends cdk.Stack {
@@ -552,7 +557,7 @@ export class MyappInfraStack extends cdk.Stack {
       ],
     });
 
-    // Secret per DB password (rotazione automatica)
+    // Secret per DB password (generato; la rotazione va abilitata a parte, es. cluster.addRotationSingleUser())
     const dbSecret = new secretsmanager.Secret(this, 'DbSecret', {
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: 'myapp' }),
@@ -600,7 +605,7 @@ export class MyappInfraStack extends cdk.Stack {
     });
 
     const container = taskDefinition.addContainer('app', {
-      image: ecs.ContainerImage.fromEcrRepository(repository, 'latest'),
+      image: ecs.ContainerImage.fromEcrRepository(repository, this.node.tryGetContext('appVersion') ?? '1.0.0'),  // evitare 'latest' in prod
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'myapp' }),
       secrets: {
         DB_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, 'password'),
@@ -619,6 +624,8 @@ export class MyappInfraStack extends cdk.Stack {
         desiredCount: 2,
         listenerPort: 443,
         protocol: elbv2.ApplicationProtocol.HTTPS,
+        // HTTPS richiede un certificato ACM (o dominio+zona), altrimenti synth fallisce
+        certificate: acm.Certificate.fromCertificateArn(this, 'Cert', 'arn:aws:acm:eu-central-1:123456789012:certificate/xxxx'),
         publicLoadBalancer: true,
         circuitBreaker: { rollback: true },
       }
@@ -668,7 +675,7 @@ new MyappInfraStack(app, 'MyappProd', {
 cdk synth                       # genera CloudFormation YAML (senza deploy)
 cdk diff                        # mostra differenze vs stack attuale
 cdk deploy                      # deploy
-cdk deploy --hotswap            # deploy rapido (solo Lambda/ECS, no full CF update)
+cdk deploy --hotswap            # deploy rapido solo per dev: crea drift, MAI in produzione
 cdk watch                       # deploy automatico su salvataggio file (dev)
 cdk destroy                     # elimina stack
 cdk ls                          # lista tutti gli stacks
@@ -714,8 +721,8 @@ const bucket = new s3.Bucket(this, 'L2Bucket', {
 class RequireTagsAspect implements cdk.IAspect {
   visit(node: cdk.IConstruct): void {
     if (node instanceof cdk.CfnResource) {
+      // Evitare valori non deterministici (es. date): ogni synth genererebbe un diff
       cdk.Tags.of(node).add('ManagedBy', 'CDK');
-      cdk.Tags.of(node).add('LastUpdated', new Date().toISOString().split('T')[0]);
     }
   }
 }
@@ -747,7 +754,10 @@ class InfraPipelineStack extends cdk.Stack {
         commands: ['npm ci', 'npm run build', 'npx cdk synth'],
       }),
       selfMutation: true,   // la pipeline si aggiorna automaticamente
+      crossAccountKeys: true,   // necessario per deploy cross-account (KMS key per gli artifact)
     });
+    // Preferibile a un token GitHub in Secrets Manager: CodePipelineSource.connection(
+    //   'company/myapp-infra', 'main', { connectionArn }) con AWS CodeConnections
 
     // Stage: staging
     pipeline.addStage(new MyappStage(this, 'Staging', {
@@ -1045,14 +1055,14 @@ aws cloudformation describe-stack-resource-drifts \
     --stack-resource-drift-status-filters MODIFIED DELETED \
     --query 'StackResourceDrifts[*].{Resource:LogicalResourceId,Status:StackResourceDriftStatus,Expected:ExpectedProperties,Actual:ActualProperties}'
 
-# Opzione A: riallineare applicando il template attuale (sovrascrive le modifiche manuali)
-aws cloudformation update-stack \
-    --stack-name myapp-prod \
-    --use-previous-template \
-    --capabilities CAPABILITY_IAM
+# Opzione A: riallineare la risorsa. ATTENZIONE: un update-stack con template invariato
+# è un no-op e NON annulla il drift (CloudFormation confronta template vs template
+# precedente, non vs stato reale). Serve un update che modifichi la proprietà driftata
+# (es. cambia e ripristina il valore) oppure correggere a mano la risorsa reale.
 
 # Opzione B: importare risorse esistenti nello stack (se create fuori da CF)
-# Richiede che la risorsa supporti CloudFormation Resource Import
+# Richiede che la risorsa supporti Resource Import e che nel template la risorsa
+# abbia DeletionPolicy esplicita (es. Retain); il change set IMPORT non può modificare altre risorse
 aws cloudformation create-change-set \
     --stack-name myapp-prod \
     --change-set-name import-resources \

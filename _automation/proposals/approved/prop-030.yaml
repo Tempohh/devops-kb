@@ -1,0 +1,61 @@
+approved_at: '2026-09-26'
+auto_approved: true
+description: 'Guida operativa di diagnosi di rete a strati, con metodologia (DNS ->
+  connettivita'' L3 -> porta L4 -> TLS -> L7).
+
+  Contenuto: `dig`/`nslookup` (+trace, +short), `ping`/`mtr` (lettura di loss/latency
+  per hop),
+
+  `ss -tanp`/`ss -s` (stati TCP, SYN-SENT vs CLOSE-WAIT accumulati), `tcpdump` con
+  filtri BPF
+
+  (SYN senza SYN-ACK, retransmission, RST) e lettura in Wireshark, `curl -w` con timing
+  (namelookup/connect/appconnect),
+
+  `openssl s_client`, `conntrack -L`/tabella piena (`nf_conntrack: table full`), MTU/PMTUD
+  blackhole
+
+  (`ping -M do -s`, MSS clamping, ICMP frag-needed bloccato), asimmetria di routing,
+  port exhaustion/ephemeral ports, SNAT.
+
+  Sezione cloud/K8s: `kubectl debug` con nicolaka/netshoot, `tcpdump` in ephemeral
+  container, VPC Flow Logs e
+
+  AWS Reachability Analyzer come complemento. Tabella sintomo -> causa probabile ->
+  comando.
+
+  Esempi di output reali commentati.
+
+  '
+effort: medium
+id: prop-030
+last_analyzed: 2026-09-26
+priority: high
+rationale: 'I singoli tool sono citati in 6 file ma nessun file li unisce in un metodo
+  di diagnosi.
+
+  E'' il gap trasversale piu'' usato in incidente: timeout intermittenti, connection
+  reset, conntrack pieno, MTU su VPN/overlay.
+
+  Complementa tcpip, dns, nat, cni, ebpf e vpn-ipsec con un percorso pratico.
+
+  '
+status: approved
+tags:
+- networking
+- troubleshooting
+- tcpdump
+- conntrack
+- mtu
+target_file: docs/networking/fondamentali/network-troubleshooting.md
+title: 'Network troubleshooting: tcpdump, mtr, ss, conntrack, MTU/PMTUD'
+type: new-file
+utility_test:
+  outcome: Segue un albero di diagnosi, isola lo strato guasto con 2-3 comandi e identifica
+    cause come conntrack table full o PMTUD blackhole
+  reader: SRE/DevOps mid-senior on-call su servizi containerizzati
+  scenario: 'Timeout intermittenti tra due pod/VM: non sa se e'' DNS, conntrack, MTU
+    o applicazione'
+  score: high
+  without_kb: Cercherebbe blog post sparsi per ogni sintomo, senza un metodo unificato
+    ne' contesto K8s/cloud

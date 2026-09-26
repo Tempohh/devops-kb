@@ -7,9 +7,10 @@ search_keywords: [AWS ECS, Elastic Container Service, EKS, Elastic Kubernetes Se
 parent: cloud/aws/compute/_index
 related: [cloud/aws/iam/policies-avanzate, cloud/aws/networking/vpc, cloud/aws/security/kms-secrets, cloud/aws/monitoring/cloudwatch, containers/kubernetes/_index]
 official_docs: https://docs.aws.amazon.com/ecs/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-09-26
+last_verified: 2026-09-26
 ---
 
 # ECS, EKS & Containers AWS
@@ -22,7 +23,7 @@ last_updated: 2026-03-28
 | Portabilità | AWS-only | Kubernetes (multi-cloud) |
 | Pricing control plane | Gratuito | $0.10/hr per cluster |
 | Fargate support | Sì (nativo) | Sì (Fargate profiles) |
-| Service mesh | App Mesh / ECS native | Istio, AWS App Mesh, Linkerd |
+| Service mesh | ECS Service Connect (App Mesh: end of support 30/09/2026) | Istio, Linkerd, Cilium (App Mesh deprecato) |
 | Advanced scheduling | Limitato | Completo (K8s scheduler) |
 | CRD (Custom Resource Definition) / Operators | No | Sì |
 | Integrazione AWS | Nativa profonda | Buona (via add-ons) |
@@ -240,7 +241,9 @@ docker push 123456789012.dkr.ecr.eu-central-1.amazonaws.com/myapp:v1.0.0
 # Pull-through cache (ECR come proxy per Docker Hub / ECR Public)
 aws ecr create-pull-through-cache-rule \
     --ecr-repository-prefix docker-hub \
-    --upstream-registry-url registry-1.docker.io
+    --upstream-registry-url registry-1.docker.io \
+    --credential-arn arn:aws:secretsmanager:eu-central-1:123456789012:secret:ecr-pullthroughcache/docker-hub
+# Docker Hub richiede credenziali in Secrets Manager (nome secret con prefisso ecr-pullthroughcache/)
 
 # Usare immagini Docker Hub tramite ECR (caching automatico):
 # 123456789012.dkr.ecr.eu-central-1.amazonaws.com/docker-hub/nginx:latest
@@ -261,7 +264,7 @@ kind: ClusterConfig
 metadata:
   name: production
   region: eu-central-1
-  version: "1.31"
+  version: "1.34"                   # usare una versione in standard support (1.31 è EOL)
 
 iam:
   withOIDC: true                    # IRSA support
@@ -360,6 +363,12 @@ spec:
           # AWS SDK legge automaticamente le credenziali dal IRSA token
 ```
 
+!!! tip "EKS Pod Identity"
+    **EKS Pod Identity** (add-on `eks-pod-identity-agent`) è l'alternativa moderna a IRSA: nessun OIDC provider per cluster, trust policy unica (`pods.eks.amazonaws.com`), associazione via `aws eks create-pod-identity-association`. Preferibile per nuovi cluster su EC2; su Fargate resta IRSA.
+
+!!! note "ECS: opzioni di capacity"
+    Oltre a Fargate ed EC2 ASG, ECS offre **ECS Managed Instances** (EC2 gestite da AWS, senza gestire ASG/AMI). Il JSON della Task Definition sopra contiene commenti `//` a scopo didattico: rimuoverli prima di usare `--cli-input-json`.
+
 ### EKS Add-ons Essenziali
 
 ```bash
@@ -380,7 +389,7 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
 
 # Karpenter (scheduler di nuova generazione — sostituisce Cluster Autoscaler)
 helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
-    --version "1.0.0" \
+    --version "<versione-1.x-corrente>" \
     --namespace kube-system \
     --set settings.clusterName=production \
     --set controller.resources.requests.cpu=1 \
@@ -396,6 +405,10 @@ metadata:
 spec:
   template:
     spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
       requirements:
         - key: kubernetes.io/arch
           operator: In
@@ -410,15 +423,35 @@ spec:
     cpu: "1000"
     memory: 4000Gi
   disruption:
-    consolidationPolicy: WhenUnderutilized
+    consolidationPolicy: WhenEmptyOrUnderutilized   # v1: "WhenUnderutilized" non è più valido
     consolidateAfter: 30s
+---
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  amiSelectorTerms:
+    - alias: al2023@latest
+  role: "KarpenterNodeRole-production"
+  subnetSelectorTerms:
+    - tags: {karpenter.sh/discovery: production}
+  securityGroupSelectorTerms:
+    - tags: {karpenter.sh/discovery: production}
 ```
+
+!!! note "Karpenter v1"
+    Dalla v1 il `NodePool` richiede `spec.template.spec.nodeClassRef` (group `karpenter.k8s.aws`, kind `EC2NodeClass`, name `default`) verso l'`EC2NodeClass` sopra. Pinnare sempre una versione 1.x corrente del chart, non `1.0.0`.
 
 ---
 
 ## AWS App Runner
 
 **App Runner** è il servizio PaaS per container — deploy con zero configurazione infrastruttura.
+
+<!-- REVIEW: verificare stato App Runner — AWS ha annunciato che non accetta nuovi clienti dal 30/04/2026 (maintenance mode); per nuovi progetti preferire ECS Express Mode -->
+!!! warning "Attenzione"
+    App Runner potrebbe non essere più disponibile per nuovi account. Verificare lo stato attuale prima di adottarlo; alternativa: **ECS Express Mode** (deploy semplificato di servizi su ECS/Fargate con ALB e scaling preconfigurati).
 
 ```bash
 # Creare App Runner service da ECR
@@ -452,8 +485,8 @@ aws apprunner create-service \
 | Networking | Solo pubblico (con VPC egress) | Completo (VPC, private) |
 | Configurazione | Minimale | Completa |
 | Autoscaling | Automatico (basato su req/s) | Configurabile |
-| Cold start | A 0 richieste scala a 0 | Minimo configurabile |
-| Costo idle | ~$0 (scale-to-zero) | Minimo configurabile |
+| Idle | Nessun scale-to-zero: istanze "provisioned" (solo memoria) restano fatturate, min 1 | Min task configurabile (anche 0 con scaling) |
+| Costo idle | Basso ma non zero | Dipende dai task attivi |
 | Use case | MVP, microservizi semplici | Produzione enterprise |
 
 ---

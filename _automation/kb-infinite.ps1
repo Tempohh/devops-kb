@@ -1,4 +1,4 @@
-﻿# KB Update - Modalita' Infinita
+# KB Update - Modalita' Infinita
 # Loop continuo. Su rate limit attende il ripristino.
 # Ctrl+C per interrompere (stato sempre salvato su disco).
 #
@@ -542,6 +542,35 @@ try {
             $logVerb    = if ($fileWasCreated) { "CREATED" } else { "SKIP" }
             $tokenCount = if ($tokens) { $tokens.total_tokens } else { 0 }
             Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] $logVerb task=$($task.id) elapsed=${elapsed}s tokens=$tokenCount lines=$fileLines" -Encoding UTF8
+
+            # -- Commit + push automatico (best-effort, mai bloccante) --------
+            # Committa dopo ogni task cosi' il lavoro non resta solo nel working tree.
+            # Su conflitto di rebase (es. state.yaml toccato dalla CI) annulla il rebase e
+            # lascia il commit locale: si risolve a mano, il loop continua.
+            try {
+                & git -C $ProjectRoot add -A 2>&1 | Out-Null
+                & git -C $ProjectRoot diff --cached --quiet
+                if ($LASTEXITCODE -ne 0) {
+                    $commitMsg = "kb: $($task.type) $($task.path) (auto #$($task.id))"
+                    & git -C $ProjectRoot commit -q -m $commitMsg -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" 2>&1 | Out-Null
+                    & git -C $ProjectRoot pull -q --rebase 2>&1 | Out-Null
+                    if ($LASTEXITCODE -ne 0) {
+                        & git -C $ProjectRoot rebase --abort 2>&1 | Out-Null
+                        Write-Host "  [GIT] rebase in conflitto - annullato, commit solo locale" -ForegroundColor Yellow
+                        Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [WRN] GIT_REBASE_CONFLICT task=$($task.id)" -Encoding UTF8
+                    } else {
+                        & git -C $ProjectRoot push -q origin HEAD:master 2>&1 | Out-Null
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Host "  [GIT] commit + push ok" -ForegroundColor DarkGreen
+                        } else {
+                            Write-Host "  [GIT] push fallito - commit resta locale" -ForegroundColor Yellow
+                            Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [WRN] GIT_PUSH_FAIL task=$($task.id)" -Encoding UTF8
+                        }
+                    }
+                }
+            } catch {
+                Write-Host "  [GIT] errore: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
 
             Start-Countdown -Seconds $RunInterval -PendingInfo $pendingCount
         }

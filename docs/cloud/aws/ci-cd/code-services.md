@@ -7,9 +7,10 @@ search_keywords: [codebuild, buildspec, codedeploy, appspec, deployment configur
 parent: cloud/aws/ci-cd/_index
 related: [cloud/aws/ci-cd/cloudformation-cdk, cloud/aws/monitoring/cloudwatch, cloud/aws/security/kms-secrets, cloud/aws/storage/s3]
 official_docs: https://docs.aws.amazon.com/codebuild/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-09-26
+last_verified: 2026-09-26
 ---
 
 # CodeBuild, CodeDeploy, CodePipeline e CodeArtifact
@@ -18,8 +19,9 @@ last_updated: 2026-03-03
 
 I servizi AWS Developer Tools formano una suite CI/CD completamente managed: CodeBuild per build e test, CodeDeploy per deployment automatizzato, CodePipeline per orchestrazione della pipeline, e CodeArtifact per gestione degli artefatti software.
 
-!!! note "AWS CodeCommit — Deprecato per nuovi utenti"
-    Dal luglio 2024, AWS ha smesso di accettare nuovi utenti su CodeCommit. Gli utenti esistenti possono continuare a usarlo. Per nuovi progetti, AWS raccomanda GitHub, GitLab o Bitbucket integrati con CodeBuild/CodePipeline tramite GitHub App connections.
+!!! note "AWS CodeCommit — stato"
+    Da luglio 2024 CodeCommit non accettava nuovi clienti (solo mantenimento). A fine 2025 AWS ha ripristinato la piena disponibilità per i nuovi clienti. In ogni caso la pratica più diffusa resta GitHub, GitLab o Bitbucket collegati a CodeBuild/CodePipeline tramite CodeConnections (ex CodeStar Connections).
+    <!-- REVIEW: verificare lo stato corrente di CodeCommit sulla pagina ufficiale prima di raccomandarlo per nuovi progetti -->
 
 ---
 
@@ -30,11 +32,11 @@ I servizi AWS Developer Tools formano una suite CI/CD completamente managed: Cod
 CodeBuild è un servizio di build e test completamente managed. Non richiede server o agenti da gestire. Si paga per minuto di build consumato.
 
 **Caratteristiche principali:**
-- Build environment: Ubuntu 22.04, Amazon Linux 2023, Windows Server 2019/2022
+- Build environment: Ubuntu (immagini `standard:7.0` = 22.04, `standard:8.0` = 24.04), Amazon Linux 2023, Windows Server 2019/2022
 - Runtime supportati: Python, Node.js, Java, .NET, Go, PHP, Ruby, Docker
 - Integrazione nativa con ECR, S3, Secrets Manager, Parameter Store
 - VPC support: accesso a risorse private (RDS, ElastiCache, ECS in VPC privata)
-- Concurrency: build parallele illimitate (dipende dal tipo di istanza)
+- Concurrency: build parallele entro le service quota per account/regione (aumentabili); disponibili anche reserved capacity, compute Lambda e self-hosted runner GitHub Actions
 - Cache: S3 (tra build separati) e Local cache (Docker layer, source, custom path)
 
 ### buildspec.yml
@@ -65,13 +67,13 @@ phases:
       - echo "Installing dependencies"
       - pip install -r requirements.txt
       - npm ci --prefix frontend
-      - pip install pytest coverage bandit safety
+      - pip install pytest pytest-cov bandit safety
 
   pre_build:
     commands:
       - echo "Running security scans"
       - bandit -r src/ -ll -ii  # SAST scan Python
-      - safety check            # Dependency vulnerabilities
+      - safety scan             # Dependency vulnerabilities (`safety check` è deprecato)
       - echo "Logging in to Amazon ECR"
       - aws ecr get-login-password | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
       - export IMAGE_TAG=$(git rev-parse --short HEAD)
@@ -91,7 +93,7 @@ phases:
       - echo "Pushing Docker image"
       - docker push $ECR_REPO_URI:$IMAGE_TAG
       - docker push $ECR_REPO_URI:latest
-      - echo "Writing image definition file for CodeDeploy"
+      - echo "Writing image definition file (solo per la action ECS standard, non per CodeDeploy blue/green)"
       - printf '[{"name":"app","imageUri":"%s"}]' $ECR_REPO_URI:$IMAGE_TAG > imagedefinitions.json
       - echo "Build completed at $(date)"
 
@@ -108,7 +110,8 @@ reports:
 
 artifacts:
   files:
-    - imagedefinitions.json
+    - imagedefinitions.json   # usato solo dalla action ECS standard
+    - imageDetail.json        # per CodeDeployToECS: {"ImageURI": "..."}, sostituisce <IMAGE1_NAME> in taskdef.json
     - appspec.yaml
     - taskdef.json
     - "frontend/build/**/*"
@@ -123,7 +126,7 @@ cache:
   paths:
     - "/root/.cache/pip/**/*"
     - "/root/.npm/**/*"
-    - "/var/lib/docker/**/*"
+# Docker layer cache: non è un path; si abilita con cache type LOCAL + LOCAL_DOCKER_LAYER_CACHE
 ```
 
 ### Creare un CodeBuild Project
@@ -201,11 +204,12 @@ phases:
         docker build \
           --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
           --build-arg GIT_COMMIT=$(git rev-parse HEAD) \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
           --cache-from $ECR_URI:cache \
           --tag $ECR_URI:$IMAGE_TAG \
           --tag $ECR_URI:latest \
           .
-      # Scan dell'immagine con Trivy
+      # Scan dell'immagine con Trivy (non preinstallato: installarlo in install phase)
       - trivy image --exit-code 1 --severity CRITICAL $ECR_URI:$IMAGE_TAG
 
   post_build:
@@ -255,10 +259,12 @@ Resources:
   - MyLambdaFunction:
       Type: AWS::Lambda::Function
       Properties:
-        Name: !Ref MyLambdaFunction
-        Alias: !Ref LambdaFunctionAlias
-        CurrentVersion: !Ref CurrentVersion
-        TargetVersion: !Ref NewVersion
+        Name: "my-function"
+        Alias: "live"
+        CurrentVersion: "1"
+        TargetVersion: "2"
+# Nota: AppSpec non supporta intrinsic function (!Ref); i valori sono letterali.
+# Con SAM/CloudFormation (AutoPublishAlias + DeploymentPreference) l'AppSpec è generato automaticamente.
 Hooks:
   - BeforeAllowTraffic: "arn:aws:lambda:us-east-1:123456789012:function:pre-traffic-hook"
   - AfterAllowTraffic: "arn:aws:lambda:us-east-1:123456789012:function:post-traffic-hook"
@@ -304,16 +310,19 @@ hooks:
 - Custom: percentuale configurabile
 
 **Per Lambda:**
-- `Canary10Percent5Minutes`: 10% traffico per 5 minuti, poi 100%
-- `Canary10Percent30Minutes`: 10% per 30 minuti, poi 100%
-- `Linear10PercentEvery1Minute`: 10% ogni minuto fino a 100%
-- `Linear10PercentEvery10Minutes`: 10% ogni 10 minuti
-- `AllAtOnce`: deploy immediato
+- `CodeDeployDefault.LambdaCanary10Percent5Minutes`: 10% traffico per 5 minuti, poi 100%
+- `CodeDeployDefault.LambdaCanary10Percent30Minutes`: 10% per 30 minuti, poi 100%
+- `CodeDeployDefault.LambdaLinear10PercentEvery1Minute`: 10% ogni minuto fino a 100%
+- `CodeDeployDefault.LambdaLinear10PercentEvery10Minutes`: 10% ogni 10 minuti
+- `CodeDeployDefault.LambdaAllAtOnce`: deploy immediato
 
 **Per ECS:**
 - `CodeDeployDefault.ECSAllAtOnce`: blue/green immediato
-- `ECSCanary10Percent5Minutes`: canary ECS
-- `ECSLinear10PercentEvery1Minute`: linear ECS
+- `CodeDeployDefault.ECSCanary10Percent5Minutes`: canary ECS
+- `CodeDeployDefault.ECSLinear10PercentEvery1Minutes`: linear ECS (nota il plurale "Minutes")
+
+!!! note "Deployment nativi ECS"
+    ECS supporta ora blue/green, canary e linear direttamente nel service (deployment strategy nativa, con lifecycle hook Lambda) senza CodeDeploy. CodeDeploy resta valido, soprattutto per Lambda/EC2 e pipeline esistenti.
 
 ```bash
 # Creare un'applicazione CodeDeploy
@@ -327,6 +336,7 @@ aws deploy create-deployment-group \
   --deployment-group-name "production" \
   --deployment-config-name "CodeDeployDefault.ECSAllAtOnce" \
   --service-role-arn arn:aws:iam::123456789012:role/CodeDeployRole \
+  --deployment-style deploymentType=BLUE_GREEN,deploymentOption=WITH_TRAFFIC_CONTROL \
   --ecs-services '[{
     "serviceName": "my-ecs-service",
     "clusterName": "production-cluster"
@@ -573,7 +583,7 @@ CodeArtifact è un repository managed per artefatti software: npm, pip, Maven, N
 
 **Vantaggi rispetto a registri pubblici:**
 - Proxy e cache verso registri pubblici (PyPI, npm, Maven Central)
-- Scansione di sicurezza opzionale
+- Package origin controls (mitigano dependency confusion: publish/upstream per package group)
 - Controllo degli accessi tramite IAM
 - Integrazione con CodeBuild per pull automatico
 
@@ -594,18 +604,21 @@ aws codeartifact create-domain \
   --domain my-org \
   --encryption-key alias/codeartifact-key
 
-# Creare un repository con upstream PyPI
+# Creare prima il repository upstream con connessione a PyPI
+aws codeartifact create-repository \
+  --domain my-org \
+  --repository pypi-store
+aws codeartifact associate-external-connection \
+  --domain my-org \
+  --repository pypi-store \
+  --external-connection public:pypi
+
+# Poi il repository che lo usa come upstream (l'upstream deve già esistere)
 aws codeartifact create-repository \
   --domain my-org \
   --repository production \
   --description "Production packages" \
-  --upstreams '[{"repositoryName": "pypi-store"}]'
-
-# Creare il repository upstream per PyPI
-aws codeartifact create-repository \
-  --domain my-org \
-  --repository pypi-store \
-  --external-connections public:pypi
+  --upstreams repositoryName=pypi-store
 
 # Ottenere il token di autenticazione (scade dopo 12h)
 TOKEN=$(aws codeartifact get-authorization-token \
@@ -651,13 +664,14 @@ phases:
 
   pre_build:
     commands:
-      - sam validate
+      - sam validate --lint
       - python -m pytest tests/ --junitxml=reports/test-results.xml
 
   build:
     commands:
       - sam build --use-container
-      - sam package \
+      - |
+        sam package \
           --s3-bucket $SAM_ARTIFACTS_BUCKET \
           --output-template-file packaged-template.yaml \
           --region $AWS_DEFAULT_REGION
@@ -697,7 +711,7 @@ reports:
 ### CodeBuild
 
 1. **Usare ECR Public o cache Docker** per velocizzare pull delle immagini base
-2. **Local cache** per dipendenze (pip, npm, Maven) — riduce i tempi di build del 50-70%
+2. **Local cache** per dipendenze (pip, npm, Maven) e Docker layer — riduce sensibilmente i tempi di build
 3. **Scan di sicurezza nel build** (Bandit, Safety, Trivy) — fail the build su CRITICAL
 4. **Report** di test JUnit e coverage — feedback immediato nel build
 5. **VPC** per accedere a risorse private, ma aggiunge latenza (NAT Gateway necessario per Internet)
@@ -722,12 +736,13 @@ reports:
 
 ### CodeBuild: Build Fallisce con "Cannot connect to Docker"
 
-Il container CodeBuild deve avere `privilegedMode: true` per usare Docker-in-Docker.
+Il container CodeBuild deve avere `privilegedMode: true` per usare Docker-in-Docker (serve anche per `sam build --use-container`).
 
 ```bash
+# update-project sostituisce l'intero blocco environment: ripassare type, image, computeType
 aws codebuild update-project \
   --name my-app-build \
-  --environment privilegedMode=true
+  --environment type=LINUX_CONTAINER,image=aws/codebuild/standard:7.0,computeType=BUILD_GENERAL1_MEDIUM,privilegedMode=true
 ```
 
 ### CodePipeline: Stage Bloccato
@@ -738,16 +753,21 @@ aws codepipeline get-pipeline-state \
   --name "my-ecs-pipeline" \
   --query 'stageStates[*].{Stage:stageName,Status:latestExecution.status}'
 
-# Sbloccare uno stage (skip dell'azione corrente)
-aws codepipeline put-action-revision \
+# Approvare/rifiutare una manual approval (token da get-pipeline-state)
+aws codepipeline put-approval-result \
   --pipeline-name "my-ecs-pipeline" \
   --stage-name "Approval" \
   --action-name "ManualApproval" \
-  --action-revision '{
-    "revisionId": "manual-skip",
-    "revisionChangeId": "skip-$(date +%s)",
-    "created": "2024-01-15T10:00:00Z"
-  }'
+  --result summary="OK",status=Approved \
+  --token <TOKEN>
+
+# Riabilitare una transizione di stage disabilitata
+aws codepipeline enable-stage-transition \
+  --pipeline-name "my-ecs-pipeline" --stage-name "Production" --transition-type Inbound
+
+# Fermare un'esecuzione bloccata
+aws codepipeline stop-pipeline-execution \
+  --pipeline-name "my-ecs-pipeline" --pipeline-execution-id <ID> --abandon
 ```
 
 ### CodeDeploy: Rollback Non Avviene

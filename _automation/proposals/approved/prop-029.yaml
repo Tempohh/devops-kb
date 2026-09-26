@@ -1,0 +1,64 @@
+approved_at: '2026-09-26'
+auto_approved: true
+description: 'File dedicato a Elastic Load Balancing, oggi trattato solo per accenni
+  in ec2-autoscaling,
+
+  eks e cloudfront (nessun file in cloud/aws/networking).
+
+  Struttura: scelta ALB vs NLB vs GWLB (tabella decisionale); target group (instance/ip/lambda/alb),
+
+  health check e deregistration delay; listener rules (path/host/header, weighted
+  forward per canary);
+
+  cross-zone load balancing e relativi costi di data transfer; preservazione client
+  IP e Proxy Protocol v2;
+
+  NLB con Elastic IP e PrivateLink (endpoint service); GWLB con appliance di sicurezza
+  (GENEVE, porta 6081);
+
+  TLS termination, ACM, SNI, policy TLS (ELBSecurityPolicy-TLS13-*); access logs su
+  S3 e metriche CloudWatch
+
+  (TargetResponseTime, HTTPCode_ELB_5XX, UnHealthyHostCount); integrazione con AWS
+  Load Balancer Controller
+
+  su EKS (annotation, target-type ip). Esempi Terraform e comandi `aws elbv2 ...`.
+
+  Troubleshooting: 502/503/504, idle timeout mismatch con keep-alive del backend,
+  target unhealthy, drain lento.
+
+  '
+effort: medium
+id: prop-029
+last_analyzed: 2026-09-26
+priority: high
+rationale: 'Ogni workload AWS esposto passa da un ELB, ma la KB non ha un punto di
+  atterraggio.
+
+  I 502/504 da idle timeout e i costi di cross-zone sono problemi operativi ricorrenti
+  e non banali;
+
+  la documentazione ufficiale e'' frammentata per tipo di LB. Collega load-balancing/layer4-vs-layer7,
+
+  ingress K8s e cloudfront.
+
+  '
+status: approved
+tags:
+- aws
+- load-balancing
+- alb
+- nlb
+- networking
+target_file: docs/cloud/aws/networking/elastic-load-balancing.md
+title: 'AWS Elastic Load Balancing: ALB, NLB, GWLB in produzione'
+type: new-file
+utility_test:
+  outcome: Sceglie il tipo di LB corretto, configura health check/timeout coerenti
+    col backend e diagnostica i 5xx dalle metriche
+  reader: DevOps/SRE mid-senior che gestisce servizi su AWS/EKS
+  scenario: Riceve 502 intermittenti dietro ALB dopo un deploy, o deve scegliere tra
+    ALB e NLB per un servizio gRPC/TCP
+  score: high
+  without_kb: Dovrebbe consultare 3 sezioni separate della doc AWS (ALB/NLB/GWLB)
+    e ricostruire da solo le best practice

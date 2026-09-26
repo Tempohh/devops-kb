@@ -1,0 +1,65 @@
+approved_at: '2026-09-26'
+auto_approved: true
+description: 'File dedicato a BGP (eBGP/iBGP, ASN privati 64512-65534 e 4-byte, path
+  attributes:
+
+  AS_PATH, LOCAL_PREF, MED, communities), best-path selection ordinata, timers/BFD.
+
+  Sezioni pratiche: sessione eBGP su AWS Direct Connect (private/transit VIF, prepend
+
+  AS_PATH e communities per traffic engineering), Transit Gateway con Site-to-Site
+  VPN
+
+  dinamica, ECMP; Cilium BGP Control Plane e Calico BGP per annunciare Pod CIDR e
+
+  LoadBalancer IP (MetalLB in modalita'' BGP) su bare metal.
+
+  Comandi reali: `vtysh -c "show ip bgp summary"`, `show bgp neighbors`, `birdc show
+  protocols`,
+
+  `cilium bgp peers`, `calicoctl node status`.
+
+  Troubleshooting: sessione bloccata in Active/Idle (ACL su TCP 179, MD5 mismatch,
+  TTL
+
+  multihop), route non annunciate, flapping e route dampening, BGP hijack/leak e RPKI
+  ROV.
+
+  Oggi BGP e'' sparso in cni.md, ddos-protezione.md, vpc-avanzato.md e azure connettivita
+
+  senza una spiegazione unica del protocollo.
+
+  '
+effort: medium
+id: prop-031
+last_analyzed: 2026-09-26
+priority: medium
+rationale: 'Chi lavora con hybrid connectivity (Direct Connect, ExpressRoute) o K8s
+  on-prem incontra
+
+  BGP senza un riferimento unico nella KB. Il file consolida il modello mentale e
+  collega
+
+  i file esistenti tramite related.
+
+  '
+status: approved
+tags:
+- bgp
+- routing
+- direct-connect
+- cilium
+- metallb
+- networking
+target_file: docs/networking/protocolli/bgp.md
+title: 'BGP per DevOps: peering, route policy, Direct Connect e Cilium/Calico BGP'
+type: new-file
+utility_test:
+  outcome: Diagnostica lo stato FSM, corregge policy/filtri e imposta traffic engineering
+    con LOCAL_PREF/prepend
+  reader: DevOps/platform engineer mid-senior con connettivita' ibrida o cluster K8s
+    bare metal
+  scenario: Sessione BGP su Direct Connect o MetalLB/Cilium non sale o non annuncia
+    le route attese
+  score: medium
+  without_kb: Dovrebbe ricomporre info da RFC 4271, doc AWS, doc Cilium e Calico separatamente
