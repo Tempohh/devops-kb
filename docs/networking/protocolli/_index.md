@@ -25,6 +25,7 @@ Questa sezione copre i principali protocolli utilizzati in contesti DevOps e clo
 | [TCP e UDP](tcp-udp.md) | Intermedio | Fondamenti del livello di trasporto: connection-oriented vs connectionless, handshake, flow control, congestion control |
 | [HTTP/2 e HTTP/3](http2-http3.md) | Intermedio | Evoluzione di HTTP: multiplexing, HPACK compression, migrazione a QUIC |
 | [QUIC](quic.md) | Avanzato | Protocollo di trasporto next-generation su UDP: 0-RTT, stream multipli, connection migration |
+| [BGP](bgp.md) | Avanzato | Routing inter-AS: eBGP/iBGP, path attributes, best-path, Direct Connect, Transit Gateway, Cilium/Calico/MetalLB, RPKI |
 | [WebSocket](websocket.md) | Intermedio | Comunicazione full-duplex persistente: upgrade handshake, scaling, sticky sessions |
 | [gRPC](grpc.md) | Avanzato | Framework RPC ad alte prestazioni: Protocol Buffers, 4 pattern di comunicazione, integrazione Kubernetes |
 
