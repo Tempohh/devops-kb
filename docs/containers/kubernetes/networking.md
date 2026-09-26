@@ -465,6 +465,128 @@ spec:
 
 **Limiti:** il client deve gestire failover e refresh DNS (attenzione alla cache DNS della JVM: `networkaddress.cache.ttl`); nessun VIP unico da usare come punto d'ingresso stabile.
 
+### Latenza: da dove vengono i millisecondi (e come sceglierne il percorso)
+
+In enterprise la scelta tra le alternative non si fa "per abitudine" ma sommando i **contributi di latenza** lungo il percorso. Ordini di grandezza tipici (dipendono da provider, regione, carico: **misurare sempre nel proprio ambiente** con `curl -w`, `iperf3`, `tcpdump`):
+
+| Contributo al percorso | Ordine di grandezza | Perché costa |
+|---|---|---|
+| Hop kube-proxy/DNAT sullo stesso nodo | ~0,01-0,1 ms | Solo riscrittura pacchetto in kernel; trascurabile |
+| Hop extra verso un altro nodo, **stessa AZ** | ~0,1-0,5 ms | Un salto di rete in più (NodePort/ClusterIP verso Pod remoto) |
+| Hop verso altra AZ, **stessa regione** | ~1-2 ms | Distanza fisica tra datacenter + costo del traffico cross-AZ |
+| Load balancer L4 (NLB, F5, MetalLB) | ~0,1-1 ms | Un proxy/NAT in più nel percorso |
+| Load balancer L7 / Ingress / WAF | ~1-5 ms (anche più con WAF) | Termina TLS, ispeziona HTTP, apre una seconda connessione verso il backend |
+| Handshake TLS nuovo (non riusato) | +1-2 RTT (~2-10 ms+) | Round trip aggiuntivi prima del primo byte applicativo |
+| **Rotta pubblica** (Internet, CDN/WAF, NAT gateway, egress) | ~5-50+ ms, **variabile** | Percorso non controllato, più hop/AS, terminazioni multiple, jitter |
+| Collegamento privato stessa regione (VPC peering, Transit Gateway, Direct Connect/ExpressRoute) | ~1-5 ms, stabile | Percorso diretto sulla rete del provider/dorsale privata |
+| Inter-regione | ~30-150 ms | Limite fisico (velocità della luce in fibra ≈ 1 ms ogni ~100 km andata/ritorno) |
+
+Due punti contano più del valore medio in enterprise:
+
+- **La latenza si moltiplica per le chiamate sequenziali.** Un servizio che fa 20 chiamate seriali a un backend remoto paga 20 × RTT. 2 ms in più diventano 40 ms per richiesta utente; su un flusso di 200 chiamate, 400 ms. Per questo "qualche millisecondo" pesa.
+- **Conta la coda (p99), non solo la media.** La rotta pubblica ha jitter e variabilità molto più alti di un collegamento privato: il p99 è spesso peggiore di un ordine di grandezza. Un SLA di latenza si rompe sui percorsi non deterministici.
+
+### Caso: migrazione tra cluster (cluster-to-cluster)
+
+Scenario tipico: si migra un'applicazione da un cluster **vecchio** (A) a uno **nuovo** (B), servizio per servizio. Durante la migrazione (settimane/mesi) i servizi già migrati e quelli ancora su A devono parlarsi. Esempio: `checkout` è già su B, ma chiama ancora `payments` che è su A.
+
+**Il punto non è NodePort in sé, ma il percorso.** La strada "pubblica" (Ingress pubblico di A → Internet → WAF/CDN → Ingress di B) è lenta perché attraversa più terminazioni TLS, WAF, NAT e tratti Internet variabili. La strada "privata" tiene il traffico dentro la rete aziendale/provider: meno hop, nessuna terminazione ripetuta, latenza stabile. NodePort è **uno dei modi** per costruire questa strada privata: si espone il servizio del cluster di destinazione su `IP-nodo:nodePort`, raggiungibile direttamente dalla rete privata (peering/VPN/Direct Connect) con regole firewall/security group dedicate.
+
+```
+  Cluster A (vecchio)                                  Cluster B (nuovo)
+  ┌───────────────────────┐                            ┌───────────────────────┐
+  │ checkout ──► Service  │                            │ Service payments      │
+  │            "payments" │     rete PRIVATA           │  (NodePort 30443 /     │
+  │  (ExternalName o      │ ─────────────────────────► │   LB interno)          │
+  │   Endpoints manuali   │  peering / TGW / VPN /     │        │               │
+  │   → IP nodi B:30443)  │  Direct Connect            │        ▼               │
+  └───────────────────────┘  (regole SG/firewall       │   Pod payments         │
+                              solo su :30443)          └───────────────────────┘
+
+  vs. percorso pubblico:  A → NAT/egress → Internet → CDN/WAF → Ingress pubblico B → Service → Pod
+```
+
+**Come si realizza in pratica** (lato cluster chiamante A):
+
+```yaml
+# Service SENZA selector + EndpointSlice manuale → nome DNS stabile "payments" dentro A
+apiVersion: v1
+kind: Service
+metadata:
+  name: payments
+  namespace: production
+spec:
+  ports:
+    - port: 443
+      targetPort: 30443        # NodePort del cluster B
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: payments-b
+  namespace: production
+  labels:
+    kubernetes.io/service-name: payments
+addressType: IPv4
+ports:
+  - port: 30443
+endpoints:
+  - addresses: ["10.20.1.11"]   # IP privato worker-1 di B
+  - addresses: ["10.20.1.12"]   # worker-2 di B
+  - addresses: ["10.20.1.13"]   # worker-3 di B
+```
+
+I client in A continuano a chiamare `payments.production.svc`: quando `payments` viene migrato, basta sostituire l'EndpointSlice con un vero selector locale (o il contrario per un rollback). Nessuna modifica alle applicazioni.
+
+**Alternative a confronto (dalla più semplice alla più performante)**
+
+| Alternativa | Percorso / cosa aggiunge | Latenza relativa | Quando è la scelta migliore |
+|---|---|---|---|
+| **Rotta pubblica** (Ingress pubblico + WAF) | Internet, terminazioni TLS/WAF ripetute, NAT/egress | Alta e **variabile** (jitter, p99 pessimo) | Solo per traffico realmente esterno; **da evitare** per servizi interni tra cluster |
+| **NodePort su rete privata** + EndpointSlice manuale | Rete privata → nodo B → (kube-proxy) → Pod. 1 hop extra se il Pod è su un altro nodo; SNAT con `Cluster` | Bassa, stabile | Migrazione **temporanea**, setup rapido, nessun LB da approvare/provisionare; nodi B raggiungibili dalla rete di A |
+| **Internal LoadBalancer** (NLB/ILB/MetalLB) su rete privata | VIP stabile → nodi (o Pod con `target-type: ip`) con health check | Bassa (+ ~0,1-1 ms del LB), stabile | Migrazione **lunga o servizio critico**: un VIP unico, failover/health check automatici, nessun elenco di nodi da mantenere |
+| **Ingress/Gateway interno** su rete privata | Come sopra + TLS/routing L7 | Media (+1-5 ms L7) | Servizi HTTP con routing per host/path condiviso; overhead L7 accettabile |
+| **Service mesh multi-cluster** / **Cilium ClusterMesh** / **Submariner** | Service discovery e routing cross-cluster nativi; mTLS incluso; con rotte Pod CIDR dirette, **Pod-to-Pod senza hop né NAT** | La più bassa (nessun proxy/NodePort intermedio) | Migrazione **lunga** con molti servizi interdipendenti, o architettura **multi-cluster permanente**; richiede CIDR Pod **non sovrapposti** e più lavoro di setup |
+
+**Perché NodePort (o LB interno) e non altro? Il ragionamento.** Il criterio è: *il minimo percorso che rende raggiungibile il servizio, con il minimo lavoro operativo*.
+
+- Se i Pod di B **non** sono raggiungibili dalla rete di A (CIDR overlay non instradati, sovrapposti, o CNI overlay senza esportazione delle route) l'unico indirizzo raggiungibile è quello dei **nodi** → NodePort o LB davanti ai nodi. È il motivo storico per cui NodePort compare nelle migrazioni.
+- Se **si riesce** a instradare i Pod CIDR tra i cluster (CNI VPC-native come AWS VPC CNI/Azure CNI, oppure BGP/ClusterMesh), si può parlare direttamente ai Pod: **si elimina l'hop NodePort e l'SNAT**, e si guadagna anche l'IP sorgente originale.
+- Se la migrazione è breve e tocca pochi servizi → NodePort (meno pezzi da gestire). Se è lunga o critica → LB interno o mesh: il costo di setup si ripaga in stabilità e osservabilità.
+
+**Come ridurre ulteriormente i millisecondi con NodePort:**
+
+- `externalTrafficPolicy: Local` sul Service di B, con il monitor che sonda solo i nodi che ospitano Pod → **niente hop tra nodi e niente SNAT** (e si preserva l'IP del chiamante per audit/whitelist). Richiede Pod distribuiti sui nodi
+- Elencare nei nodi dell'EndpointSlice **solo i nodi della stessa AZ del chiamante** (o dare priorità ad essi) per evitare il salto cross-AZ (~1-2 ms in più, più traffico fatturato)
+- **Riusare le connessioni** (keep-alive, HTTP/2, connection pool): il costo dell'handshake TCP+TLS si paga una volta, non a ogni richiesta
+- Mantenere il TLS **end-to-end** (o mTLS) sul canale privato: non serve una terminazione intermedia, e i dati non viaggiano in chiaro anche se la rete è privata
+
+!!! warning "Rischi da gestire (la rotta privata non è gratis)"
+    - **Sicurezza:** una NodePort aperta su tutti i nodi di B amplia la superficie. Limitare con security group/firewall **alla sola sorgente** (IP/CIDR dei nodi di A e solo sulla porta specifica) + NetworkPolicy + mTLS
+    - **Elenco nodi manuale = debito tecnico:** se i nodi di B cambiano (scale, upgrade, sostituzioni) l'EndpointSlice manuale va aggiornato → automatizzare (controller/script/Terraform) oppure passare a un LB interno che segue i nodi da solo
+    - **Failover:** un client che usa un elenco statico di nodi senza health check perde richieste quando un nodo cade → sempre health check o LB davanti
+    - **Provvisorio:** documentare e schedulare la rimozione a fine migrazione, altrimenti diventa dipendenza permanente non tracciata
+    - **CIDR sovrapposti:** se i due cluster usano la stessa rete Pod/Service, il routing diretto è impossibile (NodePort/LB restano l'unica strada), ma va pianificato prima: rinumerare dopo è molto costoso
+
+### Ragionamento per caso d'uso: perché *questa* scelta
+
+| Caso d'uso | Scelta migliore | Perché (in termini di percorso e latenza) | Alternativa peggiore e motivo |
+|---|---|---|---|
+| Microservizi nello stesso cluster | **ClusterIP** (+ `trafficDistribution: PreferClose`) | DNAT locale (~0,01-0,1 ms); `PreferClose` evita il salto cross-AZ (~1-2 ms × ogni chiamata) | Passare da Ingress/LB per traffico interno: aggiunge proxy L7 (~1-5 ms) e costi senza alcun beneficio |
+| Agent locale (log, metrics) su ogni nodo | **ClusterIP con `internalTrafficPolicy: Local`** | Il traffico resta sul nodo: zero rete fisica | ClusterIP standard: il pacchetto può finire su un altro nodo |
+| API HTTP pubbliche | **1 LB L4 → Ingress/Gateway → ClusterIP** | I ms del L7 (TLS, WAF) si pagano **una volta sola** al bordo, non a ogni microservizio | 1 LB per servizio: stessa latenza ma costi e IP moltiplicati |
+| Preservare IP client con latenza minima | **`externalTrafficPolicy: Local`** + Pod spread | Nessun hop tra nodi, nessun SNAT | `Cluster`: +0,1-0,5 ms (stessa AZ) o +1-2 ms (cross-AZ) e IP perso |
+| Servizio TCP non-HTTP (DB, MQTT) | **LoadBalancer L4** (interno se possibile) | Nessun parsing L7: overhead minimo (~0,1-1 ms) | Ingress HTTP: non gestisce il protocollo |
+| Bare metal, alta banda | **MetalLB BGP (ECMP)** | Il traffico entra da tutti i nodi con hash sui router: niente collo di bottiglia su un nodo | MetalLB L2: un solo nodo riceve tutto (limite di banda + failover più lento) |
+| Cluster A ↔ B, migrazione **breve**, pochi servizi | **NodePort su rete privata** | Una sola rete privata (~1-5 ms stabili), zero componenti da provisionare | Rotta pubblica: 5-50+ ms variabili, WAF/TLS ripetuti |
+| Cluster A ↔ B, migrazione **lunga/critica** | **Internal LB** oppure **Cilium ClusterMesh/Submariner** | VIP + health check (LB) o Pod-to-Pod diretto (mesh): niente elenco nodi manuale | NodePort con nodi a mano: rischio operativo che cresce col tempo |
+| Client gRPC/HTTP2 long-lived | **Headless** + LB lato client (o mesh) | kube-proxy bilancia per **connessione**: una connessione HTTP/2 resta su un solo Pod, quindi sbilanciamento e latenze di coda; il client-side LB distribuisce per **richiesta** | ClusterIP: p99 peggiore per Pod sovraccarico |
+
+!!! tip "Come decidere: procedura in 3 domande"
+    1. **Chi è il chiamante?** Stesso cluster → ClusterIP. Altro cluster → percorso privato. Esterno → LB + Ingress.
+    2. **Quanti ms posso spendere e quante chiamate sequenziali faccio?** Somma i contributi della tabella sopra: se il budget è stretto, elimina prima i salti cross-AZ e i proxy L7 non necessari.
+    3. **Quanto dura e quanto è critico?** Temporaneo → soluzione semplice (NodePort). Permanente/critico → soluzione con health check e failover (LB interno, mesh).
+
 ### Pattern enterprise: come si combinano
 
 ```
