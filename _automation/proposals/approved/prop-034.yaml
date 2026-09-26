@@ -1,0 +1,53 @@
+approved_at: '2026-09-26'
+auto_approved: true
+description: 'Complemento a vpn-ipsec.md, che non copre WireGuard (solo 4 file lo
+  citano).
+
+  Contenuti: modello crittografico (Noise IK, Curve25519, ChaCha20-Poly1305), cryptokey
+  routing, differenze con IPsec/OpenVPN.
+
+  Config reale: wg0.conf con [Interface]/[Peer], AllowedIPs, Endpoint, PersistentKeepalive,
+  wg genkey/pubkey/genpsk, wg-quick, wg show.
+
+  Pattern: hub-and-spoke, site-to-site con routing/forwarding e NAT (sysctl net.ipv4.ip_forward,
+  iptables/nftables),
+
+  full-mesh gestito (Tailscale/Netbird/Headscale, cenni) e uso in Kubernetes (Cilium/Calico
+  encryption WireGuard).
+
+  Deploy su EC2 come alternativa a Site-to-Site VPN AWS: limiti (nessun HA nativo,
+  rotazione chiavi manuale).
+
+  Troubleshooting: handshake assente, MTU 1420 e frammentazione, AllowedIPs sovrapposti,
+  UDP bloccato, NAT timeout.
+
+  '
+effort: medium
+id: prop-034
+last_analyzed: 2026-09-26
+priority: medium
+rationale: 'WireGuard e'' lo standard de facto per VPN semplici e per cifratura pod-to-pod;
+  il lettore che usa vpn-ipsec.md
+
+  non trova alternativa moderna ne'' la guida a configurazione e debug.
+
+  '
+status: approved
+tags:
+- wireguard
+- vpn
+- tunneling
+- encryption
+- networking
+target_file: docs/networking/sicurezza/wireguard.md
+title: 'WireGuard: VPN moderna, site-to-site e accesso remoto'
+type: new-file
+utility_test:
+  outcome: Configura tunnel WireGuard, instrada le subnet corrette e risolve problemi
+    di handshake/MTU
+  reader: DevOps/SRE che collega sedi, VPC o dev remoti con una VPN
+  scenario: Vuole una VPN site-to-site o di accesso remoto leggera, senza la complessita'
+    di IPsec
+  score: medium
+  without_kb: Dovrebbe assemblare quickstart e whitepaper, senza il confronto con
+    IPsec gia' presente in KB
