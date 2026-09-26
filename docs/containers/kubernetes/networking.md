@@ -7,9 +7,9 @@ search_keywords: [kubernetes networking, CNI container network interface, kubern
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/architettura, containers/kubernetes/sicurezza, containers/kubernetes/workloads, containers/docker/networking]
 official_docs: https://kubernetes.io/docs/concepts/services-networking/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-25
+last_updated: 2026-09-26
 ---
 
 # Kubernetes Networking
@@ -103,9 +103,57 @@ kubectl get configmap kube-proxy -n kube-system -o yaml | grep mode
 
 Un **Service** è un oggetto Kubernetes che espone un gruppo di Pod tramite un selector label. Fornisce un Virtual IP (ClusterIP) stabile e un nome DNS che non cambia anche quando i Pod vengono ricreati.
 
+### Come funziona davvero un Service (prerequisito per capire tutti i tipi)
+
+Un Service **non è un processo né un proxy**: è solo un oggetto nell'API server + regole di rete programmate su ogni nodo. Tre componenti collaborano:
+
+| Componente | Cosa fa | Dove gira |
+|---|---|---|
+| **EndpointSlice controller** | Osserva i Pod che matchano il `selector` **e sono Ready** → mantiene la lista `IP:porta` in oggetti `EndpointSlice` | control plane (kube-controller-manager) |
+| **kube-proxy** (o Cilium eBPF) | Osserva Service + EndpointSlice via API server → programma regole iptables/IPVS/eBPF | **ogni nodo** |
+| **CNI** | Rende ogni IP Pod raggiungibile da ogni nodo (flat network) | ogni nodo |
+
+```
+   API server (fonte di verità cluster-wide)
+   ├─ Service api        → ClusterIP 10.96.45.123:80
+   └─ EndpointSlice api  → 10.244.1.7:8080 (worker-1)
+                           10.244.2.9:8080 (worker-2)
+                           10.244.3.4:8080 (worker-3)
+          │ watch                │ watch                │ watch
+          ▼                      ▼                      ▼
+     kube-proxy w1          kube-proxy w2          kube-proxy w3
+     (regole DNAT)          (regole DNAT)          (regole DNAT)
+```
+
+**Conseguenza chiave:** *ogni nodo conosce la posizione di tutti i Pod di tutti i Service*, anche di quelli che non ospita. Per questo un pacchetto diretto al ClusterIP (o a un NodePort) può arrivare su **qualsiasi** nodo: quel nodo fa DNAT verso un IP Pod scelto tra gli endpoint e il CNI lo recapita, anche se il Pod sta su un altro nodo.
+
+!!! note "Il ClusterIP non esiste su nessuna interfaccia"
+    `10.96.45.123` non è assegnato a nessuna NIC e non risponde a `ping`. È solo un match nelle regole di kube-proxy: il pacchetto viene riscritto (DNAT) verso un IP Pod prima ancora di uscire dal nodo. Solo le porte dichiarate nel Service funzionano.
+
+```bash
+# Chi sono gli endpoint reali dietro un Service? (solo Pod Ready)
+kubectl get endpointslices -n production -l kubernetes.io/service-name=api -o wide
+
+# Pod NotReady (readinessProbe fallita) vengono RIMOSSI dagli endpoint → niente traffico
+# È il meccanismo che rende sicuri i rolling update: readinessProbe ben fatta = zero downtime
+```
+
+### Scegliere il tipo: visione d'insieme
+
+| Tipo | Raggiungibile da | Livello | Caso d'uso enterprise tipico |
+|---|---|---|---|
+| **ClusterIP** | Solo dentro il cluster | L4 | Comunicazione **east-west** tra microservizi, DB/cache interni, backend dietro Ingress |
+| **NodePort** | `IP-nodo:porta` (rete dei nodi) | L4 | Building block per LB esterni **on-prem** (F5, HAProxy); lab/dev. Raramente esposto direttamente in prod |
+| **LoadBalancer** | IP/VIP dedicato del LB | L4 | Esporre **un** servizio TCP/UDP non-HTTP (DB, MQTT, gRPC raw, syslog) o l'Ingress controller stesso |
+| **ExternalName** | Solo dentro il cluster | DNS | Alias DNS verso servizi fuori cluster (RDS, SaaS, servizio legacy in migrazione) |
+| **Headless** (`clusterIP: None`) | Solo dentro il cluster | DNS | StatefulSet, database cluster, client-side load balancing (Kafka, Cassandra) |
+
+!!! tip "Regola pratica enterprise"
+    Il 90% dei Service in un cluster è **ClusterIP**. Il traffico HTTP(S) esterno entra da **un solo** LoadBalancer davanti a un Ingress Controller / Gateway API, che poi instrada verso decine di ClusterIP. Un `type: LoadBalancer` per ogni microservizio è quasi sempre un anti-pattern (costo, IP sprecati, nessun punto centrale per WAF/TLS/auth).
+
 ### ClusterIP (default)
 
-Espone il Service solo all'interno del cluster. Il ClusterIP è un IP virtuale gestito da kube-proxy.
+Espone il Service solo all'interno del cluster, con un IP virtuale stabile e un nome DNS. È il mattone di base: **tutti gli altri tipi lo includono** (NodePort e LoadBalancer creano anche un ClusterIP).
 
 ```yaml
 apiVersion: v1
@@ -133,20 +181,40 @@ spec:
 # - Traffico su 10.96.45.123:80 → distribuito ai Pod su porta 8080
 ```
 
+**Casi d'uso concreti (enterprise):**
+
+- **Microservizi east-west:** `checkout` chiama `http://payments.production.svc:80`. Il chiamante non sa quanti Pod ci sono, dove girano, né quando vengono ricreati (HPA, rolling update, node drain).
+- **Backend di un Ingress:** l'Ingress/Gateway non punta ai Pod ma a un ClusterIP; la HTTP routing vive nell'Ingress, la scoperta dei Pod nel Service.
+- **Dipendenze infrastrutturali interne:** Redis, Elasticsearch, Vault agent — mai esposte fuori cluster; l'accesso è ulteriormente ristretto con [NetworkPolicy](#networkpolicy-segmentazione-di-rete).
+- **Cross-namespace:** `payments.production.svc.cluster.local` da altri namespace; il perimetro di sicurezza si impone con NetworkPolicy, **non** con il Service.
+
+**Opzioni utili in produzione:**
+
+```yaml
+spec:
+  sessionAffinity: ClientIP          # sticky per IP client (default: None = round-robin/random)
+  sessionAffinityConfig:
+    clientIP: { timeoutSeconds: 3600 }
+  internalTrafficPolicy: Local       # solo endpoint sullo stesso nodo (es. agent DaemonSet: log/metrics locali)
+  trafficDistribution: PreferClose   # preferisce endpoint nella stessa zona → meno costi cross-AZ e latenza
+```
+
+!!! tip "Costi cross-AZ"
+    Nei cloud il traffico tra Availability Zone è a pagamento e aggiunge latenza. `trafficDistribution: PreferClose` (o Topology Aware Routing) mantiene il traffico east-west nella stessa zona quando ci sono endpoint sufficienti.
+
 ```bash
 # Verifica Service e i suoi Endpoints
 kubectl get service api -n production
-kubectl get endpoints api -n production          # IP:porta dei Pod selezionati
-kubectl get endpointslices -n production         # versione scalabile degli endpoints
+kubectl get endpointslices -n production         # IP:porta dei Pod selezionati
 
 # Debug: il Service non raggiunge i Pod?
-kubectl describe service api -n production       # verifica selector
+kubectl describe service api -n production       # verifica selector ed Endpoints (vuoti = selector sbagliato o Pod NotReady)
 kubectl get pods -n production -l app=api        # i Pod hanno il label corretto?
 ```
 
 ### NodePort
 
-Espone il Service su una porta statica su ogni nodo del cluster (range default: 30000-32767).
+Apre la **stessa porta** (range default 30000-32767) su **tutti i nodi** del cluster; il traffico ricevuto su `IP-qualsiasi-nodo:nodePort` viene inoltrato al Service (e quindi a un Pod).
 
 ```yaml
 apiVersion: v1
@@ -168,23 +236,83 @@ spec:
 # Accesso:
 # Interno:  api-nodeport.production.svc.cluster.local:80
 # Esterno:  <IP-qualsiasi-nodo>:30080
-#
-# ATTENZIONE: kube-proxy fa SNAT sul traffico NodePort
-# → il Pod vede l'IP del nodo, non l'IP del client originale
-# → Per preservare l'IP sorgente: externalTrafficPolicy: Local
 ```
 
+#### Perché su *tutti* i nodi? Chi sceglie il nodo? Come fa a trovare i Pod?
+
+Le tre domande classiche, in ordine:
+
+**1. Come fa il nodo a sapere dove sono i Pod?** Non "sa" niente di speciale: come visto sopra, ogni kube-proxy ha già la lista completa degli endpoint del Service (da EndpointSlice). Quando arriva un pacchetto su `:30080`, la regola locale fa DNAT verso uno degli IP Pod, e il CNI lo instrada — anche verso un altro nodo.
+
+**2. Perché aprirla su tutti i nodi invece che solo dove stanno i Pod?** Perché i Pod si spostano (scheduler, autoscaling, drain, crash). Se la porta fosse aperta solo sui nodi che ospitano Pod, ogni reschedule cambierebbe la superficie di accesso e chi sta davanti dovrebbe inseguirla. Con la porta aperta ovunque, **la lista dei nodi raggiungibili è stabile** e indipendente dalla posizione dei Pod.
+
+**3. Chi chiama dall'esterno: "ogni tanto un nodo, ogni tanto un altro"?** Qui sta il punto: **in produzione il client non sceglie mai il nodo.** Davanti ai nodi c'è un load balancer esterno che ha come backend `worker-1:30080, worker-2:30080, worker-3:30080` e li controlla con health check. Il client conosce solo il VIP/DNS del load balancer.
+
+```
+  Client ──► https://api.azienda.it  (DNS → VIP del load balancer)
+                     │
+              ┌──────▼───────┐   health check TCP :30080 su ogni nodo
+              │  F5 / HAProxy │   (nodo down → rimosso dal pool)
+              │  / NLB / ALB  │
+              └─┬─────┬─────┬─┘
+                │     │     │
+      worker-1:30080  │  worker-3:30080        ← stessa porta su tutti i nodi
+                │  worker-2:30080
+                ▼     ▼     ▼
+        kube-proxy (regole DNAT, conoscono TUTTI gli endpoint)
+                │
+                ▼  (può essere un Pod su un ALTRO nodo → hop extra + SNAT)
+        Pod 10.244.x.y:8080
+```
+
+Senza LB davanti, un client che punta a `worker-1:30080` funziona finché worker-1 è vivo: se cade, il client non fa failover da solo. Per questo NodePort "nudo" è fragile.
+
+#### Quando si usa NodePort (e quando no)
+
+| Scenario | Valutazione |
+|---|---|
+| **On-prem con LB hardware/software esistente** (F5 BIG-IP, HAProxy, NGINX, Citrix ADC) | ✅ Caso d'uso principale: l'LB aziendale ha i nodi worker come pool member su `:nodePort`. Il team di rete gestisce VIP/TLS/WAF, il team K8s espone il NodePort |
+| **Base di un `type: LoadBalancer`** | ✅ Automatico: MetalLB, cloud controller e molti LB provider usano il NodePort come target |
+| **Lab, dev, kind/minikube, demo, debug rapido** | ✅ Comodo, nessuna dipendenza esterna |
+| **Ingress controller senza LoadBalancer** (bare metal) | ✅ L'Ingress controller viene esposto via NodePort e un LB esterno lo raggiunge |
+| **Produzione cloud, servizio HTTP** | ❌ Usare Ingress/Gateway API + LoadBalancer |
+| **Esposizione diretta a Internet** | ❌ Apre una porta alta su ogni nodo: superficie d'attacco, gestione firewall/security group per ogni porta |
+
+**Limiti da conoscere:**
+
+- Porte nel range 30000-32767 (non porte "vere" come 443) → serve sempre qualcosa davanti per avere porte standard
+- Una porta del range per Service, **globale al cluster** (collisioni, gestione degli assegnamenti)
+- I firewall/security group devono aprire il range verso i nodi dall'LB
+- Nessun health check applicativo, TLS, routing L7: è puro L4
+- Hop extra + SNAT (vedi sotto)
+
+#### externalTrafficPolicy: Cluster vs Local
+
+Il comportamento default (`Cluster`) massimizza la distribuzione ma perde l'IP del client. `Local` preserva l'IP ma cambia il modello.
+
+```
+externalTrafficPolicy: Cluster (default)
+  LB → worker-1:30080 → kube-proxy sceglie un Pod QUALSIASI del cluster
+  ✅ Bilanciamento uniforme tra tutti i Pod    ❌ SNAT: il Pod vede l'IP del nodo, non del client
+  ❌ Hop extra tra nodi (latenza, traffico cross-AZ)
+
+externalTrafficPolicy: Local
+  LB → worker-1:30080 → SOLO Pod presenti su worker-1
+  ✅ IP client originale preservato (whitelisting, audit, rate limit per IP)
+  ✅ Nessun hop extra    ❌ Se il nodo non ha Pod → pacchetto scartato
+  ❌ Distribuzione sbilanciata se i Pod sono distribuiti in modo non uniforme
+```
+
+Con `Local`, chi sta davanti deve sapere **quali nodi hanno Pod**. Con `type: LoadBalancer` Kubernetes alloca un `healthCheckNodePort` su ogni nodo che risponde **200 solo se il nodo ha almeno un endpoint locale Ready**: l'LB lo usa per escludere automaticamente i nodi senza Pod. Con un **NodePort puro** (LB esterno gestito a mano, es. F5) `healthCheckNodePort` non viene allocato: il monitor dell'LB deve sondare la NodePort stessa (un nodo senza Pod locali non risponde → esce dal pool) o direttamente un endpoint di health applicativo.
+
 ```yaml
-# externalTrafficPolicy: Local — preserva IP client ma limita bilanciamento
 apiVersion: v1
 kind: Service
 metadata:
   name: api-nodeport
 spec:
   type: NodePort
-  externalTrafficPolicy: Local   # traffico va SOLO ai Pod sul nodo ricevente
-  # Pro: IP client originale preservato nel Pod
-  # Contro: se il nodo non ha Pod, il traffico viene droppato → richiede LB esterno
+  externalTrafficPolicy: Local
   selector:
     app: api
   ports:
@@ -193,9 +321,23 @@ spec:
       nodePort: 30080
 ```
 
+!!! warning "Local richiede Pod spread"
+    Con `Local` usare `topologySpreadConstraints` o `podAntiAffinity` per distribuire le repliche sui nodi: altrimenti un nodo con 3 Pod e uno con 1 ricevono la stessa quota di traffico dal LB, sovraccaricando i Pod del secondo.
+
 ### LoadBalancer
 
-Richiede un cloud provider o un controller esterno (MetalLB per bare metal) che provvede un External IP.
+Chiede a un **controller esterno al cluster** (cloud controller manager, MetalLB, kube-vip, F5 CIS…) di provisionare un load balancer con un **IP/VIP dedicato**. È di fatto **NodePort + ClusterIP + automazione dell'LB davanti**: lo schema visto nella sezione NodePort (LB esterno → nodi:nodePort) viene creata e mantenuta per te, inclusi health check e aggiornamento del pool quando i nodi cambiano.
+
+```
+  Client ─► 34.100.200.50:443 (External IP)
+                   │  provisioning automatico da parte del cloud/MetalLB
+            ┌──────▼──────┐
+            │ Load Balancer│──► nodi :nodePort (NodePort creato automaticamente)
+            └─────────────┘          │
+                                     ▼ kube-proxy → Pod
+  Con AWS LB Controller / GKE NEG / Azure CNI overlay-less:
+  LB ──► direttamente IP:porta dei Pod (target-type: ip)  → salta NodePort, niente SNAT, meno hop
+```
 
 ```yaml
 apiVersion: v1
@@ -213,6 +355,7 @@ metadata:
     service.beta.kubernetes.io/azure-load-balancer-internal: "true"
 spec:
   type: LoadBalancer
+  externalTrafficPolicy: Local     # preserva IP client; l'LB usa healthCheckNodePort
   selector:
     app: api
   ports:
@@ -232,7 +375,37 @@ spec:
 # api-lb  LoadBalancer 10.96.200.100  34.100.200.50    80:30234/TCP, 443:31567/TCP
 ```
 
-### ExternalName e Headless Service
+**Casi d'uso concreti (enterprise):**
+
+- **Ingress controller / Gateway:** il caso più comune. **Un** `LoadBalancer` per l'NGINX/Traefik/Envoy Gateway; da lì il routing L7 verso centinaia di ClusterIP. Un solo IP pubblico, un solo punto per WAF, TLS e rate limit.
+- **Servizi non-HTTP (TCP/UDP):** database esposti a un'altra VPC/on-prem, broker MQTT, Kafka con listener esterni, syslog, VPN endpoint, game server — protocolli che un Ingress HTTP non gestisce.
+- **Load balancer interno (`internal`):** esporre un servizio alla rete corporate/VPC peering/Direct Connect **senza** IP pubblico. In enterprise è la forma di LoadBalancer più usata: API interne condivise tra cluster o tra team.
+- **Egress/ingress con IP fisso:** un partner deve mettere in whitelist il tuo IP → static IP pre-allocato assegnato al Service.
+- **Multi-cluster / disaster recovery:** ogni cluster espone lo stesso servizio con il proprio LB; il traffico è governato da DNS/GSLB (Route 53, Traffic Manager, F5 GTM).
+
+**On-prem / bare metal — chi fornisce il LoadBalancer?**
+
+Senza cloud provider, `type: LoadBalancer` resta in `<pending>` finché non installi un'implementazione:
+
+| Soluzione | Come annuncia il VIP | Note |
+|---|---|---|
+| **MetalLB** (L2 mode) | ARP/NDP da un nodo "leader" | Semplice; il traffico entra da **un solo nodo** alla volta (failover, non load balancing) |
+| **MetalLB** (BGP mode) | BGP verso i router ToR (ECMP) | Vero bilanciamento tra nodi; richiede router BGP-capable |
+| **Cilium LB-IPAM + BGP** | BGP control plane di Cilium | Consigliato se già CNI Cilium; L2/BGP integrati |
+| **kube-vip** | ARP o BGP | Usato anche per il VIP del control plane |
+| **F5 CIS / NetScaler CIC** | Programma l'appliance esistente | Integra l'infrastruttura di rete enterprise già presente |
+
+**Costi e limiti:**
+
+- Nei cloud **ogni Service LoadBalancer = un LB fatturato** (~16-25 $/mese + traffico) e un IP: 50 microservizi = 50 LB → **usare Ingress/Gateway condiviso**
+- Provisioning lento (30-180 s) e con quote per account/regione
+- Le annotation sono **provider-specifiche** (non portabili tra AWS/GCP/Azure); preferire `loadBalancerClass` per selezionare l'implementazione esplicitamente
+- L4 puro: nessun routing per host/path, nessuna terminazione TLS L7 (salvo annotation cloud specifiche)
+- `loadBalancerSourceRanges` è una difesa base; per la sicurezza reale usare security group/NSG + NetworkPolicy
+
+### ExternalName
+
+Non instrada traffico né usa kube-proxy: crea solo un **record DNS CNAME** dentro CoreDNS. Un Pod che risolve `external-db.production.svc` ottiene il CNAME verso l'hostname esterno.
 
 ```yaml
 # ExternalName: CNAME verso servizio esterno al cluster
@@ -243,12 +416,28 @@ metadata:
   namespace: production
 spec:
   type: ExternalName
-  externalName: mydb.rds.amazonaws.com   # risolve in CNAME, no ClusterIP
-  # Uso: permette al codice di usare "external-db" come hostname
-  # → facile switch tra DB esterno e interno senza cambiare config app
+  externalName: mydb.abc123.eu-west-1.rds.amazonaws.com   # risolve in CNAME, no ClusterIP
+```
 
----
-# Headless Service: ClusterIP: None → DNS ritorna direttamente gli IP dei Pod
+**Casi d'uso concreti:**
+
+- **Astrarre un database gestito** (RDS, Cloud SQL, Azure SQL): le app usano sempre `external-db`; ambienti diversi (dev/staging/prod) puntano a hostname diversi cambiando **solo** il Service, non la configurazione delle app
+- **Migrazione graduale verso Kubernetes:** oggi `payments` è una VM legacy → `ExternalName: payments.legacy.corp`; domani è un Deployment → si sostituisce l'ExternalName con un ClusterIP con **lo stesso nome**. I client non cambiano
+- **Servizi SaaS/terzi con dominio stabile** (es. `smtp.provider.com`) con un nome interno uniforme
+- **Alias cross-namespace:** `db` in `app-ns` → `postgres.data-ns.svc.cluster.local`
+
+**Limiti:**
+
+- Nessun load balancing, health check o selezione porte: è solo DNS
+- Con HTTP/HTTPS l'header `Host` e il certificato TLS del client restano quelli del **nome interno** (`external-db`), non dell'hostname reale → errori di validazione TLS/SNI. Va bene per protocolli TCP dove il nome non compare (PostgreSQL, Redis), problematico per HTTPS
+- Non è filtrabile per IP con NetworkPolicy standard (la destinazione reale è nota solo dopo la risoluzione DNS) → per l'egress controllato servono policy FQDN (Cilium) o egress gateway
+- Non usare per puntare a un IP: `externalName` deve essere un hostname (usare Service senza selector + EndpointSlice manuale)
+
+### Headless Service
+
+Con `clusterIP: None` non esiste VIP né kube-proxy: il DNS restituisce **direttamente gli IP dei Pod** (record A multipli). Il client sceglie a chi connettersi.
+
+```yaml
 apiVersion: v1
 kind: Service
 metadata:
@@ -263,10 +452,58 @@ spec:
       targetPort: 5432
 
 # DNS headless:
-# postgres-headless.production.svc.cluster.local → A records di tutti i Pod
+# postgres-headless.production.svc.cluster.local → A records di tutti i Pod Ready
 # Con StatefulSet: postgres-0.postgres-headless.production.svc.cluster.local → IP pod-0
-# Usato per: StatefulSet, service discovery client-side, database cluster
 ```
+
+**Casi d'uso concreti:**
+
+- **Database in cluster con identità stabile (StatefulSet):** in un cluster PostgreSQL/Patroni, MongoDB, Cassandra, Elasticsearch, Kafka, ZooKeeper i nodi devono **indirizzarsi singolarmente** (`kafka-0`, `kafka-1`…) per replica, elezione del leader, bootstrap dei peer. Un ClusterIP che sceglie a caso li renderebbe inutilizzabili
+- **Primary/replica:** scrittura su `pg-0.pg-headless`, lettura distribuita sugli altri
+- **Client-side load balancing / gRPC:** un client gRPC con round-robin lato client risolve tutti gli IP e bilancia per conto proprio (il L4 di kube-proxy bilancerebbe per *connessione*, e con HTTP/2 long-lived tutto il traffico finirebbe su un solo Pod)
+- **Service discovery per sistemi di membership** (Consul, Hazelcast, Akka cluster): la query DNS restituisce l'elenco dei peer
+
+**Limiti:** il client deve gestire failover e refresh DNS (attenzione alla cache DNS della JVM: `networkaddress.cache.ttl`); nessun VIP unico da usare come punto d'ingresso stabile.
+
+### Pattern enterprise: come si combinano
+
+```
+  Internet / rete corporate
+        │
+  [ CDN / WAF / DDoS protection ]                 ← perimetro (Cloudflare, AWS WAF, Akamai)
+        │
+  [ LoadBalancer L4 (1 solo) ]  ──► NLB/F5/MetalLB, IP fisso, whitelist
+        │        (NodePort automatico o target-type: ip)
+  [ Ingress Controller / Gateway API ]            ← TLS, routing host/path, auth, rate limit
+        │
+   ┌────┼────────────┬──────────────┐
+   ▼    ▼            ▼              ▼
+ svc-A  svc-B      svc-C          svc-D           ← ClusterIP (east-west, stabili)
+ (web)  (api)    (payments)     (search)
+                     │
+                     ├─► ExternalName → RDS.eu-west-1...        ← DB gestito
+                     └─► Headless   → kafka-0/1/2 (StatefulSet) ← broker con identità
+```
+
+| Esigenza | Soluzione consigliata |
+|---|---|
+| API HTTP(S) pubbliche multi-servizio | 1 LoadBalancer → Ingress/Gateway → ClusterIP |
+| API HTTP interne (solo rete corporate) | LoadBalancer **internal** → Ingress/Gateway interno |
+| Servizio TCP/UDP non-HTTP (DB, MQTT, syslog) | LoadBalancer dedicato (interno se possibile) |
+| Bare metal con F5/HAProxy aziendale | NodePort + pool member `nodi:nodePort` (con `Local`: monitor sulla NodePort) |
+| Bare metal senza LB | MetalLB / Cilium LB-IPAM (BGP) + LoadBalancer |
+| Preservare IP client (audit, whitelist) | `externalTrafficPolicy: Local` **oppure** PROXY protocol / header `X-Forwarded-For` sul LB L7 |
+| Database su StatefulSet | Headless + eventuale ClusterIP separato per i client applicativi |
+| DB gestito cloud / servizio legacy | ExternalName |
+| Ridurre costi cross-AZ | `trafficDistribution: PreferClose` + Pod spread per zona |
+
+!!! warning "Anti-pattern comuni"
+    - **Un LoadBalancer per ogni microservizio:** costo e sprawl di IP → Ingress/Gateway condiviso
+    - **NodePort esposto direttamente a Internet:** porte alte aperte su tutti i nodi, nessun WAF/TLS
+    - **Client che puntano a un singolo nodo:NodePort:** nessun failover; sempre un LB con health check davanti
+    - **`externalTrafficPolicy: Local` senza spread dei Pod:** distribuzione sbilanciata e nodi scartati
+    - **Comunicare con IP Pod o ClusterIP hard-coded:** usare sempre il nome DNS del Service
+    - **Selector troppo largo o duplicato:** Service che cattura Pod di altri workload → verificare sempre gli endpoint
 
 ---
 
