@@ -549,7 +549,7 @@ def cmd_init_analysis():
             "type": "audit",
             "path": path,
             "category": path.split("/")[1] if len(path.split("/")) > 1 else "unknown",
-            "priority": "P3",
+            "priority": _focus_priority(path),
             "status": "pending",
             "reason": f"Issue identificati: {issue_str}"
         })
@@ -574,9 +574,10 @@ def cmd_init_analysis():
                       .get("review_sample_size", 3)))
     except Exception:
         sample = 3
+    pending_paths = {i.get("path") for i in state.get("queue", []) if i.get("status") == "pending"}
     reviewed_scored = []
     for rel in kb_files:
-        if rel in queued_paths:
+        if rel in pending_paths:
             continue
         try:
             fm = _read_frontmatter((Path(__file__).parent.parent / rel)
@@ -593,7 +594,7 @@ def cmd_init_analysis():
             "type": "review",
             "path": rel,
             "category": rel.split("/")[1] if len(rel.split("/")) > 1 else "unknown",
-            "priority": "P3",
+            "priority": _focus_priority(rel),
             "status": "pending",
             "reason": "Review critica: correttezza, attualita', valore. Aggiorna last_verified.",
         })
@@ -1069,6 +1070,11 @@ def _focus_rank(rel: str) -> int:
     return 0 if any(rel.startswith(p) for p in prefixes) else 1
 
 
+def _focus_priority(rel: str, default: str = "P3") -> str:
+    """P2 per i file nel focus (passano davanti ai P3), altrimenti la priorita' di default."""
+    return "P2" if _focus_rank(rel) == 0 else default
+
+
 def _read_frontmatter(text: str) -> dict:
     """Parser minimale del frontmatter YAML in testa a un file .md."""
     if not text.startswith("---"):
@@ -1176,7 +1182,7 @@ def cmd_inject_review_tasks(n):
         state["queue"].append({
             "id": str(max_id), "type": "review", "path": rel,
             "category": rel.split("/")[1] if len(rel.split("/")) > 1 else "unknown",
-            "priority": "P3", "status": "pending",
+            "priority": _focus_priority(rel), "status": "pending",
             "reason": "Passaggio di review: correttezza, attualita', valore. Aggiorna last_verified.",
         })
         created.append(rel)
