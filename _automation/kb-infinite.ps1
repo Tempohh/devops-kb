@@ -1,4 +1,4 @@
-# KB Update - Modalita' Infinita
+﻿# KB Update - Modalita' Infinita
 # Loop continuo. Su rate limit attende il ripristino.
 # Ctrl+C per interrompere (stato sempre salvato su disco).
 #
