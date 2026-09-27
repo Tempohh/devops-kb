@@ -5,11 +5,11 @@ category: networking
 tags: [linkerd, service-mesh, kubernetes, mtls, rust, sidecar, osservabilità]
 search_keywords: [linkerd2, linkerd service mesh, rust proxy, linkerd-proxy, ultra-light, mTLS automatico, golden signals, latency percentiles, linkerd viz, multicluster, policy, serviceprofile, traffic split, retries, timeouts, cncf, buoyant]
 parent: networking/service-mesh/_index
-related: [networking/service-mesh/istio, networking/service-mesh/concetti-base, networking/kubernetes/network-policies, dev/resilienza/circuit-breaker]
+related: [networking/service-mesh/istio, networking/service-mesh/concetti-base, networking/kubernetes/network-policies, dev/resilienza/circuit-breaker, networking/kubernetes/gateway-api]
 official_docs: https://linkerd.io/2.x/overview/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-09-28
 ---
 
 # Linkerd
@@ -286,6 +286,11 @@ kubectl logs pod/my-pod -c linkerd-proxy
     Architettura sidecar, data plane e control plane.
 
     **Approfondimento →** [Concetti Base](concetti-base.md)
+
+??? info "Gateway API — Ingress verso il mesh"
+    Linkerd supporta **Gateway API** (lo standard Kubernetes che sostituisce Ingress, con CRD tipizzate `Gateway`/`HTTPRoute`) come alternativa moderna per instradare il traffico in entrata verso i servizi meshati, al posto di un Ingress Controller tradizionale.
+
+    **Approfondimento →** [Gateway API](../kubernetes/gateway-api.md)
 
 ## Riferimenti
 
