@@ -5,11 +5,11 @@ category: ci-cd
 tags: [cicd, jenkins, github-actions, gitlab-ci, gitops, argocd, flux, pipeline, automation, devops]
 search_keywords: [CI/CD, continuous integration, continuous delivery, continuous deployment, pipeline automation, Jenkins, GitHub Actions, GitLab CI, ArgoCD, Flux, GitOps, DORA metrics, DevOps pipeline, deployment pipeline enterprise, blue green canary, SBOM supply chain, SLSA]
 parent: _index
-related: [containers/kubernetes/_index, containers/helm/_index]
+related: [containers/kubernetes/_index, containers/helm/_index, dev/processi/_index]
 official_docs: https://www.jenkins.io/doc/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-09-27
 ---
 
 # CI/CD & DevOps Automation

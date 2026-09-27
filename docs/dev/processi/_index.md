@@ -5,10 +5,11 @@ category: dev
 tags: [workflow, processi, developer-experience, sdlc, git, testing, ci-cd]
 search_keywords: [processi sviluppo, developer workflow, development process, inner loop, outer loop, branching strategy, git workflow, sdlc, software development lifecycle, developer experience, dx]
 parent: dev/_index
+related: [ci-cd/_index, dev/linguaggi/_index, dev/_index]
 official_docs: https://www.atlassian.com/continuous-delivery/software-testing/shift-left-testing
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-09-27
 ---
 
 # Processi di Sviluppo
