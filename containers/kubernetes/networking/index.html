@@ -10539,7 +10539,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10564,7 +10564,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25284,8 +25284,8 @@
 </span></code></pre></div></p>
 <p><strong>Causa possibile B — Nessun Endpoint:</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Il Service seleziona Pod inesistenti o non Ready</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>endpoints<span class="w"> </span>api<span class="w"> </span>-n<span class="w"> </span>production
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># Se "Endpoints: &lt;none&gt;" → i label del selector non matchano nessun Pod</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>endpointslices<span class="w"> </span>-n<span class="w"> </span>production<span class="w"> </span>-l<span class="w"> </span>kubernetes.io/service-name<span class="o">=</span>api
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># Se non ci sono indirizzi elencati → i label del selector non matchano nessun Pod</span>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>
 </span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>production<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>api<span class="w"> </span>--show-labels<span class="w">   </span><span class="c1"># verifica i label</span>
 </span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>service<span class="w"> </span>api<span class="w"> </span>-n<span class="w"> </span>production<span class="w">                 </span><span class="c1"># verifica il selector</span>
