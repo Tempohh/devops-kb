@@ -6,7 +6,7 @@ tags: [networking, reti, protocolli, sicurezza, load-balancing, dns, kubernetes]
 parent: /
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-09-27
 ---
 
 # Networking
@@ -96,9 +96,10 @@ Per chi deve gestire infrastruttura in produzione:
 
 1. [Load Balancing L4 vs L7](load-balancing/layer4-vs-layer7.md)
 2. [Algoritmi di Load Balancing](load-balancing/algoritmi.md)
-3. [API Gateway Pattern](api-gateway/pattern-base.md)
-4. [Rate Limiting](api-gateway/rate-limiting.md)
-5. [Firewall e WAF](sicurezza/firewall-waf.md)
+3. [Nginx e HAProxy](load-balancing/nginx-haproxy.md) — implementazione pratica
+4. [API Gateway Pattern](api-gateway/pattern-base.md)
+5. [Rate Limiting](api-gateway/rate-limiting.md)
+6. [Firewall e WAF](sicurezza/firewall-waf.md)
 
 ### Percorso Kubernetes
 Per chi lavora su Kubernetes:
@@ -115,10 +116,10 @@ Per chi lavora su Kubernetes:
 
 | Sezione | Argomenti | Livello |
 |---------|-----------|---------|
-| Fondamentali | OSI, TCP/IP, IP/Subnetting, DNS, HTTP/S, TLS | Beginner |
-| Protocolli | TCP/UDP, HTTP/2, HTTP/3, QUIC, WebSocket, gRPC | Intermediate |
-| Load Balancing | L4/L7, algoritmi, HA/failover | Intermediate |
+| Fondamentali | OSI, TCP/IP, IP/Subnetting, DNS, HTTP/S, TLS, NAT, eBPF, Troubleshooting | Beginner |
+| Protocolli | TCP/UDP, HTTP/2, HTTP/3, QUIC, WebSocket, gRPC, BGP | Intermediate |
+| Load Balancing | L4/L7, algoritmi, HA/failover, Nginx/HAProxy | Intermediate |
 | API Gateway | Pattern, Kong, rate limiting | Intermediate |
-| Service Mesh | Concetti, Istio, Envoy, Linkerd | Advanced |
+| Service Mesh | Concetti, Istio, Envoy, Linkerd, Consul | Advanced |
 | Kubernetes Networking | CNI, Ingress, Network Policies | Advanced |
-| Sicurezza di Rete | Firewall/WAF, VPN/IPsec, Zero Trust, DDoS | Advanced |
+| Sicurezza di Rete | Firewall/WAF, VPN/IPsec, WireGuard, Zero Trust, DDoS | Advanced |
