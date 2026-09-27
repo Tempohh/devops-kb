@@ -1,0 +1,41 @@
+id: prop-038
+title: "HashiCorp Consul — service discovery e mesh ibrido VM+Kubernetes"
+type: new-file
+priority: high
+target_file: docs/networking/service-mesh/consul.md
+effort: medium
+description: |
+  Consul è citato in 14 file della KB (vault.md, mtls-spiffe.md, concetti-base.md,
+  envoy.md, service-mesh/_index.md, prometheus.md, zookeeper-kraft.md, opentofu.md,
+  failover-recovery.md, replicazione.md, cassandra.md, entra-id.md, valutazione.md,
+  kubernetes/networking.md) solo come esempio di terze parti (riga di tabella in
+  concetti-base.md), ma non ha un file dedicato mentre istio.md, linkerd.md ed
+  envoy.md sì. Struttura suggerita:
+  - Cos'è: service discovery + service mesh (Consul Connect) + KV store, agent
+    model (client/server), gossip protocol (Serf) per il cluster membership.
+  - Differenza pratica dagli altri mesh già documentati (istio.md, linkerd.md):
+    Consul non richiede Kubernetes — supporta VM, container e k8s nello stesso
+    catalogo di servizi, utile per infrastrutture ibride in migrazione.
+  - Kubernetes integration: Consul on Kubernetes (Helm chart), sync catalogo
+    VM <-> k8s (catalog sync), sidecar injection via annotation.
+  - mTLS: Connect CA (Vault come backend opzionale, collegamento a vault.md e
+    mtls-spiffe.md già esistenti), intentions per autorizzazione L4/L7.
+  - Esempio pratico: registrare un servizio VM legacy nel catalogo, esporlo a un
+    pod k8s via Consul Connect senza VPN/peering.
+  - Limiti noti: overhead operativo del cluster Consul separato da k8s, curva di
+    apprendimento di intentions/ACL rispetto a NetworkPolicy nativa.
+rationale: |
+  DevOps/platform engineer che gestisce infrastruttura ibrida (VM legacy +
+  Kubernetes) e valuta come collegare servizio a servizio senza migrare tutto
+  su k8s. Istio e Linkerd, già documentati, assumono workload k8s-nativi;
+  Consul è l'opzione quando serve discovery cross-piattaforma. Il gap è reale:
+  la KB nomina Consul come "esempio" 14 volte ma non spiega mai come funziona
+  o quando sceglierlo davvero.
+utility_test:
+  reader: "Platform engineer con VM legacy e cluster Kubernetes da far comunicare senza migrazione completa"
+  scenario: "Deve decidere tra Istio/Linkerd (k8s-only) e Consul per un mesh che copra anche le VM esistenti"
+  outcome: "Configura Consul Connect con catalog sync VM+k8s e capisce quando preferirlo a un mesh k8s-nativo"
+  without_kb: "Dovrebbe leggere la documentazione HashiCorp per intero (agent model, Connect, k8s integration, ACL) senza un confronto diretto con Istio/Linkerd già noti dalla KB"
+  score: high
+tags: [consul, service-mesh, service-discovery, hashicorp, hybrid-infrastructure, kubernetes, mtls]
+last_analyzed: 2026-09-27

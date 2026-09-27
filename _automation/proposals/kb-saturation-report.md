@@ -268,7 +268,22 @@ Nessuna altra proposta: censimento categorie invariato da task 559 (cloud 107,
 networking 43, iac 14, monitoring 20); nessun nuovo gap `score: high` in
 networking/aws oltre a quanto già proposto nelle sessioni precedenti.
 
+## Sessione proposal 2026-09-27 (task 563)
+Gate eseguito con `py`: `file_count` 305, target 330, `over_target: false`,
+headroom 25 (invariato dal task 561). `pending/` vuota, ultimo id prop-037
+(approvata, in attesa di esecuzione fix-relation). Nessuna variazione di
+contenuto KB dai task 559/561 (solo fix a `kb-infinite.ps1`, non contenuti).
+Ripresa del gap segnalato come "da valutare" nella sessione precedente: Consul
+citato in 14 file (vault, mtls-spiffe, concetti-base, envoy, service-mesh
+_index, prometheus, zookeeper-kraft, opentofu, failover-recovery, replicazione
+postgresql, cassandra, entra-id, valutazione, kubernetes/networking) ma solo
+come voce di tabella comparativa, mai come file dedicato — a differenza di
+istio.md e linkerd.md già presenti in `networking/service-mesh/`. Gap reale e
+distinto: Consul copre discovery/mesh ibrido VM+Kubernetes, caso d'uso non
+coperto da Istio/Linkerd (k8s-native). Generata 1 proposta: prop-038
+(networking/service-mesh/consul.md, high priority, medium effort).
+
 ## Prossima sessione consigliata
-Dopo esecuzione prop-037, valutare Consul (service discovery ibrida VM+K8s)
-come possibile gap futuro, non ancora abbastanza distinto da giustificare
-proposta in questo ciclo. Continuare focus networking + cloud/aws.
+Dopo esecuzione prop-037 (fix-relation vpc-lattice) e prop-038 (consul.md).
+Nessun altro gap `score: high` emerso in networking/cloud/aws oltre a quanto
+già proposto. Continuare focus networking + cloud/aws.

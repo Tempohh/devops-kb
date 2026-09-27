@@ -1,0 +1,54 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "`vpc-lattice.md` (creato in task 560) elenca `cloud/aws/networking/vpc-avanzato`\n\
+  e `cloud/aws/networking/elastic-load-balancing` nel proprio campo `related`, ma\n\
+  la relazione è asimmetrica: nessuno dei due file collega VPC Lattice all'indietro.\n\
+  Applicare protocollo 3 (CLAUDE.md) su 2 file:\n- `docs/cloud/aws/networking/vpc-avanzato.md`:\
+  \ aggiungere\n  `cloud/aws/networking/vpc-lattice` a `related`; opzionale una riga/admonition\n\
+  \  che segnali Lattice come alternativa L7 quando hub-and-spoke L3 (TGW) o\n  endpoint\
+  \ singolo (PrivateLink) non bastano.\n- `docs/cloud/aws/networking/elastic-load-balancing.md`:\
+  \ aggiungere\n  `cloud/aws/networking/vpc-lattice` a `related` (Lattice usa target\
+  \ group\n  concettualmente simili ad ALB ma con service discovery e IAM auth nativi).\n\
+  Aggiornare `last_updated` in entrambi i file. Nessuna modifica a `vpc-lattice.md`\n\
+  (già corretto).\n"
+effort: small
+id: prop-037
+last_analyzed: 2026-09-27
+priority: medium
+rationale: 'Un lettore che apre `vpc-avanzato.md` — l''hub principale di connettività
+  AWS
+
+  (TGW/PrivateLink/Direct Connect/VPN) — non trova alcun rimando all''opzione più
+
+  recente (VPC Lattice, GA 2023) per casi L7 service-to-service, nonostante
+
+  `vpc-lattice.md` esista già e la referenzi esplicitamente. Stesso problema da
+
+  `elastic-load-balancing.md`. Senza il collegamento, chi decide tra le 4/5 opzioni
+
+  di connettività AWS deve scoprire VPC Lattice per caso (ricerca full-text) invece
+
+  che navigando i `related` dei file che già conosce.
+
+  '
+status: approved
+tags:
+- aws
+- vpc-lattice
+- vpc-avanzato
+- elastic-load-balancing
+- related
+- networking
+target_file: docs/cloud/aws/networking/vpc-avanzato.md
+title: Collegare VPC Lattice a VPC Avanzato ed Elastic Load Balancing (related mancante)
+type: fix-relation
+utility_test:
+  outcome: Trova il link a vpc-lattice.md nel related e scopre l'opzione L7 gestita
+    senza dover indovinare che esiste o cercarla altrove
+  reader: DevOps/architetto AWS che valuta hub-and-spoke (TGW) vs endpoint singolo
+    (PrivateLink) vs L7 service networking (Lattice) per una nuova architettura multi-account
+  scenario: Sta leggendo vpc-avanzato.md (il file che già conosce, hub della categoria)
+    per capire le opzioni di connettività disponibili
+  score: medium
+  without_kb: Dovrebbe già sapere che VPC Lattice esiste e cercarlo per nome, oppure
+    leggere tutta la doc ufficiale AWS categoria per categoria per notare l'opzione
