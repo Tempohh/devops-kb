@@ -5,7 +5,7 @@ category: containers
 tags: [kubernetes, multi-cluster, cluster-api, rancher, fleet, argocd, crossplane, kubefed, federation, gitops]
 search_keywords: [kubernetes multi cluster, gestione multi cluster k8s, cluster federation kubernetes, Cluster API CAPI, KubeFed v2, Rancher multi cluster management, Fleet GitOps Rancher, Argo CD multi cluster deploy, Crossplane infrastructure kubernetes, multi cluster networking, cluster mesh, service mesh multi cluster, hub and spoke kubernetes, kubernetes federation pattern, workload distribution cluster, geo distribution kubernetes, dev staging prod cluster separation, multi cluster observability, multi cluster RBAC, vcluster virtual cluster, Loft vcluster, Open Cluster Management OCM, Admiral Istio multi cluster, kubernetes multi tenancy clusters, multi cluster DR disaster recovery, cluster lifecycle management]
 parent: containers/kubernetes/_index
-related: [containers/kubernetes/architettura, containers/kubernetes/networking, containers/kubernetes/operators-crd, containers/kubernetes/sicurezza, containers/kubernetes/helm]
+related: [containers/kubernetes/architettura, containers/kubernetes/networking, containers/kubernetes/operators-crd, containers/kubernetes/sicurezza, containers/helm/_index]
 official_docs: https://kubernetes.io/docs/concepts/cluster-administration/
 status: complete
 difficulty: expert
