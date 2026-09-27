@@ -106,6 +106,11 @@ Il cluster si auto-configura dallo stato desiderato in Git
 
 <div class="grid cards" markdown>
 
+-   :material-sitemap: **[Pipeline — Fondamentali](pipeline.md)**
+
+    ---
+    Stage, quality gate, artifact, trigger, pipeline as code. Le basi su cui si costruiscono Jenkins, GitHub Actions, GitLab CI e gli altri tool.
+
 -   :fontawesome-brands-jenkins: **[Jenkins](jenkins/_index.md)**
 
     ---
