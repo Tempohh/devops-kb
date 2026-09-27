@@ -4,9 +4,10 @@ slug: kubernetes-networking
 category: networking
 tags: [kubernetes, networking, cni, ingress, network-policy, service, pod]
 parent: networking
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-09-27
+last_verified: 2026-09-27
 ---
 
 # Kubernetes Networking
