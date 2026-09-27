@@ -7,9 +7,10 @@ search_keywords: [AWS networking, AWS VPC, Route 53, CloudFront, Direct Connect,
 parent: cloud/aws/_index
 related: [cloud/aws/compute/ec2, cloud/aws/security/network-security]
 official_docs: https://docs.aws.amazon.com/vpc/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-09-27
+last_verified: 2026-09-27
 ---
 
 # AWS Networking
