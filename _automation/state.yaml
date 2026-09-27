@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-09-27T22:30:27.218464+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 1016
+total_ops: 1017
 total_runs: 481
 queue:
 - id: W-001
@@ -6309,6 +6309,24 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '690'
+  type: expand
+  path: docs/iac/terraform/testing.md
+  category: iac
+  priority: P1
+  status: pending
+  reason: "Aggiungere una sezione dedicata a `terraform test`, il framework di test\nnativo introdotto in Terraform 1.6 (file\
+    \ `.tftest.hcl`), tra la sezione\n\"6. Terraform built-in checks (v1.5+)\" e \"7. pre-commit hooks\". Il file\nattuale\
+    \ copre solo alternative esterne (Terratest in Go, checkov, conftest)\nma non lo strumento first-party di HashiCorp, che\
+    \ è oggi lo standard\nconsigliato per test di unità/integrazione su moduli senza introdurre una\ndipendenza Go nel progetto.\n\
+    Contenuti minimi da includere:\n- Struttura di un file `tests/*.tftest.hcl` con blocchi `run` multipli\n- Differenza tra\
+    \ `command = plan` (unit test veloce, no risorse reali) e\n  `command = apply` (integration test, provisiona davvero)\n\
+    - Blocco `assert` con `condition`/`error_message`, analogo ai `check {}`\n  ma eseguibile fuori da `terraform plan/apply`\
+    \ reali\n- Uso di `variables {}` per override per-run e `mock_provider` (v1.7+) per\n  test senza credenziali cloud\n\
+    - Comando `terraform test` in CI, confronto con Terratest nella tabella\n  \"Tool Overview\" esistente (aggiungere riga)\n\
+    - Esempio pratico: test di un modulo VPC che verifica cidr_block via\n  `command = plan` prima di un test `command = apply`\
+    \ più costoso\n"
+  proposal_id: prop-118
 completed:
 - id: '675'
   path: docs/ci-cd/_index.md
