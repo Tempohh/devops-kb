@@ -1,0 +1,51 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "Aggiungere `databases/fondamentali/schema-migrations` al campo `related`\
+  \ del\nfrontmatter di `argocd.md` (attualmente: [ci-cd/gitops/_index, ci-cd/gitops/flux,\n\
+  containers/kubernetes/_index, containers/helm/_index, containers/kustomize/_index]).\n\
+  Aggiungere anche un blocco admonition collapsibile vicino all'esempio di\nPreSync\
+  \ hook esistente (righe ~506-522, esempio \"db-migration\"):\n\n??? info \"Schema\
+  \ Migrations — Strumenti per lo script di migrazione\"\n    Il PreSync hook sopra\
+  \ esegue `./scripts/migrate.sh`, ma non entra nel\n    merito di quale tool usare\
+  \ né delle strategie di rollback/zero-downtime.\n\n    **Approfondimento completo\
+  \ →** [Schema Migrations — Flyway, Liquibase,\n    Atlas, golang-migrate](../../databases/fondamentali/schema-migrations.md)\n\
+  \nAggiornare `last_updated`.\n"
+effort: small
+id: prop-121
+last_analyzed: 2026-09-28
+priority: medium
+rationale: '`schema-migrations.md` include già `ci-cd/gitops/argocd` in `related`
+
+  (il file discute esplicitamente pattern di migrazione DB nei deploy GitOps).
+
+  `argocd.md` contiene un esempio concreto e completo di PreSync hook per
+
+  database migration ma non rimanda a schema-migrations.md, nonostante il
+
+  contenuto si sovrapponga direttamente. Relazione asimmetrica confermata
+
+  leggendo schema-migrations.md per intero e verificando il contenuto di
+
+  argocd.md in questa sessione.
+
+  '
+status: approved
+tags:
+- argocd
+- gitops
+- schema-migrations
+- database
+- connettivita
+target_file: docs/ci-cd/gitops/argocd.md
+title: 'Fix relazione: ci-cd/gitops/argocd.md non punta a schema-migrations.md'
+type: fix-relation
+utility_test:
+  outcome: Trova il link a schema-migrations.md direttamente nell'esempio, senza dover
+    cercare per full-text search
+  reader: DevOps che configura un deploy GitOps con ArgoCD e deve gestire migrazioni
+    schema DB
+  scenario: Ha appena scritto il PreSync hook con `migrate.sh` e cerca quale tool
+    di migrazione usare e come gestire rollback in un contesto GitOps dichiarativo
+  score: medium
+  without_kb: Deve sapere già che esiste una pagina dedicata sotto databases/fondamentali,
+    oppure affidarsi alla sidebar o al full-text search
