@@ -1,62 +1,66 @@
-# KB Saturation Report — 2026-09-27 (sessione #634)
+# KB Saturation Report — 2026-09-27 (sessione #637)
 
 ## Gate meccanico
 
 ```
-file_count: 315, target: 330, over_target: false, headroom: 15
+file_count: 314, target: 330, over_target: false, headroom: 16
 category_saturated_pct: 85, allow_zero_proposals: true
 ```
 
-Sotto target. Focus raccomandato dalla sessione precedente (#630): controllo
-di connettività hub→figli sui sotto-hub **interni** (secondo livello) di
-`docs/containers/**` e `docs/security/**`, mai verificati con questo
-criterio specifico prima d'ora.
+Sotto target. Focus raccomandato dalla sessione precedente (#634): controllo di
+connettività hub→figli sui sotto-hub **interni** (secondo livello) di
+`docs/cloud/aws/**` e `docs/cloud/azure/**`, mai verificati con questo criterio
+specifico prima d'ora (entrambe già grandi, a rischio di figli orfani accumulati
+come visto in `containers/kubernetes`, #634).
 
 ## Copertura stimata per categoria
 
 | Categoria | Files | Coverage % | Depth | Note |
 |-----------|-------|------------|-------|------|
-| security/ (7 sotto-hub) | tutti i figli linkati | 100% connesso | Controllati tutti e 7 i sotto-hub (`autenticazione`, `autorizzazione`, `compliance`, `network`, `pki-certificati`, `runtime`, `secret-management`): ogni figlio è raggiungibile dalla grid del proprio sotto-hub | Nessun gap — quarta categoria a passare il controllo di connettività interna senza problemi (dopo `ai/`) |
-| containers/ (7 sotto-hub) | 1 sotto-hub con 4 figli orfani | gap reale, il più grande trovato finora | Controllati `container-runtime`, `docker`, `helm`, `kustomize`, `openshift`, `registry` (puliti, 100% figli linkati) e `kubernetes` (12 file: grid ne linka solo 7, la nota Networking ne linka 1, **4 restano orfani**: `autoscaling.md`, `ingress.md`, `multi-cluster.md`, `resource-management.md`) | prop-078 (high, fix-relation) per i 4 orfani; scoperta secondaria: `kubernetes/helm.md` (anch'esso orfano, coperto da prop-078) si sovrappone concettualmente a `helm/_index.md` senza `related` incrociati — prop-079 (medium, consolidate) |
+| cloud/aws (8 sotto-hub) | tutti i figli linkati | 100% connesso | Controllati tutti e 8 i sotto-hub (`ci-cd`, `compute`, `containers`, `database`, `fondamentali`, `iam`, `messaging`, `monitoring`, `security`, `storage` — 10 in realtà) | Nessun gap — `networking` (9 figli, il sotto-hub più grande di `aws/`) e tutti gli altri hanno grid "Sezioni"/"Argomenti" complete |
+| cloud/azure (9 sotto-hub) | tutti i figli linkati | 100% connesso | Controllati `ci-cd`, `compute`, `database`, `fondamentali`, `identita`, `messaging`, `monitoring`, `networking`, `security`, `storage` | Nessun gap — ogni figlio è raggiungibile dalla grid del proprio sotto-hub |
 
 ## Categorie vicine alla saturazione
 
 Confermate sature nelle sessioni precedenti (invariato): **databases/**,
 **dev/linguaggi/**, **messaging/rabbitmq**, **cloud/aws**, **networking/**,
 **dev/testing, dev/data, dev/resilienza, dev/sicurezza, dev/integrazioni**,
-**monitoring/**, **iac/**, **cloud/azure/**. **ai/** e **security/**
-confermate pulite anche al livello dei sotto-hub interni.
+**monitoring/**, **iac/**, **cloud/azure/**. **ai/**, **security/**,
+**cloud/aws/** e **cloud/azure/** confermate pulite anche al livello dei
+sotto-hub interni (nessun figlio orfano).
 
 ## Categorie con gap reali
 
-- **containers/kubernetes/_index.md**: 4 file figli completi
-  (`autoscaling`, `ingress`, `multi-cluster`, `resource-management`) non
-  raggiungibili dalla grid "Sottosezioni" dell'hub — prop-078 (high).
+Nessun nuovo gap trovato in questa sessione. Restano aperti (da #634, non
+ancora risolti da una proposta approvata al momento di questo report):
+
+- **containers/kubernetes/_index.md**: 4 file figli non raggiungibili dalla
+  grid "Sottosezioni" — prop-078 (high), già in `_automation/proposals/approved/`.
 - **containers/kubernetes/helm.md vs containers/helm/_index.md**: contenuto
-  sovrapposto su Helm-per-Kubernetes, nessun `related` incrociato —
-  prop-079 (medium).
+  sovrapposto senza `related` incrociati — prop-079 (medium), già approvata.
+
+Zero proposte generate in questa sessione: il check di connettività su
+`cloud/aws/**` e `cloud/azure/**` non ha rivelato figli orfani in nessuno dei
+17 sotto-hub controllati (8 AWS + 9 Azure), e nessun altro gap operativo ha
+superato il test di utilità (reader/scenario/outcome) durante l'analisi.
 
 ## Focus usato in questa sessione
 
-Come raccomandato da #630: controllo mirato di connettività sui sotto-hub
-**interni** (secondo livello) di `docs/containers/**` e `docs/security/**`.
-Risultato: `security/` è risultata completamente pulita (seconda categoria,
-dopo `ai/`, a passare senza alcun gap in quattro sessioni consecutive),
-mentre `containers/` ha rivelato il gap di connettività più grande trovato
-finora nella KB — 4 file orfani in un solo sotto-hub, contro il massimo di
-2 osservato in `ci-cd/strategie` (#630). Il pattern "hub non aggiornato
-dopo la creazione di nuovi figli" resta sistemico ma non uniforme: due
-categorie su quattro controllate finora (`ci-cd`, `containers`) lo mostrano,
-due (`ai`, `security`) no — la correlazione sembra con la frequenza di
-crescita della categoria più che con la sua dimensione.
+Come raccomandato da #634: controllo mirato di connettività sui sotto-hub
+interni di `docs/cloud/aws/**` e `docs/cloud/azure/**`. Risultato: entrambe
+completamente pulite. Aggiornando il conteggio complessivo del pattern "hub
+non aggiornato dopo la creazione di nuovi figli": 4 categorie su 6 controllate
+finora (`ai`, `security`, `cloud/aws`, `cloud/azure`) risultano pulite, 2
+(`ci-cd`, `containers`) hanno mostrato gap. La correlazione con la frequenza
+di crescita recente della categoria (osservata in #634) resta la spiegazione
+più plausibile.
 
 ## Prossima sessione consigliata
 
-Non prima di 2026-10-04. Con `ai/`, `ci-cd/`, `containers/` e `security/`
-ora verificate a livello di sotto-hub interni (2 su 4 con gap reali), il
-prossimo giro dovrebbe coprire i sotto-hub interni di `docs/cloud/**`
-(aws/azure, entrambi già grandi e a rischio di figli orfani accumulati) e
-valutare se aprire una proposta di follow-up per una regola strutturale
-permanente in CLAUDE.md (checklist obbligatoria "aggiorna il genitore" nel
-protocollo 1️⃣ Nuovo Argomento) — il pattern è ora confermato in 2 categorie
-su 4, con containers/kubernetes come caso peggiore finora.
+Non prima di 2026-10-04. Con 6 categorie ora verificate a livello di sotto-hub
+interni, il prossimo giro dovrebbe coprire i sotto-hub interni di
+`docs/dev/**` (categoria più popolosa e composita, mai controllata con questo
+criterio) e valutare se il pattern "hub non aggiornato" giustifica ormai una
+regola strutturale permanente in CLAUDE.md (checklist "aggiorna il genitore"
+nel protocollo 1️⃣ Nuovo Argomento) — 2 categorie su 6 con gap è già un segnale
+non trascurabile.
