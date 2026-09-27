@@ -1,88 +1,84 @@
-# KB Saturation Report — 2026-09-27 (sessione #610)
+# KB Saturation Report — 2026-09-27 (sessione #613)
 
 ## Gate meccanico
 
 ```
-file_count: 314, target: 330, over_target: false, headroom: 16
+file_count: 315, target: 330, over_target: false, headroom: 15
 category_saturated_pct: 85, allow_zero_proposals: true
 ```
 
-Sotto target. Focus ruotato su `docs/dev/` (raccomandazione del report #609:
-"mai stato in focus esplicito, categoria ampia e potenzialmente eterogenea").
+Sotto target. Focus da report #610: `docs/databases/` (file di dettaglio non
+ancora letti: `postgresql/extensions.md`, `nosql/cassandra.md`,
+`kubernetes-cloud/db-su-kubernetes.md`) e completamento `docs/dev/` (`runtime`,
+`processi`, dettagli `linguaggi`: `go.md`, `python.md`, `java-quarkus.md`,
+`dotnet.md`).
 
 ## Copertura stimata per categoria
 
 | Categoria | Files | Coverage % | Depth | Note |
 |-----------|-------|------------|-------|------|
-| dev/ | 27 | ~85% | Alta: la maggior parte delle sottocategorie usa il pattern "1 file `_index.md` = trattazione completa del tema" (testing, data, resilienza, sicurezza, integrazioni, api) invece di molti file piccoli — verificato NON un problema, sono file lunghi e completi (500-950 righe) | 2 gap reali trovati: GraphQL promesso ma assente, Node.js citato ma senza file |
-| databases/ | 31 | ~90% | Alta: fondamentali, postgresql, mysql, nosql, sql-avanzato, replicazione-ha, kubernetes-cloud tutti con più file coerenti | Nessun gap reale trovato (mysql confrontato con postgresql: profondità paragonabile, 2 file densi vs 4 più mirati) |
+| databases/ (dettaglio) | 3 letti (extensions, cassandra, db-su-kubernetes) | ~95% | Molto alta: ognuno 300-500 righe, 4-5 scenari di troubleshooting con comandi reali, best practice specifiche, nessuna sezione mancante rispetto al proprio official_docs | Nessun gap reale — confermano la valutazione "alta coverage" di #609/#610 |
+| dev/linguaggi/ (dettaglio) | 4 letti (go, python, dotnet, java-quarkus) + _index | ~95% | Molto alta: Panoramica con quando-usare/quando-non-usare, tabella comparativa coerente nell'_index, tutti i 6 linguaggi (incl. Node.js, verificato integrato da sessione #611/#612) ora presenti | Gap #2 di #610 (Node.js mancante) risulta chiuso: file esiste e _index lo referenzia |
+| dev/runtime/, dev/processi/ | 2 _index letti | Alta come hub, ma **isolati nel grafo `related`** | Struttura a schede coerente con pattern hub validato altrove | Gap di connettività trovato (non di contenuto) — vedi sotto |
 
 ## Analisi di questa sessione
 
-File analizzati (9): `dev/testing/_index.md`, `dev/data/_index.md`, `dev/_index.md`,
-`dev/api/_index.md`, `dev/integrazioni/_index.md`, `dev/resilienza/_index.md`,
-`dev/sicurezza/_index.md`, `dev/linguaggi/_index.md`, `databases/_index.md` (+
-`databases/mysql/_index.md` come decimo).
+File analizzati (10): `databases/postgresql/extensions.md`,
+`databases/nosql/cassandra.md`, `databases/kubernetes-cloud/db-su-kubernetes.md`,
+`dev/runtime/_index.md`, `dev/processi/_index.md`, `dev/linguaggi/go.md`,
+`dev/linguaggi/python.md`, `dev/linguaggi/_index.md`, `dev/linguaggi/dotnet.md`,
+`dev/linguaggi/java-quarkus.md`. Verificati inoltre via `grep` i campi `related`
+di `dev/api/_index`, `dev/resilienza/_index`, `dev/integrazioni/_index`,
+`ci-cd/_index`, `dev/_index` per la coerenza bidirezionale.
 
-**Verificato NON un gap — Testing e Data Layer come "subcat da 1 file"**:
-ipotesi iniziale (dal report #609) che `dev/testing/` e `dev/data/` fossero
-sottodimensionati (contengono solo un `_index.md` ciascuno). Lettura integrale
-mostra che sono file completi di 500-950 righe con Panoramica, Concetti Chiave,
-Architettura, Configurazione & Pratica multi-linguaggio (Java/Python/Go),
-Best Practices, Troubleshooting con 4+ problemi documentati — non stub.
-Pattern coerente con `messaging/rabbitmq` (già validato in sessione #609).
+**Verificato NON un gap — contenuto databases/ e dev/linguaggi/**: tutti i file
+letti sono completi, con troubleshooting operativo reale (comandi `nodetool`,
+`kubectl cnpg`, query SQL diagnostiche) e nessuna sezione promessa-e-assente.
+Il gap Node.js segnalato in #610 è chiuso (nodejs.md esiste, `_index.md`
+aggiornato `last_updated: 2026-09-27`).
 
-**Gap reale #1 — GraphQL promesso ma assente in `dev/api/_index.md`**: il
-frontmatter (`tags: [..., graphql, ...]`) e la Panoramica di `dev/_index.md`
-("REST, gRPC, GraphQL, AsyncAPI") annunciano GraphQL come uno dei paradigmi
-trattati, ma il corpo del file ha sezioni solo per REST, gRPC e AsyncAPI.
-→ prop-063 (extend-section).
+**Gap reale #1 — `dev/linguaggi/_index.md` isola nel grafo `related`**:
+`related: []` nonostante sia citato da `dev/api/_index` e (per due file figli)
+da `dev/runtime/_index`. Nessun link di ritorno. → prop-065 (fix-relation).
 
-**Gap reale #2 — Node.js citato ma senza file dedicato**: `dev/linguaggi/_index.md`
-include Node.js nella tabella comparativa con metriche complete (startup,
-footprint, throughput, "Ideal per: I/O bound, BFF") e nei `tags`/
-`search_keywords`, ma la lista "Argomenti in questa sezione" ha file solo per
-Java Spring Boot, Java Quarkus, .NET, Go, Python. Asimmetria non di design —
-gli altri 4 linguaggi della stessa tabella hanno tutti un file dedicato.
-→ prop-064 (new-file).
-
-**Verificato NON un gap — MySQL vs PostgreSQL**: MySQL ha 2 file (Architettura
-e Replicazione, Performance Tuning) contro i 4 di PostgreSQL, ma la
-profondità per file è comparabile (replicazione binlog/GTID, Group
-Replication, Galera, InnoDB internals coperti in un solo file denso). Non un
-gap — solo organizzazione diversa.
+**Gap reale #2 — `dev/processi/_index.md` completamente irraggiungibile via
+`related`**: campo assente dal frontmatter, e `grep -rn "dev/processi" docs/`
+non trova nessun riferimento da altri file. Tema (branching strategy, quality
+gate, DORA metrics) fortemente sovrapposto a `ci-cd/`, che non lo referenzia.
+→ prop-066 (fix-relation, tocca anche `ci-cd/_index.md` per la reciprocità).
 
 ## Categorie vicine alla saturazione
 
-- **dev/testing, dev/data, dev/resilienza, dev/sicurezza, dev/integrazioni**:
-  confermati saturi in questa sessione — file singoli ma completi, nessuna
-  sezione mancante rispetto alla loro Panoramica dichiarata.
-- **databases/**: nessun gap reale trovato, coverage alta e coerente.
+- **databases/** (incl. dettagli postgresql/nosql/kubernetes-cloud): confermata
+  satura — coverage alta, nessun gap di contenuto in questa sessione.
+- **dev/linguaggi/**: confermata satura per contenuto (6/6 linguaggi coperti,
+  simmetria tra file completa); gap residuo solo di connettività (prop-065).
 - **security/**, **messaging/rabbitmq**, **networking**, **cloud/aws**,
-  **ci-cd/testing**: confermati saturi nelle sessioni precedenti (#591-596,
-  #607, #609).
+  **ci-cd/testing**, **dev/testing, dev/data, dev/resilienza, dev/sicurezza,
+  dev/integrazioni**: confermati saturi nelle sessioni precedenti (#591-596,
+  #607, #609, #610).
 
 ## Categorie con gap reali
 
-- **dev/api/**: GraphQL promesso nel frontmatter/file padre, mai trattato nel
-  corpo (prop-063).
-- **dev/linguaggi/**: Node.js citato in tabella comparativa senza file
-  dedicato, a differenza di tutti gli altri linguaggi elencati (prop-064).
+- **dev/linguaggi/_index.md**: nessun gap di contenuto, gap di connettività
+  (`related` vuoto) — prop-065.
+- **dev/processi/_index.md**: nessun gap di contenuto, isola completa nel
+  grafo `related` — prop-066.
 
 ## Focus usato in questa sessione
 
-`docs/dev/` (rotazione da report #609: "mai stato in focus esplicito").
-Trovati 2 gap reali circoscritti (non strutturali — la categoria nel
-complesso è matura), a differenza delle 2 sessioni precedenti (#607, #609)
-che avevano chiuso a zero proposte.
+`docs/databases/` (dettaglio) + `docs/dev/` (runtime, processi, linguaggi
+dettaglio), come raccomandato dal report #610. Entrambe le aree risultano
+mature sul piano del contenuto: non emergono gap che superino il test di
+utilità per proposte `new-file`/`extend-section`. Le uniche proposte generate
+sono di connettività (`fix-relation`), categoria di proposta sempre ammessa
+indipendentemente dal freno di saturazione.
 
 ## Prossima sessione consigliata
 
-2026-09-28 o successiva, focus `docs/databases/` (verificato in questa
-sessione solo su `_index` + `mysql/_index`, non ancora letti in profondità i
-file di dettaglio: `postgresql/extensions.md`, `nosql/cassandra.md`,
-`kubernetes-cloud/db-su-kubernetes.md`) e/o completamento di `docs/dev/`
-(sottocategorie non ancora verificate in questa sessione: `runtime`,
-`processi`, e i file di dettaglio di `linguaggi` — `go.md`, `python.md`,
-`java-spring-boot.md`, `java-quarkus.md`, `dotnet.md` — per verificare se
-contengono gap interni oltre all'assenza di Node.js già segnalata).
+2026-09-28 o successiva. Nessuna area di `docs/dev/` o `docs/databases/`
+richiede ulteriore esplorazione di contenuto a breve termine (entrambe verificate
+mature su più sessioni). Ruotare il focus su un'area non ancora esplorata in
+profondità nelle ultime 4 sessioni: `docs/monitoring/` (mai stata in focus
+esplicito secondo i report #607-#613) e/o `docs/iac/` (terraform/opentofu/
+pulumi/ansible — coverage non verificata di recente).
