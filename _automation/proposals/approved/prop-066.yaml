@@ -1,0 +1,69 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: 'docs/dev/processi/_index.md non ha il campo `related` nel frontmatter
+  (assente,
+
+  non solo vuoto), e nessun altro file nella KB lo cita nel proprio `related`
+
+  (verificato con grep su tutta `docs/`) — è un''isola completa nel grafo delle
+
+  relazioni, nonostante tratti argomenti (branching strategy, CI gate, DORA
+
+  metrics, feature flags) fortemente connessi a `ci-cd/`.
+
+  Aggiungere a `docs/dev/processi/_index.md`:
+
+  ```yaml
+
+  related: [ci-cd/_index, dev/linguaggi/_index, dev/_index]
+
+  ```
+
+  E, in modo speculare, aggiungere `dev/processi/_index` al `related` di
+
+  `docs/ci-cd/_index.md` (attualmente `[containers/kubernetes/_index,
+
+  containers/helm/_index]` — nessun link verso dev/processi nonostante il tema
+
+  SDLC/workflow condiviso).
+
+  Aggiornare `last_updated` in entrambi i file.
+
+  '
+effort: small
+id: prop-066
+last_analyzed: 2026-09-27
+priority: medium
+rationale: 'Stesso principio del protocollo 3 di CLAUDE.md (relazioni bidirezionali):
+
+  qui il problema è più marcato — il file non ha proprio il campo popolato e
+
+  nessuno lo referenzia, quindi è irraggiungibile tramite navigazione `related`
+
+  da qualsiasi altro punto della KB. Un lettore che arriva su ci-cd/_index
+
+  (branching strategy, quality gate) non scopre l''esistenza della trattazione
+
+  gemella su dev/processi (developer workflow, SDLC enterprise, PM tecnico).
+
+  '
+status: approved
+tags:
+- meta
+- connettività
+- dev
+- ci-cd
+- processi
+target_file: docs/dev/processi/_index.md
+title: Collegare dev/processi/_index (isola nel grafo related) a ci-cd e dev/linguaggi
+type: fix-relation
+utility_test:
+  outcome: Trova dev/processi/_index seguendo `related` da ci-cd/_index, senza doverlo
+    scoprire per caso navigando l'albero docs/dev/
+  reader: Tech lead che sta definendo branching strategy e quality gate per un team,
+    partito da ci-cd/_index
+  scenario: Cerca la parte 'developer experience' del processo (inner loop, DoD, feature
+    flags, DORA metrics) che è documentata in dev/processi ma non collegata
+  score: medium
+  without_kb: Deve conoscere già la struttura delle cartelle o usare la ricerca full-text
+    per trovare dev/processi

@@ -2,11 +2,11 @@
 # Aggiornato automaticamente - non modificare 'completed' manualmente
 
 version: 2
-last_run: '2026-09-27T16:45:22.769684+00:00'
+last_run: '2026-09-27T16:47:56.709395+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 864
-total_runs: 423
+total_ops: 867
+total_runs: 424
 queue:
 - id: W-001
   type: new_topic
@@ -4856,11 +4856,56 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '614'
+  type: audit
+  path: docs/dev/linguaggi/_index.md
+  category: dev
+  priority: P2
+  status: completed
+  reason: "docs/dev/linguaggi/_index.md ha `related: []` (vuoto), ma almeno due file\npuntano già a lui in modo asimmetrico:\n\
+    - docs/dev/api/_index.md → related include `dev/linguaggi/_index`\n- docs/dev/runtime/_index.md → related include `dev/linguaggi/java-spring-boot`\n\
+    \  e `dev/linguaggi/java-quarkus` (due file specifici della sezione linguaggi)\nNessuno di questi link ha il corrispondente\
+    \ inverso in `linguaggi/_index.md`.\nAggiungere a `docs/dev/linguaggi/_index.md`:\n```yaml\nrelated: [dev/api/_index,\
+    \ dev/runtime/_index, dev/processi/_index]\n```\n(incluso anche `dev/processi/_index` per lo stesso motivo — vedi prop-066:\n\
+    i linguaggi discussi qui sono l'oggetto del workflow di sviluppo descritto lì).\nAggiornare `last_updated`.\n"
+  proposal_id: prop-065
+- id: '615'
+  type: audit
+  path: docs/dev/processi/_index.md
+  category: dev
+  priority: P2
+  status: pending
+  reason: 'docs/dev/processi/_index.md non ha il campo `related` nel frontmatter (assente,
+
+    non solo vuoto), e nessun altro file nella KB lo cita nel proprio `related`
+
+    (verificato con grep su tutta `docs/`) — è un''isola completa nel grafo delle
+
+    relazioni, nonostante tratti argomenti (branching strategy, CI gate, DORA
+
+    metrics, feature flags) fortemente connessi a `ci-cd/`.
+
+    Aggiungere a `docs/dev/processi/_index.md`:
+
+    ```yaml
+
+    related: [ci-cd/_index, dev/linguaggi/_index, dev/_index]
+
+    ```
+
+    E, in modo speculare, aggiungere `dev/processi/_index` al `related` di
+
+    `docs/ci-cd/_index.md` (attualmente `[containers/kubernetes/_index,
+
+    containers/helm/_index]` — nessun link verso dev/processi nonostante il tema
+
+    SDLC/workflow condiviso).
+
+    Aggiornare `last_updated` in entrambi i file.
+
+    '
+  proposal_id: prop-066
 completed:
-- id: '599'
-  path: docs/monitoring/tools/continuous-profiling.md
-  completed_at: '2026-09-27T15:38:37.938256+00:00'
-  result: File presente su disco - completato ma state non aggiornato dall'agente
 - id: '600'
   path: _automation/proposals
   completed_at: '2026-09-27T15:44:29.973588+00:00'
@@ -4916,6 +4961,10 @@ completed:
 - id: '613'
   path: _automation/proposals
   completed_at: '2026-09-27T16:45:23.277569+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '614'
+  path: docs/dev/linguaggi/_index.md
+  completed_at: '2026-09-27T16:47:57.204062+00:00'
   result: File presente su disco - completato ma state non aggiornato dall'agente
 analysis:
   last_started: '2026-09-26T11:09:51.824146+00:00'

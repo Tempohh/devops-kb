@@ -5,7 +5,7 @@ category: dev
 tags: [linguaggi, runtime, java, go, python, nodejs, microservizi]
 search_keywords: [linguaggi backend, runtime, java, go, golang, python, nodejs, node.js, spring boot, quarkus, graalvm, native image, startup time, footprint, microservizi, linguaggi per microservizi]
 parent: dev/_index
-related: []
+related: [dev/api/_index, dev/runtime/_index, dev/processi/_index]
 official_docs: https://microservices.io/
 status: complete
 difficulty: intermediate
