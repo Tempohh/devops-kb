@@ -1,0 +1,42 @@
+id: prop-118
+title: "Aggiungere sezione su terraform test (framework nativo HCL, v1.6+)"
+type: extend-section
+priority: high
+target_file: docs/iac/terraform/testing.md
+effort: small
+description: |
+  Aggiungere una sezione dedicata a `terraform test`, il framework di test
+  nativo introdotto in Terraform 1.6 (file `.tftest.hcl`), tra la sezione
+  "6. Terraform built-in checks (v1.5+)" e "7. pre-commit hooks". Il file
+  attuale copre solo alternative esterne (Terratest in Go, checkov, conftest)
+  ma non lo strumento first-party di HashiCorp, che è oggi lo standard
+  consigliato per test di unità/integrazione su moduli senza introdurre una
+  dipendenza Go nel progetto.
+  Contenuti minimi da includere:
+  - Struttura di un file `tests/*.tftest.hcl` con blocchi `run` multipli
+  - Differenza tra `command = plan` (unit test veloce, no risorse reali) e
+    `command = apply` (integration test, provisiona davvero)
+  - Blocco `assert` con `condition`/`error_message`, analogo ai `check {}`
+    ma eseguibile fuori da `terraform plan/apply` reali
+  - Uso di `variables {}` per override per-run e `mock_provider` (v1.7+) per
+    test senza credenziali cloud
+  - Comando `terraform test` in CI, confronto con Terratest nella tabella
+    "Tool Overview" esistente (aggiungere riga)
+  - Esempio pratico: test di un modulo VPC che verifica cidr_block via
+    `command = plan` prima di un test `command = apply` più costoso
+rationale: |
+  Chi legge iac/terraform/testing.md come guida completa al testing Terraform
+  oggi non trova menzione dello strumento nativo di HashiCorp, solo
+  alternative esterne più pesanti da adottare (Terratest richiede Go).
+  Senza questo file, il lettore dovrebbe scoprire l'esistenza di
+  `terraform test` dalla documentazione ufficiale HashiCorp per caso,
+  mentre la pagina della KB si propone esplicitamente come piramide
+  completa di testing IaC.
+utility_test:
+  reader: "DevOps intermedio che scrive moduli Terraform condivisi e vuole testarli senza aggiungere Go/Terratest allo stack"
+  scenario: "Sta decidendo come testare un modulo VPC e cerca l'opzione più leggera prima di adottare Terratest"
+  outcome: "Scrive un file .tftest.hcl con assert su plan, eseguibile con `terraform test` senza dipendenze esterne"
+  without_kb: "Dovrebbe cercare nella documentazione ufficiale HashiCorp, non collegata dal resto della KB IaC"
+  score: high
+tags: [terraform, testing, iac, tftest, quality-gate]
+last_analyzed: 2026-09-28
