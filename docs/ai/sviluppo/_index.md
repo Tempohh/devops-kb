@@ -7,9 +7,10 @@ search_keywords: [sviluppo applicazioni AI, AI development, LLM API, integrazion
 parent: ai/_index
 related: [ai/modelli/_index, ai/tokens-context/_index, ai/agents/_index, ai/mlops/_index]
 official_docs: https://docs.anthropic.com/en/api/getting-started
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-09-27
+last_verified: 2026-09-27
 ---
 
 # Sviluppo Applicazioni AI
@@ -59,7 +60,7 @@ client = anthropic.Anthropic()  # usa ANTHROPIC_API_KEY da env
 # Chiamata semplice
 def ask_claude(question: str, system: str = None) -> str:
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-sonnet-5",
         max_tokens=2048,
         system=system or "Sei un assistente tecnico esperto.",
         messages=[{"role": "user", "content": question}]
@@ -69,7 +70,7 @@ def ask_claude(question: str, system: str = None) -> str:
 # Streaming
 def stream_claude(question: str) -> Iterator[str]:
     with client.messages.stream(
-        model="claude-3-5-haiku-20241022",
+        model="claude-haiku-4-5",
         max_tokens=1024,
         messages=[{"role": "user", "content": question}]
     ) as stream:
@@ -79,7 +80,7 @@ def stream_claude(question: str) -> Iterator[str]:
 # Conversazione multi-turn
 def chat(messages: list[dict], system: str = None) -> str:
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-sonnet-5",
         max_tokens=4096,
         system=system,
         messages=messages
@@ -131,7 +132,7 @@ def call_with_retry(prompt: str, max_retries: int = 3, base_delay: float = 1.0) 
     for attempt in range(max_retries):
         try:
             response = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-5",
                 max_tokens=2048,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -163,7 +164,7 @@ class IncidentAnalysis(BaseModel):
 
 def analyze_incident_structured(incident_description: str) -> IncidentAnalysis:
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-sonnet-5",
         max_tokens=1024,
         system="Rispondi SOLO con JSON valido, nessun testo aggiuntivo.",
         messages=[{
@@ -182,6 +183,10 @@ Incidente: {incident_description}"""
     )
     return IncidentAnalysis(**json.loads(response.content[0].text))
 ```
+
+!!! note "Model ID aggiornati"
+    Per l'elenco corrente di model ID e parametri (es. `output_config.effort`,
+    `thinking: {type: "adaptive"}`) vedi [Modelli Claude](../modelli/claude.md).
 
 ## Riferimenti
 
