@@ -254,8 +254,21 @@ di connettività AWS già parzialmente documentate. → **1 proposta generata**
 - **cloud/aws/networking**: VPC Lattice assente, nessuna guida comparativa
   Transit Gateway/PrivateLink/Direct Connect/VPC Lattice (prop-036).
 
+## Sessione proposal 2026-09-27 (task 561)
+Gate eseguito con `py`: `file_count` 305, target 330, `over_target: false`,
+headroom 25. `pending/` vuota, ultimo id prop-036 — prop-035 (api-gateway.md) e
+prop-036 (vpc-lattice.md) risultano già scritte (task 558 e 560, `new_topic`).
+Verifica mirata (come raccomandato dalla sessione precedente): `vpc-lattice.md`
+elenca `vpc-avanzato` ed `elastic-load-balancing` in `related`, ma nessuno dei
+due la richiama indietro — relazione asimmetrica, protocollo 3 non applicato
+alla creazione del nuovo file. Gap concreto e verificabile via grep (non
+teorico): confermato assenza di `vpc-lattice` in entrambi i file target.
+Generata 1 proposta: prop-037 (fix-relation, medium priority, small effort).
+Nessuna altra proposta: censimento categorie invariato da task 559 (cloud 107,
+networking 43, iac 14, monitoring 20); nessun nuovo gap `score: high` in
+networking/aws oltre a quanto già proposto nelle sessioni precedenti.
+
 ## Prossima sessione consigliata
-Continuare focus networking + cloud/aws. Se prop-036 viene approvata e scritta,
-verificare se emergono `related` da collegare in vpc-avanzato.md (protocollo 3).
-Valutare Consul (service discovery ibrida VM+K8s) come possibile gap futuro,
-non ancora abbastanza distinto da giustificare proposta in questo ciclo.
+Dopo esecuzione prop-037, valutare Consul (service discovery ibrida VM+K8s)
+come possibile gap futuro, non ancora abbastanza distinto da giustificare
+proposta in questo ciclo. Continuare focus networking + cloud/aws.

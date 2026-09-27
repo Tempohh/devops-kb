@@ -187,6 +187,7 @@ try {
     # sessione locale: run_once.py (CI) non inietta piu' proposal a coda vuota.
     $lastProposalInjectAt        = [datetime]::MinValue
     $ProposalMinIntervalSeconds  = 600   # min 10 minuti tra due iniezioni proposal in questa sessione
+    $throttleNotified            = $false # evita di ristampare il messaggio di throttle a ogni tick da 30s
 
     while ($true) {
 
@@ -273,8 +274,12 @@ try {
                 $secsSinceLastProposal = ((Get-Date) - $lastProposalInjectAt).TotalSeconds
                 if ($secsSinceLastProposal -lt $ProposalMinIntervalSeconds) {
                     $waitLeft = [int]($ProposalMinIntervalSeconds - $secsSinceLastProposal)
-                    Write-Host "  [PROPOSTE] Throttle sessione attivo — prossima proposta tra ${waitLeft}s" -ForegroundColor DarkGray
+                    if (-not $throttleNotified) {
+                        Write-Host "  [PROPOSTE] Throttle sessione attivo — prossima proposta tra ${waitLeft}s (silenzio fino ad allora)" -ForegroundColor DarkGray
+                        $throttleNotified = $true
+                    }
                 } else {
+                    $throttleNotified = $false
                     Write-Host "  [PROPOSTE] Coda vuota — avvio sessione proposte strategica..." -ForegroundColor Magenta
                     $injectResult = & $pythonBin $StatePy inject-proposal-task 2>&1
                     try { $injectObj = $injectResult | ConvertFrom-Json } catch { $injectObj = $null }
