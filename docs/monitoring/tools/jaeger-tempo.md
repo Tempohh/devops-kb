@@ -5,11 +5,11 @@ category: monitoring
 tags: [tracing, distributed-tracing, observability, jaeger, tempo, grafana, cncf, opentelemetry]
 search_keywords: [Jaeger, Tempo, Grafana Tempo, distributed tracing, tracce distribuite, tracciamento, tracing backend, OTLP, OpenTelemetry backend, Zipkin, spans, trace ID, sampling, tail-based sampling, head-based sampling, TraceQL, Jaeger UI, observability, osservabilità, microservices tracing, request tracing]
 parent: monitoring/tools
-related: [monitoring/fondamentali/opentelemetry, monitoring/tools/prometheus, monitoring/tools/grafana, monitoring/tools/loki, networking/service-mesh/istio]
+related: [monitoring/fondamentali/opentelemetry, monitoring/tools/prometheus, monitoring/tools/grafana, monitoring/tools/loki, networking/service-mesh/istio, dev/resilienza/observability-code]
 official_docs: https://www.jaegertracing.io/docs/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-09-28
 ---
 
 # Jaeger & Grafana Tempo
@@ -346,6 +346,11 @@ exporters:
     Istio può generare automaticamente span per ogni chiamata tra microservizi, senza modificare il codice applicativo. Il backend di tracing configurabile è Jaeger o qualsiasi endpoint OTLP (quindi anche Tempo).
 
     **Approfondimento completo →** [Istio](../../networking/service-mesh/istio.md)
+
+??? info "Instrumentazione Codice — Da Dove Vengono le Tracce"
+    Le tracce che Jaeger/Tempo visualizzano non nascono nel backend: vengono generate lato applicativo tramite strumentazione OpenTelemetry (manuale o automatica) che crea span, propaga il context e li esporta via OTLP.
+
+    **Approfondimento completo →** [Observability nel Codice](../../dev/resilienza/observability-code.md)
 
 ## Riferimenti
 
