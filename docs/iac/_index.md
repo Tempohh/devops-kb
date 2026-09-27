@@ -2,12 +2,12 @@
 title: "Infrastructure as Code"
 slug: iac
 category: iac
-tags: [iac, infrastructure-as-code, terraform, ansible, pulumi, automazione, provisioning]
-search_keywords: [infrastructure as code, iac, terraform, ansible, pulumi, hashicorp, hcl, provisioning, automazione infrastruttura, gitops, immutable infrastructure]
+tags: [iac, infrastructure-as-code, terraform, ansible, pulumi, crossplane, automazione, provisioning]
+search_keywords: [infrastructure as code, iac, terraform, ansible, pulumi, crossplane, hashicorp, hcl, provisioning, automazione infrastruttura, gitops, immutable infrastructure]
 parent: /
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-09-27
 ---
 
 # Infrastructure as Code
@@ -21,6 +21,7 @@ La sezione IaC copre gli strumenti e le pratiche per gestire l'infrastruttura co
 | **Terraform** | Dichiarativo, agentless | Provisioning cloud multi-provider |
 | **Ansible** | Dichiarativo, agentless | Configuration management, provisioning VM |
 | **Pulumi** | Imperativo (linguaggi reali) | IaC per team developer-oriented |
+| **Crossplane** | Dichiarativo, Kubernetes-native | Self-service infrastructure via control loop K8s |
 
 ## Percorso di Apprendimento
 
