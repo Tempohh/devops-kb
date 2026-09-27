@@ -1,4 +1,4 @@
-# KB Saturation Report — 2026-09-27 (sessione #651)
+# KB Saturation Report — 2026-09-27 (sessione #653)
 
 ## Gate meccanico
 
@@ -6,68 +6,79 @@
 file_count: 314, target: 330, over_target: false, headroom: 16, category_saturated_pct: 85
 ```
 
-Invariato dal gate della sessione precedente (#649). Sotto target, espansione ammessa
+Invariato dalle sessioni precedenti (#649, #651). Sotto target, espansione ammessa
 ma solo con gap reali (vedi PASSO 0/3 del prompt).
 
 ## Focus usato in questa sessione
 
-Come raccomandato dal report di #649: primo giro di lettura di **contenuto**
-(non solo connettività) su `cloud/aws/` e `databases/` — mai state oggetto di
-un giro mirato a currency/refusi (solo controlli hub→figli nelle sessioni
-precedenti). 10 file letti in profondità, scelti tra i più densi/centrali
-delle due sezioni:
+Come raccomandato dal report di #651: continuazione del giro di lettura
+**content-focused** (non solo connettività) su `cloud/aws/` e `databases/`,
+questa volta sulle sottocategorie non ancora coperte: `cloud/aws/{networking,
+security,storage,messaging,monitoring}` e `databases/{fondamentali,
+replicazione-ha,nosql}`. 10 file letti in profondità:
 
-- `cloud/aws/compute/lambda.md`, `cloud/aws/containers/eks.md`,
-  `cloud/aws/database/rds-aurora.md`, `cloud/aws/database/dynamodb.md`,
-  `cloud/aws/iam/policies-avanzate.md`
-- `databases/postgresql/replicazione.md`, `databases/mysql/performance-tuning.md`,
-  `databases/nosql/mongodb.md`, `databases/sql-avanzato/query-optimizer.md`,
-  `databases/kubernetes-cloud/managed-databases.md`
+- `cloud/aws/networking/vpc-lattice.md`, `cloud/aws/networking/global-accelerator.md`
+- `cloud/aws/security/network-security.md`, `cloud/aws/security/kms-secrets.md`
+- `cloud/aws/storage/s3-avanzato.md`
+- `cloud/aws/messaging/eventbridge-kinesis.md`
+- `cloud/aws/monitoring/observability.md`
+- `databases/fondamentali/sharding.md`
+- `databases/replicazione-ha/failover-recovery.md`
+- `databases/nosql/cassandra.md`
 
 ## Risultato
 
-Tutti e 10 i file sono risultati **solidi dal punto di vista di currency**:
-nessun comando/flag deprecato, nessun limite di servizio palesemente
-obsoleto (es. limiti Lambda, RCU/WCU DynamoDB, versioni engine RDS/Aurora
-tutti plausibili e coerenti tra loro), nessun conflitto tra pagine correlate.
-Diversi file (`mysql/performance-tuning.md`, `sql-avanzato/query-optimizer.md`)
-hanno `last_updated: 2026-09-27` — già toccati di recente in sessioni
-`currency`/`review` precedenti — a conferma che il lavoro di manutenzione
-pregresso su queste aree ha già avuto effetto.
+Tutti e 10 i file sono risultati **maturi e solidi**: contenuto denso, esempi
+pratici realistici (CLI, Terraform, Python), sezioni Troubleshooting con
+scenari multipli, nessun comando/flag palesemente deprecato, nessuna
+incoerenza di contenuto tra file collegati.
 
-Un solo gap reale trovato, di tipo **connettività** (non contenuto):
+Due gap reali trovati, entrambi di tipo **connettività** (non contenuto),
+sullo stesso pattern già riscontrato in #651 con prop-089:
 
-- **`databases/kubernetes-cloud/managed-databases.md`** (hub cross-cloud
-  RDS/Aurora/DynamoDB/Cloud SQL/Azure DB) non collega i file di
-  approfondimento AWS che riassume nel testo — `cloud/aws/database/rds-aurora.md`
-  e `cloud/aws/database/dynamodb.md` — né riceve il link inverso da questi.
-  → prop-089 (low, fix-relation).
+- **`cloud/aws/networking/vpc-lattice.md`** (creato/aggiornato in questa
+  sessione, `last_updated: 2026-09-27`) confronta in prosa Transit
+  Gateway/PrivateLink (`vpc-avanzato.md`), NLB/ALB come target
+  (`elastic-load-balancing.md`) e la sintassi auth policy
+  (`iam/policies-avanzate.md`), ma nessuno dei tre lo referenzia nel proprio
+  `related`. → prop-090 (low, fix-relation).
+- **`cloud/aws/networking/global-accelerator.md`** (stesso `last_updated`)
+  confronta esplicitamente il proprio failover-in-secondi con Route 53
+  failover routing, si posiziona vs CloudFront per traffico non cacheable, e
+  usa ALB/NLB/VPC come endpoint — ma `route53.md`, `cloudfront.md`,
+  `elastic-load-balancing.md` e `vpc.md` non lo referenziano indietro. →
+  prop-091 (low, fix-relation).
 
-Nessun gap di tipo `new-file` o `extend-section` proposto: entrambe le
-sezioni esaminate sono mature e ben mantenute.
+Nessun gap di tipo `new-file` o `extend-section`: le sezioni esaminate sono
+mature. Da notare che `vpc-lattice.md` e `global-accelerator.md` sono file
+recenti (stesso `last_updated` di questa sessione) — probabile causa del gap:
+aggiunti senza aggiornare i `related` inversi nei file più vecchi che
+confrontano.
 
 ## Categorie vicine alla saturazione
 
-Invariato dalle sessioni precedenti: **databases/**, **dev/linguaggi/**,
-**messaging/rabbitmq**, **cloud/aws**, **networking/**, **dev/testing,
-dev/data, dev/resilienza, dev/sicurezza, dev/integrazioni**, **monitoring/**,
-**iac/**, **cloud/azure/**, **ai/**, **security/**, **containers/**,
-**messaging/kafka/**. Con questa sessione si confermano di alta qualità
-(content-read, non solo connettività) anche i file più densi di
-`cloud/aws/{compute,containers,database,iam}` e `databases/{postgresql,
-mysql,nosql,sql-avanzato,kubernetes-cloud}`.
+Invariato: **databases/**, **dev/linguaggi/**, **messaging/rabbitmq**,
+**cloud/aws**, **networking/**, **dev/testing, dev/data, dev/resilienza,
+dev/sicurezza, dev/integrazioni**, **monitoring/**, **iac/**, **cloud/azure/**,
+**ai/**, **security/**, **containers/**, **messaging/kafka/**. Con questa
+sessione si confermano di alta qualità (content-read) anche
+`cloud/aws/{networking,security,storage,messaging,monitoring}` e
+`databases/{fondamentali,replicazione-ha,nosql}` (parzialmente — vedi sotto).
 
 ## Categorie con gap reali
 
-Un solo gap concreto trovato in questa sessione: connettività mancante tra
-`databases/kubernetes-cloud/managed-databases.md` e i due file AWS che
-riassume (vedi sopra, prop-089).
+Due gap di connettività isolati (vedi sopra, prop-090/091). Nessun gap di
+contenuto in questa sessione.
 
 ## Prossima sessione consigliata
 
-Non prima di 2026-10-03. Il giro di lettura content-focused su `cloud/aws/`
-e `databases/` copre solo una parte dei file di queste sezioni (10 su ~75
-totali tra le due): prossimo focus suggerito continuare lo stesso tipo di
-lettura (non connettività) su `cloud/aws/{networking,security,storage,
-messaging,monitoring}` e `databases/{fondamentali,replicazione-ha,nosql
-rimanenti}` — file mai stati oggetto di un giro currency mirato finora.
+Non prima di 2026-10-03. Il giro content-focused su `cloud/aws/` copre ora
+tutte le sottocategorie principali (compute, containers, database, iam,
+networking, security, storage, messaging, monitoring) su un campione denso.
+Per `databases/` restano da coprire in profondità: `postgresql/` (solo
+`replicazione.md` letto finora, mancano `connection-pooling`, `extensions`,
+`mvcc-vacuum`), `mysql/`, `sql-avanzato/` (parziale), `kubernetes-cloud/`. Per
+`cloud/aws/`, prossimo giro utile: applicare prop-090/091 (fix-relation, se
+approvate) e poi passare a un primo giro content-focused su `cloud/azure/`
+(mai stato oggetto di lettura mirata finora) o completare `databases/`
+elencato sopra.
