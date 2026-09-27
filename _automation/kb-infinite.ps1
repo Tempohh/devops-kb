@@ -325,6 +325,7 @@ try {
                 $emptyRuns = 0
                 continue
             } else {
+                Show-RunHeader
                 Write-Host "  [WAIT] Queue vuota — prossima run tra ${RunInterval}s" -ForegroundColor DarkGray
                 Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] QUEUE_EMPTY" -Encoding UTF8
             }
@@ -336,6 +337,7 @@ try {
 
         # Task trovato: reset contatore empty
         $emptyRuns = 0
+        Show-RunHeader
 
         try { $task = $taskJson | ConvertFrom-Json }
         catch {
