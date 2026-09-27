@@ -9,7 +9,7 @@ related: [cloud/aws/_index, cloud/azure/_index]
 official_docs: https://cloud.google.com/docs
 status: complete
 difficulty: beginner
-last_updated: 2026-03-25
+last_updated: 2026-09-27
 ---
 
 # Google Cloud Platform
@@ -39,6 +39,10 @@ GCP vs AWS vs Azure — differenziatori chiave
 
     Progetti, IAM, billing, regioni/zone, Google Cloud SDK
 
+- :material-shield-account: **[IAM](iam/_index.md)**
+
+    Service account, ruoli e permessi, sicurezza accessi
+
 - :material-kubernetes: **[Containers](containers/_index.md)**
 
     GKE — Autopilot vs Standard, Workload Identity, node pool, autoscaling
@@ -54,6 +58,10 @@ GCP vs AWS vs Azure — differenziatori chiave
 - :material-bucket: **[Storage](storage/_index.md)**
 
     Cloud Storage (GCS) — object storage, storage class, lifecycle policy, versioning, IAM, Terraform state backend
+
+- :material-message-arrow-right: **[Messaging](messaging/_index.md)**
+
+    Pub/Sub — event-driven, streaming, push/pull subscription
 
 </div>
 
