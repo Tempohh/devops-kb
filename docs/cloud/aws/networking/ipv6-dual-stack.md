@@ -7,9 +7,10 @@ search_keywords: [IPv6, dual-stack, dualstack, IPv6-only, EIGW, Egress-only Inte
 parent: cloud/aws/networking/_index
 related: [cloud/aws/networking/vpc, cloud/aws/networking/vpc-avanzato, cloud/aws/networking/route53, cloud/aws/networking/elastic-load-balancing, cloud/aws/networking/cloudfront, cloud/aws/containers/eks, networking/fondamentali/indirizzi-ip-subnetting]
 official_docs: https://docs.aws.amazon.com/vpc/latest/userguide/vpc-migrate-ipv6.html
-status: draft
+status: reviewed
 difficulty: advanced
 last_updated: 2026-09-26
+last_verified: 2026-09-27
 ---
 
 # IPv6 e Dual-Stack su AWS
