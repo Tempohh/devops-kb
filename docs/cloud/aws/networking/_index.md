@@ -7,7 +7,7 @@ search_keywords: [AWS networking, AWS VPC, Route 53, CloudFront, Direct Connect,
 parent: cloud/aws/_index
 related: [cloud/aws/compute/ec2, cloud/aws/security/network-security]
 official_docs: https://docs.aws.amazon.com/vpc/
-status: complete
+status: needs-review
 difficulty: intermediate
 last_updated: 2026-09-27
 ---
@@ -39,6 +39,18 @@ Il networking è la fondamenta di ogni architettura AWS. VPC, subnets, routing e
 - :material-web: **[CloudFront & CDN](cloudfront.md)**
 
     CDN globale, distributions, caching, Lambda@Edge, CloudFront Functions, WAF integration
+
+- :material-scale-balance: **[Elastic Load Balancing](elastic-load-balancing.md)**
+
+    ALB/NLB/GWLB, target groups, health check, listener rules, cross-zone balancing
+
+- :material-api: **[API Gateway](api-gateway.md)**
+
+    REST/HTTP/WebSocket API, Lambda proxy integration, authorizer, throttling, usage plan
+
+- :material-lan-connect: **[VPC Lattice](vpc-lattice.md)**
+
+    Application networking layer 7, service network, IAM auth, alternativa a PrivateLink/Transit Gateway cross-account
 
 </div>
 
@@ -73,6 +85,7 @@ On-premises → Direct Connect → Transit Gateway → VPC-A, VPC-B, VPC-C...
 | **VPC Peering** | Connessione 2 VPC (stesso/altro account) | Bassa | Privato | Solo dati |
 | **Transit Gateway** | Hub per molti VPC e on-premises | Bassa | Privato | $0.05/hr + dati |
 | **PrivateLink** | Accesso privato a servizi AWS/SaaS | Bassa | Privato | $0.01/hr + dati |
+| **VPC Lattice** | Application networking L7 cross-account/VPC, alternativa a PrivateLink/Transit Gateway | Bassa | IAM auth | $0.0125-0.025/hr + dati |
 | **Site-to-Site VPN** | On-premises ↔ AWS via Internet | Media | Cifrato | $0.05/hr |
 | **Direct Connect** | On-premises ↔ AWS dedicated line | Molto bassa | Dedicato | $$$ |
 | **Client VPN** | Developer → VPC via VPN | Media | Cifrato | $0.10/hr + connessioni |
