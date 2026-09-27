@@ -33,8 +33,22 @@ Zero proposte. `python` ancora assente dal PATH: gate non eseguibile, `over_targ
 ## Non proposti
 - VPC Lattice, Global Accelerator dedicato: niche/copertura ufficiale sufficiente.
 
+## Sessione proposal 2026-09-27 (task 557)
+Gate eseguito con `py`: `file_count` 303, target 330, `over_target: false`, headroom 27
+(invariato da task 503/504). `pending/` vuota, ultimo id prop-034. Censimento Glob:
+networking 43 file, cloud/aws 42 file — entrambe le aree focus ben coperte (BGP,
+IPv6, TGW/PrivateLink/Direct Connect, ELB, nginx/haproxy, WireGuard tutti presenti).
+5 file `status: draft` in attesa di review (non azione di questa sessione: task
+`review`, non `proposal`). Analisi mirata: Amazon API Gateway (servizio gestito)
+citato solo di sfuggita in 7 file (lambda, cloudformation-cdk, route53, kms-secrets,
+network-security, observability, policies-avanzate) ma senza file dedicato —
+gap reale trasversale (serverless + networking + IAM). Generata 1 proposta:
+prop-035 (cloud/aws/networking/api-gateway.md, high, medium effort).
+
 ## Prossima sessione consigliata
-Dopo esecuzione di prop-029/030. Nessuna nuova espansione salvo gap score: high.
+Dopo esecuzione prop-035. Valutare promozione a `reviewed` dei 5 file in `draft`
+(network-troubleshooting, nginx-haproxy, wireguard, ipv6-dual-stack — via task
+`review`, non `proposal`). Nessuna nuova espansione salvo gap score: high.
 
 ## Sessione proposal 2026-09-26 (quinquies, task 497)
 Gate eseguito con `py` (non `python`): `file_count` 299, target 330, `over_target: false`, headroom 31. I report precedenti (411 file, "over_target dedotto true") erano errati: stima da Glob/conteggio non allineata al gate. Generate 2 proposte: prop-031 (BGP, medium) e prop-032 (IPv6/dual-stack AWS, high). Gap verificato via Grep: IPv6 solo panoramica in `indirizzi-ip-subnetting.md`; BGP senza file dedicato (sparso in cni, ddos, vpc-avanzato, azure connettivita). Analisi approfondita di 10 file non eseguita.

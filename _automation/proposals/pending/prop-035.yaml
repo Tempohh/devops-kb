@@ -1,0 +1,42 @@
+id: prop-035
+title: "Amazon API Gateway: REST vs HTTP API, authorizer, throttling, VPC Link"
+type: new-file
+priority: high
+target_file: docs/cloud/aws/networking/api-gateway.md
+effort: medium
+description: |
+  Manca un file dedicato al servizio gestito Amazon API Gateway (citato solo
+  di sfuggita in lambda.md, cloudformation-cdk.md, route53.md, kms-secrets.md,
+  network-security.md, observability.md, policies-avanzate.md — mai come
+  argomento primario). Struttura suggerita:
+  - REST API vs HTTP API vs WebSocket API: differenze di feature, prezzo,
+    latenza; quando scegliere l'uno o l'altro.
+  - Integrazioni: Lambda proxy, HTTP proxy, AWS service integration (es. SQS,
+    Step Functions), mapping templates (VTL) per REST API.
+  - Autenticazione/autorizzazione: Lambda authorizer (token vs request based),
+    IAM authorizer, Cognito authorizer, JWT authorizer nativo su HTTP API.
+  - Throttling e usage plans: rate/burst limit a livello account/stage/metodo,
+    API keys, usage plans per tier cliente.
+  - Esposizione privata: API privata via VPC endpoint (Interface Endpoint),
+    resource policy, VPC Link per raggiungere NLB/ALB interni da API pubblica.
+  - CORS, custom domain names (edge-optimized vs regional), stage e canary
+    deployment, logging su CloudWatch (access log format, execution log).
+  - Esempio SAM/CDK minimo per REST API + Lambda + authorizer.
+  - Troubleshooting: errori 403 da resource policy vs IAM vs authorizer,
+    CORS preflight che fallisce, timeout 29s hard limit su integrazione.
+rationale: |
+  Amazon API Gateway è il servizio standard per esporre API serverless su AWS
+  (spesso abbinato a Lambda) ma la KB non ha un file dedicato: chi deve
+  scegliere tra REST/HTTP API, configurare un authorizer o un VPC Link deve
+  oggi ricostruire l'informazione da 7 file diversi che lo citano solo di
+  passaggio, oppure andare sulla doc ufficiale (sparsa su più pagine per
+  REST API, HTTP API, authorizers, VPC Link). Colma un gap operativo reale
+  e trasversale (networking + serverless + IAM), non simmetria formale.
+utility_test:
+  reader: "DevOps/backend engineer che espone una API serverless (Lambda) su AWS"
+  scenario: "Deve scegliere tra REST API e HTTP API, proteggere l'endpoint con un authorizer e capire come limitarne l'uso con throttling/usage plan, o esporlo privatamente via VPC Link"
+  outcome: "Sceglie il tipo di API corretto, configura authorizer/throttling/VPC Link senza tentativi-errore, e sa diagnosticare i 403/CORS/timeout più comuni"
+  without_kb: "Ricostruire l'informazione da 7 file KB che citano API Gateway solo marginalmente, o navigare 4+ pagine separate della doc AWS (REST API, HTTP API, Lambda authorizers, VPC Link)"
+  score: high
+tags: [aws, api-gateway, serverless, lambda, networking, authorizer, throttling]
+last_analyzed: 2026-09-27
