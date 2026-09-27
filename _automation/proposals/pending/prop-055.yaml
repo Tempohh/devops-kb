@@ -1,0 +1,36 @@
+id: prop-055
+title: "Review hub Kubernetes Networking (_index needs-review dopo Gateway API)"
+type: review
+priority: medium
+target_file: docs/networking/kubernetes/_index.md
+effort: small
+description: |
+  Il file è stato marcato `needs-review` dal ciclo precedente dopo l'aggiunta
+  della sezione Gateway API (successore di Ingress, GA da K8s 1.28) e del
+  relativo link a gateway-api.md, chiudendo un gap di navigazione. Il
+  contenuto (modello di rete, confronto CNI, relazioni cross-categoria) è
+  denso ma non è mai stato certificato.
+  Verificare in review:
+  - il confronto CNI (Flannel/Calico/Cilium) riflette lo stato 2026 (es.
+    kube-proxy replacement, eBPF ormai mainstream) o è formulato in modo
+    da invecchiare rapidamente
+  - i 4 link della sezione "Argomenti in questa Sezione" puntano a file
+    esistenti e coerenti col riassunto dato qui
+  - la sezione "Relazioni" (Service Mesh, Load Balancing, Sicurezza, API
+    Gateway, containers/kubernetes/networking) resta accurata
+  Se tutto corretto: promuovere a `status: reviewed` e impostare `last_verified`.
+rationale: |
+  Hub di navigazione avanzato (difficulty: advanced) per una decisione
+  architetturale difficile da cambiare dopo il deploy (scelta del CNI):
+  un errore o un'informazione datata qui ha impatto alto e silenzioso.
+  Nel focus tematico corrente (networking/); nessun gap di contenuto nuovo
+  trovato in questo ciclo — il valore residuo è la certificazione, non
+  nuovi file.
+utility_test:
+  reader: "DevOps/platform engineer che deve scegliere il CNI per un nuovo cluster Kubernetes on-prem o cloud"
+  scenario: "Usa la tabella 'Quale CNI Scegliere' come primo filtro prima di approfondire cni.md"
+  outcome: "Prende una decisione difficile da cambiare in seguito fidandosi di una tabella certificata reviewed, non solo strutturalmente completa"
+  without_kb: "Dovrebbe confrontare le doc ufficiali di Calico/Cilium/Flannel e la pagina Kubernetes CNI da zero per arrivare alla stessa sintesi"
+  score: medium
+tags: [kubernetes, networking, cni, review, hub]
+last_analyzed: 2026-09-27
