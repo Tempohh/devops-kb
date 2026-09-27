@@ -1,0 +1,35 @@
+id: prop-112
+title: "Relazione asimmetrica: Observability-code cita Jaeger/Tempo ma non viceversa"
+type: fix-relation
+priority: medium
+target_file: docs/monitoring/tools/jaeger-tempo.md
+effort: small
+description: |
+  `docs/dev/resilienza/observability-code.md` include `monitoring/tools/jaeger-tempo`
+  nel campo `related` del frontmatter (strumentazione OTel lato codice che
+  produce le tracce visualizzate poi in Jaeger/Tempo). Il file target non
+  reciproca: nessun riferimento a observability-code.md, né in `related` né nel
+  testo.
+  Aggiungere in `jaeger-tempo.md`:
+  - `dev/resilienza/observability-code` al campo `related`
+  - un admonition `??? info` (sezione Relazioni, se esiste, altrimenti crearla
+    in coda al file prima di Riferimenti) che chiarisca: le tracce che Jaeger/
+    Tempo visualizzano vengono generate lato applicativo tramite
+    strumentazione OTel manuale o automatica, descritta in dettaglio in
+    observability-code.md
+  Aggiornare `last_updated`.
+rationale: |
+  Chi arriva su jaeger-tempo.md per capire il backend di visualizzazione delle
+  tracce non trova il collegamento a come quelle tracce vengono effettivamente
+  generate nel codice applicativo (span, context propagation, auto vs manual
+  instrumentation) — un gap di connettività tra la parte infrastrutturale e
+  quella applicativa dello stesso flusso end-to-end. Stesso pattern di
+  asimmetria già rilevato ripetutamente nella KB.
+utility_test:
+  reader: "DevOps/developer che configura Jaeger o Tempo come backend di tracing"
+  scenario: "Ha il backend funzionante ma non sa come instrumentare il proprio servizio per produrre tracce utili"
+  outcome: "Trova subito il collegamento alla guida di strumentazione OTel lato codice, senza dover cercare separatamente"
+  without_kb: "Dovrebbe cercare autonomamente la documentazione OTel per il proprio linguaggio, senza sapere che la KB ha già una guida dedicata"
+  score: medium
+tags: [opentelemetry, jaeger, tempo, observability, relazioni]
+last_analyzed: 2026-09-28
