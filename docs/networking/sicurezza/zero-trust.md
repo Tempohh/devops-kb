@@ -5,11 +5,11 @@ category: networking
 tags: [zero-trust, sicurezza, identità, ztna, microsegmentazione, mtls, iam]
 search_keywords: [zero trust network, ztna, zero trust architecture, never trust always verify, identity aware proxy, iap, beyondcorp, nist 800-207, software defined perimeter, sdp, micro-segmentation, conditional access, device posture, continuous verification, service mesh mtls, bpf, sidecar proxy, identity provider, okta, azure ad, google workspace]
 parent: networking/sicurezza/_index
-related: [networking/sicurezza/vpn-ipsec, networking/sicurezza/firewall-waf, networking/service-mesh/istio, networking/kubernetes/network-policies, security/network/zero-trust]
+related: [networking/sicurezza/vpn-ipsec, networking/sicurezza/firewall-waf, networking/sicurezza/wireguard, networking/service-mesh/istio, networking/kubernetes/network-policies, security/network/zero-trust]
 official_docs: https://csrc.nist.gov/publications/detail/sp/800-207/final
 status: complete
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-09-28
 ---
 
 # Zero Trust Networking
@@ -318,6 +318,11 @@ kubectl exec mypod -- cat /var/run/secrets/... | openssl x509 -noout -text | gre
 ```
 
 ## Relazioni
+
+??? info "WireGuard — VPN moderna spesso usata come building block ZTNA"
+    WireGuard fornisce il tunnel cifrato punto-punto su cui alcune soluzioni ZTNA (es. Cloudflare WARP) costruiscono le proprie policy di accesso.
+
+    **Approfondimento →** [WireGuard](wireguard.md)
 
 ??? info "VPN — L'approccio che Zero Trust sostituisce"
     La VPN concede accesso a rete; Zero Trust concede accesso per risorsa.
