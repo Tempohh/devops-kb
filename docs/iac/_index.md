@@ -29,6 +29,8 @@ La sezione IaC copre gli strumenti e le pratiche per gestire l'infrastruttura co
 2. **Terraform State Management** — Remote state, locking, workspace
 3. **Terraform Moduli** — Riuso, registry, composizione
 4. **Ansible Fondamentali** — Playbook, inventory, roles
+5. **Pulumi Fondamentali** — quando preferire un linguaggio reale a HCL
+6. **Crossplane Fondamentali** — quando l'astrazione self-service via Kubernetes ha senso
 
 ## Relazioni con altri argomenti
 
