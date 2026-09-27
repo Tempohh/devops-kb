@@ -1,0 +1,73 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "L'hub docs/containers/kubernetes/_index.md ha una grid \"Sottosezioni\"\
+  \ con\n7 card (Architettura, Workloads, Storage, Scheduling Avanzato, Sicurezza,\n\
+  Operators e CRD, Troubleshooting) più una nota separata che linka\nnetworking.md.\
+  \ Ma nella cartella esistono altri 4 file completi\n(status: complete, parent: containers/kubernetes/_index)\
+  \ che non sono\nraggiungibili né dalla grid né dalla nota né da nessun'altra sezione\n\
+  dell'hub:\n  - autoscaling.md (HPA/VPA/KEDA/Cluster Autoscaler)\n  - ingress.md\
+  \ (Ingress controller, TLS, routing, canary)\n  - multi-cluster.md (Cluster API,\
+  \ Rancher/Fleet, Argo CD multi-cluster)\n  - resource-management.md (QoS, LimitRange,\
+  \ ResourceQuota)\nAggiungere 4 card alla grid esistente, seguendo lo stesso formato\
+  \ delle\naltre (titolo breve in grassetto, 1 riga di riassunto, link \"→ [Titolo]\n\
+  (file.md)\"). Esempio per una card:\n\n-   **Autoscaling**\n\n    HPA, VPA, KEDA,\
+  \ Cluster Autoscaler, custom metrics, scale-to-zero.\n\n    → [Autoscaling](autoscaling.md)\n\
+  \nRipetere per ingress.md, multi-cluster.md, resource-management.md usando\nil loro\
+  \ frontmatter (title, tags, search_keywords) come base per il\nriassunto di una\
+  \ riga.\n"
+effort: small
+id: prop-078
+last_analyzed: 2026-09-27
+priority: high
+rationale: 'Chi: un DevOps mid-senior o SRE che apre containers/kubernetes/_index.md
+
+  per farsi un''idea di cosa la KB copre su Kubernetes prima di cercare un
+
+  argomento specifico (autoscaling, ingress, gestione multi-cluster,
+
+  resource management).
+
+  Problema: 4 pagine complete e sostanziali su temi molto richiesti in
+
+  produzione (autoscaling, ingress, multi-cluster, resource management)
+
+  sono invisibili dall''hub — l''utente le trova solo se conosce già il nome
+
+  del file o usa la ricerca full-text del sito. È lo stesso pattern
+
+  sistemico segnalato nelle ultime sessioni per docs/ci-cd/strategie e
+
+  docs/ci-cd/testing (prop-076, prop-077), qui però con 4 file orfani in
+
+  un solo hub — il caso peggiore osservato finora.
+
+  Perché ora: il report di saturazione precedente (#630) raccomandava di
+
+  controllare la connettività dei sotto-hub interni di containers/** e
+
+  security/**, mai verificati con questo criterio; security/** è risultata
+
+  pulita ma containers/kubernetes/_index.md ha il gap più grande trovato
+
+  finora nella KB.
+
+  '
+status: approved
+tags:
+- connettività
+- hub-navigazione
+- containers
+- kubernetes
+target_file: docs/containers/kubernetes/_index.md
+title: Collegare 4 pagine orfane alla grid di containers/kubernetes/_index.md
+type: extend-section
+utility_test:
+  outcome: Vede subito che la KB copre autoscaling, ingress, multi-cluster e resource
+    management e ci arriva con un click, senza dover indovinare l'URL o usare la ricerca
+  reader: DevOps mid-senior/SRE che deve impostare autoscaling, ingress o gestione
+    multi-cluster su Kubernetes
+  scenario: Apre containers/kubernetes/_index.md per orientarsi sulla documentazione
+    K8s disponibile prima di cercare l'argomento specifico
+  score: high
+  without_kb: Deve usare la ricerca full-text del sito o navigare il repository GitHub
+    per scoprire che questi file esistono
