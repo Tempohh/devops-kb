@@ -278,6 +278,13 @@ try {
                         Write-Host "  [PROPOSTE] Throttle sessione attivo — prossima proposta tra ${waitLeft}s (silenzio fino ad allora)" -ForegroundColor DarkGray
                         $throttleNotified = $true
                     }
+                    # Niente lavoro da fare finche' dura il throttle: dormi come un
+                    # normale giro vuoto invece di ripartire subito (senza questo
+                    # Start-Sleep il loop gira senza pause reali tra un giro e
+                    # l'altro, decine di run/secondo finche' non scade il throttle).
+                    $emptyRuns = 0
+                    Start-Sleep -Seconds $RunInterval
+                    continue
                 } else {
                     $throttleNotified = $false
                     Write-Host "  [PROPOSTE] Coda vuota — avvio sessione proposte strategica..." -ForegroundColor Magenta
