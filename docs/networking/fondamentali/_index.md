@@ -9,7 +9,7 @@ related: []
 official_docs: https://www.ietf.org/
 status: complete
 difficulty: beginner
-last_updated: 2026-02-24
+last_updated: 2026-09-27
 ---
 
 # Fondamentali di Networking
@@ -24,6 +24,7 @@ Comprendere i fondamentali del networking è prerequisito essenziale per qualsia
 | [Stack TCP/IP](tcpip.md) | La suite di protocolli che governa internet: livelli, encapsulation e flusso dati |
 | [Indirizzi IP e Subnetting](indirizzi-ip-subnetting.md) | IPv4, IPv6, CIDR, subnet mask e pianificazione degli indirizzi per infrastrutture cloud |
 | [DNS — Domain Name System](dns.md) | Risoluzione dei nomi, tipi di record, CoreDNS in Kubernetes e sicurezza DNS |
+| [Network Troubleshooting](network-troubleshooting.md) | Metodologia a strati per diagnosi di rete: DNS, L3/L4, MTU, conntrack, TLS, con comandi e scenari pratici |
 | [HTTP e HTTPS](http-https.md) | Metodi, status code, header, versioni HTTP, caching e CORS |
 | [TLS/SSL — Fondamentali](tls-ssl-basics.md) | Handshake TLS 1.3, certificati X.509, PKI, mTLS e gestione dei certificati |
 | [NAT — Network Address Translation](nat.md) | SNAT, DNAT, PAT, port forwarding, conntrack e NAT in Kubernetes |

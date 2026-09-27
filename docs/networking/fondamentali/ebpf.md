@@ -5,11 +5,11 @@ category: networking
 tags: [ebpf, kernel, networking, security, observability, cilium, falco, xdp, tracing]
 search_keywords: [ebpf, extended bpf, berkeley packet filter, kernel programmability, xdp express data path, tc traffic control, kprobe, uprobe, tracepoint, bpftrace, bpftool, libbpf, bcc tools, cilium ebpf, falco ebpf, tetragon, pixie, hubble, kernel bypass, packet filtering, syscall tracing, performance profiling, network observability, runtime security, container security, kernel modules alternativa, co-re compile once run everywhere, btf bpf type format, bpf maps, ring buffer, verifier ebpf, jit compiler bpf, socket filter, lsm bpf, xdp drop, xdp redirect, cgroup bpf, fentry fexit, raw tracepoint]
 parent: networking/fondamentali/_index
-related: [networking/kubernetes/cni, containers/kubernetes/sicurezza, security/runtime/seccomp-apparmor, networking/fondamentali/modello-osi]
+related: [networking/kubernetes/cni, containers/kubernetes/sicurezza, security/runtime/seccomp-apparmor, networking/fondamentali/modello-osi, networking/fondamentali/network-troubleshooting]
 official_docs: https://ebpf.io/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-25
+last_updated: 2026-09-27
 ---
 
 # eBPF — Extended Berkeley Packet Filter

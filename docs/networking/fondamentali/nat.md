@@ -5,11 +5,11 @@ category: networking
 tags: [nat, pat, snat, dnat, networking, routing, firewall]
 search_keywords: [nat network address translation, pat port address translation, snat source nat, dnat destination nat, masquerade linux, ip masquerade, conntrack connection tracking, nat traversal, nat-t, hairpin nat, double nat, nat44, nat66, cgnat carrier grade nat, iptables nat, nftables nat, overload nat, static nat, dynamic nat, natting, port forwarding, port mapping, indirizzi privati nat, rfc1918 nat, ip privato pubblico, traduzione indirizzi, network address port translation, napt]
 parent: networking/fondamentali
-related: [networking/fondamentali/indirizzi-ip-subnetting, networking/fondamentali/tcpip, networking/sicurezza/vpn-ipsec, networking/sicurezza/firewall-waf, networking/kubernetes/cni]
+related: [networking/fondamentali/indirizzi-ip-subnetting, networking/fondamentali/tcpip, networking/sicurezza/vpn-ipsec, networking/sicurezza/firewall-waf, networking/kubernetes/cni, networking/fondamentali/network-troubleshooting]
 official_docs: https://www.rfc-editor.org/rfc/rfc3022
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-25
+last_updated: 2026-09-27
 ---
 
 # NAT — Network Address Translation
