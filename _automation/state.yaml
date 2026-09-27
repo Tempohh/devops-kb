@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-09-27T23:00:25.285542+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 1030
+total_ops: 1031
 total_runs: 485
 queue:
 - id: W-001
@@ -6391,6 +6391,26 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '697'
+  type: new_topic
+  path: docs/messaging/rabbitmq/sicurezza.md
+  category: messaging
+  priority: P2
+  status: pending
+  reason: "Kafka ha una sottocartella dedicata `messaging/kafka/sicurezza/` con 3 file\n(acl-autorizzazione, sasl, tls-ssl)\
+    \ che coprono in profondità autenticazione\ne autorizzazione. RabbitMQ non ha un equivalente: TLS e LDAP compaiono solo\n\
+    come sotto-sezioni operative in `deployment.md` (focus K8s operator/monitoring),\nsenza profondità dedicata su:\n- **OAuth2\
+    \ plugin** (`rabbitmq_auth_backend_oauth2`): configurazione con\n  Keycloak/Entra ID come IdP, validazione JWT lato broker,\
+    \ scope-to-permission\n  mapping (es. `rabbitmq.read:vhost/queue` → permessi AMQP), differenze tra\n  OAuth2 per Management\
+    \ UI vs AMQP client.\n- **SASL EXTERNAL / mTLS client-cert auth**: `ssl_cert_login_from` per mappare\n  CN/SAN del certificato\
+    \ client a uno username RabbitMQ, differenza rispetto\n  a TLS \"solo trasporto\" già mostrato in deployment.md.\n- **Permission\
+    \ model avanzato**: pattern comuni di errore nelle regex di\n  `set_permissions` (configure/write/read), topic permissions\
+    \ per exchange\n  `topic`, differenze tra permessi su vhost vs risorsa.\n- **User tags e Management UI RBAC** (`administrator`,\
+    \ `monitoring`,\n  `policymaker`), federazione con LDAP per i tag.\n- **Security hardening checklist**: disabilitare guest\
+    \ user in produzione,\n  rotazione credenziali, plugin da disabilitare di default, audit del\n  management plugin esposto.\n\
+    Includere almeno 2 esempi YAML/config completi (Cluster Operator CRD con\nOAuth2, rabbitmq.conf con SASL EXTERNAL) e una\
+    \ sezione Troubleshooting\n(es. \"ACCESS_REFUSED\" da mismatch permessi, JWT scope non riconosciuto).\n"
+  proposal_id: prop-122
 completed:
 - id: '682'
   path: docs/monitoring/tools/jaeger-tempo.md
