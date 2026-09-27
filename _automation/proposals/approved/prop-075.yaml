@@ -1,0 +1,52 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "docs/cloud/gcp/_index.md ha una sezione \"Mappa dei Servizi\" (grid\
+  \ cards)\nche elenca solo 5 sotto-aree: Fondamentali, Containers, Dati & Analytics,\n\
+  Monitoring & Observability, Storage. Mancano due sotto-hub reali e\ncompleti (status:\
+  \ complete, contenuto sostanziale, non stub):\n  - docs/cloud/gcp/iam/_index.md\
+  \ (\"IAM su GCP\" — service account,\n    permessi, sicurezza accessi)\n  - docs/cloud/gcp/messaging/_index.md\
+  \ (\"Messaging su GCP\" — Pub/Sub,\n    event-driven, streaming)\nNessuna delle\
+  \ due è raggiungibile navigando da cloud/gcp/_index.md.\nAzioni:\n  1. Aggiungere\
+  \ una card \"IAM\" nella grid che linki a iam/_index.md,\n     posizionata dopo\
+  \ Fondamentali (coerente con l'ordine logico\n     \"identità prima di tutto\" usato\
+  \ in cloud/aws/_index.md e\n     cloud/azure/_index.md, dove IAM/Identità è tra\
+  \ i primi elementi).\n  2. Aggiungere una card \"Messaging\" che linki a messaging/_index.md.\n\
+  \  3. Aggiornare `last_updated`.\n"
+effort: small
+id: prop-075
+last_analyzed: 2026-09-27
+priority: high
+rationale: 'Stesso pattern già corretto in altre categorie/provider (prop-067..073,
+
+  prop-074): hub padre non aggiornato quando nasce una nuova sottocartella
+
+  figlia. Il gap è più marcato che in dev/ perché IAM è un argomento
+
+  cross-cutting (chiunque lavori su GCP lo incontra) e non compare affatto
+
+  nella pagina di ingresso del provider — a differenza di AWS e Azure dove
+
+  IAM/Identità è tra le prime card mostrate.
+
+  '
+status: approved
+tags:
+- connettività
+- hub
+- gcp
+- navigazione
+- fix-relation
+target_file: docs/cloud/gcp/_index.md
+title: Collegare gcp/iam e gcp/messaging all'hub cloud/gcp/_index.md
+type: fix-relation
+utility_test:
+  outcome: Trova le card IAM e Messaging nella grid e arriva alla guida in un click,
+    con la stessa esperienza di navigazione già coerente su AWS/Azure
+  reader: Cloud/DevOps engineer che apre la sezione cloud/gcp/_index.md per farsi
+    un'idea di cosa copre la KB su GCP
+  scenario: Deve configurare permessi IAM o un topic Pub/Sub su GCP e naviga dall'hub
+    principale per orientarsi, aspettandosi di trovare IAM come nelle pagine equivalenti
+    di AWS e Azure
+  score: high
+  without_kb: Deve intuire che esiste /cloud/gcp/iam/ o /cloud/gcp/messaging/ senza
+    alcun indizio dall'hub, oppure usare la ricerca full-text
