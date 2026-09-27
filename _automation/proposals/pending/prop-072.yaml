@@ -1,0 +1,41 @@
+id: prop-072
+title: "security/_index.md non elenca la sottosezione network/ (Network Security / Zero Trust)"
+type: extend-section
+priority: medium
+target_file: docs/security/_index.md
+effort: small
+description: |
+  docs/security/network/_index.md ("Network Security", status: complete,
+  parent: security/_index) con il suo unico figlio docs/security/network/zero-trust.md
+  non compare in nessuna delle liste di navigazione di docs/security/_index.md:
+  non nella grid "## Sezioni" (6 card: Autenticazione, Autorizzazione, Secret
+  Management, PKI e Certificati, Supply Chain Security, Compliance e Audit —
+  manca Network Security), non nei "## Percorsi di Studio", non nella tabella
+  "## Tutti gli Argomenti".
+  Aggiungere:
+  1. Una 7ª card nella grid "## Sezioni": **Network Security** →
+     security/network/_index.md, descrizione "Zero Trust a livello di rete:
+     micro-segmentazione, NetworkPolicy, Istio AuthorizationPolicy, Cilium."
+  2. Una riga nella tabella "## Tutti gli Argomenti":
+     | [Zero Trust Architecture](network/zero-trust.md) | Network Security | Advanced |
+  3. Valutare se citarla nel percorso "Architettura Zero Trust per Microservizi"
+     (punto 1, insieme a mTLS/SPIFFE) dato che il tema si sovrappone.
+rationale: |
+  Un'intera sottosezione (2 file, entrambi status: complete) è raggiungibile
+  solo con l'URL diretto — non tramite l'hub della sua stessa categoria.
+  È lo stesso pattern "_index padre non aggiornato quando nasce una nuova
+  sottocartella" già documentato in prop-067..070 e prop-071, qui applicato
+  a security/ invece che monitoring/iac/ci-cd. Nota: esiste anche
+  networking/sicurezza/zero-trust.md (contenuto diverso, focus di rete
+  generale vs microservizi/K8s specifico di security/network/zero-trust.md):
+  non è un duplicato da consolidare, sono i due file già linkati
+  correttamente nei rispettivi hub — qui la modifica riguarda solo il
+  hub security/_index.md.
+utility_test:
+  reader: "Security engineer o DevOps che arriva su docs/security/_index.md per farsi un quadro della sicurezza microservizi coperta dalla KB"
+  scenario: "Cerca guidance su Zero Trust a livello di rete/service-mesh nel dominio security, non sa che esiste security/network/zero-trust.md"
+  outcome: "Trova la sezione Network Security elencata tra le 7 aree della sicurezza e ci arriva con un click, invece di scoprirla solo se già linkata da un altro file (related) o via ricerca"
+  without_kb: "Dovrebbe affidarsi al campo related di altri file (mtls-spiffe.md, opa.md) per scoprire l'esistenza della pagina, o alla ricerca full-text del sito"
+  score: medium
+tags: [security, navigation, hub, connectivity, zero-trust, network-security]
+last_analyzed: 2026-09-27

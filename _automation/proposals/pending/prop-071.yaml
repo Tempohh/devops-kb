@@ -1,0 +1,43 @@
+id: prop-071
+title: "ci-cd/_index.md non elenca 3 sottosezioni (tools, testing, platform-engineering)"
+type: extend-section
+priority: high
+target_file: docs/ci-cd/_index.md
+effort: small
+description: |
+  La sezione "## Argomenti in questa Sezione" di docs/ci-cd/_index.md elenca
+  solo 5 sottocartelle (Jenkins, GitHub Actions, GitLab CI, GitOps, Strategie
+  di Deployment) su 8 esistenti. Mancano completamente dalla grid di
+  navigazione:
+    - ci-cd/tools/_index.md (Tekton, CircleCI — CI/CD Kubernetes-native e SaaS)
+    - ci-cd/testing/_index.md (contract-testing, performance-testing,
+      test-strategy — tutti status: complete)
+    - ci-cd/platform-engineering/_index.md (Backstage / Internal Developer
+      Platform)
+  Aggiungere 3 card alla grid esistente, nello stesso stile delle 5 già
+  presenti (icona materialdesign + link + 1-2 righe di descrizione presa
+  dal contenuto reale di ciascun _index):
+    - :material-tools: Tools → Tekton, CircleCI
+    - :material-flask: Testing → contract testing, performance testing, test strategy
+    - :material-view-dashboard: Platform Engineering → Backstage, Internal Developer Platform
+  Aggiornare anche `related` di docs/ci-cd/_index.md se manca uno di questi
+  path (verificare prima di aggiungere duplicati).
+rationale: |
+  Le 3 sottosezioni esistono, sono complete (status: complete, contenuto
+  verificato con esempi reali) ma sono irraggiungibili dalla navigazione
+  dell'hub principale ci-cd/_index.md — un lettore che arriva sull'hub CI/CD
+  non scopre mai che esistono guide su Tekton/CircleCI, contract/performance
+  testing o Backstage, a meno di conoscere già l'URL diretto o di trovarle
+  tramite ricerca full-text. Stesso pattern di "hub _index che invecchia
+  peggio dei file figli" già rilevato nelle sessioni precedenti su
+  monitoring/sre, monitoring/alerting, monitoring/tools e iac/_index
+  (prop-067..070) — qui however il gap è più ampio: 3 intere sottosezioni,
+  non singoli file.
+utility_test:
+  reader: "DevOps mid-senior che valuta strumenti CI/CD Kubernetes-native o strategie di testing in pipeline"
+  scenario: "Arriva su docs/ci-cd/_index.md per farsi un quadro di cosa copre la KB su CI/CD prima di cercare Tekton o contract testing"
+  outcome: "Vede subito che la KB ha guide dedicate a Tools (Tekton/CircleCI), Testing (contract/performance/strategy) e Platform Engineering (Backstage), e ci arriva con un click invece di scoprirle per caso"
+  without_kb: "Dovrebbe già sapere che quelle pagine esistono (URL diretto) o affidarsi alla ricerca full-text del sito, perdendo il beneficio di un hub di navigazione curato"
+  score: high
+tags: [ci-cd, navigation, hub, connectivity, tekton, testing, platform-engineering]
+last_analyzed: 2026-09-27

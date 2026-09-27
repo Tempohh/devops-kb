@@ -1,4 +1,4 @@
-# KB Saturation Report — 2026-09-27 (sessione #616)
+# KB Saturation Report — 2026-09-27 (sessione #621)
 
 ## Gate meccanico
 
@@ -7,100 +7,92 @@ file_count: 315, target: 330, over_target: false, headroom: 15
 category_saturated_pct: 85, allow_zero_proposals: true
 ```
 
-Sotto target. Focus di questa sessione (da raccomandazione #613): `docs/monitoring/`
-e `docs/iac/` — categorie mai state in focus esplicito nelle sessioni #591-#615.
+Sotto target. Raccomandazione della sessione precedente (#616): niente
+nuova esplorazione di contenuto su monitoring/iac (già mature), ma un
+**controllo mirato** sul pattern "hub `_index.md` non aggiornato quando
+nasce una nuova sottocartella/file" su altri hub — in particolare
+`ci-cd/jenkins/_index.md` e gli `_index.md` di `cloud/aws/*`.
 
 ## Copertura stimata per categoria
 
 | Categoria | Files | Coverage % | Depth | Note |
 |-----------|-------|------------|-------|------|
-| monitoring/ | 20 file (incl. 5 `_index`) | ~95% contenuto | Alta: ogni file letto (sre/_index, alerting/_index, tools/_index, tools/_index dettaglio) ha troubleshooting reale e best practice specifiche | Nessun gap di contenuto — gap solo di connettività hub→figli |
-| iac/ | 17 file (incl. 4 `_index`) | ~95% contenuto | Molto alta: terraform (5 sotto-argomenti + testing + ci-cd), ansible (2), pulumi (3), crossplane (1, molto dettagliato: 500+ righe, 4 scenari troubleshooting) | Nessun gap di contenuto reale — solo incoerenza narrativa minore nell'_index |
+| ci-cd/ | ~24 file (incl. 9 `_index`) | ~90% contenuto, gap di connettività hub | jenkins/_index perfetto (5/5 figli linkati); ma ci-cd/_index.md (hub di livello superiore) elenca solo 5 sottosezioni su 8 | Gap reale trovato: 3 intere sottosezioni (tools/, testing/, platform-engineering/) assenti dalla grid dell'hub |
+| security/ | 26 file (incl. 8 `_index`) | ~95% contenuto | autenticazione/_index, supply-chain/_index verificati completi e ben linkati | Gap reale trovato: sottosezione network/ (2 file) assente da security/_index.md |
+| networking/ | 43 file | ~95%, hub sani | kubernetes/_index e api-gateway/_index verificati: nessun figlio orfano; networking/_index.md ben strutturato con percorsi di studio coerenti | Nessun gap trovato in questa sessione |
 
 ## Analisi di questa sessione
 
-File analizzati (10): `monitoring/_index.md`, `monitoring/tools/_index.md`,
-`monitoring/sre/_index.md`, `monitoring/alerting/_index.md`,
-`iac/_index.md`, `iac/crossplane/_index.md`, `iac/crossplane/fondamentali.md`,
-`iac/ansible/_index.md`, `iac/pulumi/_index.md`, `iac/terraform/_index.md`.
+File letti (10): `ci-cd/jenkins/_index.md`, `networking/kubernetes/_index.md`,
+`networking/api-gateway/_index.md`, `security/supply-chain/_index.md`,
+`security/autenticazione/_index.md`, `security/_index.md`,
+`networking/_index.md`, `security/network/_index.md`, `ci-cd/_index.md`,
+`ci-cd/tools/_index.md`.
 
-**Verificato NON un gap — contenuto monitoring/ e iac/**: tutti i file di
-dettaglio ispezionati (specialmente `crossplane/fondamentali.md`, 520 righe,
-4 scenari di troubleshooting con comandi `kubectl` reali) sono completi,
-con esempi concreti, best practice e anti-pattern. Nessuna sezione
-promessa-e-assente.
+**Verificato NON un gap**: `ci-cd/jenkins/_index.md` (5/5 figli linkati),
+`networking/kubernetes/_index.md` (4/4), `networking/api-gateway/_index.md`
+(3/3), `security/supply-chain/_index.md` (3/3), `security/autenticazione/_index.md`
+(3/3), `networking/_index.md` (tutte le 7 sottosezioni presenti in grid,
+percorsi di studio e tabella finale coerenti tra loro).
 
-**Gap reale #1 — `monitoring/sre/_index.md` elenca 1 argomento su 5**:
-la cartella contiene `slo-sla-sli.md`, `error-budget.md`,
-`capacity-planning.md`, `chaos-engineering.md`, `incident-management.md`
-(tutti `status: complete`), ma l'hub ("## Argomenti") linka solo
-`slo-sla-sli.md`. 4 file completi sono irraggiungibili dalla navigazione
-del sito. → prop-067 (extend-section, priority high — gap più ampio
-trovato in questa sessione).
+**Gap reale #1 — `ci-cd/_index.md` elenca 5 sottosezioni su 8**: la grid
+"## Argomenti in questa Sezione" cita Jenkins, GitHub Actions, GitLab CI,
+GitOps, Strategie di Deployment, ma non `ci-cd/tools/_index.md` (Tekton,
+CircleCI), `ci-cd/testing/_index.md` (contract/performance testing, test
+strategy) né `ci-cd/platform-engineering/_index.md` (Backstage) — tutte e
+tre `status: complete` e con contenuto verificato. → prop-071
+(extend-section, priority high — 3 sottosezioni intere, il gap più ampio
+di questa sessione).
 
-**Gap reale #2 — `monitoring/alerting/_index.md` non elenca
-`prometheus-rules.md`**: la cartella ha 2 file, l'hub ne linka 1
-(`alertmanager.md`). → prop-068 (extend-section, priority medium).
+**Gap reale #2 — `security/_index.md` non elenca `security/network/_index.md`**
+(Network Security / Zero Trust, `status: complete`): assente dalla grid
+"## Sezioni" (6 card invece di 7), dai "Percorsi di Studio" e dalla tabella
+"Tutti gli Argomenti". → prop-072 (extend-section, priority medium — 1
+sottosezione con 1 file figlio).
 
-**Gap reale #3 — `monitoring/tools/_index.md` non elenca
-`continuous-profiling.md`**: 6 file nella cartella, 5 nell'elenco
-puntato dell'hub. → prop-069 (extend-section, priority medium).
-
-**Gap minore #4 — `iac/_index.md`**: la tabella "Strumenti Coperti" lista
-Terraform/Ansible/Pulumi/Crossplane come pari livello, ma "## Percorso di
-Apprendimento" si ferma al punto 4 (Ansible) senza mai citare Pulumi o
-Crossplane, entrambi sezioni sviluppate. → prop-070 (extend-section,
-priority low — incoerenza narrativa, non un vero blocco di scoperta
-perché la tabella sopra li cita comunque).
-
-Pattern ricorrente rilevato: **hub `_index.md` che invecchia peggio dei
-file figli** — quando si aggiunge un file di dettaglio a una sezione, la
-lista "## Argomenti" dell'_index non viene sempre aggiornata in parallelo.
-Stesso pattern già visto in #613 (dev/linguaggi, dev/processi) ma lì era
-il campo `related` a mancare, qui è la lista di navigazione interna alla
-sezione stessa — variante più subdola perché il file esiste ed è pure
-linkato da `related` altrove, solo non dall'hub della propria categoria.
+Il pattern "hub padre non aggiornato quando nasce una nuova sottocartella"
+(già visto in monitoring/sre, monitoring/alerting, monitoring/tools,
+iac/_index — prop-067..070) si conferma **trasversale a più categorie**:
+qui colpisce ci-cd/ e security/ a livello di hub di primo livello (non
+solo hub di sottosezione). Nessun caso trovato invece in networking/,
+che risulta l'unica categoria tra quelle controllate con navigazione
+interamente coerente.
 
 ## Categorie vicine alla saturazione
 
-- **monitoring/** e **iac/**: confermate mature per contenuto in questa
-  sessione — nessun gap di `new-file`/`extend-section` sostanziale oltre
-  ai 4 fix di connettività sopra.
+- **networking/**: confermata matura per contenuto e connettività in
+  questa sessione — nessun gap trovato.
 - Confermate sature nelle sessioni precedenti (invariato): **databases/**,
-  **dev/linguaggi/**, **security/**, **messaging/rabbitmq**, **networking**,
-  **cloud/aws**, **ci-cd/testing**, **dev/testing, dev/data, dev/resilienza,
-  dev/sicurezza, dev/integrazioni**.
+  **dev/linguaggi/**, **messaging/rabbitmq**, **cloud/aws**,
+  **ci-cd/testing** (contenuto, non connettività — vedi gap #1),
+  **dev/testing, dev/data, dev/resilienza, dev/sicurezza, dev/integrazioni**,
+  **monitoring/**, **iac/** (contenuto maturo, connettività già corretta
+  da prop-067..070).
 
 ## Categorie con gap reali
 
-- **monitoring/sre/_index.md**: 4/5 argomenti non raggiungibili dall'hub —
-  prop-067 (high).
-- **monitoring/alerting/_index.md**: 1/2 argomenti non raggiungibile —
-  prop-068 (medium).
-- **monitoring/tools/_index.md**: 1/6 argomenti non raggiungibile —
-  prop-069 (medium).
-- **iac/_index.md**: percorso di apprendimento incompleto rispetto alla
-  tabella strumenti — prop-070 (low).
+- **ci-cd/_index.md**: 3/8 sottosezioni non raggiungibili dall'hub —
+  prop-071 (high).
+- **security/_index.md**: 1/7 sottosezioni non raggiungibile —
+  prop-072 (medium).
 
 ## Focus usato in questa sessione
 
-`docs/monitoring/` e `docs/iac/`, come raccomandato dal report #613 (aree
-mai esplorate in focus esplicito nelle sessioni #591-#615). Entrambe
-risultano mature sul contenuto; il valore emerso è interamente di
-connettività hub→figli (pattern "_index non aggiornato quando si aggiunge
-un file"), coerente con `allow_zero_proposals` ma non azzerato perché
-i gap di navigazione superano il test di utilità (contenuto reale
-invisibile, non ridondanza).
+Controllo mirato (non intera sessione di analisi) sul pattern di
+connettività hub→figli, come raccomandato da #616, esteso a `ci-cd/`,
+`security/` e `networking/` invece che a una singola categoria di
+contenuto. Scelta motivata dal fatto che il pattern trovato in #616 era
+strutturale (hub desincronizzati), non specifico di monitoring/iac —
+verificarlo su altre categorie era il modo più efficiente di trovare
+valore reale senza riaprire un'analisi di contenuto su aree già mature.
 
 ## Prossima sessione consigliata
 
-Non prima di 2026-10-04. Nessuna delle due aree richiede ulteriore
-esplorazione di contenuto a breve termine. Suggerito un controllo
-mirato — non un'intera sessione di analisi — su altri hub `_index.md`
-della KB per verificare se il pattern "elenco argomenti disperso rispetto
-ai file reali della cartella" si ripete altrove (es. `ci-cd/jenkins/_index.md`,
-che ha 5 file figli, o `cloud/aws/*/​_index.md`, mai controllati con
-questo criterio specifico). In assenza di quel controllo, ruotare il
-focus su `docs/security/` (ultima verifica di contenuto risalente a
-#591-#596, non ancora ri-controllata con il criterio di connettività
-hub) o su `docs/networking/` (stesso discorso).
+Non prima di 2026-10-04. Suggerito completare lo stesso controllo mirato
+di connettività hub→figli su `cloud/aws/*/_index.md` (11 hub, mai
+controllati con questo criterio) e su `docs/dev/**/_index.md` — se il
+pattern si ripete anche lì, valutare se aggiungere un controllo
+automatico (script) invece di continuare a scoprirlo manualmente file
+per file. In assenza di nuovi hit, ruotare su una verifica di contenuto
+(non solo connettività) di `docs/cloud/azure/` e `docs/cloud/gcp/`, mai
+riverificate dal punto di vista di completezza dei singoli file.
