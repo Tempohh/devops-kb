@@ -1,0 +1,40 @@
+id: prop-089
+title: "Collegare Managed Databases (overview cross-cloud) a RDS/Aurora e DynamoDB AWS"
+type: fix-relation
+priority: low
+target_file: docs/databases/kubernetes-cloud/managed-databases.md
+effort: small
+description: |
+  docs/databases/kubernetes-cloud/managed-databases.md e' l'hub cross-cloud
+  (RDS, Aurora, Aurora Serverless v2, DynamoDB, Cloud SQL, Azure Database) ma
+  il suo `related` punta solo a databases/replicazione-ha/backup-pitr,
+  databases/replicazione-ha/failover-recovery e
+  databases/postgresql/connection-pooling — non ai due file AWS che
+  approfondisce direttamente nel testo:
+  - docs/cloud/aws/database/rds-aurora.md (RDS Multi-AZ, Read Replica, Aurora
+    storage cluster, Serverless v2, Global Database — tutti gia' citati in
+    managed-databases.md in forma sintetica)
+  - docs/cloud/aws/database/dynamodb.md (modello dati, capacity mode,
+    ProvisionedThroughputExceededException — anche questo gia' riassunto)
+  Aggiungere entrambi a `related` in managed-databases.md, e aggiungere il
+  riferimento inverso (databases/kubernetes-cloud/managed-databases) al
+  `related` di cloud/aws/database/rds-aurora.md e cloud/aws/database/dynamodb.md.
+  Aggiornare last_updated nei 3 file coinvolti.
+rationale: |
+  Lettore: DevOps che parte dalla panoramica cross-cloud per scegliere un
+  managed database e poi vuole approfondire l'opzione AWS scelta (o
+  viceversa, arriva da un file AWS specifico e vuole confrontare con
+  Cloud SQL/Azure). Oggi il percorso di navigazione si interrompe: l'hub
+  riassume RDS/Aurora/DynamoDB ma non linka le pagine di approfondimento
+  corrispondenti, nonostante queste esistano gia' e siano mature (status
+  complete, contenuto verificato in questa sessione). E' un gap di
+  connettivita', non di contenuto: non richiede nuova scrittura, solo
+  collegare pagine gia' esistenti e pertinenti.
+utility_test:
+  reader: "DevOps mid-level che valuta un managed database per un nuovo progetto AWS"
+  scenario: "Sta leggendo la panoramica cross-cloud per capire le opzioni, ha scelto AWS e vuole i dettagli operativi (parametri CLI, Proxy, Backtrack) di RDS/Aurora o DynamoDB"
+  outcome: "Segue un link diretto dalla panoramica al file di approfondimento invece di dover cercare manualmente nella struttura docs/cloud/aws/database/"
+  without_kb: "Dovrebbe usare la ricerca del sito o navigare manualmente l'albero delle cartelle per trovare i file di dettaglio, nonostante siano gia' menzionati nel testo dell'hub"
+  score: medium
+tags: [aws, rds, aurora, dynamodb, managed-database, connettivita]
+last_analyzed: 2026-09-27

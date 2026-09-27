@@ -1,4 +1,4 @@
-# KB Saturation Report — 2026-09-27 (sessione #649)
+# KB Saturation Report — 2026-09-27 (sessione #651)
 
 ## Gate meccanico
 
@@ -6,71 +6,68 @@
 file_count: 314, target: 330, over_target: false, headroom: 16, category_saturated_pct: 85
 ```
 
-Sotto target, coerente con la sessione precedente (#645).
+Invariato dal gate della sessione precedente (#649). Sotto target, espansione ammessa
+ma solo con gap reali (vedi PASSO 0/3 del prompt).
 
 ## Focus usato in questa sessione
 
-Come raccomandato dal report di #645: lettura di contenuto (non connettività)
-su `dev/**` e `messaging/**`, cercando pattern di currency/refusi analoghi a
-quelli trovati in `ai/sviluppo/` (currency modello) e `ai/agents/` (refuso
-path). 10 file letti in profondità:
+Come raccomandato dal report di #649: primo giro di lettura di **contenuto**
+(non solo connettività) su `cloud/aws/` e `databases/` — mai state oggetto di
+un giro mirato a currency/refusi (solo controlli hub→figli nelle sessioni
+precedenti). 10 file letti in profondità, scelti tra i più densi/centrali
+delle due sezioni:
 
-- `messaging/rabbitmq/_index.md`, `messaging/kafka/_index.md`,
-  `messaging/kafka/fondamenti/_index.md` (i 3 hub più vecchi della sezione,
-  `last_updated` 2026-02-23/24/03-03)
-- `messaging/kafka/sicurezza/tls-ssl.md`, `sasl.md` (sicurezza Kafka,
-  candidati naturali per drift di best practice)
-- `messaging/kafka/schema-registry/avro.md`
-- `dev/sicurezza/tls-da-codice.md`, `dev/sicurezza/secrets-config.md`
-  (documenti "ponte" dev/security, alto rischio di disallineamento se le
-  pagine security cambiano)
-- `dev/integrazioni/rabbitmq-client.md` (ponte dev/messaging)
-- `dev/runtime/jvm-tuning.md`
+- `cloud/aws/compute/lambda.md`, `cloud/aws/containers/eks.md`,
+  `cloud/aws/database/rds-aurora.md`, `cloud/aws/database/dynamodb.md`,
+  `cloud/aws/iam/policies-avanzate.md`
+- `databases/postgresql/replicazione.md`, `databases/mysql/performance-tuning.md`,
+  `databases/nosql/mongodb.md`, `databases/sql-avanzato/query-optimizer.md`,
+  `databases/kubernetes-cloud/managed-databases.md`
 
 ## Risultato
 
-A differenza della sessione precedente (che in `ai/**` aveva trovato 2 gap
-di contenuto su 1 solo giro di lettura), qui i 10 file esaminati sono
-risultati **solidi**: nessun model ID datato, nessun comando deprecato,
-nessun conflitto con pagine correlate già `reviewed`. Un solo gap reale
-trovato, di tipo connettività (non currency):
+Tutti e 10 i file sono risultati **solidi dal punto di vista di currency**:
+nessun comando/flag deprecato, nessun limite di servizio palesemente
+obsoleto (es. limiti Lambda, RCU/WCU DynamoDB, versioni engine RDS/Aurora
+tutti plausibili e coerenti tra loro), nessun conflitto tra pagine correlate.
+Diversi file (`mysql/performance-tuning.md`, `sql-avanzato/query-optimizer.md`)
+hanno `last_updated: 2026-09-27` — già toccati di recente in sessioni
+`currency`/`review` precedenti — a conferma che il lavoro di manutenzione
+pregresso su queste aree ha già avuto effetto.
 
-- **messaging/kafka/_index.md** non linka `messaging/rabbitmq/_index` nel
-  `related`, mentre il percorso inverso (rabbitmq → kafka) esiste già.
-  → prop-088 (low, fix-relation).
+Un solo gap reale trovato, di tipo **connettività** (non contenuto):
 
-Nessun gap di tipo `new-file` proposto: la sezione `dev/**` e `messaging/**`
-sono entrambe già coperte in profondità (RabbitMQ da codice, TLS da codice,
-secrets da codice, JVM tuning sono tutti documenti "ponte" già maturi e
-cross-referenziati). Non sono emerse lacune che superino il test di utilità
-del PASSO 3.
+- **`databases/kubernetes-cloud/managed-databases.md`** (hub cross-cloud
+  RDS/Aurora/DynamoDB/Cloud SQL/Azure DB) non collega i file di
+  approfondimento AWS che riassume nel testo — `cloud/aws/database/rds-aurora.md`
+  e `cloud/aws/database/dynamodb.md` — né riceve il link inverso da questi.
+  → prop-089 (low, fix-relation).
+
+Nessun gap di tipo `new-file` o `extend-section` proposto: entrambe le
+sezioni esaminate sono mature e ben mantenute.
 
 ## Categorie vicine alla saturazione
 
 Invariato dalle sessioni precedenti: **databases/**, **dev/linguaggi/**,
 **messaging/rabbitmq**, **cloud/aws**, **networking/**, **dev/testing,
 dev/data, dev/resilienza, dev/sicurezza, dev/integrazioni**, **monitoring/**,
-**iac/**, **cloud/azure/**, **ai/**, **security/**, **containers/**. Con
-questa sessione si aggiunge, per lettura di contenuto approfondita (non solo
-connettività): `messaging/kafka/**` (fondamenti, sicurezza, schema-registry)
-e `dev/sicurezza/**`, `dev/integrazioni/rabbitmq-client.md`,
-`dev/runtime/jvm-tuning.md` — tutti confermati di alta qualità e senza gap
-di currency.
+**iac/**, **cloud/azure/**, **ai/**, **security/**, **containers/**,
+**messaging/kafka/**. Con questa sessione si confermano di alta qualità
+(content-read, non solo connettività) anche i file più densi di
+`cloud/aws/{compute,containers,database,iam}` e `databases/{postgresql,
+mysql,nosql,sql-avanzato,kubernetes-cloud}`.
 
 ## Categorie con gap reali
 
-Un solo gap concreto trovato in questa sessione: connettività asimmetrica
-`messaging/kafka/_index.md` → `messaging/rabbitmq/_index.md` (vedi sopra,
-prop-088). Nessun gap di tipo `new-file` o `extend-section`.
+Un solo gap concreto trovato in questa sessione: connettività mancante tra
+`databases/kubernetes-cloud/managed-databases.md` e i due file AWS che
+riassume (vedi sopra, prop-089).
 
 ## Prossima sessione consigliata
 
-Non prima di 2026-10-04 (2 giorni oltre quanto raccomandato da #645, in
-linea con il ritmo osservato). Il giro di lettura content-focused su
-`dev/**`/`messaging/**` può considerarsi concluso per i file più datati
-(pre-2026-03-29): erano gli unici a rischio di drift e sono risultati
-puliti. Prossimo focus suggerito: proseguire la lettura di contenuto (non
-connettività) sulle sezioni **cloud/aws/** e **databases/** — mai state
-oggetto di un giro di lettura approfondita mirato a currency/refusi (solo
-controlli di connettività hub→figli nelle sessioni #634-#645), e sono tra le
-sezioni più vecchie/dense della KB.
+Non prima di 2026-10-03. Il giro di lettura content-focused su `cloud/aws/`
+e `databases/` copre solo una parte dei file di queste sezioni (10 su ~75
+totali tra le due): prossimo focus suggerito continuare lo stesso tipo di
+lettura (non connettività) su `cloud/aws/{networking,security,storage,
+messaging,monitoring}` e `databases/{fondamentali,replicazione-ha,nosql
+rimanenti}` — file mai stati oggetto di un giro currency mirato finora.
