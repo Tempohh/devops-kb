@@ -9,7 +9,7 @@ related: []
 official_docs: https://docs.aws.amazon.com/
 status: complete
 difficulty: beginner
-last_updated: 2026-02-25
+last_updated: 2026-09-27
 ---
 
 # Amazon Web Services
@@ -88,6 +88,10 @@ AWS Global Infrastructure (2025)
 - :material-server: **[Compute](compute/_index.md)**
 
     EC2, Auto Scaling, Lambda, ECS, EKS, Fargate
+
+- :material-kubernetes: **[Containers](containers/_index.md)**
+
+    Amazon EKS — managed Kubernetes, node groups, Fargate profiles, IRSA
 
 - :material-database: **[Storage](storage/_index.md)**
 
