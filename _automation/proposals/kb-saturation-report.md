@@ -1,4 +1,4 @@
-# KB Saturation Report — 2026-09-27 (sessione #656)
+# KB Saturation Report — 2026-09-27 (sessione #659)
 
 ## Gate meccanico
 
@@ -6,77 +6,67 @@
 file_count: 314, target: 330, over_target: false, headroom: 16, category_saturated_pct: 85
 ```
 
-Invariato dalle sessioni precedenti (#649, #651, #653). Sotto target, espansione
-ammessa ma solo con gap reali (vedi PASSO 0/3 del prompt).
+Invariato dalle sessioni precedenti (#649, #651, #653, #656). Sotto target,
+espansione ammessa ma solo con gap reali (vedi PASSO 0/3 del prompt).
 
 ## Focus usato in questa sessione
 
-Come raccomandato dal report di #653: prosecuzione del giro content-focused su
-`cloud/azure/` (mai stato oggetto di lettura mirata prima d'ora), sulle
-sottocategorie principali: networking, security, storage, database,
-monitoring, messaging. 10 file letti in profondità:
+Come raccomandato dal report di #656: primo giro content-focused su `docs/iac/`,
+mai stato oggetto di lettura mirata prima d'ora. 10 file letti in profondità,
+coprendo tutte le sottocategorie principali:
 
-- `cloud/azure/networking/vnet.md`, `cloud/azure/networking/load-balancing.md`,
-  `cloud/azure/networking/connettivita.md`
-- `cloud/azure/security/key-vault.md`, `cloud/azure/security/defender-sentinel.md`
-- `cloud/azure/storage/storage-avanzato.md`
-- `cloud/azure/database/cosmos-db.md`, `cloud/azure/database/azure-sql.md`
-- `cloud/azure/monitoring/monitor-log-analytics.md`
-- `cloud/azure/messaging/event-hubs.md`
-
-Nota: `databases/postgresql/{connection-pooling,extensions,mvcc-vacuum}.md`,
-indicati come "mancanti" nel report #653, in realtà **esistono già** (verificato
-con Glob) — quella nota andava letta come "non ancora sottoposti a lettura di
-contenuto", non come file da creare. Corretto qui per evitare che una sessione
-futura proponga `new-file` per file già presenti.
+- `iac/ansible/fondamentali.md`, `iac/ansible/roles-collections.md`
+- `iac/pulumi/fondamentali.md`, `iac/pulumi/stacks-ambienti.md`,
+  `iac/pulumi/policy-as-code.md`
+- `iac/terraform/fondamentali.md`, `iac/terraform/moduli.md`,
+  `iac/terraform/state-management.md`, `iac/terraform/testing.md`
+- `iac/crossplane/fondamentali.md`
 
 ## Risultato
 
 Tutti e 10 i file sono risultati **maturi e solidi**: contenuto denso, esempi
-CLI (`az`) realistici, snippet Python/PowerShell dove pertinente, sezioni
-Troubleshooting con scenari multipli concreti, nessun comando/flag palesemente
-deprecato. Nessun gap di contenuto (`new-file` / `extend-section`) trovato.
+CLI realistici (`ansible-playbook`, `pulumi`, `terraform`, `kubectl`), snippet
+completi (playbook YAML, HCL, Python/TypeScript/Go), sezioni Troubleshooting
+con scenari multipli concreti, confronti espliciti tra i tool (Terraform vs
+Pulumi vs Crossplane vs Ansible) coerenti tra i vari file. Nessun gap di
+contenuto (`new-file` / `extend-section`) trovato — `iac/` è coperta a un
+livello di maturità paragonabile a `cloud/aws/` (#653) e `cloud/azure/` (#656).
 
-Due gap di **connettività** individuati, stesso pattern già visto in #651/#653
-(file hub molto referenziati ma con `related` proprio non aggiornato in modo
-reciproco):
+Due gap individuati, stesso pattern ricorrente delle sessioni precedenti:
 
-- **`cloud/azure/security/key-vault.md`** — referenziato in dettaglio da
-  `storage-avanzato.md` (sezione CMK) e `cosmos-db.md`, ma il proprio `related`
-  (3 voci: app-service-functions, aks-containers, azure-sql) non li include.
-  → prop-092 (low, fix-relation).
-- **`cloud/azure/monitoring/monitor-log-analytics.md`** — referenziato con
-  esempi concreti di diagnostic settings da `azure-sql.md` e `event-hubs.md`,
-  ma il proprio `related` (3 voci: virtual-machines, aks-containers,
-  defender-sentinel) non li include. → prop-093 (low, fix-relation).
+- **Connettività** — `iac/terraform/fondamentali.md` è referenziato in
+  dettaglio (related + sezione Relazioni) sia da `iac/pulumi/fondamentali.md`
+  sia da `iac/crossplane/fondamentali.md`, ma il proprio `related` (5 voci:
+  state-management, moduli, ansible/fondamentali, cloud/aws EC2, cloud/aws VPC)
+  non include nessuno dei due. → prop-094 (low, fix-relation).
+- **Correttezza** — `iac/ansible/fondamentali.md` ha nel `related` il path
+  `ci-cd/pipeline/github-actions`, che non esiste (verificato con Glob); il
+  path corretto è `ci-cd/github-actions/_index`, già usato correttamente nel
+  file gemello `iac/ansible/roles-collections.md`. → prop-095 (low, fix-relation).
 
-Nessuna proposta `new-file` in questa sessione: le sottocategorie esaminate di
-`cloud/azure/` sono coperte in modo completo e maturo quanto le equivalenti
-già validate su `cloud/aws/` in #653.
+Nessuna proposta `new-file` in questa sessione.
 
 ## Categorie vicine alla saturazione
 
 Invariato: **databases/**, **dev/linguaggi/**, **messaging/rabbitmq**,
 **cloud/aws**, **networking/**, **dev/testing, dev/data, dev/resilienza,
-dev/sicurezza, dev/integrazioni**, **monitoring/**, **iac/**, **cloud/azure/**,
-**ai/**, **security/**, **containers/**, **messaging/kafka/**. Con questa
-sessione si confermano di alta qualità (content-read) anche
-`cloud/azure/{networking,security,storage,database,monitoring,messaging}`
-(campione di 10 file).
+dev/sicurezza, dev/integrazioni**, **monitoring/**, **ai/**, **security/**,
+**containers/**, **messaging/kafka/**, **cloud/azure/**. Con questa sessione
+si conferma di alta qualità (content-read) anche `iac/` (campione di 10 file
+su 4 sottocategorie: ansible, pulumi, terraform, crossplane).
 
 ## Categorie con gap reali
 
-Due gap di connettività isolati (vedi sopra, prop-092/093). Nessun gap di
-contenuto in questa sessione.
+Due gap isolati (vedi sopra, prop-094/095). Nessun gap di contenuto in questa
+sessione.
 
 ## Prossima sessione consigliata
 
 Non prima di 2026-10-04. Il giro content-focused ha ora coperto un campione
-denso sia di `cloud/aws/` (#653) sia di `cloud/azure/` (questa sessione). Per
-`cloud/azure/`, restano non ancora letti in profondità: `compute/` (aks-containers,
-virtual-machines, app-service-functions), `identita/` (entra-id, governance,
-rbac-managed-identity), `ci-cd/` (arm-bicep, azure-devops). In alternativa,
-applicare prop-092/093 (fix-relation, se approvate) e passare a un primo giro
-content-focused su `databases/postgresql/` (file esistenti ma non ancora
-letti per contenuto: `connection-pooling.md`, `extensions.md`,
-`mvcc-vacuum.md`) o su `iac/` (mai stato in focus finora).
+denso di `cloud/aws/` (#653), `cloud/azure/` (#656) e `iac/` (questa sessione).
+In alternativa, applicare prop-094/095 (fix-relation, se approvate) e passare
+a un primo giro content-focused su `databases/postgresql/` (file esistenti ma
+non ancora letti per contenuto: `connection-pooling.md`, `extensions.md`,
+`mvcc-vacuum.md`, `replicazione.md`) — mai stata in focus finora nonostante
+sia segnalata "vicina alla saturazione" da diverse sessioni consecutive senza
+mai essere stata verificata a livello di contenuto.

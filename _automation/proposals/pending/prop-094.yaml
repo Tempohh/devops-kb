@@ -1,0 +1,34 @@
+id: prop-094
+title: "Terraform Fondamentali non elenca Pulumi e Crossplane che lo referenziano"
+type: fix-relation
+priority: low
+target_file: docs/iac/terraform/fondamentali.md
+effort: small
+description: |
+  docs/iac/terraform/fondamentali.md è l'hub concettuale IaC della KB e viene
+  referenziato esplicitamente (sia in `related` sia in sezioni "Relazioni") da
+  docs/iac/pulumi/fondamentali.md (confronto HCL vs linguaggi reali, stesso
+  problema di state) e da docs/iac/crossplane/fondamentali.md (confronto
+  control-loop Kubernetes vs plan/apply CLI). Il proprio `related` (attualmente:
+  [iac/terraform/state-management, iac/terraform/moduli, iac/ansible/fondamentali,
+  cloud/aws/compute/ec2, cloud/aws/networking/vpc]) non include nessuno dei due.
+  Aggiungere:
+  - iac/pulumi/fondamentali
+  - iac/crossplane/fondamentali
+  Aggiornare `last_updated`. Nessuna modifica al corpo testo, solo il campo
+  `related` — operazione O(1) sul file target.
+rationale: |
+  Un DevOps che apre terraform/fondamentali.md per capire lo stato dell'arte IaC
+  non trova il rimando alle due alternative "moderne" (Pulumi: linguaggi reali;
+  Crossplane: control loop Kubernetes) già documentate e collegate in senso
+  inverso — stesso pattern di gap di connettività già riscontrato più volte
+  (Key Vault #651/#653, Azure Monitor #656) su file-hub molto referenziati ma
+  con `related` non aggiornato in modo reciproco.
+utility_test:
+  reader: "DevOps mid-senior che valuta se restare su Terraform o esplorare alternative IaC"
+  scenario: "Sta leggendo terraform/fondamentali.md come punto di partenza e vuole sapere quali alternative esistono e perché"
+  outcome: "Dal related, arriva direttamente ai confronti già scritti (Pulumi, Crossplane) senza doverli cercare per nome"
+  without_kb: "Dovrebbe già sapere che quei file esistono e cercarli per nome nella ricerca del sito"
+  score: medium
+tags: [terraform, iac, connettivita, fix-relation]
+last_analyzed: 2026-09-27
