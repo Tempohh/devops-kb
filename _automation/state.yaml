@@ -2,11 +2,11 @@
 # Aggiornato automaticamente - non modificare 'completed' manualmente
 
 version: 2
-last_run: '2026-09-27T15:32:55.796655+00:00'
+last_run: '2026-09-27T15:36:22.951051+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 832
-total_runs: 407
+total_ops: 835
+total_runs: 408
 queue:
 - id: W-001
   type: new_topic
@@ -4645,11 +4645,44 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '598'
+  type: new_topic
+  path: docs/iac/pulumi/policy-as-code.md
+  category: iac
+  priority: P1
+  status: completed
+  reason: "Documentare CrossGuard, il framework di Policy as Code nativo di Pulumi, che\noggi manca completamente nella KB\
+    \ (Terraform ha un intero file dedicato a\ntesting/policy con OPA/Sentinel/checkov, Pulumi zero). Struttura suggerita:\n\
+    - Cos'è un Policy Pack (`pulumi policy new aws-typescript`), differenza tra\n  `advisory`, `mandatory` e `remediate` enforcement\
+    \ level.\n- Esempio di policy reale in TypeScript/Python: vietare S3 bucket pubblici,\n  forzare tag obbligatori, limitare\
+    \ instance type in prod.\n- `pulumi up --policy-pack ./policy-pack` in locale e enforcement centralizzato\n  via Pulumi\
+    \ Cloud (organization-wide policy groups, assegnazione per stack).\n- Differenza CrossGuard (Policy as Code, valutata\
+    \ durante preview/up, blocca\n  il deploy) vs strumenti di scansione statica post-hoc (checkov/tfsec-style)\n  che Pulumi\
+    \ supporta comunque via `pulumi convert`/provider Terraform.\n- CI/CD: far fallire una GitHub Actions pipeline se una\
+    \ policy `mandatory`\n  viene violata (exit code diverso da 0 su `pulumi up`).\n- Troubleshooting: policy pack non trovato,\
+    \ conflitti tra policy locali e\n  organization policy, falsi positivi su risorse già esistenti (remediate\n  che modifica\
+    \ risorse a runtime — rischio da segnalare esplicitamente).\n"
+  proposal_id: prop-056
+- id: '599'
+  type: new_topic
+  path: docs/monitoring/tools/continuous-profiling.md
+  category: monitoring
+  priority: P1
+  status: pending
+  reason: "Nessun file della KB copre il continuous profiling, spesso citato come \"quarto\npilastro\" accanto a metriche/log/tracce\
+    \ (tre-pilastri-osservabilita.md si ferma\na tre) e ormai standard in stack cloud-native moderni (Grafana Pyroscope, CNCF\n\
+    Parca, Datadog Continuous Profiler). Struttura suggerita:\n- Perché serve: le tracce dicono \"quale richiesta è lenta\"\
+    , il profiling dice\n  \"quale funzione/riga di codice consuma CPU o memoria\", a livello di flame\n  graph, senza dover\
+    \ redistribuire un binario instrumentato per il debug.\n- Overhead trascurabile (<1-2% CPU) grazie a sampling statistico\
+    \ o eBPF\n  (nessuna modifica al codice applicativo, a differenza di pprof manuale).\n- Setup pratico Grafana Pyroscope:\
+    \ agent/eBPF profiler su Kubernetes (DaemonSet),\n  push verso Pyroscope server, query e flame graph in Grafana.\n- Alternativa\
+    \ CNCF Parca (agent eBPF, storage columnar, integrazione OTel).\n- OTel Profiling signal (stabilizzato 2025): come si\
+    \ integra con lo stack\n  OpenTelemetry già documentato in opentelemetry.md e otel-collector-kubernetes.md.\n- Caso d'uso\
+    \ concreto: trovare un memory leak o un hot loop CPU in produzione\n  correlando un picco in Grafana (da Prometheus) con\
+    \ il flame graph dello\n  stesso intervallo temporale.\n- Troubleshooting: overhead imprevisto su workload ad alta cardinalità\
+    \ di\n  stack, simboli non risolti (debug symbols mancanti nei container), costi di\n  storage dei profili ad alta frequenza.\n"
+  proposal_id: prop-057
 completed:
-- id: '583'
-  path: docs/cloud/aws/networking/_index.md
-  completed_at: '2026-09-27T12:03:30.055871+00:00'
-  result: File presente su disco - completato ma state non aggiornato dall'agente
 - id: '584'
   path: docs/cloud/aws/networking/global-accelerator.md
   completed_at: '2026-09-27T12:07:36.103551+00:00'
@@ -4705,6 +4738,10 @@ completed:
 - id: '597'
   path: _automation/proposals
   completed_at: '2026-09-27T15:32:56.210828+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '598'
+  path: docs/iac/pulumi/policy-as-code.md
+  completed_at: '2026-09-27T15:36:23.345077+00:00'
   result: File presente su disco - completato ma state non aggiornato dall'agente
 analysis:
   last_started: '2026-09-26T11:09:51.824146+00:00'

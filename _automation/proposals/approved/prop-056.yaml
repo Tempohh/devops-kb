@@ -1,0 +1,63 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "Documentare CrossGuard, il framework di Policy as Code nativo di Pulumi,\
+  \ che\noggi manca completamente nella KB (Terraform ha un intero file dedicato a\n\
+  testing/policy con OPA/Sentinel/checkov, Pulumi zero). Struttura suggerita:\n- Cos'è\
+  \ un Policy Pack (`pulumi policy new aws-typescript`), differenza tra\n  `advisory`,\
+  \ `mandatory` e `remediate` enforcement level.\n- Esempio di policy reale in TypeScript/Python:\
+  \ vietare S3 bucket pubblici,\n  forzare tag obbligatori, limitare instance type\
+  \ in prod.\n- `pulumi up --policy-pack ./policy-pack` in locale e enforcement centralizzato\n\
+  \  via Pulumi Cloud (organization-wide policy groups, assegnazione per stack).\n\
+  - Differenza CrossGuard (Policy as Code, valutata durante preview/up, blocca\n \
+  \ il deploy) vs strumenti di scansione statica post-hoc (checkov/tfsec-style)\n\
+  \  che Pulumi supporta comunque via `pulumi convert`/provider Terraform.\n- CI/CD:\
+  \ far fallire una GitHub Actions pipeline se una policy `mandatory`\n  viene violata\
+  \ (exit code diverso da 0 su `pulumi up`).\n- Troubleshooting: policy pack non trovato,\
+  \ conflitti tra policy locali e\n  organization policy, falsi positivi su risorse\
+  \ già esistenti (remediate\n  che modifica risorse a runtime — rischio da segnalare\
+  \ esplicitamente).\n"
+effort: medium
+id: prop-056
+last_analyzed: 2026-09-27
+priority: high
+rationale: 'Il lettore è un platform/DevOps engineer che ha già adottato Pulumi (coperto
+
+  bene da fondamentali.md e stacks-ambienti.md) e deve rispondere a un requisito
+
+  di governance/compliance (es. "nessun bucket S3 pubblico può arrivare in prod")
+
+  prima del deploy, non dopo. Oggi la KB copre l''equivalente Terraform (Sentinel/
+
+  OPA/conftest in terraform/testing.md) ma non l''omologo Pulumi, creando un buco
+
+  reale e non simmetrico: chi lavora con Pulumi in un contesto enterprise regolato
+
+  non trova risposta e deve cercare nella documentazione Pulumi sparsa su più
+
+  pagine (Policy Packs, enforcement levels, Pulumi Cloud policy groups).
+
+  '
+status: approved
+tags:
+- pulumi
+- policy-as-code
+- crossguard
+- governance
+- compliance
+- iac
+- ci-cd
+target_file: docs/iac/pulumi/policy-as-code.md
+title: Pulumi CrossGuard — Policy as Code per governance pre-deploy
+type: new-file
+utility_test:
+  outcome: Scrive un Policy Pack CrossGuard con enforcement mandatory, lo testa in
+    locale e lo integra nella pipeline CI così che il deploy fallisca su violazione
+  reader: Platform engineer che gestisce infrastruttura multi-team su Pulumi e deve
+    bloccare deploy non conformi prima che tocchino il cloud
+  scenario: Deve impedire che un team crei un S3 bucket pubblico o dimentichi i tag
+    di costo obbligatori, e vuole farlo bloccare a livello di pulumi up/CI, non con
+    un audit successivo
+  score: high
+  without_kb: Deve cercare tra almeno 4-5 pagine sparse della documentazione Pulumi
+    (Policy as Code overview, Policy Packs, Enforcement Levels, Pulumi Cloud policy
+    groups, CI examples) senza un percorso guidato unico
