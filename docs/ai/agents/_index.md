@@ -5,11 +5,11 @@ category: ai
 tags: [agents, agentic-ai, tool-use, autonomous]
 search_keywords: [agenti AI, AI agents, agente autonomo, tool use, function calling, agentic workflow, LLM agent, multi-agent, planning LLM, memory agent, ReAct pattern, chain of thought agent, Claude Code, AutoGen, LangChain agent, CrewAI]
 parent: ai/_index
-related: [ai/agenti/claude-agent-sdk, ai/agenti/frameworks, ai/sviluppo/prompt-engineering, ai/sviluppo/rag]
+related: [ai/agents/claude-agent-sdk, ai/agents/frameworks, ai/sviluppo/prompt-engineering, ai/sviluppo/rag]
 official_docs: https://docs.anthropic.com/en/docs/build-with-claude/tool-use
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-09-27
 ---
 
 # Agenti AI
