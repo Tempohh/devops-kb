@@ -1,0 +1,49 @@
+id: prop-062
+title: "Crossplane — Provisioning Kubernetes-native (CRD, Compositions, XRDs)"
+type: new-file
+priority: high
+target_file: docs/iac/crossplane/fondamentali.md
+effort: medium
+description: |
+  Crossplane è assente dalla KB: la sezione iac/ copre solo Terraform (CLI/HCL,
+  agentless), Ansible (config management via SSH) e Pulumi (linguaggi reali).
+  Nessuno dei tre rappresenta il paradigma Kubernetes-native — control loop
+  dichiarativo, provider come CRD, riconciliazione continua — che Crossplane
+  introduce come "Terraform-via-Kubernetes-API".
+  Sezioni da includere:
+  - Panoramica: perché esiste (self-service infra via kubectl/GitOps, no CLI
+    esterna, integrazione nativa con RBAC e policy K8s), quando NON usarlo
+    (team senza cluster K8s già maturo, o senza bisogno di self-service platform)
+  - Concetti chiave: Provider (aws-provider, provider-family), Managed Resource
+    (MR) 1:1 con risorsa cloud, Composite Resource (XR) e Composition per
+    aggregare più MR in un'astrazione riusabile, XRD (CompositeResourceDefinition)
+    per definire lo schema self-service esposto agli sviluppatori
+  - Architettura: control loop Kubernetes (reconcile, drift correction continua
+    a differenza del plan/apply on-demand di Terraform), confronto esplicito
+    con Terraform (stato in etcd vs state file, riconciliazione continua vs
+    on-demand, RBAC K8s nativo vs IAM/backend separato)
+  - Config & pratica: install via Helm, esempio Provider AWS, esempio Composition
+    che espone un "Database" astratto (nasconde RDS+security group+subnet),
+    esempio XRD con claim namespaced
+  - Best practices: quando preferire Crossplane a Terraform (platform engineering,
+    self-service multi-tenant), pattern GitOps (Composition + ArgoCD/Flux)
+  - Troubleshooting: provider non pronto (CRD non installate), Composition
+    che non converge, permessi RBAC del provider service account
+rationale: |
+  Il lettore è un platform engineer che deve costruire una internal developer
+  platform (IDP) e valuta se Terraform/Pulumi bastano o se serve un motore
+  Kubernetes-native che esponga infrastruttura self-service via kubectl/CRD
+  invece di CLI esterne. Oggi la KB non ha risposta: iac/_index.md elenca solo
+  3 strumenti e containers/kubernetes/multi-cluster.md cita Crossplane solo di
+  striscio (multi-cluster provisioning), senza spiegare Provider/MR/XR/XRD.
+  È un gap trasversale reale tra iac/ e containers/kubernetes/, non simmetria
+  formale: il modello control-loop è concettualmente diverso da plan/apply e
+  merita spiegazione propria prima di poter essere confrontato con Terraform.
+utility_test:
+  reader: "Platform engineer che costruisce una developer platform self-service su Kubernetes"
+  scenario: "Deve scegliere tra Terraform Cloud/Atlantis e un motore K8s-native per esporre infrastruttura come CRD ai team applicativi"
+  outcome: "Capisce Provider/Managed Resource/Composition/XRD, sa configurare un Provider e una Composition di base, e sa quando questo modello supera Terraform per self-service multi-tenant"
+  without_kb: "Dovrebbe leggere la documentazione ufficiale Crossplane da zero (crossplane.io/docs) senza un confronto diretto e contestualizzato con gli altri strumenti IaC già coperti dalla KB"
+  score: high
+tags: [crossplane, iac, kubernetes, platform-engineering, gitops, self-service, crd]
+last_analyzed: 2026-09-27

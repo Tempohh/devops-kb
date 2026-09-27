@@ -1,94 +1,80 @@
-# KB Saturation Report — 2026-09-27 (sessione #603)
+# KB Saturation Report — 2026-09-27 (sessione #607)
 
 ## Gate meccanico
 
 ```
-file_count: 311, target: 330, over_target: false, headroom: 19
+file_count: 313, target: 330, over_target: false, headroom: 17
 category_saturated_pct: 85, allow_zero_proposals: true
 ```
 
-Sotto target. Focus ruotato su `ci-cd/` (non riletto in profondità da diverse
-sessioni, come raccomandato dal report #600) e chiusura del follow-up
-MySQL già indicato per `databases/`.
+Sotto target. Focus ruotato su `docs/iac/` (raccomandato dal report #603:
+"non riletto da tempo, coverage ~75%") e verifica mirata su `docs/ci-cd/testing/`
+(secondo suggerimento del report #603).
 
 ## Copertura stimata per categoria
 
 | Categoria | Files | Coverage % | Depth | Note |
 |-----------|-------|------------|-------|------|
-| databases | 29 (+7 `_index`) | ~78% | Alta su PostgreSQL/NoSQL/MySQL-base | Gap MySQL performance-tuning identificato |
-| ci-cd | 28 (+8 `_index`) | ~85% | Alta su Jenkins/GH Actions/GitLab/GitOps | Gap SaaS CI: CircleCI assente come argomento dedicato |
-| monitoring | 21 | ~75% | Alta sui 3 pilastri + SRE + tools | Incident management già copre on-call/PagerDuty/Opsgenie — nessun gap |
-| networking | 44 | ~90% | Alta | Confermato saturo (sessioni #591-596) |
-| cloud/aws | 45 | ~90% | Alta | Confermato saturo (sessioni #594-596) |
+| iac | 14 (+3 `_index`) | ~75% | Alta su Terraform (7 file), Ansible (2, con Vault/Molecule/CI), Pulumi (3, con CrossGuard) | Manca paradigma K8s-native (Crossplane) — gap confermato |
+| ci-cd/testing | 4 (incl. `_index`) | ~85% | Alta: test pyramid, mutation testing, contract testing, k6/Gatling già coperti in profondità | Flaky test management già coperto (troubleshooting test-strategy.md) — nessun gap |
 
 ## Analisi di questa sessione
 
-File analizzati (10): `ci-cd/_index.md`, `ci-cd/tools/_index.md`,
-`ci-cd/pipeline.md`, `databases/sql-avanzato/query-optimizer.md`,
-`databases/mysql/architettura-replicazione.md`,
-`databases/mysql/_index.md`, `monitoring/sre/incident-management.md`,
-più censimento strutturale completo di `docs/ci-cd/**`, `docs/databases/**`,
-`docs/monitoring/**`.
+File analizzati (10): `iac/_index.md`, `iac/ansible/_index.md`,
+`iac/ansible/fondamentali.md`, `iac/ansible/roles-collections.md`,
+`iac/pulumi/_index.md`, `iac/pulumi/policy-as-code.md`,
+`iac/terraform/testing.md`, `ci-cd/testing/_index.md`,
+`ci-cd/testing/test-strategy.md`, `ci-cd/testing/performance-testing.md`.
 
-**Verificato NON un gap**: alerting/on-call oltre Prometheus. Ipotesi di
-proporre un file dedicato a PagerDuty/Opsgenie routing è stata scartata:
-`monitoring/sre/incident-management.md` copre già severity, MTTA/MTTR,
-escalation policy, on-call fatigue con `search_keywords` ricchi
-(pagerduty, opsgenie, victorops). Nessuna proposta.
+**Verificato NON un gap**: test parallelization/flaky test management in
+ci-cd/testing (ipotesi del report #603). `test-strategy.md` copre già test
+splitting/shard, ordine random per rilevare flaky, pytest-randomly,
+rerunFailingTestsCount, cause comuni (stato condiviso, sleep fissi). Non serve
+un file dedicato — l'informazione esiste già ed è collegata.
 
-**Gap reali confermati**:
-1. **CircleCI assente come argomento dedicato**: citato solo nella tabella
-   comparativa di `ci-cd/_index.md` ("Startup, velocità di setup") ma
-   `ci-cd/tools/` contiene solo `tekton.md`. Concetti CircleCI-specifici
-   (orbs, resource_class, executor types, dynamic config/continuation)
-   senza equivalente diretto in GitHub Actions/GitLab CI già documentati
-   in profondità (Jenkins 6 file, GH Actions 3, GitLab 2). Non è simmetria
-   formale — score high.
-2. **MySQL/InnoDB — query optimizer e performance tuning**: follow-up
-   esplicito raccomandato dal report #600 dopo la chiusura del gap
-   architettura/replicazione (prop-058, auto #601). `query-optimizer.md`
-   esistente è interamente Postgres-centrico (pg_stat_statements, planner
-   Postgres); InnoDB ha modello di costo, clustered index e hash join
-   (8.0.18+) concettualmente diversi. Gap più piccolo del precedente —
-   score medium.
+**Gap reale confermato**: **Crossplane assente come argomento**. La sezione
+iac/ tratta solo Terraform/Ansible/Pulumi — tutti CLI-driven con ciclo
+plan/apply o playbook on-demand. Crossplane introduce un paradigma diverso
+(control loop Kubernetes, CRD come interfaccia, riconciliazione continua) che
+non ha equivalente diretto negli altri tre. Citato solo di striscio in
+`containers/kubernetes/multi-cluster.md` (provisioning multi-cluster), senza
+spiegare Provider/Managed Resource/Composition/XRD. Non è simmetria formale:
+il modello è concettualmente distinto da plan/apply e merita trattazione
+propria — score high.
 
 ## Categorie vicine alla saturazione
 
-- **networking**, **cloud/aws**: confermato saturo, nessuna nuova analisi
-  in questa sessione (fuori focus).
+- **networking**, **cloud/aws**: confermato saturo nelle sessioni precedenti
+  (#591-596), fuori focus in questa sessione.
+- **ci-cd**, **ci-cd/testing**: alta profondità confermata anche in questa
+  sessione, nessun gap aggiuntivo trovato.
 
 ## Categorie con gap reali
 
-- **ci-cd/tools**: manca CircleCI come argomento dedicato — proposta
-  generata (prop-060, priority high).
-- **databases/mysql**: manca performance tuning/query optimizer InnoDB —
-  proposta generata (prop-061, priority medium).
+- **iac/**: manca Crossplane (paradigma K8s-native) — proposta generata
+  (prop-062, priority high).
 
 ## Focus usato in questa sessione
 
-`docs/ci-cd/` (rotazione da report #600: "non riletto in profondità da
-diverse sessioni") + follow-up mirato su `docs/databases/mysql/`
-(esplicitamente raccomandato dal report precedente come secondo file
-MySQL "solo se emerge gap reale" — verificato: query-optimizer.md è
-Postgres-only, gap confermato).
+`docs/iac/` (rotazione da report #603: "coverage più bassa, non riletto da
+tempo") + verifica mirata su `docs/ci-cd/testing/` (secondo suggerimento del
+report #603, risultata in nessun gap).
 
-## Decisione: 2 proposte
+## Decisione: 1 proposta
 
-- `prop-060`: CircleCI — Orbs, Workflows e Resource Classes,
-  `ci-cd/tools/circleci.md`, priority high.
-- `prop-061`: MySQL/InnoDB — Query Optimizer e Performance Tuning,
-  `databases/mysql/performance-tuning.md`, priority medium.
+- `prop-062`: Crossplane — Provisioning Kubernetes-native,
+  `iac/crossplane/fondamentali.md`, priority high.
 
-Zero proposte aggiuntive su monitoring/networking/cloud: monitoring
-confermato ben coperto anche su on-call (verifica esplicita sopra),
-networking e cloud/aws restano fuori focus e già confermati saturi nelle
-sessioni precedenti.
+Zero proposte aggiuntive: `ci-cd/testing` confermato ben coperto anche su
+flaky test management (verifica esplicita sopra); networking/cloud/aws
+restano fuori focus e già confermati saturi.
 
 ## Prossima sessione consigliata
 
-2026-09-28 o successiva. Se `prop-060`/`prop-061` vengono eseguite,
-valutare terzo file CircleCI solo se emerge gap reale (es. testing/
-orchestration avanzata), altrimenti ruotare focus su `iac/` (14 file,
-coverage ~75%, non riletto da tempo) o su `ci-cd/testing`
-(contract-testing, performance-testing, test-strategy — verificare se
-manca un confronto tool per test parallelization/flaky test management).
+2026-09-28 o successiva. Se `prop-062` viene eseguita, valutare se
+`iac/_index.md` necessita di un aggiornamento della tabella "Strumenti
+Coperti" (task `expand`, non `new_topic`) per includere Crossplane. Se non
+emergono nuovi gap in iac/, ruotare focus su `security/` (verificare
+coverage supply-chain/runtime, mai stati in focus esplicito nelle ultime
+sessioni tracciate) o su `messaging/` (solo kafka+rabbitmq, coverage da
+verificare).
