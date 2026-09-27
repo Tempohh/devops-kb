@@ -44,6 +44,10 @@ Il networking è la fondamenta di ogni architettura AWS. VPC, subnets, routing e
 
     ALB/NLB/GWLB, target groups, health check, listener rules, cross-zone balancing
 
+- :material-transit-connection-variant: **[Global Accelerator](global-accelerator.md)**
+
+    IP anycast statici, failover multi-regione in secondi, standard vs custom routing accelerator
+
 - :material-api: **[API Gateway](api-gateway.md)**
 
     REST/HTTP/WebSocket API, Lambda proxy integration, authorizer, throttling, usage plan
