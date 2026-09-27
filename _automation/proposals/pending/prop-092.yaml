@@ -1,0 +1,32 @@
+id: prop-092
+title: "Collegare Key Vault ai file che lo referenziano (link inverso mancante)"
+type: fix-relation
+priority: low
+target_file: docs/cloud/azure/security/key-vault.md
+effort: small
+description: |
+  docs/cloud/azure/storage/storage-avanzato.md (sezione "Customer-managed Keys
+  (CMK)") e docs/cloud/azure/database/cosmos-db.md usano entrambi Key Vault come
+  parte integrante del proprio flusso (CMK, secrets), ma
+  docs/cloud/azure/security/key-vault.md non li elenca nel proprio `related`
+  (attualmente: [cloud/azure/compute/app-service-functions,
+  cloud/azure/compute/aks-containers, cloud/azure/database/azure-sql]).
+  Aggiungere al `related` di key-vault.md:
+  - cloud/azure/storage/storage-avanzato (sezione CMK dedicata)
+  - cloud/azure/database/cosmos-db (related già lo cita in senso opposto)
+  Aggiornare `last_updated` in key-vault.md. Nessuna modifica al corpo testo,
+  solo il campo `related` — operazione O(1) sul file target.
+rationale: |
+  Un DevOps che apre key-vault.md per capire dove si usa non trova i due
+  scenari applicativi più concreti (CMK per storage, secrets per Cosmos DB)
+  già documentati altrove nella KB — deve già sapere che quei file esistono
+  per collegarli. Il gap è di navigabilità/connettività, non di contenuto:
+  entrambi i file target sono maturi (status complete).
+utility_test:
+  reader: "DevOps che configura Customer-managed Keys per uno storage account o segreti per un'app Cosmos DB"
+  scenario: "Sta leggendo key-vault.md per capire dove si integra nel resto della KB"
+  outcome: "Dal related, arriva direttamente alla sezione CMK di storage-avanzato.md o al setup Cosmos DB, senza dover cercare per nome"
+  without_kb: "Dovrebbe già sapere che quei file esistono e usare la ricerca del sito per nome"
+  score: medium
+tags: [azure, key-vault, connettivita, fix-relation]
+last_analyzed: 2026-09-27
