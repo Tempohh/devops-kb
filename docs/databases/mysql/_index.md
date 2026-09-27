@@ -19,3 +19,6 @@ Questa sezione copre gli aspetti operativi che determinano il comportamento in p
 
 ### [Architettura e Replicazione](architettura-replicazione.md)
 Storage engine InnoDB (buffer pool, redo/undo log, clustered index), replicazione basata su binary log (statement/row/mixed, GTID), semi-sync vs async, alta disponibilità con Group Replication e Galera Cluster, backup logico (mysqldump) vs fisico (Percona XtraBackup).
+
+### [Performance Tuning e Query Optimizer](performance-tuning.md)
+EXPLAIN e EXPLAIN FORMAT=JSON, EXPLAIN ANALYZE (8.0.18+), optimizer_trace, clustered index vs secondary index lookup, algoritmi di join (nested loop, hash join da 8.0.18), tuning buffer pool InnoDB, slow query log e pt-query-digest, strategia di indicizzazione.

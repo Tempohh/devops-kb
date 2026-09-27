@@ -5,11 +5,11 @@ category: databases
 tags: [query-optimizer, explain, performance, planner, indici, postgresql]
 search_keywords: [explain analyze, query plan, seq scan, index scan, index only scan, bitmap index scan, hash join, nested loop join, merge join, cost model, startup cost, total cost, actual rows, estimated rows, buffers, hit ratio, work_mem, enable_seqscan, pg_stat_statements, auto explain, slow query log, statistics target, correlation, n_distinct, planner hints]
 parent: databases/sql-avanzato/_index
-related: [databases/fondamentali/indici, databases/postgresql/mvcc-vacuum, databases/sql-avanzato/window-functions]
+related: [databases/fondamentali/indici, databases/postgresql/mvcc-vacuum, databases/sql-avanzato/window-functions, databases/mysql/performance-tuning]
 official_docs: https://www.postgresql.org/docs/current/using-explain.html
 status: complete
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-09-27
 ---
 
 # Query Optimizer e EXPLAIN
