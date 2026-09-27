@@ -1,68 +1,76 @@
-# KB Saturation Report — 2026-09-27 (ciclo #594)
+# KB Saturation Report — 2026-09-27
 
 ## Gate meccanico
 
 ```
-file_count: 307 (manage-state.py saturation-gate)
-target: 330
-over_target: false
-headroom: 23
-category_saturated_pct: 85
+file_count: 307, target: 330, over_target: false, headroom: 23
+category_saturated_pct: 85, allow_zero_proposals: true
 ```
 
-Non satura a livello globale. Sessione consecutiva nello stesso giorno del ciclo
-#591 (stesso focus tematico: `docs/networking/` e `docs/cloud/aws/`), rieseguita
-da zero con campionamento indipendente di 10 file di contenuto (non hub).
+Sotto target a livello globale, ma il **focus tematico corrente** (`docs/networking/`,
+`docs/cloud/aws/`) risulta saturo nei fatti — vedi sotto.
 
-## Copertura stimata per categoria (focus sessione)
+## Copertura stimata per categoria
 
-| Categoria | Files (Glob) | Coverage % | Depth | Note |
+| Categoria | Files | Coverage % | Depth | Note |
 |-----------|-------|------------|-------|------|
-| networking/ | 43 | ~90% | alta | Nessun draft/needs-review residuo dopo commit #593 |
-| cloud/aws/ | 46 | ~90% | alta | Nessun draft/needs-review residuo dopo commit #592 |
-
-## Analisi di dettaglio
-
-Campione letto (10 file, tutti status `complete`, tutti ≥217 righe, tutti con
-frontmatter ricco: `search_keywords` ≥9, `related` ≥3): `quic.md`, `tcpip.md`,
-`concetti-base.md` (service-mesh), `global-accelerator.md`, `vpc-lattice.md`,
-`gateway-api.md`, `bgp.md`, `ebpf.md`, `api-gateway.md` (AWS),
-`elastic-load-balancing.md`. Nessun file sotto la soglia minima (150 righe),
-nessuna isola di connettività (`related` sempre popolato con link validi),
-nessun contenuto superficiale rispetto alla documentazione ufficiale.
-
-Controllo `status` su tutta la KB: **zero** file `draft` (fuori dal template),
-**zero** file `needs-review` in `networking/` o `cloud/aws/` — i due hub
-(`cloud/aws/networking/_index.md`, `networking/kubernetes/_index.md`) segnalati
-nel ciclo precedente sono ora `status: reviewed` con `last_verified: 2026-09-27`
-(commit #592, #593).
+| networking | 44 | ~90% | Alta | 8 sottocategorie, hub `_index` ricchi, `related` densi |
+| cloud/aws | 43 | ~90% | Alta | 8 sottocategorie, review recenti (#590-593), `vpc-avanzato`/`vpc-lattice` copre già Transit Gateway/PrivateLink/Direct Connect |
+| messaging | 55 | ~95% | Molto alta | Kafka quasi enciclopedico (7 sottosezioni), RabbitMQ completo |
+| cloud (totale) | 109 | ~75% | Media-alta | AWS saturo, Azure/GCP meno profondi ma fuori focus |
+| containers | 38 | ~80% | Alta | — |
+| databases | 28 | ~70% | Media | — |
+| security | 26 | ~70% | Media | — |
+| ci-cd | 29 | ~75% | Media-alta | — |
+| ai | 27 | ~75% | Media-alta | — |
+| dev | 28 | ~65% | Media | — |
+| monitoring | 20 | ~60% | Media | — |
+| iac | 14 | ~55% | Bassa-media | Sottodimensionata rispetto al resto |
 
 ## Categorie vicine alla saturazione
 
-- **networking/** e **cloud/aws/networking/**: seconda sessione di fila senza
-  gap trovati. Il focus tematico fisso di `proposal-prompt.md` su queste due
-  aree ha esaurito il margine utile a breve termine.
+- **networking**: ogni sottocategoria (fondamentali, protocolli, load-balancing,
+  service-mesh, sicurezza, api-gateway, kubernetes) ha hub `_index` con card
+  complete e cross-link ricchi. Nessun file `draft`/`needs-review` residuo.
+- **cloud/aws/networking**: 9 file, tutti `complete` o `reviewed`, `last_updated`
+  concentrati nelle ultime settimane. Transit Gateway, PrivateLink, Direct Connect,
+  VPC Flow Logs, Reachability Analyzer sono già trattati (in `vpc-avanzato.md`,
+  `vpc.md`, `network-security.md`) — non isole scoperte, gap simmetrici scartati
+  per regola PASSO 3.
+- **messaging/kafka**: 7 sottosezioni, quasi ogni pattern enterprise già coperto
+  (CQRS, Saga, Outbox, exactly-once, schema registry, sicurezza SASL/TLS/ACL).
 
 ## Categorie con gap reali
 
-- Nessuno individuato in questo ciclo, nel focus assegnato.
-- Fuori focus (solo per riferimento, non azionati qui): 3 file restano
-  `status: needs-review` senza `last_verified` — `cloud/aws/compute/containers-ecs-eks.md`,
-  `cloud/finops/fondamentali.md`, `containers/kubernetes/networking.md`.
-- Categorie più piccole in assoluto (candidate a nuovo focus): `iac/` (14 file),
-  `monitoring/` (20), `security/` (26).
+- **iac**: solo 14 file per 3 tecnologie (terraform+opentofu, pulumi, ansible) —
+  sottodimensionata rispetto a containers/networking, ma **fuori focus tematico**
+  di questo ciclo (`networking`/`cloud/aws`). Da considerare nella prossima sessione
+  senza focus ristretto.
+- **monitoring** e **databases**: coverage media, ma anch'esse fuori focus corrente.
 
-## Proposte generate questo ciclo
+Nessun gap reale trovato dentro il focus richiesto (`networking/`, `cloud/aws/`)
+che superi il test di utilità (PASSO 3): tutti i candidati esaminati sono già
+coperti con profondità operativa (comandi reali, tabelle di confronto, sezioni
+Troubleshooting) e connettività (`related` con 3-5 voci ciascuno).
 
-Nessuna. Il test di utilità ("chi è il lettore, cosa gli permette di fare in
-più rispetto a 2 click sulla documentazione ufficiale") non è superato da
-nessun gap nel focus corrente — il focus è stato già lavorato in profondità nel
-ciclo #591 dello stesso giorno.
+## Decisione: 0 proposte
+
+10 file analizzati in profondità (`vpc-avanzato.md`, `protocolli/_index.md`,
+`gateway-api.md`, `containers-ecs-eks.md`, `zero-trust.md`, `vpc-lattice.md`,
+`global-accelerator.md`, `ha-e-failover.md`, `network-policies.md`,
+`cloud/aws/networking/_index.md`). Nessuno supera il test di utilità per una
+nuova proposta: o il contenuto è già completo e reviewed, o il gap ipotizzato
+(es. file dedicato a Transit Gateway/PrivateLink) è già assorbito in un file
+esistente con profondità sufficiente — creare un file gemello sarebbe
+simmetria formale, non gap operativo (regola di scarto esplicita PASSO 3).
+
+Il backlog `draft`/`needs-review` residuo (`containers-ecs-eks.md`,
+`cloud/finops/fondamentali.md`, `containers/kubernetes/networking.md`) è già
+gestito dai task `review`/`expand` esistenti in coda, non richiede proposte.
 
 ## Prossima sessione consigliata
 
-Data: 2026-10-04 o al prossimo ciclo `proposal` schedulato.
-Focus tematico suggerito: cambiare focus da `networking/`+`cloud/aws/` (due
-cicli consecutivi a zero gap) a `iac/` o `monitoring/`, le categorie più
-piccole della KB; in subordine chiudere i 3 `needs-review` fuori focus elencati
-sopra.
+2026-10-04+ — spostare il focus tematico fuori da `networking`/`cloud/aws`
+(entrambi saturi) verso **`iac/`** (sottodimensionata, 14 file) o
+**`monitoring/`** e **`databases/`** (coverage media), dove il gate di
+saturazione ha più margine reale per proposte `new-file` ad alto score.
