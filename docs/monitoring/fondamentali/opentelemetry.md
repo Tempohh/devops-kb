@@ -5,11 +5,11 @@ category: monitoring
 tags: [observability, telemetry, tracing, metrics, logs, otel, cncf]
 search_keywords: [OTel, OpenTelemetry, OTEL, telemetria, osservabilità, distributed tracing, metriche, log, tracce, OTLP, collector, SDK, instrumentazione, CNCF, spans, traces, context propagation, vendor-neutral]
 parent: monitoring/fondamentali
-related: [monitoring/tools/prometheus, monitoring/tools/grafana, monitoring/tools/loki, monitoring/tools/jaeger-tempo, monitoring/sre/slo-sla-sli, networking/service-mesh/istio]
+related: [monitoring/tools/prometheus, monitoring/tools/grafana, monitoring/tools/loki, monitoring/tools/jaeger-tempo, monitoring/sre/slo-sla-sli, networking/service-mesh/istio, monitoring/tools/continuous-profiling]
 official_docs: https://opentelemetry.io/docs/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-09-27
 ---
 
 # OpenTelemetry
@@ -26,6 +26,12 @@ OpenTelemetry (OTel) è il framework CNCF open-source per la raccolta, elaborazi
     - **Metriche**: valori numerici aggregati nel tempo (CPU, latenza, error rate)
     - **Log**: eventi discreti con timestamp e contesto strutturato
     - **Tracce (Distributed Tracing)**: catena di operazioni attraverso microservizi
+
+    Dal 2025 OpenTelemetry ha stabilizzato un **quarto signal, il profiling**
+    (`profiles`), che risponde a "quale funzione/riga di codice consuma CPU o
+    memoria" — complemento continuo ai tre pilastri classici.
+
+    **Approfondimento completo →** [Continuous Profiling](../tools/continuous-profiling.md)
 
 ### Signal: Traces
 
@@ -119,6 +125,12 @@ Componente opzionale ma raccomandato in produzione. Agisce da proxy/agent tra le
 - Tail-based sampling: decide quali trace conservare DOPO averle ricevute completamente
 - Retry e buffering in caso di downtime del backend
 - Filtraggio PII prima che i dati lascino il cluster
+
+!!! note "Quarto signal: profiles"
+    Dal 2025 il Collector supporta anche una pipeline `profiles`, accanto a
+    `traces`/`metrics`/`logs`, per instradare i dati di continuous profiling
+    (es. verso Pyroscope) senza un agente separato. Dettagli e YAML completo in
+    [Continuous Profiling](../tools/continuous-profiling.md).
 
 **Deployment modes:**
 - **Agent**: sidecar o daemonset per-node, minima latenza
