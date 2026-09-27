@@ -9,7 +9,7 @@ related: []
 official_docs: https://microservices.io/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-09-27
 ---
 
 # Linguaggi & Runtime
@@ -40,3 +40,4 @@ Questa sezione documenta le scelte di linguaggio e runtime per microservizi Kube
 - [ASP.NET Core 8+](dotnet.md) — Minimal API vs Controller, DI lifetimes, BackgroundService, gRPC, .NET Aspire, HealthChecks
 - [Go](go.md) — Goroutine, channel, GOMAXPROCS containerizzazione, framework HTTP (Gin/Echo), gRPC, graceful shutdown
 - [Python](python.md) — FastAPI async, Pydantic v2, Uvicorn/Gunicorn workers, SQLAlchemy 2 async, GIL e containerizzazione
+- [Node.js](nodejs.md) — Event loop, Express/Fastify/NestJS, async/await, graceful shutdown, cluster vs replica K8s, OpenTelemetry
