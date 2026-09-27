@@ -13,9 +13,13 @@ protocolli *di contenuto*; questo file descrive *come la KB si mantiene da sola*
 | **Locale — 1 task** | doppio click su `KB_Aggiorna_Sicuro.bat` (→ `kb-safe.ps1` → `run_once.py --max-tasks 1`) | Eseguire un singolo task al volo su Windows, con la stessa logica della CI. |
 | **Locale — loop infinito** | `KB_Aggiorna_Infinito.bat` (→ `kb-infinite.ps1`) | Sessioni intensive locali. **Non** applica la policy modello di `config.yaml`. Legacy. |
 
-Deploy del sito: `.github/workflows/deploy.yml` (build + `mkdocs gh-deploy`) parte
-a ogni push su `master` che tocca `docs/`, `mkdocs.yml`, `requirements.txt`.
-`kb-maintenance.yml` ripubblica anche da solo dopo aver committato contenuto.
+Deploy del sito: **solo** `.github/workflows/deploy.yml` (build + `mkdocs gh-deploy`),
+che parte a ogni push su `master` che tocca `docs/`, `mkdocs.yml`, `requirements.txt`.
+`kb-maintenance.yml` si limita a `git push`: non chiama piu' `mkdocs gh-deploy` da solo
+(faceva doppio deploy per ogni task che toccava `docs/`, uno manuale e uno via trigger —
+criticita' registrata in CLAUDE.md). `deploy-pages` ha `cancel-in-progress: true`: push
+ravvicinati (es. `kb-infinite.ps1`, che pusha dopo ogni task) cancellano le build
+intermedie in coda e restano solo l'ultima.
 
 > **Perche' uno scheduler esterno e non `schedule:` nel workflow?** Il cron di
 > GitHub Actions sui runner condivisi parte con 30 min – 4 h di ritardo (o viene

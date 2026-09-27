@@ -19,7 +19,11 @@ permissions:
 
 concurrency:
   group: deploy-pages
-  cancel-in-progress: false
+  # true: se arrivano piu' push ravvicinati (es. kb-infinite.ps1 che pusha dopo
+  # ogni singolo task completato) le build intermedie in coda si cancellano e
+  # resta solo l'ultima. La build e' idempotente (rigenera tutto da docs/),
+  # quindi non serve pubblicare ogni stato intermedio.
+  cancel-in-progress: true
 
 jobs:
   build-deploy:

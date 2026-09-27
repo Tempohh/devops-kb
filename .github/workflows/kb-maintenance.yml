@@ -118,15 +118,17 @@ jobs:
         run: |
           python _automation/run_once.py --max-tasks "${{ github.event.inputs.max_tasks || '1' }}"
 
-      - name: Push and redeploy if run_once.py produced a commit
+      - name: Push se run_once.py ha prodotto un commit
+        # Solo push: NON chiama mkdocs gh-deploy qui. Se il push tocca docs/**,
+        # mkdocs.yml o requirements.txt, deploy.yml scatta gia' da solo sul push
+        # a master (vedi paths: in .github/workflows/deploy.yml). Farlo anche
+        # qui produceva un doppio deploy per ogni task che tocca docs/ (build +
+        # pubblicazione gh-pages due volte, una manuale e una via trigger).
         if: steps.gate.outputs.enabled == 'true'
-        env:
-          PYTHONUTF8: "1"
         run: |
           git fetch origin master
           if [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)" ]; then
-            echo "run_once.py non ha prodotto commit (coda vuota o rate limit) - niente push/deploy."
+            echo "run_once.py non ha prodotto commit (coda vuota o rate limit) - niente push."
             exit 0
           fi
           git push origin HEAD:master
-          mkdocs gh-deploy --force --strict
