@@ -1,4 +1,4 @@
-# KB Saturation Report — 2026-09-27 (sessione #613)
+# KB Saturation Report — 2026-09-27 (sessione #616)
 
 ## Gate meccanico
 
@@ -7,78 +7,100 @@ file_count: 315, target: 330, over_target: false, headroom: 15
 category_saturated_pct: 85, allow_zero_proposals: true
 ```
 
-Sotto target. Focus da report #610: `docs/databases/` (file di dettaglio non
-ancora letti: `postgresql/extensions.md`, `nosql/cassandra.md`,
-`kubernetes-cloud/db-su-kubernetes.md`) e completamento `docs/dev/` (`runtime`,
-`processi`, dettagli `linguaggi`: `go.md`, `python.md`, `java-quarkus.md`,
-`dotnet.md`).
+Sotto target. Focus di questa sessione (da raccomandazione #613): `docs/monitoring/`
+e `docs/iac/` — categorie mai state in focus esplicito nelle sessioni #591-#615.
 
 ## Copertura stimata per categoria
 
 | Categoria | Files | Coverage % | Depth | Note |
 |-----------|-------|------------|-------|------|
-| databases/ (dettaglio) | 3 letti (extensions, cassandra, db-su-kubernetes) | ~95% | Molto alta: ognuno 300-500 righe, 4-5 scenari di troubleshooting con comandi reali, best practice specifiche, nessuna sezione mancante rispetto al proprio official_docs | Nessun gap reale — confermano la valutazione "alta coverage" di #609/#610 |
-| dev/linguaggi/ (dettaglio) | 4 letti (go, python, dotnet, java-quarkus) + _index | ~95% | Molto alta: Panoramica con quando-usare/quando-non-usare, tabella comparativa coerente nell'_index, tutti i 6 linguaggi (incl. Node.js, verificato integrato da sessione #611/#612) ora presenti | Gap #2 di #610 (Node.js mancante) risulta chiuso: file esiste e _index lo referenzia |
-| dev/runtime/, dev/processi/ | 2 _index letti | Alta come hub, ma **isolati nel grafo `related`** | Struttura a schede coerente con pattern hub validato altrove | Gap di connettività trovato (non di contenuto) — vedi sotto |
+| monitoring/ | 20 file (incl. 5 `_index`) | ~95% contenuto | Alta: ogni file letto (sre/_index, alerting/_index, tools/_index, tools/_index dettaglio) ha troubleshooting reale e best practice specifiche | Nessun gap di contenuto — gap solo di connettività hub→figli |
+| iac/ | 17 file (incl. 4 `_index`) | ~95% contenuto | Molto alta: terraform (5 sotto-argomenti + testing + ci-cd), ansible (2), pulumi (3), crossplane (1, molto dettagliato: 500+ righe, 4 scenari troubleshooting) | Nessun gap di contenuto reale — solo incoerenza narrativa minore nell'_index |
 
 ## Analisi di questa sessione
 
-File analizzati (10): `databases/postgresql/extensions.md`,
-`databases/nosql/cassandra.md`, `databases/kubernetes-cloud/db-su-kubernetes.md`,
-`dev/runtime/_index.md`, `dev/processi/_index.md`, `dev/linguaggi/go.md`,
-`dev/linguaggi/python.md`, `dev/linguaggi/_index.md`, `dev/linguaggi/dotnet.md`,
-`dev/linguaggi/java-quarkus.md`. Verificati inoltre via `grep` i campi `related`
-di `dev/api/_index`, `dev/resilienza/_index`, `dev/integrazioni/_index`,
-`ci-cd/_index`, `dev/_index` per la coerenza bidirezionale.
+File analizzati (10): `monitoring/_index.md`, `monitoring/tools/_index.md`,
+`monitoring/sre/_index.md`, `monitoring/alerting/_index.md`,
+`iac/_index.md`, `iac/crossplane/_index.md`, `iac/crossplane/fondamentali.md`,
+`iac/ansible/_index.md`, `iac/pulumi/_index.md`, `iac/terraform/_index.md`.
 
-**Verificato NON un gap — contenuto databases/ e dev/linguaggi/**: tutti i file
-letti sono completi, con troubleshooting operativo reale (comandi `nodetool`,
-`kubectl cnpg`, query SQL diagnostiche) e nessuna sezione promessa-e-assente.
-Il gap Node.js segnalato in #610 è chiuso (nodejs.md esiste, `_index.md`
-aggiornato `last_updated: 2026-09-27`).
+**Verificato NON un gap — contenuto monitoring/ e iac/**: tutti i file di
+dettaglio ispezionati (specialmente `crossplane/fondamentali.md`, 520 righe,
+4 scenari di troubleshooting con comandi `kubectl` reali) sono completi,
+con esempi concreti, best practice e anti-pattern. Nessuna sezione
+promessa-e-assente.
 
-**Gap reale #1 — `dev/linguaggi/_index.md` isola nel grafo `related`**:
-`related: []` nonostante sia citato da `dev/api/_index` e (per due file figli)
-da `dev/runtime/_index`. Nessun link di ritorno. → prop-065 (fix-relation).
+**Gap reale #1 — `monitoring/sre/_index.md` elenca 1 argomento su 5**:
+la cartella contiene `slo-sla-sli.md`, `error-budget.md`,
+`capacity-planning.md`, `chaos-engineering.md`, `incident-management.md`
+(tutti `status: complete`), ma l'hub ("## Argomenti") linka solo
+`slo-sla-sli.md`. 4 file completi sono irraggiungibili dalla navigazione
+del sito. → prop-067 (extend-section, priority high — gap più ampio
+trovato in questa sessione).
 
-**Gap reale #2 — `dev/processi/_index.md` completamente irraggiungibile via
-`related`**: campo assente dal frontmatter, e `grep -rn "dev/processi" docs/`
-non trova nessun riferimento da altri file. Tema (branching strategy, quality
-gate, DORA metrics) fortemente sovrapposto a `ci-cd/`, che non lo referenzia.
-→ prop-066 (fix-relation, tocca anche `ci-cd/_index.md` per la reciprocità).
+**Gap reale #2 — `monitoring/alerting/_index.md` non elenca
+`prometheus-rules.md`**: la cartella ha 2 file, l'hub ne linka 1
+(`alertmanager.md`). → prop-068 (extend-section, priority medium).
+
+**Gap reale #3 — `monitoring/tools/_index.md` non elenca
+`continuous-profiling.md`**: 6 file nella cartella, 5 nell'elenco
+puntato dell'hub. → prop-069 (extend-section, priority medium).
+
+**Gap minore #4 — `iac/_index.md`**: la tabella "Strumenti Coperti" lista
+Terraform/Ansible/Pulumi/Crossplane come pari livello, ma "## Percorso di
+Apprendimento" si ferma al punto 4 (Ansible) senza mai citare Pulumi o
+Crossplane, entrambi sezioni sviluppate. → prop-070 (extend-section,
+priority low — incoerenza narrativa, non un vero blocco di scoperta
+perché la tabella sopra li cita comunque).
+
+Pattern ricorrente rilevato: **hub `_index.md` che invecchia peggio dei
+file figli** — quando si aggiunge un file di dettaglio a una sezione, la
+lista "## Argomenti" dell'_index non viene sempre aggiornata in parallelo.
+Stesso pattern già visto in #613 (dev/linguaggi, dev/processi) ma lì era
+il campo `related` a mancare, qui è la lista di navigazione interna alla
+sezione stessa — variante più subdola perché il file esiste ed è pure
+linkato da `related` altrove, solo non dall'hub della propria categoria.
 
 ## Categorie vicine alla saturazione
 
-- **databases/** (incl. dettagli postgresql/nosql/kubernetes-cloud): confermata
-  satura — coverage alta, nessun gap di contenuto in questa sessione.
-- **dev/linguaggi/**: confermata satura per contenuto (6/6 linguaggi coperti,
-  simmetria tra file completa); gap residuo solo di connettività (prop-065).
-- **security/**, **messaging/rabbitmq**, **networking**, **cloud/aws**,
-  **ci-cd/testing**, **dev/testing, dev/data, dev/resilienza, dev/sicurezza,
-  dev/integrazioni**: confermati saturi nelle sessioni precedenti (#591-596,
-  #607, #609, #610).
+- **monitoring/** e **iac/**: confermate mature per contenuto in questa
+  sessione — nessun gap di `new-file`/`extend-section` sostanziale oltre
+  ai 4 fix di connettività sopra.
+- Confermate sature nelle sessioni precedenti (invariato): **databases/**,
+  **dev/linguaggi/**, **security/**, **messaging/rabbitmq**, **networking**,
+  **cloud/aws**, **ci-cd/testing**, **dev/testing, dev/data, dev/resilienza,
+  dev/sicurezza, dev/integrazioni**.
 
 ## Categorie con gap reali
 
-- **dev/linguaggi/_index.md**: nessun gap di contenuto, gap di connettività
-  (`related` vuoto) — prop-065.
-- **dev/processi/_index.md**: nessun gap di contenuto, isola completa nel
-  grafo `related` — prop-066.
+- **monitoring/sre/_index.md**: 4/5 argomenti non raggiungibili dall'hub —
+  prop-067 (high).
+- **monitoring/alerting/_index.md**: 1/2 argomenti non raggiungibile —
+  prop-068 (medium).
+- **monitoring/tools/_index.md**: 1/6 argomenti non raggiungibile —
+  prop-069 (medium).
+- **iac/_index.md**: percorso di apprendimento incompleto rispetto alla
+  tabella strumenti — prop-070 (low).
 
 ## Focus usato in questa sessione
 
-`docs/databases/` (dettaglio) + `docs/dev/` (runtime, processi, linguaggi
-dettaglio), come raccomandato dal report #610. Entrambe le aree risultano
-mature sul piano del contenuto: non emergono gap che superino il test di
-utilità per proposte `new-file`/`extend-section`. Le uniche proposte generate
-sono di connettività (`fix-relation`), categoria di proposta sempre ammessa
-indipendentemente dal freno di saturazione.
+`docs/monitoring/` e `docs/iac/`, come raccomandato dal report #613 (aree
+mai esplorate in focus esplicito nelle sessioni #591-#615). Entrambe
+risultano mature sul contenuto; il valore emerso è interamente di
+connettività hub→figli (pattern "_index non aggiornato quando si aggiunge
+un file"), coerente con `allow_zero_proposals` ma non azzerato perché
+i gap di navigazione superano il test di utilità (contenuto reale
+invisibile, non ridondanza).
 
 ## Prossima sessione consigliata
 
-2026-09-28 o successiva. Nessuna area di `docs/dev/` o `docs/databases/`
-richiede ulteriore esplorazione di contenuto a breve termine (entrambe verificate
-mature su più sessioni). Ruotare il focus su un'area non ancora esplorata in
-profondità nelle ultime 4 sessioni: `docs/monitoring/` (mai stata in focus
-esplicito secondo i report #607-#613) e/o `docs/iac/` (terraform/opentofu/
-pulumi/ansible — coverage non verificata di recente).
+Non prima di 2026-10-04. Nessuna delle due aree richiede ulteriore
+esplorazione di contenuto a breve termine. Suggerito un controllo
+mirato — non un'intera sessione di analisi — su altri hub `_index.md`
+della KB per verificare se il pattern "elenco argomenti disperso rispetto
+ai file reali della cartella" si ripete altrove (es. `ci-cd/jenkins/_index.md`,
+che ha 5 file figli, o `cloud/aws/*/​_index.md`, mai controllati con
+questo criterio specifico). In assenza di quel controllo, ruotare il
+focus su `docs/security/` (ultima verifica di contenuto risalente a
+#591-#596, non ancora ri-controllata con il criterio di connettività
+hub) o su `docs/networking/` (stesso discorso).
