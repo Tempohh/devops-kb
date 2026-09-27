@@ -1,0 +1,59 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "Aggiungere `iac/terraform/ci-cd` e `iac/terraform/testing` al campo\
+  \ `related`\ndel frontmatter di `state-management.md` (attualmente:\n[iac/terraform/fondamentali,\
+  \ iac/terraform/moduli, cloud/aws/compute/ec2,\ncloud/aws/iam/_index]).\nAggiungere\
+  \ due blocchi admonition nella sezione \"Relazioni\":\n\n  ??? info \"Terraform\
+  \ CI/CD — Backend Remoto come Prerequisito\"\n      Il workflow PR-based (Atlantis\
+  \ o GitHub Actions) si appoggia sempre\n      a un backend remoto con locking: senza\
+  \ state condiviso, l'apply\n      automatico dalla CI non è sicuro con più di un\
+  \ contributore.\n\n      **Approfondimento completo →** [Terraform CI/CD](ci-cd.md)\n\
+  \n  ??? info \"Terraform Testing — Verifica dello State\"\n      `terraform plan\
+  \ -refresh-only` (drift detection) e i test di\n      integrazione con `terraform\
+  \ test` o Terratest operano sullo stesso\n      state remoto: capire locking e backend\
+  \ è prerequisito per non\n      introdurre race condition nei test paralleli.\n\n\
+  \      **Approfondimento completo →** [Terraform Testing e Quality Gate](testing.md)\n\
+  \nAggiornare `last_updated`.\n"
+effort: small
+id: prop-120
+last_analyzed: 2026-09-28
+priority: medium
+rationale: 'Sia `ci-cd.md` (related include iac/terraform/state-management, con
+
+  admonition dedicata "Terraform State Management — Backend e Locking") sia
+
+  `testing.md` (related include iac/terraform/state-management) puntano a
+
+  state-management.md, ma il file non ricambia in nessuno dei due casi.
+
+  Verificato leggendo per intero tutti e tre i file in questa sessione: è
+
+  un''asimmetria reale, non simmetria formale — un lettore di
+
+  state-management.md che vuole sapere come automatizzare apply in CI o come
+
+  interagisce lo state con i test di integrazione non trova il rimando.
+
+  '
+status: approved
+tags:
+- terraform
+- iac
+- state
+- ci-cd
+- testing
+- connettivita
+target_file: docs/iac/terraform/state-management.md
+title: 'Fix relazione: state-management.md non ricambia link da ci-cd.md e testing.md'
+type: fix-relation
+utility_test:
+  outcome: Segue il link a ci-cd.md direttamente da state-management.md invece di
+    scoprirlo per caso
+  reader: DevOps mid-senior che sta introducendo automazione CI/CD per Terraform in
+    un team che finora ha applicato da locale
+  scenario: Ha appena configurato il backend S3+DynamoDB leggendo state-management.md
+    e ora deve capire come collegarlo a un workflow Atlantis/GitHub Actions senza
+    race condition sul lock
+  score: medium
+  without_kb: Deve leggere l'intero indice della categoria iac/terraform o usare la
+    ricerca full-text sperando di trovare ci-cd.md
