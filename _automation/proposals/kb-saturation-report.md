@@ -1,4 +1,4 @@
-# KB Saturation Report — 2026-09-27 (ciclo #591)
+# KB Saturation Report — 2026-09-27 (ciclo #594)
 
 ## Gate meccanico
 
@@ -10,54 +10,59 @@ headroom: 23
 category_saturated_pct: 85
 ```
 
-Non satura. Ciclo precedente (auto #586, prop-050/051/052/053) ha già chiuso
-i 4 file "draft" sostanziali (network-troubleshooting, nginx-haproxy,
-wireguard, ipv6-dual-stack) — verificati oggi tutti promossi a `reviewed`
-nei commit #587-590. `grep status: draft` su `docs/` restituisce **zero**
-risultati in tutta la KB.
+Non satura a livello globale. Sessione consecutiva nello stesso giorno del ciclo
+#591 (stesso focus tematico: `docs/networking/` e `docs/cloud/aws/`), rieseguita
+da zero con campionamento indipendente di 10 file di contenuto (non hub).
 
 ## Copertura stimata per categoria (focus sessione)
 
 | Categoria | Files (Glob) | Coverage % | Depth | Note |
 |-----------|-------|------------|-------|------|
-| networking/ | 44 | ~90% | alta | Nessun draft residuo; 1 hub `needs-review` (kubernetes/_index) |
-| cloud/aws/networking/ | 10 | ~90% | alta | Nessun draft residuo; hub `_index` `needs-review` |
-| cloud/aws/ (totale) | ~46 | alta | alta | Copertura ampia, invariata |
+| networking/ | 43 | ~90% | alta | Nessun draft/needs-review residuo dopo commit #593 |
+| cloud/aws/ | 46 | ~90% | alta | Nessun draft/needs-review residuo dopo commit #592 |
+
+## Analisi di dettaglio
+
+Campione letto (10 file, tutti status `complete`, tutti ≥217 righe, tutti con
+frontmatter ricco: `search_keywords` ≥9, `related` ≥3): `quic.md`, `tcpip.md`,
+`concetti-base.md` (service-mesh), `global-accelerator.md`, `vpc-lattice.md`,
+`gateway-api.md`, `bgp.md`, `ebpf.md`, `api-gateway.md` (AWS),
+`elastic-load-balancing.md`. Nessun file sotto la soglia minima (150 righe),
+nessuna isola di connettività (`related` sempre popolato con link validi),
+nessun contenuto superficiale rispetto alla documentazione ufficiale.
+
+Controllo `status` su tutta la KB: **zero** file `draft` (fuori dal template),
+**zero** file `needs-review` in `networking/` o `cloud/aws/` — i due hub
+(`cloud/aws/networking/_index.md`, `networking/kubernetes/_index.md`) segnalati
+nel ciclo precedente sono ora `status: reviewed` con `last_verified: 2026-09-27`
+(commit #592, #593).
 
 ## Categorie vicine alla saturazione
 
-- **cloud/aws/networking/** e **networking/**: contenuto tecnico profondo,
-  nessun draft residuo. Nuovi `new-file` ammessi solo con gap operativo
-  esplicito (nessuno trovato in questo ciclo).
+- **networking/** e **cloud/aws/networking/**: seconda sessione di fila senza
+  gap trovati. Il focus tematico fisso di `proposal-prompt.md` su queste due
+  aree ha esaurito il margine utile a breve termine.
 
 ## Categorie con gap reali
 
-- **Nessun gap di contenuto o navigazione nuovo** in `networking/` e
-  `cloud/aws/networking/` in questo ciclo.
-- **Pattern residuo, non un gap di contenuto**: 5 file in tutta la KB
-  restano `status: needs-review` (nessuno `draft`). Due sono hub `_index`
-  nel focus tematico corrente, mai certificati dopo l'ultima estensione:
-  `docs/cloud/aws/networking/_index.md` (link Global Accelerator/API
-  Gateway/VPC Lattice aggiunti dal ciclo precedente) e
-  `docs/networking/kubernetes/_index.md` (sezione Gateway API aggiunta).
-  Generate 2 proposte `review` mirate su questi due hub. Gli altri 3
-  `needs-review` (`cloud/aws/compute/containers-ecs-eks.md`,
-  `cloud/finops/fondamentali.md`, `containers/kubernetes/networking.md`)
-  sono fuori dal focus tematico corrente e restano candidati per il
-  prossimo ciclo con focus diverso.
+- Nessuno individuato in questo ciclo, nel focus assegnato.
+- Fuori focus (solo per riferimento, non azionati qui): 3 file restano
+  `status: needs-review` senza `last_verified` — `cloud/aws/compute/containers-ecs-eks.md`,
+  `cloud/finops/fondamentali.md`, `containers/kubernetes/networking.md`.
+- Categorie più piccole in assoluto (candidate a nuovo focus): `iac/` (14 file),
+  `monitoring/` (20), `security/` (26).
 
 ## Proposte generate questo ciclo
 
-- prop-054 (review, medium): docs/cloud/aws/networking/_index.md
-- prop-055 (review, medium): docs/networking/kubernetes/_index.md
+Nessuna. Il test di utilità ("chi è il lettore, cosa gli permette di fare in
+più rispetto a 2 click sulla documentazione ufficiale") non è superato da
+nessun gap nel focus corrente — il focus è stato già lavorato in profondità nel
+ciclo #591 dello stesso giorno.
 
 ## Prossima sessione consigliata
 
-Data: 2026-10-04 (o al prossimo ciclo `proposal` schedulato).
-Focus tematico suggerito: chiudere i restanti 3 `needs-review` fuori focus
-(`cloud/aws/compute/containers-ecs-eks.md`, `cloud/finops/fondamentali.md`,
-`containers/kubernetes/networking.md`); verificare se `_automation/config.yaml`
-debba includere `status: needs-review` tra i criteri di selezione automatica
-per i task `review` (oggi basati solo su `last_verified`), dato che questi
-file non hanno mai `last_verified` impostato e quindi non emergono nel ciclo
-standard.
+Data: 2026-10-04 o al prossimo ciclo `proposal` schedulato.
+Focus tematico suggerito: cambiare focus da `networking/`+`cloud/aws/` (due
+cicli consecutivi a zero gap) a `iac/` o `monitoring/`, le categorie più
+piccole della KB; in subordine chiudere i 3 `needs-review` fuori focus elencati
+sopra.
