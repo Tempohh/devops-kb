@@ -7,9 +7,10 @@ search_keywords: [OTel, OpenTelemetry, OTEL, telemetria, osservabilità, distrib
 parent: monitoring/fondamentali
 related: [monitoring/tools/prometheus, monitoring/tools/grafana, monitoring/tools/loki, monitoring/tools/jaeger-tempo, monitoring/sre/slo-sla-sli, networking/service-mesh/istio, monitoring/tools/continuous-profiling]
 official_docs: https://opentelemetry.io/docs/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-09-27
+last_verified: 2026-09-28
 ---
 
 # OpenTelemetry
@@ -216,23 +217,23 @@ processors:
     limit_mib: 512
 
 exporters:
-  jaeger:
-    endpoint: jaeger:14250
+  otlp/jaeger:            # Jaeger accetta OTLP nativamente dalla v1.35 — l'exporter
+    endpoint: jaeger:4317  # dedicato "jaeger" è deprecato e rimosso dal Collector
     tls:
       insecure: true
   prometheus:
     endpoint: 0.0.0.0:8889
   loki:
     endpoint: http://loki:3100/loki/api/v1/push
-  logging:
-    loglevel: debug
+  debug:                  # sostituisce l'exporter "logging", deprecato e rimosso
+    verbosity: detailed
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [jaeger]
+      exporters: [otlp/jaeger]
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, batch]

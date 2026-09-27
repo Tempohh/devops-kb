@@ -7,9 +7,10 @@ search_keywords: [continuous profiling, profiling continuo, flame graph, flamegr
 parent: monitoring/tools
 related: [monitoring/fondamentali/tre-pilastri-osservabilita, monitoring/fondamentali/opentelemetry, monitoring/tools/prometheus, monitoring/tools/grafana, monitoring/tools/otel-collector-kubernetes]
 official_docs: https://grafana.com/docs/pyroscope/latest/
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-09-27
+last_verified: 2026-09-28
 ---
 
 # Continuous Profiling
