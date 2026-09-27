@@ -1,0 +1,47 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "Il file è `status: needs-review` (`last_updated: 2026-09-26`,\n`last_verified:\
+  \ 2026-09-27`) e contiene un commento HTML esplicito\n`<!-- REVIEW: verificare stato\
+  \ App Runner — AWS ha annunciato che non\naccetta nuovi clienti dal 30/04/2026 ...\
+  \ -->` (riga 452) — un segnale\ndiretto lasciato per una revisione futura, non ancora\
+  \ chiuso.\nUn task `review` (Opus/high) deve:\n- Verificare lo stato reale di App\
+  \ Runner (accettazione nuovi clienti,\n  eventuale sunset) e rimuovere/aggiornare\
+  \ il commento REVIEW con\n  l'informazione confermata.\n- Verificare la sezione\
+  \ ECS vs EKS (App Mesh end-of-support 30/09/2026,\n  ECS Managed Instances, Karpenter\
+  \ v1 NodePool schema) per coerenza con\n  lo stato attuale dei servizi.\n- Se tutto\
+  \ regge dopo la verifica, promuovere a `status: reviewed`.\n"
+effort: medium
+id: prop-098
+last_analyzed: 2026-09-27
+priority: medium
+rationale: 'Lettore: chi decide tra ECS e EKS per un nuovo workload containerizzato
+  su
+
+  AWS. Un commento REVIEW lasciato inline nel markdown è un debito esplicito
+
+  — il file segnala da solo che contiene un''incertezza non risolta
+
+  (disponibilità App Runner), che è esattamente il tipo di gap che un
+
+  task `review` deve chiudere prima che il file possa considerarsi affidabile.
+
+  '
+status: approved
+tags:
+- aws
+- ecs
+- eks
+- apprunner
+- review
+target_file: docs/cloud/aws/compute/containers-ecs-eks.md
+title: 'Review: ECS/EKS/Containers AWS — needs-review con annotazioni REVIEW inline'
+type: review
+utility_test:
+  outcome: Ottiene una risposta verificata invece di un warning generico 'potrebbe
+    non essere disponibile'
+  reader: Architect che valuta App Runner vs ECS Fargate per un nuovo servizio
+  scenario: Deve sapere se App Runner è ancora un'opzione valida per un progetto che
+    parte ora
+  score: medium
+  without_kb: Dovrebbe cercare annunci AWS recenti per capire lo stato di sunset di
+    App Runner

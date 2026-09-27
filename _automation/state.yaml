@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-09-27T21:40:32.504939+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 962
+total_ops: 967
 total_runs: 463
 queue:
 - id: W-001
@@ -5743,6 +5743,116 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '663'
+  type: review
+  path: docs/cloud/finops/fondamentali.md
+  category: cloud
+  priority: P1
+  status: pending
+  reason: "Il file è in status `needs-review` con `last_updated: 2026-03-29` — è rimasto\nin questo stato per ~6 mesi senza\
+    \ mai passare a `reviewed`, mentre altri file\nneeds-review della sessione odierna (#659→#662) sono freschi di modifica.\n\
+    Un task `review` (Opus/high) deve:\n- Verificare l'attualità dei prezzi/comandi citati (Reserved Instances,\n  Savings\
+    \ Plans, GCP CUD, tool come Infracost/Kubecost) — 6 mesi in ambito\n  FinOps sono sufficienti per drift su pricing model\
+    \ o nomi di feature.\n- Controllare i tre blocchi CLI multi-cloud (AWS `ce`/`budgets`, Azure\n  `consumption budget`/`policy`,\
+    \ GCP `billing budgets`/BigQuery export) per\n  sintassi corrente.\n- Se il contenuto regge, promuovere a `status: reviewed`\
+    \ e impostare\n  `last_verified`; se serve aggiornamento, applicarlo e solo poi promuovere.\n"
+  proposal_id: prop-096
+- id: '664'
+  type: review
+  path: docs/containers/kubernetes/networking.md
+  category: containers
+  priority: P2
+  status: pending
+  reason: "Il file è `status: needs-review` con `last_updated: 2026-09-27` (oggi) — ha\nricevuto un'espansione consistente\
+    \ (sezioni Service/NodePort/LoadBalancer,\ntabelle di latenza, caso migrazione cluster-to-cluster molto dettagliato,\n\
+    >800 righe). Il gate qualità impone `needs-review` per modifiche >30% del\ncontenuto, ma il file non ha ancora avuto una\
+    \ revisione reale.\nUn task `review` (Opus/high) deve:\n- Verificare la coerenza interna tra le molte tabelle comparative\
+    \ aggiunte\n  (ClusterIP/NodePort/LoadBalancer/ExternalName/Headless) — nessuna\n  contraddizione tra la tabella \"visione\
+    \ d'insieme\" e le sezioni di dettaglio.\n- Controllare che i rimandi a `../../networking/kubernetes/{cni,ingress,network-policies}.md`\n\
+    \  siano coerenti con quei file (nessun contenuto duplicato o contraddetto).\n- Validare gli ordini di grandezza di latenza\
+    \ citati (tabella \"da dove\n  vengono i millisecondi\") come indicativi e non presentati come misure\n  assolute.\n-\
+    \ Se il contenuto regge, promuovere a `status: reviewed` + `last_verified`.\n"
+  proposal_id: prop-097
+- id: '665'
+  type: review
+  path: docs/cloud/aws/compute/containers-ecs-eks.md
+  category: cloud
+  priority: P2
+  status: pending
+  reason: "Il file è `status: needs-review` (`last_updated: 2026-09-26`,\n`last_verified: 2026-09-27`) e contiene un commento\
+    \ HTML esplicito\n`<!-- REVIEW: verificare stato App Runner — AWS ha annunciato che non\naccetta nuovi clienti dal 30/04/2026\
+    \ ... -->` (riga 452) — un segnale\ndiretto lasciato per una revisione futura, non ancora chiuso.\nUn task `review` (Opus/high)\
+    \ deve:\n- Verificare lo stato reale di App Runner (accettazione nuovi clienti,\n  eventuale sunset) e rimuovere/aggiornare\
+    \ il commento REVIEW con\n  l'informazione confermata.\n- Verificare la sezione ECS vs EKS (App Mesh end-of-support 30/09/2026,\n\
+    \  ECS Managed Instances, Karpenter v1 NodePool schema) per coerenza con\n  lo stato attuale dei servizi.\n- Se tutto\
+    \ regge dopo la verifica, promuovere a `status: reviewed`.\n"
+  proposal_id: prop-098
+- id: '666'
+  type: audit
+  path: docs/databases/postgresql/extensions.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: '`docs/databases/postgresql/extensions.md` ha `related: [sql-avanzato/partitioning,
+
+    fondamentali/modelli-dati, nosql/redis]` — nessuna voce verso i tre file
+
+    fratelli nella stessa cartella (`connection-pooling.md`, `mvcc-vacuum.md`,
+
+    `replicazione.md`), pur essendo collegati tutti dallo stesso hub
+
+    `postgresql/_index.md`. Verificato con Glob + lettura diretta dei 4 file:
+
+    nessuno dei tre fratelli linka a `extensions.md` nel proprio `related`,
+
+    e viceversa.
+
+    Aggiungere a `extensions.md`:
+
+    `related: [..., databases/postgresql/mvcc-vacuum, databases/postgresql/connection-pooling]`
+
+    (pg_cron e pg_stat_statements toccano temi di manutenzione/performance
+
+    trattati in mvcc-vacuum; pgvector/TimescaleDB generano dati che finiscono
+
+    dietro connection-pooling in produzione — collegamento tematico reale, non
+
+    solo simmetria formale).
+
+    '
+  proposal_id: prop-099
+- id: '667'
+  type: audit
+  path: docs/databases/postgresql/mvcc-vacuum.md
+  category: databases
+  priority: P3
+  status: pending
+  reason: '`connection-pooling.md` ha una sezione `??? info "MVCC e Vacuum —
+
+    PostgreSQL internals"` con link esplicito a `mvcc-vacuum.md` (le
+
+    transazioni corte in transaction mode riducono l''accumulo di dead tuple).
+
+    `mvcc-vacuum.md`, però, ha `related: [fondamentali/transazioni-concorrenza,
+
+    fondamentali/indici, sql-avanzato/query-optimizer]` — non include
+
+    `postgresql/connection-pooling`, quindi la relazione è asimmetrica
+
+    (protocollo "Segnalazione Relazioni": va toccata anche B quando si collega
+
+    A→B).
+
+    Aggiungere `databases/postgresql/connection-pooling` al `related` di
+
+    `mvcc-vacuum.md` (opzionale ma coerente: aggiungere anche una breve
+
+    admonition `??? info` di rimando, simmetrica a quella già presente in
+
+    connection-pooling.md).
+
+    '
+  proposal_id: prop-100
 completed:
 - id: '648'
   path: docs/ai/agents/_index.md

@@ -1,0 +1,58 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: '`connection-pooling.md` ha una sezione `??? info "MVCC e Vacuum —
+
+  PostgreSQL internals"` con link esplicito a `mvcc-vacuum.md` (le
+
+  transazioni corte in transaction mode riducono l''accumulo di dead tuple).
+
+  `mvcc-vacuum.md`, però, ha `related: [fondamentali/transazioni-concorrenza,
+
+  fondamentali/indici, sql-avanzato/query-optimizer]` — non include
+
+  `postgresql/connection-pooling`, quindi la relazione è asimmetrica
+
+  (protocollo "Segnalazione Relazioni": va toccata anche B quando si collega
+
+  A→B).
+
+  Aggiungere `databases/postgresql/connection-pooling` al `related` di
+
+  `mvcc-vacuum.md` (opzionale ma coerente: aggiungere anche una breve
+
+  admonition `??? info` di rimando, simmetrica a quella già presente in
+
+  connection-pooling.md).
+
+  '
+effort: small
+id: prop-100
+last_analyzed: 2026-09-27
+priority: low
+rationale: 'Lettore: chi legge mvcc-vacuum.md per capire perché le dead tuple si
+
+  accumulano e vuole sapere come la durata delle transazioni (governata dal
+
+  pool mode di PgBouncer) impatta il bloat — oggi la relazione esiste solo
+
+  in una direzione.
+
+  '
+status: approved
+tags:
+- postgresql
+- mvcc
+- vacuum
+- connettività
+- fix-relation
+target_file: docs/databases/postgresql/mvcc-vacuum.md
+title: 'Fix-relation: mvcc-vacuum.md non reciproca il link da connection-pooling.md'
+type: fix-relation
+utility_test:
+  outcome: Trova il rimando a connection-pooling.md direttamente nel related/Relazioni
+    del file che sta leggendo
+  reader: DBA che investiga un bloat rate anomalo e sospetta connessioni long-lived
+  scenario: Ha letto mvcc-vacuum.md per il bloat e cerca la causa applicativa (pool
+    mode)
+  score: low
+  without_kb: Deve ricordarsi che l'altro file esiste o passare dall'indice postgresql/_index.md
