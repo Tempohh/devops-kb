@@ -8,7 +8,7 @@ parent: /
 official_docs: https://microservices.io/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-09-27
 ---
 
 # Sviluppo Microservizi
@@ -48,6 +48,13 @@ La DevOps KB copre lo stesso sistema da angolazioni diverse. È importante saper
     Go, Java (JVM/GraalVM), Python, Node.js. Caratteristiche chiave per microservizi: startup time, memory footprint, concurrency model, ecosystem.
 
     → [Linguaggi](linguaggi/_index.md)
+
+-   :material-speedometer: **Runtime & Performance**
+
+    ---
+    JVM tuning (heap, GC, JIT), resource sizing (CPU/memory request-limit), profiling e diagnosi di memory leak/CPU throttling.
+
+    → [Runtime & Performance](runtime/_index.md)
 
 -   :material-api: **API Design**
 
@@ -90,6 +97,13 @@ La DevOps KB copre lo stesso sistema da angolazioni diverse. È importante saper
     TLS/mTLS dal codice: Java KeyStore/TrustStore, SSLContext, .NET X509Certificate2, Go tls.Config. Rotation certificati senza restart, debug TLS.
 
     → [Sicurezza](sicurezza/_index.md)
+
+-   :material-source-branch: **Processi di Sviluppo**
+
+    ---
+    SDLC (Software Development Life Cycle — ciclo di vita del software), git workflow, inner/outer loop, developer experience.
+
+    → [Processi di Sviluppo](processi/_index.md)
 
 </div>
 
@@ -232,6 +246,8 @@ Developer Stack — Dal Codice al Cluster
 | Rendere un servizio fault-tolerant | Resilienza → Circuit Breaker → Retry/Timeout |
 | Testare un microservizio in isolamento | Testing → Contract Testing → Testcontainers |
 | Ottimizzare il database per un servizio ad alto carico | Data Layer → Connection Pooling → Cache |
+| Tunare JVM/heap o diagnosticare memory leak | Runtime & Performance → JVM Tuning → Resource Tuning |
+| Migliorare il ciclo git/PR e l'inner loop del team | Processi di Sviluppo → Developer Workflow → SDLC |
 
 ---
 
