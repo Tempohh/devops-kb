@@ -7,9 +7,10 @@ search_keywords: [nginx, haproxy, reverse proxy, load balancer, upstream, backen
 parent: networking/load-balancing/_index
 related: [networking/load-balancing/algoritmi, networking/load-balancing/layer4-vs-layer7, networking/load-balancing/ha-e-failover, networking/kubernetes/ingress, cloud/aws/networking/elastic-load-balancing, networking/fondamentali/tls-ssl-basics]
 official_docs: https://docs.haproxy.org/
-status: draft
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-09-26
+last_verified: 2026-09-27
 ---
 
 # NGINX e HAProxy
