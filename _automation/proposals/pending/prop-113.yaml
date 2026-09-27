@@ -1,0 +1,38 @@
+id: prop-113
+title: "Reciprocare related in java-spring-boot.md verso 6 file dev/* che lo citano"
+type: fix-relation
+priority: high
+target_file: docs/dev/linguaggi/java-spring-boot.md
+effort: small
+description: |
+  Il campo `related` attuale di java-spring-boot.md è
+  `[messaging/kafka/sviluppo/spring-kafka, dev/linguaggi/java-quarkus]`.
+  Sei file in dev/resilienza, dev/sicurezza e dev/integrazioni citano
+  esplicitamente `dev/linguaggi/java-spring-boot` nel proprio `related`, ma
+  nessuno è reciprocato (verificato via grep mirato, nessun match nella
+  direzione opposta):
+  - dev/resilienza/circuit-breaker.md
+  - dev/resilienza/health-checks.md
+  - dev/sicurezza/secrets-config.md
+  - dev/sicurezza/tls-da-codice.md
+  - dev/integrazioni/database-patterns.md
+  - dev/integrazioni/rabbitmq-client.md
+  Aggiungere tutti e sei alla lista `related` di java-spring-boot.md e
+  aggiornare `last_updated`.
+rationale: |
+  DevOps che apre java-spring-boot.md per capire come integrare Spring Boot
+  non trova link verso i pattern operativi (circuit breaker, health checks,
+  secrets, TLS da codice, pattern DB, client RabbitMQ) che lo citano come
+  linguaggio di riferimento — deve già sapere che esistono per trovarli.
+  Stesso pattern sistemico già osservato per crossplane/operators-crd
+  (prop-111) e observability-code/jaeger-tempo (prop-112): i file
+  "linguaggio" fanno da hub implicito ma non linkano indietro ai pattern che
+  li usano come esempio concreto.
+utility_test:
+  reader: "Sviluppatore Java che consulta java-spring-boot.md per capire cosa la KB copre su Spring Boot"
+  scenario: "Vuole sapere se esistono già pattern KB su resilienza, secrets o integrazioni DB applicati a Spring Boot"
+  outcome: "Trova subito i 6 file correlati dalla pagina del linguaggio, senza dover indovinare o cercare per categoria"
+  without_kb: "Dovrebbe navigare dev/resilienza, dev/sicurezza, dev/integrazioni una per una sperando di trovare esempi Spring Boot"
+  score: high
+tags: [java, spring-boot, connectivity, fix-relation]
+last_analyzed: 2026-09-28
