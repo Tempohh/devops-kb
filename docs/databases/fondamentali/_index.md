@@ -6,7 +6,7 @@ tags: [database, fondamentali, acid, cap, nosql, indici, transazioni]
 parent: databases
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-09-27
 ---
 
 # Fondamentali dei Database
@@ -29,3 +29,6 @@ Livelli di isolamento (Read Uncommitted → Serializable), i fenomeni che evitan
 
 ### [Sharding](sharding.md)
 La distribuzione orizzontale dei dati: range sharding, hash sharding, directory-based. Hotspot, resharding, cross-shard queries, distributed transactions. Differenza tra sharding applicativo, middleware (Vitess, Citus) e sharding nativo (MongoDB, Cassandra, DynamoDB).
+
+### [Schema Migrations](schema-migrations.md)
+Flyway, Liquibase, Atlas, golang-migrate. Migrazioni versionate/imperative vs declarative/state-based, rollback, drift detection, expand-and-contract per zero-downtime migration.
