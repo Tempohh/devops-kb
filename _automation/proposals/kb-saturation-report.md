@@ -1,4 +1,4 @@
-# KB Saturation Report — 2026-09-27 (sessione #609)
+# KB Saturation Report — 2026-09-27 (sessione #610)
 
 ## Gate meccanico
 
@@ -7,82 +7,82 @@ file_count: 314, target: 330, over_target: false, headroom: 16
 category_saturated_pct: 85, allow_zero_proposals: true
 ```
 
-Sotto target. Focus ruotato su `docs/security/` e `docs/messaging/` (raccomandazione
-del report #607: "security/ mai stato in focus esplicito" / "messaging/ solo
-kafka+rabbitmq, coverage da verificare").
+Sotto target. Focus ruotato su `docs/dev/` (raccomandazione del report #609:
+"mai stato in focus esplicito, categoria ampia e potenzialmente eterogenea").
 
 ## Copertura stimata per categoria
 
 | Categoria | Files | Coverage % | Depth | Note |
 |-----------|-------|------------|-------|------|
-| security | 25 (+8 `_index`) | ~90% | Molto alta: autenticazione (OAuth2/OIDC, JWT, mTLS/SPIFFE), autorizzazione (RBAC/ABAC/ReBAC, OPA), secret-management (Vault + K8s Secrets con Sealed Secrets/ESO/Reloader trattati nello stesso file), PKI, supply-chain (4 file), compliance/audit (SIEM, Falco, cloud audit log, framework compliance) | Nessun gap operativo trovato |
-| messaging/rabbitmq | 7 (+1 `_index`) | ~90% | Alta: architettura AMQP, affidabilità/Quorum Queues, Streams, DLX/retry, Federation/Shovel, clustering, deployment K8s (Cluster+Topology Operator, TLS, Prometheus/Grafana, Amazon MQ) | Asimmetria con Kafka (44 file) è per design — RabbitMQ non necessita pari profondità, i topic esistenti sono trattati a fondo |
+| dev/ | 27 | ~85% | Alta: la maggior parte delle sottocategorie usa il pattern "1 file `_index.md` = trattazione completa del tema" (testing, data, resilienza, sicurezza, integrazioni, api) invece di molti file piccoli — verificato NON un problema, sono file lunghi e completi (500-950 righe) | 2 gap reali trovati: GraphQL promesso ma assente, Node.js citato ma senza file |
+| databases/ | 31 | ~90% | Alta: fondamentali, postgresql, mysql, nosql, sql-avanzato, replicazione-ha, kubernetes-cloud tutti con più file coerenti | Nessun gap reale trovato (mysql confrontato con postgresql: profondità paragonabile, 2 file densi vs 4 più mirati) |
 
 ## Analisi di questa sessione
 
-File analizzati (9): `messaging/rabbitmq/_index.md`, `messaging/rabbitmq/features-avanzate.md`,
-`messaging/rabbitmq/deployment.md`, `security/_index.md`, `security/network/_index.md`,
-`security/compliance/_index.md`, `security/compliance/audit-logging.md`,
-`security/secret-management/_index.md`, `security/secret-management/kubernetes-secrets.md`.
+File analizzati (9): `dev/testing/_index.md`, `dev/data/_index.md`, `dev/_index.md`,
+`dev/api/_index.md`, `dev/integrazioni/_index.md`, `dev/resilienza/_index.md`,
+`dev/sicurezza/_index.md`, `dev/linguaggi/_index.md`, `databases/_index.md` (+
+`databases/mysql/_index.md` come decimo).
 
-**Verificato NON un gap — RabbitMQ**: ipotizzato che il subcat fosse sottodimensionato
-(7 file vs 44 di Kafka). Verifica mostra che i temi esistenti (Streams, DLX+retry con
-backoff, Federation, Shovel, Single Active Consumer, Lazy Queues, Cluster/Topology
-Operator, TLS, Prometheus alerting, Amazon MQ) sono trattati con lo stesso livello di
-profondità di Kafka — mancano solo topic che *non esistono* in RabbitMQ (partitioning
-stile Kafka, schema registry). Nessun gap reale.
+**Verificato NON un gap — Testing e Data Layer come "subcat da 1 file"**:
+ipotesi iniziale (dal report #609) che `dev/testing/` e `dev/data/` fossero
+sottodimensionati (contengono solo un `_index.md` ciascuno). Lettura integrale
+mostra che sono file completi di 500-950 righe con Panoramica, Concetti Chiave,
+Architettura, Configurazione & Pratica multi-linguaggio (Java/Python/Go),
+Best Practices, Troubleshooting con 4+ problemi documentati — non stub.
+Pattern coerente con `messaging/rabbitmq` (già validato in sessione #609).
 
-**Verificato NON un gap — Secret Management**: `security/_index.md` promette "Sealed
-Secrets, External Secrets Operator" nella sezione Secret Management, ma esiste solo
-`kubernetes-secrets.md` (oltre a `vault.md`) — sembrava un file mancante. Lettura del
-contenuto mostra che Sealed Secrets ed ESO sono trattati per intero dentro
-`kubernetes-secrets.md` (setup, confronto Sealed Secrets vs ESO vs Vault Agent,
-troubleshooting dedicato). Non serve uno split — l'informazione esiste ed è profonda.
+**Gap reale #1 — GraphQL promesso ma assente in `dev/api/_index.md`**: il
+frontmatter (`tags: [..., graphql, ...]`) e la Panoramica di `dev/_index.md`
+("REST, gRPC, GraphQL, AsyncAPI") annunciano GraphQL come uno dei paradigmi
+trattati, ma il corpo del file ha sezioni solo per REST, gRPC e AsyncAPI.
+→ prop-063 (extend-section).
 
-**Verificato NON un gap — Compliance/Audit**: un solo file (`audit-logging.md`) per
-l'intero subcat sembrava sottile, ma copre application audit strutturato, K8s audit
-log, Falco (regole, sidekick, troubleshooting), cloud audit log (CloudTrail), SIEM
-(OpenSearch/Fluentbit con regole di correlazione), tabella framework compliance
-(SOC2/ISO27001/PCI-DSS/GDPR/HIPAA) e CIS Benchmark. Copertura completa in un file
-coerente — split forzerebbe una divisione artificiale.
+**Gap reale #2 — Node.js citato ma senza file dedicato**: `dev/linguaggi/_index.md`
+include Node.js nella tabella comparativa con metriche complete (startup,
+footprint, throughput, "Ideal per: I/O bound, BFF") e nei `tags`/
+`search_keywords`, ma la lista "Argomenti in questa sezione" ha file solo per
+Java Spring Boot, Java Quarkus, .NET, Go, Python. Asimmetria non di design —
+gli altri 4 linguaggi della stessa tabella hanno tutti un file dedicato.
+→ prop-064 (new-file).
 
-**Verificato NON un gap — Network Security**: `security/network/` ha un solo file
-(`zero-trust.md`). Possibili estensioni (WAF, DDoS, firewall, VPN) sono già coperte
-in profondità in `networking/sicurezza/` (confermato saturo nelle sessioni #591-596).
-Il file esistente tratta lo zero trust a livello di identità workload (SPIFFE, OPA,
-NIST 800-207) — argomento distinto e non duplicato.
+**Verificato NON un gap — MySQL vs PostgreSQL**: MySQL ha 2 file (Architettura
+e Replicazione, Performance Tuning) contro i 4 di PostgreSQL, ma la
+profondità per file è comparabile (replicazione binlog/GTID, Group
+Replication, Galera, InnoDB internals coperti in un solo file denso). Non un
+gap — solo organizzazione diversa.
 
 ## Categorie vicine alla saturazione
 
-- **security/**, **messaging/rabbitmq**: confermato saturo in questa sessione dopo
-  verifica approfondita (9 file letti, zero gap reali trovati).
-- **networking**, **cloud/aws**, **ci-cd/testing**: confermato saturo nelle sessioni
-  precedenti (#591-596, #607).
+- **dev/testing, dev/data, dev/resilienza, dev/sicurezza, dev/integrazioni**:
+  confermati saturi in questa sessione — file singoli ma completi, nessuna
+  sezione mancante rispetto alla loro Panoramica dichiarata.
+- **databases/**: nessun gap reale trovato, coverage alta e coerente.
+- **security/**, **messaging/rabbitmq**, **networking**, **cloud/aws**,
+  **ci-cd/testing**: confermati saturi nelle sessioni precedenti (#591-596,
+  #607, #609).
 
 ## Categorie con gap reali
 
-Nessuno identificato in questa sessione.
+- **dev/api/**: GraphQL promesso nel frontmatter/file padre, mai trattato nel
+  corpo (prop-063).
+- **dev/linguaggi/**: Node.js citato in tabella comparativa senza file
+  dedicato, a differenza di tutti gli altri linguaggi elencati (prop-064).
 
 ## Focus usato in questa sessione
 
-`docs/security/` (rotazione da report #607: "mai stato in focus esplicito") +
-`docs/messaging/` (rotazione da report #607: "solo kafka+rabbitmq, coverage da
-verificare"). Entrambi risultati saturi dopo verifica mirata.
-
-## Decisione: 0 proposte
-
-Nessuna proposta generata. I due gap ipotizzati dal report precedente (asimmetria
-RabbitMQ/Kafka, presunto file mancante su Sealed Secrets/ESO) sono stati verificati e
-scartati come non reali — l'informazione esiste già con profondità adeguata. Generare
-proposte qui avrebbe prodotto lavoro a basso valore (contenuto duplicato o split
-artificiale di file già coerenti).
+`docs/dev/` (rotazione da report #609: "mai stato in focus esplicito").
+Trovati 2 gap reali circoscritti (non strutturali — la categoria nel
+complesso è matura), a differenza delle 2 sessioni precedenti (#607, #609)
+che avevano chiuso a zero proposte.
 
 ## Prossima sessione consigliata
 
-2026-09-28 o successiva. Aree non ancora esplorate in focus esplicito: `docs/dev/`
-(coverage da verificare, categoria ampia e potenzialmente eterogenea) e
-`docs/databases/` (menzionato come coverage più bassa nel report #603, non ancora
-verificato con lettura approfondita). Se anche queste risultano sature, considerare
-`consolidate`/`review` sui file con `last_verified` più vecchio invece di nuova
-generazione — la KB con 314/330 file e gap reali sempre più rari sta approcciando un
-punto di rendimento decrescente per i task `new_topic`.
+2026-09-28 o successiva, focus `docs/databases/` (verificato in questa
+sessione solo su `_index` + `mysql/_index`, non ancora letti in profondità i
+file di dettaglio: `postgresql/extensions.md`, `nosql/cassandra.md`,
+`kubernetes-cloud/db-su-kubernetes.md`) e/o completamento di `docs/dev/`
+(sottocategorie non ancora verificate in questa sessione: `runtime`,
+`processi`, e i file di dettaglio di `linguaggi` — `go.md`, `python.md`,
+`java-spring-boot.md`, `java-quarkus.md`, `dotnet.md` — per verificare se
+contengono gap interni oltre all'assenza di Node.js già segnalata).
