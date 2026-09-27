@@ -4,9 +4,9 @@ slug: kubernetes-networking
 category: networking
 tags: [kubernetes, networking, cni, ingress, network-policy, service, pod]
 parent: networking
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-09-27
 ---
 
 # Kubernetes Networking
@@ -44,6 +44,9 @@ Come esporre servizi Kubernetes all'esterno via HTTP/HTTPS: Ingress resource, In
 
 ### [Network Policies](network-policies.md)
 Firewall a livello di pod: controllare quale pod può comunicare con quale altro pod o namespace. Default-deny, ingress/egress rules, selettori per label. Fondamentale per la sicurezza in ambienti multi-tenant.
+
+### [Gateway API](gateway-api.md)
+Successore ufficiale di Ingress (GA da Kubernetes 1.28, sigs.k8s.io/gateway-api): separa i ruoli con `GatewayClass`/`Gateway` (infra) e `HTTPRoute`/`GRPCRoute`/`TCPRoute` (routing), superando i limiti di espressività e le annotazioni proprietarie dell'Ingress classico.
 
 ## Quale CNI Scegliere
 

@@ -107,8 +107,9 @@ Per chi lavora su Kubernetes:
 1. [CNI — Container Network Interface](kubernetes/cni.md)
 2. [Ingress e Ingress Controller](kubernetes/ingress.md)
 3. [Network Policies](kubernetes/network-policies.md)
-4. [Service Mesh — Concetti Base](service-mesh/concetti-base.md)
-5. [Istio](service-mesh/istio.md)
+4. [Gateway API](kubernetes/gateway-api.md) — successore di Ingress, HTTPRoute/GRPCRoute/TCPRoute
+5. [Service Mesh — Concetti Base](service-mesh/concetti-base.md)
+6. [Istio](service-mesh/istio.md)
 
 ---
 
@@ -121,5 +122,5 @@ Per chi lavora su Kubernetes:
 | Load Balancing | L4/L7, algoritmi, HA/failover, Nginx/HAProxy | Intermediate |
 | API Gateway | Pattern, Kong, rate limiting | Intermediate |
 | Service Mesh | Concetti, Istio, Envoy, Linkerd, Consul | Advanced |
-| Kubernetes Networking | CNI, Ingress, Network Policies | Advanced |
+| Kubernetes Networking | CNI, Ingress, Network Policies, Gateway API | Advanced |
 | Sicurezza di Rete | Firewall/WAF, VPN/IPsec, WireGuard, Zero Trust, DDoS | Advanced |
