@@ -7,9 +7,9 @@ search_keywords: [api design, rest api, restful, grpc, graphql, asyncapi, openap
 parent: dev/_index
 related: [dev/linguaggi/_index, dev/resilienza/_index, dev/integrazioni/_index, security/_index, messaging/_index]
 official_docs: https://swagger.io/specification/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-09-27
 ---
 
 # API Design
@@ -326,6 +326,155 @@ enum OrderStatus {
 
 ---
 
+## GraphQL API Design
+
+### Quando Scegliere GraphQL
+
+GraphQL è un'alternativa a REST/gRPC quando il client — non il server — deve decidere quali dati recuperare in una singola richiesta.
+
+| Scenario | Scelta consigliata | Motivo |
+|---|---|---|
+| Client eterogenei (web, mobile, IoT) con esigenze dati diverse | GraphQL | Ogni client richiede solo i campi che gli servono, evita over-fetching |
+| Aggregazione di più microservizi in una vista unica (es. dashboard ordine+utente+spedizione) | GraphQL (Federation) | Un solo round-trip invece di N chiamate REST lato client (no under-fetching) |
+| API pubblica semplice, cacheable via CDN | REST | GraphQL usa quasi sempre `POST /graphql`, difficile da cachare a livello HTTP |
+| Comunicazione interna ad alta frequenza, poliglotta | gRPC | Overhead di parsing/risoluzione GraphQL non giustificato per RPC interno |
+| Client con banda limitata e viste altamente variabili | GraphQL | Query mirata riduce payload rispetto a endpoint REST fissi |
+
+!!! warning "GraphQL non sostituisce REST/gRPC ovunque"
+    È un buon front-door per un **API Gateway** che aggrega servizi backend, non necessariamente il protocollo interno tra microservizi.
+
+### Schema Definition Language (SDL)
+
+```graphql
+# schema.graphql
+type Order {
+  id: ID!
+  status: OrderStatus!
+  createdAt: String!
+  items: [OrderItem!]!
+  product: Product          # risolto cross-service in un subgraph diverso
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+type OrderItem {
+  productId: ID!
+  quantity: Int!
+  unitPrice: Float!
+}
+
+type Product {
+  id: ID!
+  name: String!
+  description: String
+  price: Float!
+}
+
+type Query {
+  order(id: ID!): Order
+  orders(status: OrderStatus, limit: Int = 20): [Order!]!
+}
+
+type Mutation {
+  createOrder(input: CreateOrderInput!): Order!
+}
+
+input CreateOrderInput {
+  items: [OrderItemInput!]!
+}
+
+input OrderItemInput {
+  productId: ID!
+  quantity: Int!
+}
+```
+
+### Apollo Federation come API Gateway
+
+Federation aggrega più microservizi (ognuno con il proprio **subgraph**) in un unico grafo (**supergraph**), esposto ai client come singolo endpoint GraphQL.
+
+```graphql
+# order-service subgraph
+type Order @key(fields: "id") {
+  id: ID!
+  status: OrderStatus!
+  items: [OrderItem!]!
+}
+
+# product-service subgraph — estende Order senza possederlo
+extend type Order @key(fields: "id") {
+  id: ID! @external
+}
+
+type Product @key(fields: "id") {
+  id: ID!
+  name: String!
+  price: Float!
+}
+```
+
+```
+Client
+  │  singola query GraphQL
+  ▼
+Gateway (Apollo Router / GraphQL Mesh)
+  │  scompone la query, chiama i subgraph coinvolti
+  ├──► order-service (subgraph)
+  └──► product-service (subgraph)
+  │  ricompone la risposta in un unico grafo
+  ▼
+Risposta unificata al client
+```
+
+!!! tip "Confine di ownership"
+    Ogni subgraph possiede i propri tipi (`@key`) e può estendere tipi di altri subgraph. Evita che il gateway diventi un monolite: la business logic resta nei microservizi.
+
+### N+1 Problem e DataLoader
+
+Risolvere `Order.product` per una lista di ordini con un resolver naive genera 1 query per la lista + N query (una per prodotto) — il classico **N+1**.
+
+```javascript
+// ❌ N+1: una query per ogni ordine risolto
+const resolvers = {
+  Order: {
+    product: (order) => db.products.findById(order.productId), // 1 query per order
+  },
+};
+
+// ✅ DataLoader: batching + caching per singolo tick di event loop
+const productLoader = new DataLoader(async (productIds) => {
+  const products = await db.products.findByIds(productIds); // 1 query per tutti
+  return productIds.map((id) => products.find((p) => p.id === id));
+});
+
+const resolvers = {
+  Order: {
+    product: (order) => productLoader.load(order.productId),
+  },
+};
+```
+
+### Confronto GraphQL vs REST vs gRPC
+
+| Aspetto | REST/JSON | gRPC/Protobuf | GraphQL |
+|---|---|---|---|
+| Serializzazione | JSON (testo) | Protobuf (binario) | JSON (testo) |
+| Forma della risposta | Fissa per endpoint | Fissa per RPC | Definita dal client (query) |
+| Over/Under-fetching | Frequente | Raro (RPC mirati) | Evitato per design |
+| Aggregazione multi-servizio | Richiede orchestrazione lato client | Richiede orchestrazione lato client | Nativa (Federation) |
+| Caching HTTP/CDN | Facile (GET cacheable) | N/A (non HTTP semantico) | Difficile (`POST` singolo endpoint) |
+| Streaming | Limitato | Nativo (4 pattern) | Subscriptions (via WebSocket) |
+| Tooling browser | Eccellente | Limitato (grpc-web) | Eccellente (GraphiQL, Apollo Studio) |
+| Ideale per | API pubbliche, B2B | Interno inter-servizio | Gateway aggregante, client eterogenei |
+
+---
+
 ## Versionamento API
 
 ### Strategie di Versionamento
@@ -523,6 +672,25 @@ buf breaking --against .git#branch=main
 
 ---
 
+### Problema: Query GraphQL troppo profonda satura il backend
+
+**Sintomo:** Un client (o attaccante) invia una query fortemente annidata (es. `order { items { product { relatedProducts { items { ... } } } } }`) che genera un numero esponenziale di risoluzioni e rallenta o abbatte il servizio.
+
+**Causa:** GraphQL, a differenza di REST, non limita la forma della query per default — il client controlla profondità e ampiezza.
+
+**Soluzione:** Applicare **query complexity limiting** e/o depth limiting lato gateway:
+```javascript
+// Esempio con graphql-query-complexity
+const rule = createComplexityLimitRule(1000, {
+  onCost: (cost) => console.log("query cost:", cost),
+});
+// Esempio con depth limit
+const depthRule = depthLimit(6); // max 6 livelli di annidamento
+```
+Aggiungere entrambe le regole alla validazione dello schema, e restituire un errore `400` con codice `QUERY_TOO_COMPLEX` prima di eseguire i resolver.
+
+---
+
 ## Relazioni
 
 ??? info "Dev / Resilienza — Retry e timeout sulle chiamate API"
@@ -545,6 +713,8 @@ buf breaking --against .git#branch=main
 - [Google API Design Guide](https://cloud.google.com/apis/design) — Best practice da Google
 - [Protobuf Style Guide](https://protobuf.dev/programming-guides/style/) — Naming e struttura Protobuf
 - [AsyncAPI Specification](https://www.asyncapi.com/docs/reference/specification/v2.6.0) — Standard per API asincrone
+- [Apollo Federation Docs](https://www.apollographql.com/docs/federation/) — Subgraph/supergraph, composizione schema
+- [GraphQL DataLoader](https://github.com/graphql/dataloader) — Batching e caching per risolvere N+1
 - [Microsoft REST API Guidelines](https://github.com/microsoft/api-guidelines) — Linee guida REST complete
 - [buf.build](https://buf.build/) — Toolchain moderna per Protobuf (linting, breaking detection, BSR)
 - [oasdiff](https://github.com/Tufin/oasdiff) — Rilevamento breaking changes OpenAPI

@@ -1,0 +1,65 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "`docs/dev/linguaggi/_index.md` include Node.js nella tabella comparativa\n\
+  \"Criteri di Scelta\" con metriche complete (startup ~200ms, footprint\n50-100MB,\
+  \ \"Ideal per: I/O bound, BFF\") e lo cita nei `tags`/\n`search_keywords` del file,\
+  \ ma la lista \"Argomenti in questa sezione\"\nelenca solo Java Spring Boot, Java\
+  \ Quarkus, .NET, Go e Python — Node.js\nnon ha un file dedicato, a differenza di\
+  \ ogni altro linguaggio nella\nstessa tabella.\nCreare `nodejs.md` seguendo la struttura\
+  \ degli altri file della stessa\nsottocategoria (es. `go.md`, `python.md`): copertura\
+  \ di Node.js LTS\ncorrente per microservizi containerizzati:\n- Event loop e modello\
+  \ di concorrenza I/O-bound (perché è indicato per BFF)\n- Framework HTTP: Express\
+  \ vs Fastify vs NestJS (trade-off performance/DX)\n- TypeScript come default de\
+  \ facto per microservizi enterprise\n- Gestione async: Promise, async/await, gestione\
+  \ errori non catturati\n  (unhandledRejection) — rilevante per crash in produzione\n\
+  - Containerizzazione: multi-stage Dockerfile, `NODE_ENV=production`,\n  gestione\
+  \ segnali (SIGTERM) per graceful shutdown su Kubernetes\n- Cluster module vs orizzontale\
+  \ via K8s replica (perché Node.js è\n  single-thread e non sfrutta più core in un\
+  \ solo processo)\n- Observability: OpenTelemetry auto-instrumentation per Node.js\n\
+  Aggiornare `_index.md`: aggiungere la voce nella lista \"Argomenti in\nquesta sezione\"\
+  \ e in `related` se pertinente.\n"
+effort: medium
+id: prop-064
+last_analyzed: 2026-09-27
+priority: medium
+rationale: 'Un developer che consulta la tabella di scelta linguaggio vede Node.js
+
+  proposto come opzione valida ("Ideal per: I/O bound, BFF") con metriche
+
+  precise, ma se clicca per approfondire non trova nulla — l''informazione
+
+  si ferma alla tabella comparativa. Gli altri 4 linguaggi della stessa
+
+  tabella hanno tutti un file dedicato con dettagli pratici (framework,
+
+  containerizzazione, pattern K8s-specifici); l''asimmetria non è per design
+
+  ma un file mancante, dato che il linguaggio è già citato come scelta
+
+  consigliata per un caso d''uso specifico (BFF).
+
+  '
+status: approved
+tags:
+- nodejs
+- javascript
+- typescript
+- express
+- fastify
+- nestjs
+- microservizi
+target_file: docs/dev/linguaggi/nodejs.md
+title: Creare docs/dev/linguaggi/nodejs.md (linguaggio referenziato ma mai documentato)
+type: new-file
+utility_test:
+  outcome: Dopo aver letto il file, sceglie Fastify/NestJS in base al trade-off DX/performance,
+    implementa un graceful shutdown corretto su SIGTERM, e sa quali metriche OpenTelemetry
+    esporre
+  reader: Developer che deve scegliere il runtime per un nuovo Backend-For-Frontend
+    (BFF) I/O-bound su Kubernetes
+  scenario: La tabella di dev/linguaggi/_index.md consiglia Node.js per il suo caso,
+    ma vuole capire framework, gestione errori async e shutdown graceful in K8s
+  score: high
+  without_kb: Dovrebbe assemblare la conoscenza da doc Node.js ufficiali, blog su
+    Fastify vs Express e guide Kubernetes generiche, senza il framing containerizzato/K8s-native
+    che il resto della sezione mantiene per gli altri linguaggi

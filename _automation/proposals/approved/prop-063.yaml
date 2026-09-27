@@ -1,0 +1,59 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "Il file promette GraphQL ma non lo tratta: il tag `graphql` è presente\
+  \ nel\nfrontmatter, la Panoramica del file padre `dev/_index.md` elenca\n\"REST,\
+  \ gRPC, GraphQL, AsyncAPI\" come i quattro paradigmi trattati, ma il\ncorpo del\
+  \ documento copre solo REST, gRPC e AsyncAPI — GraphQL non compare\nin nessuna sezione\
+  \ H2.\nAggiungere una sezione \"## GraphQL API Design\" allo stesso livello di\n\
+  \"## gRPC API Design\" e \"## AsyncAPI per API Asincrone\", con:\n- Quando scegliere\
+  \ GraphQL vs REST/gRPC per microservizi (query flessibili\n  lato client, aggregazione\
+  \ multi-servizio, over-fetching/under-fetching)\n- Schema Definition Language (SDL):\
+  \ esempio type/query/mutation per un\n  dominio Order/Product coerente con gli altri\
+  \ esempi del file\n- Apollo Federation / GraphQL Federation come pattern di API\
+  \ Gateway per\n  aggregare più microservizi in un grafo unico (subgraph/supergraph)\n\
+  - N+1 problem specifico di GraphQL e soluzione con DataLoader (batching)\n- Confronto\
+  \ tabellare GraphQL vs REST vs gRPC (stesso stile della tabella\n  \"Confronto REST\
+  \ vs gRPC\" già presente nel file)\n- Un caso di Troubleshooting coerente con lo\
+  \ stile esistente (es. query\n  troppo profonde/costose → query complexity limiting)\n"
+effort: small
+id: prop-063
+last_analyzed: 2026-09-27
+priority: medium
+rationale: 'Il reader di questo file arriva aspettandosi una copertura equivalente
+  ai
+
+  tre paradigmi già trattati, perché sia i tag che il file padre lo
+
+  promettono esplicitamente. Un DevOps/backend developer che valuta se
+
+  esporre un API Gateway GraphQL davanti a più microservizi (caso comune in
+
+  architetture BFF) oggi non trova nulla in questa sezione nonostante sia
+
+  nominata, e deve cercare altrove — rompendo la promessa di "single source"
+
+  della sezione API Design.
+
+  '
+status: approved
+tags:
+- graphql
+- api-design
+- apollo-federation
+- dataloader
+- microservizi
+target_file: docs/dev/api/_index.md
+title: Aggiungere sezione GraphQL API Design a dev/api/_index.md
+type: extend-section
+utility_test:
+  outcome: Dopo la modifica, valuta Apollo Federation come pattern di aggregazione,
+    riconosce il rischio N+1 e sa mitigarlo con DataLoader, sceglie consapevolmente
+    tra GraphQL/REST/gRPC per il proprio caso
+  reader: Backend developer che deve decidere se esporre un API Gateway GraphQL davanti
+    a più microservizi REST/gRPC esistenti
+  scenario: Cerca in dev/api/_index.md (che nel titolo/tag promette GraphQL) indicazioni
+    su Federation, N+1 e schema design, ma la sezione non esiste
+  score: high
+  without_kb: Dovrebbe cercare su Apollo/GraphQL Foundation docs, senza il contesto
+    di confronto diretto con REST/gRPC già presente nella KB per lo stesso dominio
+    (Order/Payment)
