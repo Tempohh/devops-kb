@@ -1,0 +1,51 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "La tabella DORA Metrics nella sezione \"DORA Metrics — Misurare la Performance\n\
+  DevOps\" ha un commento HTML `<!-- REVIEW: ... -->` inline (riga 66) che segnala\n\
+  un problema mai risolto nonostante due passaggi di automazione recenti (review\n\
+  auto #672, currency auto #673 — vedi git log): la colonna Change Failure Rate\n\
+  riporta lo stesso intervallo \"16-30%\" identico per High, Medium e Low, mentre\n\
+  Elite è 0-15%. È quasi certamente un copia-incolla del valore Elite/High.\nCorreggere\
+  \ con le soglie correnti da DORA/Accelerate (State of DevOps, dal\nreport 2023 in\
+  \ poi la metodologia usa cluster, non soglie fisse identiche per\n3 livelli):\n\
+  \  - Elite: 0-5%\n  - High: 5-10%\n  - Medium: 10-15%\n  - Low: >15% (o \"16-30%\"\
+  \ solo per Low, non ripetuto 3 volte)\nVerificare il valore esatto sul report DORA/Accelerate\
+  \ più recente citato nei\nRiferimenti del file (o aggiungere un riferimento se manca)\
+  \ prima di scrivere\ni numeri definitivi — non riproporre la stessa tabella senza\
+  \ fonte.\nUna volta corretta la tabella, rimuovere il commento HTML `<!-- REVIEW:\
+  \ ... -->`\nresiduo (non deve restare in produzione) e valutare se lo status può\
+  \ tornare\n`complete` (dipende da quanto altro contenuto del file è stato toccato\
+  \ di\nrecente dai task #672/#673).\n"
+effort: small
+id: prop-106
+last_analyzed: 2026-09-27
+priority: high
+rationale: 'Il file è l''hub di categoria ci-cd, letto da chiunque cerchi un riferimento
+
+  rapido alle metriche DORA. Un dato palesemente sbagliato (stesso range per 3
+
+  livelli di maturità) mina la credibilità dell''intera sezione ed è stato
+
+  segnalato ma non corretto da due sessioni di automazione consecutive — vale
+
+  la pena un task mirato invece di un ennesimo giro di review generico.
+
+  '
+status: approved
+tags:
+- ci-cd
+- dora-metrics
+- data-quality
+- needs-review
+target_file: docs/ci-cd/_index.md
+title: Fix tabella DORA Change Failure Rate in ci-cd/_index.md (soglie identiche High/Medium/Low)
+type: extend-section
+utility_test:
+  outcome: Ottiene soglie corrette e citabili, senza dover verificare a mano sulla
+    fonte ufficiale
+  reader: DevOps mid-senior che usa la KB come riferimento rapido per DORA metrics
+    in una retrospettiva
+  scenario: Deve presentare le soglie DORA a un team e cita la tabella della KB
+  score: high
+  without_kb: Dovrebbe cercare il report DORA/Accelerate originale e derivare le soglie
+    da solo

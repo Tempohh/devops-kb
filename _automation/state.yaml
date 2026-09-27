@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-09-27T22:00:52.539410+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 986
+total_ops: 990
 total_runs: 472
 queue:
 - id: W-001
@@ -5974,6 +5974,114 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '675'
+  type: expand
+  path: docs/ci-cd/_index.md
+  category: ci-cd
+  priority: P1
+  status: pending
+  reason: "La tabella DORA Metrics nella sezione \"DORA Metrics — Misurare la Performance\nDevOps\" ha un commento HTML `<!--\
+    \ REVIEW: ... -->` inline (riga 66) che segnala\nun problema mai risolto nonostante due passaggi di automazione recenti\
+    \ (review\nauto #672, currency auto #673 — vedi git log): la colonna Change Failure Rate\nriporta lo stesso intervallo\
+    \ \"16-30%\" identico per High, Medium e Low, mentre\nElite è 0-15%. È quasi certamente un copia-incolla del valore Elite/High.\n\
+    Correggere con le soglie correnti da DORA/Accelerate (State of DevOps, dal\nreport 2023 in poi la metodologia usa cluster,\
+    \ non soglie fisse identiche per\n3 livelli):\n  - Elite: 0-5%\n  - High: 5-10%\n  - Medium: 10-15%\n  - Low: >15% (o\
+    \ \"16-30%\" solo per Low, non ripetuto 3 volte)\nVerificare il valore esatto sul report DORA/Accelerate più recente citato\
+    \ nei\nRiferimenti del file (o aggiungere un riferimento se manca) prima di scrivere\ni numeri definitivi — non riproporre\
+    \ la stessa tabella senza fonte.\nUna volta corretta la tabella, rimuovere il commento HTML `<!-- REVIEW: ... -->`\nresiduo\
+    \ (non deve restare in produzione) e valutare se lo status può tornare\n`complete` (dipende da quanto altro contenuto\
+    \ del file è stato toccato di\nrecente dai task #672/#673).\n"
+  proposal_id: prop-106
+- id: '676'
+  type: review
+  path: docs/monitoring/fondamentali/opentelemetry.md
+  category: monitoring
+  priority: P2
+  status: pending
+  reason: 'Entrambi i file sono stati modificati oggi (2026-09-27, auto #669/#670) per
+
+    risolvere l''asimmetria concettuale con continuous-profiling.md (il "quarto
+
+    pilastro" del profiling ora è menzionato in entrambi). Il contenuto risulta
+
+    già coerente e ben integrato a lettura diretta in questa sessione — nessun
+
+    gap ulteriore trovato. Restano però `status: needs-review` invece di
+
+    `reviewed`, e senza `last_verified`.
+
+    Applicare il task `review` standard: verificare accuratezza tecnica (versioni
+
+    OTel, sintassi YAML del Collector, esempio Go), poi impostare
+
+    `status: reviewed` + `last_verified: <data task>` su entrambi i file se il
+
+    controllo conferma che sono corretti e attuali (come atteso, dato il contesto
+
+    fresco).
+
+    '
+  proposal_id: prop-107
+- id: '677'
+  type: audit
+  path: docs/networking/kubernetes/cni.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: '`docs/networking/fondamentali/ebpf.md` ha `networking/kubernetes/cni` nel
+
+    campo `related` e nel testo spiega esplicitamente che Cilium implementa il
+
+    CNI Kubernetes usando eBPF (XDP/TC) sostituendo iptables/kube-proxy.
+
+    `docs/networking/kubernetes/cni.md` (related attuale:
+
+    `[networking/kubernetes/network-policies, networking/kubernetes/ingress,
+
+    networking/service-mesh/istio, containers/kubernetes/networking]`) non cita
+
+    eBPF né come `related` né nel testo, nonostante Cilium (basato su eBPF) sia
+
+    con ogni probabilità già discusso come plugin CNI nel file.
+
+    Aggiungere `networking/fondamentali/ebpf` al campo `related` di cni.md e,
+
+    se il file ha una sezione sui plugin CNI (Cilium/Calico/Flannel), una riga
+
+    o admonition collapsibile che rimanda a eBPF per l''approfondimento del
+
+    meccanismo sottostante a Cilium.
+
+    '
+  proposal_id: prop-108
+- id: '678'
+  type: audit
+  path: docs/networking/service-mesh/linkerd.md
+  category: networking
+  priority: P3
+  status: pending
+  reason: '`docs/networking/kubernetes/gateway-api.md` ha una sezione "Relazioni" con
+
+    un admonition collapsibile dedicato a Linkerd ("Service Mesh — Integrazione":
+
+    Istio e Linkerd supportano Gateway API come data plane) e link diretto a
+
+    `../../networking/service-mesh/linkerd.md`. `docs/networking/service-mesh/
+
+    linkerd.md` non ha alcun riferimento a Gateway API né in `related` né nel
+
+    testo (verificato via grep — nessun match).
+
+    Aggiungere `networking/kubernetes/gateway-api` al campo `related` di
+
+    linkerd.md e una riga o admonition che spiega che Linkerd supporta Gateway
+
+    API come alternativa moderna a Ingress per il traffico in entrata verso il
+
+    mesh.
+
+    '
+  proposal_id: prop-109
 completed:
 - id: '660'
   path: docs/iac/terraform/fondamentali.md

@@ -1,0 +1,59 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: '`docs/networking/fondamentali/ebpf.md` ha `networking/kubernetes/cni`
+  nel
+
+  campo `related` e nel testo spiega esplicitamente che Cilium implementa il
+
+  CNI Kubernetes usando eBPF (XDP/TC) sostituendo iptables/kube-proxy.
+
+  `docs/networking/kubernetes/cni.md` (related attuale:
+
+  `[networking/kubernetes/network-policies, networking/kubernetes/ingress,
+
+  networking/service-mesh/istio, containers/kubernetes/networking]`) non cita
+
+  eBPF né come `related` né nel testo, nonostante Cilium (basato su eBPF) sia
+
+  con ogni probabilità già discusso come plugin CNI nel file.
+
+  Aggiungere `networking/fondamentali/ebpf` al campo `related` di cni.md e,
+
+  se il file ha una sezione sui plugin CNI (Cilium/Calico/Flannel), una riga
+
+  o admonition collapsibile che rimanda a eBPF per l''approfondimento del
+
+  meccanismo sottostante a Cilium.
+
+  '
+effort: small
+id: prop-108
+last_analyzed: 2026-09-27
+priority: low
+rationale: 'Stesso pattern di relazione asimmetrica già rilevato e corretto in sessioni
+
+  precedenti (postgresql #662, opa/zero-trust #668): un lettore che parte da
+
+  CNI e usa Cilium non trova il rimando all''eBPF che ne spiega il funzionamento
+
+  interno, mentre il percorso inverso (da eBPF a CNI) esiste già.
+
+  '
+status: approved
+tags:
+- networking
+- cni
+- ebpf
+- cilium
+- connettività
+target_file: docs/networking/kubernetes/cni.md
+title: 'Relazione asimmetrica: eBPF cita CNI ma CNI non cita eBPF'
+type: fix-relation
+utility_test:
+  outcome: Trova subito il link a eBPF per capire XDP/TC/kube-proxy replacement senza
+    doverlo cercare altrove nella KB
+  reader: DevOps che configura Cilium come CNI e vuole capire come funziona internamente
+  scenario: Legge cni.md per scegliere/configurare il plugin CNI, arriva a Cilium
+  score: medium
+  without_kb: Dovrebbe notare da solo che Cilium è eBPF-based e cercare il file eBPF
+    manualmente nell'indice
