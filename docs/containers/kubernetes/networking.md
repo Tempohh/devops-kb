@@ -7,9 +7,10 @@ search_keywords: [kubernetes networking, kubernetes service clusterip, kubernete
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/architettura, containers/kubernetes/sicurezza, containers/kubernetes/workloads, containers/docker/networking, networking/kubernetes/cni, networking/kubernetes/ingress, networking/kubernetes/network-policies]
 official_docs: https://kubernetes.io/docs/concepts/services-networking/
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-09-27
+last_verified: 2026-09-27
 ---
 
 # Kubernetes Networking
@@ -753,8 +754,8 @@ kubectl rollout restart deployment/coredns -n kube-system
 **Causa possibile B — Nessun Endpoint:**
 ```bash
 # Il Service seleziona Pod inesistenti o non Ready
-kubectl get endpoints api -n production
-# Se "Endpoints: <none>" → i label del selector non matchano nessun Pod
+kubectl get endpointslices -n production -l kubernetes.io/service-name=api
+# Se non ci sono indirizzi elencati → i label del selector non matchano nessun Pod
 
 kubectl get pods -n production -l app=api --show-labels   # verifica i label
 kubectl describe service api -n production                 # verifica il selector
