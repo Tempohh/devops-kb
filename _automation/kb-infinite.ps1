@@ -189,12 +189,18 @@ try {
     $ProposalMinIntervalSeconds  = 600   # min 10 minuti tra due iniezioni proposal in questa sessione
     $throttleNotified            = $false # evita di ristampare il messaggio di throttle a ogni tick da 30s
 
+    function Show-RunHeader {
+        # Stampata solo quando c'e' davvero qualcosa da riportare — durante
+        # l'attesa silenziosa del throttle non va chiamata, altrimenti si torna
+        # a un "Run #N" vuoto ogni 30s senza nessuna informazione utile.
+        Write-Host ""
+        Write-Host "  [$(Get-Date -Format 'HH:mm:ss')] Run #$sessionRuns" -ForegroundColor Cyan
+    }
+
     while ($true) {
 
         $sessionRuns++
         $timestamp = Get-Date -Format "HH:mm:ss"
-        Write-Host ""
-        Write-Host "  [$timestamp] Run #$sessionRuns" -ForegroundColor Cyan
 
         # -- Estrai prossimo task --------------------------------------------
 
@@ -216,6 +222,7 @@ try {
             catch { $analysisObj = $null }
 
             if ($analysisObj -and $analysisObj.needs_analysis) {
+                Show-RunHeader
                 Write-Host "  [ANALISI] $($analysisObj.reason) - avvio scansione KB..." -ForegroundColor Cyan
                 $initJson = & $pythonBin $StatePy init-analysis 2>&1
                 try { $initObj = $initJson | ConvertFrom-Json } catch { $initObj = $null }
@@ -246,6 +253,7 @@ try {
 
                 $runsLeft = $EmptyBeforeAutoApprove - $emptyRuns
 
+                Show-RunHeader
                 Write-Host ""
                 Write-Host "  ===== $pendingCount PROPOSTE IN ATTESA =====" -ForegroundColor Yellow
                 foreach ($prop in $proposalsObj.proposals) {
@@ -275,18 +283,31 @@ try {
                 if ($secsSinceLastProposal -lt $ProposalMinIntervalSeconds) {
                     $waitLeft = [int]($ProposalMinIntervalSeconds - $secsSinceLastProposal)
                     if (-not $throttleNotified) {
+                        Show-RunHeader
                         Write-Host "  [PROPOSTE] Throttle sessione attivo — prossima proposta tra ${waitLeft}s (silenzio fino ad allora)" -ForegroundColor DarkGray
                         $throttleNotified = $true
                     }
-                    # Niente lavoro da fare finche' dura il throttle: dormi come un
-                    # normale giro vuoto invece di ripartire subito (senza questo
-                    # Start-Sleep il loop gira senza pause reali tra un giro e
-                    # l'altro, decine di run/secondo finche' non scade il throttle).
                     $emptyRuns = 0
-                    Start-Sleep -Seconds $RunInterval
+                    if ($waitLeft -gt 30) {
+                        # Grosso del tempo: nessun output, un solo Start-Sleep
+                        # bounded a 30s per volta cosi' il loop resta reattivo
+                        # (nuovo task/proposta manuale) senza fare polling a
+                        # raffica (era il bug: nessun sleep -> centinaia di
+                        # iterazioni/sec durante il throttle).
+                        Start-Sleep -Seconds ([Math]::Min(30, $waitLeft - 5))
+                    } else {
+                        # Countdown finale silenzioso salvo qualche promemoria.
+                        foreach ($mark in 30, 10, 5, 3, 2, 1) {
+                            if ($waitLeft -eq $mark) {
+                                Write-Host "  [PROPOSTE] ...${mark}s" -ForegroundColor DarkGray
+                            }
+                        }
+                        Start-Sleep -Seconds 1
+                    }
                     continue
                 } else {
                     $throttleNotified = $false
+                    Show-RunHeader
                     Write-Host "  [PROPOSTE] Coda vuota — avvio sessione proposte strategica..." -ForegroundColor Magenta
                     $injectResult = & $pythonBin $StatePy inject-proposal-task 2>&1
                     try { $injectObj = $injectResult | ConvertFrom-Json } catch { $injectObj = $null }

@@ -283,7 +283,23 @@ distinto: Consul copre discovery/mesh ibrido VM+Kubernetes, caso d'uso non
 coperto da Istio/Linkerd (k8s-native). Generata 1 proposta: prop-038
 (networking/service-mesh/consul.md, high priority, medium effort).
 
+## Sessione proposal 2026-09-27 (task 565)
+Zero proposte. Gate eseguito con `py`: `file_count` 306, target 330,
+`over_target: false`, headroom 24 (consul.md da task 564 ora contato).
+`pending/` vuota, ultimo id prop-038 (approvata). prop-037 (fix-relation
+vpc-lattice) **non ancora eseguita**: verificato via grep che
+`vpc-avanzato.md` ed `elastic-load-balancing.md` non richiamano ancora
+`vpc-lattice` in `related` — resta un task di esecuzione in coda, non
+materia per una nuova proposta. Censimento Glob invariato: networking 43
+file (incl. `_index`), cloud/aws 44. Verifica mirata su gap non ancora
+testati: Route 53 Resolver hybrid DNS (inbound/outbound endpoint, DNS
+Firewall, DNS64) già documentato in dettaglio in `route53.md` con esempi
+CLI; nessun gap. Nessun nuovo gap `score: high` in networking/cloud/aws.
+Solo `state.yaml` e `kb-infinite.ps1` variati da git status — nessuna
+modifica ai contenuti KB dal task 563.
+
 ## Prossima sessione consigliata
-Dopo esecuzione prop-037 (fix-relation vpc-lattice) e prop-038 (consul.md).
-Nessun altro gap `score: high` emerso in networking/cloud/aws oltre a quanto
-già proposto. Continuare focus networking + cloud/aws.
+Dare priorità all'esecuzione di prop-037 (fix-relation vpc-lattice, in coda
+da 2 sessioni) prima di generare nuove proposte in networking/cloud/aws.
+Nessun altro gap `score: high` emerso oltre a quanto già proposto.
+Continuare focus networking + cloud/aws.
