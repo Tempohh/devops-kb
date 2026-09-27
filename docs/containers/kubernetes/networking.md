@@ -2,14 +2,14 @@
 title: "Kubernetes Networking"
 slug: networking
 category: containers
-tags: [kubernetes, networking, cni, services, ingress, networkpolicy, coredns, cilium, calico]
-search_keywords: [kubernetes networking, CNI container network interface, kubernetes service clusterip, kubernetes nodeport, kubernetes loadbalancer, kubernetes ingress, kubernetes networkpolicy, coredns kubernetes, service discovery kubernetes, kube-proxy, iptables kubernetes, ipvs kubernetes, kubernetes dns, pod network, kubernetes cluster network, kubernetes overlay network, flannel, calico, cilium, weave net, kubernetes ingress controller, nginx ingress, traefik kubernetes, kubernetes egress, kubernetes east-west traffic, kubernetes north-south traffic, kubernetes service mesh intro, kubernetes pod ip, kubernetes service ip, endpoint kubernetes, endpointslice]
+tags: [kubernetes, networking, services, coredns, kube-proxy, dns]
+search_keywords: [kubernetes networking, kubernetes service clusterip, kubernetes nodeport, kubernetes loadbalancer, coredns kubernetes, service discovery kubernetes, kube-proxy, iptables kubernetes, ipvs kubernetes, kubernetes dns, pod network, kubernetes cluster network, kubernetes east-west traffic, kubernetes north-south traffic, kubernetes pod ip, kubernetes service ip, endpoint kubernetes, endpointslice, cluster migration nodeport]
 parent: containers/kubernetes/_index
-related: [containers/kubernetes/architettura, containers/kubernetes/sicurezza, containers/kubernetes/workloads, containers/docker/networking]
+related: [containers/kubernetes/architettura, containers/kubernetes/sicurezza, containers/kubernetes/workloads, containers/docker/networking, networking/kubernetes/cni, networking/kubernetes/ingress, networking/kubernetes/network-policies]
 official_docs: https://kubernetes.io/docs/concepts/services-networking/
 status: needs-review
 difficulty: advanced
-last_updated: 2026-09-26
+last_updated: 2026-09-27
 ---
 
 # Kubernetes Networking
@@ -27,36 +27,17 @@ Quattro problemi di comunicazione che K8s risolve:
 !!! warning "IP Pod sono efimeri"
     L'IP di un Pod cambia ad ogni restart. Non comunicare mai direttamente con l'IP di un Pod in produzione — usare sempre un Service come punto di accesso stabile.
 
+!!! note "Scope di questa pagina"
+    Questa pagina si concentra su **Service, kube-proxy, CoreDNS/DNS interno** (incluso il caso pratico di migrazione cluster-to-cluster via NodePort). CNI, Ingress e NetworkPolicy hanno pagine dedicate e più complete in [Networking → Kubernetes](../../networking/kubernetes/_index.md).
+
 ---
 
-## CNI — Container Network Interface
+## Cluster Networking — CIDR e kube-proxy
 
-Il **CNI** è lo standard che definisce come i plugin di rete configurano il networking dei container. Quando un Pod viene creato, il kubelet chiama il CNI plugin che:
-1. Crea un network namespace per il Pod
-2. Crea una coppia di virtual ethernet (veth pair): un'estremità nel namespace del Pod, l'altra nel namespace del nodo
-3. Assegna un IP al Pod dal CIDR del nodo
-4. Configura le route per raggiungere altri Pod e il resto del cluster
+??? info "CNI — Approfondimento"
+    L'assegnazione IP ai Pod (network namespace, veth pair, route) è compito del **CNI plugin** (Calico, Cilium, Flannel...). Confronto plugin, overlay vs BGP vs eBPF, installazione e troubleshooting completo:
 
-### Plugin CNI Comuni
-
-```
-CNI Plugin Comparison
-
-  ┌─────────────┬──────────────┬──────────────┬────────────────────────┐
-  │ Plugin      │ Data Plane   │ NetworkPolicy│ Note                   │
-  ├─────────────┼──────────────┼──────────────┼────────────────────────┤
-  │ Calico      │ iptables/BGP │ ✅ nativo    │ Produzione enterprise  │
-  │ Cilium      │ eBPF         │ ✅ esteso    │ Osservabilità avanzata │
-  │ Flannel     │ VXLAN        │ ❌ no        │ Semplicità, lab/dev    │
-  │ Weave Net   │ VXLAN/PCap   │ ✅ nativo    │ Self-healing mesh      │
-  │ AWS VPC CNI │ VPC native   │ ✅ via SG    │ Solo AWS EKS           │
-  │ Azure CNI   │ VNet native  │ ✅ via NSG   │ Solo AKS               │
-  └─────────────┴──────────────┴──────────────┴────────────────────────┘
-
-  Calico/BGP: ogni nodo annuncia le proprie route via BGP → no encapsulation overhead
-  Cilium/eBPF: intercetta syscall a livello kernel → massime performance, L7 visibility
-  Flannel/VXLAN: encapsula i pacchetti in UDP → overhead ma compatibilità universale
-```
+    **Approfondimento completo →** [CNI — Container Network Interface](../../networking/kubernetes/cni.md)
 
 ### Indirizzi IP nel Cluster
 
@@ -185,7 +166,7 @@ spec:
 
 - **Microservizi east-west:** `checkout` chiama `http://payments.production.svc:80`. Il chiamante non sa quanti Pod ci sono, dove girano, né quando vengono ricreati (HPA, rolling update, node drain).
 - **Backend di un Ingress:** l'Ingress/Gateway non punta ai Pod ma a un ClusterIP; la HTTP routing vive nell'Ingress, la scoperta dei Pod nel Service.
-- **Dipendenze infrastrutturali interne:** Redis, Elasticsearch, Vault agent — mai esposte fuori cluster; l'accesso è ulteriormente ristretto con [NetworkPolicy](#networkpolicy-segmentazione-di-rete).
+- **Dipendenze infrastrutturali interne:** Redis, Elasticsearch, Vault agent — mai esposte fuori cluster; l'accesso è ulteriormente ristretto con [NetworkPolicy](../../networking/kubernetes/network-policies.md).
 - **Cross-namespace:** `payments.production.svc.cluster.local` da altri namespace; il perimetro di sicurezza si impone con NetworkPolicy, **non** con il Service.
 
 **Opzioni utili in produzione:**
@@ -715,286 +696,19 @@ kubectl logs -n kube-system -l k8s-app=kube-dns --tail=50
 
 ---
 
-## Ingress — Routing HTTP/HTTPS
+## Ingress e NetworkPolicy
 
-Un **Ingress** è una risorsa Kubernetes che definisce regole di routing per traffico HTTP/HTTPS in ingresso. Richiede un **Ingress Controller** deployato nel cluster (nginx, Traefik, HAProxy, AWS ALB, GCE, ecc.).
+Il routing HTTP/HTTPS esterno (Ingress/Ingress Controller, TLS con cert-manager, Gateway API) e la microsegmentazione L3/L4 tra Pod (NetworkPolicy, default-deny, pattern multi-layer) sono documentati in modo più completo nella sezione Networking:
 
-!!! warning "Ingress richiede un Controller"
-    La risorsa Ingress da sola non fa nulla. Deve esserci un Ingress Controller in esecuzione nel cluster che legge le risorse Ingress e configura il proxy/LB sottostante.
+??? info "Ingress — Approfondimento"
+    Installazione Ingress Controller, host/path routing, TLS con cert-manager, Gateway API, troubleshooting 404/502/redirect loop.
 
-### Ingress Controller — Installazione
+    **Approfondimento completo →** [Ingress e Ingress Controller](../../networking/kubernetes/ingress.md)
 
-```bash
-# NGINX Ingress Controller (opzione più comune)
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm repo update
+??? info "NetworkPolicy — Approfondimento"
+    Default-deny, selettori (podSelector/namespaceSelector/ipBlock), pattern multi-layer, CiliumNetworkPolicy L7, troubleshooting DNS-egress e CNI incompatibili.
 
-helm install ingress-nginx ingress-nginx/ingress-nginx \
-  --namespace ingress-nginx \
-  --create-namespace \
-  --set controller.replicaCount=2 \
-  --set controller.nodeSelector."kubernetes\.io/os"=linux \
-  --set controller.admissionWebhooks.patch.nodeSelector."kubernetes\.io/os"=linux
-
-# Verifica
-kubectl get pods -n ingress-nginx
-kubectl get service -n ingress-nginx   # External IP del controller
-```
-
-### Regole Ingress
-
-```yaml
-# Ingress con host-based e path-based routing
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: app-ingress
-  namespace: production
-  annotations:
-    kubernetes.io/ingress.class: "nginx"
-    # Rate limiting
-    nginx.ingress.kubernetes.io/limit-rps: "100"
-    # Redirect HTTP → HTTPS
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    # Timeout
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
-    # Rewrite path: /api/v1/users → /users
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-spec:
-  ingressClassName: nginx    # alternativa all'annotation (K8s 1.18+)
-
-  # TLS
-  tls:
-    - hosts:
-        - api.company.com
-        - app.company.com
-      secretName: company-tls-cert   # Secret tipo kubernetes.io/tls
-
-  rules:
-    # Host-based routing
-    - host: api.company.com
-      http:
-        paths:
-          - path: /v1(/|$)(.*)       # regex path (con rewrite-target: /$2)
-            pathType: Prefix
-            backend:
-              service:
-                name: api-v1
-                port:
-                  number: 80
-          - path: /v2(/|$)(.*)
-            pathType: Prefix
-            backend:
-              service:
-                name: api-v2
-                port:
-                  number: 80
-
-    - host: app.company.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: frontend
-                port:
-                  number: 80
-
-    # Wildcard host
-    - host: "*.company.com"
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: default-backend
-                port:
-                  number: 80
-```
-
-```yaml
-# IngressClass — definisce il controller responsabile
-apiVersion: networking.k8s.io/v1
-kind: IngressClass
-metadata:
-  name: nginx
-  annotations:
-    ingressclass.kubernetes.io/is-default-class: "true"  # default se non specificato
-spec:
-  controller: k8s.io/ingress-nginx
-
----
-# TLS Secret (cert-manager lo crea automaticamente)
-apiVersion: v1
-kind: Secret
-metadata:
-  name: company-tls-cert
-  namespace: production
-type: kubernetes.io/tls
-data:
-  tls.crt: <base64-encoded-cert>    # cat cert.pem | base64 -w0
-  tls.key: <base64-encoded-key>     # cat key.pem | base64 -w0
-```
-
-!!! tip "cert-manager per TLS automatico"
-    Usa `cert-manager` con Let's Encrypt per gestire automaticamente i certificati TLS. Aggiunge l'annotation `cert-manager.io/cluster-issuer: letsencrypt-prod` all'Ingress e crea/rinnova i Secret TLS automaticamente.
-
----
-
-## NetworkPolicy — Segmentazione di Rete
-
-Per default, tutti i Pod in un cluster Kubernetes possono comunicare liberamente tra loro. Le **NetworkPolicy** implementano microsegmentazione: definiscono whitelist di traffico ingress/egress per gruppi di Pod.
-
-!!! warning "Il CNI deve supportare NetworkPolicy"
-    Flannel non implementa NetworkPolicy. Serve Calico, Cilium, Weave Net, o un cloud CNI con supporto. Creare una NetworkPolicy su un cluster con CNI non supportato non avrà effetto silenziosamente.
-
-### Default Deny — Pattern Fondamentale
-
-```yaml
-# Default deny-all ingress per il namespace production
-# BEST PRACTICE: applicare in ogni namespace e poi aprire solo il necessario
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: default-deny-ingress
-  namespace: production
-spec:
-  podSelector: {}          # {} = seleziona TUTTI i Pod del namespace
-  policyTypes:
-    - Ingress              # applica solo a ingress (lascia egress libero)
-  # ingress: []            # implicito: nessuna regola = nessun ingress permesso
-
----
-# Default deny-all (ingress + egress)
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: default-deny-all
-  namespace: production
-spec:
-  podSelector: {}
-  policyTypes:
-    - Ingress
-    - Egress
-  # Nessun ingress né egress permesso — isola completamente il namespace
-```
-
-### Regole Ingress/Egress
-
-```yaml
-# NetworkPolicy completa per un'app API
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: api-networkpolicy
-  namespace: production
-spec:
-  # Applica a: Pod con label app=api
-  podSelector:
-    matchLabels:
-      app: api
-
-  policyTypes:
-    - Ingress
-    - Egress
-
-  ingress:
-    # Regola 1: permetti traffico dall'Ingress Controller
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: ingress-nginx
-      ports:
-        - protocol: TCP
-          port: 8080
-
-    # Regola 2: permetti traffic da altri Pod nella stessa namespace con label tier=frontend
-    - from:
-        - podSelector:
-            matchLabels:
-              tier: frontend
-      ports:
-        - protocol: TCP
-          port: 8080
-
-    # Regola 3: permetti monitoring dal namespace monitoring
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: monitoring
-      ports:
-        - protocol: TCP
-          port: 9090   # metrics endpoint
-
-  egress:
-    # Permetti accesso al database
-    - to:
-        - podSelector:
-            matchLabels:
-              app: postgres
-      ports:
-        - protocol: TCP
-          port: 5432
-
-    # Permetti DNS (CRITICO: senza questo il Pod non risolve nomi)
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-      ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
-
-    # Permetti traffico HTTPS verso Internet (es. API esterne)
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.0.0.0/8       # escludi rete interna
-              - 172.16.0.0/12
-              - 192.168.0.0/16
-      ports:
-        - protocol: TCP
-          port: 443
-```
-
-```yaml
-# NetworkPolicy con ipBlock — per servizi on-premise o range IP specifici
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-from-datacenter
-  namespace: production
-spec:
-  podSelector:
-    matchLabels:
-      app: legacy-connector
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - ipBlock:
-            cidr: 10.10.0.0/16        # range datacenter on-premise
-            except:
-              - 10.10.50.0/24         # escludi subnet non autorizzata
-      ports:
-        - protocol: TCP
-          port: 8443
-```
-
-!!! tip "Combinazione di selettori in NetworkPolicy"
-    All'interno di un elemento `from`/`to`, i campi `namespaceSelector` e `podSelector` sono in AND logico (entrambi devono essere soddisfatti). Elementi separati nella lista sono in OR. Questa distinzione è critica per scrivere policy corrette.
+    **Approfondimento completo →** [Network Policies](../../networking/kubernetes/network-policies.md)
 
 ---
 
@@ -1011,17 +725,8 @@ spec:
 - Configurare stub zone CoreDNS per risolvere hostname interni aziendali
 - Monitorare le metriche CoreDNS (latenza DNS alta causa problemi a cascata)
 
-**NetworkPolicy:**
-- Adottare sempre il pattern default-deny per namespace di produzione
-- Ricordare di includere sempre la regola egress per DNS (porta 53 UDP/TCP)
-- Etichettare i namespace con `kubernetes.io/metadata.name` per policy cross-namespace
-- Testare le policy in staging prima di applicare in produzione
-
-**Ingress:**
-- Usare un Ingress Controller dedicato per produzione (non lo stesso del dev)
-- Configurare `cert-manager` per TLS automatico
-- Definire `resource limits` per l'Ingress Controller (può diventare collo di bottiglia)
-- Usare `externalTrafficPolicy: Local` su LoadBalancer Service per Ingress se serve IP client reale
+!!! tip "NetworkPolicy e Ingress"
+    Best practice specifiche (default-deny, cert-manager, IngressClass, resource limits) sono in [Network Policies](../../networking/kubernetes/network-policies.md) e [Ingress](../../networking/kubernetes/ingress.md).
 
 ---
 
@@ -1060,80 +765,15 @@ kubectl describe service api -n production                 # verifica il selecto
 # Elenca NetworkPolicy nel namespace target
 kubectl get networkpolicy -n production
 kubectl describe networkpolicy -n production
-
-# Test senza NetworkPolicy (solo debug, mai in prod)
-kubectl label namespace production network-policy-exempt=true  # non ha effetto diretto
-# → usa un Pod privilegiato per tracciare il traffico
 ```
+Debug approfondito (Calico/Cilium, AND vs OR nei selettori, DNS egress mancante) → [Network Policies — Troubleshooting](../../networking/kubernetes/network-policies.md#troubleshooting).
+
+!!! note "Ingress 404/502"
+    Se il sintomo parte da un browser (non da un Pod interno), vedi [Ingress — Troubleshooting](../../networking/kubernetes/ingress.md#troubleshooting) per gli scenari 404/502/redirect loop.
 
 ---
 
-### Scenario 2: Ingress ritorna 404 o 502
-
-**Sintomo:** Browser riceve 404 Not Found o 502 Bad Gateway su un host configurato nell'Ingress.
-
-```bash
-# 404 — Ingress Controller non trova regola
-kubectl get ingress -n production                           # esiste l'Ingress?
-kubectl describe ingress app-ingress -n production          # regole corrette?
-
-# Verifica IngressClass
-kubectl get ingressclass                                    # esiste la class?
-kubectl get ingress app-ingress -n production -o jsonpath='{.spec.ingressClassName}'
-
-# 502 — Ingress Controller raggiunge il Service ma il Pod non risponde
-kubectl get endpoints api -n production                     # endpoints presenti?
-kubectl logs -n ingress-nginx deployment/ingress-nginx-controller --tail=100
-
-# Test diretto al Service bypassando Ingress
-kubectl port-forward service/api 8080:80 -n production
-curl http://localhost:8080/healthz
-```
-
----
-
-### Scenario 3: NetworkPolicy blocca traffico legittimo
-
-**Sintomo:** Dopo aver applicato una NetworkPolicy, un servizio smette di funzionare.
-
-```bash
-# Identifica quale policy sta bloccando
-kubectl get networkpolicy -n production -o yaml | grep -A 20 "podSelector"
-
-# Strumento di verifica Calico (se CNI è Calico)
-kubectl exec -n kube-system ds/calico-node -- calicoctl get networkpolicy -o wide
-
-# Strumento Cilium (se CNI è Cilium)
-kubectl exec -n kube-system ds/cilium -- cilium policy trace \
-  --src-pod production/api-xxx --dst-pod production/postgres-yyy --dport 5432
-
-# Errore comune: dimenticato il permesso DNS egress
-# Aggiungi immediatamente se i Pod non risolvono nomi dopo default-deny:
-kubectl apply -f - <<EOF
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-dns-egress
-  namespace: production
-spec:
-  podSelector: {}
-  policyTypes: [Egress]
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: kube-system
-    ports:
-    - protocol: UDP
-      port: 53
-    - protocol: TCP
-      port: 53
-EOF
-```
-
----
-
-### Scenario 4: Service LoadBalancer bloccato in `<pending>` External IP
+### Scenario 2: Service LoadBalancer bloccato in `<pending>` External IP
 
 **Sintomo:** `kubectl get service` mostra `EXTERNAL-IP: <pending>` da molto tempo.
 
@@ -1182,10 +822,6 @@ kubectl patch service api-lb -n production -p '{"spec": {"type": "NodePort"}}'
 
 - [Kubernetes Networking Model](https://kubernetes.io/docs/concepts/cluster-administration/networking/)
 - [Services](https://kubernetes.io/docs/concepts/services-networking/service/)
-- [Ingress](https://kubernetes.io/docs/concepts/services-networking/ingress/)
-- [NetworkPolicy](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 - [DNS per Service e Pod](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/)
 - [CoreDNS](https://coredns.io/plugins/kubernetes/)
-- [NGINX Ingress Controller](https://kubernetes.github.io/ingress-nginx/)
-- [Cilium NetworkPolicy](https://docs.cilium.io/en/stable/security/policy/)
-- [Calico NetworkPolicy](https://docs.tigera.io/calico/latest/network-policy/)
+- [EndpointSlice](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/)

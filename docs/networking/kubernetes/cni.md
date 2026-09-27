@@ -5,7 +5,7 @@ category: networking
 tags: [kubernetes, cni, calico, cilium, flannel, overlay, ebpf, bgp, networking]
 search_keywords: [container network interface, cni plugin, pod networking, overlay network, vxlan, geneve, bgp, calico, cilium, flannel, weave, ebpf, pod cidr, cluster cidr, ip-in-ip, wireguard, network policy enforcement, kube-proxy replacement, hubble, network observability]
 parent: networking/kubernetes/_index
-related: [networking/kubernetes/network-policies, networking/kubernetes/ingress, networking/service-mesh/istio]
+related: [networking/kubernetes/network-policies, networking/kubernetes/ingress, networking/service-mesh/istio, containers/kubernetes/networking]
 official_docs: https://www.cni.dev/docs/
 status: complete
 difficulty: advanced

@@ -5,7 +5,7 @@ category: networking
 tags: [kubernetes, network-policy, sicurezza, firewall, microsegmentazione, calico, cilium]
 search_keywords: [kubernetes network policy, pod firewall, default deny, ingress egress rules, namespace selector, pod selector, ipblock, calico network policy, cilium network policy, micro-segmentation, zero trust kubernetes, egress control, dns egress, multi-tenant kubernetes]
 parent: networking/kubernetes/_index
-related: [networking/kubernetes/cni, networking/kubernetes/ingress, networking/sicurezza/zero-trust, networking/sicurezza/firewall-waf]
+related: [networking/kubernetes/cni, networking/kubernetes/ingress, networking/sicurezza/zero-trust, networking/sicurezza/firewall-waf, containers/kubernetes/networking]
 official_docs: https://kubernetes.io/docs/concepts/services-networking/network-policies/
 status: complete
 difficulty: advanced

@@ -66,3 +66,4 @@ Il CNI plugin è una delle decisioni architetturali più durature di un cluster 
 - **Load Balancing**: i Kubernetes Service di tipo LoadBalancer si integrano con il cloud provider LB (AWS ALB, Azure LB)
 - **Sicurezza**: le Network Policies sono il complemento Kubernetes delle firewall rules tradizionali
 - **API Gateway**: Kong Ingress Controller, Traefik estendono l'Ingress con funzionalità di API Gateway
+- **Service, kube-proxy, DNS/CoreDNS**: il dettaglio su Service types, kube-proxy (iptables/ipvs), risoluzione DNS interna e un caso pratico di migrazione cluster-to-cluster via NodePort sono in [containers/kubernetes/networking](../../containers/kubernetes/networking.md)

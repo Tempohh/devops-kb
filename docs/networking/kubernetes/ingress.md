@@ -5,7 +5,7 @@ category: networking
 tags: [kubernetes, ingress, nginx, traefik, tls, routing, cert-manager]
 search_keywords: [kubernetes ingress, ingress controller, nginx ingress, traefik ingress, haproxy ingress, cert-manager, lets encrypt, tls termination, path based routing, host based routing, ingress class, gateway api, httproute, grpc route, kubernetes service, nodeport, clusterip, loadbalancer, external traffic]
 parent: networking/kubernetes/_index
-related: [networking/kubernetes/network-policies, networking/kubernetes/cni, networking/api-gateway/pattern-base, networking/load-balancing/layer4-vs-layer7]
+related: [networking/kubernetes/network-policies, networking/kubernetes/cni, networking/api-gateway/pattern-base, networking/load-balancing/layer4-vs-layer7, containers/kubernetes/networking]
 official_docs: https://kubernetes.io/docs/concepts/services-networking/ingress/
 status: complete
 difficulty: intermediate

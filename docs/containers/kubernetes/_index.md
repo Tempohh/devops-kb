@@ -65,4 +65,4 @@ Kubernetes (K8s) è il sistema di orchestrazione di container de facto per ambie
 </div>
 
 !!! note "Networking Kubernetes"
-    CNI, Ingress, NetworkPolicy e Service Mesh sono documentati nella sezione [Networking → Kubernetes](../../networking/kubernetes/_index.md).
+    CNI, Ingress, NetworkPolicy e Service Mesh sono documentati nella sezione [Networking → Kubernetes](../../networking/kubernetes/_index.md). Per Service, kube-proxy, DNS/CoreDNS e il caso pratico di migrazione cluster-to-cluster via NodePort vedi [Networking](networking.md) in questa sezione.
