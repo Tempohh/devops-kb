@@ -6,7 +6,7 @@ tags: [sicurezza, firewall, vpn, zero-trust, ddos, waf]
 parent: networking
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-09-27
 ---
 
 # Sicurezza di Rete
@@ -27,6 +27,9 @@ Dalla protezione L3/L4 con packet filtering e stateful inspection fino alla prot
 
 ### [VPN e IPsec](vpn-ipsec.md)
 Tecnologie di tunneling per la connettività sicura: IPsec (IKEv2, ESP, AH), WireGuard, OpenVPN. Configurazioni site-to-site e remote access, con analisi comparativa e indicazioni su quando usare ciascuna tecnologia.
+
+### [WireGuard](wireguard.md)
+VPN moderna basata su cryptokey routing, con confronto diretto a IPsec e OpenVPN. Topologie site-to-site, hub-and-spoke e full-mesh gestito (Tailscale, Headscale, NetBird), integrazione in Cilium/Calico.
 
 ### [Zero Trust Networking](zero-trust.md)
 Il modello di sicurezza che sostituisce il paradigma perimetrale: "never trust, always verify". Principi NIST 800-207, implementazione pratica con identity provider, device posture, micro-segmentazione e service mesh mTLS.
