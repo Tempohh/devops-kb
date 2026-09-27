@@ -5,9 +5,9 @@ category: dev
 tags: [api, rest, grpc, graphql, asyncapi, openapi, versionamento, contratti, microservizi]
 search_keywords: [api design, rest api, restful, grpc, graphql, asyncapi, openapi, swagger, api gateway, versionamento api, api versioning, contratti api, api contract, backward compatibility, protobuf, protocol buffers, api first, design first, code first, idl, interface definition language, api schema, json schema, avro, schema registry, http api, web api, service api, endpoint, route, resource, api specification, api documentation, api testing, api mocking, consumer driven contract, pact, contract testing, api security, oauth2, jwt bearer, rate limiting, throttling, api design patterns, hateoas, hypermedia]
 parent: dev/_index
-related: [dev/linguaggi/_index, dev/resilienza/_index, dev/integrazioni/_index, security/_index, messaging/_index]
+related: [dev/api/rest-openapi, dev/linguaggi/_index, dev/resilienza/_index, dev/integrazioni/_index, security/_index, messaging/_index]
 official_docs: https://swagger.io/specification/
-status: needs-review
+status: complete
 difficulty: intermediate
 last_updated: 2026-09-27
 ---
@@ -25,6 +25,10 @@ Esistono tre paradigmi principali per le API di microservizi:
 - **AsyncAPI / Event-Driven** — descrive le API asincrone (Kafka, RabbitMQ, NATS). Il complemento di OpenAPI per il mondo event-driven.
 
 La scelta del paradigma influenza profondamente le decisioni successive: serializzazione, versionamento, testing, e tooling di generazione codice.
+
+### Sezioni
+
+- [REST & OpenAPI](rest-openapi.md) — guida dedicata a REST over HTTP/JSON e OpenAPI 3.x: design URI, status code, formato errori, paginazione, versionamento, contract testing (`oasdiff`).
 
 ---
 
