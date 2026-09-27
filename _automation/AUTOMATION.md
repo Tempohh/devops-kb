@@ -107,8 +107,8 @@ next-task ─► pre-flight (0 token) ─► modello per tipo ─► claude -p -
 coda vuota?                                              rate limit? ─► stop soft (task pending)
   ├─ analisi > 7g?  ─► init-analysis                     errore?     ─► force-complete, stop
   ├─ proposte pending? ─► auto-approve (CI) / lascia      ok?         ─► force-complete
-  └─ altrimenti ─► inject-proposal-task                                  ├─ validate-all
-                                                                        ├─ prune
+  └─ altrimenti ─► nessuna azione, stop (attende            │             ├─ validate-all
+                   il prossimo init-analysis)                            ├─ prune
 fine giro: check-mkdocs (broken link ─► P0) + maintain                  └─ git commit
 ```
 
@@ -183,7 +183,7 @@ check-mkdocs | validate-all <json> | audit-preflight <path>
 estimate-tokens <path> <in> <out> | update-run | prune | maintain | stats
 analysis-status | init-analysis
 list-proposals | approve-proposal <id> | reject-proposal <id>
-auto-approve-proposals | inject-proposal-task
+auto-approve-proposals | inject-proposal-task (solo kb-infinite.ps1, non da run_once.py)
 resolve-interrupted            # pulisce un interrupted_task stale
 saturation-gate                # stato saturazione vs target
 review-candidates [n]          # n file verificati meno di recente

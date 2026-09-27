@@ -951,9 +951,17 @@ def cmd_auto_approve_proposals():
 def cmd_inject_proposal_task():
     """
     Inietta un task di tipo 'proposal' nella coda.
-    Usato dal loop quando la coda è vuota da troppo tempo e non ci sono
-    proposte pendenti. Evita duplicati: non aggiunge se esiste già un task
-    proposal pending.
+    Usato SOLO da kb-infinite.ps1 (uso interattivo locale) quando la coda e'
+    vuota da troppo tempo e non ci sono proposte pendenti. Evita duplicati:
+    non aggiunge se esiste già un task proposal pending.
+
+    run_once.py (CI + KB_Aggiorna_Sicuro.bat) NON chiama piu' questo comando a
+    coda vuota: la generazione proposte per quei percorsi resta schedulata solo
+    dentro init-analysis (1 task/settimana), per evitare sessioni Opus/high
+    ripetute a vuoto quando la KB non cambia tra un tick e l'altro (criticita' #5).
+    Il throttle per l'uso interattivo di kb-infinite.ps1 vive nello script stesso
+    (ProposalMinIntervalSeconds), non qui, perche' e' un limite di sessione
+    (wall-clock in memoria) e non uno stato persistente condiviso con la CI.
     """
     state = load_state()
     queue = state.get("queue", [])

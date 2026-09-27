@@ -180,6 +180,14 @@ try {
     $EmptyBeforeProposal     = 1    # 1 run vuota → genera subito proposte (~30s)
     $EmptyBeforeAutoApprove  = 3    # 3 run con proposte pending → auto-approva (~90s finestra utente)
 
+    # Throttle di sessione (in memoria, non persistito in state.yaml): senza
+    # questo, con EmptyBeforeProposal=1 e RunInterval=30s, una coda che resta
+    # vuota tra una proposta e l'altra farebbe ripartire una sessione Opus/high
+    # di scansione KB ogni ~30-60s (criticita' #5). Limite solo per questa
+    # sessione locale: run_once.py (CI) non inietta piu' proposal a coda vuota.
+    $lastProposalInjectAt        = [datetime]::MinValue
+    $ProposalMinIntervalSeconds  = 600   # min 10 minuti tra due iniezioni proposal in questa sessione
+
     while ($true) {
 
         $sessionRuns++
@@ -261,18 +269,25 @@ try {
                 }
 
             } elseif ($emptyRuns -ge $EmptyBeforeProposal) {
-                # ── 3. Nessuna proposta e coda vuota: genera proposte
-                Write-Host "  [PROPOSTE] Coda vuota — avvio sessione proposte strategica..." -ForegroundColor Magenta
-                $injectResult = & $pythonBin $StatePy inject-proposal-task 2>&1
-                try { $injectObj = $injectResult | ConvertFrom-Json } catch { $injectObj = $null }
-                if ($injectObj -and $injectObj.status -eq "ok") {
-                    Write-Host "  [PROPOSTE] Task $($injectObj.task_id) iniettato — Claude analizzera' la KB" -ForegroundColor Magenta
-                    Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] PROPOSAL_INJECT task=$($injectObj.task_id)" -Encoding UTF8
-                } elseif ($injectObj -and $injectObj.status -eq "skipped") {
-                    # Proposta gia' in coda (pending), non aggiungere duplicati
-                    Write-Host "  [PROPOSTE] Task proposal gia' in coda." -ForegroundColor DarkGray
+                # ── 3. Nessuna proposta e coda vuota: genera proposte (con throttle di sessione)
+                $secsSinceLastProposal = ((Get-Date) - $lastProposalInjectAt).TotalSeconds
+                if ($secsSinceLastProposal -lt $ProposalMinIntervalSeconds) {
+                    $waitLeft = [int]($ProposalMinIntervalSeconds - $secsSinceLastProposal)
+                    Write-Host "  [PROPOSTE] Throttle sessione attivo — prossima proposta tra ${waitLeft}s" -ForegroundColor DarkGray
                 } else {
-                    Write-Host "  [!] inject-proposal-task: $injectResult" -ForegroundColor Red
+                    Write-Host "  [PROPOSTE] Coda vuota — avvio sessione proposte strategica..." -ForegroundColor Magenta
+                    $injectResult = & $pythonBin $StatePy inject-proposal-task 2>&1
+                    try { $injectObj = $injectResult | ConvertFrom-Json } catch { $injectObj = $null }
+                    if ($injectObj -and $injectObj.status -eq "ok") {
+                        Write-Host "  [PROPOSTE] Task $($injectObj.task_id) iniettato — Claude analizzera' la KB" -ForegroundColor Magenta
+                        Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] PROPOSAL_INJECT task=$($injectObj.task_id)" -Encoding UTF8
+                        $lastProposalInjectAt = Get-Date
+                    } elseif ($injectObj -and $injectObj.status -eq "skipped") {
+                        # Proposta gia' in coda (pending), non aggiungere duplicati
+                        Write-Host "  [PROPOSTE] Task proposal gia' in coda." -ForegroundColor DarkGray
+                    } else {
+                        Write-Host "  [!] inject-proposal-task: $injectResult" -ForegroundColor Red
+                    }
                 }
                 $emptyRuns = 0
                 continue

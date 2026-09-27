@@ -294,11 +294,15 @@ def handle_empty_queue(cfg: dict, args) -> bool:
         log(f"[PROPOSTE] {pending} pendenti — lasciate per review manuale")
         return False
 
-    # coda vuota, nessuna proposta: inietta una sessione di proposte
-    log("[PROPOSTE] coda vuota — inietto task proposal")
-    if not args.dry_run:
-        state("inject-proposal-task")
-    return True
+    # Coda vuota, nessuna proposta pendente: nessuna iniezione standalone qui.
+    # La generazione di proposte e' gia' schedulata dentro init-analysis (1 task
+    # proposal ogni analysis_interval_days, vedi ramo sopra). Iniettarne un'altra
+    # a ogni tick vuoto (fino a 4/giorno) produceva solo sessioni Opus/high
+    # ripetute a vuoto quando la KB non cambia tra un tick e l'altro (criticita' #5).
+    # L'iniezione rapida standalone resta disponibile solo in kb-infinite.ps1,
+    # che ha un proprio throttle per l'uso interattivo locale.
+    log("[PROPOSTE] coda vuota — nessuna proposta pendente, in attesa del prossimo init-analysis")
+    return False
 
 
 # ── main ──────────────────────────────────────────────────────────────────

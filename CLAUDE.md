@@ -312,6 +312,7 @@ scrivere `_automation/state.yaml`**; fermati dopo un task.
 | 2 | 2026-02-23 | Sequenze di escape letterali (es. `\n`) nei diagrammi/schemi renderizzate come testo invece che come caratteri di controllo | Aggiunto pattern da evitare; usare sempre newline reali o attributi XML appropriati nei file `.drawio.svg` | CLAUDE.md | ✅ Chiuso |
 | 3 | 2026-09-08 | `status: complete` privo di significato (404/407 file "complete"); gate qualità solo meccanico; nessun freno alla crescita; automazione non documentata in CLAUDE.md; sezione AI indietro di una generazione (Claude 4.6 vs famiglia Claude 5); `mkdocs build --strict` rotto; automazione dipendente dal PC acceso | Ciclo di stato reale con `reviewed`/`last_verified`; task type `review`/`currency`/`consolidate`; freno di saturazione; sezione "Layer di automazione"; CI GitHub Actions (deploy + manutenzione schedulata); fix config tags; sweep attualità sezione AI | CLAUDE.md, `_automation/*`, `.github/workflows/*`, `mkdocs.yml`, `docs/ai/modelli/*`, `docs/index.md`, `docs/_metadata/taxonomy.yml` | ✅ Chiuso |
 | 4 | 2026-09-09 | Il cron nativo di GitHub Actions per `kb-maintenance` partiva con 1–4 h di ritardo (o veniva droppato): lo step *Gate* con finestra oraria di 1 h scartava **ogni** run schedulato (`ora di Roma fuori da 00/06/12/18`). Da quando lo schedule fu ancorato: zero iterazioni reali dell'automazione via cron. | Rimosso `schedule:` dal workflow (trigger solo `workflow_dispatch`); scheduling puntuale 00/06/12/18 ora di Roma delegato a scheduler esterno (cron-job.org, timezone Europe/Rome, PAT fine-grained con permesso *Actions: RW*) che chiama l'endpoint `dispatches`; gate ridotto a pausa + secret; runbook in `AUTOMATION.md` §2 | `.github/workflows/kb-maintenance.yml`, `_automation/AUTOMATION.md`, CLAUDE.md | ✅ Chiuso |
+| 5 | 2026-09-27 | `run_once.py::handle_empty_queue` iniettava un nuovo task `proposal` (Opus/high, scansione intera KB) a ogni tick con coda vuota, senza alcun cooldown — fino a 4 sessioni/giorno via CI, tutte concluse a "zero proposte" perché nulla era cambiato dall'ultima (5 commit auto #552-556 di fila identici). `kb-infinite.ps1` aveva lo stesso problema ma piggiore: loop ogni 30s, `EmptyBeforeProposal=1` → re-iniettava dopo una sola run vuota (~30-60s). | `run_once.py`: rimossa l'iniezione standalone a coda vuota — la generazione proposte per CI/`.bat` resta solo dentro `init-analysis` (1/settimana, `analysis_interval_days`). `kb-infinite.ps1`: mantenuta l'iniezione rapida (uso interattivo) ma con throttle di sessione in memoria (`ProposalMinIntervalSeconds=600`, non persistito in `state.yaml`) per non spammare Opus ogni 30s. | `_automation/run_once.py`, `_automation/manage-state.py`, `_automation/kb-infinite.ps1`, `_automation/AUTOMATION.md`, CLAUDE.md | ✅ Chiuso |
 
 ### Pattern da Evitare
 
@@ -330,6 +331,11 @@ scrivere `_automation/state.yaml`**; fermati dopo un task.
   (cron-job.org → endpoint `dispatches`); il cron di Actions arrivava troppo in
   ritardo e il gate orario azzerava il throughput (criticità #4). Workflow con
   trigger solo `workflow_dispatch`, gate ridotto a pausa + secret. → applicata
+- **2026-09-27**: Rimossa l'iniezione standalone di task `proposal` a coda vuota
+  da `run_once.py` (CI + `.bat` locale) — restava solo dentro `init-analysis`,
+  1/settimana; sessioni Opus/high ripetute a vuoto (criticità #5). Aggiunto
+  throttle di sessione (10 min, in memoria) in `kb-infinite.ps1`, unico
+  percorso che mantiene l'iniezione rapida per uso interattivo. → applicata
 
 ---
 
