@@ -9,7 +9,7 @@ related: [ci-cd/strategie/pipeline-security]
 official_docs: https://docs.pact.io/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-09-27
 ---
 
 # Testing CI/CD
@@ -20,3 +20,4 @@ Strategie e strumenti per integrare i test nella pipeline CI/CD, con focus sulla
 
 - [Test Strategy](test-strategy.md) — Test pyramid per microservizi, Testcontainers, mutation testing
 - [Contract Testing](contract-testing.md) — Pact e Consumer-Driven Contracts per microservizi
+- [Performance Testing](performance-testing.md) — Load/stress/soak testing con k6 e Gatling, soglie SLO in pipeline
