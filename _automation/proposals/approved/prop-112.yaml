@@ -1,0 +1,49 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "`docs/dev/resilienza/observability-code.md` include `monitoring/tools/jaeger-tempo`\n\
+  nel campo `related` del frontmatter (strumentazione OTel lato codice che\nproduce\
+  \ le tracce visualizzate poi in Jaeger/Tempo). Il file target non\nreciproca: nessun\
+  \ riferimento a observability-code.md, né in `related` né nel\ntesto.\nAggiungere\
+  \ in `jaeger-tempo.md`:\n- `dev/resilienza/observability-code` al campo `related`\n\
+  - un admonition `??? info` (sezione Relazioni, se esiste, altrimenti crearla\n \
+  \ in coda al file prima di Riferimenti) che chiarisca: le tracce che Jaeger/\n \
+  \ Tempo visualizzano vengono generate lato applicativo tramite\n  strumentazione\
+  \ OTel manuale o automatica, descritta in dettaglio in\n  observability-code.md\n\
+  Aggiornare `last_updated`.\n"
+effort: small
+id: prop-112
+last_analyzed: 2026-09-28
+priority: medium
+rationale: 'Chi arriva su jaeger-tempo.md per capire il backend di visualizzazione
+  delle
+
+  tracce non trova il collegamento a come quelle tracce vengono effettivamente
+
+  generate nel codice applicativo (span, context propagation, auto vs manual
+
+  instrumentation) — un gap di connettività tra la parte infrastrutturale e
+
+  quella applicativa dello stesso flusso end-to-end. Stesso pattern di
+
+  asimmetria già rilevato ripetutamente nella KB.
+
+  '
+status: approved
+tags:
+- opentelemetry
+- jaeger
+- tempo
+- observability
+- relazioni
+target_file: docs/monitoring/tools/jaeger-tempo.md
+title: 'Relazione asimmetrica: Observability-code cita Jaeger/Tempo ma non viceversa'
+type: fix-relation
+utility_test:
+  outcome: Trova subito il collegamento alla guida di strumentazione OTel lato codice,
+    senza dover cercare separatamente
+  reader: DevOps/developer che configura Jaeger o Tempo come backend di tracing
+  scenario: Ha il backend funzionante ma non sa come instrumentare il proprio servizio
+    per produrre tracce utili
+  score: medium
+  without_kb: Dovrebbe cercare autonomamente la documentazione OTel per il proprio
+    linguaggio, senza sapere che la KB ha già una guida dedicata
