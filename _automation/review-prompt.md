@@ -19,7 +19,7 @@ Leggi il file per intero. Leggi 1–2 file `related` per contesto.
 |---|---|---|
 | **Correttezza** | Ci sono affermazioni tecnicamente sbagliate, comandi che non funzionano, API/flag inesistenti, versioni citate come correnti ma superate? | Correggi in loco le imprecisioni evidenti e sicure. Per quelle che richiedono verifica esterna, annota `<!-- REVIEW: verificare X -->` e abbassa `status`. |
 | **Attualità** | Il contenuto riflette lo stato del 2026? Tool deprecati presentati come vivi? Manca una novità rilevante e stabile? | Aggiorna i punti sicuri. Apri una proposta `currency` (vedi Fase 4) se serve un intervento ampio. |
-| **Valore** | Un DevOps che legge SOLO questo file risolve un problema reale, o è contenuto generico/di riempimento? C'è overlap forte con un altro file? | Se è debole ma recuperabile: nota cosa manca. Se è ridondante: proponi `consolidate`. |
+| **Valore** | Un DevOps che legge SOLO questo file risolve un problema reale, o è contenuto generico/di riempimento? C'è overlap forte con un altro file? Ogni termine/acronimo poco riconoscibile è spiegato alla prima occorrenza? Ogni scelta ha un **perché** (motivo) e un **come** (meccanismo), non solo il "cosa"? Le admonitions `??? info` verso altri file sono pertinenti, aggiornate e non ridondanti col contenuto già presente? | Se è debole ma recuperabile: nota cosa manca. Se è ridondante: proponi `consolidate`. Se manca una spiegazione/motivazione o un riferimento è sganciato dal contesto: correggi in loco se puntuale, altrimenti annota `<!-- REVIEW: ... -->` e abbassa `status`. |
 
 ### Fase 3 — Aggiornamento frontmatter
 

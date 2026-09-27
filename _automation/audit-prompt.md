@@ -29,6 +29,8 @@ Controlla questi criteri nell'ordine indicato. **Appena trovi un'issue, correggi
 | 4 | `search_keywords` | >= 10 entry | Se pochi: aggiungi sinonimi IT/EN, acronimi |
 | 5 | `related` | >= 2 percorsi reali | Se pochi: aggiungi path verificati |
 | 6 | Sezioni H2 vuote | Tutte popolate | Se vuote: aggiungi contenuto minimo |
+| 7 | Termini/acronimi poco riconoscibili | Ogni acronimo o termine tecnico non ovvio ha una breve spiegazione alla prima occorrenza (parentesi o frase) | Se manca: aggiungi spiegazione inline di 1 riga, senza appesantire il testo |
+| 8 | Affermazioni senza motivazione | Ogni scelta/comando/config presentato ha un perché (motivo) o un come (meccanismo) accennato, non solo il "cosa" | Se manca: aggiungi 1 frase di contesto — non limitarti a elencare il comando |
 
 **Regole:**
 - Aggiorna `last_updated` a oggi e `status: complete` nel frontmatter
