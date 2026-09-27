@@ -7,7 +7,7 @@ search_keywords: [AWS ECS, Elastic Container Service, EKS, Elastic Kubernetes Se
 parent: cloud/aws/compute/_index
 related: [cloud/aws/iam/policies-avanzate, cloud/aws/networking/vpc, cloud/aws/security/kms-secrets, cloud/aws/monitoring/cloudwatch, containers/kubernetes/_index]
 official_docs: https://docs.aws.amazon.com/ecs/
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-09-26
 last_verified: 2026-09-27
@@ -449,9 +449,8 @@ spec:
 
 **App Runner** è il servizio PaaS per container — deploy con zero configurazione infrastruttura.
 
-<!-- REVIEW: verificare stato App Runner — AWS ha annunciato che non accetta nuovi clienti dal 30/04/2026 (maintenance mode); per nuovi progetti preferire ECS Express Mode -->
-!!! warning "Attenzione"
-    App Runner potrebbe non essere più disponibile per nuovi account. Verificare lo stato attuale prima di adottarlo; alternativa: **ECS Express Mode** (deploy semplificato di servizi su ECS/Fargate con ALB e scaling preconfigurati).
+!!! warning "App Runner in maintenance mode"
+    Confermato (AWS, 31/03/2026): dal **30/04/2026** App Runner non accetta nuovi clienti — passa in **maintenance mode** (solo security/availability, nessuna nuova feature). Chi ha già account può continuare a creare servizi normalmente. Per nuovi progetti: **ECS Express Mode** (lanciato re:Invent 2025), deploy semplificato su ECS/Fargate con ALB e scaling preconfigurati, con accesso completo alle feature ECS.
 
 ```bash
 # Creare App Runner service da ECR
