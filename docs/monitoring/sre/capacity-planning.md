@@ -5,11 +5,11 @@ category: monitoring
 tags: [sre, capacity-planning, load-testing, demand-forecasting, scaling, performance, k6, locust, jmeter, headroom]
 search_keywords: [capacity planning, pianificazione capacità, demand forecasting, previsione domanda, load testing, test di carico, stress test, k6, locust, jmeter, gatling, headroom, margine di capacità, over-provisioning, under-provisioning, right-sizing, scalabilità, scalability, vertical scaling, horizontal scaling, auto-scaling, HPA, resource limits, resource requests, cpu throttling, memory pressure, traffic spike, peak traffic, traffic forecast, growth planning, saturation, utilizzo risorse, resource utilization, throughput, latency degradation, capacity model, performance baseline, benchmark, VU, virtual users, ramp-up, soak test, spike test, finops, cost vs performance, sre capacity, google sre, load profile]
 parent: monitoring/sre/_index
-related: [monitoring/sre/slo-sla-sli, monitoring/sre/error-budget, monitoring/tools/prometheus, monitoring/tools/grafana, monitoring/sre/chaos-engineering]
+related: [monitoring/sre/slo-sla-sli, monitoring/sre/error-budget, monitoring/tools/prometheus, monitoring/tools/grafana, monitoring/sre/chaos-engineering, monitoring/sre/incident-management]
 official_docs: https://sre.google/workbook/capacity-planning/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-26
+last_updated: 2026-09-27
 ---
 
 # Capacity Planning — SRE

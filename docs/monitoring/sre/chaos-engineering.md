@@ -5,11 +5,11 @@ category: monitoring
 tags: [sre, chaos-engineering, chaos-monkey, litmus-chaos, resilience, fault-injection, gameday, kubernetes]
 search_keywords: [chaos engineering, ingegneria del caos, chaos monkey, chaos mesh, litmus chaos, litmus, gremlin, fault injection, iniezione guasti, fault tolerance, tolleranza ai guasti, resilience testing, test di resilienza, gameday, game day, steady state hypothesis, ipotesi di stato stabile, blast radius, raggio di esplosione, pod failure, network latency, latenza di rete, cpu stress, node drain, kill pod, pod kill, network partition, partizione di rete, failure mode, failure modes, failure scenarios, scenari di guasto, chaos experiment, esperimento chaos, chaos testing, mean time to recovery, mttr, dependency failure, cascading failure, fallimento a cascata, circuit breaker, disruption, service disruption, production chaos, netflix chaos, simian army, chaos gorilla, chaos kong]
 parent: monitoring/sre/_index
-related: [monitoring/sre/slo-sla-sli, monitoring/sre/incident-management, monitoring/sre/error-budget, containers/kubernetes/architettura, containers/kubernetes/workloads]
+related: [monitoring/sre/slo-sla-sli, monitoring/sre/incident-management, monitoring/sre/error-budget, monitoring/sre/capacity-planning, containers/kubernetes/architettura, containers/kubernetes/workloads]
 official_docs: https://principlesofchaos.org/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-25
+last_updated: 2026-09-27
 ---
 
 # Chaos Engineering

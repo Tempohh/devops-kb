@@ -5,11 +5,11 @@ category: monitoring
 tags: [sre, slo, sla, sli, reliability, error-budget, google-sre]
 search_keywords: [slo, sla, sli, service level objective, service level agreement, service level indicator, error budget, reliability, affidabilità, uptime, disponibilità, sre, google sre, toil, burn rate, target di disponibilità]
 parent: monitoring/sre/_index
-related: [monitoring/sre/error-budget, monitoring/tools/prometheus, monitoring/alerting/alertmanager, monitoring/fondamentali/opentelemetry]
+related: [monitoring/sre/error-budget, monitoring/sre/capacity-planning, monitoring/sre/chaos-engineering, monitoring/sre/incident-management, monitoring/tools/prometheus, monitoring/alerting/alertmanager, monitoring/fondamentali/opentelemetry]
 official_docs: https://sre.google/sre-book/service-level-objectives/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-09-27
 ---
 
 # SLO, SLA, SLI — Reliability Targets

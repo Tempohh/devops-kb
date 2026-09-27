@@ -5,11 +5,11 @@ category: monitoring
 tags: [sre, incident-management, on-call, postmortem, runbook, pagerduty, opsgenie, mttr, severity]
 search_keywords: [incident management, gestione incidenti, on-call, oncall, on call rotation, reperibilità, pagerduty, opsgenie, victorops, runbook, playbook, war room, blameless postmortem, post mortem, postmortem, retrospettiva incidente, severity, severità, severity level, incident severity, mttr, mean time to recover, mean time to resolve, mtta, mean time to acknowledge, mttd, mean time to detect, incident commander, incident response, escalation, escalation policy, sre, site reliability engineering, slo violation, on-call fatigue, alert fatigue, incident retrospective, root cause analysis, rca]
 parent: monitoring/sre/_index
-related: [monitoring/sre/slo-sla-sli, monitoring/sre/error-budget, monitoring/alerting/alertmanager, monitoring/tools/prometheus, monitoring/tools/grafana]
+related: [monitoring/sre/slo-sla-sli, monitoring/sre/error-budget, monitoring/sre/chaos-engineering, monitoring/sre/capacity-planning, monitoring/alerting/alertmanager, monitoring/tools/prometheus, monitoring/tools/grafana]
 official_docs: https://sre.google/sre-book/managing-incidents/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-25
+last_updated: 2026-09-27
 ---
 
 # Incident Management — SRE

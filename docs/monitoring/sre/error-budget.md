@@ -5,11 +5,11 @@ category: monitoring
 tags: [sre, error-budget, burn-rate, reliability, toil, deploy-freeze, slo]
 search_keywords: [error budget, budget di errore, burn rate, tasso di consumo, deploy freeze, reliability work, toil, error budget policy, sre, error budget exhaustion, esaurimento budget, finestra di errore, fast burn, slow burn, alert multiwindow]
 parent: monitoring/sre/_index
-related: [monitoring/sre/slo-sla-sli, monitoring/tools/prometheus, monitoring/alerting/alertmanager, monitoring/tools/grafana]
+related: [monitoring/sre/slo-sla-sli, monitoring/sre/capacity-planning, monitoring/sre/chaos-engineering, monitoring/sre/incident-management, monitoring/tools/prometheus, monitoring/alerting/alertmanager, monitoring/tools/grafana]
 official_docs: https://sre.google/workbook/error-budget-policy/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-09-27
 ---
 
 # Error Budget — Meccanismo Operativo

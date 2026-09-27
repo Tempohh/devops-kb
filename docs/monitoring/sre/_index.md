@@ -7,7 +7,7 @@ parent: monitoring/_index
 related: [monitoring/tools/prometheus, monitoring/alerting/alertmanager]
 status: complete
 difficulty: advanced
-last_updated: 2026-03-24
+last_updated: 2026-09-27
 ---
 
 # SRE — Site Reliability Engineering
@@ -17,3 +17,7 @@ Le pratiche e le metriche per misurare e garantire la reliability dei sistemi in
 ## Argomenti
 
 - [SLO / SLA / SLI](slo-sla-sli.md) — Definizioni, error budget, burn rate, alerting multi-window
+- [Error Budget](error-budget.md) — Consumo error budget, burn rate, policy di freeze
+- [Capacity Planning](capacity-planning.md) — Previsione capacità, load testing, scaling
+- [Chaos Engineering](chaos-engineering.md) — Game day, fault injection, blast radius
+- [Incident Management](incident-management.md) — Runbook, postmortem, severità
