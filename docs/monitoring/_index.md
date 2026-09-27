@@ -5,9 +5,9 @@ category: monitoring
 tags: [monitoring, observability, prometheus, grafana, opentelemetry, sre, alerting, metriche, log, tracce]
 search_keywords: [monitoring, observability, osservabilità, prometheus, grafana, opentelemetry, loki, jaeger, alertmanager, sre, slo, sla, sli, metriche, log, tracce, tre pilastri]
 parent: /
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-09-27
 ---
 
 # Monitoring & Observability
@@ -24,12 +24,15 @@ La sezione copre l'osservabilità nei sistemi distribuiti moderni: dai tre pilas
 
 [OpenTelemetry](fondamentali/opentelemetry.md) è lo standard che unifica i tre pilastri con un unico SDK e protocollo (OTLP).
 
+!!! note "Quarto segnale: profiling continuo"
+    Oltre ai tre pilastri classici, il [continuous profiling](tools/continuous-profiling.md) aggiunge un quarto segnale — dati a livello di codice (stack trace, CPU, memoria) campionati in continuo in produzione. Risponde a "quale riga di codice consuma le risorse?", una domanda che metriche/log/tracce da sole non coprono.
+
 ## Sezioni
 
 | Sezione | Contenuto |
 |---|---|
 | [Fondamentali](fondamentali/_index.md) | OpenTelemetry, concetti base |
-| [Tools](tools/_index.md) | Prometheus, Grafana, Loki |
+| [Tools](tools/_index.md) | Prometheus, Grafana, Loki, continuous profiling |
 | [Alerting](alerting/_index.md) | Alertmanager, routing, on-call |
 | [SRE](sre/_index.md) | SLO/SLA/SLI, error budget |
 
