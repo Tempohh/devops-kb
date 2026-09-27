@@ -5,11 +5,11 @@ category: ci-cd
 tags: [cicd-strategy, deployment-strategy, pipeline-design, devsecops]
 search_keywords: [cicd strategies, deployment patterns, pipeline design, shift left security, devsecops, continuous deployment, continuous delivery, feature flags, release management]
 parent: ci-cd/_index
-related: [ci-cd/strategie/deployment-strategies, ci-cd/strategie/pipeline-security, ci-cd/jenkins/enterprise-patterns, ci-cd/gitops/argocd]
+related: [ci-cd/strategie/deployment-strategies, ci-cd/strategie/pipeline-security, ci-cd/jenkins/enterprise-patterns, ci-cd/gitops/argocd, ci-cd/strategie/trunk-based-development, ci-cd/strategie/feature-flags]
 official_docs: https://dora.dev/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-27
+last_updated: 2026-09-27
 ---
 
 # Strategie CI/CD
@@ -316,6 +316,16 @@ smoke-test:
     Pipeline design patterns in Jenkins, gestione ambienti, approvazioni, multi-branch.
 
     **Approfondimento completo →** [Jenkins Enterprise Patterns](../jenkins/enterprise-patterns.md)
+
+??? info "Trunk-Based Development"
+    Branching strategy con integrazione continua sul branch principale, feature branch di brevissima durata, disaccoppiamento tra integrazione e rilascio tramite feature flags.
+
+    **Approfondimento completo →** [Trunk-Based Development](trunk-based-development.md)
+
+??? info "Feature Flags"
+    Disaccoppiare deployment del codice da release delle funzionalità: rollout graduale, targeting rules, kill switch, lifecycle management dei flag.
+
+    **Approfondimento completo →** [Feature Flags](feature-flags.md)
 
 ## Riferimenti
 
