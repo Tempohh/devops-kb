@@ -71,10 +71,17 @@ in 2 click. Scarta se è solo simmetria formale tra provider cloud senza gap rea
 **Tieni** se: colma un gap trasversale, aggiunge connettività mancante,
 risolve un problema operativo documentato e non banale.
 
-**Focus tematico corrente:** `docs/networking/` e `docs/cloud/aws/`. A parità di
-score, dai la precedenza ai gap in queste due aree e dedica loro la maggior parte
-delle proposte. Le altre categorie restano ammesse solo con `score: high`. Il freno
-di saturazione (PASSO 0) resta vincolante: il focus non lo scavalca.
+**Focus tematico — auto-rotante, NON hardcodato.** Leggi la sezione "Raccomandazione
+operativa" / "Categorie con gap reali" dell'ultimo `kb-saturation-report.md` (se
+esiste): se segnala un'area satura da 2+ sessioni consecutive senza proposte, sposta
+il focus sull'area con gap reale che il report indica come mai esplorata. Se il
+report non esiste o è la prima sessione, focus di default: `docs/iac/`,
+`docs/monitoring/`, `docs/databases/` (coverage più bassa, mai state in focus finora).
+A parità di score, dai la precedenza ai gap nell'area di focus corrente e dedica loro
+la maggior parte delle proposte; le altre categorie restano ammesse solo con
+`score: high`. Il freno di saturazione (PASSO 0) resta vincolante: il focus non lo
+scavalca. Riporta nel PASSO 5 quale focus hai usato e perché, così la sessione
+successiva può leggerlo.
 
 ---
 
@@ -133,6 +140,9 @@ last_analyzed: 2026-03-30
 
 ## Categorie con gap reali
 [elenco con motivazione]
+
+## Focus usato in questa sessione
+[area/e + perché: default, o rotazione da raccomandazione sessione precedente]
 
 ## Prossima sessione consigliata
 [data + focus tematico]
