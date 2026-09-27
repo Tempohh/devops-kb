@@ -18,4 +18,13 @@ Message broker, event streaming e pattern asincroni per architetture a microserv
 
     [:octicons-arrow-right-24: Esplora](kafka/_index.md)
 
+-   :simple-rabbitmq:{ .lg .middle } **RabbitMQ**
+
+    ---
+
+    Message broker AMQP con routing avanzato: exchange, binding, task queue,
+    RPC pattern. Smart broker per architetture dove il routing è complesso.
+
+    [:octicons-arrow-right-24: Esplora](rabbitmq/_index.md)
+
 </div>
