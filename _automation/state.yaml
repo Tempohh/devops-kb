@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-09-27T20:41:00.007292+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 928
+total_ops: 931
 total_runs: 454
 queue:
 - id: W-001
@@ -5412,6 +5412,72 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '646'
+  type: audit
+  path: docs/cloud/gcp/compute/_index.md
+  category: cloud
+  priority: P1
+  status: pending
+  reason: "`docs/cloud/gcp/compute/cloud-run.md` esiste ed è completo (frontmatter\n`parent: cloud/gcp/compute/_index`), ma\
+    \ il file `_index.md` a cui punta\nNON esiste — è l'unico hub mancante in tutta la sezione `cloud/gcp/**`\n(tutte le altre\
+    \ 6 sotto-sezioni: fondamentali, iam, containers, dati,\nmessaging, monitoring, storage hanno il proprio `_index.md`).\n\
+    Inoltre `docs/cloud/gcp/_index.md` (il grid \"Mappa dei Servizi\") non\nmenziona affatto \"Compute\" o \"Cloud Run\":\
+    \ un lettore che segue la\nnavigazione dalla home GCP non trova mai questo articolo.\nCloud Run è oggi linkato solo lateralmente\
+    \ da 2 admonition \"Approfondimento\"\n(pubsub.md, cloud-monitoring.md) — nessun percorso di navigazione diretto.\nAzioni\
+    \ richieste:\n1. Creare `docs/cloud/gcp/compute/_index.md` seguendo lo stile degli altri\n   hub GCP (frontmatter standard,\
+    \ parent: cloud/gcp/_index, breve intro,\n   grid/lista con link a cloud-run.md).\n2. Aggiungere una card \"Compute\"\
+    \ al grid \"Mappa dei Servizi\" in\n   `docs/cloud/gcp/_index.md` (stesso pattern delle altre 6 card),\n   puntando a\
+    \ `compute/_index.md`.\n"
+  proposal_id: prop-085
+- id: '647'
+  type: currency
+  path: docs/ai/sviluppo/_index.md
+  category: ai
+  priority: P2
+  status: pending
+  reason: "Tutti gli esempi di codice Python in questo file usano model ID datati\ne superati: `\"claude-3-5-sonnet-20241022\"\
+    ` e `\"claude-3-5-haiku-20241022\"`\n(righe ~62, ~72, ~82, ~134, ~166). La KB ha già un file `ai/modelli/claude.md`\n\
+    con `status: reviewed`, `last_verified: 2026-09-08` che documenta i model ID\ncorrenti senza suffisso data (`claude-opus-5`,\
+    \ `claude-sonnet-5`,\n`claude-haiku-4-5`, `claude-fable-5`) e i parametri correnti\n(`output_config.effort`, `thinking:\
+    \ {type: \"adaptive\"}`, niente\n`temperature`/prefill sui modelli 4.7+). Questo file (`last_updated:\n2026-02-27`, mai\
+    \ portato a `reviewed`) non riflette nulla di tutto ciò:\nè rimasto alla generazione Claude 3.5, la stessa criticità già\
+    \ chiusa\naltrove nella KB (vedi registro criticità #3 in CLAUDE.md, che ha sanato\n`docs/ai/modelli/*` ma non ha toccato\
+    \ `ai/sviluppo/`).\nAzioni richieste:\n1. Sostituire i model ID negli esempi con quelli correnti\n   (`claude-sonnet-5`\
+    \ per gli esempi generici, `claude-haiku-4-5` per lo\n   streaming/classificazione veloce).\n2. Aggiungere una riga o\
+    \ nota che rimanda a `ai/modelli/claude.md` per\n   l'elenco aggiornato dei model ID e i parametri correnti, così il file\n\
+    \   non si disallinea di nuovo alla prossima release.\n3. Aggiornare `last_updated` e valutare se impostare `status: needs-review`\n\
+    \   data la modifica (dipende da quanto del contenuto cambia oltre il 30%).\n"
+  proposal_id: prop-086
+- id: '648'
+  type: audit
+  path: docs/ai/agents/_index.md
+  category: ai
+  priority: P3
+  status: pending
+  reason: 'Il campo `related` in `docs/ai/agents/_index.md` (riga 8) contiene:
+
+    `related: [ai/agenti/claude-agent-sdk, ai/agenti/frameworks, ...]`
+
+    ma la cartella reale è `ai/agents/` (inglese), non `ai/agenti/`
+
+    (italiano) — i due file target esistono realmente come
+
+    `docs/ai/agents/claude-agent-sdk.md` e `docs/ai/agents/frameworks.md`.
+
+    Il refuso rende i due riferimenti nel campo `related` non risolvibili
+
+    da qualsiasi tooling che li usi per costruire grafo di connettività o
+
+    suggerimenti "vedi anche" (stesso meccanismo usato in questa sessione
+
+    per l''audit di connettività hub→figli).
+
+    Azione richiesta: correggere le due voci in
+
+    `related: [ai/agents/claude-agent-sdk, ai/agents/frameworks, ai/sviluppo/prompt-engineering, ai/sviluppo/rag]`.
+
+    '
+  proposal_id: prop-087
 completed:
 - id: '631'
   path: docs/ci-cd/strategie/_index.md
