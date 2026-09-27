@@ -7,9 +7,10 @@ search_keywords: [FinOps, Financial Operations, ottimizzazione costi cloud, clou
 parent: cloud/finops/_index
 related: [cloud/aws/fondamentali/billing-pricing, cloud/azure/fondamentali/pricing, cloud/gcp/fondamentali/panoramica]
 official_docs: https://www.finops.org/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-03-29
+last_verified: 2026-09-27
 ---
 
 # FinOps — Fondamentali
@@ -449,16 +450,9 @@ gcloud billing budgets create \
 # Creare il topic Pub/Sub per ricevere le notifiche budget
 gcloud pubsub topics create billing-alerts --project=my-project-id
 
-# Step 2: Label enforcement tramite Organization Policy
+# Step 2: Label enforcement tramite Custom Organization Policy
 # Richiedere il label "team" su tutte le risorse Compute Engine
-gcloud org-policies set-policy - <<'EOF'
-name: organizations/ORG_ID/policies/compute.disableSerialPortAccess
-spec:
-  rules:
-  - enforce: true
-EOF
-
-# Policy custom per label obbligatori (richiede Custom Org Policy — disponibile da GA 2024)
+# (Custom Org Policy per label — GA da settembre 2023)
 gcloud org-policies set-policy label-policy.yaml --organization=ORG_ID
 
 # label-policy.yaml (esempio):
