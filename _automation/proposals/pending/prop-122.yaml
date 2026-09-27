@@ -1,0 +1,47 @@
+id: prop-122
+title: "RabbitMQ: file dedicato a sicurezza (OAuth2, SASL EXTERNAL/mTLS, permessi)"
+type: new-file
+priority: medium
+target_file: docs/messaging/rabbitmq/sicurezza.md
+effort: medium
+description: |
+  Kafka ha una sottocartella dedicata `messaging/kafka/sicurezza/` con 3 file
+  (acl-autorizzazione, sasl, tls-ssl) che coprono in profondità autenticazione
+  e autorizzazione. RabbitMQ non ha un equivalente: TLS e LDAP compaiono solo
+  come sotto-sezioni operative in `deployment.md` (focus K8s operator/monitoring),
+  senza profondità dedicata su:
+  - **OAuth2 plugin** (`rabbitmq_auth_backend_oauth2`): configurazione con
+    Keycloak/Entra ID come IdP, validazione JWT lato broker, scope-to-permission
+    mapping (es. `rabbitmq.read:vhost/queue` → permessi AMQP), differenze tra
+    OAuth2 per Management UI vs AMQP client.
+  - **SASL EXTERNAL / mTLS client-cert auth**: `ssl_cert_login_from` per mappare
+    CN/SAN del certificato client a uno username RabbitMQ, differenza rispetto
+    a TLS "solo trasporto" già mostrato in deployment.md.
+  - **Permission model avanzato**: pattern comuni di errore nelle regex di
+    `set_permissions` (configure/write/read), topic permissions per exchange
+    `topic`, differenze tra permessi su vhost vs risorsa.
+  - **User tags e Management UI RBAC** (`administrator`, `monitoring`,
+    `policymaker`), federazione con LDAP per i tag.
+  - **Security hardening checklist**: disabilitare guest user in produzione,
+    rotazione credenziali, plugin da disabilitare di default, audit del
+    management plugin esposto.
+  Includere almeno 2 esempi YAML/config completi (Cluster Operator CRD con
+  OAuth2, rabbitmq.conf con SASL EXTERNAL) e una sezione Troubleshooting
+  (es. "ACCESS_REFUSED" da mismatch permessi, JWT scope non riconosciuto).
+rationale: |
+  Un platform/security engineer che deve mettere in produzione RabbitMQ con
+  requisiti di compliance (stesso livello di rigore già richiesto per Kafka,
+  vedi `messaging/kafka/sicurezza/`) oggi non trova un punto di riferimento
+  unico: deve dedurre OAuth2/mTLS client-auth da documentazione ufficiale
+  sparsa su più repository (plugin README su GitHub, non sul sito principale
+  RabbitMQ). L'asimmetria con la profondità dedicata a Kafka è concreta e
+  verificabile (grep negli attuali file messaging/ non trova nessuna menzione
+  di oauth2_backend, sasl_external, SASL EXTERNAL).
+utility_test:
+  reader: "Platform engineer che deve securizzare un cluster RabbitMQ in produzione con SSO aziendale (Keycloak/Entra ID) e mTLS tra servizi"
+  scenario: "Deve decidere tra OAuth2 plugin e SASL EXTERNAL per l'autenticazione M2M, e configurare permessi granulari senza bloccare erroneamente i consumer"
+  outcome: "Configura rabbitmq_auth_backend_oauth2 con mapping scope→permessi, oppure SASL EXTERNAL con mTLS, e imposta permessi vhost/topic corretti al primo tentativo"
+  without_kb: "Deve leggere il codice sorgente del plugin OAuth2 su GitHub e testare per tentativi le regex di set_permissions in produzione"
+  score: medium
+tags: [rabbitmq, oauth2, mtls, sasl, security, amqp, permissions]
+last_analyzed: 2026-09-28
