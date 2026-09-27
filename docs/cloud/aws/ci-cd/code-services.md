@@ -9,8 +9,8 @@ related: [cloud/aws/ci-cd/cloudformation-cdk, cloud/aws/monitoring/cloudwatch, c
 official_docs: https://docs.aws.amazon.com/codebuild/
 status: reviewed
 difficulty: intermediate
-last_updated: 2026-09-26
-last_verified: 2026-09-26
+last_updated: 2026-09-28
+last_verified: 2026-09-28
 ---
 
 # CodeBuild, CodeDeploy, CodePipeline e CodeArtifact
@@ -20,8 +20,7 @@ last_verified: 2026-09-26
 I servizi AWS Developer Tools formano una suite CI/CD completamente managed: CodeBuild per build e test, CodeDeploy per deployment automatizzato, CodePipeline per orchestrazione della pipeline, e CodeArtifact per gestione degli artefatti software.
 
 !!! note "AWS CodeCommit — stato"
-    Da luglio 2024 CodeCommit non accettava nuovi clienti (solo mantenimento). A fine 2025 AWS ha ripristinato la piena disponibilità per i nuovi clienti. In ogni caso la pratica più diffusa resta GitHub, GitLab o Bitbucket collegati a CodeBuild/CodePipeline tramite CodeConnections (ex CodeStar Connections).
-    <!-- REVIEW: verificare lo stato corrente di CodeCommit sulla pagina ufficiale prima di raccomandarlo per nuovi progetti -->
+    Da luglio 2024 CodeCommit non accettava nuovi clienti (solo mantenimento). Il 24 novembre 2025 AWS ha riportato CodeCommit in piena General Availability: nuovi account possono di nuovo creare repository. In ogni caso la pratica più diffusa resta GitHub, GitLab o Bitbucket collegati a CodeBuild/CodePipeline tramite CodeConnections (ex CodeStar Connections).
 
 ---
 
