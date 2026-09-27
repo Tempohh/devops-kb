@@ -10,7 +10,7 @@ official_docs: https://docs.aws.amazon.com/ecs/
 status: needs-review
 difficulty: advanced
 last_updated: 2026-09-26
-last_verified: 2026-09-26
+last_verified: 2026-09-27
 ---
 
 # ECS, EKS & Containers AWS
@@ -196,11 +196,11 @@ aws ecr get-login-password --region eu-central-1 | \
         --password-stdin \
         123456789012.dkr.ecr.eu-central-1.amazonaws.com
 
-# Creare repository
+# Creare repository (tag immutabili — best practice)
 aws ecr create-repository \
     --repository-name myapp \
     --image-scanning-configuration scanOnPush=true \
-    --image-tag-mutability IMMUTABLE \    # tag immutabili — best practice
+    --image-tag-mutability IMMUTABLE \
     --encryption-configuration encryptionType=KMS
 
 # Lifecycle Policy: mantieni solo 10 immagini tagged + elimina untagged dopo 1 giorno
