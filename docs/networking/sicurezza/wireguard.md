@@ -7,9 +7,10 @@ search_keywords: [wireguard vpn, wg, wg-quick, wg0.conf, noise protocol, noise i
 parent: networking/sicurezza/_index
 related: [networking/sicurezza/vpn-ipsec, networking/sicurezza/zero-trust, networking/sicurezza/firewall-waf, networking/fondamentali/nat, networking/fondamentali/network-troubleshooting, networking/kubernetes/cni, cloud/aws/networking/vpc]
 official_docs: https://www.wireguard.com/
-status: draft
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-09-26
+last_verified: 2026-09-27
 ---
 
 # WireGuard
