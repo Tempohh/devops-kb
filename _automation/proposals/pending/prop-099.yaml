@@ -1,0 +1,34 @@
+id: prop-099
+title: "Fix-relation: extensions.md isolato dai fratelli postgresql/*"
+type: fix-relation
+priority: low
+target_file: docs/databases/postgresql/extensions.md
+effort: small
+description: |
+  `docs/databases/postgresql/extensions.md` ha `related: [sql-avanzato/partitioning,
+  fondamentali/modelli-dati, nosql/redis]` — nessuna voce verso i tre file
+  fratelli nella stessa cartella (`connection-pooling.md`, `mvcc-vacuum.md`,
+  `replicazione.md`), pur essendo collegati tutti dallo stesso hub
+  `postgresql/_index.md`. Verificato con Glob + lettura diretta dei 4 file:
+  nessuno dei tre fratelli linka a `extensions.md` nel proprio `related`,
+  e viceversa.
+  Aggiungere a `extensions.md`:
+  `related: [..., databases/postgresql/mvcc-vacuum, databases/postgresql/connection-pooling]`
+  (pg_cron e pg_stat_statements toccano temi di manutenzione/performance
+  trattati in mvcc-vacuum; pgvector/TimescaleDB generano dati che finiscono
+  dietro connection-pooling in produzione — collegamento tematico reale, non
+  solo simmetria formale).
+rationale: |
+  Lettore: chi legge extensions.md per pgvector/TimescaleDB/pg_cron e ha
+  bisogno di sapere anche come queste estensioni interagiscono con vacuum
+  (es. pg_repack) o pooling (compatibilità pgvector con transaction mode)
+  — oggi non trova questi rimandi nel `related` del file, solo tramite il
+  file indice.
+utility_test:
+  reader: "DevOps che sta configurando pg_cron per manutenzione automatica"
+  scenario: "Vuole capire l'impatto delle estensioni su vacuum/pooling senza tornare all'indice"
+  outcome: "Naviga direttamente da extensions.md a mvcc-vacuum.md e connection-pooling.md via related"
+  without_kb: "Deve tornare a postgresql/_index.md per scoprire i file collegati"
+  score: low
+tags: [postgresql, extensions, connettività, fix-relation]
+last_analyzed: 2026-09-27

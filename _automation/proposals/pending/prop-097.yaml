@@ -1,0 +1,36 @@
+id: prop-097
+title: "Review: Kubernetes Networking dopo espansione needs-review"
+type: review
+priority: medium
+target_file: docs/containers/kubernetes/networking.md
+effort: medium
+description: |
+  Il file è `status: needs-review` con `last_updated: 2026-09-27` (oggi) — ha
+  ricevuto un'espansione consistente (sezioni Service/NodePort/LoadBalancer,
+  tabelle di latenza, caso migrazione cluster-to-cluster molto dettagliato,
+  >800 righe). Il gate qualità impone `needs-review` per modifiche >30% del
+  contenuto, ma il file non ha ancora avuto una revisione reale.
+  Un task `review` (Opus/high) deve:
+  - Verificare la coerenza interna tra le molte tabelle comparative aggiunte
+    (ClusterIP/NodePort/LoadBalancer/ExternalName/Headless) — nessuna
+    contraddizione tra la tabella "visione d'insieme" e le sezioni di dettaglio.
+  - Controllare che i rimandi a `../../networking/kubernetes/{cni,ingress,network-policies}.md`
+    siano coerenti con quei file (nessun contenuto duplicato o contraddetto).
+  - Validare gli ordini di grandezza di latenza citati (tabella "da dove
+    vengono i millisecondi") come indicativi e non presentati come misure
+    assolute.
+  - Se il contenuto regge, promuovere a `status: reviewed` + `last_verified`.
+rationale: |
+  Lettore: DevOps/SRE che deve scegliere il tipo di Service Kubernetes giusto
+  o pianificare una migrazione cluster-to-cluster. Il file è diventato un
+  riferimento denso e operativo (non solo teoria) — merita la revisione che
+  il gate `needs-review` richiede prima di tornare `complete`/`reviewed`,
+  altrimenti resta indefinitamente in uno stato "non garantito".
+utility_test:
+  reader: "SRE che sta pianificando la migrazione di un servizio tra due cluster K8s"
+  scenario: "Deve scegliere tra NodePort, LB interno o service mesh per il traffico cross-cluster temporaneo"
+  outcome: "Si fida della guida perché è stata verificata, non solo scritta in una sessione di espansione"
+  without_kb: "Dovrebbe validare da solo i trade-off leggendo doc Kubernetes ufficiali sparse su più pagine"
+  score: medium
+tags: [kubernetes, networking, review, quality-gate]
+last_analyzed: 2026-09-27
