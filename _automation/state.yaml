@@ -2,11 +2,11 @@
 # Aggiornato automaticamente - non modificare 'completed' manualmente
 
 version: 2
-last_run: '2026-09-27T15:54:26.339665+00:00'
+last_run: '2026-09-27T15:59:01.636206+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 844
-total_runs: 413
+total_ops: 847
+total_runs: 414
 queue:
 - id: W-001
   type: new_topic
@@ -4727,11 +4727,43 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '604'
+  type: new_topic
+  path: docs/ci-cd/tools/circleci.md
+  category: ci-cd
+  priority: P1
+  status: completed
+  reason: "Nuovo file per CircleCI, SaaS CI citato nella tabella comparativa di\nci-cd/_index.md (\"Startup, velocità di setup\"\
+    ) ma assente come argomento\ndedicato — l'unico file in ci-cd/tools/ è tekton.md, mentre Jenkins ha 6\nfile, GitHub Actions\
+    \ 3, GitLab CI 2. Struttura suggerita:\n- Config.yml 2.1: orbs (pacchetti riusabili, versioning, orb registry\n  pubblico/privato),\
+    \ executors (docker/machine/macos/windows — differenze\n  di isolamento e costo), resource_class (cpu/memoria per job).\n\
+    - Workflows: fan-out/fan-in, job dependencies (`requires`), approval job\n  manuale, scheduled workflows (cron), matrix\
+    \ jobs (parametrizzati).\n- Dynamic config: `setup workflows`, `continuation orb` per pipeline\n  generate a runtime (monorepo,\
+    \ path-filtering).\n- Caching e Docker layer caching: `save_cache`/`restore_cache` con\n  chiavi basate su checksum, differenza\
+    \ rispetto a GitHub Actions cache.\n- Self-hosted runners (CircleCI runner) per workload non containerizzabili.\n- Contexts\
+    \ e security: secret scoping per progetto/org, OIDC per cloud\n  provider (AWS/GCP) senza static credentials.\n- Confronto\
+    \ pratico con GitHub Actions/GitLab CI: dove CircleCI vince\n  (setup rapido, resource class granulare) e dove perde (ecosistema\n\
+    \  meno integrato con il code hosting).\n"
+  proposal_id: prop-060
+- id: '605'
+  type: new_topic
+  path: docs/databases/mysql/performance-tuning.md
+  category: databases
+  priority: P2
+  status: pending
+  reason: "Secondo file per databases/mysql/ (dopo architettura-replicazione.md,\nauto #601), speculare a databases/sql-avanzato/query-optimizer.md\
+    \ ma per\nl'ottimizzatore InnoDB, che ha modello di costo e strumenti di analisi\ndiversi da Postgres. Struttura suggerita:\n\
+    - EXPLAIN e EXPLAIN FORMAT=JSON: differenze da EXPLAIN ANALYZE Postgres\n  (MySQL 8.0.18+ supporta EXPLAIN ANALYZE ma\
+    \ con output diverso), lettura\n  di `possible_keys`, `key_len`, `rows`, `filtered`, `Extra` (Using\n  filesort, Using\
+    \ temporary, Using index).\n- Optimizer trace (`optimizer_trace`): come ispezionare le decisioni del\n  planner passo-passo,\
+    \ utile quando EXPLAIN non basta.\n- Clustered index (PK) vs secondary index: costo del lookup secondario\n  (torna al\
+    \ clustered index), differenza pratica da Postgres (heap +\n  indici tutti equivalenti).\n- Join algorithms: nested loop\
+    \ (unico storicamente), hash join\n  (introdotto in 8.0.18) e quando MySQL lo sceglie.\n- InnoDB buffer pool tuning: `innodb_buffer_pool_size`,\n\
+    \  `innodb_buffer_pool_instances`, adaptive hash index (quando disabilitarlo).\n- Slow query log + `pt-query-digest` (Percona\
+    \ Toolkit) per triage.\n- Index strategy: covering index, index merge, perché troppi indici\n  penalizzano write-heavy\
+    \ workload su InnoDB più che su Postgres (doppio\n  costo update per clustered index).\n"
+  proposal_id: prop-061
 completed:
-- id: '589'
-  path: docs/networking/sicurezza/wireguard.md
-  completed_at: '2026-09-27T12:25:14.460934+00:00'
-  result: File presente su disco - completato ma state non aggiornato dall'agente
 - id: '590'
   path: docs/cloud/aws/networking/ipv6-dual-stack.md
   completed_at: '2026-09-27T12:26:12.550431+00:00'
@@ -4787,6 +4819,10 @@ completed:
 - id: '603'
   path: _automation/proposals
   completed_at: '2026-09-27T15:54:26.733819+00:00'
+  result: File presente su disco - completato ma state non aggiornato dall'agente
+- id: '604'
+  path: docs/ci-cd/tools/circleci.md
+  completed_at: '2026-09-27T15:59:02.026175+00:00'
   result: File presente su disco - completato ma state non aggiornato dall'agente
 analysis:
   last_started: '2026-09-26T11:09:51.824146+00:00'
