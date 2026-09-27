@@ -3,13 +3,13 @@ title: "Terraform — Testing e Quality Gate"
 slug: terraform-testing
 category: iac
 tags: [terraform, iac, testing, quality, security, linting, policy, ci-cd, compliance]
-search_keywords: [terraform testing, terratest, tflint, checkov, conftest, OPA, open policy agent, terraform validate, terraform plan, pre-commit hooks, iac testing, infrastructure testing, security scanning, policy as code, compliance as code, static analysis, terraform lint, infracost, snyk iac, terraform compliance, kitchen terraform, inspec, regula, sentinel, quality gate, ci cd terraform, terraform pipeline, unit test infrastruttura, integration test infrastruttura, test iac, terraform check, terraform fmt, security iac, vulnerabilità iac, misconfiguration, CIS benchmark, cloud security posture]
+search_keywords: [terraform testing, terratest, tflint, checkov, conftest, OPA, open policy agent, terraform validate, terraform plan, pre-commit hooks, iac testing, infrastructure testing, security scanning, policy as code, compliance as code, static analysis, terraform lint, infracost, snyk iac, terraform compliance, kitchen terraform, inspec, regula, sentinel, quality gate, ci cd terraform, terraform pipeline, unit test infrastruttura, integration test infrastruttura, test iac, terraform check, terraform fmt, security iac, vulnerabilità iac, misconfiguration, CIS benchmark, cloud security posture, terraform test, tftest.hcl, mock provider terraform, hcl test framework, native terraform testing]
 parent: iac/terraform/_index
 related: [iac/terraform/fondamentali, iac/terraform/moduli, iac/terraform/state-management, ci-cd/pipeline]
 official_docs: https://developer.hashicorp.com/terraform/language/checks
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-26
+last_updated: 2026-09-28
 ---
 
 # Terraform — Testing e Quality Gate
@@ -50,6 +50,7 @@ Testare il codice Terraform è essenziale quanto testare il codice applicativo: 
 | **checkov** | Policy | Security scanning, CIS benchmark, 1000+ check built-in |
 | **conftest/OPA** | Policy | Policy-as-code personalizzate in Rego |
 | **Terratest** | Integration | Test Go che provisionano infrastruttura reale |
+| **terraform test** | Unit/Integration | Framework nativo HashiCorp (`.tftest.hcl`), no dipendenza Go |
 | **pre-commit** | Orchestrazione | Esegue tutti i check prima di ogni commit |
 
 !!! note "Terraform built-in checks (≥ v1.5)"
@@ -401,7 +402,138 @@ check "external_bucket_exists" {
 }
 ```
 
-### 7. pre-commit hooks — Automazione Locale
+### 7. terraform test — Framework Nativo (v1.6+)
+
+Da Terraform 1.6, il comando `terraform test` esegue file `.tftest.hcl` (convenzionalmente nella cartella `tests/`) senza richiedere Go né librerie esterne. È oggi lo strumento first-party consigliato da HashiCorp per unit e integration test sui moduli.
+
+```
+modules/
+└── vpc/
+    ├── main.tf
+    ├── variables.tf
+    ├── outputs.tf
+    └── tests/
+        ├── unit.tftest.hcl        # command = plan, veloce, no risorse reali
+        └── integration.tftest.hcl # command = apply, provisiona davvero
+```
+
+Ogni file `.tftest.hcl` contiene uno o più blocchi `run`, eseguiti in sequenza nello stesso file. `variables {}` a livello di `run` sovrascrive le variabili solo per quell'esecuzione; `mock_provider` (v1.7+) sostituisce un provider reale con uno finto, per testare la logica del modulo senza credenziali cloud.
+
+```hcl
+# tests/unit.tftest.hcl — unit test: solo plan, nessuna risorsa reale creata
+variables {
+  environment = "test"
+}
+
+# mock_provider evita di dover configurare credenziali AWS per un test di sola logica
+mock_provider "aws" {}
+
+run "cidr_is_valid" {
+  command = plan
+
+  variables {
+    cidr_block = "10.0.0.0/16"
+  }
+
+  assert {
+    condition     = can(cidrhost(var.cidr_block, 0))
+    error_message = "cidr_block '${var.cidr_block}' non è un CIDR valido."
+  }
+}
+
+run "cidr_rejects_too_small_block" {
+  command = plan
+
+  variables {
+    cidr_block = "10.0.0.0/29"
+  }
+
+  assert {
+    condition     = tonumber(split("/", var.cidr_block)[1]) <= 24
+    error_message = "Il CIDR della VPC deve essere almeno /24."
+  }
+}
+```
+
+```hcl
+# tests/integration.tftest.hcl — integration test: apply reale + destroy automatico a fine file
+run "setup" {
+  command = apply
+
+  variables {
+    cidr_block  = "10.0.0.0/16"
+    environment = "test"
+  }
+}
+
+run "vpc_has_expected_cidr" {
+  command = apply
+
+  # Riusa lo state del run precedente nello stesso file
+  assert {
+    condition     = aws_vpc.this.cidr_block == "10.0.0.0/16"
+    error_message = "La VPC creata non ha il CIDR atteso."
+  }
+
+  assert {
+    condition     = length(aws_subnet.private) >= 2
+    error_message = "Servono almeno 2 subnet private per l'alta disponibilità."
+  }
+}
+```
+
+```bash
+# Esecuzione locale
+terraform test
+
+# Esecuzione di un singolo file
+terraform test -filter=tests/unit.tftest.hcl
+
+# Output tipico
+terraform test
+tests/unit.tftest.hcl... in progress
+  run "cidr_is_valid"... pass
+  run "cidr_rejects_too_small_block"... pass
+tests/unit.tftest.hcl... tearing down
+tests/unit.tftest.hcl... pass
+
+tests/integration.tftest.hcl... in progress
+  run "setup"... pass
+  run "vpc_has_expected_cidr"... pass
+tests/integration.tftest.hcl... tearing down
+tests/integration.tftest.hcl... pass
+
+Success! 4 passed, 0 failed.
+```
+
+```yaml
+# GitHub Actions — step terraform test nella pipeline CI
+- name: Terraform Test (unit, no cloud)
+  run: terraform test -filter=tests/unit.tftest.hcl
+
+- name: Terraform Test (integration, sandbox account)
+  env:
+    AWS_ACCESS_KEY_ID: ${{ secrets.AWS_TEST_ACCESS_KEY_ID }}
+    AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_TEST_SECRET_ACCESS_KEY }}
+  run: terraform test -filter=tests/integration.tftest.hcl
+```
+
+**`terraform test` vs Terratest:**
+
+| Aspetto | `terraform test` | Terratest |
+|---------|-------------------|-----------|
+| Dipendenza | Nessuna (built-in dal binario Terraform) | Go + moduli esterni |
+| Sintassi | HCL nativo (`.tftest.hcl`) | Go (`_test.go`) |
+| Unit test veloce (`plan`) | Sì, nativo | Non nativo — richiede parsing manuale del plan |
+| Assertion library | `assert {}` con `condition`/`error_message` | `testify`, helper Terratest |
+| Mock provider (no cloud) | Sì, `mock_provider` (v1.7+) | No — richiede sempre provisioning reale o wrapper custom |
+| Maturità ecosistema | Recente (v1.6, 2023) | Consolidato dal 2018, ampia community |
+| Casi d'uso complessi (retry HTTP, polling) | Limitato | Ampio (librerie helper dedicate: `http-helper`, `k8s`, ecc.) |
+
+!!! tip "Strategia consigliata"
+    Usa `terraform test` come primo livello per moduli nuovi o semplici (evita la dipendenza Go). Passa a Terratest quando serve orchestrare verifiche complesse post-provisioning (health check HTTP con retry, chiamate ad API esterne, interazione con Kubernetes).
+
+### 8. pre-commit hooks — Automazione Locale
 
 ```bash
 # Installazione pre-commit
@@ -649,6 +781,22 @@ head -1 policy/terraform.rego
 
 # Test con output verboso
 conftest test tfplan.json --policy policy/ --trace 2>&1 | head -50
+```
+
+---
+
+### Problema: `terraform test` fallisce con "provider configuration not present" nonostante `mock_provider`
+
+**Sintomo:** `run` con `command = plan` fallisce con errore di configurazione provider anche se è dichiarato `mock_provider "aws" {}`.
+
+**Causa:** `mock_provider` deve essere dichiarato nello stesso file `.tftest.hcl` (o in un file `variables.tftest.hcl` condiviso) del `run` che lo usa, e il nome deve corrispondere esattamente al provider referenziato nel modulo (`aws`, non `aws.us_east_1` se il modulo usa un alias).
+
+**Soluzione:**
+```hcl
+# Se il modulo usa un provider con alias, il mock deve rispettarlo
+mock_provider "aws" {
+  alias = "us_east_1"
+}
 ```
 
 ---
