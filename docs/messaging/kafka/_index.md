@@ -8,11 +8,11 @@ search_keywords: [apache kafka, message broker, event streaming, topic, partitio
   log distribuito, coda messaggi, streaming dati, pipeline dati,
   kafka connect, kafka streams, exactly once, at least once, confluent]
 parent: messaging/_index
-related: [networking/tcp, containers/openshift]
+related: [networking/tcp, containers/openshift, messaging/rabbitmq/_index]
 official_docs: https://kafka.apache.org/documentation/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-09-27
 ---
 
 # Apache Kafka
