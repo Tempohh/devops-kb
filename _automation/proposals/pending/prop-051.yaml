@@ -1,0 +1,28 @@
+id: prop-051
+title: "Review e promozione status: nginx-haproxy.md"
+type: review
+priority: medium
+target_file: docs/networking/load-balancing/nginx-haproxy.md
+effort: small
+description: |
+  File status: draft (last_updated 2026-09-26) ma completo: confronto NGINX
+  vs HAProxy, config reverse proxy/TLS/canary/stream TCP, runtime API HAProxy
+  (drain via socket), reload zero-downtime, 6 scenari di troubleshooting
+  (502/504, TIME_WAIT, worker_connections, conntrack, X-Forwarded-For).
+  6 related ricchi verso algoritmi, layer4-vs-layer7, ha-e-failover, ingress,
+  elastic-load-balancing, tls-ssl-basics. Azione: verifica tecnica ad alto
+  ragionamento (sintassi haproxy.cfg/nginx.conf, valori default corretti per
+  versioni recenti) e promozione a reviewed + last_verified.
+rationale: |
+  E' il file di riferimento pratico per due dei proxy open source più usati
+  negli ingress controller Kubernetes citati altrove nella KB (ingress.md);
+  restare "draft" ne sottostima l'affidabilità agli occhi di chi lo consulta
+  per un deploy di produzione.
+utility_test:
+  reader: "DevOps mid-senior che deve configurare/debuggare un reverse proxy NGINX o HAProxy davanti a un pool di backend"
+  scenario: "Deve scegliere tra NGINX e HAProxy, configurare health check attivi e fare un deploy senza downtime (drain)"
+  outcome: "Applica la config pronta, usa la runtime API per il drain, riconosce 502 vs 504 dal log e risolve senza tentativi"
+  without_kb: "Dovrebbe combinare la documentazione ufficiale di due progetti distinti e articoli sparsi sul drain via socket"
+  score: medium
+tags: [networking, load-balancing, nginx, haproxy, review, status]
+last_analyzed: 2026-09-27
