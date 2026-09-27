@@ -1,82 +1,70 @@
-# KB Saturation Report — 2026-09-27 (sessione 5, task 571)
+# KB Saturation Report — 2026-09-27 (sessione 6, task 577)
 
 ## Copertura stimata per categoria
 
 | Categoria | Files | Coverage % | Depth | Note |
 |-----------|-------|------------|-------|------|
 | KB totale | 306 (gate) / ~309 (glob, esclusi index/tags/template) | n/a | n/a | `target_file_count` 330, `over_target: false`, headroom 24 |
-| networking | 44 | ~88% | Advanced | 4 file `status: draft` scoperti in questo ciclo (network-troubleshooting, nginx-haproxy, wireguard, +1 in cloud/aws) — contenuto completo ma isolati dai rispettivi hub `_index.md`. Non più "congelata": 3 gap di connettività reali trovati. |
-| cloud/aws | 44 | ~90% | Advanced | 1 file draft isolato (ipv6-dual-stack) + 1 file `needs-review` non ancora chiuso (containers-ecs-eks). Non più "congelata": 2 gap trovati. |
-| messaging | 55 | ~92% | Advanced | invariata da sessione 569 (gap hub già coperto da prop-039, ancora pending) |
-| containers | 38 | ~90% | Advanced/Expert | invariata da sessione 569 |
-| security | 26 | ~90% | Advanced | invariata da sessione 568 |
-| iac | 14 | ~90% | Advanced | invariata da sessione 568 |
-| cloud (totale) | 108 | n/d | n/d | solo AWS analizzato in profondità; Azure/GCP non campionati in questo ciclo |
-| ci-cd | 29 | n/d | n/d | non analizzata in profondità |
-| dev | 28 | n/d | n/d | non analizzata in profondità |
-| databases | 28 | n/d | n/d | non analizzata in profondità |
-| ai | 27 | n/d | n/d | non analizzata in profondità |
-| monitoring | 20 | n/d | n/d | non analizzata in profondità |
+| networking | 41 | ~92% | Advanced | Gap di connettività della sessione precedente (prop-040..043) risolti: i 5 sotto-hub (fondamentali, load-balancing, sicurezza, protocolli, service-mesh) referenziano ora tutti i file recenti. Trovato 1 nuovo gap: l'hub **radice** `docs/networking/_index.md` (last_updated 2026-02-24) non è stato toccato e resta indietro di 7 file → **prop-045**. |
+| cloud/aws | 45 | ~91% | Advanced | `docs/cloud/aws/networking/_index.md` aggiornato (2026-09-27, referenzia ipv6-dual-stack). `docs/cloud/aws/_index.md` root non necessita modifiche (linka solo sotto-categorie, non singoli file leaf). |
+| messaging | 55 | ~92% | Advanced | invariata, non ri-analizzata |
+| containers | 38 | ~90% | Advanced/Expert | invariata, non ri-analizzata |
+| security | 26 | ~90% | Advanced | invariata, non ri-analizzata |
+| iac | 14 | ~90% | Advanced | invariata, non ri-analizzata |
+| ci-cd / dev / databases / ai / monitoring | 29/28/28/27/20 | n/d | n/d | non analizzate in profondità in questo ciclo (fuori focus tematico) |
 
 ## Categorie vicine alla saturazione
 
-- **networking / cloud/aws**: contenuto tecnico maturo, ma questo ciclo ha
-  rivelato un problema di **processo** più che di contenuto: file creati il
-  2026-09-26 (probabilmente da un task `new_topic` recente) restano in
-  `status: draft` pur superando ampiamente il gate meccanico per `complete`
-  (righe, code-block, Troubleshooting, keyword, related), e non sono mai
-  stati agganciati agli hub `_index.md` delle rispettive sottocategorie. Non
-  è un gap di saturazione ma un gap di **integrazione post-creazione** —
-  vedi prop-040..043.
-- **messaging / containers / security / iac**: confermate sature, nessun
-  nuovo segnale in questo ciclo (non ri-analizzate).
+- **networking / cloud/aws**: entrambe confermate mature dopo 6 cicli di analisi
+  consecutivi. Restano solo 3 file `status: draft` (wireguard.md,
+  nginx-haproxy.md, network-troubleshooting.md) e 1 `status: needs-review`
+  (containers-ecs-eks.md) non ancora promossi — già coperti da prop-040..044
+  (in `approved/`, in attesa di esecuzione task `review`). Non è un problema di
+  contenuto: il contenuto è completo e integrato, manca solo la promozione di
+  stato che spetta a un task `review`, non a questa sessione `proposal`.
+- **messaging / containers / security / iac**: confermate sature, nessun nuovo
+  segnale (non ri-analizzate in questo ciclo).
 
 ## Categorie con gap reali
 
-- **docs/networking/fondamentali/_index.md**: non elenca
-  `network-troubleshooting.md` (completo, 540 righe). → **prop-040**.
-- **docs/networking/load-balancing/_index.md**: non elenca
-  `nginx-haproxy.md` (completo, 489 righe). → **prop-041**.
-- **docs/networking/sicurezza/_index.md**: non elenca `wireguard.md`
-  (completo, 366 righe). → **prop-042**.
-- **docs/cloud/aws/networking/_index.md**: non elenca
-  `ipv6-dual-stack.md` (completo, 376 righe, driver economico diretto:
-  costo IPv4 pubblico AWS). → **prop-043**.
-- **docs/cloud/aws/compute/containers-ecs-eks.md**: `status: needs-review`
-  da una modifica precedente, mai chiuso da un task `review`. → **prop-044**.
+- **docs/networking/_index.md**: hub radice della sezione, fermo a
+  2026-02-24, non elenca 7 file creati/integrati successivamente nei
+  sotto-hub (network-troubleshooting, nat, ebpf, bgp, consul, wireguard,
+  nginx-haproxy). Gap di discoverability per chi consulta prima la root.
+  → **prop-045** (extend-section, priority medium, effort small).
 
-Pattern trasversale da segnalare (non una proposta a sé, annotato nelle 4
-proposte `extend-section`): i 4 file draft sopra sono probabilmente l'output
-di un batch di `new_topic` che non ha eseguito il passo finale di
-integrazione nell'hub né la promozione di stato. Vale la pena, in un
-prossimo ciclo `audit`, controllare se altri file recenti hanno lo stesso
-problema (draft + assente dagli hub) oltre ai 4 già trovati qui.
+Nessun gap di tipo `new-file` identificato con `score: high` in networking o
+cloud/aws in questo ciclo — il focus tematico resta valido ma il contenuto
+sostanziale è già coperto; il lavoro residuo è integrazione/hygiene, non
+nuovi argomenti.
 
-## Sessione proposal 2026-09-27 (task 571)
+## Sessione proposal 2026-09-27 (task 577)
 
 Gate: `file_count` 306, target 330, `over_target: false`, headroom 24.
-`pending/` conteneva prop-001..039 (tutte in attesa) prima di questa
-sessione; `approved/` vuota.
+`pending/` vuota prima di questa sessione (prop-040..044 già spostate in
+`approved/`); `approved/` conteneva prop-001..044.
 
-Letti 5 file completi (i 4 draft + containers-ecs-eks.md) più le 6 pagine
-hub `_index.md` di networking/fondamentali, networking/load-balancing,
-networking/sicurezza, networking (root), cloud/aws/networking — per
-verificare l'assenza di riferimenti. Confermato con grep che nessun file
-della KB (eccetto i 2 `related` incrociati già esistenti: cni.md e
-vpn-ipsec.md) referenzia i 4 file draft.
+Letti/ispezionati: hub `docs/networking/_index.md`, `docs/cloud/aws/_index.md`,
+`docs/cloud/aws/networking/_index.md`, i 5 sotto-hub di networking
+(fondamentali, protocolli, service-mesh, load-balancing, sicurezza tramite
+grep mirato + read completo di fondamentali/protocolli/service-mesh),
+`grpc.md` e `quic.md` (verifica currency — contenuto ancora corretto e
+aggiornato nonostante `last_updated` 2026-02-24, nessuna azione necessaria).
+Verificato via grep lo stato `draft`/`needs-review` residuo su tutta la KB
+(invariato rispetto alla sessione precedente, 4 file, già coperti da
+prop-040..044) e la presenza diffusa di mTLS/mutual-TLS nella KB (47 file,
+nessun gap di concetto mancante).
 
-**Proposte generate: 5** (prop-040..044), tutte a priorità
-high/medium, effort small, nel focus tematico richiesto (networking +
-cloud/aws). Nessuna proposta `new-file`: il freno di saturazione (headroom
-24) l'avrebbe ammessa, ma non è emerso alcun gap di contenuto mancante con
-`score: high` in queste due categorie — solo gap di connettività e di
-status/processo, già coperti.
+**Proposte generate: 1** (prop-045), priority medium, effort small, nel
+focus tematico richiesto (networking). Zero proposte `new-file`: nessun gap
+di contenuto con `score: high` emerso in networking o cloud/aws — solo un
+gap di navigazione/hygiene sull'hub radice.
 
 ## Prossima sessione consigliata
 
-**Data**: 2026-10-04 (prossimo ciclo settimanale). **Focus**: verificare se
-il pattern "draft + assente dall'hub" si ripete su altri file creati di
-recente (grep `status: draft` su tutta la KB, non solo networking/cloud-aws);
-se prop-040..044 sono state approvate ed eseguite, ri-analizzare
-containers/security/iac per un nuovo gap dato che networking/cloud-aws
-restano temi ricorrenti da 5 cicli.
+**Data**: 2026-10-04 (prossimo ciclo settimanale). **Focus**: verificare
+l'esecuzione di prop-040..045 (promozione status + hub radice aggiornato);
+se networking/cloud-aws restano privi di gap sostanziali dopo l'esecuzione,
+spostare il focus tematico su una categoria non ancora analizzata in
+profondità in questo semestre (ci-cd, dev, databases o monitoring) per
+evitare di continuare a scavare un'area ormai satura da 6 cicli.
