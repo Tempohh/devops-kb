@@ -1,4 +1,4 @@
-# KB Saturation Report — 2026-09-27 (sessione #642)
+# KB Saturation Report — 2026-09-27 (sessione #645)
 
 ## Gate meccanico
 
@@ -7,73 +7,86 @@ file_count: 314, target: 330, over_target: false, headroom: 16
 category_saturated_pct: 85, allow_zero_proposals: true
 ```
 
-Sotto target. Focus raccomandato dalla sessione precedente (#638): continuare
-il controllo di connettività hub→figli su `ci-cd/**`, `messaging/**`,
-`databases/**` (categorie rimaste da riverificare dopo #634/#637/#638).
+Sotto target. Focus raccomandato dalla sessione precedente (#642): completare
+il controllo di connettività hub→figli su `networking/**`, `iac/**`,
+`monitoring/**`, `security/**`, `ai/**`, `cloud/gcp` (fondi/finops), `containers/**`.
 
 ## Copertura stimata per categoria
 
-| Categoria | Files | Coverage % | Depth | Note |
-|-----------|-------|------------|-------|------|
-| ci-cd/** (9 sotto-hub + 1 top) | 30 file totali | — | Controllati tutti i 9 sotto-hub + il grid top-level | 1 gap: `pipeline.md` orfano dal top-level `_index.md` |
-| messaging/** (kafka 9 sotto-hub + rabbitmq + top) | 55 file totali | — | Controllati kafka (9 sotto-hub), rabbitmq (flat), top-level | 0 gap — categoria pulita |
-| databases/** (7 sotto-hub + top) | 31 file totali | — | Controllati tutti i 7 sotto-hub + top-level | 1 gap: `schema-migrations.md` orfano da `fondamentali/_index.md` |
+| Categoria | Sotto-hub controllati | Gap trovati | Note |
+|-----------|------------------------|-------------|------|
+| networking/** (7 sotto-hub + top) | 8/8 | 0 | Tutti i grid del genitore linkano correttamente i figli |
+| iac/** (4 strumenti + top) | 5/5 | 0 | terraform, ansible, pulumi, crossplane tutti agganciati |
+| monitoring/** (4 sotto-hub + top) | 5/5 | 0 | fondamentali, tools, alerting, sre puliti |
+| security/** (7 sotto-hub + top) | 8/8 | 0 | autenticazione, autorizzazione, secret-management, pki, supply-chain, compliance, network tutti puliti |
+| cloud/gcp/** (7 sotto-hub + top) | 7/8 | 1 | **compute/_index.md manca del tutto** — unico hub GCP assente (vedi sotto) |
+| cloud/finops (2 file) | 1/1 | 0 | Pulito |
+| containers/** (6 sotto-hub + top + kubernetes 11 figli) | 7/7 | 0 | docker, openshift, helm, kustomize, registry, container-runtime, kubernetes tutti puliti |
+| ai/** (7 sotto-hub + top) | 8/8 | 0 (connettività) — 1 gap di **currency** e 1 di **refuso path** | Vedi sotto |
 
 ## Categorie vicine alla saturazione
 
-Confermate sature nelle sessioni precedenti (invariato): **databases/**
-(contenuto — la connettività aveva un gap, ora proposto fix), **dev/linguaggi/**,
-**messaging/rabbitmq** (contenuto — connettività ora verificata pulita),
-**cloud/aws**, **networking/**, **dev/testing, dev/data, dev/resilienza
-(contenuto), dev/sicurezza, dev/integrazioni (contenuto)**, **monitoring/**,
-**iac/**, **cloud/azure/**, **ai/**, **security/**.
+Confermate sature (invariato dalle sessioni precedenti): **databases/**,
+**dev/linguaggi/**, **messaging/rabbitmq**, **cloud/aws**, **networking/**,
+**dev/testing, dev/data, dev/resilienza, dev/sicurezza, dev/integrazioni**,
+**monitoring/**, **iac/**, **cloud/azure/**, **ai/**, **security/**,
+**containers/**. Con questa sessione si aggiungono a "verificate pulite sotto
+il profilo connettività hub→figli": networking, iac, monitoring, security,
+containers, cloud/gcp (a parte 1 gap), cloud/finops.
 
 ## Categorie con gap reali
 
-Trovati **2 hub orfani**, stesso pattern delle sessioni precedenti (figlio
-completo, frontmatter `parent` corretto, ma zero link dal corpo dell'`_index.md`
-del genitore):
+Trovati **3 gap concreti**, nessuno di tipo "hub non linkato dal grid" puro
+(il pattern ricorrente delle sessioni precedenti) tranne il primo, che è
+un caso più severo (hub interamente mancante):
 
-- **ci-cd/_index.md** — non linka `pipeline.md`, unico file di secondo
-  livello che vive senza sottocartella propria (tutti gli altri 8 sotto-hub
-  di ci-cd sono invece linkati e connessi correttamente al 100%: github-actions,
-  gitlab-ci, gitops, jenkins, platform-engineering, strategie, testing, tools).
-  → prop-083 (high).
-- **databases/fondamentali/_index.md** — non linka `schema-migrations.md`,
-  aggiunto dopo i 5 figli originali (acid-base-cap, modelli-dati, indici,
-  transazioni-concorrenza, sharding) e mai inserito nel grid "## Argomenti".
-  Tutti gli altri 6 sotto-hub di databases sono puliti al 100%: kubernetes-cloud,
-  nosql, postgresql, replicazione-ha, sql-avanzato, mysql. Anche il top-level
-  `databases/_index.md` è pulito (mysql confermato linkato correttamente).
-  → prop-084 (high).
+- **cloud/gcp/compute/_index.md — file mancante** (non solo link mancante):
+  `cloud-run.md` esiste, completo, con `parent: cloud/gcp/compute/_index`,
+  ma quel file `_index.md` non esiste in tutta la sezione GCP (unico caso
+  su 7 sotto-sezioni). Il grid "Mappa dei Servizi" in `cloud/gcp/_index.md`
+  non menziona nemmeno "Compute". → prop-085 (high).
+- **ai/sviluppo/_index.md — currency**: tutti gli esempi di codice usano
+  model ID Claude 3.5 datati (`claude-3-5-sonnet-20241022`), disallineati
+  da `ai/modelli/claude.md` (già `reviewed`, model ID famiglia 5 correnti)
+  nella stessa KB. Stesso pattern della criticità #3 (CLAUDE.md), sanato
+  altrove ma non qui. → prop-086 (medium, currency).
+- **ai/agents/_index.md — refuso path**: campo `related` punta a
+  `ai/agenti/...` (italiano) invece di `ai/agents/...` (inglese, cartella
+  reale) — innocuo per il rendering ma inquina i dati di connettività per
+  audit futuri. → prop-087 (low, fix-relation).
 
-Sotto-hub controllati e puliti (nessun gap): tutti i 9 sotto-hub Kafka
-(fondamenti, kafka-connect, kafka-streams, kubernetes-cloud, operazioni,
-pattern-microservizi, schema-registry, sicurezza, sviluppo), rabbitmq
-(flat, 6/6 figli linkati), messaging/_index.md top-level.
+Sotto-hub controllati e puliti in questa sessione (nessun gap di
+connettività): tutti i 7 sotto-hub networking + top, tutti i 4 strumenti
+IaC + top, tutti i 4 sotto-hub monitoring + top, tutti i 7 sotto-hub
+security + top, tutti i 6 sotto-hub containers + kubernetes (11 figli via
+grid + nota cross-reference) + top, 6/7 sotto-hub GCP + finops + top.
 
 ## Focus usato in questa sessione
 
-Come raccomandato da #638: completamento del controllo di connettività
-hub→figli su `ci-cd/**`, `messaging/**`, `databases/**`. Risultato: 2 gap su
-17 sotto-hub verificati in questa sessione (~12%), messaging risultata
-categoria completamente pulita (0/9 sotto-hub Kafka + rabbitmq + top). Bilancio
-cumulativo del pattern "hub non aggiornato dopo creazione nuovo figlio" su
-tutte le sessioni: 5 gap totali (dev/api, dev/resilienza, dev/integrazioni,
-ci-cd/pipeline, databases/schema-migrations) su circa 26 sotto-hub controllati
-nelle sessioni #634/#637/#638/#642 (~19%) — sotto la soglia 40% osservata
-prima in dev/**, ma comunque un pattern ricorrente e a basso costo di fix
-(sempre `fix-relation` da poche righe). Conferma il valore di aggiungere una
-checklist esplicita "aggiorna il grid del genitore" al protocollo 1️⃣ Nuovo
-Argomento in CLAUDE.md — segnalato di nuovo, non applicato in questa sessione
-perché fuori scope (agente di contenuto, non modifica-CLAUDE.md).
+Come raccomandato da #642: completamento del controllo di connettività
+hub→figli su `networking/**`, `iac/**`, `monitoring/**`, `security/**`,
+`cloud/gcp/**`, `cloud/finops/**`, `containers/**`, più un giro di lettura
+approfondita su `ai/**` (mai stato nel focus di rotazione finora, come da
+default del PASSO 3). Risultato: il pattern "hub non linkato dal grid"
+osservato nelle 4 sessioni precedenti (5 casi su ~26 sotto-hub, ~19%) qui
+sale a 1 caso su ~35 sotto-hub controllati (~3%) — la KB risulta molto più
+pulita sotto questo profilo nelle categorie appena verificate rispetto a
+`dev/**` (dove il pattern era più marcato). Il gap trovato in `cloud/gcp`
+è però più severo del solito: non manca un link, manca il file hub stesso.
+In `ai/**`, primo giro di lettura approfondita per questa sessione, sono
+emersi due problemi di natura diversa dalla connettività pura (currency e
+refuso di frontmatter) — segnale che vale la pena, nelle prossime sessioni,
+alternare il controllo "hub→figli" con una lettura di contenuto mirata
+anche nelle categorie già dichiarate "pulite" strutturalmente.
 
 ## Prossima sessione consigliata
 
-Non prima di 2026-10-04. Categorie ancora da controllare con questo
-criterio: `networking/**`, `iac/**`, `monitoring/**`, `security/**`, `ai/**`,
-`cloud/**` (aws/azure già confermate pulite in #638, gcp/finops non ancora
-verificate), `containers/**` (gap noto da sessioni precedenti — verificare se
-prop-078/079 sono state applicate). In alternativa: proposta `review` per
-introdurre la checklist "grid genitore" nel protocollo 1️⃣ di CLAUDE.md, dato
-che il pattern è ora confermato in 3 sessioni consecutive su categorie diverse.
+Non prima di 2026-10-04. Il ciclo di controllo "hub→figli" avviato in
+#634 può considerarsi concluso su tutte le categorie principali (solo
+containers/openshift e kustomize erano da riconfermare dopo prop-078/079,
+ora verificati puliti in questa sessione). Prossimo focus suggerito:
+lettura di contenuto (non solo connettività) su `dev/**` e `messaging/**`
+per cercare pattern analoghi a quelli trovati in `ai/sviluppo/` (currency,
+refusi di frontmatter) — la connettività strutturale della KB è ormai
+in buono stato diffuso, il valore marginale maggiore ora sta nel controllo
+di freschezza dei contenuti e nell'accuratezza dei metadati.

@@ -1,0 +1,50 @@
+id: prop-086
+title: "Aggiornare model ID obsoleti in ai/sviluppo/_index.md (currency)"
+type: currency
+priority: medium
+target_file: docs/ai/sviluppo/_index.md
+effort: small
+description: |
+  Tutti gli esempi di codice Python in questo file usano model ID datati
+  e superati: `"claude-3-5-sonnet-20241022"` e `"claude-3-5-haiku-20241022"`
+  (righe ~62, ~72, ~82, ~134, ~166). La KB ha già un file `ai/modelli/claude.md`
+  con `status: reviewed`, `last_verified: 2026-09-08` che documenta i model ID
+  correnti senza suffisso data (`claude-opus-5`, `claude-sonnet-5`,
+  `claude-haiku-4-5`, `claude-fable-5`) e i parametri correnti
+  (`output_config.effort`, `thinking: {type: "adaptive"}`, niente
+  `temperature`/prefill sui modelli 4.7+). Questo file (`last_updated:
+  2026-02-27`, mai portato a `reviewed`) non riflette nulla di tutto ciò:
+  è rimasto alla generazione Claude 3.5, la stessa criticità già chiusa
+  altrove nella KB (vedi registro criticità #3 in CLAUDE.md, che ha sanato
+  `docs/ai/modelli/*` ma non ha toccato `ai/sviluppo/`).
+  Azioni richieste:
+  1. Sostituire i model ID negli esempi con quelli correnti
+     (`claude-sonnet-5` per gli esempi generici, `claude-haiku-4-5` per lo
+     streaming/classificazione veloce).
+  2. Aggiungere una riga o nota che rimanda a `ai/modelli/claude.md` per
+     l'elenco aggiornato dei model ID e i parametri correnti, così il file
+     non si disallinea di nuovo alla prossima release.
+  3. Aggiornare `last_updated` e valutare se impostare `status: needs-review`
+     data la modifica (dipende da quanto del contenuto cambia oltre il 30%).
+rationale: |
+  Lettore: sviluppatore che copia-incolla gli snippet Python di questo file
+  per integrare l'API Claude in un'applicazione nuova.
+  Scenario: segue l'esempio "Integrazione Base con Claude SDK" per scrivere
+  la prima chiamata API.
+  Outcome atteso: dovrebbe ottenere codice che usa i model ID correnti e
+  best practice aggiornate, coerenti col resto della KB.
+  Outcome reale oggi: copia un model ID di una generazione precedente,
+  disallineato da `ai/modelli/claude.md` nella stessa KB — incoerenza
+  interna che mina la fiducia nel contenuto e rischia di far usare in un
+  progetto nuovo un modello che non è più il default consigliato.
+  Without_KB: dovrebbe scoprire la disallineamento leggendo la doc ufficiale
+  Anthropic in parallelo, vanificando il valore di avere un esempio pronto
+  nella KB.
+utility_test:
+  reader: "Sviluppatore che integra per la prima volta l'API Anthropic in un'applicazione DevOps (es. bot di analisi incidenti)"
+  scenario: "Copia lo snippet 'Integrazione Base con Claude SDK' da ai/sviluppo/_index.md per il primo prototipo"
+  outcome: "Ottiene codice con model ID e parametri coerenti con la generazione corrente, senza dover incrociare un secondo file (ai/modelli/claude.md) per capire che il model ID copiato è superato"
+  without_kb: "Dovrebbe confrontare manualmente la doc ufficiale Anthropic con l'esempio della KB per accorgersi della discrepanza, o scoprirlo solo a runtime se il model ID datato viene deprecato"
+  score: high
+tags: [ai, claude, currency, model-id, sviluppo]
+last_analyzed: 2026-09-27

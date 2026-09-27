@@ -1,0 +1,36 @@
+id: prop-087
+title: "Correggere path errato 'ai/agenti/' nel frontmatter di ai/agents/_index.md"
+type: fix-relation
+priority: low
+target_file: docs/ai/agents/_index.md
+effort: small
+description: |
+  Il campo `related` in `docs/ai/agents/_index.md` (riga 8) contiene:
+  `related: [ai/agenti/claude-agent-sdk, ai/agenti/frameworks, ...]`
+  ma la cartella reale è `ai/agents/` (inglese), non `ai/agenti/`
+  (italiano) — i due file target esistono realmente come
+  `docs/ai/agents/claude-agent-sdk.md` e `docs/ai/agents/frameworks.md`.
+  Il refuso rende i due riferimenti nel campo `related` non risolvibili
+  da qualsiasi tooling che li usi per costruire grafo di connettività o
+  suggerimenti "vedi anche" (stesso meccanismo usato in questa sessione
+  per l'audit di connettività hub→figli).
+  Azione richiesta: correggere le due voci in
+  `related: [ai/agents/claude-agent-sdk, ai/agents/frameworks, ai/sviluppo/prompt-engineering, ai/sviluppo/rag]`.
+rationale: |
+  Lettore: nessun impatto diretto sulla resa visiva della pagina (il
+  frontmatter `related` non è renderizzato come link in questo file), ma
+  qualunque automazione o audit futuro che si fidi del campo `related` per
+  calcolare la connettività della KB (esattamente il tipo di controllo
+  fatto in questa sessione su networking/iac/monitoring/security/gcp)
+  otterrebbe un falso negativo su questo file, sprecando tempo a rincorrere
+  un gap di connettività che in realtà è solo un refuso di percorso.
+  Fix a costo quasi zero (1 riga), utile a mantenere l'affidabilità dei
+  dati di connettività della KB nel tempo.
+utility_test:
+  reader: "L'automazione stessa della KB (task audit/review) o un agente di contenuto che verifica connettività hub→figli"
+  scenario: "Calcola quali related-path sono validi per stimare la connettività della sezione ai/agents"
+  outcome: "Con il fix, il campo related risolve correttamente ai due file esistenti, senza generare un falso gap di connettività da investigare"
+  without_kb: "Un controllo futuro di connettività (come quello fatto in questa sessione) rileverebbe un related path 'rotto' e potrebbe sprecare un ciclo di analisi per capire se manchi davvero un file"
+  score: medium
+tags: [ai, agents, fix-relation, frontmatter, refuso]
+last_analyzed: 2026-09-27

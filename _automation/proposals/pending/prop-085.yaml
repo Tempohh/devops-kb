@@ -1,0 +1,45 @@
+id: prop-085
+title: "Creare hub mancante cloud/gcp/compute/_index.md (Cloud Run orfano)"
+type: fix-relation
+priority: high
+target_file: docs/cloud/gcp/compute/_index.md
+effort: small
+description: |
+  `docs/cloud/gcp/compute/cloud-run.md` esiste ed è completo (frontmatter
+  `parent: cloud/gcp/compute/_index`), ma il file `_index.md` a cui punta
+  NON esiste — è l'unico hub mancante in tutta la sezione `cloud/gcp/**`
+  (tutte le altre 6 sotto-sezioni: fondamentali, iam, containers, dati,
+  messaging, monitoring, storage hanno il proprio `_index.md`).
+  Inoltre `docs/cloud/gcp/_index.md` (il grid "Mappa dei Servizi") non
+  menziona affatto "Compute" o "Cloud Run": un lettore che segue la
+  navigazione dalla home GCP non trova mai questo articolo.
+  Cloud Run è oggi linkato solo lateralmente da 2 admonition "Approfondimento"
+  (pubsub.md, cloud-monitoring.md) — nessun percorso di navigazione diretto.
+  Azioni richieste:
+  1. Creare `docs/cloud/gcp/compute/_index.md` seguendo lo stile degli altri
+     hub GCP (frontmatter standard, parent: cloud/gcp/_index, breve intro,
+     grid/lista con link a cloud-run.md).
+  2. Aggiungere una card "Compute" al grid "Mappa dei Servizi" in
+     `docs/cloud/gcp/_index.md` (stesso pattern delle altre 6 card),
+     puntando a `compute/_index.md`.
+rationale: |
+  Lettore: DevOps/Cloud Engineer che valuta opzioni serverless su GCP.
+  Scenario: parte dalla home GCP della KB per capire quali servizi compute
+  sono coperti, o segue `related` da un altro file GCP.
+  Outcome: con l'hub creato e linkato, arriva a Cloud Run in un click dal
+  grid principale, invece di scoprirlo solo per caso da un rimando laterale.
+  Without_KB: dovrebbe usare la ricerca full-text o notare per caso i link
+  "Approfondimento" in pubsub.md/cloud-monitoring.md — nessuna garanzia di
+  scoprire il contenuto navigando normalmente la sezione.
+  Pattern già osservato in sessioni precedenti (#634/#637/#638/#642): hub
+  creato/child aggiunto ma mai agganciato al grid del genitore — qui il
+  caso è più severo perché manca l'intero file `_index.md`, non solo il
+  link.
+utility_test:
+  reader: "Cloud/DevOps Engineer che valuta Cloud Run per un workload containerizzato serverless su GCP"
+  scenario: "Naviga docs/cloud/gcp/_index.md per capire l'offerta compute di GCP prima di scegliere tra GKE, Cloud Run e VM"
+  outcome: "Trova la card Compute nel grid principale e raggiunge Cloud Run in un click, con un hub che lo inquadra rispetto a GKE/Compute Engine"
+  without_kb: "Deve notare per caso un link 'Approfondimento' in un file di tutt'altra sezione (Pub/Sub o Monitoring), oppure usare la ricerca full-text sperando di trovare 'cloud-run.md'"
+  score: high
+tags: [gcp, cloud-run, navigation, fix-relation, hub-orfano]
+last_analyzed: 2026-09-27
