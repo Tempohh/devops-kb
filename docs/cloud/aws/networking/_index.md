@@ -9,7 +9,7 @@ related: [cloud/aws/compute/ec2, cloud/aws/security/network-security]
 official_docs: https://docs.aws.amazon.com/vpc/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-25
+last_updated: 2026-09-27
 ---
 
 # AWS Networking
@@ -27,6 +27,10 @@ Il networking è la fondamenta di ogni architettura AWS. VPC, subnets, routing e
 - :material-vector-combine: **[VPC Avanzato](vpc-avanzato.md)**
 
     VPC Peering, Transit Gateway, PrivateLink, VPN Site-to-Site, Direct Connect, Client VPN
+
+- :material-ip-network: **[IPv6 Dual-Stack](ipv6-dual-stack.md)**
+
+    Indirizzamento IPv6 VPC, EIGW, NAT64/DNS64, ALB/Route53/CloudFront dual-stack — evita i costi IPv4 pubblici in vigore dal 2024
 
 - :material-dns: **[Route 53](route53.md)**
 
