@@ -9,8 +9,8 @@ related: [containers/kubernetes/_index, containers/helm/_index, dev/processi/_in
 official_docs: https://www.jenkins.io/doc/
 status: needs-review
 difficulty: intermediate
-last_updated: 2026-09-27
-last_verified: 2026-09-27
+last_updated: 2026-09-28
+last_verified: 2026-09-28
 ---
 
 # CI/CD & DevOps Automation
@@ -63,9 +63,14 @@ I **DORA Metrics** (DevOps Research and Assessment) sono i KPI standard per valu
 |---------|-------|------|--------|-----|
 | **Deployment Frequency** | Su richiesta (>1/giorno) | 1/settimana - 1/mese | 1/mese - 1/6mesi | < 1/6 mesi |
 | **Lead Time for Changes** | < 1 ora | 1 giorno - 1 settimana | 1 settimana - 1 mese | > 6 mesi |
-<!-- REVIEW: verificare soglie Change Failure Rate contro report DORA/Accelerate più recente — High/Medium/Low identici (16-30%) è sospetto, probabile copia-incolla; inoltre dal report 2022+ DORA ha rivisto la metodologia dei cluster (non più solo Elite/High/Medium/Low a soglie fisse) -->
-| **Change Failure Rate** | 0-15% | 16-30% | 16-30% | 16-30% |
+| **Change Failure Rate** | ~5% | ~10% | ~15% | ~64% |
 | **Time to Restore** | < 1 ora | < 1 giorno | 1 giorno - 1 settimana | > 6 mesi |
+
+!!! note "Change Failure Rate — salto Low"
+    Il valore Low (~64%) non è un refuso: dal report 2023 in poi DORA ha rivisto la
+    metodologia di clustering e il gap tra Medium e Low si è allargato in modo netto
+    rispetto alle edizioni precedenti (dove Low era ~16-30%, in linea con High/Medium).
+    Fonte: [DORA — Four Keys metrics](https://dora.dev/guides/dora-metrics-four-keys/).
 
 ---
 
