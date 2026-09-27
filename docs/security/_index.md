@@ -8,7 +8,7 @@ parent: _index
 official_docs: https://owasp.org/www-project-top-ten/
 status: complete
 difficulty: advanced
-last_updated: 2026-02-24
+last_updated: 2026-09-27
 ---
 
 # Security
@@ -56,6 +56,11 @@ Questa sezione copre la sicurezza nel contesto specifico di microservizi cloud-n
     ---
     Audit logging strutturato, Falco runtime security, Kubernetes audit log, SIEM.
     "Cosa è successo?" — audit trail e rilevazione anomalie.
+
+-   **[Network Security](network/_index.md)**
+
+    ---
+    Zero Trust a livello di rete: micro-segmentazione, NetworkPolicy, Istio AuthorizationPolicy, Cilium.
 
 </div>
 
@@ -122,6 +127,7 @@ Ogni layer:
 2. [OPA](autorizzazione/opa.md) — policy as code
 3. [HashiCorp Vault](secret-management/vault.md) — dynamic secrets
 4. [PKI Interna](pki-certificati/pki-interna.md) — gerarchia CA
+5. [Zero Trust Architecture](network/zero-trust.md) — micro-segmentazione di rete e policy enforcement
 
 ### DevSecOps — Security nel CI/CD
 
@@ -149,6 +155,7 @@ Ogni layer:
 | [SBOM e Cosign](supply-chain/sbom-cosign.md) | Supply Chain | Advanced |
 | [Admission Control](supply-chain/admission-control.md) | Supply Chain | Advanced |
 | [Audit Logging e Runtime Security](compliance/audit-logging.md) | Compliance | Advanced |
+| [Zero Trust Architecture](network/zero-trust.md) | Network Security | Advanced |
 
 ## Riferimenti Fondamentali
 
