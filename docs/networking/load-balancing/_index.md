@@ -6,7 +6,7 @@ tags: [load-balancing, alta-disponibilità, distribuzione-traffico, reverse-prox
 parent: networking
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-09
+last_updated: 2026-09-27
 ---
 
 # Load Balancing
@@ -27,6 +27,9 @@ Differenza fondamentale tra load balancing a livello di trasporto (TCP/UDP) e a 
 
 ### [Algoritmi di Load Balancing](algoritmi.md)
 I principali algoritmi: Round Robin, Least Connections, IP Hash, Random, Weighted Round Robin, Least Response Time. Analisi comparativa, scenari ottimali per ciascuno e come configurarli in Nginx e HAProxy.
+
+### [Nginx vs HAProxy](nginx-haproxy.md)
+Confronto pratico tra i due reverse proxy/load balancer più diffusi: configurazione di reverse proxy, TLS termination, canary release e stream TCP, runtime API di HAProxy, reload zero-downtime e troubleshooting.
 
 ### [Alta Disponibilità e Failover](ha-e-failover.md)
 Eliminare il load balancer come single point of failure: active-passive con VRRP/Keepalived, active-active, health check attivi e passivi, graceful draining. Configurazioni di HA per Nginx e HAProxy in produzione.
