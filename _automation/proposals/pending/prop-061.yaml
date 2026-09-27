@@ -1,0 +1,45 @@
+id: prop-061
+title: "MySQL/InnoDB — Query Optimizer e Performance Tuning"
+type: new-file
+priority: medium
+target_file: docs/databases/mysql/performance-tuning.md
+effort: medium
+description: |
+  Secondo file per databases/mysql/ (dopo architettura-replicazione.md,
+  auto #601), speculare a databases/sql-avanzato/query-optimizer.md ma per
+  l'ottimizzatore InnoDB, che ha modello di costo e strumenti di analisi
+  diversi da Postgres. Struttura suggerita:
+  - EXPLAIN e EXPLAIN FORMAT=JSON: differenze da EXPLAIN ANALYZE Postgres
+    (MySQL 8.0.18+ supporta EXPLAIN ANALYZE ma con output diverso), lettura
+    di `possible_keys`, `key_len`, `rows`, `filtered`, `Extra` (Using
+    filesort, Using temporary, Using index).
+  - Optimizer trace (`optimizer_trace`): come ispezionare le decisioni del
+    planner passo-passo, utile quando EXPLAIN non basta.
+  - Clustered index (PK) vs secondary index: costo del lookup secondario
+    (torna al clustered index), differenza pratica da Postgres (heap +
+    indici tutti equivalenti).
+  - Join algorithms: nested loop (unico storicamente), hash join
+    (introdotto in 8.0.18) e quando MySQL lo sceglie.
+  - InnoDB buffer pool tuning: `innodb_buffer_pool_size`,
+    `innodb_buffer_pool_instances`, adaptive hash index (quando disabilitarlo).
+  - Slow query log + `pt-query-digest` (Percona Toolkit) per triage.
+  - Index strategy: covering index, index merge, perché troppi indici
+    penalizzano write-heavy workload su InnoDB più che su Postgres (doppio
+    costo update per clustered index).
+rationale: |
+  Chi legge: DevOps/DBA mid-senior che opera un MySQL/MariaDB in produzione
+  (coperto ora solo su architettura/replicazione) e deve diagnosticare
+  query lente. Non è simmetria formale con query-optimizer.md: il modello
+  di costo InnoDB, il clustered index e l'introduzione recente dell'hash
+  join sono meccanismi concettualmente diversi da Postgres, non solo sintassi
+  diversa dello stesso comando. Consigliato come follow-up dal report di
+  saturazione della sessione precedente (#600) come secondo file MySQL da
+  valutare dopo l'architettura.
+utility_test:
+  reader: "DevOps/DBA mid-senior che gestisce MySQL/InnoDB in produzione"
+  scenario: "Una query è lenta e deve capire se il problema è nel piano di esecuzione InnoDB, ma la KB copre solo tuning Postgres"
+  outcome: "Legge EXPLAIN FORMAT=JSON, distingue quando il costo è dominato dal lookup su clustered index, e sa quando alzare innodb_buffer_pool_size invece di aggiungere un indice"
+  without_kb: "Documentazione ufficiale MySQL Optimizer + blog Percona, senza il confronto diretto con i concetti Postgres già noti dal resto della KB"
+  score: medium
+tags: [mysql, innodb, query-optimizer, explain, performance-tuning, indici]
+last_analyzed: 2026-09-27

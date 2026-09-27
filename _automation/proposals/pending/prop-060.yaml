@@ -1,0 +1,43 @@
+id: prop-060
+title: "CircleCI — Orbs, Workflows e Resource Classes"
+type: new-file
+priority: high
+target_file: docs/ci-cd/tools/circleci.md
+effort: medium
+description: |
+  Nuovo file per CircleCI, SaaS CI citato nella tabella comparativa di
+  ci-cd/_index.md ("Startup, velocità di setup") ma assente come argomento
+  dedicato — l'unico file in ci-cd/tools/ è tekton.md, mentre Jenkins ha 6
+  file, GitHub Actions 3, GitLab CI 2. Struttura suggerita:
+  - Config.yml 2.1: orbs (pacchetti riusabili, versioning, orb registry
+    pubblico/privato), executors (docker/machine/macos/windows — differenze
+    di isolamento e costo), resource_class (cpu/memoria per job).
+  - Workflows: fan-out/fan-in, job dependencies (`requires`), approval job
+    manuale, scheduled workflows (cron), matrix jobs (parametrizzati).
+  - Dynamic config: `setup workflows`, `continuation orb` per pipeline
+    generate a runtime (monorepo, path-filtering).
+  - Caching e Docker layer caching: `save_cache`/`restore_cache` con
+    chiavi basate su checksum, differenza rispetto a GitHub Actions cache.
+  - Self-hosted runners (CircleCI runner) per workload non containerizzabili.
+  - Contexts e security: secret scoping per progetto/org, OIDC per cloud
+    provider (AWS/GCP) senza static credentials.
+  - Confronto pratico con GitHub Actions/GitLab CI: dove CircleCI vince
+    (setup rapido, resource class granulare) e dove perde (ecosistema
+    meno integrato con il code hosting).
+rationale: |
+  Chi legge: DevOps mid-senior che valuta o eredita una pipeline CircleCI
+  (comune in startup e scale-up) e non trova nulla nella KB nonostante lo
+  strumento sia già citato come alternativa nella tabella comparativa di
+  ci-cd/_index.md. È un gap reale, non simmetria formale: orbs, resource
+  class ed executor sono concetti CircleCI-specifici senza equivalente
+  diretto in GitHub Actions/GitLab CI (che pure sono documentati in
+  profondità). Utile ora perché completa la copertura degli strumenti CI
+  SaaS più diffusi accanto a GitHub Actions e GitLab CI.
+utility_test:
+  reader: "DevOps mid-senior che eredita o valuta una pipeline CircleCI"
+  scenario: "Deve capire come strutturare orbs/workflows/resource class e non trova riferimenti nella KB, solo una menzione in tabella"
+  outcome: "Configura un config.yml 2.1 con orbs riusabili, workflow fan-out/fan-in e dynamic config per monorepo, sapendo quando usare resource_class più alta invece di self-hosted runner"
+  without_kb: "Documentazione ufficiale CircleCI, sparsa tra config reference e orb registry, senza il confronto diretto con GitHub Actions/GitLab CI già presenti in KB"
+  score: high
+tags: [ci-cd, circleci, orbs, workflows, saas, pipeline]
+last_analyzed: 2026-09-27
