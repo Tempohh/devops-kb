@@ -197,6 +197,33 @@ try {
         Write-Host "  [$(Get-Date -Format 'HH:mm:ss')] Run #$sessionRuns" -ForegroundColor Cyan
     }
 
+    function Invoke-KbCommit {
+        # Commit dedicato per scritture di bookkeeping (state.yaml, spostamenti
+        # proposals/) che avvengono FUORI dal ciclo normale di un task — es.
+        # auto-approve-proposals. Se non le si committa subito qui, restano
+        # scoperte nel working tree e finiscono nel PROSSIMO `git add -A` del
+        # task successivo, taggate con l'id del task sbagliato (criticita'
+        # osservata: commit "(auto #NNN)" il cui diff era solo state.yaml o
+        # solo un prop-NNN.yaml spostato, senza alcun contenuto del task NNN).
+        param([string]$Message)
+        try {
+            & git -C $ProjectRoot add -A 2>&1 | Out-Null
+            & git -C $ProjectRoot diff --cached --quiet
+            if ($LASTEXITCODE -ne 0) {
+                & git -C $ProjectRoot commit -q -m $Message -m "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" 2>&1 | Out-Null
+                & git -C $ProjectRoot pull -q --rebase 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    & git -C $ProjectRoot rebase --abort 2>&1 | Out-Null
+                    Write-Host "  [GIT] rebase in conflitto - annullato, commit bookkeeping solo locale" -ForegroundColor Yellow
+                } else {
+                    & git -C $ProjectRoot push -q origin HEAD:master 2>&1 | Out-Null
+                }
+            }
+        } catch {
+            Write-Host "  [GIT] errore commit bookkeeping: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+
     while ($true) {
 
         $sessionRuns++
@@ -270,6 +297,7 @@ try {
                     $approved = if ($autoObj -and $autoObj.approved) { $autoObj.approved } else { 0 }
                     Write-Host "  [AUTO-APPROVA] $approved proposte approvate — task aggiunti alla coda" -ForegroundColor Magenta
                     Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] AUTO_APPROVE count=$approved" -Encoding UTF8
+                    Invoke-KbCommit "kb: auto-approve $approved proposte (bookkeeping)"
                     $emptyRuns = 0
                     continue
                 } else {
