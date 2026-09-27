@@ -1,0 +1,45 @@
+id: prop-048
+title: "Aggiungere ELB, API Gateway, VPC Lattice all'index AWS networking"
+type: extend-section
+priority: high
+target_file: docs/cloud/aws/networking/_index.md
+effort: small
+description: |
+  docs/cloud/aws/networking/ contiene 8 file di contenuto oltre a
+  _index.md: vpc.md, vpc-avanzato.md, ipv6-dual-stack.md, route53.md,
+  cloudfront.md, elastic-load-balancing.md, api-gateway.md,
+  vpc-lattice.md. _index.md ha una griglia "Sezioni" con SOLO 5 card
+  (VPC, VPC Avanzato, IPv6, Route 53, CloudFront) — verificato via Read
+  diretto del file. elastic-load-balancing.md (457 righe, status:
+  complete), api-gateway.md (437 righe, status: complete) e
+  vpc-lattice.md (297 righe, status: complete) sono completamente
+  assenti dalla pagina indice della loro stessa categoria.
+  Modifica: aggiungere 3 card nella griglia "Sezioni" di
+  docs/cloud/aws/networking/_index.md, stesso formato markdown delle
+  esistenti (icona MDI + titolo + 1 riga descrittiva + link), per:
+  - Elastic Load Balancing (ALB/NLB/GWLB, target groups, health check)
+  - API Gateway (REST/HTTP/WebSocket API, Lambda proxy, authorizer)
+  - VPC Lattice (application networking, service network, IAM auth)
+  Valutare anche se aggiungere una riga alla tabella "Confronto Opzioni
+  di Connettività" per VPC Lattice come alternativa a PrivateLink/Transit
+  Gateway per application networking cross-account (il file vpc-lattice.md
+  la cita già come "alternativa Transit Gateway/PrivateLink" nei suoi
+  search_keywords).
+rationale: |
+  Chi: DevOps/cloud engineer che apre l'index AWS Networking per farsi
+  un quadro di cosa la KB copre prima di approfondire.
+  Problema: 3 argomenti sostanziali e già completi (quasi 1200 righe
+  totali) sono invisibili da chi naviga per categoria — li trova solo
+  se già sa che esistono o passa da Glob/ricerca testuale.
+  Perché ora: stesso pattern del gap Gateway API in networking/; è
+  un fix strutturale a costo bassissimo (1 file, 3 blocchi di card) con
+  beneficio diretto sulla scopribilità dei contenuti AWS, area di focus
+  di questa sessione.
+utility_test:
+  reader: "Cloud engineer che valuta le opzioni di load balancing o service networking su AWS"
+  scenario: "Apre docs/cloud/aws/networking/_index.md per un quadro d'insieme prima di scegliere tra ALB/NLB, API Gateway o VPC Lattice per il proprio caso d'uso"
+  outcome: "Vede tutte e 8 le sezioni disponibili nella griglia, non solo 5, e arriva diretto al file giusto invece di assumere che l'argomento non sia coperto"
+  without_kb: "Deve affidarsi a una ricerca testuale o al Glob della cartella per scoprire che ELB/API Gateway/VPC Lattice sono già documentati"
+  score: high
+tags: [aws, networking, elb, api-gateway, vpc-lattice, navigazione, fix-relation]
+last_analyzed: 2026-09-27

@@ -1,72 +1,62 @@
-# KB Saturation Report — 2026-09-27 (sessione 7, task 579)
+# KB Saturation Report — 2026-09-27
 
-## Copertura stimata per categoria
+## Gate meccanico
 
-| Categoria | Files | Coverage % | Depth | Note |
+```
+file_count: 306 (conteggio manage-state.py)
+target: 330
+over_target: false
+headroom: 24
+category_saturated_pct: 85
+```
+
+Non satura. `allow_zero_proposals: true` ma non necessario in questo ciclo:
+trovati 2 gap di connettività reali (costo quasi zero, impatto alto) + 1 gap
+di contenuto (AWS Global Accelerator) nel focus tematico richiesto.
+
+## Copertura stimata per categoria (focus sessione)
+
+| Categoria | Files (Glob) | Coverage % | Depth | Note |
 |-----------|-------|------------|-------|------|
-| KB totale | 306 (gate) | n/a | n/a | `target_file_count` 330, `over_target: false`, headroom 24 |
-| networking | 41 | ~93% | Advanced | prop-045 eseguita (auto #578): hub radice `docs/networking/_index.md` ora aggiornato al 2026-09-27, tutti i sotto-hub connessi. Nessun nuovo gap sostanziale trovato in questo ciclo. |
-| cloud/aws | 45 | ~91% | Advanced | invariata rispetto al ciclo precedente. `containers-ecs-eks.md` risulta ancora `status: needs-review` nonostante il task `review` #576 già eseguito — non azione per una sessione `proposal` (non rigenerare prop-044, già in approved/eseguita: verificare in sede `review`/`currency` perché la promozione di stato non è avvenuta). |
-| containers | 38 | ~90% | Advanced/Expert | **Nuovo gap reale trovato**: `docs/containers/kubernetes/networking.md` (needs-review, 2026-09-26) duplica in larga parte `docs/networking/kubernetes/_index.md` + foglie (CNI, Ingress, NetworkPolicy) ed è orfano (nessun hub lo linka; `containers/kubernetes/_index.md` rimanda esplicitamente solo all'hub esterno). → **prop-046** (consolidate, priority medium). |
-| databases | 28 | alta | Advanced | Campione ispezionato (`dev/data/_index.md`, hub cross-referenziato): copertura migrazioni schema/pooling/cache già completa e aggiornata, nessun gap. |
-| monitoring | 20 | alta | Advanced | Censimento strutturale: alerting, fondamentali, sre, tools tutti popolati senza buchi evidenti (tracing, SLO, chaos engineering, capacity planning presenti). Non ispezionato in profondità (fuori focus, nessun segnale di draft/needs-review). |
-| messaging / security / iac | 55/26/14 | ~90-92% | Advanced | invariate, non ri-analizzate in questo ciclo |
-| ci-cd / dev / ai | 29/28/27 | n/d | n/d | non analizzate in profondità in questo ciclo |
+| networking/ | 44 | ~90% | alta | Contenuto completo; gap solo di navigazione (Gateway API non linkato dagli _index) |
+| cloud/aws/networking/ | 9 | ~85% | alta | Contenuto completo (VPC, VPC avanzato, IPv6, Route53, CloudFront, ELB, API GW, VPC Lattice); gap di navigazione (3/8 file non in _index) + 1 gap di contenuto (Global Accelerator) |
+| cloud/aws/ (totale) | ~46 | alta | alta | Copertura ampia su compute, storage, database, iam, security, monitoring, messaging |
 
 ## Categorie vicine alla saturazione
 
-- **networking / cloud/aws**: confermate mature dopo 7 cicli di analisi
-  consecutivi con focus tematico su queste due aree. Restano solo problemi di
-  hygiene/stato (containers-ecs-eks.md needs-review non promosso) che
-  spettano a task `review`, non a una sessione `proposal`.
-- **databases / monitoring**: campionate in questo ciclo per verificare se
-  meritassero lo spostamento del focus — risultano già ben coperte, nessun
-  gap con `score: high` trovato.
+- **cloud/aws/networking/**: contenuto tecnico già molto profondo (VPC,
+  routing, DNS, CDN, load balancing, application networking). Nuovi
+  `new-file` qui ammessi solo con gap operativo esplicito e non banale
+  (vedi Global Accelerator, unico caso trovato).
+- **networking/** (generale): tutte le 7 sotto-aree del percorso di
+  studio hanno già file `status: complete` multipli. Ulteriore
+  espansione con `new-file` va giustificata con score `high` esplicito.
 
 ## Categorie con gap reali
 
-- **containers/kubernetes**: duplicazione di contenuto + isola di
-  navigazione tra `containers/kubernetes/networking.md` e
-  `networking/kubernetes/_index.md` → **prop-046** (consolidate, priority
-  medium, effort medium). Non è new-file: il rischio è drift tra due fonti
-  che descrivono lo stesso CNI/Ingress/NetworkPolicy.
+- **Navigazione/connettività** (trasversale, non categoria specifica):
+  2 casi confermati di file `status: complete` e sostanziali (297–457
+  righe) esistenti ma non raggiungibili dagli `_index.md` della propria
+  categoria — gateway-api.md (networking/kubernetes) e 3 file in
+  cloud/aws/networking (ELB, API Gateway, VPC Lattice). Pattern da
+  tenere d'occhio in futuri audit: un file "complete" isolato dalla
+  navigazione vale meno di uno collegato.
+- **AWS Global Accelerator**: servizio distinto senza file proprio,
+  oggi solo citato di sfuggita in elastic-load-balancing.md.
 
-Nessun gap `new-file` con `score: high` trovato in networking o cloud/aws in
-questo ciclo — la sessione precedente (task 577) era già arrivata alla
-stessa conclusione ed eseguire il PASSO 3 su un campione di databases/dev e
-monitoring conferma che spostare subito il focus lì non produce proposte,
-sono già mature. Il gap trovato in containers è emerso per errore di
-navigazione incrociata (nota esplicita in containers/kubernetes/_index.md
-che rimanda a un altro hub), non per assenza di contenuto.
+## Proposte generate questo ciclo
 
-## Sessione proposal 2026-09-27 (task 579)
-
-Gate: `file_count` 306, target 330, `over_target: false`, headroom 24.
-`pending/` vuota prima di questa sessione; `approved/` conteneva
-prop-001..045 (prop-045 eseguita lo stesso giorno, auto #578).
-
-Letti/ispezionati: `docs/networking/_index.md` (verifica esecuzione
-prop-045), elenco file `status: draft|needs-review` su tutta la KB (8 file,
-di cui 2 nuovi rispetto al ciclo precedente: `ipv6-dual-stack.md` già
-coperto da prop-043, e `containers/kubernetes/networking.md` non ancora
-coperto), `containers/kubernetes/_index.md`, `networking/kubernetes/_index.md`,
-prime ~80 righe di `containers/kubernetes/networking.md` (verifica
-duplicazione), `dev/data/_index.md` (campione categoria "databases-adjacent"
-per validare se spostare il focus — nessun gap), censimento strutturale
-Glob di `docs/monitoring/**` e `docs/databases/**`.
-
-**Proposte generate: 1** (prop-046), priority medium, effort medium. Zero
-proposte `new-file`: la KB resta sotto il target di file (headroom 24) ma
-il contenuto sostanziale nelle aree ispezionate è già coperto — il gap
-trovato è di tipo consolidamento/hygiene, non contenuto mancante.
+- prop-047 (extend-section, high): Gateway API → docs/networking/_index.md
+  + kubernetes/_index.md
+- prop-048 (extend-section, high): ELB/API Gateway/VPC Lattice →
+  docs/cloud/aws/networking/_index.md
+- prop-049 (new-file, medium): docs/cloud/aws/networking/global-accelerator.md
 
 ## Prossima sessione consigliata
 
-**Data**: 2026-10-04 (prossimo ciclo settimanale). **Focus**: eseguire
-prop-046 (consolidate containers/kubernetes/networking.md); verificare
-perché containers-ecs-eks.md resta needs-review dopo il task review #576
-(possibile bug nel task type `review` che non promuove lo stato — segnalare
-come criticità se confermato); spostare il focus tematico principale su
-**ci-cd** o **ai** (uniche categorie non ancora campionate in profondità
-negli ultimi 3 cicli), mantenendo networking/cloud-aws solo per hygiene
-residua.
+Data: 2026-10-04 (o al prossimo ciclo `proposal` schedulato).
+Focus tematico suggerito: verificare se lo stesso pattern di "file
+completo ma non linkato dall'_index" esiste in altre categorie ad alta
+profondità (es. `docs/security/`, `docs/ci-cd/jenkins/`) prima di
+generare nuovi `new-file`. Il focus tematico corrente (networking +
+aws) resta valido finché non emergono gap `score: high` altrove.
