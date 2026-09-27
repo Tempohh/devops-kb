@@ -62,6 +62,30 @@ Kubernetes (K8s) è il sistema di orchestrazione di container de facto per ambie
 
     → [Troubleshooting](troubleshooting.md)
 
+-   **Autoscaling**
+
+    HPA, VPA, KEDA, Cluster Autoscaler, metriche custom, scale-to-zero.
+
+    → [Autoscaling](autoscaling.md)
+
+-   **Ingress**
+
+    Ingress controller (NGINX, Traefik), TLS termination, path/host routing, canary.
+
+    → [Ingress](ingress.md)
+
+-   **Multi-Cluster**
+
+    Cluster API, Rancher/Fleet, Argo CD multi-cluster, federation, gestione multi-tenant.
+
+    → [Multi-Cluster](multi-cluster.md)
+
+-   **Resource Management**
+
+    QoS classes, LimitRange, ResourceQuota, OOM kill, noisy neighbor, multi-tenancy.
+
+    → [Resource Management](resource-management.md)
+
 </div>
 
 !!! note "Networking Kubernetes"
