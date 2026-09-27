@@ -1,4 +1,4 @@
-# KB Saturation Report — 2026-09-27 (sessione #637)
+# KB Saturation Report — 2026-09-27 (sessione #638)
 
 ## Gate meccanico
 
@@ -7,60 +7,63 @@ file_count: 314, target: 330, over_target: false, headroom: 16
 category_saturated_pct: 85, allow_zero_proposals: true
 ```
 
-Sotto target. Focus raccomandato dalla sessione precedente (#634): controllo di
-connettività hub→figli sui sotto-hub **interni** (secondo livello) di
-`docs/cloud/aws/**` e `docs/cloud/azure/**`, mai verificati con questo criterio
-specifico prima d'ora (entrambe già grandi, a rischio di figli orfani accumulati
-come visto in `containers/kubernetes`, #634).
+Sotto target. Focus raccomandato dalla sessione precedente (#637): controllo
+di connettività hub→figli sui sotto-hub interni di `docs/dev/**` (categoria
+più popolosa e composita, mai controllata con questo criterio prima d'ora).
 
 ## Copertura stimata per categoria
 
 | Categoria | Files | Coverage % | Depth | Note |
 |-----------|-------|------------|-------|------|
-| cloud/aws (8 sotto-hub) | tutti i figli linkati | 100% connesso | Controllati tutti e 8 i sotto-hub (`ci-cd`, `compute`, `containers`, `database`, `fondamentali`, `iam`, `messaging`, `monitoring`, `security`, `storage` — 10 in realtà) | Nessun gap — `networking` (9 figli, il sotto-hub più grande di `aws/`) e tutti gli altri hanno grid "Sezioni"/"Argomenti" complete |
-| cloud/azure (9 sotto-hub) | tutti i figli linkati | 100% connesso | Controllati `ci-cd`, `compute`, `database`, `fondamentali`, `identita`, `messaging`, `monitoring`, `networking`, `security`, `storage` | Nessun gap — ogni figlio è raggiungibile dalla grid del proprio sotto-hub |
+| dev/** (9 sotto-hub) | 28 file totali | — | Controllati tutti e 9 i sotto-hub (`api`, `data`, `integrazioni`, `linguaggi`, `processi`, `resilienza`, `runtime`, `sicurezza`, `testing`) | 3 gap trovati (vedi sotto) su 9 sotto-hub controllati |
 
 ## Categorie vicine alla saturazione
 
 Confermate sature nelle sessioni precedenti (invariato): **databases/**,
 **dev/linguaggi/**, **messaging/rabbitmq**, **cloud/aws**, **networking/**,
-**dev/testing, dev/data, dev/resilienza, dev/sicurezza, dev/integrazioni**,
-**monitoring/**, **iac/**, **cloud/azure/**. **ai/**, **security/**,
-**cloud/aws/** e **cloud/azure/** confermate pulite anche al livello dei
-sotto-hub interni (nessun figlio orfano).
+**dev/testing, dev/data, dev/resilienza (contenuto), dev/sicurezza,
+dev/integrazioni (contenuto)**, **monitoring/**, **iac/**, **cloud/azure/**,
+**ai/**, **security/**.
 
 ## Categorie con gap reali
 
-Nessun nuovo gap trovato in questa sessione. Restano aperti (da #634, non
-ancora risolti da una proposta approvata al momento di questo report):
+Trovati **3 hub orfani** in `docs/dev/**` — file figli esistenti, completi,
+ma con **zero link** dall'`_index.md` del proprio sotto-hub (verificato con
+grep sull'intero corpo di ciascun file, non solo il frontmatter):
 
-- **containers/kubernetes/_index.md**: 4 file figli non raggiungibili dalla
-  grid "Sottosezioni" — prop-078 (high), già in `_automation/proposals/approved/`.
-- **containers/kubernetes/helm.md vs containers/helm/_index.md**: contenuto
-  sovrapposto senza `related` incrociati — prop-079 (medium), già approvata.
+- **dev/api/_index.md** — non linka `rest-openapi.md`, il suo UNICO figlio.
+  → prop-080 (high).
+- **dev/resilienza/_index.md** — non linka nessuno dei 3 figli
+  (`circuit-breaker.md`, `health-checks.md`, `observability-code.md`;
+  `health-checks` compare solo nel frontmatter `related`, non nel corpo).
+  → prop-081 (high).
+- **dev/integrazioni/_index.md** — non linka nessuno dei 2 figli
+  (`database-patterns.md`, `rabbitmq-client.md`). → prop-082 (medium).
 
-Zero proposte generate in questa sessione: il check di connettività su
-`cloud/aws/**` e `cloud/azure/**` non ha rivelato figli orfani in nessuno dei
-17 sotto-hub controllati (8 AWS + 9 Azure), e nessun altro gap operativo ha
-superato il test di utilità (reader/scenario/outcome) durante l'analisi.
+Sotto-hub controllati e puliti: `dev/data` (monolitico, nessun figlio
+previsto), `dev/testing` (monolitico, nessun figlio previsto), `dev/linguaggi`
+(6/6 figli linkati), `dev/processi` (3/3 linkati), `dev/runtime` (2/2
+linkati), `dev/sicurezza` (2/2 linkati).
 
 ## Focus usato in questa sessione
 
-Come raccomandato da #634: controllo mirato di connettività sui sotto-hub
-interni di `docs/cloud/aws/**` e `docs/cloud/azure/**`. Risultato: entrambe
-completamente pulite. Aggiornando il conteggio complessivo del pattern "hub
-non aggiornato dopo la creazione di nuovi figli": 4 categorie su 6 controllate
-finora (`ai`, `security`, `cloud/aws`, `cloud/azure`) risultano pulite, 2
-(`ci-cd`, `containers`) hanno mostrato gap. La correlazione con la frequenza
-di crescita recente della categoria (osservata in #634) resta la spiegazione
-più plausibile.
+Come raccomandato da #637: controllo di connettività sui sotto-hub interni
+di `docs/dev/**`. Risultato: 3 gap su 9 sotto-hub (33%), la percentuale più
+alta finora tra le categorie controllate con questo criterio. Aggiornando il
+conteggio complessivo: 4 categorie pulite (`ai`, `security`, `cloud/aws`,
+`cloud/azure`) vs 3 con gap (`ci-cd`, `containers`, `dev`) su 7 categorie
+verificate finora. Il pattern "hub non aggiornato dopo la creazione di nuovi
+figli" continua a manifestarsi soprattutto nelle categorie con crescita
+recente più intensa — coerente con l'osservazione di #634/#637. Vale la pena
+valutare, in una prossima sessione `review` o modifica a CLAUDE.md, una
+checklist esplicita "aggiorna il grid del genitore" nel protocollo 1️⃣ Nuovo
+Argomento: 3 categorie su 7 con gap (43%) non è più rumore statistico.
 
 ## Prossima sessione consigliata
 
-Non prima di 2026-10-04. Con 6 categorie ora verificate a livello di sotto-hub
-interni, il prossimo giro dovrebbe coprire i sotto-hub interni di
-`docs/dev/**` (categoria più popolosa e composita, mai controllata con questo
-criterio) e valutare se il pattern "hub non aggiornato" giustifica ormai una
-regola strutturale permanente in CLAUDE.md (checklist "aggiorna il genitore"
-nel protocollo 1️⃣ Nuovo Argomento) — 2 categorie su 6 con gap è già un segnale
-non trascurabile.
+Non prima di 2026-10-04. Restano da controllare con questo criterio:
+`ci-cd/**` (gap già noto ma non riverificato dopo prop-078/prop-079),
+`messaging/**`, `databases/**`. In alternativa, valutare se aprire una
+proposta `review`/modifica CLAUDE.md per rendere permanente il controllo
+"grid genitore aggiornata" nel protocollo di creazione nuovo argomento, dato
+il tasso di ricorrenza ormai sopra il 40%.
