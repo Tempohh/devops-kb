@@ -1,0 +1,41 @@
+id: prop-036
+title: "AWS VPC Lattice — service networking cross-VPC/cross-account"
+type: new-file
+priority: medium
+target_file: docs/cloud/aws/networking/vpc-lattice.md
+effort: medium
+description: |
+  Nuovo file su AWS VPC Lattice, servizio di application networking (GA 2023)
+  assente nella KB (grep su tutta docs/ per "Lattice": zero risultati) mentre
+  Transit Gateway, PrivateLink e Direct Connect sono già ben coperti in
+  vpc-avanzato.md. Struttura suggerita:
+  - Cos'è: service network, service, target group (Lambda/EC2/ECS/EKS pod),
+    auth policy IAM-based a livello di servizio.
+  - Differenza pratica da alternative già documentate: quando usare Lattice
+    invece di Transit Gateway (no hub-and-spoke L3, routing a livello L7/servizio),
+    invece di PrivateLink (niente Interface Endpoint per singolo servizio,
+    service network condiviso tra più VPC/account via Resource Access Manager),
+    invece di un service mesh (niente sidecar, gestito da AWS).
+  - Configurazione pratica: creare service network, associare VPC, registrare
+    target group ECS/EKS, applicare auth policy IAM (esempio JSON).
+  - Cross-account: condivisione service network via AWS RAM, esempio CLI
+    `aws vpc-lattice create-service-network` + `aws ram create-resource-share`.
+  - Limiti noti: nessun supporto UDP, latenza aggiuntiva vs NLB diretto,
+    quota su numero di service association per service network.
+  - Tabella comparativa finale: VPC Peering / Transit Gateway / PrivateLink /
+    VPC Lattice — quando scegliere cosa (colonna "use case", "livello OSI",
+    "cross-account").
+rationale: |
+  I file esistenti su networking AWS (vpc-avanzato.md) coprono già a fondo
+  Transit Gateway, PrivateLink, Direct Connect ma un DevOps che valuta queste
+  opzioni oggi si scontra anche con VPC Lattice, assente dalla KB. Senza una
+  guida che lo posizioni rispetto alle alternative già documentate, il lettore
+  deve ricostruire da solo il confronto leggendo 4 pagine di doc AWS separate.
+utility_test:
+  reader: "DevOps mid-senior che deve esporre un servizio ECS/EKS a più VPC o account senza VPN/peering"
+  scenario: "Deve scegliere tra Transit Gateway, PrivateLink e VPC Lattice per collegare servizi cross-account e non trova un confronto diretto nella KB"
+  outcome: "Sceglie l'approccio giusto in base a caso d'uso reale e configura un service network con auth policy IAM in pochi comandi"
+  without_kb: "Dovrebbe leggere separatamente le doc ufficiali di VPC Lattice, Transit Gateway e PrivateLink e costruire da solo la tabella comparativa"
+  score: high
+tags: [aws, vpc-lattice, networking, service-networking, cross-account, iam]
+last_analyzed: 2026-09-27

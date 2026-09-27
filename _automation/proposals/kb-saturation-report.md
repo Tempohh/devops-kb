@@ -211,3 +211,51 @@ Zero proposte. Gate eseguito con `py`: `file_count` 303, target 330, `over_targe
 
 ## Sessione proposal 2026-09-26 (novodecies, task 556)
 Zero proposte. Gate eseguito con `py`: `file_count` 303, target 330, `over_target: false`, headroom 27 (invariato). `pending/` vuota, ultimo id prop-034. Glob: networking 43 file (incl. `_index`), cloud/aws 47, nessuna variazione. Nessun gap `score: high`; residui (Global Accelerator, VPC Lattice, Traefik) coperti dalla doc ufficiale in 2 click. Analisi approfondita di 10 file non eseguita: nessun segnale nuovo.
+
+## Sessione proposal 2026-09-27 (task 559)
+Gate eseguito con `py` (fix rispetto a sessioni precedenti che segnalavano Python
+assente): `file_count` 304, `target` 330, `over_target: false`, `headroom` 26.
+Conteggio per categoria (find, .md reali):
+
+| Categoria | Files |
+|-----------|-------|
+| cloud | 107 |
+| messaging | 55 |
+| containers | 38 |
+| ci-cd | 29 |
+| ai | 27 |
+| databases | 28 |
+| dev | 28 |
+| security | 26 |
+| networking | 43 |
+| monitoring | 20 |
+| iac | 14 |
+
+Focus tematico (networking + cloud/aws): grep mirato su Transit Gateway,
+PrivateLink, Direct Connect, Network Firewall, Global Accelerator, VPC Lattice,
+Cilium, Consul, Traefik in `docs/cloud/aws/**` e `docs/networking/**`.
+Confermato (come nelle 17 sessioni precedenti): Transit Gateway, PrivateLink,
+Direct Connect, Network Firewall già ben coperti in `vpc-avanzato.md` e
+`network-security.md`; Global Accelerator e Traefik restano gap deboli
+(risolvibili in 2 click sulla doc ufficiale, nessun confronto trasversale da
+offrire). Novità rispetto ai cicli precedenti: **VPC Lattice non è mai stato
+verificato con grep dedicato** nelle sessioni passate — confermato assente
+dall'intera KB e distinto per capacità (service networking L7 cross-VPC/
+cross-account via IAM, non hub-and-spoke L3 come TGW né Interface Endpoint
+singolo come PrivateLink). Gap reale: nessun confronto esiste tra le 4 opzioni
+di connettività AWS già parzialmente documentate. → **1 proposta generata**
+(prop-036, new-file, score high).
+
+## Categorie vicine alla saturazione
+- **cloud/aws**: ~44 file in networking+security; gap residui puntuali.
+- **networking**: 43 file; solo gap trasversali operativi.
+
+## Categorie con gap reali
+- **cloud/aws/networking**: VPC Lattice assente, nessuna guida comparativa
+  Transit Gateway/PrivateLink/Direct Connect/VPC Lattice (prop-036).
+
+## Prossima sessione consigliata
+Continuare focus networking + cloud/aws. Se prop-036 viene approvata e scritta,
+verificare se emergono `related` da collegare in vpc-avanzato.md (protocollo 3).
+Valutare Consul (service discovery ibrida VM+K8s) come possibile gap futuro,
+non ancora abbastanza distinto da giustificare proposta in questo ciclo.
