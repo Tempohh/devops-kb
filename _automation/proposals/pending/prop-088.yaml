@@ -1,0 +1,33 @@
+id: prop-088
+title: "Relazione asimmetrica messaging/kafka <-> messaging/rabbitmq"
+type: fix-relation
+priority: low
+target_file: docs/messaging/kafka/_index.md
+effort: small
+description: |
+  `docs/messaging/rabbitmq/_index.md` ha `related: [messaging/kafka/_index, ...]`
+  e dedica un'intera sezione al confronto Kafka/RabbitMQ (modello mentale,
+  pro/contro, "quando usare entrambi"). Il file gemello
+  `docs/messaging/kafka/_index.md` non ricambia il link: il suo `related` è
+  `[networking/tcp, containers/openshift]`, senza riferimento a RabbitMQ.
+  Aggiungere `messaging/rabbitmq/_index` (o direttamente
+  `messaging/rabbitmq/vs-kafka` per puntare al confronto tecnico) al campo
+  `related` di `messaging/kafka/_index.md` e aggiornare `last_updated`.
+  Nessuna modifica al corpo del documento necessaria.
+rationale: |
+  Un DevOps che arriva prima su Kafka (percorso più comune, essendo Kafka il
+  broker "di default" nelle architetture event-driven) e vuole capire se
+  RabbitMQ sarebbe più adatto per un caso d'uso di routing/task-queue non
+  trova il link nella pagina hub di Kafka, mentre il percorso inverso
+  (RabbitMQ -> Kafka) è già coperto. Stesso pattern di gap già corretto in
+  ai/agents/_index.md (prop-087, sessione #645): relazione a senso unico che
+  inquina la connettività per audit futuri e priva il lettore di un
+  cross-reference utile e già scritto altrove nella KB.
+utility_test:
+  reader: "DevOps mid-senior che valuta Kafka per un nuovo sistema event-driven"
+  scenario: "Sta leggendo la pagina hub di Kafka e si chiede se il suo caso d'uso (routing complesso, task queue) sarebbe servito meglio da RabbitMQ"
+  outcome: "Trova subito, nel campo related/hub, il link al confronto già scritto in messaging/rabbitmq/vs-kafka.md, senza dover sapere che esiste una sezione RabbitMQ nella KB"
+  without_kb: "Deve navigare manualmente nella cartella messaging/ o usare la search per scoprire che esiste già un confronto Kafka vs RabbitMQ"
+  score: low
+tags: [messaging, kafka, rabbitmq, connettività, metadata]
+last_analyzed: 2026-09-27
