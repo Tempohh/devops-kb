@@ -7,7 +7,7 @@ search_keywords: [service mesh microservizi, sidecar proxy pattern, istio servic
 parent: networking
 status: complete
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-09-27
 ---
 
 # Service Mesh
@@ -22,6 +22,7 @@ Un **service mesh** è uno strato di infrastruttura dedicato alla gestione della
 | [Istio](istio.md) | Il service mesh più diffuso in Kubernetes: CRDs, traffic management, sicurezza | Advanced |
 | [Envoy Proxy](envoy.md) | Il data plane de-facto dei service mesh: architettura xDS, filtri, configurazione | Advanced |
 | [Linkerd](linkerd.md) | Service mesh leggero scritto in Rust: semplicità, mTLS automatico, basso overhead | Advanced |
+| [Consul](consul.md) | Service mesh + service discovery + KV store HashiCorp, VM e Kubernetes nello stesso catalogo | Advanced |
 
 ## Quando usare un Service Mesh
 
