@@ -1,0 +1,58 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "Nuovo sottoargomento `databases/mysql/` (attualmente inesistente — la\
+  \ KB copre\nPostgreSQL in profondità ma zero MySQL/MariaDB, pur essendo tra gli\
+  \ RDBMS più\ndiffusi in produzione). Struttura suggerita:\n- Architettura InnoDB:\
+  \ clustered index su PK, buffer pool, redo log/undo log\n  (equivalente concettuale\
+  \ del WAL/MVCC di PostgreSQL ma meccanismo diverso —\n  confronto esplicito con\
+  \ `postgresql/mvcc-vacuum.md`)\n- Replicazione: binlog (statement/row/mixed based),\
+  \ GTID-based replication,\n  semi-sync vs async\n- Alta disponibilità: Group Replication\
+  \ (nativo MySQL 8) vs Galera Cluster\n  (MariaDB/Percona XtraDB) — trade-off multi-master\
+  \ vs single-writer\n- Backup: mysqldump (logical) vs Percona XtraBackup (physical,\
+  \ hot backup) —\n  confronto con `replicazione-ha/backup-pitr.md` lato Postgres\n\
+  - Comandi reali: `SHOW REPLICA STATUS`, `SHOW ENGINE INNODB STATUS`,\n  configurazione\
+  \ GTID (`gtid_mode`, `enforce_gtid_consistency`)\nAggiungere `mysql` a `docs/_metadata/taxonomy.yml`\
+  \ come sottocategoria di\n`databases` durante la creazione del file.\n"
+effort: medium
+id: prop-058
+last_analyzed: 2026-09-27
+priority: high
+rationale: 'Chi legge la KB per PostgreSQL trova copertura enciclopedica (replicazione,
+
+  MVCC, extension, connection pooling) ma chi opera flotte MySQL/MariaDB (comune
+
+  in ambienti legacy, WordPress/CMS, e molte managed offering cloud) non trova
+
+  nulla. Non è simmetria formale: i meccanismi interni (binlog vs WAL, InnoDB
+
+  clustered index vs Postgres heap+index, Group Replication vs streaming
+
+  replication) sono concettualmente diversi e richiedono spiegazione dedicata,
+
+  non un semplice "stesso contenuto con nome diverso".
+
+  '
+status: approved
+tags:
+- mysql
+- mariadb
+- innodb
+- replication
+- galera
+- group-replication
+- binlog
+- gtid
+- backup
+target_file: docs/databases/mysql/architettura-replicazione.md
+title: MySQL/MariaDB — Architettura InnoDB e Replicazione
+type: new-file
+utility_test:
+  outcome: Capisce le differenze binlog/GTID, sceglie la strategia HA corretta per
+    il proprio caso, sa quali comandi diagnostici usare
+  reader: DevOps/DBA che gestisce un cluster MySQL o MariaDB in produzione (es. dietro
+    RDS MySQL, Aurora MySQL, o self-hosted)
+  scenario: Deve progettare o debuggare una topologia di replica MySQL, o scegliere
+    tra Group Replication e Galera per HA
+  score: high
+  without_kb: Dovrebbe incrociare la documentazione ufficiale MySQL, MariaDB/Galera
+    e Percona (3 fonti separate) per ricostruire lo stesso confronto

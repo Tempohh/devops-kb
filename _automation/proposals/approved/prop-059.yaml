@@ -1,0 +1,52 @@
+approved_at: '2026-09-27'
+auto_approved: true
+description: "Confronto operativo tra i principali tool di schema migration, assente\
+  \ nella\nKB (esiste solo il pattern di deployment \"init container\" in\n`dev/integrazioni/database-patterns.md`,\
+  \ non il confronto tra tool):\n- Versioned migrations (Flyway, golang-migrate) vs\
+  \ declarative/state-based\n  (Atlas, Liquibase in modalità diff)\n- Rollback: quali\
+  \ tool supportano rollback automatico vs richiedono migration\n  \"down\" scritte\
+  \ a mano (Flyway Community non ha rollback automatico —\n  trade-off spesso sottovalutato)\n\
+  - Migration idempotenti e locking (evitare doppia esecuzione da pod paralleli\n\
+  \  — collegamento esplicito a `dev/integrazioni/database-patterns.md`)\n- Gestione\
+  \ multi-ambiente (dev/staging/prod) e drift detection (Atlas è\n  l'unico con diff\
+  \ schema-vs-stato-reale nativo)\n- Esempio comparativo: stessa migration (aggiungi\
+  \ colonna NOT NULL con\n  default) espressa nei 3 tool\n"
+effort: small
+id: prop-059
+last_analyzed: 2026-09-27
+priority: medium
+rationale: 'Chi introduce schema migration in una pipeline CI/CD deve scegliere tra
+  tool
+
+  con modelli concettuali diversi (versioned vs declarative) e la scelta
+
+  sbagliata costa una migrazione di tool dopo mesi. La KB ha il pattern di
+
+  deployment Kubernetes ma non la scelta "quale tool e perché" — gap operativo
+
+  concreto, non reperibile in un confronto strutturato nella doc ufficiale di
+
+  un singolo tool (ognuno documenta solo se stesso).
+
+  '
+status: approved
+tags:
+- schema-migrations
+- flyway
+- liquibase
+- atlas
+- ci-cd
+- database-versioning
+target_file: docs/databases/fondamentali/schema-migrations.md
+title: Migrazioni di Schema — Flyway, Liquibase, Atlas
+type: new-file
+utility_test:
+  outcome: Sceglie il tool giusto per il proprio modello (versioned vs declarative)
+    e capisce i limiti di rollback prima di scoprirli in produzione
+  reader: DevOps che introduce schema migration automatizzate in una pipeline CI/CD
+    per la prima volta, o valuta di cambiare tool
+  scenario: Deve scegliere tra Flyway/Liquibase/Atlas per gestire migration di uno
+    schema PostgreSQL/MySQL in produzione con rollback sicuro
+  score: medium
+  without_kb: Dovrebbe leggere 3 documentazioni ufficiali separate e ricostruire da
+    solo il confronto rollback/drift-detection

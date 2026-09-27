@@ -36,6 +36,11 @@ La sezione copre i fondamentali teorici dei database, SQL avanzato, PostgreSQL i
     ---
     MVCC, vacuum, replicazione fisica e logica, connection pooling (PgBouncer), extensions (pgvector, TimescaleDB, PostGIS).
 
+-   **[MySQL](mysql/_index.md)**
+
+    ---
+    Architettura InnoDB (buffer pool, redo/undo log), replicazione binlog/GTID, alta disponibilità con Group Replication e Galera Cluster.
+
 -   **[NoSQL](nosql/_index.md)**
 
     ---
@@ -97,6 +102,7 @@ La sezione copre i fondamentali teorici dei database, SQL avanzato, PostgreSQL i
 | [Replicazione](postgresql/replicazione.md) | PostgreSQL | Advanced |
 | [Connection Pooling](postgresql/connection-pooling.md) | PostgreSQL | Intermediate |
 | [Extensions](postgresql/extensions.md) | PostgreSQL | Intermediate |
+| [Architettura e Replicazione](mysql/architettura-replicazione.md) | MySQL | Advanced |
 | [Redis](nosql/redis.md) | NoSQL | Intermediate |
 | [MongoDB](nosql/mongodb.md) | NoSQL | Intermediate |
 | [Cassandra](nosql/cassandra.md) | NoSQL | Advanced |
