@@ -7,9 +7,10 @@ search_keywords: [network troubleshooting, diagnosi di rete, debug rete, dig, ns
 parent: networking/fondamentali
 related: [networking/fondamentali/dns, networking/fondamentali/tcpip, networking/fondamentali/tls-ssl-basics, networking/fondamentali/nat, networking/fondamentali/ebpf, networking/kubernetes/cni, containers/kubernetes/troubleshooting, cloud/aws/networking/vpc]
 official_docs: https://man7.org/linux/man-pages/man8/ss.8.html
-status: draft
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-09-26
+last_verified: 2026-09-27
 ---
 
 # Network Troubleshooting — Diagnosi di Rete a Strati
