@@ -5,9 +5,9 @@ category: ci-cd
 tags: [cicd, jenkins, github-actions, gitlab-ci, gitops, argocd, flux, pipeline, automation, devops]
 search_keywords: [CI/CD, continuous integration, continuous delivery, continuous deployment, pipeline automation, Jenkins, GitHub Actions, GitLab CI, ArgoCD, Flux, GitOps, DORA metrics, DevOps pipeline, deployment pipeline enterprise, blue green canary, SBOM supply chain, SLSA]
 parent: _index
-related: [containers/kubernetes/_index, containers/helm/_index, dev/processi/_index]
+related: [containers/kubernetes/_index, containers/helm/_index, dev/processi/_index, ci-cd/tools/_index, ci-cd/testing/_index, ci-cd/platform-engineering/_index]
 official_docs: https://www.jenkins.io/doc/
-status: complete
+status: needs-review
 difficulty: intermediate
 last_updated: 2026-09-27
 ---
@@ -130,5 +130,20 @@ Il cluster si auto-configura dallo stato desiderato in Git
 
     ---
     Blue/Green, Canary, Rolling, Feature Flags, Progressive Delivery, Pipeline Security, SBOM, SLSA, Sigstore
+
+-   :material-tools: **[Tools](tools/_index.md)**
+
+    ---
+    Tekton (CI/CD Kubernetes-native CNCF Graduated), CircleCI (SaaS-first, Orbs, resource_class, dynamic config)
+
+-   :material-flask: **[Testing](testing/_index.md)**
+
+    ---
+    Test Strategy (test pyramid, Testcontainers, mutation testing), Contract Testing (Pact, Consumer-Driven Contracts)
+
+-   :material-view-dashboard: **[Platform Engineering](platform-engineering/_index.md)**
+
+    ---
+    Internal Developer Platform, Backstage (Software Catalog, TechDocs, Scaffolder Golden Path)
 
 </div>
