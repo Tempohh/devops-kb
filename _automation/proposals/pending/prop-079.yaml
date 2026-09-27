@@ -1,0 +1,45 @@
+id: prop-079
+title: "Risolvere sovrapposizione tra containers/kubernetes/helm.md e containers/helm/_index.md"
+type: consolidate
+priority: medium
+target_file: docs/containers/kubernetes/helm.md
+effort: medium
+description: |
+  Esistono due pagine indipendenti che trattano lo stesso argomento —
+  "Helm come package manager per Kubernetes" — senza riferimento incrociato:
+    - docs/containers/helm/_index.md (hub dedicato, con 2 figli:
+      chart-avanzato.md, deployment-produzione.md)
+    - docs/containers/kubernetes/helm.md (pagina standalone, parent:
+      containers/kubernetes/_index, NON linkata dalla grid dell'hub —
+      vedi anche prop-078)
+  Entrambe coprono concetti (Chart, Release, values.yaml, rollback,
+  Tiller/Helm 3) in modo sovrapposto ma con tagli leggermente diversi (una
+  più "reference comandi", l'altra più "guida concettuale"). Nessuna delle
+  due linka l'altra in `related`.
+  Azione suggerita (da valutare, non prescrittiva): scegliere se (a)
+  fondere kubernetes/helm.md nell'hub containers/helm/ come terzo figlio
+  con focus specifico (es. "Helm in contesto Kubernetes: RBAC, CRD
+  ordering, hooks vs operators") rimuovendo la sovrapposizione concettuale
+  con l'_index, oppure (b) tenerle separate ma aggiungere `related`
+  incrociati e un chiaro delta di scope in cima a ciascun file ("per la
+  guida completa ai comandi Helm vedi X; qui: come Helm si integra con
+  RBAC/CRD/operators di Kubernetes").
+rationale: |
+  Chi: un lettore che cerca "Helm" nella KB e trova due pagine diverse
+  senza capire quale leggere prima o se sono ridondanti.
+  Problema: contenuto duplicato non è solo spreco di manutenzione (due
+  posti da aggiornare quando cambia una best practice Helm) ma anche
+  fonte di confusione — se in futuro un aggiornamento tocca solo una delle
+  due pagine (come richiesto dal protocollo "modifica solo il file
+  target"), le due finiscono per divergere silenziosamente.
+  Perché ora: emerso analizzando il gap di connettività di prop-078 —
+  kubernetes/helm.md è risultato orfano E parzialmente ridondante con un
+  hub esistente, non solo scollegato.
+utility_test:
+  reader: "DevOps che cerca la pagina di riferimento su Helm nella KB"
+  scenario: "Trova containers/helm/_index.md via ricerca, ma anche containers/kubernetes/helm.md esiste con contenuto simile e non sa quale sia la fonte aggiornata"
+  outcome: "Ogni pagina Helm dichiara chiaramente il proprio scope e rimanda all'altra per il resto, evitando di leggere due volte lo stesso concetto o fidarsi della versione sbagliata"
+  without_kb: "Legge entrambe le pagine per sicurezza, o si affida a quella trovata per prima rischiando info non aggiornata"
+  score: medium
+tags: [consolidamento, duplicazione, containers, helm, kubernetes]
+last_analyzed: 2026-09-27
