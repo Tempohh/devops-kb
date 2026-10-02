@@ -62,3 +62,12 @@ citati in 8-15 file) -> nessun gap. ai/: MCP trattato solo come sezione di
 claude-agent-sdk (solo 2 file citano Model Context Protocol) -> prop-137 (medium,
 produzione/sicurezza MCP). Focus usato: `ai/` e `security/runtime` come da raccomandazione #719.
 Prossima sessione: non prima di 2026-10-09; con headroom 2 dopo prop-137, probabile zero proposte.
+
+## Aggiornamento sessione #723
+
+Gate: file_count 328, target 330, headroom 2, over_target false. `pending/` vuota
+(prop-137 gia' implementata: `docs/ai/agents/mcp-produzione.md`). Sessione ravvicinata
+a #721 (stesso giorno), nessuna modifica rilevante alla KB nel frattempo; focus
+`ai/` + `security/runtime` gia' esaurito in #721. Nessun gap `score: high` identificato
+-> **zero proposte**. Non letti 10 file (PASSO 2): nessuna novita' da analizzare.
+Prossima sessione: non prima di 2026-10-09; focus `iac/` o `databases/` (rotazione).
