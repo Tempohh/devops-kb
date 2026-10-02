@@ -9,7 +9,7 @@ related: [cloud/aws/_index, cloud/azure/_index]
 official_docs: https://cloud.google.com/docs
 status: complete
 difficulty: beginner
-last_updated: 2026-09-27
+last_updated: 2026-10-02
 ---
 
 # Google Cloud Platform
@@ -42,6 +42,10 @@ GCP vs AWS vs Azure — differenziatori chiave
 - :material-shield-account: **[IAM](iam/_index.md)**
 
     Service account, ruoli e permessi, sicurezza accessi
+
+- :material-shield-lock: **[Security](security/_index.md)**
+
+    Cloud KMS, Secret Manager, CMEK, envelope encryption, Cloud HSM
 
 - :material-kubernetes: **[Containers](containers/_index.md)**
 
