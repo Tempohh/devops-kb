@@ -1,0 +1,78 @@
+approved_at: '2026-10-02'
+auto_approved: true
+description: "Creare `docs/messaging/pulsar/_index.md` (indice categoria, stesso pattern\
+  \ di\n`kafka/_index.md` e `rabbitmq/_index.md`) e `docs/messaging/pulsar/fondamentali.md`\n\
+  con almeno queste sezioni:\n- Architettura: separazione compute/storage — broker\
+  \ (stateless) vs BookKeeper\n  (bookie, storage a log segmentato) vs ZooKeeper/metadata\
+  \ store. Differenza\n  strutturale rispetto a Kafka (broker con storage locale su\
+  \ disco).\n- Topics: persistent vs non-persistent, partitioned topics, subscription\
+  \ model\n  (exclusive, shared, failover, key_shared) — più flessibile dei consumer\
+  \ group\n  Kafka perché più subscription type sullo stesso topic.\n- Multi-tenancy\
+  \ nativa: tenant → namespace → topic, con policy (quota, retention,\n  TTL) applicabili\
+  \ per namespace. Caso d'uso: piattaforma multi-team/multi-cliente\n  su cluster\
+  \ condiviso senza cluster Kafka separati.\n- Tiered storage: offload automatico\
+  \ dei segmenti BookKeeper più vecchi su S3/GCS,\n  mantenendo lo stream interrogabile\
+  \ con retention illimitata a costo contenuto\n  (differenza pratica vs Kafka, dove\
+  \ retention lunga = disco locale costoso o\n  Kafka tiered storage solo nelle distribuzioni\
+  \ enterprise recenti).\n- Pulsar Functions: elaborazione lightweight inline (confronto\
+  \ con Kafka Streams/ksqlDB).\n- Esempio pratico: comandi `pulsar-admin` per creare\
+  \ tenant/namespace/topic,\n  client Python/Java minimale per produce/consume.\n\
+  - Tabella comparativa Kafka vs Pulsar vs RabbitMQ (throughput, multi-tenancy,\n\
+  \  operational complexity, ecosystem, quando scegliere l'uno o l'altro).\n- Troubleshooting:\
+  \ bookie under-replication, backlog quota exceeded.\nAggiornare `docs/messaging/_index.md`\
+  \ con una terza card \"Apache Pulsar\" nella\ngrid, e `docs/_metadata/taxonomy.yml`\
+  \ aggiungendo `pulsar` a\n`messaging.subcategories`.\n"
+effort: medium
+id: prop-130
+last_analyzed: 2026-10-02
+priority: high
+rationale: 'Kafka e RabbitMQ sono gli unici due sistemi di messaging documentati nella
+  KB
+
+  (56 file solo per Kafka). Apache Pulsar è il terzo sistema di event-streaming
+
+  più diffuso in produzione (Yahoo/Verizon, Splunk, Tencent, StreamNative/Datastax
+
+  Astra Streaming) ed è frequentemente il termine di confronto quando un team
+
+  valuta "Kafka vs alternative" per via di multi-tenancy nativa e tiered storage
+
+  — due capability che Kafka non ha nativamente (serverless/tiered storage solo
+
+  in offerte enterprise). Oggi la KB non menziona Pulsar in nessun file: chi
+
+  deve scegliere tra Kafka e Pulsar, o chi eredita un cluster Pulsar esistente,
+
+  non trova alcun riferimento. Non è simmetria formale: l''architettura compute/
+
+  storage separata di Pulsar è concettualmente diversa da Kafka e genera domande
+
+  operative specifiche (bookie sizing, tiered storage offload) che non sono
+
+  risolvibili per analogia con i contenuti Kafka esistenti.
+
+  '
+status: approved
+tags:
+- pulsar
+- messaging
+- event-streaming
+- kafka-alternative
+- multi-tenancy
+- tiered-storage
+target_file: docs/messaging/pulsar/fondamentali.md
+title: Apache Pulsar — fondamentali e confronto con Kafka
+type: new-file
+utility_test:
+  outcome: Capisce la differenza architetturale chiave (compute/storage separati),
+    sa quando Pulsar è la scelta giusta vs Kafka/RabbitMQ, ed esegue i comandi pulsar-admin
+    di base per creare ed operare topic multi-tenant
+  reader: DevOps/platform engineer che deve scegliere o già opera un cluster Pulsar
+  scenario: Deve valutare Pulsar come alternativa a Kafka per multi-tenancy o tiered
+    storage, oppure deve fare troubleshooting su un cluster Pulsar esistente senza
+    esperienza precedente con l'architettura broker/bookie
+  score: high
+  without_kb: Deve leggere la documentazione ufficiale Pulsar (inglese, organizzata
+    per reference tecnico non per percorso di apprendimento) e assemblare da solo
+    il confronto con Kafka, che nella doc ufficiale Pulsar è presentato in modo promozionale
+    e non neutro

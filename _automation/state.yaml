@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-10-02T17:02:41.859006+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 1056
+total_ops: 1057
 total_runs: 499
 queue:
 - id: W-001
@@ -6574,6 +6574,28 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '710'
+  type: new_topic
+  path: docs/messaging/pulsar/fondamentali.md
+  category: messaging
+  priority: P1
+  status: pending
+  reason: "Creare `docs/messaging/pulsar/_index.md` (indice categoria, stesso pattern di\n`kafka/_index.md` e `rabbitmq/_index.md`)\
+    \ e `docs/messaging/pulsar/fondamentali.md`\ncon almeno queste sezioni:\n- Architettura: separazione compute/storage —\
+    \ broker (stateless) vs BookKeeper\n  (bookie, storage a log segmentato) vs ZooKeeper/metadata store. Differenza\n  strutturale\
+    \ rispetto a Kafka (broker con storage locale su disco).\n- Topics: persistent vs non-persistent, partitioned topics,\
+    \ subscription model\n  (exclusive, shared, failover, key_shared) — più flessibile dei consumer group\n  Kafka perché\
+    \ più subscription type sullo stesso topic.\n- Multi-tenancy nativa: tenant → namespace → topic, con policy (quota, retention,\n\
+    \  TTL) applicabili per namespace. Caso d'uso: piattaforma multi-team/multi-cliente\n  su cluster condiviso senza cluster\
+    \ Kafka separati.\n- Tiered storage: offload automatico dei segmenti BookKeeper più vecchi su S3/GCS,\n  mantenendo lo\
+    \ stream interrogabile con retention illimitata a costo contenuto\n  (differenza pratica vs Kafka, dove retention lunga\
+    \ = disco locale costoso o\n  Kafka tiered storage solo nelle distribuzioni enterprise recenti).\n- Pulsar Functions:\
+    \ elaborazione lightweight inline (confronto con Kafka Streams/ksqlDB).\n- Esempio pratico: comandi `pulsar-admin` per\
+    \ creare tenant/namespace/topic,\n  client Python/Java minimale per produce/consume.\n- Tabella comparativa Kafka vs Pulsar\
+    \ vs RabbitMQ (throughput, multi-tenancy,\n  operational complexity, ecosystem, quando scegliere l'uno o l'altro).\n-\
+    \ Troubleshooting: bookie under-replication, backlog quota exceeded.\nAggiornare `docs/messaging/_index.md` con una terza\
+    \ card \"Apache Pulsar\" nella\ngrid, e `docs/_metadata/taxonomy.yml` aggiungendo `pulsar` a\n`messaging.subcategories`.\n"
+  proposal_id: prop-130
 completed:
 - id: '695'
   path: docs/ci-cd/gitops/argocd.md
