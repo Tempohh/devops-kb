@@ -1,0 +1,54 @@
+approved_at: '2026-10-02'
+auto_approved: true
+description: "Secondo file della nuova sottocategoria docs/cloud/gcp/security/ (vedi\n\
+  prop-128 per il primo e per la creazione di _index.md). Copre protezione\ndi rete\
+  \ e detection, equivalente GCP di quanto già documentato per AWS in\nnetwork-security.md\
+  \ + compliance-audit.md:\n- Cloud Armor: WAF rules, rate limiting, protezione L7\
+  \ per servizi dietro\n  Global Load Balancer, preconfigured WAF rules (OWASP CRS),\
+  \ Adaptive\n  Protection (DDoS ML-based)\n- VPC Service Controls: service perimeter,\
+  \ come previene data exfiltration\n  tra progetti/servizi, differenza rispetto a\
+  \ IAM (controllo a livello di\n  rete/API, non di identità) — concetto spesso frainteso\n\
+  - Security Command Center: tier Standard vs Premium, finding di\n  misconfigurazione,\
+  \ integrazione con Cloud Asset Inventory\n- Organization Policies rilevanti per\
+  \ sicurezza (es. constraints/compute.*,\n  restrict public IP, uniform bucket-level\
+  \ access) — collegamento a\n  iam-service-accounts.md già esistente\n- Troubleshooting:\
+  \ Cloud Armor rule non applicata per ordine priorità\n  sbagliato, VPC-SC che blocca\
+  \ una chiamata API legittima (debug via log)\n"
+effort: medium
+id: prop-129
+last_analyzed: 2026-10-02
+priority: medium
+rationale: 'Chi deve mettere in produzione un servizio esposto su GCP con requisiti
+  di
+
+  protezione perimetrale (WAF, anti-exfiltration) non trova nella KB nulla di
+
+  specifico GCP: zero-trust.md è concettuale e cross-provider, non spiega quali
+
+  controlli GCP configurare concretamente. VPC Service Controls in particolare
+
+  è un concetto che genera confusione pratica (viene scambiato per firewall)
+
+  e non è documentato da nessuna parte nella KB.
+
+  '
+status: approved
+tags:
+- gcp
+- security
+- cloud-armor
+- vpc-service-controls
+- security-command-center
+target_file: docs/cloud/gcp/security/network-perimeter-detection.md
+title: 'GCP Security: Cloud Armor, VPC Service Controls e Security Command Center'
+type: new-file
+utility_test:
+  outcome: Configura Cloud Armor con le regole giuste, capisce quando VPC-SC è necessario
+    (vs IAM da solo) e sa dove guardare per i finding di sicurezza aggregati
+  reader: DevOps/Platform engineer che deve esporre un servizio GCP a internet rispettando
+    requisiti di sicurezza perimetrale e prevenzione data exfiltration
+  scenario: Deve capire se Cloud Armor basta o serve anche VPC-SC, e come leggere
+    i finding di Security Command Center senza esperienza pregressa GCP
+  score: high
+  without_kb: Deve leggere tre prodotti diversi nella doc ufficiale Google senza un
+    quadro che li metta in relazione, rischiando di confondere VPC-SC con un firewall

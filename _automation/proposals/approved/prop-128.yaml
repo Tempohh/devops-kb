@@ -1,0 +1,58 @@
+approved_at: '2026-10-02'
+auto_approved: true
+description: "Creare docs/cloud/gcp/security/ (nuova sottocategoria, manca del tutto\
+  \ —\nAWS e Azure hanno entrambi una cartella security/ dedicata con 3-4 file,\n\
+  GCP ne ha zero nonostante iam/ copra solo identità). Questo primo file\ntratta la\
+  \ protezione dati:\n- Cloud KMS: key hierarchy (keyring/key/version), CMEK vs CSEK\
+  \ vs Google-managed,\n  rotazione automatica, envelope encryption, HSM-backed keys\
+  \ (Cloud HSM),\n  IAM binding su chiavi (cryptoKeyEncrypter/Decrypter)\n- Secret\
+  \ Manager: versioning dei secret, rotazione, replica (automatic vs\n  user-managed),\
+  \ integrazione con Cloud Run/GKE (Workload Identity + CSI driver),\n  confronto\
+  \ con HashiCorp Vault già documentato in security/secret-management/vault.md\n-\
+  \ Cifratura at-rest di default su tutti i servizi GCP vs CMEK quando serve\n  controllo\
+  \ del ciclo di vita chiave (requisiti compliance)\n- Esempio pratico: binding IAM\
+  \ minimo per un service account che deve solo\n  decrittare, non gestire chiavi\n\
+  - Troubleshooting: errori comuni PERMISSION_DENIED su cryptoKey, secret non\n  accessibile\
+  \ da Cloud Run per IAM mancante\nCreare anche docs/cloud/gcp/security/_index.md\
+  \ (frontmatter standard,\ngrid cards verso questo file e verso prop-129), seguendo\
+  \ lo stile di\ndocs/cloud/aws/security/_index.md.\n"
+effort: medium
+id: prop-128
+last_analyzed: 2026-10-02
+priority: high
+rationale: 'Chi lavora su GCP e deve gestire segreti/cifratura applicativa oggi non
+  ha
+
+  alcun punto di riferimento nella KB — deve usare solo la doc ufficiale Google,
+
+  mentre lo stesso problema su AWS (kms-secrets.md) e Azure (key-vault.md) è
+
+  già coperto con pattern pratici ed esempi di troubleshooting. L''asimmetria
+
+  non è estetica: KMS/Secret Manager sono tra i servizi GCP più usati in
+
+  produzione da chi fa deploy su Cloud Run/GKE.
+
+  '
+status: approved
+tags:
+- gcp
+- security
+- kms
+- secret-manager
+- cifratura
+- cmek
+target_file: docs/cloud/gcp/security/kms-secret-manager.md
+title: 'GCP Security: Cloud KMS, Secret Manager e cifratura dati'
+type: new-file
+utility_test:
+  outcome: Sceglie lo strumento giusto, configura il binding IAM minimo necessario,
+    e sa quando CMEK è richiesto vs cifratura default
+  reader: DevOps mid-senior che deploya su GCP (Cloud Run o GKE) e deve gestire secret
+    applicativi e cifratura CMEK per requisiti di compliance
+  scenario: Deve decidere se usare Secret Manager o Vault, capire come fare binding
+    IAM corretto per Cloud Run, e se serve CMEK per un requisito di audit
+  score: high
+  without_kb: Deve cercare su 3-4 pagine diverse della doc ufficiale Google Cloud
+    (KMS, Secret Manager, IAM) senza un confronto pratico con Vault o con l'equivalente
+    AWS/Azure già noto
