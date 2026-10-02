@@ -7,7 +7,7 @@ parent: monitoring/_index
 related: [monitoring/fondamentali/opentelemetry, monitoring/alerting/alertmanager, monitoring/sre/slo-sla-sli]
 status: complete
 difficulty: intermediate
-last_updated: 2026-09-27
+last_updated: 2026-10-02
 ---
 
 # Tools di Monitoring
@@ -23,3 +23,4 @@ Gli strumenti principali per metriche, visualizzazione e log nell'ecosistema clo
 - [OTel Collector su Kubernetes](otel-collector-kubernetes.md) — DaemonSet/Gateway pattern, pipeline receivers/processors/exporters, Operator
 - [Prometheus: Scalabilità e Long-term Storage](prometheus-scalabilita.md) — Thanos, VictoriaMetrics, Grafana Mimir, remote write tuning, multi-cluster
 - [Continuous Profiling](continuous-profiling.md) — Profiling continuo in produzione, Pyroscope/Parca, flame graph, overhead eBPF
+- [Synthetic Monitoring](synthetic-monitoring.md) — Black-box probing, Blackbox Exporter, uptime check, alerting multi-region
