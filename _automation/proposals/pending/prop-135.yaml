@@ -1,0 +1,42 @@
+id: prop-135
+title: "Terragrunt — DRY multi-ambiente, dependency e stacks per Terraform/OpenTofu"
+type: new-file
+priority: medium
+target_file: docs/iac/terraform/terragrunt.md
+effort: medium
+description: |
+  File dedicato a Terragrunt. Oggi e' trattato solo come sezione 7 di
+  `iac/terraform/ci-cd.md` (circa 50 righe con `run-all`); 3 file lo menzionano in tutto.
+  Struttura suggerita:
+  - Problema risolto: duplicazione di backend/provider tra dev/staging/prod e tra
+    decine di root module; quando Terragrunt NON serve (workspaces, moduli + CI bastano).
+  - Layout repo: `root.hcl` con `remote_state` e `generate "provider"`, `include`
+    (`find_in_parent_folders`), `terragrunt.hcl` per unit, `env.hcl`/`account.hcl`
+    con `read_terragrunt_config`.
+  - Dipendenze: blocco `dependency` con `mock_outputs` per plan su stack vuoto,
+    `dependencies`, ordine di esecuzione e grafo (`terragrunt dag graph`).
+  - CLI: `terragrunt run --all plan|apply` (nuova CLI redesign, sostituisce
+    `run-all` deprecato), `--filter`, `--parallelism`, `--non-interactive`; nota di
+    migrazione dai flag `--terragrunt-*` ai nuovi.
+  - Stacks: `terragrunt.stack.hcl`, `unit`/`stack` block e `terragrunt stack generate`
+    per catalogare layout riusabili.
+  - Integrazione con OpenTofu (`terraform_binary`/`TG_TF_PATH`), CI/Atlantis e
+    caching dei provider (`TG_PROVIDER_CACHE`).
+  - Troubleshooting: `dependency` senza output su stato vuoto, lock contention
+    in parallelo, `.terragrunt-cache` obsoleta, drift tra versioni di terragrunt
+    (pin con `terragrunt_version_constraint`).
+  Verificare le versioni correnti dalla documentazione ufficiale prima di scrivere
+  i comandi (la CLI e' cambiata di recente).
+rationale: |
+  Platform engineer che mantiene infrastruttura multi-account/multi-regione con
+  Terraform/OpenTofu e ha gia' letto state-management e moduli. La sezione esistente
+  mostra solo `run-all`; mancano struttura repo, mock delle dipendenze e migrazione
+  della CLI, che sono i punti dove i team sbagliano.
+utility_test:
+  reader: "Platform engineer con 30+ root module Terraform su 3 account AWS"
+  scenario: "Backend e provider sono copiati in ogni modulo e l'apply in ordine corretto e' manuale"
+  outcome: "Ristruttura il repo con root.hcl, dependency con mock_outputs e `run --all` ordinato"
+  without_kb: "Dovrebbe ricostruire i pattern da docs ufficiali e blog, con CLI storica ormai deprecata"
+  score: medium
+tags: [terragrunt, terraform, opentofu, iac, multi-environment, dry]
+last_analyzed: 2026-10-02

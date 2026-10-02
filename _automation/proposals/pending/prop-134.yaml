@@ -1,0 +1,39 @@
+id: prop-134
+title: "Packer — Golden Image e Immutable Infrastructure (AMI/VM image pipeline)"
+type: new-file
+priority: high
+target_file: docs/iac/packer/golden-image-pipeline.md
+effort: medium
+description: |
+  Guida operativa a HashiCorp Packer per costruire immagini immutabili (AMI, Azure
+  Managed Image / Compute Gallery, GCP image). Oggi la KB ha 0 file su Packer
+  (grep "packer": nessun risultato), nonostante EC2 Auto Scaling e Terraform
+  presuppongano un'immagine pronta.
+  Struttura suggerita:
+  - Perche' golden image vs configuration-at-boot (cloud-init/Ansible pull): tempi di
+    scale-out, drift, reproducibilita'; quando NON usarlo (container-first).
+  - Formato HCL2: blocchi `packer { required_plugins }`, `source "amazon-ebs"`,
+    `build`, provisioner `shell`/`ansible`, post-processor `manifest`; comandi
+    `packer init`, `packer fmt`, `packer validate`, `packer build -var-file`.
+  - Hardening e baseline: CIS benchmark nel provisioner, rimozione chiavi SSH/credenziali
+    temporanee, IMDSv2, cifratura EBS, copia cross-region/account con `ami_regions`.
+  - Pipeline: build in GitHub Actions con OIDC (no chiavi statiche), scansione CVE
+    dell'immagine (Trivy/Inspector), tagging con commit SHA, test con
+    InSpec/Goss prima della promozione.
+  - Integrazione con Terraform: `data "aws_ami"` con filtro su tag, launch template
+    + ASG instance refresh per rollout, rollback sul tag precedente; HCP Packer
+    registry per canali (channel) e revoca di immagini vulnerabili.
+  - Troubleshooting: timeout SSH/WinRM, `Error waiting for AMI`, VPC/subnet
+    mancante, plugin non trovato dopo `packer init`.
+rationale: |
+  Platform/DevOps engineer che gestisce flotte EC2/VM (non solo Kubernetes) e deve
+  ridurre i tempi di scale-out e il configuration drift. La KB spiega ASG e Terraform
+  ma non come nasce l'immagine che questi consumano: lacuna reale nel ciclo IaC.
+utility_test:
+  reader: "DevOps mid-senior che gestisce ASG/VM con Terraform e Ansible"
+  scenario: "Lo scale-out impiega 8 minuti perche' ogni istanza esegue Ansible al boot e le istanze divergono tra loro"
+  outcome: "Costruisce una pipeline Packer con hardening, scan CVE e rollout via instance refresh, con rollback su AMI precedente"
+  without_kb: "Dovrebbe assemblare da solo docs Packer, AWS Image Builder, Terraform e CI senza un percorso end-to-end"
+  score: high
+tags: [packer, iac, golden-image, immutable-infrastructure, ami, hashicorp]
+last_analyzed: 2026-10-02
