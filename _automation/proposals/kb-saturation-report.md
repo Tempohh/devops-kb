@@ -100,3 +100,13 @@ databases/postgresql: `pg_upgrade`/major upgrade = 0 menzioni -> **prop-138** (m
 headroom resta 1). Non letti 10 file per intero (PASSO 2): analisi via grep + elenco file.
 Focus usato: `databases/` (rotazione da #725). Prossima sessione: non prima di 2026-10-09;
 con headroom 1 probabile zero proposte; focus residuo `databases/mysql` (upgrade/HA) o `iac/ansible`.
+
+## Aggiornamento sessione #729 (2026-10-03)
+
+Gate (via `py`): file_count 329, target 330, headroom 1, over_target false. `pending/` vuota;
+prop-138 implementata (`major-version-upgrade.md`). Grep mirati su `databases/` e `iac/ansible`:
+ansible/molecule/ansible-lint coperti; **online schema change = 0 menzioni** (gh-ost,
+pt-osc, "online schema"; `lock_timeout` in 1 solo file) -> **prop-139** (high, 1 file,
+headroom resta 0 dopo implementazione). Non letti 10 file per intero (PASSO 2): analisi via grep.
+Focus usato: `databases/` (residuo rotazione da #727). Prossima sessione: non prima di
+2026-10-09; con headroom 0 solo gap `score: high`, altrimenti zero proposte; focus `iac/ansible`.
