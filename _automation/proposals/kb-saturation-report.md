@@ -1,4 +1,4 @@
-# KB Saturation Report — 2026-10-02 (sessione #719)
+# KB Saturation Report — 2026-10-02 (sessione #721)
 
 ## Gate meccanico
 
@@ -53,3 +53,12 @@ Rotazione da #716: `monitoring/` e `ci-cd/tools`. Monitoring chiuso senza propos
 
 Non prima di 2026-10-09. Dato headroom 4, probabile zero proposte salvo gap `high`;
 focus: `ai/` e `security/runtime` (mai esplorati di recente).
+
+## Aggiornamento sessione #721
+
+Gate: file_count 327, target 330, headroom 3, over_target false. Verificati con grep
+ai/ e security/runtime: runtime coperto (falco, seccomp-apparmor, eBPF/gVisor/kata
+citati in 8-15 file) -> nessun gap. ai/: MCP trattato solo come sezione di
+claude-agent-sdk (solo 2 file citano Model Context Protocol) -> prop-137 (medium,
+produzione/sicurezza MCP). Focus usato: `ai/` e `security/runtime` come da raccomandazione #719.
+Prossima sessione: non prima di 2026-10-09; con headroom 2 dopo prop-137, probabile zero proposte.
