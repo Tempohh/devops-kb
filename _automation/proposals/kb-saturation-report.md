@@ -90,3 +90,13 @@ da allora, nessun gap `score: high` -> **zero proposte**. Non letti 10 file (PAS
 nulla di nuovo da analizzare (`py` usato al posto di `python`, alias Store non funzionante).
 Focus: nessuno nuovo; rotazione `iac/`/`databases/` non esplorata per headroom minimo.
 Prossima sessione: non prima di 2026-10-09; focus `iac/` o `databases/`.
+
+## Aggiornamento sessione #727
+
+Gate (via `py`): file_count 328, target 330, headroom 2, over_target false. `pending/` vuota.
+Rotazione `iac/` + `databases/` esplorata per la prima volta (indicata da #723-#725).
+Grep mirati: iac coperto (terraform test, terratest, drift, molecule, moved blocks presenti);
+databases/postgresql: `pg_upgrade`/major upgrade = 0 menzioni -> **prop-138** (medium, 1 file,
+headroom resta 1). Non letti 10 file per intero (PASSO 2): analisi via grep + elenco file.
+Focus usato: `databases/` (rotazione da #725). Prossima sessione: non prima di 2026-10-09;
+con headroom 1 probabile zero proposte; focus residuo `databases/mysql` (upgrade/HA) o `iac/ansible`.
