@@ -1,80 +1,86 @@
-# KB Saturation Report — 2026-10-02 (sessione #706)
+# KB Saturation Report — 2026-10-02 (sessione #709)
 
 ## Gate meccanico
 
 ```
-file_count: 318, target: 330, over_target: false, headroom: 12, category_saturated_pct: 85, allow_zero_proposals: true
+file_count: 320, target: 330, over_target: false, headroom: 10, category_saturated_pct: 85, allow_zero_proposals: true
 ```
 
-Sotto target (headroom 12): proposte di espansione ammesse se superano il
-test di utilità. Nota di cadenza: task #706 (P2) arrivato lo stesso giorno
-della sessione #702 — sesto caso consecutivo di arrivo anticipato rispetto
-alla finestra raccomandata (#694→#696→#698→#701→#702→#706). Confermato:
-prop-125/126/127 della sessione #702 risultano già implementate e committate
-(commit 7b5d866e, 3aa751fb, 213d3268) — nessuna duplicazione di lavoro in
+Sotto target (headroom 10): proposte di espansione ammesse se superano il test
+di utilità. Nota di cadenza: ancora un arrivo rapido dopo #706/#707 (stessa
+settimana) — pattern già segnalato in report precedenti, non bloccante per
 questa sessione.
+
+Verificato lo stato delle proposte della sessione precedente (#706): prop-128
+(`cloud/gcp/security/kms-secret-manager.md`) risulta committata (commit
+1416785f, auto #707). prop-129 (`cloud/gcp/security/network-perimeter-detection.md`)
+risulta creata ma non ancora committata (file untracked in working tree) —
+nessuna azione richiesta in questa sessione, nessuna duplicazione.
 
 ## Focus usato in questa sessione
 
-Il report #702 raccomandava, in caso di arrivo anticipato, di spostare il
-focus su `docs/security/` o `docs/cloud/` (non esplorate di recente) oppure
-verificare l'implementazione di prop-125/126/127 prima di generarne di nuove
-nella stessa area. Verificata l'implementazione (tutte e tre presenti),
-focus spostato su `docs/cloud/` con incrocio su `docs/security/`.
+Il report #706 raccomandava, in caso di arrivo anticipato, di spostare il
+focus su `docs/messaging/` o `docs/containers/` (non esplorate di recente nelle
+sessioni `proposal`). Applicato: entrambe analizzate.
 
-File letti (10): `cloud/aws/security/_index.md`, `cloud/azure/security/_index.md`
-(elenco cartella, non letto per intero), `cloud/gcp/iam/_index.md`,
-`cloud/gcp/iam/iam-service-accounts.md` (frontmatter), `security/_index.md`,
-`security/network/_index.md`, `security/network/zero-trust.md`,
-`security/compliance/_index.md`, `security/compliance/audit-logging.md`,
-`docs/_metadata/taxonomy.yml` (ricerca sezione gcp — non trovata, nessun
-vincolo esplicito sulla sottocategoria security per gcp).
+File letti/ispezionati (10): `docs/messaging/_index.md`, `docs/messaging/kafka/*`
+(elenco strutturale, non letture complete), `docs/messaging/rabbitmq/vs-kafka.md`
+(grep), `docs/messaging/rabbitmq/features-avanzate.md`, `docs/containers/container-runtime/_index.md`
+(completo), `docs/containers/*` (elenco strutturale), `docs/iac/ansible/_index.md`,
+`docs/iac/crossplane/_index.md` + `fondamentali.md` (grep su "function"),
+`docs/databases/*` (elenco strutturale), `docs/ai/sviluppo/rag.md` +
+`docs/databases/postgresql/extensions.md` (grep su "vector/pgvector/qdrant").
 
 ## Risultato
 
-**Gap reale trovato — `docs/cloud/gcp/`**: a differenza di AWS e Azure, che
-hanno entrambi una sottocartella `security/` dedicata (AWS: kms-secrets,
-network-security, compliance-audit — 3 file; Azure: key-vault,
-defender-sentinel — 2 file), **GCP non ha alcuna cartella `security/`**.
-La cartella `iam/` copre solo identità (Organization/Folder/Project,
-Service Account, Workload Identity) ma non protezione dati (Cloud KMS,
-Secret Manager), protezione perimetrale (Cloud Armor, VPC Service Controls)
-né detection (Security Command Center). Non è un gap di simmetria formale
-tra provider: sono servizi GCP di uso quotidiano in produzione (Cloud
-Run/GKE + Secret Manager, perimetri VPC-SC) che oggi non hanno alcun
-riferimento nella KB, a differenza dell'equivalente AWS/Azure già
-documentato con pattern pratici e troubleshooting.
+**`docs/containers/`**: maturo. `container-runtime/_index.md` copre già CRI,
+containerd, CRI-O, runc, RuntimeClass, gVisor/Kata in profondità (expert).
+Nessun gap trovato.
 
-**`docs/security/`** (categoria trasversale): risulta matura e ben
-connessa — `network/zero-trust.md` è concettuale/cross-provider e ben
-collegato (6 `related`), `compliance/audit-logging.md` copre la parte
-di audit trail generico. Nessun gap trasversale aggiuntivo identificato
-in questa sessione oltre a quello GCP-specifico sopra.
+**`docs/iac/`**: Ansible (`roles-collections.md`) copre già Vault multi-ambiente,
+dynamic inventory, Molecule testing — ipotesi di gap iniziale (secrets/testing)
+smentita a lettura. Crossplane `fondamentali.md` copre già Composition Functions
+(v1.14+, pipeline, `crossplane render`) — expand recente (sessione #705) ha
+già colmato quello che sembrava un gap.
+
+**Vector database / pgvector**: ipotesi di gap smentita — `docs/ai/sviluppo/rag.md`
+(Qdrant, Pinecone, Weaviate, pgvector, hybrid search, tabella comparativa) e
+`docs/databases/postgresql/extensions.md` (pgvector, HNSW/IVFFlat, troubleshooting)
+coprono il tema da entrambe le angolazioni, cross-referenziati.
+
+**Gap reale trovato — `docs/messaging/pulsar/`**: la categoria messaging
+documenta solo Kafka (56 file) e RabbitMQ (8 file). Apache Pulsar — terzo
+sistema di event-streaming più diffuso in produzione, spesso termine di
+confronto diretto con Kafka per multi-tenancy nativa e tiered storage — non
+è menzionato in **nessun** file della KB (verificato via grep ricorsivo,
+zero risultati). Non è simmetria formale: l'architettura compute/storage
+separata (broker stateless + BookKeeper) di Pulsar è concettualmente diversa
+da Kafka e genera domande operative specifiche (bookie sizing, tiered storage
+offload, subscription model key_shared) non risolvibili per analogia con i
+contenuti Kafka/RabbitMQ esistenti.
 
 ## Proposte generate
 
-- **prop-128** (high, new-file) — `cloud/gcp/security/kms-secret-manager.md`
-  (+ creazione `cloud/gcp/security/_index.md`)
-- **prop-129** (medium, new-file) — `cloud/gcp/security/network-perimeter-detection.md`
+- **prop-130** (high, new-file) — `messaging/pulsar/fondamentali.md` (+ creazione
+  `messaging/pulsar/_index.md`, + card nella grid di `messaging/_index.md`,
+  + `pulsar` in `taxonomy.yml:messaging.subcategories`)
 
 ## Categorie vicine alla saturazione
 
-`docs/dev/`, `docs/ci-cd/testing/` (confermate sature, sessioni #701/#702).
-`docs/databases/` densa ma non formalmente satura (nessuna proposta in
-questa sessione, non in focus).
-`docs/security/` (categoria trasversale) matura, nessun gap trovato oltre
-quello cross-referenziato in `cloud/gcp/`.
+`docs/dev/`, `docs/ci-cd/testing/` (confermate sature, sessioni precedenti).
+`docs/containers/` e `docs/iac/` risultano mature dopo l'analisi di questa
+sessione (nessun gap reale, vedi sopra) — non formalmente sature per conteggio
+file ma senza ulteriori gap operativi individuati.
+`docs/messaging/kafka/` e `docs/messaging/rabbitmq/` maturi (56+8 file,
+coverage profonda su sicurezza, pattern, operazioni).
 
 ## Categorie con gap reali
 
-`docs/cloud/gcp/security/` (intera sottocategoria mancante) — vedi proposte
-sopra. Gap minore non proposto: Pulumi testing avanzato (`docs/iac/`,
-segnalato già nel report #702, score insufficiente).
+`docs/messaging/pulsar/` (intera sottocategoria mancante) — vedi proposta sopra.
 
 ## Prossima sessione consigliata
 
-Non prima di 2026-10-09. Se arriva comunque prima (pattern ricorrente da 6
-sessioni — verificare lato sorgente del trigger task, possibile problema di
-schedulazione), focus successivo: verificare implementazione prop-128/129,
-poi `docs/messaging/` o `docs/containers/` (non esplorate di recente in
-sessioni `proposal`).
+Non prima di 2026-10-09. Verificare prima l'implementazione di prop-130 e il
+commit di prop-129 (sessione #706, ancora untracked). Se arriva comunque in
+anticipo, spostare il focus su `docs/networking/` o `docs/security/` (non
+esplorate in profondità da più sessioni `proposal` consecutive).

@@ -1,0 +1,60 @@
+id: prop-130
+title: "Apache Pulsar — fondamentali e confronto con Kafka"
+type: new-file
+priority: high
+target_file: docs/messaging/pulsar/fondamentali.md
+effort: medium
+description: |
+  Creare `docs/messaging/pulsar/_index.md` (indice categoria, stesso pattern di
+  `kafka/_index.md` e `rabbitmq/_index.md`) e `docs/messaging/pulsar/fondamentali.md`
+  con almeno queste sezioni:
+  - Architettura: separazione compute/storage — broker (stateless) vs BookKeeper
+    (bookie, storage a log segmentato) vs ZooKeeper/metadata store. Differenza
+    strutturale rispetto a Kafka (broker con storage locale su disco).
+  - Topics: persistent vs non-persistent, partitioned topics, subscription model
+    (exclusive, shared, failover, key_shared) — più flessibile dei consumer group
+    Kafka perché più subscription type sullo stesso topic.
+  - Multi-tenancy nativa: tenant → namespace → topic, con policy (quota, retention,
+    TTL) applicabili per namespace. Caso d'uso: piattaforma multi-team/multi-cliente
+    su cluster condiviso senza cluster Kafka separati.
+  - Tiered storage: offload automatico dei segmenti BookKeeper più vecchi su S3/GCS,
+    mantenendo lo stream interrogabile con retention illimitata a costo contenuto
+    (differenza pratica vs Kafka, dove retention lunga = disco locale costoso o
+    Kafka tiered storage solo nelle distribuzioni enterprise recenti).
+  - Pulsar Functions: elaborazione lightweight inline (confronto con Kafka Streams/ksqlDB).
+  - Esempio pratico: comandi `pulsar-admin` per creare tenant/namespace/topic,
+    client Python/Java minimale per produce/consume.
+  - Tabella comparativa Kafka vs Pulsar vs RabbitMQ (throughput, multi-tenancy,
+    operational complexity, ecosystem, quando scegliere l'uno o l'altro).
+  - Troubleshooting: bookie under-replication, backlog quota exceeded.
+  Aggiornare `docs/messaging/_index.md` con una terza card "Apache Pulsar" nella
+  grid, e `docs/_metadata/taxonomy.yml` aggiungendo `pulsar` a
+  `messaging.subcategories`.
+rationale: |
+  Kafka e RabbitMQ sono gli unici due sistemi di messaging documentati nella KB
+  (56 file solo per Kafka). Apache Pulsar è il terzo sistema di event-streaming
+  più diffuso in produzione (Yahoo/Verizon, Splunk, Tencent, StreamNative/Datastax
+  Astra Streaming) ed è frequentemente il termine di confronto quando un team
+  valuta "Kafka vs alternative" per via di multi-tenancy nativa e tiered storage
+  — due capability che Kafka non ha nativamente (serverless/tiered storage solo
+  in offerte enterprise). Oggi la KB non menziona Pulsar in nessun file: chi
+  deve scegliere tra Kafka e Pulsar, o chi eredita un cluster Pulsar esistente,
+  non trova alcun riferimento. Non è simmetria formale: l'architettura compute/
+  storage separata di Pulsar è concettualmente diversa da Kafka e genera domande
+  operative specifiche (bookie sizing, tiered storage offload) che non sono
+  risolvibili per analogia con i contenuti Kafka esistenti.
+utility_test:
+  reader: "DevOps/platform engineer che deve scegliere o già opera un cluster Pulsar"
+  scenario: "Deve valutare Pulsar come alternativa a Kafka per multi-tenancy o
+    tiered storage, oppure deve fare troubleshooting su un cluster Pulsar esistente
+    senza esperienza precedente con l'architettura broker/bookie"
+  outcome: "Capisce la differenza architetturale chiave (compute/storage separati),
+    sa quando Pulsar è la scelta giusta vs Kafka/RabbitMQ, ed esegue i comandi
+    pulsar-admin di base per creare ed operare topic multi-tenant"
+  without_kb: "Deve leggere la documentazione ufficiale Pulsar (inglese, organizzata
+    per reference tecnico non per percorso di apprendimento) e assemblare da solo
+    il confronto con Kafka, che nella doc ufficiale Pulsar è presentato in modo
+    promozionale e non neutro"
+  score: high
+tags: [pulsar, messaging, event-streaming, kafka-alternative, multi-tenancy, tiered-storage]
+last_analyzed: 2026-10-02
