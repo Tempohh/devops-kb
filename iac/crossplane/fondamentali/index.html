@@ -16049,7 +16049,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -16074,7 +16074,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -16257,6 +16257,17 @@
     <span class="md-ellipsis">
       
         Composition Completa — Astrazione "Database"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing-di-compositionxrd-prima-del-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing di Composition/XRD prima del merge
       
     </span>
   </a>
@@ -24149,6 +24160,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#testing-di-compositionxrd-prima-del-merge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing di Composition/XRD prima del merge
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -24780,6 +24802,73 @@
 </span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Le credenziali sono in un Secret Kubernetes standard</span>
 </span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>checkout-db-conn<span class="w"> </span>-n<span class="w"> </span>team-checkout<span class="w"> </span>-o<span class="w"> </span>yaml
 </span></code></pre></div>
+<h3 id="testing-di-compositionxrd-prima-del-merge">Testing di Composition/XRD prima del merge<a class="headerlink" href="#testing-di-compositionxrd-prima-del-merge" title="Permanent link">&para;</a></h3>
+<p>Il warning in <a href="#best-practices">Best Practices</a> dice di trattare una Composition come un'API pubblica con "test automatici prima del merge" — ecco come farlo concretamente, su due livelli.</p>
+<p><strong>Livello 1 — <code>crossplane render</code> (offline, nessun cluster)</strong></p>
+<p>Dalla v1.14, il comando <code>crossplane render</code> compila claim + composite + function-pipeline di una Composition e stampa i Managed Resource risultanti, senza toccare alcun cluster reale. Serve a validare che il patching/function pipeline produca l'output atteso, in locale o in CI, in pochi secondi:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># render.sh — xr.yaml è l'XR di esempio, composition.yaml la Composition sotto test,</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># functions.yaml dichiara le function usate dalla pipeline (se mode: Pipeline)</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>crossplane<span class="w"> </span>render<span class="w"> </span>xr.yaml<span class="w"> </span>composition.yaml<span class="w"> </span>functions.yaml<span class="w"> </span>&gt;<span class="w"> </span>rendered-output.yaml
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># Diff contro uno snapshot committato: se cambia senza che il PR lo documenti, fallisce</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>diff<span class="w"> </span>rendered-output.yaml<span class="w"> </span>tests/snapshots/xdatabase-aws.yaml
+</span></code></pre></div>
+<p><code>crossplane render</code> non applica nulla al cluster: è equivalente concettuale di <code>terraform plan</code> con output renderizzato invece che un piano testuale, utile come gate rapido pre-merge.</p>
+<p><strong>Livello 2 — Chainsaw/kuttl (end-to-end, cluster ephemeral)</strong></p>
+<p><code>crossplane render</code> non verifica che il provider accetti davvero i campi generati né che il reconciler converga. Per questo serve un test end-to-end: applicare il claim in un cluster kind/k3d usa-e-getta e asserire sullo stato finale delle Managed Resource. <a href="https://kyverno.github.io/chainsaw/">Chainsaw</a> (dal progetto Kyverno) o il suo predecessore kuttl fanno esattamente questo, dichiarativamente:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># chainsaw-test.yaml</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chainsaw.kyverno.io/v1alpha1</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Test</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xdatabase-aws-provisioning</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">  </span><span class="nt">steps</span><span class="p">:</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">try</span><span class="p">:</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">apply</span><span class="p">:</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">            </span><span class="nt">file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">database-claim.yaml</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">assert</span><span class="p">:</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">            </span><span class="nt">file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assert-rdsinstance-ready.yaml</span><span class="w">   </span><span class="c1"># asserisce Managed Resource Ready: True</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">assert</span><span class="p">:</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">            </span><span class="nt">resource</span><span class="p">:</span>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="w">              </span><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">platform.example.org/v1alpha1</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="w">              </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Database</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">              </span><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">checkout-db</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">              </span><span class="nt">status</span><span class="p">:</span>
+</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="w">                </span><span class="nt">conditions</span><span class="p">:</span>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="w">                  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Ready</span>
+</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">                    </span><span class="nt">status</span><span class="p">:</span><span class="w"> </span><span class="s">"True"</span>
+</span></code></pre></div>
+<p><strong>Pipeline CI (GitHub Actions) — bloccare il merge su diff non documentato</strong></p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># .github/workflows/test-compositions.yml</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="nt">on</span><span class="p">:</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="nt">pull_request</span><span class="p">:</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="nt">paths</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"compositions/**"</span><span class="p p-Indicator">]</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="nt">jobs</span><span class="p">:</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">  </span><span class="nt">render-diff</span><span class="p">:</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">crossplane/setup-crossplane-cli@v1</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Render e confronta con snapshot</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">          </span><span class="no">crossplane render compositions/xdatabase/xr.yaml \</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="w">            </span><span class="no">compositions/xdatabase/composition.yaml \</span>
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="w">            </span><span class="no">compositions/xdatabase/functions.yaml &gt; /tmp/rendered.yaml</span>
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a><span class="w">          </span><span class="no">diff compositions/xdatabase/snapshot.yaml /tmp/rendered.yaml</span>
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="w">  </span><span class="nt">e2e-chainsaw</span><span class="p">:</span>
+</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
+</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
+</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
+</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">helm/kind-action@v1</span>
+</span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">curl -sSf https://kyverno.github.io/chainsaw/install.sh | sh</span>
+</span><span id="__span-15-23"><a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chainsaw test compositions/xdatabase/chainsaw-test.yaml</span>
+</span></code></pre></div>
+<p>Il job <code>render-diff</code> fallisce se l'output della Composition cambia senza che lo snapshot committato nel PR sia stato aggiornato consapevolmente (forza a rivedere/documentare ogni cambiamento di comportamento). Il job <code>e2e-chainsaw</code> verifica che il provider reale (in un kind effimero) accetti i campi generati e che il reconciler converga a <code>Ready: True</code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Differenza con Molecule (Ansible)</p>
+<p><a href="../../ansible/roles-collections/">Molecule</a> testa <strong>convergenza e idempotenza</strong> di un role Ansible su una VM/container: applica il role due volte e verifica che la seconda esecuzione non produca modifiche. Chainsaw/<code>crossplane render</code> testano invece la <strong>generazione dichiarativa di manifest Kubernetes</strong>: non c'è "seconda esecuzione" da confrontare, ma l'output di una pipeline di patching/funzioni contro uno schema atteso. Stesso principio (test automatico pre-merge di codice IaC), motore di verifica diverso perché il modello di esecuzione sottostante (convergenza imperativa vs. reconciliation dichiarativa) è diverso.</p>
+</div>
 <hr />
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
@@ -24834,47 +24923,47 @@
 <h3 id="provider-bloccato-in-stato-non-pronto-crd-non-installate">Provider bloccato in stato non pronto (CRD non installate)<a class="headerlink" href="#provider-bloccato-in-stato-non-pronto-crd-non-installate" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>kubectl get providers</code> mostra <code>INSTALLED: True</code> ma <code>HEALTHY: False</code> o vuoto; le CRD del provider (es. <code>buckets.s3.aws.upbound.io</code>) non compaiono in <code>kubectl get crds</code>.
 <strong>Causa:</strong> il pod del provider non è ancora partito, oppure ha crashato per mancanza di risorse o immagine non raggiungibile.
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Verificare lo stato dettagliato del provider</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>provider<span class="w"> </span>provider-aws-s3
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Controllare i pod del provider (girano nel namespace crossplane-system)</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>crossplane-system<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>provider-aws
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1"># Log del pod provider per errori di pull immagine o crash</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>crossplane-system<span class="w"> </span>deploy/provider-aws-s3-&lt;hash&gt;
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Verificare lo stato dettagliato del provider</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>provider<span class="w"> </span>provider-aws-s3
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Controllare i pod del provider (girano nel namespace crossplane-system)</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>crossplane-system<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>provider-aws
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># Log del pod provider per errori di pull immagine o crash</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>crossplane-system<span class="w"> </span>deploy/provider-aws-s3-&lt;hash&gt;
 </span></code></pre></div>
 <strong>Soluzione:</strong> verificare connettività al registry OCI (<code>xpkg.upbound.io</code>), risorse CPU/memoria disponibili nel cluster, e che la versione del pacchetto esista.</p>
 <h3 id="composition-che-non-converge-xr-resta-in-synced-false">Composition che non converge (XR resta in <code>Synced: False</code>)<a class="headerlink" href="#composition-che-non-converge-xr-resta-in-synced-false" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> l'XR/claim resta indefinitamente in stato non pronto, <code>kubectl describe</code> mostra eventi ripetuti di errore.
 <strong>Causa:</strong> tipicamente un patch nella Composition referenzia un <code>fromFieldPath</code> inesistente nello schema XRD, oppure una Managed Resource ha un campo <code>forProvider</code> non valido per l'API cloud.
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Vedere eventi e condizioni dell'XR</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>xdatabase<span class="w"> </span>&lt;nome&gt;
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Vedere lo stato delle singole Managed Resource generate</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>managed<span class="w"> </span>-l<span class="w"> </span>crossplane.io/composite<span class="o">=</span>&lt;nome-xr&gt;
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Log del controller Crossplane core per errori di patching</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>crossplane-system<span class="w"> </span>deploy/crossplane<span class="w"> </span>-f
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Vedere eventi e condizioni dell'XR</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>xdatabase<span class="w"> </span>&lt;nome&gt;
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Vedere lo stato delle singole Managed Resource generate</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>managed<span class="w"> </span>-l<span class="w"> </span>crossplane.io/composite<span class="o">=</span>&lt;nome-xr&gt;
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="c1"># Log del controller Crossplane core per errori di patching</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>crossplane-system<span class="w"> </span>deploy/crossplane<span class="w"> </span>-f
 </span></code></pre></div>
 <strong>Soluzione:</strong> correggere il path del patch o il valore di default nello schema XRD, poi riapplicare la Composition (il reconciler la rilegge automaticamente al prossimo ciclo).</p>
 <h3 id="permessi-rbac-del-provider-service-account-insufficienti">Permessi RBAC del provider service account insufficienti<a class="headerlink" href="#permessi-rbac-del-provider-service-account-insufficienti" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> la Managed Resource resta in <code>Ready: False</code> con evento <code>AccessDenied</code> o <code>UnauthorizedOperation</code> nei log, pur avendo un <code>ProviderConfig</code> valido.
 <strong>Causa:</strong> le credenziali cloud referenziate nel <code>ProviderConfig</code> non hanno i permessi IAM necessari per l'azione richiesta (es. <code>rds:CreateDBInstance</code>).
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Verificare quale ProviderConfig usa la risorsa</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>bucket<span class="w"> </span>my-app-bucket<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.spec.providerConfigRef.name}'</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># Controllare gli eventi della risorsa per il messaggio di errore IAM esatto</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>bucket<span class="w"> </span>my-app-bucket
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Verificare quale ProviderConfig usa la risorsa</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>bucket<span class="w"> </span>my-app-bucket<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.spec.providerConfigRef.name}'</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Controllare gli eventi della risorsa per il messaggio di errore IAM esatto</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>bucket<span class="w"> </span>my-app-bucket
 </span></code></pre></div>
 <strong>Soluzione:</strong> estendere la policy IAM associata alle credenziali nel Secret referenziato dal <code>ProviderConfig</code>, seguendo il principio del privilegio minimo per le sole azioni richieste dal provider.</p>
 <h3 id="claim-creato-ma-nessuna-composition-selezionata-no-matching-composition">Claim creato ma nessuna Composition selezionata (<code>no matching composition</code>)<a class="headerlink" href="#claim-creato-ma-nessuna-composition-selezionata-no-matching-composition" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> il claim resta in stato vuoto/pending, evento <code>cannot find a Composition matching the composite resource's compositionSelector</code>.
 <strong>Causa:</strong> la Composition non è stata applicata, oppure <code>compositionSelector.matchLabels</code> nel claim non corrisponde alle label della Composition installata.
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Elencare le Composition disponibili e le loro label</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>compositions<span class="w"> </span>--show-labels
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Verificare il selector richiesto dal claim</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>database<span class="w"> </span>checkout-db<span class="w"> </span>-n<span class="w"> </span>team-checkout<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A3<span class="w"> </span>compositionSelector
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Elencare le Composition disponibili e le loro label</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>compositions<span class="w"> </span>--show-labels
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Verificare il selector richiesto dal claim</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>database<span class="w"> </span>checkout-db<span class="w"> </span>-n<span class="w"> </span>team-checkout<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A3<span class="w"> </span>compositionSelector
 </span></code></pre></div>
 <strong>Soluzione:</strong> applicare la Composition mancante o correggere le label/selector affinché combacino, oppure impostare <code>compositionRef.name</code> esplicito nel claim se si vuole bypassare la selezione per label.</p>
 <hr />
