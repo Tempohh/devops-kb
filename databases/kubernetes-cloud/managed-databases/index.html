@@ -13490,7 +13490,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13515,7 +13515,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13604,6 +13604,17 @@
     <span class="md-ellipsis">
       
         Aurora Serverless v2 — Auto-scaling Compute
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aurora-limitless-database-e-aurora-dsql-oltre-il-cluster-singolo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aurora Limitless Database e Aurora DSQL — Oltre il Cluster Singolo
       
     </span>
   </a>
@@ -23983,6 +23994,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#aurora-limitless-database-e-aurora-dsql-oltre-il-cluster-singolo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aurora Limitless Database e Aurora DSQL — Oltre il Cluster Singolo
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -24376,7 +24398,7 @@
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>aws<span class="w"> </span>rds<span class="w"> </span>create-db-cluster<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--db-cluster-identifier<span class="w"> </span>prod-aurora<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--engine<span class="w"> </span>aurora-postgresql<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--engine-version<span class="w"> </span><span class="m">16</span>.1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--engine-version<span class="w"> </span><span class="m">17</span>.7<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--serverless-v2-scaling-configuration<span class="w"> </span><span class="s1">'{"MinCapacity": 0.5, "MaxCapacity": 64}'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--master-username<span class="w"> </span>dbadmin<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span>--manage-master-user-password<span class="w"> </span><span class="se">\ </span><span class="w">     </span><span class="c1"># Gestisce la password in Secrets Manager</span>
@@ -24395,6 +24417,12 @@
 <p><strong>Quando usare Serverless v2 vs istanza fissa:</strong>
 - Serverless v2: workload variabile, dev/staging, picchi imprevedibili
 - Istanza fissa: produzione con carico prevedibile, latenza critica (Serverless ha ~10ms di warm-up per scale-up)</p>
+<h3 id="aurora-limitless-database-e-aurora-dsql-oltre-il-cluster-singolo">Aurora Limitless Database e Aurora DSQL — Oltre il Cluster Singolo<a class="headerlink" href="#aurora-limitless-database-e-aurora-dsql-oltre-il-cluster-singolo" title="Permanent link">&para;</a></h3>
+<p>Due opzioni aggiuntive per casi che eccedono i limiti di un cluster Aurora classico:</p>
+<ul>
+<li><strong>Aurora Limitless Database</strong>: sharding orizzontale gestito all'interno di un singolo cluster Aurora PostgreSQL — scala elasticamente da zero a carichi petabyte-scale senza re-sharding manuale, con failover cross-AZ tipicamente sotto 30-60s. Resta un singolo cluster regionale.</li>
+<li><strong>Aurora DSQL</strong>: motore distinto (non è "Aurora" in senso stretto di storage condiviso), serverless, compatibile solo PostgreSQL, pensato per topologie <strong>multi-region active-active</strong> con replica sincrona delle scritture tra regioni e forte consistenza. Cambia il confronto RDS/Aurora quando il requisito è multi-region con scritture attive ovunque, non solo DR.</li>
+</ul>
 <hr />
 <h2 id="amazon-dynamodb-key-valuedocument-serverless">Amazon DynamoDB — Key-Value/Document Serverless<a class="headerlink" href="#amazon-dynamodb-key-valuedocument-serverless" title="Permanent link">&para;</a></h2>
 <p>DynamoDB è il database NoSQL serverless di AWS: throughput provisioned o on-demand, latenza sub-10ms a qualsiasi scala, zero administration.</p>
@@ -24458,6 +24486,10 @@
 <h2 id="google-cloud-sql-e-azure-database">Google Cloud SQL e Azure Database<a class="headerlink" href="#google-cloud-sql-e-azure-database" title="Permanent link">&para;</a></h2>
 <h3 id="cloud-sql-gcp">Cloud SQL (GCP)<a class="headerlink" href="#cloud-sql-gcp" title="Permanent link">&para;</a></h3>
 <p>Equivalente GCP di RDS — PostgreSQL, MySQL, SQL Server.</p>
+<div class="admonition note">
+<p class="admonition-title">AlloyDB come alternativa Aurora-equivalente</p>
+<p>Per workload che richiedono le stesse garanzie di Aurora (storage disaccoppiato, performance analitiche su dati transazionali) GCP offre <strong>AlloyDB</strong> (managed, PostgreSQL-compatibile) e <strong>AlloyDB Omni</strong> (stessa engine, deployabile on-prem/altro cloud/edge, GA). Cloud SQL resta la scelta per workload relazionali standard senza queste esigenze.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Crea istanza Cloud SQL PostgreSQL con HA</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>gcloud<span class="w"> </span>sql<span class="w"> </span>instances<span class="w"> </span>create<span class="w"> </span>prod-postgres<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--database-version<span class="o">=</span>POSTGRES_17<span class="w"> </span><span class="se">\</span>
