@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-10-02T23:32:52.686511+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 1097
+total_ops: 1098
 total_runs: 520
 queue:
 - id: W-001
@@ -6864,6 +6864,25 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '730'
+  type: new_topic
+  path: docs/databases/fondamentali/online-schema-change.md
+  category: databases
+  priority: P2
+  status: pending
+  reason: "Guida operativa al DDL senza downtime su tabelle da centinaia di milioni di righe,\ncomplementare a schema-migrations.md\
+    \ (che copre i tool di versioning, non il\ncomportamento del lock a runtime).\nStruttura suggerita:\n- Perche' un ALTER\
+    \ \"banale\" blocca la produzione: lock queue (un ALTER in attesa\n  di ACCESS EXCLUSIVE blocca tutte le query successive),\
+    \ metadata lock MySQL.\n- PostgreSQL: lock_timeout/statement_timeout con retry loop, CREATE INDEX\n  CONCURRENTLY (+ bonifica\
+    \ indici INVALID), ADD CONSTRAINT ... NOT VALID +\n  VALIDATE CONSTRAINT, ADD COLUMN con default (PG11+ metadata-only),\
+    \ SET NOT NULL\n  via CHECK NOT VALID, pg_repack, pgroll.\n- MySQL: ALGORITHM=INSTANT/INPLACE/COPY e LOCK=NONE, quando\
+    \ INSTANT non basta;\n  gh-ost (binlog-based, throttling, --postpone-cut-over-flag-file, --test-on-replica)\n  vs pt-online-schema-change\
+    \ (trigger-based) vs Vitess/Spirit; impatto su replica lag.\n- Pattern expand/contract applicato al DDL (rename colonna\
+    \ in 4 release), backfill\n  in batch con throttling, rollback plan.\n- Troubleshooting: cut-over bloccato da long transaction,\
+    \ replica lag esplosivo,\n  foreign key e trigger incompatibili con gh-ost, indice INVALID dopo CONCURRENTLY fallito.\n\
+    - Esempi con comandi reali (gh-ost --alter, pt-online-schema-change --dry-run,\n  query su pg_stat_activity/pg_locks e\
+    \ performance_schema.metadata_locks).\n"
+  proposal_id: prop-139
 completed:
 - id: '716'
   path: _automation/proposals
