@@ -27,4 +27,13 @@ Message broker, event streaming e pattern asincroni per architetture a microserv
 
     [:octicons-arrow-right-24: Esplora](rabbitmq/_index.md)
 
+-   :material-message-processing:{ .lg .middle } **Apache Pulsar**
+
+    ---
+
+    Broker distribuito con separazione compute/storage, multi-tenancy nativa
+    (tenant/namespace/topic) e tiered storage automatico su object storage.
+
+    [:octicons-arrow-right-24: Esplora](pulsar/_index.md)
+
 </div>
