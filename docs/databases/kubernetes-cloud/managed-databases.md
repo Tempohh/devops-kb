@@ -3,13 +3,14 @@ title: "Managed Databases"
 slug: managed-databases
 category: databases
 tags: [managed-database, rds, aurora, dynamodb, cloud-sql, azure-database, dbaas]
-search_keywords: [managed database service, aws rds, amazon aurora, aurora serverless, dynamodb, google cloud sql, azure database postgresql, azure cosmos db, rds multi-az, rds read replicas, aurora global database, aurora storage auto scaling, rds proxy, database as a service, dbaas, database cloud comparison, rds vs aurora, aurora vs dynamodb, managed vs self-managed database, cloud database cost, rds instance types, aurora serverless v2, planetscale, neon serverless postgres, cockroachdb cloud, supabase]
+search_keywords: [managed database service, aws rds, amazon aurora, aurora serverless, dynamodb, google cloud sql, azure database postgresql, azure cosmos db, rds multi-az, rds read replicas, aurora global database, aurora storage auto scaling, rds proxy, database as a service, dbaas, database cloud comparison, rds vs aurora, aurora vs dynamodb, managed vs self-managed database, cloud database cost, rds instance types, aurora serverless v2, aurora limitless database, aurora dsql, alloydb, alloydb omni, planetscale, neon serverless postgres, cockroachdb cloud, supabase]
 parent: databases/kubernetes-cloud/_index
 related: [databases/replicazione-ha/backup-pitr, databases/replicazione-ha/failover-recovery, databases/postgresql/connection-pooling]
 official_docs: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-02
+last_verified: 2026-10-02
 ---
 
 # Managed Databases
@@ -122,7 +123,7 @@ Aurora Serverless v2 scala le ACU (Aurora Capacity Units) in base al carico, in 
 aws rds create-db-cluster \
   --db-cluster-identifier prod-aurora \
   --engine aurora-postgresql \
-  --engine-version 16.1 \
+  --engine-version 17.7 \
   --serverless-v2-scaling-configuration '{"MinCapacity": 0.5, "MaxCapacity": 64}' \
   --master-username dbadmin \
   --manage-master-user-password \      # Gestisce la password in Secrets Manager
@@ -142,6 +143,13 @@ aws rds create-db-instance \
 **Quando usare Serverless v2 vs istanza fissa:**
 - Serverless v2: workload variabile, dev/staging, picchi imprevedibili
 - Istanza fissa: produzione con carico prevedibile, latenza critica (Serverless ha ~10ms di warm-up per scale-up)
+
+### Aurora Limitless Database e Aurora DSQL — Oltre il Cluster Singolo
+
+Due opzioni aggiuntive per casi che eccedono i limiti di un cluster Aurora classico:
+
+- **Aurora Limitless Database**: sharding orizzontale gestito all'interno di un singolo cluster Aurora PostgreSQL — scala elasticamente da zero a carichi petabyte-scale senza re-sharding manuale, con failover cross-AZ tipicamente sotto 30-60s. Resta un singolo cluster regionale.
+- **Aurora DSQL**: motore distinto (non è "Aurora" in senso stretto di storage condiviso), serverless, compatibile solo PostgreSQL, pensato per topologie **multi-region active-active** con replica sincrona delle scritture tra regioni e forte consistenza. Cambia il confronto RDS/Aurora quando il requisito è multi-region con scritture attive ovunque, non solo DR.
 
 ---
 
@@ -218,6 +226,9 @@ dynamodb.meta.client.transact_write(
 ### Cloud SQL (GCP)
 
 Equivalente GCP di RDS — PostgreSQL, MySQL, SQL Server.
+
+!!! note "AlloyDB come alternativa Aurora-equivalente"
+    Per workload che richiedono le stesse garanzie di Aurora (storage disaccoppiato, performance analitiche su dati transazionali) GCP offre **AlloyDB** (managed, PostgreSQL-compatibile) e **AlloyDB Omni** (stessa engine, deployabile on-prem/altro cloud/edge, GA). Cloud SQL resta la scelta per workload relazionali standard senza queste esigenze.
 
 ```bash
 # Crea istanza Cloud SQL PostgreSQL con HA
