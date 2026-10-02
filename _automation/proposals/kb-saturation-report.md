@@ -110,3 +110,14 @@ pt-osc, "online schema"; `lock_timeout` in 1 solo file) -> **prop-139** (high, 1
 headroom resta 0 dopo implementazione). Non letti 10 file per intero (PASSO 2): analisi via grep.
 Focus usato: `databases/` (residuo rotazione da #727). Prossima sessione: non prima di
 2026-10-09; con headroom 0 solo gap `score: high`, altrimenti zero proposte; focus `iac/ansible`.
+
+## Aggiornamento sessione #731 (2026-10-03)
+
+Gate (via `py`): file_count 330, target 330, headroom 0, over_target **true**. `pending/` vuota;
+prop-139 implementata (`databases/fondamentali/online-schema-change.md`). Ultima sessione (#729)
+ha già esplorato `databases/`; nessuna modifica alla KB dopo il new_topic #730. Con over_target
+sono ammessi solo `new-file` `score: high` con gap esplicito: nessuno identificato -> **zero proposte**.
+Non letti 10 file (PASSO 2): analisi limitata a gate + report precedente, nulla di nuovo da valutare.
+Focus: nessuno nuovo; residuo rotazione `iac/ansible` non esplorato per saturazione.
+Prossima sessione: non prima di 2026-10-09; solo proposte `currency`/`consolidate`/`review`
+o `new-file` high; focus `iac/ansible`.
