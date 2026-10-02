@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://tempohh.github.io/devops-kb/databases/fondamentali/schema-migrations/">
+        <link rel="canonical" href="https://tempohh.github.io/devops-kb/databases/fondamentali/online-schema-change/">
       
       
-        <link rel="prev" href="../online-schema-change/">
+        <link rel="prev" href="../modelli-dati/">
       
       
-        <link rel="next" href="../sharding/">
+        <link rel="next" href="../schema-migrations/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Schema Migrations — Flyway, Liquibase, Atlas, golang-migrate - DevOps Knowledge Base</title>
+        <title>Online Schema Change — DDL senza downtime - DevOps Knowledge Base</title>
       
     
     
@@ -110,7 +110,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#schema-migrations-flyway-liquibase-atlas-golang-migrate" class="md-skip">
+        <a href="#online-schema-change-ddl-senza-downtime" class="md-skip">
           Vai al contenuto
         </a>
       
@@ -146,7 +146,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Schema Migrations — Flyway, Liquibase, Atlas, golang-migrate
+              Online Schema Change — DDL senza downtime
             
           </span>
         </div>
@@ -24283,6 +24283,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Architettura / Come Funziona">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lock-queue-in-postgresql" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lock queue in PostgreSQL
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#metadata-lock-in-mysql" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata lock in MySQL
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#algoritmi-di-alter-in-mysql-innodb" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Algoritmi di ALTER in MySQL (InnoDB)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#osc-esterni-trigger-based-vs-binlog-based" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OSC esterni: trigger-based vs binlog-based
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#online-ddl-in-postgresql-oltre-il-ddl-nativo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Online DDL in PostgreSQL oltre il DDL nativo
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24298,10 +24359,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#flyway-versioned-community-edition" class="md-nav__link">
+  <a href="#postgresql-ddl-con-retry-e-timeout" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Flyway (versioned, community edition)
+        PostgreSQL: DDL con retry e timeout
       
     </span>
   </a>
@@ -24309,10 +24370,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#liquibase-changelog-con-modalita-diff-opzionale" class="md-nav__link">
+  <a href="#postgresql-create-index-concurrently" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Liquibase (changelog, con modalità diff opzionale)
+        PostgreSQL: CREATE INDEX CONCURRENTLY
       
     </span>
   </a>
@@ -24320,10 +24381,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#atlas-declarative-drift-detection-nativo" class="md-nav__link">
+  <a href="#postgresql-vincoli-con-not-valid" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Atlas (declarative, drift detection nativo)
+        PostgreSQL: vincoli con NOT VALID
       
     </span>
   </a>
@@ -24331,10 +24392,87 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#golang-migrate-versioned-minimale-multi-driver" class="md-nav__link">
+  <a href="#postgresql-add-column-cambio-tipo" class="md-nav__link">
     <span class="md-ellipsis">
       
-        golang-migrate (versioned, minimale, multi-driver)
+        PostgreSQL: ADD COLUMN, cambio tipo
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#postgresql-pg_repack-e-pgroll" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PostgreSQL: pg_repack e pgroll
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mysql-algorithm-e-lock-espliciti" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MySQL: ALGORITHM e LOCK espliciti
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mysql-gh-ost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MySQL: gh-ost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mysql-pt-online-schema-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MySQL: pt-online-schema-change
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#diagnostica-dei-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostica dei lock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#expandcontract-applicato-al-ddl-rinominare-una-colonna" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Expand/contract applicato al DDL: rinominare una colonna
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backfill-a-batch-con-throttling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backfill a batch con throttling
       
     </span>
   </a>
@@ -24370,10 +24508,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#scenario-1-due-pod-applicano-la-stessa-migration-in-parallelo-race-condition" class="md-nav__link">
+  <a href="#lapplicazione-si-blocca-durante-un-alter-veloce" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scenario 1 — Due pod applicano la stessa migration in parallelo (race condition)
+        L'applicazione si blocca durante un ALTER "veloce"
       
     </span>
   </a>
@@ -24381,10 +24519,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#scenario-2-checksum-mismatch-su-migration-gia-applicata" class="md-nav__link">
+  <a href="#gh-ost-il-cut-over-non-avviene-resta-in-attesa" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scenario 2 — Checksum mismatch su migration già applicata
+        gh-ost: il cut-over non avviene / resta in attesa
       
     </span>
   </a>
@@ -24392,10 +24530,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#scenario-3-drift-non-rilevato-modifica-manuale-in-produzione-ignorata-dal-tool" class="md-nav__link">
+  <a href="#replica-lag-che-esplode-durante-losc-il-backfill" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scenario 3 — Drift non rilevato: modifica manuale in produzione ignorata dal tool
+        Replica lag che esplode durante l'OSC / il backfill
       
     </span>
   </a>
@@ -24403,10 +24541,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#scenario-4-migration-not-null-fallisce-su-tabella-con-dati-esistenti" class="md-nav__link">
+  <a href="#gh-ost-pt-osc-rifiutano-la-tabella-foreign-key-trigger-niente-pk" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scenario 4 — Migration NOT NULL fallisce su tabella con dati esistenti
+        gh-ost / pt-osc rifiutano la tabella (foreign key, trigger, niente PK)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indice-invalid-dopo-create-index-concurrently-fallito" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Indice INVALID dopo CREATE INDEX CONCURRENTLY fallito
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alter-add-column-default-riscrive-la-tabella-in-postgresql" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ALTER ... ADD COLUMN DEFAULT riscrive la tabella in PostgreSQL
       
     </span>
   </a>
@@ -24527,20 +24687,6 @@
       
       
       
-        <a href="../../../tags/#tag:atlas" class="md-tag">atlas</a>
-      
-    
-      
-      
-      
-      
-        <a href="../../../tags/#tag:ci-cd" class="md-tag">ci-cd</a>
-      
-    
-      
-      
-      
-      
         <a href="../../../tags/#tag:database" class="md-tag">database</a>
       
     
@@ -24548,21 +24694,21 @@
       
       
       
-        <a href="../../../tags/#tag:flyway" class="md-tag">flyway</a>
+        <a href="../../../tags/#tag:ddl" class="md-tag">ddl</a>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:golang-migrate" class="md-tag">golang-migrate</a>
+        <a href="../../../tags/#tag:gh-ost" class="md-tag">gh-ost</a>
       
     
       
       
       
       
-        <a href="../../../tags/#tag:liquibase" class="md-tag">liquibase</a>
+        <a href="../../../tags/#tag:locking" class="md-tag">locking</a>
       
     
       
@@ -24576,6 +24722,27 @@
       
       
       
+        <a href="../../../tags/#tag:mysql" class="md-tag">mysql</a>
+      
+    
+      
+      
+      
+      
+        <a href="../../../tags/#tag:postgresql" class="md-tag">postgresql</a>
+      
+    
+      
+      
+      
+      
+        <a href="../../../tags/#tag:pt-online-schema-change" class="md-tag">pt-online-schema-change</a>
+      
+    
+      
+      
+      
+      
         <a href="../../../tags/#tag:schema" class="md-tag">schema</a>
       
     
@@ -24583,7 +24750,7 @@
       
       
       
-        <a href="../../../tags/#tag:versioning" class="md-tag">versioning</a>
+        <a href="../../../tags/#tag:zero-downtime" class="md-tag">zero-downtime</a>
       
     
   </nav>
@@ -24593,240 +24760,515 @@
   
 
 
-<h1 id="schema-migrations-flyway-liquibase-atlas-golang-migrate">Schema Migrations — Flyway, Liquibase, Atlas, golang-migrate<a class="headerlink" href="#schema-migrations-flyway-liquibase-atlas-golang-migrate" title="Permanent link">&para;</a></h1>
+<h1 id="online-schema-change-ddl-senza-downtime">Online Schema Change — DDL senza downtime<a class="headerlink" href="#online-schema-change-ddl-senza-downtime" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>Uno schema migration tool applica in modo controllato e ripetibile i cambi di struttura a un database (nuove tabelle, colonne, indici, vincoli), tenendo traccia di cosa è già stato applicato. Serve ovunque lo schema evolva insieme al codice: senza di esso, l'allineamento tra ambienti (dev/staging/prod) degrada in fretta e il rollout diventa un'operazione manuale rischiosa. Esistono due filosofie opposte — <strong>versioned/imperative</strong> (una sequenza di script SQL numerati, applicati in ordine) e <strong>declarative/state-based</strong> (si descrive lo stato finale desiderato, il tool calcola il diff) — e la scelta tra le due ha conseguenze dirette su rollback, drift detection e revisione in code review. Non serve per migrazioni di dati massive tra database diversi (ETL) né per replica continua — quello è terreno di strumenti diversi (es. Debezium, AWS DMS).</p>
+<p>Un <code>ALTER TABLE</code> che su un database di sviluppo termina in un millisecondo può fermare la produzione per minuti su una tabella da centinaia di milioni di righe. Il problema raramente è la durata del DDL in sé: è il <strong>lock</strong> che richiede e la <strong>coda</strong> che crea. I tool di versioning (<a href="../schema-migrations/">Schema Migrations</a>) dicono <em>quando</em> applicare uno script; questa guida spiega <em>come</em> scrivere e lanciare il DDL in modo che non blocchi il traffico, su PostgreSQL e MySQL.</p>
+<p>Le tre leve sono sempre le stesse: (1) scegliere la variante di DDL che prende il lock più debole o che è solo metadata (<code>CONCURRENTLY</code>, <code>NOT VALID</code>, <code>ALGORITHM=INSTANT</code>); (2) proteggersi dalla lock queue con timeout brevi e retry; (3) quando il DB non offre una variante online, copiare la tabella in background con un tool esterno (gh-ost, pt-online-schema-change, pg_repack, pgroll) e fare uno swap atomico. Sopra a tutto sta il pattern expand/contract, che spezza le modifiche incompatibili (rename, cambio tipo) in release compatibili.</p>
+<p>Non serve per tabelle piccole (&lt; qualche milione di righe, DDL &lt; 1 s) dove un lock breve è accettabile, né per modifiche già puramente metadata: in quei casi il tool aggiunge solo complessità.</p>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <div class="admonition note">
-<p class="admonition-title">Versioned vs Declarative</p>
-<p><strong>Versioned (imperative)</strong>: ogni cambio è uno script SQL esplicito (<code>V1__create_users.sql</code>, <code>V2__add_email.sql</code>). Il tool applica solo gli script non ancora eseguiti, in ordine, tracciandoli in una tabella di controllo. Flyway e golang-migrate lavorano così.</p>
-<p><strong>Declarative (state-based)</strong>: si mantiene un file che descrive lo schema finale desiderato (HCL, SQL "target", o un modello ORM). Il tool confronta lo stato desiderato con lo stato reale del database e genera automaticamente il diff da applicare. Atlas lavora così nativamente; Liquibase lo supporta in una modalità aggiuntiva (<code>diff</code>) ma il suo modello primario resta versioned via changelog.</p>
+<p class="admonition-title">Lock queue — il vero killer</p>
+<p>Un <code>ALTER TABLE</code> che richiede <code>ACCESS EXCLUSIVE</code> (PostgreSQL) o un metadata lock esclusivo (MySQL) deve <strong>attendere</strong> che tutte le transazioni che toccano la tabella finiscano. Mentre attende, <strong>ogni nuova query sulla tabella si accoda dietro di lui</strong>, anche un semplice <code>SELECT</code>. Una sola transazione lunga + un ALTER "veloce" = tabella completamente bloccata finché la transazione lunga non termina. Il DDL non è mai stato lento: è stato <em>in coda</em>, e ha messo in coda tutti gli altri.</p>
 </div>
 <ul>
-<li><strong>Migration idempotente</strong>: può essere eseguita più volte senza produrre errori o doppi effetti (es. <code>CREATE TABLE IF NOT EXISTS</code>). Fondamentale quando le migration girano da init container Kubernetes che può ripartire dopo un crash parziale — vedi <a href="../../../dev/integrazioni/database-patterns/">Database Patterns — Init Container</a>.</li>
-<li><strong>Locking</strong>: meccanismo che impedisce a due processi di applicare la stessa migration in parallelo (es. due pod che partono contemporaneamente). Senza locking, una migration <code>ADD COLUMN</code> può essere tentata due volte in race e fallire con errori inconsistenti tra i pod.</li>
-<li><strong>Drift detection</strong>: rilevare che lo schema reale del database si è discostato da quello atteso (es. una modifica manuale fatta a mano da un DBA in produzione, non passata dal tool). Solo gli strumenti declarativi con introspection nativa (Atlas) lo fanno in automatico; con Flyway/golang-migrate serve tooling esterno o disciplina operativa.</li>
-<li><strong>Rollback (migration "down")</strong>: la capacità di annullare una migration applicata. È il punto di maggiore trade-off tra i tool, approfondito sotto.</li>
+<li><strong>Rewrite della tabella</strong>: il DDL riscrive tutte le righe (nuovo file/tablespace). Costo proporzionale alla dimensione, lock esclusivo per tutta la durata, WAL/binlog e I/O enormi, replica lag. È ciò che le varianti online cercano di evitare.</li>
+<li><strong>Metadata-only</strong>: il DDL modifica solo il catalogo. Istantaneo a prescindere dalla dimensione, ma richiede comunque il lock esclusivo <em>per un istante</em> (quindi soggetto alla lock queue).</li>
+<li><strong>Scansione di validazione</strong>: alcuni DDL (aggiungere un vincolo, <code>SET NOT NULL</code>) non riscrivono, ma devono leggere tutta la tabella per verificare i dati. Si può spostare la scansione fuori dal lock esclusivo (<code>NOT VALID</code> + <code>VALIDATE</code>).</li>
+<li><strong>Ghost / shadow table</strong>: tabella vuota con lo schema nuovo, popolata in background dal tool OSC e poi scambiata con l'originale via <code>RENAME</code> atomico (cut-over).</li>
+<li><strong>Expand/contract</strong> (a.k.a. parallel change): ogni modifica incompatibile è scomposta in step additivi compatibili con la versione precedente <em>e</em> successiva del codice, così deploy e rollback restano sicuri.</li>
+<li><strong>Backfill</strong>: popolamento dei dati storici di una nuova colonna/tabella, fatto a batch con throttling, mai in una singola <code>UPDATE</code> gigante.</li>
 </ul>
+<table>
+<thead>
+<tr>
+<th>Esigenza</th>
+<th>PostgreSQL</th>
+<th>MySQL 8.0</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Aggiungere colonna</td>
+<td>metadata-only (anche con default costante, PG11+)</td>
+<td><code>ALGORITHM=INSTANT</code></td>
+</tr>
+<tr>
+<td>Aggiungere indice</td>
+<td><code>CREATE INDEX CONCURRENTLY</code></td>
+<td><code>ALGORITHM=INPLACE, LOCK=NONE</code></td>
+</tr>
+<tr>
+<td>Aggiungere vincolo (FK/CHECK)</td>
+<td><code>NOT VALID</code> + <code>VALIDATE CONSTRAINT</code></td>
+<td>FK: <code>foreign_key_checks=0</code> (rischioso) o OSC</td>
+</tr>
+<tr>
+<td>Cambiare tipo colonna</td>
+<td>rewrite (salvo casi binary-coercible) → expand/contract</td>
+<td><code>ALGORITHM=COPY</code> → gh-ost / pt-osc</td>
+</tr>
+<tr>
+<td>Rinominare colonna</td>
+<td>metadata, ma rompe il codice → expand/contract</td>
+<td><code>INSTANT</code>/<code>INPLACE</code>, ma rompe il codice → expand/contract</td>
+</tr>
+<tr>
+<td>Recuperare bloat / riscrivere</td>
+<td><code>pg_repack</code></td>
+<td>OSC (<code>ALTER TABLE t ENGINE=InnoDB</code> via gh-ost)</td>
+</tr>
+</tbody>
+</table>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
-<p>Tutti i tool versioned condividono lo stesso schema concettuale:</p>
-<ol>
-<li>Una tabella di controllo nel database stesso (es. <code>flyway_schema_history</code>, <code>schema_migrations</code>, <code>atlas_schema_revisions</code>) registra quali migration sono state applicate, con checksum e timestamp.</li>
-<li>All'avvio, il tool confronta i file di migration presenti con le righe della tabella di controllo.</li>
-<li>Applica solo le migration mancanti, in ordine di versione, ciascuna dentro una transazione (dove il DB lo supporta — DDL transazionale è nativo in PostgreSQL, non in MySQL).</li>
-<li>Se una migration fallisce a metà, lo stato viene marcato come "failed" (Flyway) o la transazione viene rollbackata (PostgreSQL) — MySQL invece può lasciare uno stato parziale perché molte DDL fanno commit implicito.</li>
-</ol>
-<p>Atlas inverte il flusso: non parte dai file storici ma calcola sempre il diff tra <strong>stato desiderato</strong> (schema HCL/SQL dichiarato) e <strong>stato reale</strong> (introspezione live del database), poi genera il piano di migrazione al volo. Questo elimina la deriva tra "quello che pensiamo sia lo schema" e "quello che è davvero" — ma richiede più fiducia nel motore di diffing per DDL complesse (rename ambigui, split di colonne).</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Versioned (Flyway / golang-migrate)
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  file V1, V2, V3... ──► tabella controllo ──► applica i mancanti in ordine
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>Declarative (Atlas)
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  schema desiderato (HCL) ──┐
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                             ├──► diff engine ──► piano DDL ──► applica
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  schema reale (introspect)─┘
+<h3 id="lock-queue-in-postgresql">Lock queue in PostgreSQL<a class="headerlink" href="#lock-queue-in-postgresql" title="Permanent link">&para;</a></h3>
+<p><code>ALTER TABLE</code> prende <code>ACCESS EXCLUSIVE</code>, che confligge con <em>tutti</em> i lock inclusi <code>ACCESS SHARE</code> (SELECT). Il lock manager serve le richieste in ordine di arrivo: se T1 (transazione lunga) tiene <code>ACCESS SHARE</code>, l'ALTER (T2) attende, e le query successive (T3, T4…) si accodano dietro T2 perché confliggerebbero con la sua richiesta in attesa.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>T1: BEGIN; SELECT ... FROM orders;   -- tiene ACCESS SHARE, transazione "dimenticata" aperta
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>T2: ALTER TABLE orders ADD ...;      -- attende ACCESS EXCLUSIVE (bloccato da T1)
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>T3: SELECT ... FROM orders;          -- attende dietro T2  ← l'applicazione è ferma
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>T4: INSERT INTO orders ...;          -- attende dietro T2
+</span></code></pre></div>
+<p>La difesa è un <code>lock_timeout</code> breve: l'ALTER rinuncia dopo pochi secondi e il traffico riparte; si riprova in un loop. Il costo di un tentativo fallito è quasi zero, quello di un ALTER in coda senza timeout è un incidente.</p>
+<h3 id="metadata-lock-in-mysql">Metadata lock in MySQL<a class="headerlink" href="#metadata-lock-in-mysql" title="Permanent link">&para;</a></h3>
+<p>In MySQL ogni statement acquisisce un <strong>metadata lock (MDL)</strong> sulle tabelle che tocca, e lo tiene fino a fine transazione. L'<code>ALTER TABLE</code> richiede un MDL esclusivo all'inizio e alla fine (anche per DDL "online"): se una transazione lunga ha già un MDL condiviso, l'ALTER attende e tutte le query successive si accodano — stesso meccanismo di PostgreSQL, stesso sintomo (<code>Waiting for table metadata lock</code>).</p>
+<h3 id="algoritmi-di-alter-in-mysql-innodb">Algoritmi di ALTER in MySQL (InnoDB)<a class="headerlink" href="#algoritmi-di-alter-in-mysql-innodb" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th><code>ALGORITHM</code></th>
+<th>Cosa fa</th>
+<th>Concorrenza DML</th>
+<th>Costo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>INSTANT</code></td>
+<td>Solo metadata nel dizionario dati</td>
+<td>Piena</td>
+<td>Istantaneo</td>
+</tr>
+<tr>
+<td><code>INPLACE</code></td>
+<td>Modifica sul posto o rebuild interno, senza copia in tabella temporanea</td>
+<td>Con <code>LOCK=NONE</code> lettura+scrittura permesse (DML loggato e riapplicato a fine)</td>
+<td>Proporzionale alla tabella, I/O e replica lag</td>
+</tr>
+<tr>
+<td><code>COPY</code></td>
+<td>Crea tabella nuova, copia riga per riga, swap</td>
+<td>Solo lettura (<code>LOCK=SHARED</code>)</td>
+<td>Massimo; blocca le scritture</td>
+</tr>
+</tbody>
+</table>
+<p>Specificare <strong>esplicitamente</strong> <code>ALGORITHM</code> e <code>LOCK</code> è una safety net: se l'operazione non è supportata a quel livello, MySQL fallisce subito con errore invece di degradare silenziosamente a <code>COPY</code>.</p>
+<h3 id="osc-esterni-trigger-based-vs-binlog-based">OSC esterni: trigger-based vs binlog-based<a class="headerlink" href="#osc-esterni-trigger-based-vs-binlog-based" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pt-online-schema-change (trigger-based)        gh-ost (binlog-based)
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  tabella originale ──trigger INS/UPD/DEL──►     tabella originale ──binlog (ROW)──► gh-ost
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        │                                              │                              │
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>        ▼ copia a chunk                                ▼ copia a chunk                ▼ applica eventi
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>  tabella _new  ◄──────────────────────┘         tabella _gho  ◄───────────────────────┘
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        │ RENAME atomico                                │ cut-over (lock + RENAME)
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>        ▼                                               ▼
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>  tabella nuova                                  tabella nuova
+</span></code></pre></div>
+<ul>
+<li><strong>pt-osc</strong>: crea trigger sulla tabella originale che replicano ogni scrittura nella copia. Semplice e maturo, ma i trigger aggiungono overhead <em>sincrono</em> a ogni scrittura applicativa, non sono sospendibili (non si può "mettere in pausa" il carico di un trigger) e prendono lock di metadata alla creazione.</li>
+<li><strong>gh-ost</strong> (GitHub): nessun trigger; legge il <strong>binlog</strong> (di default da una replica) e riapplica gli eventi sulla ghost table. L'overhead sul primario è minimo, la migrazione è <strong>pausabile</strong> e <strong>throttle-able</strong> (replica lag, load) e il cut-over è controllabile da file flag/socket. Richiede <code>binlog_format=ROW</code> e <code>binlog_row_image=FULL</code>, una PK o unique key sulla tabella, e <strong>non supporta</strong> tabelle con foreign key né trigger.</li>
+<li><strong>Spirit</strong> (Block/Cash App, successore concettuale di gh-ost, MySQL 8): multi-thread, senza trigger, sempre binlog-based, con checksum di verifica integrata.</li>
+<li><strong>Vitess online DDL</strong>: strategie <code>vitess</code> (nativa), <code>gh-ost</code>, <code>pt-osc</code> selezionabili via <code>ddl_strategy</code>, con scheduling e revert integrati nel cluster.</li>
+</ul>
+<h3 id="online-ddl-in-postgresql-oltre-il-ddl-nativo">Online DDL in PostgreSQL oltre il DDL nativo<a class="headerlink" href="#online-ddl-in-postgresql-oltre-il-ddl-nativo" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>pg_repack</strong>: ricostruisce tabella/indici online (trigger + tabella di log), con <code>ACCESS EXCLUSIVE</code> solo nello swap finale. Pensato per recuperare <strong>bloat</strong> (vedi <a href="../../postgresql/mvcc-vacuum/">MVCC e VACUUM</a>), non per cambiare lo schema. Richiede PK o unique index NOT NULL e spazio libero ≈ dimensione tabella.</li>
+<li><strong>pgroll</strong> (Xata): applica migration in modalità expand/contract automatica. Durante la migrazione espone <em>due versioni di schema</em> contemporaneamente (viste in schemi separati <code>public_&lt;migration&gt;</code>) così la vecchia e la nuova versione dell'app convivono; <code>complete</code> consolida, <code>rollback</code> annulla.</li>
+</ul>
+<h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
+<h3 id="postgresql-ddl-con-retry-e-timeout">PostgreSQL: DDL con retry e timeout<a class="headerlink" href="#postgresql-ddl-con-retry-e-timeout" title="Permanent link">&para;</a></h3>
+<p>Template per qualunque DDL che richiede un lock forte. <code>lock_timeout</code> limita l'attesa del lock (il danno da coda); <code>statement_timeout</code> limita l'esecuzione una volta ottenuto il lock.</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1">-- Sessione dedicata alla migration</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">SET</span><span class="w"> </span><span class="n">lock_timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'3s'</span><span class="p">;</span><span class="w">          </span><span class="c1">-- se non prende il lock entro 3s, abbandona (nessuna coda prolungata)</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">SET</span><span class="w"> </span><span class="n">statement_timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'30s'</span><span class="p">;</span><span class="w">    </span><span class="c1">-- metadata-only DDL: se dura di più, qualcosa non va</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">shipped_at</span><span class="w"> </span><span class="n">timestamptz</span><span class="p">;</span>
+</span></code></pre></div>
+<p>Un singolo tentativo spesso fallisce su tabelle molto usate: serve un loop di retry con backoff, a livello di script/CI.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="ch">#!/usr/bin/env bash</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># retry-ddl.sh — ritenta il DDL finché prende il lock</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">set</span><span class="w"> </span>-u
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nv">SQL</span><span class="o">=</span><span class="s2">"ALTER TABLE orders ADD COLUMN shipped_at timestamptz;"</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">for</span><span class="w"> </span>attempt<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>seq<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">20</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span>psql<span class="w"> </span><span class="s2">"</span><span class="nv">$DATABASE_URL</span><span class="s2">"</span><span class="w"> </span>-v<span class="w"> </span><span class="nv">ON_ERROR_STOP</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">       </span>-c<span class="w"> </span><span class="s2">"SET lock_timeout='3s'; SET statement_timeout='30s'; </span><span class="si">${</span><span class="nv">SQL</span><span class="si">}</span><span class="s2">"</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"OK al tentativo </span><span class="si">${</span><span class="nv">attempt</span><span class="si">}</span><span class="s2">"</span><span class="p">;</span><span class="w"> </span><span class="nb">exit</span><span class="w"> </span><span class="m">0</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="k">fi</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"tentativo </span><span class="si">${</span><span class="nv">attempt</span><span class="si">}</span><span class="s2"> fallito (lock_timeout?), retry tra </span><span class="k">$((</span><span class="nv">attempt</span><span class="o">*</span><span class="m">2</span><span class="k">))</span><span class="s2">s"</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span>sleep<span class="w"> </span><span class="k">$((</span><span class="nv">attempt</span><span class="o">*</span><span class="m">2</span><span class="k">))</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="k">done</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"DDL non applicato dopo 20 tentativi"</span><span class="w"> </span>&gt;<span class="p">&amp;</span><span class="m">2</span><span class="p">;</span><span class="w"> </span><span class="nb">exit</span><span class="w"> </span><span class="m">1</span>
 </span></code></pre></div>
 <div class="admonition warning">
-<p class="admonition-title">Locking non è garantito ovunque</p>
-<p>Flyway usa un lock a livello di tabella di controllo (advisory lock su PostgreSQL) di default. golang-migrate NON ha locking robusto su tutti i backend — su alcuni driver due processi paralleli possono correre in race. Se le migration girano da più pod contemporaneamente (rolling deploy con più repliche che partono insieme), verificare esplicitamente il comportamento di lock del tool scelto o serializzare l'esecuzione con un init container unico / Kubernetes Job con <code>parallelism: 1</code>.</p>
+<p class="admonition-title">Imposta lock_timeout a livello di sessione, non globale</p>
+<p><code>ALTER ROLE migrator SET lock_timeout = '3s'</code> è una buona default per il ruolo che esegue le migration. <strong>Non</strong> impostarlo globalmente: romperebbe i job applicativi legittimi che attendono lock. Verifica sempre <code>SHOW lock_timeout;</code> nella sessione prima di lanciare un DDL pesante.</p>
 </div>
-<h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
-<p>Stessa modifica — <strong>aggiungere una colonna NOT NULL con default</strong> su una tabella <code>users</code> — espressa nei tre tool.</p>
-<h3 id="flyway-versioned-community-edition">Flyway (versioned, community edition)<a class="headerlink" href="#flyway-versioned-community-edition" title="Permanent link">&para;</a></h3>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">-- V4__add_status_to_users.sql</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1">-- Flyway Community non supporta rollback automatico: se serve annullare,</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1">-- va scritta a mano una migration "forward" che inverte l'effetto (V5).</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="k">ADD</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="s1">'active'</span><span class="p">;</span>
+<h3 id="postgresql-create-index-concurrently">PostgreSQL: CREATE INDEX CONCURRENTLY<a class="headerlink" href="#postgresql-create-index-concurrently" title="Permanent link">&para;</a></h3>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1">-- Non blocca INSERT/UPDATE/DELETE. Non può girare dentro una transazione.</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">CONCURRENTLY</span><span class="w"> </span><span class="n">idx_orders_customer_id</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="p">(</span><span class="n">customer_id</span><span class="p">);</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1">-- Indice unique senza lock lungo</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">UNIQUE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">CONCURRENTLY</span><span class="w"> </span><span class="n">uq_orders_ref</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="p">(</span><span class="n">external_ref</span><span class="p">);</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1">-- ...poi si "promuove" a vincolo, operazione metadata-only</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="k">CONSTRAINT</span><span class="w"> </span><span class="n">uq_orders_ref</span><span class="w"> </span><span class="k">UNIQUE</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">uq_orders_ref</span><span class="p">;</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Applica tutte le migration pendenti</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>flyway<span class="w"> </span>-url<span class="o">=</span>jdbc:postgresql://localhost:5432/app<span class="w"> </span>-user<span class="o">=</span>app<span class="w"> </span>-password<span class="o">=</span>***<span class="w"> </span>migrate
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Verifica stato senza applicare</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>flyway<span class="w"> </span>-url<span class="o">=</span>jdbc:postgresql://localhost:5432/app<span class="w"> </span>info
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Rollback: SOLO in Flyway Teams (a pagamento) con `flyway undo`</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># In Community: si scrive una nuova migration V5 che fa DROP COLUMN o inverte</span>
+<p><code>CONCURRENTLY</code> fa due scansioni della tabella e <strong>attende che terminino tutte le transazioni preesistenti</strong> (anche su altre tabelle, per lo snapshot): una transazione lunga lo rallenta indefinitamente. Se fallisce (deadlock, violazione di unique, cancellazione) lascia un indice <strong><code>INVALID</code></strong> che continua a pesare sulle scritture ma non è usato dalle query.</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1">-- Trova indici invalidi lasciati da CONCURRENTLY falliti</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">n</span><span class="p">.</span><span class="n">nspname</span><span class="p">,</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">relname</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">index_name</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">.</span><span class="n">relname</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="k">table_name</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_index</span><span class="w"> </span><span class="n">i</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">JOIN</span><span class="w"> </span><span class="n">pg_class</span><span class="w"> </span><span class="k">c</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">oid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="p">.</span><span class="n">indexrelid</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="k">JOIN</span><span class="w"> </span><span class="n">pg_class</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">t</span><span class="p">.</span><span class="n">oid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="p">.</span><span class="n">indrelid</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="k">JOIN</span><span class="w"> </span><span class="n">pg_namespace</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">n</span><span class="p">.</span><span class="n">oid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">relnamespace</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="k">WHERE</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="n">i</span><span class="p">.</span><span class="n">indisvalid</span><span class="p">;</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1">-- Bonifica e riprova</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="k">DROP</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">CONCURRENTLY</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="n">idx_orders_customer_id</span><span class="p">;</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">CONCURRENTLY</span><span class="w"> </span><span class="n">idx_orders_customer_id</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="p">(</span><span class="n">customer_id</span><span class="p">);</span>
 </span></code></pre></div>
-<div class="language-ini highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># flyway.conf</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="na">flyway.url</span><span class="o">=</span><span class="s">jdbc:postgresql://localhost:5432/app</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="na">flyway.locations</span><span class="o">=</span><span class="s">filesystem:./sql/migrations</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="na">flyway.baselineOnMigrate</span><span class="o">=</span><span class="s">true</span>
+<p>Nei tool di migration va disabilitata la transazione implicita: in Flyway <code>executeInTransaction=false</code> (file <code>.conf</code> di script o header <code>-- flyway:executeInTransaction=false</code>); in golang-migrate usare una migration con una sola istruzione senza <code>BEGIN</code>; in Liquibase <code>runInTransaction="false"</code> sul changeSet.</p>
+<h3 id="postgresql-vincoli-con-not-valid">PostgreSQL: vincoli con NOT VALID<a class="headerlink" href="#postgresql-vincoli-con-not-valid" title="Permanent link">&para;</a></h3>
+<p>Aggiungere un FK o CHECK normale scansiona l'intera tabella tenendo un lock forte. La versione in due fasi sposta la scansione fuori dal lock esclusivo.</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1">-- Fase 1: istantanea, il vincolo vale solo per le NUOVE scritture</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">SET</span><span class="w"> </span><span class="n">lock_timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'3s'</span><span class="p">;</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">order_items</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="k">ADD</span><span class="w"> </span><span class="k">CONSTRAINT</span><span class="w"> </span><span class="n">fk_items_order</span><span class="w"> </span><span class="k">FOREIGN</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="p">(</span><span class="n">order_id</span><span class="p">)</span><span class="w"> </span><span class="k">REFERENCES</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="p">(</span><span class="n">id</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">VALID</span><span class="p">;</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1">-- Fase 2: scansione completa, ma con lock SHARE UPDATE EXCLUSIVE (non blocca DML)</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">order_items</span><span class="w"> </span><span class="n">VALIDATE</span><span class="w"> </span><span class="k">CONSTRAINT</span><span class="w"> </span><span class="n">fk_items_order</span><span class="p">;</span>
 </span></code></pre></div>
-<h3 id="liquibase-changelog-con-modalita-diff-opzionale">Liquibase (changelog, con modalità diff opzionale)<a class="headerlink" href="#liquibase-changelog-con-modalita-diff-opzionale" title="Permanent link">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># changelog/004-add-status-to-users.yaml</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">databaseChangeLog</span><span class="p">:</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">changeSet</span><span class="p">:</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">      </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">004-add-status</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">      </span><span class="nt">author</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">andrea</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">      </span><span class="nt">changes</span><span class="p">:</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">addColumn</span><span class="p">:</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">            </span><span class="nt">tableName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">users</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">            </span><span class="nt">columns</span><span class="p">:</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">column</span><span class="p">:</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">                  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">status</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">                  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">varchar(20)</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">                  </span><span class="nt">defaultValue</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">active</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">                  </span><span class="nt">constraints</span><span class="p">:</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">                    </span><span class="nt">nullable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">      </span><span class="c1"># rollback esplicito dichiarato nello stesso changeset</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">      </span><span class="nt">rollback</span><span class="p">:</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">dropColumn</span><span class="p">:</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">            </span><span class="nt">tableName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">users</span>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">            </span><span class="nt">columnName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">status</span>
+<p><code>SET NOT NULL</code> su una tabella grande richiede una scansione sotto <code>ACCESS EXCLUSIVE</code>. Da PostgreSQL 12 se esiste già un CHECK validato che implica il NOT NULL, la scansione viene saltata:</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="k">CONSTRAINT</span><span class="w"> </span><span class="n">users_email_nn</span><span class="w"> </span><span class="k">CHECK</span><span class="w"> </span><span class="p">(</span><span class="n">email</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">VALID</span><span class="p">;</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="n">VALIDATE</span><span class="w"> </span><span class="k">CONSTRAINT</span><span class="w"> </span><span class="n">users_email_nn</span><span class="p">;</span><span class="w">     </span><span class="c1">-- scansione senza blocco DML</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="k">ALTER</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">email</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">;</span><span class="w">        </span><span class="c1">-- istantaneo (usa il CHECK validato)</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="k">DROP</span><span class="w"> </span><span class="k">CONSTRAINT</span><span class="w"> </span><span class="n">users_email_nn</span><span class="p">;</span><span class="w">         </span><span class="c1">-- pulizia</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Applica il changelog</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>liquibase<span class="w"> </span>--changelog-file<span class="o">=</span>changelog/db.changelog-master.yaml<span class="w"> </span>update
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Rollback dell'ultimo changeset applicato — supportato nativamente</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># SE il rollback è stato dichiarato esplicitamente nel changeset (come sopra)</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>liquibase<span class="w"> </span>rollback-one-changeset<span class="w"> </span>--changeset-id<span class="o">=</span><span class="m">004</span>-add-status<span class="w"> </span>--changeset-author<span class="o">=</span>andrea
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Modalità diff (stato-based, opzionale): genera un changelog dal confronto</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># tra due database o tra un database e uno schema di riferimento</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>liquibase<span class="w"> </span>diff-changelog<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>--reference-url<span class="o">=</span>jdbc:postgresql://localhost/app_target<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span>--url<span class="o">=</span>jdbc:postgresql://localhost/app_current<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">  </span>--changelog-file<span class="o">=</span>changelog/005-generated-diff.yaml
+<h3 id="postgresql-add-column-cambio-tipo">PostgreSQL: ADD COLUMN, cambio tipo<a class="headerlink" href="#postgresql-add-column-cambio-tipo" title="Permanent link">&para;</a></h3>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">-- PG11+: metadata-only anche con DEFAULT, se il default NON è volatile</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="nb">text</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="s1">'active'</span><span class="p">;</span><span class="w">   </span><span class="c1">-- istantaneo</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">created_at</span><span class="w"> </span><span class="n">timestamptz</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="n">now</span><span class="p">();</span><span class="w"> </span><span class="c1">-- ok: now() è STABLE, valutato una volta</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1">-- Default volatile → rewrite completo della tabella (lock esclusivo per tutta la durata)</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">token</span><span class="w"> </span><span class="n">uuid</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="n">gen_random_uuid</span><span class="p">();</span><span class="w">   </span><span class="c1">-- ATTENZIONE</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1">-- Alternativa: aggiungi nullable senza default, poi backfill a batch, poi SET NOT NULL via CHECK.</span>
 </span></code></pre></div>
-<h3 id="atlas-declarative-drift-detection-nativo">Atlas (declarative, drift detection nativo)<a class="headerlink" href="#atlas-declarative-drift-detection-nativo" title="Permanent link">&para;</a></h3>
-<div class="language-hcl highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># schema.hcl — stato DESIDERATO, non uno script incrementale</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="err">table</span><span class="w"> </span><span class="s2">"users"</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="na">schema</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">schema.public</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="err">column</span><span class="w"> </span><span class="s2">"id"</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="na">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">int</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nb">identity</span><span class="w"> </span><span class="p">{}</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span><span class="err">column</span><span class="w"> </span><span class="s2">"status"</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="na">type</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="err">varchar</span><span class="p">(</span><span class="m">20</span><span class="p">)</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="na">null</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="no">false</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="na">default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"active"</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span><span class="nb">primary_key</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="na">columns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="nv">column.id</span><span class="p">]</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="p">}</span>
+<p>Cambi di tipo: <code>varchar(50)</code> → <code>varchar(200)</code> (aumento di lunghezza) e <code>varchar</code> → <code>text</code> sono metadata-only; <code>int</code> → <code>bigint</code> <strong>riscrive</strong> la tabella e tutti gli indici. Per <code>int</code> → <code>bigint</code> su tabelle grandi si usa expand/contract (sotto).</p>
+<h3 id="postgresql-pg_repack-e-pgroll">PostgreSQL: pg_repack e pgroll<a class="headerlink" href="#postgresql-pg_repack-e-pgroll" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Ricostruisce tabella e indici online (bloat). Estensione da installare nel DB.</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>psql<span class="w"> </span>-c<span class="w"> </span><span class="s2">"CREATE EXTENSION pg_repack;"</span><span class="w"> </span>mydb
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>pg_repack<span class="w"> </span>--dbname<span class="o">=</span>mydb<span class="w"> </span>--table<span class="o">=</span>public.orders<span class="w"> </span>--jobs<span class="o">=</span><span class="m">2</span><span class="w"> </span>--wait-timeout<span class="o">=</span><span class="m">60</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Solo gli indici</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>pg_repack<span class="w"> </span>--dbname<span class="o">=</span>mydb<span class="w"> </span>--table<span class="o">=</span>public.orders<span class="w"> </span>--only-indexes
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Atlas calcola il diff tra schema.hcl e lo stato reale del DB, genera il piano</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>atlas<span class="w"> </span>schema<span class="w"> </span>apply<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--url<span class="w"> </span><span class="s2">"postgres://app:***@localhost:5432/app?sslmode=disable"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--to<span class="w"> </span><span class="s2">"file://schema.hcl"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span>--dry-run<span class="w">   </span><span class="c1"># mostra il piano DDL senza applicarlo</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Applica dopo revisione</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>atlas<span class="w"> </span>schema<span class="w"> </span>apply<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span>--url<span class="w"> </span><span class="s2">"postgres://app:***@localhost:5432/app?sslmode=disable"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span>--to<span class="w"> </span><span class="s2">"file://schema.hcl"</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># Drift detection: confronta lo stato reale con l'ultima versione tracciata</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>atlas<span class="w"> </span>schema<span class="w"> </span>inspect<span class="w"> </span>--url<span class="w"> </span><span class="s2">"postgres://app:***@localhost:5432/app"</span><span class="w"> </span>&gt;<span class="w"> </span>current.hcl
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>diff<span class="w"> </span>current.hcl<span class="w"> </span>schema.hcl<span class="w">   </span><span class="c1"># differenze = drift, es. modifiche manuali non tracciate</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="c1"># "Rollback" in Atlas = riapplicare uno schema.hcl precedente (versionato in git)</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>git<span class="w"> </span>checkout<span class="w"> </span>HEAD~1<span class="w"> </span>--<span class="w"> </span>schema.hcl
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>atlas<span class="w"> </span>schema<span class="w"> </span>apply<span class="w"> </span>--url<span class="w"> </span><span class="s2">"postgres://..."</span><span class="w"> </span>--to<span class="w"> </span><span class="s2">"file://schema.hcl"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># pgroll: migration expand/contract con due versioni di schema attive</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>pgroll<span class="w"> </span>init<span class="w"> </span>--postgres-url<span class="w"> </span><span class="s2">"</span><span class="nv">$DATABASE_URL</span><span class="s2">"</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>pgroll<span class="w"> </span>start<span class="w"> </span>migrations/0007_add_status.json<span class="w"> </span>--complete<span class="o">=</span><span class="nb">false</span><span class="w">   </span><span class="c1"># fase expand: vecchio+nuovo schema visibili</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># ...deploy della nuova versione dell'app che usa lo schema public_0007_add_status...</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>pgroll<span class="w"> </span><span class="nb">complete</span><span class="w">        </span><span class="c1"># contract: rimuove la vecchia versione</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>pgroll<span class="w"> </span>rollback<span class="w">        </span><span class="c1"># alternativa: annulla se qualcosa non va prima di complete</span>
 </span></code></pre></div>
-<h3 id="golang-migrate-versioned-minimale-multi-driver">golang-migrate (versioned, minimale, multi-driver)<a class="headerlink" href="#golang-migrate-versioned-minimale-multi-driver" title="Permanent link">&para;</a></h3>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">-- migrations/000004_add_status_to_users.up.sql</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="s1">'active'</span><span class="p">;</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1">-- migrations/000004_add_status_to_users.down.sql</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1">-- Rollback manuale: la migration "down" va scritta esplicitamente,</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1">-- il tool si limita a eseguirla — nessuna generazione automatica</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="k">DROP</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">status</span><span class="p">;</span>
+<h3 id="mysql-algorithm-e-lock-espliciti">MySQL: ALGORITHM e LOCK espliciti<a class="headerlink" href="#mysql-algorithm-e-lock-espliciti" title="Permanent link">&para;</a></h3>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">SET</span><span class="w"> </span><span class="k">SESSION</span><span class="w"> </span><span class="n">lock_wait_timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span><span class="p">;</span><span class="w">   </span><span class="c1">-- l'ALTER rinuncia se non ottiene il MDL entro 5s (default: 1 anno!)</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1">-- Metadata-only (MySQL 8.0.12+; qualsiasi posizione dalla 8.0.29)</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">shipped_at</span><span class="w"> </span><span class="n">DATETIME</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span><span class="w"> </span><span class="n">ALGORITHM</span><span class="o">=</span><span class="n">INSTANT</span><span class="p">;</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1">-- Indice secondario online</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">idx_customer</span><span class="w"> </span><span class="p">(</span><span class="n">customer_id</span><span class="p">),</span><span class="w"> </span><span class="n">ALGORITHM</span><span class="o">=</span><span class="n">INPLACE</span><span class="p">,</span><span class="w"> </span><span class="k">LOCK</span><span class="o">=</span><span class="k">NONE</span><span class="p">;</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="c1">-- Se non supportato → errore immediato (ER_ALTER_OPERATION_NOT_SUPPORTED_REASON), nessuna sorpresa</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="k">MODIFY</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">amount</span><span class="w"> </span><span class="nb">DECIMAL</span><span class="p">(</span><span class="mi">14</span><span class="p">,</span><span class="mi">4</span><span class="p">),</span><span class="w"> </span><span class="n">ALGORITHM</span><span class="o">=</span><span class="n">INPLACE</span><span class="p">,</span><span class="w"> </span><span class="k">LOCK</span><span class="o">=</span><span class="k">NONE</span><span class="p">;</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Applica tutte le migration pendenti</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>migrate<span class="w"> </span>-path<span class="w"> </span>./migrations<span class="w"> </span>-database<span class="w"> </span><span class="s2">"postgres://app:***@localhost:5432/app?sslmode=disable"</span><span class="w"> </span>up
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Rollback dell'ultima migration applicata (esegue lo script .down.sql)</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>migrate<span class="w"> </span>-path<span class="w"> </span>./migrations<span class="w"> </span>-database<span class="w"> </span><span class="s2">"postgres://..."</span><span class="w"> </span>down<span class="w"> </span><span class="m">1</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># golang-migrate non ha locking robusto su tutti i driver: in Kubernetes</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># usare un Job con parallelism:1, non un initContainer replicato per ogni pod</span>
+<p>Quando <code>INSTANT</code>/<code>INPLACE</code> non bastano (cambio tipo di colonna, cambio di charset, <code>DROP PRIMARY KEY</code>, molte altre operazioni su colonne): l'operazione è <code>COPY</code> e va fatta con un OSC esterno.</p>
+<div class="admonition note">
+<p class="admonition-title">Limiti di INSTANT</p>
+<p><code>INSTANT</code> non è usabile su tabelle <code>ROW_FORMAT=COMPRESSED</code>, tabelle con indici FULLTEXT o tabelle temporanee, e il numero di modifiche instant consecutive su una tabella è limitato (≈64 versioni di riga in 8.0.29+): oltre il limite serve un rebuild (<code>ALTER TABLE t ENGINE=InnoDB</code> o OSC) che azzeri il contatore.</p>
+</div>
+<h3 id="mysql-gh-ost">MySQL: gh-ost<a class="headerlink" href="#mysql-gh-ost" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># 1) Test su replica: esegue l'intera migrazione sulla replica e poi la scarta, senza toccare il primario</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>gh-ost<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>--host<span class="o">=</span>replica1.db.internal<span class="w"> </span>--user<span class="o">=</span>ghost<span class="w"> </span>--password<span class="o">=</span><span class="s2">"</span><span class="nv">$GHOST_PW</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span>--database<span class="o">=</span>shop<span class="w"> </span>--table<span class="o">=</span>orders<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span>--alter<span class="o">=</span><span class="s2">"ADD COLUMN shipped_at DATETIME NULL, ADD INDEX idx_shipped (shipped_at)"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span>--test-on-replica<span class="w"> </span>--switch-to-rbr<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">  </span>--chunk-size<span class="o">=</span><span class="m">1000</span><span class="w"> </span>--max-lag-millis<span class="o">=</span><span class="m">1500</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">  </span>--verbose<span class="w"> </span>--execute
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="c1"># 2) Esecuzione reale: cut-over manuale tramite flag file</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>gh-ost<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">  </span>--host<span class="o">=</span>replica1.db.internal<span class="w"> </span>--user<span class="o">=</span>ghost<span class="w"> </span>--password<span class="o">=</span><span class="s2">"</span><span class="nv">$GHOST_PW</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">  </span>--database<span class="o">=</span>shop<span class="w"> </span>--table<span class="o">=</span>orders<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="w">  </span>--alter<span class="o">=</span><span class="s2">"ADD COLUMN shipped_at DATETIME NULL"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="w">  </span>--chunk-size<span class="o">=</span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="w">  </span>--max-lag-millis<span class="o">=</span><span class="m">1500</span><span class="w"> </span>--throttle-control-replicas<span class="o">=</span><span class="s2">"replica2.db.internal,replica3.db.internal"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="w">  </span>--max-load<span class="o">=</span><span class="nv">Threads_running</span><span class="o">=</span><span class="m">40</span><span class="w"> </span>--critical-load<span class="o">=</span><span class="nv">Threads_running</span><span class="o">=</span><span class="m">200</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="w">  </span>--cut-over<span class="o">=</span>default<span class="w"> </span>--cut-over-lock-timeout-seconds<span class="o">=</span><span class="m">3</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a><span class="w">  </span>--postpone-cut-over-flag-file<span class="o">=</span>/tmp/ghost.postpone.flag<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="w">  </span>--serve-socket-file<span class="o">=</span>/tmp/gh-ost.shop.orders.sock<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a><span class="w">  </span>--initially-drop-ghost-table<span class="w"> </span>--initially-drop-old-table<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a><span class="w">  </span>--verbose<span class="w"> </span>--execute
 </span></code></pre></div>
+<p>Senza <code>--execute</code> gh-ost fa solo un dry-run (verifica prerequisiti e crea/droppa la ghost table). Con <code>--postpone-cut-over-flag-file</code>, la copia procede ma il <strong>cut-over attende</strong> finché il file esiste: lo si cancella quando si è pronti (in una finestra di basso traffico) e la migrazione si chiude.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Monitoraggio e controllo a runtime via socket</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nb">echo</span><span class="w"> </span>status<span class="w">   </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>-U<span class="w"> </span>/tmp/gh-ost.shop.orders.sock<span class="w">    </span><span class="c1"># progresso, ETA, lag</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="nb">echo</span><span class="w"> </span>throttle<span class="w"> </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>-U<span class="w"> </span>/tmp/gh-ost.shop.orders.sock<span class="w">    </span><span class="c1"># pausa la copia</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"no-throttle"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>-U<span class="w"> </span>/tmp/gh-ost.shop.orders.sock
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"chunk-size=500"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>-U<span class="w"> </span>/tmp/gh-ost.shop.orders.sock<span class="w">   </span><span class="c1"># cambio parametri a caldo</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1"># Via al cut-over quando si è pronti</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>rm<span class="w"> </span>/tmp/ghost.postpone.flag
+</span></code></pre></div>
+<p>Per girare direttamente sul primario (senza replica con binlog ROW) servono <code>--allow-on-master</code> e <code>--assume-rbr</code>; è meno sicuro: il default raccomandato è leggere il binlog da una replica.</p>
+<h3 id="mysql-pt-online-schema-change">MySQL: pt-online-schema-change<a class="headerlink" href="#mysql-pt-online-schema-change" title="Permanent link">&para;</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Dry-run: verifica prerequisiti, crea e droppa la tabella _new, NON applica la modifica</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pt-online-schema-change<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span>--alter<span class="w"> </span><span class="s2">"ADD COLUMN shipped_at DATETIME NULL"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nv">D</span><span class="o">=</span>shop,t<span class="o">=</span>orders,h<span class="o">=</span>primary.db.internal,u<span class="o">=</span>osc,p<span class="o">=</span><span class="s2">"</span><span class="nv">$OSC_PW</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span>--dry-run
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Esecuzione reale con throttling</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>pt-online-schema-change<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">  </span>--alter<span class="w"> </span><span class="s2">"ADD COLUMN shipped_at DATETIME NULL"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">  </span><span class="nv">D</span><span class="o">=</span>shop,t<span class="o">=</span>orders,h<span class="o">=</span>primary.db.internal,u<span class="o">=</span>osc,p<span class="o">=</span><span class="s2">"</span><span class="nv">$OSC_PW</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">  </span>--chunk-time<span class="o">=</span><span class="m">0</span>.5<span class="w"> </span>--max-lag<span class="o">=</span><span class="m">2</span><span class="w"> </span>--check-interval<span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">  </span>--max-load<span class="o">=</span><span class="s2">"Threads_running=50"</span><span class="w"> </span>--critical-load<span class="o">=</span><span class="s2">"Threads_running=200"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">  </span>--alter-foreign-keys-method<span class="o">=</span>auto<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">  </span>--progress<span class="o">=</span>time,30<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="w">  </span>--execute
+</span></code></pre></div>
+<p><code>--alter-foreign-keys-method</code> gestisce le tabelle <em>figlie</em> che hanno FK verso quella modificata: <code>rebuild_constraints</code> (consigliato dove possibile, ricrea i FK sulle figlie puntando alla nuova tabella), <code>drop_swap</code> (rischioso: la tabella non esiste per un istante), <code>auto</code> sceglie il più sicuro.</p>
+<h3 id="diagnostica-dei-lock">Diagnostica dei lock<a class="headerlink" href="#diagnostica-dei-lock" title="Permanent link">&para;</a></h3>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1">-- PostgreSQL: chi blocca chi</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">blocked</span><span class="p">.</span><span class="n">pid</span><span class="w">  </span><span class="k">AS</span><span class="w"> </span><span class="n">blocked_pid</span><span class="p">,</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">       </span><span class="n">blocked</span><span class="p">.</span><span class="n">query</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">blocked_query</span><span class="p">,</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">       </span><span class="n">blocking</span><span class="p">.</span><span class="n">pid</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">blocking_pid</span><span class="p">,</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">       </span><span class="n">blocking</span><span class="p">.</span><span class="k">state</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">blocking_state</span><span class="p">,</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">       </span><span class="n">now</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">blocking</span><span class="p">.</span><span class="n">xact_start</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">blocking_xact_age</span><span class="p">,</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">       </span><span class="n">blocking</span><span class="p">.</span><span class="n">query</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">blocking_query</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_activity</span><span class="w"> </span><span class="n">blocked</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="k">JOIN</span><span class="w"> </span><span class="k">LATERAL</span><span class="w"> </span><span class="k">unnest</span><span class="p">(</span><span class="n">pg_blocking_pids</span><span class="p">(</span><span class="n">blocked</span><span class="p">.</span><span class="n">pid</span><span class="p">))</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">b</span><span class="p">(</span><span class="n">pid</span><span class="p">)</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="k">true</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="k">JOIN</span><span class="w"> </span><span class="n">pg_stat_activity</span><span class="w"> </span><span class="n">blocking</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">blocking</span><span class="p">.</span><span class="n">pid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">pid</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">blocked</span><span class="p">.</span><span class="n">wait_event_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'Lock'</span><span class="p">;</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="c1">-- Transazioni aperte da più tempo (candidate a bloccare un DDL)</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pid</span><span class="p">,</span><span class="w"> </span><span class="k">state</span><span class="p">,</span><span class="w"> </span><span class="n">now</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">xact_start</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">age</span><span class="p">,</span><span class="w"> </span><span class="k">left</span><span class="p">(</span><span class="n">query</span><span class="p">,</span><span class="w"> </span><span class="mi">80</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">query</span>
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_activity</span>
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">xact_start</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span>
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">xact_start</span><span class="w"> </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
+</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a>
+</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="c1">-- Progresso di CREATE INDEX CONCURRENTLY</span>
+</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">phase</span><span class="p">,</span><span class="w"> </span><span class="n">blocks_done</span><span class="p">,</span><span class="w"> </span><span class="n">blocks_total</span><span class="p">,</span><span class="w"> </span><span class="n">tuples_done</span><span class="p">,</span><span class="w"> </span><span class="n">tuples_total</span>
+</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_progress_create_index</span><span class="p">;</span>
+</span></code></pre></div>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1">-- MySQL 8.0: metadata lock detenuti/in attesa</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">object_schema</span><span class="p">,</span><span class="w"> </span><span class="n">object_name</span><span class="p">,</span><span class="w"> </span><span class="n">lock_type</span><span class="p">,</span><span class="w"> </span><span class="n">lock_status</span><span class="p">,</span><span class="w"> </span><span class="n">owner_thread_id</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="k">FROM</span><span class="w"> </span><span class="n">performance_schema</span><span class="p">.</span><span class="n">metadata_locks</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">object_schema</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'shop'</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">object_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'orders'</span><span class="p">;</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1">-- Chi blocca l'ALTER (vista sys)</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">waiting_pid</span><span class="p">,</span><span class="w"> </span><span class="n">waiting_query</span><span class="p">,</span><span class="w"> </span><span class="n">blocking_pid</span><span class="p">,</span><span class="w"> </span><span class="n">blocking_query</span><span class="p">,</span><span class="w"> </span><span class="n">wait_age</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="k">FROM</span><span class="w"> </span><span class="n">sys</span><span class="p">.</span><span class="n">schema_table_lock_waits</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">object_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'orders'</span><span class="p">;</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="c1">-- Transazioni aperte da più tempo</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">trx_mysql_thread_id</span><span class="p">,</span><span class="w"> </span><span class="n">trx_started</span><span class="p">,</span><span class="w"> </span><span class="n">TIMESTAMPDIFF</span><span class="p">(</span><span class="k">SECOND</span><span class="p">,</span><span class="w"> </span><span class="n">trx_started</span><span class="p">,</span><span class="w"> </span><span class="n">NOW</span><span class="p">())</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">age_s</span><span class="p">,</span><span class="w"> </span><span class="n">trx_query</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="k">FROM</span><span class="w"> </span><span class="n">information_schema</span><span class="p">.</span><span class="n">innodb_trx</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">trx_started</span><span class="w"> </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
+</span></code></pre></div>
+<h3 id="expandcontract-applicato-al-ddl-rinominare-una-colonna">Expand/contract applicato al DDL: rinominare una colonna<a class="headerlink" href="#expandcontract-applicato-al-ddl-rinominare-una-colonna" title="Permanent link">&para;</a></h3>
+<p>Un <code>ALTER TABLE ... RENAME COLUMN</code> è metadata-only ma <strong>rompe istantaneamente</strong> tutti i client che usano il nome vecchio durante il rolling deploy. La procedura sicura richiede più release.</p>
+<table>
+<thead>
+<tr>
+<th>Release</th>
+<th>Schema</th>
+<th>Codice applicativo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 — <strong>Expand</strong></td>
+<td>Aggiungi <code>full_name</code> (nullable). Trigger o dual-write che copia <code>name</code> → <code>full_name</code></td>
+<td>Scrive entrambe, legge <code>name</code></td>
+</tr>
+<tr>
+<td>2 — <strong>Backfill</strong></td>
+<td>Backfill delle righe storiche a batch</td>
+<td>Scrive entrambe, legge <code>name</code></td>
+</tr>
+<tr>
+<td>3 — <strong>Switch</strong></td>
+<td>Verifica coerenza (<code>COUNT</code> dove differiscono = 0)</td>
+<td>Legge <code>full_name</code>, scrive entrambe</td>
+</tr>
+<tr>
+<td>4 — <strong>Contract</strong></td>
+<td><code>DROP COLUMN name</code> (dopo un periodo di sicurezza)</td>
+<td>Usa solo <code>full_name</code></td>
+</tr>
+</tbody>
+</table>
+<p>Ogni passo è reversibile fino al punto 4; il rollback del codice non incontra mai uno schema incompatibile.</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1">-- Release 1: expand + sync (PostgreSQL)</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">full_name</span><span class="w"> </span><span class="nb">text</span><span class="p">;</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">OR</span><span class="w"> </span><span class="k">REPLACE</span><span class="w"> </span><span class="k">FUNCTION</span><span class="w"> </span><span class="n">users_sync_name</span><span class="p">()</span><span class="w"> </span><span class="k">RETURNS</span><span class="w"> </span><span class="k">trigger</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="err">$$</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="k">BEGIN</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span><span class="k">NEW</span><span class="p">.</span><span class="n">full_name</span><span class="w"> </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="k">COALESCE</span><span class="p">(</span><span class="k">NEW</span><span class="p">.</span><span class="n">full_name</span><span class="p">,</span><span class="w"> </span><span class="k">NEW</span><span class="p">.</span><span class="n">name</span><span class="p">);</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span><span class="k">NEW</span><span class="p">.</span><span class="n">name</span><span class="w">      </span><span class="p">:</span><span class="o">=</span><span class="w"> </span><span class="k">COALESCE</span><span class="p">(</span><span class="k">NEW</span><span class="p">.</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="k">NEW</span><span class="p">.</span><span class="n">full_name</span><span class="p">);</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">  </span><span class="k">RETURN</span><span class="w"> </span><span class="k">NEW</span><span class="p">;</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="k">END</span><span class="w"> </span><span class="err">$$</span><span class="w"> </span><span class="k">LANGUAGE</span><span class="w"> </span><span class="n">plpgsql</span><span class="p">;</span>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">TRIGGER</span><span class="w"> </span><span class="n">trg_users_sync_name</span><span class="w"> </span><span class="k">BEFORE</span><span class="w"> </span><span class="k">INSERT</span><span class="w"> </span><span class="k">OR</span><span class="w"> </span><span class="k">UPDATE</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">users</span>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="w">  </span><span class="k">FOR</span><span class="w"> </span><span class="k">EACH</span><span class="w"> </span><span class="k">ROW</span><span class="w"> </span><span class="k">EXECUTE</span><span class="w"> </span><span class="k">FUNCTION</span><span class="w"> </span><span class="n">users_sync_name</span><span class="p">();</span>
+</span></code></pre></div>
+<h3 id="backfill-a-batch-con-throttling">Backfill a batch con throttling<a class="headerlink" href="#backfill-a-batch-con-throttling" title="Permanent link">&para;</a></h3>
+<p>Una singola <code>UPDATE users SET full_name = name</code> su 300 milioni di righe genera una transazione enorme: bloat, WAL/binlog massivo, replica lag, lock di riga prolungati. Si procede per range di PK con pause e controllo del lag.</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1">-- PostgreSQL: un batch (da ripetere finché rowcount = 0). Commit per ogni batch.</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="k">WITH</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="p">(</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="k">SELECT</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">users</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">  </span><span class="k">WHERE</span><span class="w"> </span><span class="n">full_name</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">  </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">id</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">  </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">5000</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">  </span><span class="k">FOR</span><span class="w"> </span><span class="k">UPDATE</span><span class="w"> </span><span class="n">SKIP</span><span class="w"> </span><span class="n">LOCKED</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="p">)</span>
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="k">UPDATE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="n">u</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">full_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">u</span><span class="p">.</span><span class="n">name</span>
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="k">FROM</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">u</span><span class="p">.</span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">batch</span><span class="p">.</span><span class="n">id</span><span class="p">;</span>
+</span></code></pre></div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="ch">#!/usr/bin/env bash</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># backfill.sh — batch + pausa adattiva sul replica lag (PostgreSQL)</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="k">while</span><span class="w"> </span>:<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span><span class="nv">n</span><span class="o">=</span><span class="k">$(</span>psql<span class="w"> </span><span class="s2">"</span><span class="nv">$DATABASE_URL</span><span class="s2">"</span><span class="w"> </span>-Atc<span class="w"> </span><span class="s2">"</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="s2">    WITH b AS (SELECT id FROM users WHERE full_name IS NULL ORDER BY id LIMIT 5000 FOR UPDATE SKIP LOCKED),</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="s2">         u AS (UPDATE users x SET full_name = x.name FROM b WHERE x.id = b.id RETURNING 1)</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="s2">    SELECT count(*) FROM u;"</span><span class="k">)</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="w">  </span><span class="o">[</span><span class="w"> </span><span class="s2">"</span><span class="nv">$n</span><span class="s2">"</span><span class="w"> </span>-eq<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="k">break</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">  </span><span class="nv">lag</span><span class="o">=</span><span class="k">$(</span>psql<span class="w"> </span><span class="s2">"</span><span class="nv">$REPLICA_URL</span><span class="s2">"</span><span class="w"> </span>-Atc<span class="w"> </span><span class="s2">"SELECT COALESCE(EXTRACT(EPOCH FROM now()-pg_last_xact_replay_timestamp()),0)::int;"</span><span class="k">)</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">  </span><span class="o">[</span><span class="w"> </span><span class="s2">"</span><span class="nv">$lag</span><span class="s2">"</span><span class="w"> </span>-gt<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sleep<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="o">||</span><span class="w"> </span>sleep<span class="w"> </span><span class="m">0</span>.2
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="k">done</span>
+</span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Rollback plan sempre scritto prima</p>
+<p>Per ogni migration pesante definisci in anticipo: (1) cosa succede se interrompi a metà (gh-ost: <code>echo panic</code>/kill del processo lascia la ghost table da droppare; pt-osc: i trigger vanno rimossi; PG: indice INVALID da droppare); (2) il comando esatto di rollback; (3) il punto di non ritorno (tipicamente il <code>DROP COLUMN</code> finale o il cut-over). Il <strong>cut-over di un OSC è effettivamente irreversibile</strong> senza un secondo OSC inverso: tenere la tabella <code>_del</code>/<code>_old</code> finché non sei certo.</p>
+</div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Migration additive prima, distruttive dopo (expand &amp; contract)</strong>: per zero-downtime, separare "aggiungi colonna nullable" (deploy 1) da "rendi NOT NULL e rimuovi la vecchia colonna" (deploy successivo, dopo che tutto il traffico usa la nuova colonna). Questo evita che un vecchio pod, ancora in rolling update, scriva contro uno schema che non conosce.</li>
-<li><strong>Mai modificare una migration già applicata in produzione</strong>: se un file versioned cambia dopo essere stato eseguito, il checksum non corrisponde più e Flyway/golang-migrate falliscono (comportamento corretto, non un bug da bypassare con <code>repair</code> senza capire perché).</li>
-<li><strong>Serializzare l'esecuzione in Kubernetes</strong>: init container con <code>replicas: 1</code> implicito nel Job, oppure lock applicativo esplicito (advisory lock PostgreSQL) se più pod potrebbero partire in parallelo — vedi <a href="../../../dev/integrazioni/database-patterns/">Database Patterns</a>.</li>
-<li><strong>Committare <code>schema.hcl</code> (Atlas) o le directory <code>migrations/</code> in git insieme al codice applicativo</strong>: la versione dello schema deve essere tracciabile allo stesso commit del codice che la richiede.</li>
+<li><strong>Un DDL = una migration = una sola istruzione "pericolosa"</strong>. Mescolare un <code>CREATE INDEX CONCURRENTLY</code> con altro DDL nella stessa migration impedisce di eseguirlo fuori transazione.</li>
+<li><strong>Timeout sempre</strong>: <code>lock_timeout</code> (PG) / <code>lock_wait_timeout</code> (MySQL) nella sessione di migration, mai attesa infinita. Retry con backoff in CI o nello script.</li>
+<li><strong>Elimina le transazioni lunghe prima del DDL</strong>: controlla <code>pg_stat_activity</code> / <code>information_schema.innodb_trx</code>; usa <code>idle_in_transaction_session_timeout</code> per le connessioni che "dimenticano" una transazione aperta.</li>
+<li><strong>Esplicita sempre <code>ALGORITHM</code>/<code>LOCK</code> in MySQL</strong>: preferisci un errore immediato a un <code>COPY</code> silenzioso che blocca le scritture.</li>
+<li><strong>Testa su dati di produzione-like</strong>: un OSC su tabella piccola non rivela i problemi di throttling, replica lag, spazio disco (la ghost table ≈ 100% della tabella + indici) e durata.</li>
+<li><strong>Spazio disco</strong>: pianifica spazio libero ≥ dimensione tabella (+ indici) per gh-ost/pt-osc/pg_repack; il WAL/binlog generato può saturare il disco prima della fine.</li>
+<li><strong>Monitora replica lag e carico</strong> durante la migrazione, con soglie di throttle (<code>--max-lag-millis</code>, <code>--max-load</code>) <em>e</em> soglie critiche di abort (<code>--critical-load</code>).</li>
+<li><strong>Cut-over in finestra di basso traffico</strong> (flag file per gh-ost) e con <code>--cut-over-lock-timeout-seconds</code> breve: meglio riprovare che bloccare.</li>
+<li><strong>Mai rename/cambio tipo "in place" in un rolling deploy</strong>: usa sempre expand/contract.</li>
+<li><strong>Backward compatibility del codice</strong>: ogni release deve funzionare con lo schema <em>prima</em> e <em>dopo</em> la migration. Dettagli sul flusso di deploy in <a href="../schema-migrations/">Schema Migrations</a>.</li>
+<li><strong>Evita <code>ALTER TABLE</code> mentre gira un <code>VACUUM FREEZE</code>/anti-wraparound o una lunga analisi</strong> su PostgreSQL: i lock si sovrappongono e allungano le code (vedi <a href="../../postgresql/mvcc-vacuum/">MVCC e VACUUM</a>).</li>
 </ul>
-<div class="admonition tip">
-<p class="admonition-title">Scegliere in base al rollback che serve davvero</p>
-<p>Se il rollback automatico è un requisito hard (compliance, cambio frequente di piani), Liquibase con rollback dichiarati esplicitamente o Flyway Teams sono le uniche opzioni pronte all'uso senza scrivere script "down" a mano. Se il team è disciplinato nello scrivere <code>.down.sql</code> per ogni migration, golang-migrate è la scelta più leggera. Se serve drift detection continuo su ambienti dove qualcuno potrebbe intervenire manualmente sul DB, solo Atlas lo copre nativamente.</p>
-</div>
 <div class="admonition warning">
-<p class="admonition-title">Flyway Community non fa rollback automatico</p>
-<p>È il trade-off più sottovalutato: un team che sceglie Flyway (community, gratuito) assumendo di poter fare <code>flyway undo</code> come con Liquibase scopre solo in un incidente che quel comando è a pagamento (Teams edition). Il piano di rollback per Flyway Community è sempre "scrivi e applica una nuova migration forward che inverte l'effetto" — va progettato PRIMA, non improvvisato durante un incidente.</p>
+<p class="admonition-title">Foreign key e trigger incompatibili con gh-ost</p>
+<p>gh-ost rifiuta tabelle con foreign key (come figlia o come padre) e tabelle con trigger. Per quelle tabelle usa pt-osc (con <code>--alter-foreign-keys-method</code>) oppure una strategia expand/contract applicativa. Verifica in anticipo con <code>SELECT * FROM information_schema.referential_constraints</code> e <code>information_schema.triggers</code>.</p>
 </div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<h3 id="scenario-1-due-pod-applicano-la-stessa-migration-in-parallelo-race-condition">Scenario 1 — Due pod applicano la stessa migration in parallelo (race condition)<a class="headerlink" href="#scenario-1-due-pod-applicano-la-stessa-migration-in-parallelo-race-condition" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo</strong>: errore <code>duplicate column</code> o <code>relation already exists</code> durante un rolling deploy con più repliche, migration falliscono in modo intermittente.</p>
-<p><strong>Causa</strong>: più init container/pod partono nella stessa finestra temporale e tentano di applicare le migration pendenti senza lock effettivo (tipico con golang-migrate su driver che non implementano advisory lock).</p>
-<p><strong>Soluzione</strong>: spostare l'esecuzione della migration in un <code>Job</code> Kubernetes dedicato con <code>completions: 1</code>, eseguito come step separato prima del rollout del Deployment, invece che in ogni init container di ogni pod.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">batch/v1</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Job</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">db-migrate-v4</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="nt">backoffLimit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span><span class="nt">template</span><span class="p">:</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">      </span><span class="nt">restartPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">migrate</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">migrate/migrate</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">          </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"-path"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"/migrations"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"-database"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"$(DB_URL)"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"up"</span><span class="p p-Indicator">]</span>
+<h3 id="lapplicazione-si-blocca-durante-un-alter-veloce">L'applicazione si blocca durante un ALTER "veloce"<a class="headerlink" href="#lapplicazione-si-blocca-durante-un-alter-veloce" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: picco di connessioni in attesa, timeout dell'applicazione; in PostgreSQL <code>wait_event_type = 'Lock'</code>, in MySQL stato <code>Waiting for table metadata lock</code> su decine di thread; l'ALTER stesso risulta fermo.
+<strong>Causa</strong>: lock queue — una transazione lunga (spesso <code>idle in transaction</code>) tiene un lock compatibile con il traffico ma non con l'ALTER, che a sua volta blocca tutti.
+<strong>Soluzione</strong>: individua e termina il bloccante (non l'ALTER, di solito).</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1">-- PostgreSQL</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pid</span><span class="p">,</span><span class="w"> </span><span class="k">state</span><span class="p">,</span><span class="w"> </span><span class="n">now</span><span class="p">()</span><span class="o">-</span><span class="n">xact_start</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">age</span><span class="p">,</span><span class="w"> </span><span class="k">left</span><span class="p">(</span><span class="n">query</span><span class="p">,</span><span class="mi">60</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_activity</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">xact_start</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">xact_start</span><span class="w"> </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">5</span><span class="p">;</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_terminate_backend</span><span class="p">(</span><span class="o">&lt;</span><span class="n">pid_bloccante</span><span class="o">&gt;</span><span class="p">);</span><span class="w">   </span><span class="c1">-- oppure pg_cancel_backend per cancellare solo la query</span>
 </span></code></pre></div>
-<h3 id="scenario-2-checksum-mismatch-su-migration-gia-applicata">Scenario 2 — Checksum mismatch su migration già applicata<a class="headerlink" href="#scenario-2-checksum-mismatch-su-migration-gia-applicata" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo</strong>: Flyway fallisce all'avvio con <code>Migration checksum mismatch for migration version X</code>.</p>
-<p><strong>Causa</strong>: un file di migration già eseguito in produzione è stato modificato dopo il fatto (es. correzione di un typo in uno script SQL già applicato in staging).</p>
-<p><strong>Soluzione</strong>: non modificare mai un file versionato applicato — creare una nuova migration correttiva. Se il mismatch è dovuto a un fix legittimo già concordato, allineare i checksum con <code>flyway repair</code> solo dopo aver verificato manualmente che lo schema reale è coerente.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>flyway<span class="w"> </span>repair<span class="w"> </span>-url<span class="o">=</span>jdbc:postgresql://localhost/app
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>flyway<span class="w"> </span>info<span class="w"> </span>-url<span class="o">=</span>jdbc:postgresql://localhost/app<span class="w">   </span><span class="c1"># verificare stato dopo il repair</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1">-- MySQL</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">sys</span><span class="p">.</span><span class="n">schema_table_lock_waits</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">object_name</span><span class="o">=</span><span class="s1">'orders'</span><span class="err">\</span><span class="k">G</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="n">KILL</span><span class="w"> </span><span class="o">&lt;</span><span class="n">blocking_pid</span><span class="o">&gt;</span><span class="p">;</span>
 </span></code></pre></div>
-<h3 id="scenario-3-drift-non-rilevato-modifica-manuale-in-produzione-ignorata-dal-tool">Scenario 3 — Drift non rilevato: modifica manuale in produzione ignorata dal tool<a class="headerlink" href="#scenario-3-drift-non-rilevato-modifica-manuale-in-produzione-ignorata-dal-tool" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo</strong>: un DBA ha eseguito manualmente un <code>ALTER TABLE</code> in produzione per un fix urgente; la prossima migration applicata da golang-migrate o Flyway non fallisce, ma lo schema risultante è inconsistente con gli altri ambienti.</p>
-<p><strong>Causa</strong>: i tool versioned non fanno introspection dello stato reale — si fidano ciecamente della tabella di controllo, non verificano che lo schema corrisponda a quanto atteso.</p>
-<p><strong>Soluzione</strong>: con Atlas, eseguire <code>atlas schema inspect</code> periodicamente (o in CI) e confrontare con lo schema dichiarato per rilevare drift; con Flyway/golang-migrate, introdurre un controllo esterno (script di introspection schedulato) perché il drift detection non è nativo.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>atlas<span class="w"> </span>schema<span class="w"> </span>inspect<span class="w"> </span>--url<span class="w"> </span><span class="s2">"postgres://app:***@prod-host:5432/app"</span><span class="w"> </span>&gt;<span class="w"> </span>/tmp/prod-actual.hcl
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>diff<span class="w"> </span>/tmp/prod-actual.hcl<span class="w"> </span>schema.hcl<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"no drift"</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"DRIFT RILEVATO"</span>
+<p>Poi riprova con <code>lock_timeout</code>/<code>lock_wait_timeout</code> brevi, così il prossimo tentativo non genera più la coda.</p>
+<h3 id="gh-ost-il-cut-over-non-avviene-resta-in-attesa">gh-ost: il cut-over non avviene / resta in attesa<a class="headerlink" href="#gh-ost-il-cut-over-non-avviene-resta-in-attesa" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: la copia è al 100% ma il log mostra <code>Waiting for postpone-cut-over-flag-file</code> oppure ripetuti <code>Cut-over failed</code> / <code>Lock wait timeout exceeded</code> / <code>cut-over lock timeout</code>.
+<strong>Causa</strong>: (1) è presente il file <code>--postpone-cut-over-flag-file</code> (comportamento voluto); (2) transazioni lunghe sulla tabella impediscono a gh-ost di prendere il lock di cut-over entro <code>--cut-over-lock-timeout-seconds</code>.
+<strong>Soluzione</strong>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>rm<span class="w"> </span>/tmp/ghost.postpone.flag<span class="w">                       </span><span class="c1"># (1) dai il via al cut-over</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># (2) trova transazioni lunghe e liberale</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>mysql<span class="w"> </span>-e<span class="w"> </span><span class="s2">"SELECT trx_mysql_thread_id, trx_started FROM information_schema.innodb_trx ORDER BY trx_started LIMIT 5;"</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"unpostpone"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>-U<span class="w"> </span>/tmp/gh-ost.shop.orders.sock<span class="w">   </span><span class="c1"># equivalente a rimuovere il flag</span>
 </span></code></pre></div>
-<h3 id="scenario-4-migration-not-null-fallisce-su-tabella-con-dati-esistenti">Scenario 4 — Migration NOT NULL fallisce su tabella con dati esistenti<a class="headerlink" href="#scenario-4-migration-not-null-fallisce-su-tabella-con-dati-esistenti" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo</strong>: <code>ALTER TABLE users ADD COLUMN status VARCHAR(20) NOT NULL</code> fallisce con <code>column "status" contains null values</code> (o equivalente) su una tabella già popolata, indipendentemente dal tool usato.</p>
-<p><strong>Causa</strong>: aggiungere una colonna NOT NULL senza <code>DEFAULT</code> su una tabella con righe esistenti lascia quelle righe senza un valore da assegnare — il vincolo NOT NULL rifiuta l'operazione.</p>
-<p><strong>Soluzione</strong>: fornire sempre un <code>DEFAULT</code> nella stessa DDL (come negli esempi sopra), oppure — se il default non è accettabile a lungo termine — dividere in tre migration: aggiungi colonna nullable, backfill dei dati esistenti, poi aggiungi il vincolo NOT NULL in una migration successiva (pattern expand &amp; contract).</p>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1">-- Migration 1: colonna nullable</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="k">ADD</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">);</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1">-- Migration 2: backfill (fuori transazione DDL se la tabella è grande, in batch)</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="k">UPDATE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'active'</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span><span class="p">;</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1">-- Migration 3: vincolo, solo dopo che il backfill è confermato completo</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">users</span><span class="w"> </span><span class="k">ALTER</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">;</span>
+<p>gh-ost ritenta il cut-over automaticamente (<code>--default-retries</code>, 60 per default); aumenta il timeout solo se il traffico lo consente.</p>
+<h3 id="replica-lag-che-esplode-durante-losc-il-backfill">Replica lag che esplode durante l'OSC / il backfill<a class="headerlink" href="#replica-lag-che-esplode-durante-losc-il-backfill" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>Seconds_Behind_Source</code> (MySQL) o <code>replay_lag</code> (PostgreSQL) in crescita costante, letture stantie dalle repliche, alert di lag.
+<strong>Causa</strong>: chunk troppo grandi → transazioni grandi da riapplicare in modo seriale sulla replica (anche con replica parallela); <code>ALGORITHM=INPLACE</code> rebuild che genera binlog enorme.
+<strong>Soluzione</strong>: riduci i chunk e attiva il throttling basato su lag.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"chunk-size=250"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>-U<span class="w"> </span>/tmp/gh-ost.shop.orders.sock
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"max-lag-millis=1000"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>-U<span class="w"> </span>/tmp/gh-ost.shop.orders.sock
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="nb">echo</span><span class="w"> </span>throttle<span class="w"> </span><span class="p">|</span><span class="w"> </span>nc<span class="w"> </span>-U<span class="w"> </span>/tmp/gh-ost.shop.orders.sock<span class="w">   </span><span class="c1"># pausa se necessario, riprendi con no-throttle</span>
 </span></code></pre></div>
+<p>Per i backfill SQL riduci <code>LIMIT</code>, aumenta la pausa e usa il controllo lag del loop mostrato sopra. Per replica MySQL vedi <a href="../../mysql/architettura-replicazione/">Architettura e replicazione MySQL</a>.</p>
+<h3 id="gh-ost-pt-osc-rifiutano-la-tabella-foreign-key-trigger-niente-pk">gh-ost / pt-osc rifiutano la tabella (foreign key, trigger, niente PK)<a class="headerlink" href="#gh-ost-pt-osc-rifiutano-la-tabella-foreign-key-trigger-niente-pk" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: gh-ost esce con <code>FOREIGN KEY constraints are not supported</code> oppure <code>Triggers found on table</code>; <code>No shared unique key can be found after ALTER</code> quando l'alter rimuove la PK/unique key usata per la copia.
+<strong>Causa</strong>: limiti architetturali di gh-ost (niente FK/trigger; serve una unique key condivisa tra tabella originale e ghost).
+<strong>Soluzione</strong>: usa pt-osc con <code>--alter-foreign-keys-method=rebuild_constraints</code>, oppure expand/contract applicativo; assicura sempre una PK sulla tabella <em>prima</em> di avviare l'OSC (aggiungila con una migration separata). Non fare mai un <code>ALTER</code> che droppa l'unica unique key e ne crea una nuova nella stessa operazione.</p>
+<h3 id="indice-invalid-dopo-create-index-concurrently-fallito">Indice INVALID dopo CREATE INDEX CONCURRENTLY fallito<a class="headerlink" href="#indice-invalid-dopo-create-index-concurrently-fallito" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>ERROR: deadlock detected</code> / <code>could not create unique index ... Key (...) is duplicated</code> durante <code>CREATE INDEX CONCURRENTLY</code>; in <code>\d tabella</code> l'indice compare con <code>INVALID</code>; le scritture sono rallentate ma l'indice non è usato dal planner.
+<strong>Causa</strong>: il build concorrente è stato interrotto (cancel, timeout, duplicati per indice unique, deadlock). L'indice resta nel catalogo, mantenuto a ogni scrittura ma inutilizzabile.
+<strong>Soluzione</strong>:</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">indexrelid</span><span class="p">::</span><span class="n">regclass</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">pg_index</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="n">indisvalid</span><span class="p">;</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="k">DROP</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">CONCURRENTLY</span><span class="w"> </span><span class="n">idx_orders_customer_id</span><span class="p">;</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1">-- Per unique: risolvi prima i duplicati</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">external_ref</span><span class="p">,</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">HAVING</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">CONCURRENTLY</span><span class="w"> </span><span class="n">idx_orders_customer_id</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">orders</span><span class="w"> </span><span class="p">(</span><span class="n">customer_id</span><span class="p">);</span>
+</span></code></pre></div>
+<p>Per ricostruire un indice esistente usa <code>REINDEX INDEX CONCURRENTLY</code> (PG12+). Vedi anche <a href="../indici/">Indici</a>.</p>
+<h3 id="alter-add-column-default-riscrive-la-tabella-in-postgresql">ALTER ... ADD COLUMN DEFAULT riscrive la tabella in PostgreSQL<a class="headerlink" href="#alter-add-column-default-riscrive-la-tabella-in-postgresql" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: un <code>ADD COLUMN</code> che doveva essere istantaneo tiene <code>ACCESS EXCLUSIVE</code> per minuti, WAL in forte crescita.
+<strong>Causa</strong>: il default è <strong>volatile</strong> (<code>gen_random_uuid()</code>, <code>random()</code>, <code>clock_timestamp()</code>) oppure la versione è &lt; PG11: serve valutare il default riga per riga e riscrivere la tabella.
+<strong>Soluzione</strong>: aggiungi la colonna nullable senza default, imposta il default solo per le nuove righe (<code>ALTER COLUMN ... SET DEFAULT</code>), esegui il backfill a batch e infine applica <code>NOT NULL</code> via CHECK <code>NOT VALID</code> + <code>VALIDATE</code>.</p>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
-<summary>Init Container Pattern — Dove girano le migration in Kubernetes</summary>
-<p>Come eseguire le migration prima che il pod applicativo si avvii, e perché serve idempotenza quando l'init container può ripartire.</p>
-<p><strong>Approfondimento completo →</strong> <a href="../../../dev/integrazioni/database-patterns/">Database Patterns</a></p>
+<summary>Schema Migrations — i tool di versioning</summary>
+<p>Flyway, Liquibase, Atlas e golang-migrate decidono <em>quali</em> script applicare e in che ordine; non rendono il DDL non bloccante. Le tecniche di questa pagina si scrivono <em>dentro</em> le migration (con <code>lock_timeout</code>, <code>CONCURRENTLY</code>, <code>NOT VALID</code>).</p>
+<p><strong>Approfondimento completo →</strong> <a href="../schema-migrations/">Schema Migrations</a></p>
 </details>
 <details class="info">
-<summary>Transazioni e Concorrenza — Perché il locking conta</summary>
-<p>DDL transazionale, advisory lock e perché MySQL si comporta diversamente da PostgreSQL durante una migration fallita a metà.</p>
+<summary>Indici — creazione e manutenzione</summary>
+<p>Struttura degli indici, <code>REINDEX CONCURRENTLY</code> e gestione di indici invalidi o gonfi.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../indici/">Indici</a></p>
+</details>
+<details class="info">
+<summary>Transazioni e Concorrenza — lock e isolation</summary>
+<p>Il modello di lock che sta alla base della lock queue, deadlock e transazioni lunghe.</p>
 <p><strong>Approfondimento completo →</strong> <a href="../transazioni-concorrenza/">Transazioni e Concorrenza</a></p>
 </details>
 <details class="info">
-<summary>GitOps — Migration come parte del deployment dichiarativo</summary>
-<p>Come integrare l'esecuzione delle migration in una pipeline GitOps (Argo CD) senza rompere la sincronizzazione dichiarativa.</p>
-<p><strong>Approfondimento completo →</strong> <a href="../../../ci-cd/gitops/argocd/">Argo CD</a></p>
+<summary>MVCC e VACUUM — bloat e pg_repack</summary>
+<p>Perché le tabelle PostgreSQL si gonfiano e quando serve riscriverle online.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../../postgresql/mvcc-vacuum/">MVCC e VACUUM</a></p>
+</details>
+<details class="info">
+<summary>Replicazione MySQL — impatto del lag</summary>
+<p>Binlog ROW, replica parallela e lag: prerequisiti e vincoli di gh-ost.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../../mysql/architettura-replicazione/">Architettura e replicazione MySQL</a></p>
+</details>
+<details class="info">
+<summary>Major Version Upgrade PostgreSQL</summary>
+<p>Le stesse tecniche expand/contract e lock-queue si applicano alle migration eseguite prima/dopo un upgrade di versione.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../../postgresql/major-version-upgrade/">Major Version Upgrade</a></p>
 </details>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="https://atlasgo.io/docs">Atlas — Documentazione ufficiale</a></li>
-<li><a href="https://documentation.red-gate.com/fd">Flyway — Documentazione ufficiale</a></li>
-<li><a href="https://docs.liquibase.com/">Liquibase — Documentazione ufficiale</a></li>
-<li><a href="https://github.com/golang-migrate/migrate">golang-migrate — GitHub</a></li>
-<li><a href="https://martinfowler.com/articles/evodb.html">Evolutionary Database Design — Martin Fowler</a></li>
+<li><a href="https://www.postgresql.org/docs/current/sql-altertable.html">PostgreSQL — ALTER TABLE (lock e rewrite)</a></li>
+<li><a href="https://www.postgresql.org/docs/current/explicit-locking.html">PostgreSQL — Explicit Locking</a></li>
+<li><a href="https://www.postgresql.org/docs/current/sql-createindex.html#SQL-CREATEINDEX-CONCURRENTLY">PostgreSQL — CREATE INDEX CONCURRENTLY</a></li>
+<li><a href="https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html">MySQL 8.0 — Online DDL Operations</a></li>
+<li><a href="https://github.com/github/gh-ost">gh-ost — GitHub</a> (doc: <code>doc/</code> — command-line-flags, cheatsheet, requirements-and-limitations)</li>
+<li><a href="https://docs.percona.com/percona-toolkit/pt-online-schema-change.html">Percona Toolkit — pt-online-schema-change</a></li>
+<li><a href="https://reorg.github.io/pg_repack/">pg_repack</a></li>
+<li><a href="https://github.com/xataio/pgroll">pgroll — Xata</a></li>
+<li><a href="https://github.com/block/spirit">Spirit — Block / Cash App</a></li>
+<li><a href="https://vitess.io/docs/user-guides/schema-changes/">Vitess — Online DDL</a></li>
 </ul>
 
 
