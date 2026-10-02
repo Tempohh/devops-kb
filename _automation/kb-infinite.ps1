@@ -29,7 +29,7 @@ if (Test-Path $LockFile) {
     $existingPid = Get-Content $LockFile -ErrorAction SilentlyContinue
     if ($existingPid -match '^\d+$') {
         $existingProcess = Get-Process -Id ([int]$existingPid) -ErrorAction SilentlyContinue
-        if ($existingProcess) {
+        if ($existingProcess -and $existingProcess.ProcessName -match '^(pwsh|powershell)$') {
             Write-Host ""
             Write-Host "  *** KB Update e' gia' in esecuzione (PID $existingPid) ***" -ForegroundColor Red
             Write-Host "  Chiudi prima quella finestra, poi rilancia questo script." -ForegroundColor Yellow
