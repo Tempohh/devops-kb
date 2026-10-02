@@ -1,0 +1,34 @@
+id: prop-136
+title: "Renovate e Dependabot: automazione aggiornamento dipendenze"
+type: new-file
+priority: medium
+target_file: docs/ci-cd/tools/renovate-dependency-updates.md
+effort: medium
+description: |
+  Guida operativa all'aggiornamento automatico delle dipendenze con Renovate
+  (self-hosted e Mend app) e confronto con Dependabot.
+  Sezioni: architettura (platform, datasource, manager, versioning), renovate.json
+  con presets (config:recommended), packageRules per grouping e automerge,
+  schedule e prConcurrentLimit, pinDigests per immagini Docker e GitHub Actions
+  (SHA pinning), custom regex manager per versioni in Dockerfile/Helm values/
+  Terraform provider (required_providers) e .tool-versions.
+  Pratica: onboarding PR, dependency dashboard issue, regole per major vs minor,
+  minimumReleaseAge contro supply-chain attack, integrazione con CI (automerge
+  solo se check verdi), esecuzione self-hosted via GitHub Action/CronJob K8s con
+  renovate/renovate image, config per monorepo.
+  Troubleshooting: PR flood, rate limit API, lockfile non aggiornato, log con
+  LOG_LEVEL=debug e renovate-config-validator.
+  Relazioni: github-actions/enterprise (SHA pinning), security/supply-chain,
+  gitops/argocd e flux (aggiornamento tag immagine), terraform.
+rationale: |
+  Oggi Renovate compare solo come commento in github-actions/enterprise.md:303.
+  Il tema e' trasversale (container, Helm, Terraform, Actions) e oggi non ha
+  una pagina dedicata; la KB spiega SHA pinning ma non come mantenerli aggiornati.
+utility_test:
+  reader: "DevOps/platform engineer che gestisce decine di repo con pin di versioni e digest"
+  scenario: "Ha pinnato immagini, Actions e provider Terraform ma gli aggiornamenti restano manuali e i pin invecchiano, accumulando CVE"
+  outcome: "Configura Renovate con grouping, automerge condizionato e minimumReleaseAge, e lo esegue self-hosted"
+  without_kb: "Leggere la documentazione Renovate (molto estesa, preset e manager sparsi) e dedurre da soli le policy sicure"
+  score: medium
+tags: [renovate, dependabot, dependency-management, supply-chain, automation]
+last_analyzed: 2026-10-02
