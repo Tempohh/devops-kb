@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-10-02T16:36:36.963400+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 1042
+total_ops: 1045
 total_runs: 492
 queue:
 - id: W-001
@@ -6468,6 +6468,63 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '703'
+  type: new_topic
+  path: docs/monitoring/tools/cardinality-cost-management.md
+  category: monitoring
+  priority: P1
+  status: pending
+  reason: "Nuovo file su gestione della cardinalità e del costo delle metriche in uno\nstack Prometheus/Thanos/Mimir/VictoriaMetrics\
+    \ a scala. Struttura suggerita:\n- Cos'è la cardinalità (serie = metrica x combinazione label), perché esplode\n  (label\
+    \ ad alta varianza: user_id, pod_name con suffisso random, trace_id\n  usato come label, path HTTP non normalizzato)\n\
+    - Comandi diagnostici reali: `topk` su `prometheus_tsdb_symbol_table_size_bytes`,\n  `count by (__name__)({__name__=~\"\
+    .+\"})`, `/api/v1/status/tsdb` per\n  top-10 metriche/label per cardinalità, `promtool tsdb analyze`\n- Mitigazioni concrete:\
+    \ `metric_relabel_configs` con `drop`/`labeldrop`,\n  aggregazione via recording rules prima del remote_write, limiti\n\
+    \  `sample_limit`/`label_limit` sugli scrape config, OTel Collector\n  `transform`/`filter` processor per normalizzare\
+    \ path ad alta cardinalità\n- Impatto costo: relazione serie attive → memoria head block → costo\n  storage long-term\
+    \ (Thanos object storage, Mimir/VictoriaMetrics\n  ingestion pricing), come stimare il costo di una nuova label prima\
+    \ di\n  aggiungerla in produzione\n- Governance: policy di review per nuove metriche/label (checklist PR),\n  alert su\
+    \ crescita anomala di cardinalità (`scrape_series_added`,\n  `prometheus_tsdb_head_series`)\nMinimo 150 righe, almeno\
+    \ 2 code-block comandi/PromQL, sezione Troubleshooting\ncon sintomi reali (OOM del Prometheus, remote_write che satura\
+    \ la rete,\nbollette cloud monitoring inattese).\n"
+  proposal_id: prop-125
+- id: '704'
+  type: new_topic
+  path: docs/monitoring/tools/synthetic-monitoring.md
+  category: monitoring
+  priority: P2
+  status: pending
+  reason: "Nuovo file sul monitoraggio sintetico (black-box) come complemento ai tre\npilastri già documentati (metriche/log/tracce,\
+    \ tutti \"white-box\" interni al\nsistema). Struttura suggerita:\n- Perché serve: white-box monitoring misura cosa succede\
+    \ dentro il sistema,\n  ma non rileva un load balancer/DNS/CDN rotto davanti all'app, o un\n  endpoint pubblico irraggiungibile\
+    \ da fuori la rete interna\n- Blackbox Exporter (Prometheus): configurazione moduli http_2xx, tcp_connect,\n  dns, icmp;\
+    \ esempio `blackbox.yml` con probe su endpoint pubblico +\n  validazione certificato TLS in scadenza; integrazione con\
+    \ Prometheus via\n  `relabel_configs` (pattern \"probe as a target\")\n- Grafana Cloud Synthetic Monitoring / Checkly\
+    \ / Playwright scheduled script\n  come alternative per scenari multi-step (login + checkout, non solo un\n  singolo GET)\n\
+    - Differenza con i canary deployment check (Flagger/Argo Rollouts) già\n  presenti in CI/CD: synthetic monitoring gira\
+    \ in continuo in produzione,\n  non solo durante un rollout\n- Alerting specifico: soglie diverse da un alert interno\
+    \ (es. 3 region\n  diverse devono fallire prima di alertare, per escludere problemi di rete\n  locale del probe)\nMinimo\
+    \ 150 righe, almeno 2 code-block (config blackbox exporter + query\nPromQL/alerting rule), sezione Troubleshooting su\
+    \ falsi positivi comuni\n(probe region con problemi di rete propri, certificati self-signed interni).\n"
+  proposal_id: prop-126
+- id: '705'
+  type: expand
+  path: docs/iac/crossplane/fondamentali.md
+  category: iac
+  priority: P2
+  status: pending
+  reason: "Estendere fondamentali.md (o, se la sezione cresce troppo, creare\n`iac/crossplane/testing.md` collegato dall'_index)\
+    \ con una sezione sul\ntesting delle Composition/XRD prima del merge, colmando il gap segnalato\ndal file stesso nel warning\
+    \ \"Composition come single point of failure\norganizzativo — trattarla come un'API pubblica... test automatici prima\n\
+    del merge\" senza però spiegare COME farlo. Struttura suggerita:\n- `crossplane render`: comando per validare offline\
+    \ l'output di una\n  Composition senza applicarla al cluster (dry-run completo di\n  claim+composition+function-pipeline)\n\
+    - Chainsaw (kyverno-chainsaw) o kuttl per test end-to-end: applicare un\n  claim in un cluster kind/k3d ephemeral e asserire\
+    \ sullo stato delle\n  Managed Resource generate\n- Esempio pipeline CI (GitHub Actions) che fa `crossplane render` su\
+    \ ogni PR\n  che tocca `compositions/`, bloccando il merge se l'output cambia in modo\n  non documentato (snapshot diff)\n\
+    - Differenza con Molecule (Ansible, già documentato in\n  iac/ansible/roles-collections.md): Molecule testa convergenza/idempotenza\n\
+    \  su VM, Chainsaw/crossplane render testano la generazione dichiarativa di\n  manifest Kubernetes\nMinimo 5 righe aggiuntive\
+    \ sostanziali (non un trafiletto), con almeno 1\ncode-block comando `crossplane render` e 1 esempio YAML Chainsaro/CI.\n"
+  proposal_id: prop-127
 completed:
 - id: '688'
   path: docs/cloud/gcp/fondamentali/panoramica.md
