@@ -22,5 +22,6 @@ In un'architettura enterprise, audit e compliance non sono optional post-hoc —
 <div class="grid cards" markdown>
 
 - **[Audit Logging e Runtime Security](audit-logging.md)** — Audit trail strutturato, Falco per runtime security, SIEM, Kubernetes audit log
+- **[CIS Benchmarks e Compliance Scanning](cis-benchmarks-compliance-scanning.md)** — Hardening misurabile con kube-bench, OpenSCAP (CIS/STIG) e Chef InSpec, gate in CI/CD
 
 </div>
