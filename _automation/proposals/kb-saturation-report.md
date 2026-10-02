@@ -71,3 +71,13 @@ a #721 (stesso giorno), nessuna modifica rilevante alla KB nel frattempo; focus
 `ai/` + `security/runtime` gia' esaurito in #721. Nessun gap `score: high` identificato
 -> **zero proposte**. Non letti 10 file (PASSO 2): nessuna novita' da analizzare.
 Prossima sessione: non prima di 2026-10-09; focus `iac/` o `databases/` (rotazione).
+
+## Aggiornamento sessione #724
+
+Gate: file_count 328, target 330, headroom 2, over_target false. `pending/` vuota.
+Conteggi per categoria invariati rispetto a #723 (ci-cd 22, ai 20 includono hub).
+Sessione ravvicinata (stesso giorno 2026-10-02), nessun cambiamento nella KB
+dopo #723 e nessun gap `score: high` -> **zero proposte**. Non letti 10 file
+(PASSO 2): nulla di nuovo da analizzare. Focus: nessuno nuovo (rotazione `iac/`/
+`databases/` indicata da #723, non esplorata per headroom minimo).
+Prossima sessione: non prima di 2026-10-09; focus `iac/` o `databases/`.
