@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-10-02T23:22:48.318312+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 1093
+total_ops: 1094
 total_runs: 518
 queue:
 - id: W-001
@@ -6827,6 +6827,36 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '728'
+  type: new_topic
+  path: docs/databases/postgresql/major-version-upgrade.md
+  category: databases
+  priority: P2
+  status: pending
+  reason: 'Guida operativa al major upgrade di PostgreSQL (es. 15 -> 17) senza sorprese.
+
+    Struttura: (1) confronto strategie: pg_dump/restore, pg_upgrade (--link/--clone/--check),
+
+    logical replication blue/green (publication/subscription, sequenze da sincronizzare a mano,
+
+    DDL non replicato, large object), managed (RDS/Aurora blue/green deployments, Cloud SQL DMA).
+
+    (2) Checklist pre-upgrade: pg_upgrade --check, compatibilita'' estensioni (PostGIS, pgvector,
+
+    timescaledb), cambi di default tra versioni (password_encryption, collation/ICU, glibc),
+
+    repliche slot e prepared transactions. (3) Post-upgrade: vacuumdb --analyze-in-stages perche''
+
+    pg_upgrade non porta le statistiche, REINDEX per cambi collation, update_extensions.
+
+    (4) Rollback plan e tempi di downtime attesi per ciascuna strategia.
+
+    (5) Upgrade su Kubernetes (CloudNativePG import/in-place) con rimando a db-su-kubernetes.
+
+    Esempi con comandi reali e script di cutover con verifica del lag LSN.
+
+    '
+  proposal_id: prop-138
 completed:
 - id: '714'
   path: _automation/proposals
