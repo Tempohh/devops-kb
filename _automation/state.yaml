@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-10-02T17:21:04.189851+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 1066
+total_ops: 1067
 total_runs: 504
 queue:
 - id: W-001
@@ -6652,6 +6652,24 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '715'
+  type: new_topic
+  path: docs/containers/kubernetes/backup-disaster-recovery.md
+  category: containers
+  priority: P1
+  status: pending
+  reason: "Guida operativa al backup/restore di cluster Kubernetes, oggi assente (Velero ha 0 file\ndedicati nella KB, solo\
+    \ 1 riga in una config di audit; etcd backup solo accennato in\narchitettura.md).\nStruttura suggerita:\n- Cosa va protetto:\
+    \ stato etcd, risorse API (manifest/CRD), PersistentVolume, secret\n  e dati applicativi; perché GitOps NON sostituisce\
+    \ il backup di PV e stato.\n- etcd: `etcdctl snapshot save/status/restore`, certificati, frequenza, restore su\n  cluster\
+    \ kubeadm vs managed (EKS/AKS/GKE non espongono etcd: cosa cambia).\n- Velero: installazione (`velero install` + plugin\
+    \ AWS/Azure/GCP/CSI), `Backup`,\n  `Schedule`, `Restore`, `BackupStorageLocation`, TTL, hook pre/post (fsfreeze,\n  pg_start_backup),\
+    \ CSI snapshot vs file-system backup (Kopia), restore parziale\n  e remapping di namespace/storage class.\n- Consistenza\
+    \ applicativa per database su K8s (rimando a db-su-kubernetes e backup-pitr).\n- Pattern DR: RPO/RTO, cluster warm/cold\
+    \ standby, restore cross-region, test periodico\n  di restore (game day), runbook.\n- Troubleshooting: backup `PartiallyFailed`,\
+    \ volumi non snapshottati, restore che\n  lascia PVC in Pending, drift di versione API/CRD, secret credenziali BSL.\n\
+    Esempi concreti con comandi reali e manifest YAML per Schedule e hook.\n"
+  proposal_id: prop-133
 completed:
 - id: '700'
   path: docs/databases/kubernetes-cloud/managed-databases.md
