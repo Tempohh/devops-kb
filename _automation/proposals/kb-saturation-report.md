@@ -81,3 +81,12 @@ dopo #723 e nessun gap `score: high` -> **zero proposte**. Non letti 10 file
 (PASSO 2): nulla di nuovo da analizzare. Focus: nessuno nuovo (rotazione `iac/`/
 `databases/` indicata da #723, non esplorata per headroom minimo).
 Prossima sessione: non prima di 2026-10-09; focus `iac/` o `databases/`.
+
+## Aggiornamento sessione #725
+
+Gate: file_count 328, target 330, headroom 2, over_target false. `pending/` vuota.
+Ultimo commit di contenuto in `docs/` (new_topic #720) precedente a #721-#724; KB invariata
+da allora, nessun gap `score: high` -> **zero proposte**. Non letti 10 file (PASSO 2):
+nulla di nuovo da analizzare (`py` usato al posto di `python`, alias Store non funzionante).
+Focus: nessuno nuovo; rotazione `iac/`/`databases/` non esplorata per headroom minimo.
+Prossima sessione: non prima di 2026-10-09; focus `iac/` o `databases/`.
