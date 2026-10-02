@@ -121,3 +121,12 @@ Non letti 10 file (PASSO 2): analisi limitata a gate + report precedente, nulla 
 Focus: nessuno nuovo; residuo rotazione `iac/ansible` non esplorato per saturazione.
 Prossima sessione: non prima di 2026-10-09; solo proposte `currency`/`consolidate`/`review`
 o `new-file` high; focus `iac/ansible`.
+
+## Aggiornamento sessione #732 (2026-10-03)
+
+Gate (via `py`): file_count 330, target 330, headroom 0, over_target **true**. `pending/` vuota.
+Ultimo commit in `docs/` e' new_topic #730, gia' analizzato in #731; nessuna modifica KB da allora.
+Nessun `new-file` `score: high` con gap esplicito -> **zero proposte**. Non letti 10 file
+(PASSO 2): nulla di nuovo da valutare. Focus: nessuno nuovo; residuo rotazione `iac/ansible`
+non esplorato per saturazione. Prossima sessione: non prima di 2026-10-09; solo
+`currency`/`consolidate`/`review` o `new-file` high.
