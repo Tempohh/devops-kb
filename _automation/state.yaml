@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-10-02T17:12:15.281644+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 1060
+total_ops: 1062
 total_runs: 501
 queue:
 - id: W-001
@@ -6603,6 +6603,48 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '712'
+  type: new_topic
+  path: docs/security/compliance/cis-benchmarks-compliance-scanning.md
+  category: security
+  priority: P1
+  status: pending
+  reason: "Nuovo file nella categoria `security/compliance`, che oggi contiene SOLO\n`audit-logging.md` (ricostruzione post-hoc)\
+    \ ma nessun contenuto su hardening\npreventivo misurabile contro baseline riconosciute. Struttura suggerita:\n- Differenza\
+    \ concettuale vs OPA (`security/autorizzazione/opa.md`): OPA\n  valuta policy a runtime/admission-time, i CIS Benchmark\
+    \ valutano\n  configurazione statica di nodi/cluster contro una baseline pubblicata\n  (CIS Kubernetes Benchmark, CIS\
+    \ Distribution Independent Benchmark).\n- `kube-bench`: installazione (DaemonSet/Job one-shot), mapping dei check\n  (`node.yaml`,\
+    \ `master.yaml`, `etcd.yaml`), esempio di output e lettura dei\n  risultati PASS/FAIL/WARN, automazione in CronJob + export\
+    \ verso\n  Prometheus/Grafana (già menzionato en passant in\n  `monitoring/tools/prometheus-scalabilita.md` — qui va il\
+    \ contenuto primario).\n- `OpenSCAP` / `oscap`: scansione SCAP di host Linux (RHEL/Ubuntu), profili\n  DISA STIG vs CIS,\
+    \ generazione report HTML, `oscap-docker` per immagini\n  container.\n- `Chef InSpec`: profili dichiarativi riusabili,\
+    \ differenza da OpenSCAP\n  (linguaggio Ruby DSL portabile multi-piattaforma vs XML SCAP), esempio di\n  profilo InSpec\
+    \ minimale, integrazione in pipeline CI/CD come gate (link a\n  `ci-cd/strategie/pipeline-security.md` che già cita compliance-as-code\
+    \ in\n  passing ma senza strumenti concreti).\n- Tabella comparativa: kube-bench (solo k8s) vs OpenSCAP (OS-level, STIG)\n\
+    \  vs InSpec (multi-target, DSL custom) — quando usare cosa.\n- Sezione Troubleshooting: falsi positivi comuni (es. kube-bench\
+    \ su cluster\n  managed EKS/GKE dove il control plane non è ispezionabile — richiede\n  profilo `--benchmark eks-1.0`\
+    \ dedicato), remediation automatica vs manuale.\n"
+  proposal_id: prop-131
+- id: '713'
+  type: new_topic
+  path: docs/security/autenticazione/saml-ldap-enterprise-sso.md
+  category: security
+  priority: P2
+  status: pending
+  reason: "Nuovo file nella categoria `security/autenticazione`, che oggi copre OAuth2/OIDC,\nJWT e mTLS/SPIFFE ma non menziona\
+    \ SAML né LDAP se non di sfuggita (3 file\nnetworking li citano solo come riferimento a porte/protocolli, zero copertura\n\
+    operativa). Struttura suggerita:\n- SAML 2.0: flusso SP-initiated vs IdP-initiated, XML assertion, differenza\n  pratica\
+    \ da OIDC (XML+redirect/POST binding vs JSON+token), perché esiste\n  ancora: tool enterprise legacy (Jira/Confluence\
+    \ on-prem, alcuni ERP, VPN\n  aziendali) e requisiti di certificazione che richiedono SAML esplicitamente.\n- Configurazione\
+    \ concreta: esempio SAML su Grafana o Jenkins con IdP\n  (Keycloak come IdP SAML, Okta/Entra ID come alternative enterprise),\n\
+    \  metadata exchange, certificate rotation per firma assertion.\n- LDAP/Active Directory: bind authentication, struttura\
+    \ DN/OU, gruppi AD per\n  RBAC (collegamento a `security/autorizzazione/rbac-abac-rebac.md`), LDAPS\n  vs StartTLS, perché\
+    \ molti tool self-hosted (GitLab CE, Grafana, Vault)\n  supportano ancora LDAP come fallback quando non c'è un IdP OIDC/SAML.\n\
+    - Tabella decisionale: OIDC (default per nuovi sistemi) vs SAML (vincolo\n  enterprise/legacy) vs LDAP diretto (directory\
+    \ on-prem senza IdP federato) —\n  quando è obbligato dal contesto e non una scelta tecnica.\n- Troubleshooting: clock\
+    \ skew su assertion SAML, certificate expiry non\n  monitorato, LDAP referral chasing, differenza NTLM vs Kerberos (menzione\n\
+    \  per contestualizzare, no approfondimento separato).\n"
+  proposal_id: prop-132
 completed:
 - id: '697'
   path: docs/messaging/rabbitmq/sicurezza.md
