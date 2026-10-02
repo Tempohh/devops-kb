@@ -1,0 +1,55 @@
+id: prop-131
+title: "CIS Benchmarks e compliance scanning (kube-bench, OpenSCAP, InSpec)"
+type: new-file
+priority: high
+target_file: docs/security/compliance/cis-benchmarks-compliance-scanning.md
+effort: medium
+description: |
+  Nuovo file nella categoria `security/compliance`, che oggi contiene SOLO
+  `audit-logging.md` (ricostruzione post-hoc) ma nessun contenuto su hardening
+  preventivo misurabile contro baseline riconosciute. Struttura suggerita:
+  - Differenza concettuale vs OPA (`security/autorizzazione/opa.md`): OPA
+    valuta policy a runtime/admission-time, i CIS Benchmark valutano
+    configurazione statica di nodi/cluster contro una baseline pubblicata
+    (CIS Kubernetes Benchmark, CIS Distribution Independent Benchmark).
+  - `kube-bench`: installazione (DaemonSet/Job one-shot), mapping dei check
+    (`node.yaml`, `master.yaml`, `etcd.yaml`), esempio di output e lettura dei
+    risultati PASS/FAIL/WARN, automazione in CronJob + export verso
+    Prometheus/Grafana (già menzionato en passant in
+    `monitoring/tools/prometheus-scalabilita.md` — qui va il contenuto primario).
+  - `OpenSCAP` / `oscap`: scansione SCAP di host Linux (RHEL/Ubuntu), profili
+    DISA STIG vs CIS, generazione report HTML, `oscap-docker` per immagini
+    container.
+  - `Chef InSpec`: profili dichiarativi riusabili, differenza da OpenSCAP
+    (linguaggio Ruby DSL portabile multi-piattaforma vs XML SCAP), esempio di
+    profilo InSpec minimale, integrazione in pipeline CI/CD come gate (link a
+    `ci-cd/strategie/pipeline-security.md` che già cita compliance-as-code in
+    passing ma senza strumenti concreti).
+  - Tabella comparativa: kube-bench (solo k8s) vs OpenSCAP (OS-level, STIG)
+    vs InSpec (multi-target, DSL custom) — quando usare cosa.
+  - Sezione Troubleshooting: falsi positivi comuni (es. kube-bench su cluster
+    managed EKS/GKE dove il control plane non è ispezionabile — richiede
+    profilo `--benchmark eks-1.0` dedicato), remediation automatica vs manuale.
+rationale: |
+  La categoria compliance della KB copre solo audit trail "a posteriori" ma
+  nessun DevOps/SRE trova qui come dimostrare PROATTIVAMENTE la conformità a
+  un audit SOC2/PCI-DSS/ISO27001 (tag già presenti nel frontmatter di
+  `compliance/_index.md` ma senza contenuto a supporto). "kube-bench" e "CIS
+  benchmark" compaiono solo come menzioni sparse in 6+ file (container-runtime,
+  docker/sicurezza, aws/security/compliance-audit, ecc.) senza mai un punto di
+  riferimento centrale che spieghi come usarli operativamente end-to-end.
+utility_test:
+  reader: "SRE/DevOps mid-senior che deve preparare un cluster Kubernetes e i
+    nodi Linux sottostanti per un audit di compliance (SOC2 Type II o PCI-DSS)"
+  scenario: "Deve dimostrare hardening misurabile e continuo, non solo policy
+    scritte — l'auditor chiede evidenza di scansioni periodiche contro una
+    baseline riconosciuta (CIS)"
+  outcome: "Dopo aver letto il file, sa deployare kube-bench come CronJob,
+    interpretare l'output, scegliere tra OpenSCAP e InSpec per l'OS-level
+    scanning, e integrare un gate di compliance in pipeline CI/CD"
+  without_kb: "Dovrebbe leggere il PDF CIS Kubernetes Benchmark (300+ pagine),
+    la doc GitHub di kube-bench, la doc OpenSCAP e i quickstart InSpec
+    separatamente, senza una sintesi comparativa su quando usare cosa"
+  score: high
+tags: [compliance, cis-benchmark, kube-bench, openscap, inspec, security, audit, hardening]
+last_analyzed: 2026-10-02

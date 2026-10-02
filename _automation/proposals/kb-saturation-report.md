@@ -1,86 +1,84 @@
-# KB Saturation Report — 2026-10-02 (sessione #709)
+# KB Saturation Report — 2026-10-02 (sessione #711)
 
 ## Gate meccanico
 
 ```
-file_count: 320, target: 330, over_target: false, headroom: 10, category_saturated_pct: 85, allow_zero_proposals: true
+file_count: 321, target: 330, over_target: false, headroom: 9, category_saturated_pct: 85, allow_zero_proposals: true
 ```
 
-Sotto target (headroom 10): proposte di espansione ammesse se superano il test
-di utilità. Nota di cadenza: ancora un arrivo rapido dopo #706/#707 (stessa
-settimana) — pattern già segnalato in report precedenti, non bloccante per
-questa sessione.
-
-Verificato lo stato delle proposte della sessione precedente (#706): prop-128
-(`cloud/gcp/security/kms-secret-manager.md`) risulta committata (commit
-1416785f, auto #707). prop-129 (`cloud/gcp/security/network-perimeter-detection.md`)
-risulta creata ma non ancora committata (file untracked in working tree) —
-nessuna azione richiesta in questa sessione, nessuna duplicazione.
+Sotto target (headroom 9): proposte di espansione ammesse se superano il test
+di utilità. Nota di cadenza: sessione #709 raccomandava "non prima di
+2026-10-09" — arrivata comunque in anticipo (dispatch da coda automazione,
+non controllabile da questa sessione). Verificato prima lo stato delle
+proposte precedenti: prop-130 (`messaging/pulsar/fondamentali.md`) risulta
+committata (commit a37741cd, auto #710). Nessuna proposta pendente duplicata
+in `_automation/proposals/pending/` (vuota a inizio sessione).
 
 ## Focus usato in questa sessione
 
-Il report #706 raccomandava, in caso di arrivo anticipato, di spostare il
-focus su `docs/messaging/` o `docs/containers/` (non esplorate di recente nelle
-sessioni `proposal`). Applicato: entrambe analizzate.
+Il report #709 raccomandava, in caso di arrivo anticipato, di spostare il
+focus su `docs/networking/` o `docs/security/` (non esplorate in profondità
+da più sessioni `proposal` consecutive). Applicato: entrambe analizzate, con
+enfasi su `security/` dove è emerso il gap più netto.
 
-File letti/ispezionati (10): `docs/messaging/_index.md`, `docs/messaging/kafka/*`
-(elenco strutturale, non letture complete), `docs/messaging/rabbitmq/vs-kafka.md`
-(grep), `docs/messaging/rabbitmq/features-avanzate.md`, `docs/containers/container-runtime/_index.md`
-(completo), `docs/containers/*` (elenco strutturale), `docs/iac/ansible/_index.md`,
-`docs/iac/crossplane/_index.md` + `fondamentali.md` (grep su "function"),
-`docs/databases/*` (elenco strutturale), `docs/ai/sviluppo/rag.md` +
-`docs/databases/postgresql/extensions.md` (grep su "vector/pgvector/qdrant").
+File letti/ispezionati: censimento strutturale di tutte le categorie
+(`docs/**/*.md`, conteggio per categoria principale); lettura completa di
+`docs/networking/` (elenco strutturale dei 44 file, nessuna lettura a
+campione necessaria — struttura già molto profonda); lettura completa di
+`docs/security/autenticazione/_index.md`, `docs/security/compliance/_index.md`
+e `audit-logging.md` (struttura); grep mirati su `saml`, `ldap`, `ipv6`,
+`kube-bench|cis benchmark|openscap|inspec` su tutta la KB; confronto
+`docs/security/network/zero-trust.md` vs `docs/networking/sicurezza/zero-trust.md`
+(verificato: coppia intenzionale cross-referenziata, due angolazioni diverse
+— non duplicazione, nessun gap).
 
 ## Risultato
 
-**`docs/containers/`**: maturo. `container-runtime/_index.md` copre già CRI,
-containerd, CRI-O, runc, RuntimeClass, gVisor/Kata in profondità (expert).
-Nessun gap trovato.
+**`docs/networking/`**: molto maturo (44 file, 6 sottocategorie: fondamentali,
+protocolli, load-balancing, service-mesh, kubernetes, sicurezza, api-gateway).
+Nessun gap reale trovato con score alto — IPv6 è menzionato in 7 file ma
+approfondirlo come topic standalone sarebbe simmetria formale IPv4/IPv6 senza
+un problema operativo distinto documentato (scartato).
 
-**`docs/iac/`**: Ansible (`roles-collections.md`) copre già Vault multi-ambiente,
-dynamic inventory, Molecule testing — ipotesi di gap iniziale (secrets/testing)
-smentita a lettura. Crossplane `fondamentali.md` copre già Composition Functions
-(v1.14+, pipeline, `crossplane render`) — expand recente (sessione #705) ha
-già colmato quello che sembrava un gap.
+**Gap reale trovato #1 — `docs/security/compliance/`**: la categoria contiene
+un solo file (`audit-logging.md`, ricostruzione post-hoc) nonostante il
+frontmatter dell'indice citi esplicitamente SOC2/ISO27001/PCI-DSS. Manca
+completamente l'hardening *proattivo* misurabile contro baseline riconosciute:
+"kube-bench"/"CIS benchmark" compaiono solo come menzioni sparse in 6+ file
+(container-runtime, docker/sicurezza, aws/security/compliance-audit, ecc.)
+senza mai un riferimento centrale end-to-end (kube-bench, OpenSCAP, InSpec).
 
-**Vector database / pgvector**: ipotesi di gap smentita — `docs/ai/sviluppo/rag.md`
-(Qdrant, Pinecone, Weaviate, pgvector, hybrid search, tabella comparativa) e
-`docs/databases/postgresql/extensions.md` (pgvector, HNSW/IVFFlat, troubleshooting)
-coprono il tema da entrambe le angolazioni, cross-referenziati.
-
-**Gap reale trovato — `docs/messaging/pulsar/`**: la categoria messaging
-documenta solo Kafka (56 file) e RabbitMQ (8 file). Apache Pulsar — terzo
-sistema di event-streaming più diffuso in produzione, spesso termine di
-confronto diretto con Kafka per multi-tenancy nativa e tiered storage — non
-è menzionato in **nessun** file della KB (verificato via grep ricorsivo,
-zero risultati). Non è simmetria formale: l'architettura compute/storage
-separata (broker stateless + BookKeeper) di Pulsar è concettualmente diversa
-da Kafka e genera domande operative specifiche (bookie sizing, tiered storage
-offload, subscription model key_shared) non risolvibili per analogia con i
-contenuti Kafka/RabbitMQ esistenti.
+**Gap reale trovato #2 — `docs/security/autenticazione/`**: copre OAuth2/OIDC,
+JWT, mTLS/SPIFFE ma zero contenuto operativo su SAML e LDAP/Active Directory,
+meccanismi ancora obbligatori in molti contesti enterprise/legacy (vincolo
+organizzativo, non scelta tecnica) e che compaiono nella KB solo come
+menzioni di protocollo/porta in file di networking.
 
 ## Proposte generate
 
-- **prop-130** (high, new-file) — `messaging/pulsar/fondamentali.md` (+ creazione
-  `messaging/pulsar/_index.md`, + card nella grid di `messaging/_index.md`,
-  + `pulsar` in `taxonomy.yml:messaging.subcategories`)
+- **prop-131** (high, new-file) — `security/compliance/cis-benchmarks-compliance-scanning.md`
+  (kube-bench, OpenSCAP, InSpec — colma il gap compliance proattiva vs
+  audit-logging reattivo)
+- **prop-132** (medium, new-file) — `security/autenticazione/saml-ldap-enterprise-sso.md`
+  (SAML/LDAP come vincolo enterprise, complemento a OAuth2/OIDC già coperto)
 
 ## Categorie vicine alla saturazione
 
 `docs/dev/`, `docs/ci-cd/testing/` (confermate sature, sessioni precedenti).
-`docs/containers/` e `docs/iac/` risultano mature dopo l'analisi di questa
-sessione (nessun gap reale, vedi sopra) — non formalmente sature per conteggio
-file ma senza ulteriori gap operativi individuati.
-`docs/messaging/kafka/` e `docs/messaging/rabbitmq/` maturi (56+8 file,
-coverage profonda su sicurezza, pattern, operazioni).
+`docs/containers/` e `docs/iac/` mature (confermato sessione #709).
+`docs/messaging/` matura dopo prop-130 (Pulsar aggiunto).
+`docs/networking/` risulta matura dopo l'analisi di questa sessione — nessun
+gap reale con score alto individuato.
 
 ## Categorie con gap reali
 
-`docs/messaging/pulsar/` (intera sottocategoria mancante) — vedi proposta sopra.
+`docs/security/compliance/` e `docs/security/autenticazione/` — vedi proposte
+sopra. `docs/security/` nel complesso resta la categoria con più margine
+operativo residuo tra quelle esplorate finora.
 
 ## Prossima sessione consigliata
 
-Non prima di 2026-10-09. Verificare prima l'implementazione di prop-130 e il
-commit di prop-129 (sessione #706, ancora untracked). Se arriva comunque in
-anticipo, spostare il focus su `docs/networking/` o `docs/security/` (non
-esplorate in profondità da più sessioni `proposal` consecutive).
+Non prima di 2026-10-09. Verificare prima l'implementazione di prop-131 e
+prop-132. Se arriva comunque in anticipo, continuare l'esplorazione di
+`docs/security/` (es. `autorizzazione/` oltre OPA/RBAC, o `secret-management/`
+oltre Vault/K8s secrets) prima di aprire nuove categorie.
