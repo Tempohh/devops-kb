@@ -1,0 +1,59 @@
+approved_at: '2026-10-02'
+auto_approved: true
+description: "MySQL usa un modello thread-per-connection (a differenza del process-per-connection\n\
+  di PostgreSQL, ma con costo di memoria per-thread comunque significativo sotto\n\
+  carico — ogni connessione tiene buffer di sort/join allocati finché aperta).\nA\
+  \ oggi `docs/databases/mysql/` copre solo architettura/replicazione e performance\n\
+  tuning; manca completamente il layer di pooling/proxy, mentre l'equivalente\nPostgreSQL\
+  \ (`postgresql/connection-pooling.md`, PgBouncer) esiste già.\nStruttura suggerita:\n\
+  - Perché serve un pooler: max_connections vs memoria (buffer pool vs per-thread\n\
+  \  buffers), thread_cache_size, costo di connessioni effimere da pool applicativi\n\
+  \  serverless/Lambda\n- ProxySQL: query routing (regex-based routing rule), read/write\
+  \ split su\n  topologia di replicazione (primary + replica), connection multiplexing,\n\
+  \  query cache, query rewrite, failover-aware (integrazione con Orchestrator/\n\
+  \  Group Replication per detection automatica del primary)\n- Config concreta: esempio\
+  \ `mysql_servers`, `mysql_query_rules`,\n  `mysql_replication_hostgroups` in ProxySQL\
+  \ admin interface (porta 6032)\n- Alternative: MaxScale (MariaDB), RDS Proxy per\
+  \ RDS/Aurora MySQL managed\n- Deployment pattern: sidecar vs layer centralizzato,\
+  \ HA del proxy stesso\n  (coppia ProxySQL + keepalived/VIP, o ProxySQL Cluster nativo\
+  \ da v2)\n- Troubleshooting: connection storm su riavvio pool, query rule debugging\n\
+  \  (stats_mysql_query_rules), split-brain tra ProxySQL e topologia reale\n"
+effort: medium
+id: prop-123
+last_analyzed: 2026-10-02
+priority: medium
+rationale: 'Lettore: DevOps/SRE che gestisce MySQL/MariaDB in produzione (self-managed
+  o
+
+  RDS) e deve gestire un numero di connessioni applicative che eccede quanto
+
+  MySQL regge in modo efficiente (tipico in architetture con molti pod/istanze
+
+  stateless, o migrazioni da monolite a microservizi). Oggi nella KB non trova
+
+  nulla sul tema per MySQL, mentre l''equivalente concettuale per Postgres esiste
+
+  già e stabilisce lo standard atteso di profondità per questa sezione.
+
+  '
+status: approved
+tags:
+- mysql
+- mariadb
+- proxysql
+- connection-pooling
+- database
+- high-availability
+target_file: docs/databases/mysql/connection-pooling-proxysql.md
+title: MySQL — Connection Pooling e Proxy Layer (ProxySQL)
+type: new-file
+utility_test:
+  outcome: Sceglie e configura ProxySQL (o RDS Proxy se managed) con query routing
+    read/write split sulla topologia esistente, senza riscrivere l'applicazione
+  reader: DevOps/SRE mid-senior che opera MySQL/MariaDB in produzione (self-managed
+    o RDS)
+  scenario: Troppi pod stateless aprono connessioni dirette a MySQL, max_connections
+    sotto pressione o latenza di connessione cresce sotto carico
+  score: medium
+  without_kb: Deve cercare tra documentazione ProxySQL ufficiale (dispersiva, orientata
+    a reference) e articoli sparsi per ricostruire il pattern completo di deployment+HA+routing

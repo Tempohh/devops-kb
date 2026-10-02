@@ -1,0 +1,49 @@
+approved_at: '2026-10-02'
+auto_approved: true
+description: "`last_updated: 2026-03-29` — il più vecchio tra tutti i file letti in\
+  \ questa\nsessione su iac/monitoring/databases, e il segmento \"managed database\"\
+  \ è\nquello con il ciclo di rilascio più veloce da parte dei cloud provider\n(nuove\
+  \ feature Aurora, DSQL, AlloyCB/AlloyDB Omni, Cosmos DB tier).\nVerificare in particolare\
+  \ se il file riflette ancora lo stato corrente di:\n- Amazon Aurora: eventuali novità\
+  \ post Aurora Serverless v2 già coperte\n  (es. Aurora Limitless Database per sharding\
+  \ orizzontale gestito)\n- AWS: Amazon Aurora DSQL (distributed SQL serverless, multi-region)\
+  \ se non\n  ancora menzionato — rilevante perché cambia il confronto RDS vs Aurora\n\
+  - GCP: AlloyDB / AlloyDB Omni se assenti dal confronto multi-cloud\n- Pricing/istanze:\
+  \ nomi di instance family citati (es. db.r6g vs generazioni\n  successive) ancora\
+  \ accurati\nNon riscrivere la struttura esistente: il gate è \"i fatti citati sono\
+  \ ancora\nveri e completi\", non \"serve una sezione in più\".\n"
+effort: small
+id: prop-124
+last_analyzed: 2026-10-02
+priority: medium
+rationale: 'Lettore: DevOps/platform engineer che deve scegliere tra opzioni di database
+
+  managed oggi, non nel Q1 2026. Un file di confronto multi-cloud con fatti
+
+  tecnici stale (nuove opzioni serverless/distribuite non menzionate) porta a
+
+  decisioni subottimali — è esattamente il tipo di contenuto dove la data di
+
+  verifica conta più della struttura.
+
+  '
+status: approved
+tags:
+- managed-database
+- rds
+- aurora
+- cloud-sql
+- currency
+target_file: docs/databases/kubernetes-cloud/managed-databases.md
+title: 'Currency check: Managed Databases (RDS/Aurora/Cloud SQL/Cosmos DB)'
+type: currency
+utility_test:
+  outcome: Ottiene un confronto aggiornato che include le opzioni serverless/distribuite
+    più recenti, senza scoprire dopo il fatto che mancava un'opzione rilevante
+  reader: DevOps/platform engineer che valuta un managed database per un nuovo workload
+    multi-cloud
+  scenario: Deve decidere tra RDS/Aurora, Cloud SQL/AlloyDB, Azure Database, confrontando
+    opzioni serverless/distribuite disponibili oggi
+  score: medium
+  without_kb: Deve verificare da zero sui siti dei singoli provider, perdendo il valore
+    del confronto trasversale che il file offre

@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-10-02T16:16:41.769744+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 1034
+total_ops: 1036
 total_runs: 488
 queue:
 - id: W-001
@@ -6418,6 +6418,42 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '699'
+  type: new_topic
+  path: docs/databases/mysql/connection-pooling-proxysql.md
+  category: databases
+  priority: P2
+  status: pending
+  reason: "MySQL usa un modello thread-per-connection (a differenza del process-per-connection\ndi PostgreSQL, ma con costo\
+    \ di memoria per-thread comunque significativo sotto\ncarico — ogni connessione tiene buffer di sort/join allocati finché\
+    \ aperta).\nA oggi `docs/databases/mysql/` copre solo architettura/replicazione e performance\ntuning; manca completamente\
+    \ il layer di pooling/proxy, mentre l'equivalente\nPostgreSQL (`postgresql/connection-pooling.md`, PgBouncer) esiste già.\n\
+    Struttura suggerita:\n- Perché serve un pooler: max_connections vs memoria (buffer pool vs per-thread\n  buffers), thread_cache_size,\
+    \ costo di connessioni effimere da pool applicativi\n  serverless/Lambda\n- ProxySQL: query routing (regex-based routing\
+    \ rule), read/write split su\n  topologia di replicazione (primary + replica), connection multiplexing,\n  query cache,\
+    \ query rewrite, failover-aware (integrazione con Orchestrator/\n  Group Replication per detection automatica del primary)\n\
+    - Config concreta: esempio `mysql_servers`, `mysql_query_rules`,\n  `mysql_replication_hostgroups` in ProxySQL admin interface\
+    \ (porta 6032)\n- Alternative: MaxScale (MariaDB), RDS Proxy per RDS/Aurora MySQL managed\n- Deployment pattern: sidecar\
+    \ vs layer centralizzato, HA del proxy stesso\n  (coppia ProxySQL + keepalived/VIP, o ProxySQL Cluster nativo da v2)\n\
+    - Troubleshooting: connection storm su riavvio pool, query rule debugging\n  (stats_mysql_query_rules), split-brain tra\
+    \ ProxySQL e topologia reale\n"
+  proposal_id: prop-123
+- id: '700'
+  type: currency
+  path: docs/databases/kubernetes-cloud/managed-databases.md
+  category: databases
+  priority: P2
+  status: pending
+  reason: "`last_updated: 2026-03-29` — il più vecchio tra tutti i file letti in questa\nsessione su iac/monitoring/databases,\
+    \ e il segmento \"managed database\" è\nquello con il ciclo di rilascio più veloce da parte dei cloud provider\n(nuove\
+    \ feature Aurora, DSQL, AlloyCB/AlloyDB Omni, Cosmos DB tier).\nVerificare in particolare se il file riflette ancora lo\
+    \ stato corrente di:\n- Amazon Aurora: eventuali novità post Aurora Serverless v2 già coperte\n  (es. Aurora Limitless\
+    \ Database per sharding orizzontale gestito)\n- AWS: Amazon Aurora DSQL (distributed SQL serverless, multi-region) se\
+    \ non\n  ancora menzionato — rilevante perché cambia il confronto RDS vs Aurora\n- GCP: AlloyDB / AlloyDB Omni se assenti\
+    \ dal confronto multi-cloud\n- Pricing/istanze: nomi di instance family citati (es. db.r6g vs generazioni\n  successive)\
+    \ ancora accurati\nNon riscrivere la struttura esistente: il gate è \"i fatti citati sono ancora\nveri e completi\", non\
+    \ \"serve una sezione in più\".\n"
+  proposal_id: prop-124
 completed:
 - id: '684'
   path: docs/dev/linguaggi/java-spring-boot.md
