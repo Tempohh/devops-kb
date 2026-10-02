@@ -5,11 +5,11 @@ category: iac
 tags: [crossplane, iac, kubernetes, gitops, platform-engineering, crd, control-loop, cloud]
 search_keywords: [crossplane, kubernetes-native iac, terraform via kubernetes, control loop, reconciliation, managed resource, mr, composite resource, xr, composition, xrd, compositeresourcedefinition, provider aws, provider-family, self-service infrastructure, platform engineering, crossplane vs terraform, kubectl apply infra, crd based provisioning, claim namespaced, upbound]
 parent: iac/crossplane/_index
-related: [iac/terraform/fondamentali, iac/terraform/state-management, containers/kubernetes/operators-crd, ci-cd/gitops/argocd]
+related: [iac/terraform/fondamentali, iac/terraform/state-management, containers/kubernetes/operators-crd, ci-cd/gitops/argocd, iac/ansible/roles-collections]
 official_docs: https://docs.crossplane.io/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-09-27
+last_updated: 2026-10-02
 ---
 
 # Crossplane — Fondamentali
@@ -401,6 +401,87 @@ kubectl describe database checkout-db -n team-checkout
 # Le credenziali sono in un Secret Kubernetes standard
 kubectl get secret checkout-db-conn -n team-checkout -o yaml
 ```
+
+### Testing di Composition/XRD prima del merge
+
+Il warning in [Best Practices](#best-practices) dice di trattare una Composition come un'API pubblica con "test automatici prima del merge" — ecco come farlo concretamente, su due livelli.
+
+**Livello 1 — `crossplane render` (offline, nessun cluster)**
+
+Dalla v1.14, il comando `crossplane render` compila claim + composite + function-pipeline di una Composition e stampa i Managed Resource risultanti, senza toccare alcun cluster reale. Serve a validare che il patching/function pipeline produca l'output atteso, in locale o in CI, in pochi secondi:
+
+```bash
+# render.sh — xr.yaml è l'XR di esempio, composition.yaml la Composition sotto test,
+# functions.yaml dichiara le function usate dalla pipeline (se mode: Pipeline)
+crossplane render xr.yaml composition.yaml functions.yaml > rendered-output.yaml
+
+# Diff contro uno snapshot committato: se cambia senza che il PR lo documenti, fallisce
+diff rendered-output.yaml tests/snapshots/xdatabase-aws.yaml
+```
+
+`crossplane render` non applica nulla al cluster: è equivalente concettuale di `terraform plan` con output renderizzato invece che un piano testuale, utile come gate rapido pre-merge.
+
+**Livello 2 — Chainsaw/kuttl (end-to-end, cluster ephemeral)**
+
+`crossplane render` non verifica che il provider accetti davvero i campi generati né che il reconciler converga. Per questo serve un test end-to-end: applicare il claim in un cluster kind/k3d usa-e-getta e asserire sullo stato finale delle Managed Resource. [Chainsaw](https://kyverno.github.io/chainsaw/) (dal progetto Kyverno) o il suo predecessore kuttl fanno esattamente questo, dichiarativamente:
+
+```yaml
+# chainsaw-test.yaml
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: xdatabase-aws-provisioning
+spec:
+  steps:
+    - try:
+        - apply:
+            file: database-claim.yaml
+        - assert:
+            file: assert-rdsinstance-ready.yaml   # asserisce Managed Resource Ready: True
+        - assert:
+            resource:
+              apiVersion: platform.example.org/v1alpha1
+              kind: Database
+              metadata:
+                name: checkout-db
+              status:
+                conditions:
+                  - type: Ready
+                    status: "True"
+```
+
+**Pipeline CI (GitHub Actions) — bloccare il merge su diff non documentato**
+
+```yaml
+# .github/workflows/test-compositions.yml
+on:
+  pull_request:
+    paths: ["compositions/**"]
+jobs:
+  render-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: crossplane/setup-crossplane-cli@v1
+      - name: Render e confronta con snapshot
+        run: |
+          crossplane render compositions/xdatabase/xr.yaml \
+            compositions/xdatabase/composition.yaml \
+            compositions/xdatabase/functions.yaml > /tmp/rendered.yaml
+          diff compositions/xdatabase/snapshot.yaml /tmp/rendered.yaml
+  e2e-chainsaw:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: helm/kind-action@v1
+      - run: curl -sSf https://kyverno.github.io/chainsaw/install.sh | sh
+      - run: chainsaw test compositions/xdatabase/chainsaw-test.yaml
+```
+
+Il job `render-diff` fallisce se l'output della Composition cambia senza che lo snapshot committato nel PR sia stato aggiornato consapevolmente (forza a rivedere/documentare ogni cambiamento di comportamento). Il job `e2e-chainsaw` verifica che il provider reale (in un kind effimero) accetti i campi generati e che il reconciler converga a `Ready: True`.
+
+!!! note "Differenza con Molecule (Ansible)"
+    [Molecule](../ansible/roles-collections.md) testa **convergenza e idempotenza** di un role Ansible su una VM/container: applica il role due volte e verifica che la seconda esecuzione non produca modifiche. Chainsaw/`crossplane render` testano invece la **generazione dichiarativa di manifest Kubernetes**: non c'è "seconda esecuzione" da confrontare, ma l'output di una pipeline di patching/funzioni contro uno schema atteso. Stesso principio (test automatico pre-merge di codice IaC), motore di verifica diverso perché il modello di esecuzione sottostante (convergenza imperativa vs. reconciliation dichiarativa) è diverso.
 
 ---
 
