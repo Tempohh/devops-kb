@@ -5,7 +5,7 @@ version: 2
 last_run: '2026-10-02T17:31:01.057744+00:00'
 last_run_completed: true
 interrupted_task: null
-total_ops: 1070
+total_ops: 1072
 total_runs: 506
 queue:
 - id: W-001
@@ -6677,6 +6677,44 @@ queue:
   priority: P2
   status: completed
   reason: 'Sessione di analisi strategica: generazione nuove proposte per la KB.'
+- id: '717'
+  type: new_topic
+  path: docs/iac/packer/golden-image-pipeline.md
+  category: iac
+  priority: P1
+  status: pending
+  reason: "Guida operativa a HashiCorp Packer per costruire immagini immutabili (AMI, Azure\nManaged Image / Compute Gallery,\
+    \ GCP image). Oggi la KB ha 0 file su Packer\n(grep \"packer\": nessun risultato), nonostante EC2 Auto Scaling e Terraform\n\
+    presuppongano un'immagine pronta.\nStruttura suggerita:\n- Perche' golden image vs configuration-at-boot (cloud-init/Ansible\
+    \ pull): tempi di\n  scale-out, drift, reproducibilita'; quando NON usarlo (container-first).\n- Formato HCL2: blocchi\
+    \ `packer { required_plugins }`, `source \"amazon-ebs\"`,\n  `build`, provisioner `shell`/`ansible`, post-processor `manifest`;\
+    \ comandi\n  `packer init`, `packer fmt`, `packer validate`, `packer build -var-file`.\n- Hardening e baseline: CIS benchmark\
+    \ nel provisioner, rimozione chiavi SSH/credenziali\n  temporanee, IMDSv2, cifratura EBS, copia cross-region/account con\
+    \ `ami_regions`.\n- Pipeline: build in GitHub Actions con OIDC (no chiavi statiche), scansione CVE\n  dell'immagine (Trivy/Inspector),\
+    \ tagging con commit SHA, test con\n  InSpec/Goss prima della promozione.\n- Integrazione con Terraform: `data \"aws_ami\"\
+    ` con filtro su tag, launch template\n  + ASG instance refresh per rollout, rollback sul tag precedente; HCP Packer\n\
+    \  registry per canali (channel) e revoca di immagini vulnerabili.\n- Troubleshooting: timeout SSH/WinRM, `Error waiting\
+    \ for AMI`, VPC/subnet\n  mancante, plugin non trovato dopo `packer init`.\n"
+  proposal_id: prop-134
+- id: '718'
+  type: new_topic
+  path: docs/iac/terraform/terragrunt.md
+  category: iac
+  priority: P2
+  status: pending
+  reason: "File dedicato a Terragrunt. Oggi e' trattato solo come sezione 7 di\n`iac/terraform/ci-cd.md` (circa 50 righe con\
+    \ `run-all`); 3 file lo menzionano in tutto.\nStruttura suggerita:\n- Problema risolto: duplicazione di backend/provider\
+    \ tra dev/staging/prod e tra\n  decine di root module; quando Terragrunt NON serve (workspaces, moduli + CI bastano).\n\
+    - Layout repo: `root.hcl` con `remote_state` e `generate \"provider\"`, `include`\n  (`find_in_parent_folders`), `terragrunt.hcl`\
+    \ per unit, `env.hcl`/`account.hcl`\n  con `read_terragrunt_config`.\n- Dipendenze: blocco `dependency` con `mock_outputs`\
+    \ per plan su stack vuoto,\n  `dependencies`, ordine di esecuzione e grafo (`terragrunt dag graph`).\n- CLI: `terragrunt\
+    \ run --all plan|apply` (nuova CLI redesign, sostituisce\n  `run-all` deprecato), `--filter`, `--parallelism`, `--non-interactive`;\
+    \ nota di\n  migrazione dai flag `--terragrunt-*` ai nuovi.\n- Stacks: `terragrunt.stack.hcl`, `unit`/`stack` block e\
+    \ `terragrunt stack generate`\n  per catalogare layout riusabili.\n- Integrazione con OpenTofu (`terraform_binary`/`TG_TF_PATH`),\
+    \ CI/Atlantis e\n  caching dei provider (`TG_PROVIDER_CACHE`).\n- Troubleshooting: `dependency` senza output su stato\
+    \ vuoto, lock contention\n  in parallelo, `.terragrunt-cache` obsoleta, drift tra versioni di terragrunt\n  (pin con `terragrunt_version_constraint`).\n\
+    Verificare le versioni correnti dalla documentazione ufficiale prima di scrivere\ni comandi (la CLI e' cambiata di recente).\n"
+  proposal_id: prop-135
 completed:
 - id: '702'
   path: _automation/proposals
