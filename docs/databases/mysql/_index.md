@@ -22,3 +22,6 @@ Storage engine InnoDB (buffer pool, redo/undo log, clustered index), replicazion
 
 ### [Performance Tuning e Query Optimizer](performance-tuning.md)
 EXPLAIN e EXPLAIN FORMAT=JSON, EXPLAIN ANALYZE (8.0.18+), optimizer_trace, clustered index vs secondary index lookup, algoritmi di join (nested loop, hash join da 8.0.18), tuning buffer pool InnoDB, slow query log e pt-query-digest, strategia di indicizzazione.
+
+### [Connection Pooling e Proxy — ProxySQL](connection-pooling-proxysql.md)
+Modello thread-per-connection di MySQL, ProxySQL per query routing e read/write split, connection multiplexing, integrazione failover-aware con Orchestrator/Group Replication/Galera, alternative (MaxScale, RDS Proxy), deployment HA del proxy.
