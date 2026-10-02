@@ -165,7 +165,7 @@ Documento di metadata:
 
 ### Gestione secret
 
-I secret di backend (token API, password DB) vivono **nel server**, mai nel client né nel `mcp.json`. Vedi [Vault](../security/secret-management/vault.md).
+I secret di backend (token API, password DB) vivono **nel server**, mai nel client né nel `mcp.json`. Vedi [Vault](../../security/secret-management/vault.md).
 
 ```yaml
 # ExternalSecret / Vault Agent: il Pod riceve i secret come file, non come env var committate
