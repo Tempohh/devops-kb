@@ -1,0 +1,47 @@
+id: prop-125
+title: "Gestione cardinalità e costo metriche Prometheus in produzione"
+type: new-file
+priority: high
+target_file: docs/monitoring/tools/cardinality-cost-management.md
+effort: medium
+description: |
+  Nuovo file su gestione della cardinalità e del costo delle metriche in uno
+  stack Prometheus/Thanos/Mimir/VictoriaMetrics a scala. Struttura suggerita:
+  - Cos'è la cardinalità (serie = metrica x combinazione label), perché esplode
+    (label ad alta varianza: user_id, pod_name con suffisso random, trace_id
+    usato come label, path HTTP non normalizzato)
+  - Comandi diagnostici reali: `topk` su `prometheus_tsdb_symbol_table_size_bytes`,
+    `count by (__name__)({__name__=~".+"})`, `/api/v1/status/tsdb` per
+    top-10 metriche/label per cardinalità, `promtool tsdb analyze`
+  - Mitigazioni concrete: `metric_relabel_configs` con `drop`/`labeldrop`,
+    aggregazione via recording rules prima del remote_write, limiti
+    `sample_limit`/`label_limit` sugli scrape config, OTel Collector
+    `transform`/`filter` processor per normalizzare path ad alta cardinalità
+  - Impatto costo: relazione serie attive → memoria head block → costo
+    storage long-term (Thanos object storage, Mimir/VictoriaMetrics
+    ingestion pricing), come stimare il costo di una nuova label prima di
+    aggiungerla in produzione
+  - Governance: policy di review per nuove metriche/label (checklist PR),
+    alert su crescita anomala di cardinalità (`scrape_series_added`,
+    `prometheus_tsdb_head_series`)
+  Minimo 150 righe, almeno 2 code-block comandi/PromQL, sezione Troubleshooting
+  con sintomi reali (OOM del Prometheus, remote_write che satura la rete,
+  bollette cloud monitoring inattese).
+rationale: |
+  Gap operativo trasversale ai tre pilastri già documentati (fondamentali,
+  tools, sre) ma mai coperto: la cardinalità delle metriche è la causa più
+  comune di OOM/costi fuori controllo in stack Prometheus a scala, ed è un
+  problema che emerge solo dopo mesi di produzione — non è nella
+  documentazione ufficiale Prometheus in modo operativo/pratico, è sparso tra
+  blog post di vendor (Grafana Labs, Chronosphere) con tagli diversi. La KB ha
+  già prometheus.md, prometheus-scalabilita.md (Thanos/Mimir/VictoriaMetrics)
+  e continuous-profiling.md ma nessuno affronta "quanto costa e come si
+  controlla" una volta che lo stack scala oltre un singolo cluster.
+utility_test:
+  reader: "SRE/platform engineer che gestisce uno stack Prometheus+Thanos multi-cluster già in produzione"
+  scenario: "Il bill del vendor di storage long-term (o la memoria del Prometheus locale) cresce senza una causa ovvia, e deve capire quali metriche/label tagliare senza rompere dashboard e alert esistenti"
+  outcome: "Sa diagnosticare quali metriche/label causano la cardinalità più alta, applicare relabeling/aggregazione mirata, e mettere in piedi una policy di review per prevenire regressioni future"
+  without_kb: "Dovrebbe cercare tra più blog post vendor-specific (Grafana Labs, Chronosphere, Last9) con terminologia e tool diversi, senza un quadro unificato collegato allo stack già documentato nella KB"
+  score: high
+tags: [prometheus, cardinality, cost-optimization, observability, metrics-governance, thanos, mimir]
+last_analyzed: 2026-10-02

@@ -1,0 +1,45 @@
+id: prop-126
+title: "Synthetic monitoring e blackbox probing per disponibilità esterna"
+type: new-file
+priority: medium
+target_file: docs/monitoring/tools/synthetic-monitoring.md
+effort: medium
+description: |
+  Nuovo file sul monitoraggio sintetico (black-box) come complemento ai tre
+  pilastri già documentati (metriche/log/tracce, tutti "white-box" interni al
+  sistema). Struttura suggerita:
+  - Perché serve: white-box monitoring misura cosa succede dentro il sistema,
+    ma non rileva un load balancer/DNS/CDN rotto davanti all'app, o un
+    endpoint pubblico irraggiungibile da fuori la rete interna
+  - Blackbox Exporter (Prometheus): configurazione moduli http_2xx, tcp_connect,
+    dns, icmp; esempio `blackbox.yml` con probe su endpoint pubblico +
+    validazione certificato TLS in scadenza; integrazione con Prometheus via
+    `relabel_configs` (pattern "probe as a target")
+  - Grafana Cloud Synthetic Monitoring / Checkly / Playwright scheduled script
+    come alternative per scenari multi-step (login + checkout, non solo un
+    singolo GET)
+  - Differenza con i canary deployment check (Flagger/Argo Rollouts) già
+    presenti in CI/CD: synthetic monitoring gira in continuo in produzione,
+    non solo durante un rollout
+  - Alerting specifico: soglie diverse da un alert interno (es. 3 region
+    diverse devono fallire prima di alertare, per escludere problemi di rete
+    locale del probe)
+  Minimo 150 righe, almeno 2 code-block (config blackbox exporter + query
+  PromQL/alerting rule), sezione Troubleshooting su falsi positivi comuni
+  (probe region con problemi di rete propri, certificati self-signed interni).
+rationale: |
+  I tre pilastri documentati in monitoring/_index.md sono tutti white-box
+  (misurano dall'interno). Non esiste in KB una pagina sul monitoraggio
+  black-box/sintetico, che è lo strumento standard per verificare la
+  disponibilità percepita dall'utente esterno (DNS, CDN, LB, certificati TLS)
+  e per gli SLO di disponibilità già discussi in monitoring/sre/slo-sla-sli.md
+  — quel file parla di "misurare l'SLO" ma non di come ottenere il segnale
+  black-box necessario a calcolarlo per endpoint pubblici.
+utility_test:
+  reader: "SRE che deve implementare il monitoraggio di disponibilità per endpoint pubblici esposti a internet"
+  scenario: "Ha già Prometheus/Grafana per metriche interne ma nessun segnale che rilevi un DNS/CDN/certificato rotto visto dall'esterno, scoperto finora solo da segnalazioni utenti"
+  outcome: "Configura Blackbox Exporter con moduli http/tcp/dns, lo integra nello stack Prometheus esistente, e imposta alerting multi-region per evitare falsi positivi"
+  without_kb: "Dovrebbe partire dalla documentazione ufficiale Blackbox Exporter (configurazione generica, nessun collegamento allo stack SRE/alerting già in uso) e ricostruire da solo il collegamento con SLO e alerting multi-region"
+  score: medium
+tags: [synthetic-monitoring, blackbox-exporter, prometheus, sre, availability, uptime]
+last_analyzed: 2026-10-02

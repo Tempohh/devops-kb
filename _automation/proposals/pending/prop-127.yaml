@@ -1,0 +1,45 @@
+id: prop-127
+title: "Testing di Composition Crossplane prima del merge in produzione"
+type: extend-section
+priority: medium
+target_file: docs/iac/crossplane/fondamentali.md
+effort: small
+description: |
+  Estendere fondamentali.md (o, se la sezione cresce troppo, creare
+  `iac/crossplane/testing.md` collegato dall'_index) con una sezione sul
+  testing delle Composition/XRD prima del merge, colmando il gap segnalato
+  dal file stesso nel warning "Composition come single point of failure
+  organizzativo — trattarla come un'API pubblica... test automatici prima
+  del merge" senza però spiegare COME farlo. Struttura suggerita:
+  - `crossplane render`: comando per validare offline l'output di una
+    Composition senza applicarla al cluster (dry-run completo di
+    claim+composition+function-pipeline)
+  - Chainsaw (kyverno-chainsaw) o kuttl per test end-to-end: applicare un
+    claim in un cluster kind/k3d ephemeral e asserire sullo stato delle
+    Managed Resource generate
+  - Esempio pipeline CI (GitHub Actions) che fa `crossplane render` su ogni PR
+    che tocca `compositions/`, bloccando il merge se l'output cambia in modo
+    non documentato (snapshot diff)
+  - Differenza con Molecule (Ansible, già documentato in
+    iac/ansible/roles-collections.md): Molecule testa convergenza/idempotenza
+    su VM, Chainsaw/crossplane render testano la generazione dichiarativa di
+    manifest Kubernetes
+  Minimo 5 righe aggiuntive sostanziali (non un trafiletto), con almeno 1
+  code-block comando `crossplane render` e 1 esempio YAML Chainsaro/CI.
+rationale: |
+  Il file fondamentali.md già segnala esplicitamente (sezione Best Practices,
+  warning "Composition come single point of failure organizzativo") che le
+  Composition andrebbero testate prima del merge come un'API pubblica, ma non
+  spiega alcun meccanismo concreto per farlo — un gap auto-identificato dal
+  contenuto esistente. Ansible ha una sezione equivalente matura (Molecule),
+  Terraform ha testing.md dedicato: Crossplane è l'unico strumento IaC della
+  KB senza guidance di testing, nonostante il file stesso ne segnali il
+  bisogno.
+utility_test:
+  reader: "Platform engineer che mantiene Composition/XRD Crossplane condivise da più team"
+  scenario: "Deve introdurre un gate di CI che impedisca a una Composition modificata di rompere silenziosamente i claim esistenti dei team che la consumano"
+  outcome: "Implementa `crossplane render` in CI per il diff automatico dell'output e sa quando servono test end-to-end più pesanti con Chainsaw su un cluster ephemeral"
+  without_kb: "Dovrebbe scoprire `crossplane render` e Chainsaw da documentazione sparsa (docs.crossplane.io testing guide + repo Chainsaw separato) senza un collegamento già pronto al resto dello stack IaC/CI documentato in KB"
+  score: medium
+tags: [crossplane, testing, ci-cd, composition, chainsaw, platform-engineering]
+last_analyzed: 2026-10-02
