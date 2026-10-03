@@ -5846,7 +5846,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -5871,7 +5871,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25777,8 +25777,7 @@
 <p>Security Hub è il pannello di controllo centrale per la sicurezza AWS. Aggrega, organizza e priorizza i finding di sicurezza da GuardDuty, Inspector, Macie, Config, Firewall Manager, IAM Access Analyzer, e altri.</p>
 <div class="admonition note">
 <p class="admonition-title">Security Hub CSPM vs nuovo Security Hub</p>
-<p>Il servizio descritto qui (controlli di compliance + formato ASFF) è oggi chiamato <strong>Security Hub CSPM</strong> (Cloud Security Posture Management). AWS ha introdotto un nuovo Security Hub (fine 2025) che aggiunge correlazione e prioritizzazione del rischio e adotta il formato OCSF; CSPM resta disponibile come componente. I comandi <code>aws securityhub</code> sotto restano validi per CSPM.
-<!-- REVIEW: verificare nomenclatura/API del nuovo Security Hub (OCSF) e impatto sui comandi CLI --></p>
+<p>Il servizio descritto qui (controlli di compliance + formato ASFF) è oggi chiamato <strong>Security Hub CSPM</strong> (Cloud Security Posture Management). AWS ha introdotto un nuovo Security Hub (fine 2025) che aggiunge correlazione e prioritizzazione del rischio e adotta il formato OCSF; CSPM resta disponibile come componente. I comandi <code>aws securityhub</code> sotto restano validi per CSPM. Il nuovo Security Hub (v2) usa lo stesso namespace CLI <code>aws securityhub</code> ma con comandi dedicati suffissati <code>-v2</code> (es. <code>aws securityhub enable-security-hub-v2</code>) e findings in formato OCSF; <code>enable-security-hub</code> (senza suffisso) abilita solo CSPM.</p>
 </div>
 <p><strong>Compliance Standards supportati (CSPM):</strong>
 - AWS Foundational Security Best Practices (FSBP)
@@ -26104,9 +26103,11 @@
 </span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="w">  </span>--lookup-attributes<span class="w"> </span><span class="nv">AttributeKey</span><span class="o">=</span>ResourceName,AttributeValue<span class="o">=</span>my-bucket
 </span></code></pre></div>
 <h3 id="cloudtrail-lake">CloudTrail Lake<a class="headerlink" href="#cloudtrail-lake" title="Permanent link">&para;</a></h3>
-<p>CloudTrail Lake permette di eseguire query SQL direttamente sui log CloudTrail senza doverli esportare. Retention fino a 3653 giorni (~10 anni) con pricing a retention estesa.</p>
-<!-- REVIEW: verificare se CloudTrail Lake è ancora disponibile ai nuovi clienti (possibile restrizione di disponibilità 2026) e, in caso, indicare alternativa trail → S3 + Athena -->
-
+<p>CloudTrail Lake permette di eseguire query SQL direttamente sui log CloudTrail senza doverli esportare. Retention fino a 3653 giorni (~10 anni) con pricing <em>One-year extendable retention</em>, o fino a 2557 giorni (~7 anni) con <em>Seven-year retention</em>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Disponibilità: chiuso ai nuovi clienti dal 31 maggio 2026</p>
+<p>Secondo la documentazione AWS, CloudTrail Lake <strong>non è più aperto ai nuovi clienti dal 31 maggio 2026</strong>; i clienti esistenti continuano a usarlo normalmente. Per i nuovi account l'alternativa è un <strong>trail → S3 + Athena</strong> (query SQL sui log in S3, eventualmente con partition projection).</p>
+</div>
 <p>Lo <code>start-query</code> richiede nel <code>FROM</code> l'<strong>ID</strong> dell'Event Data Store (non il nome).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Creare un Event Data Store</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>aws<span class="w"> </span>cloudtrail<span class="w"> </span>create-event-data-store<span class="w"> </span><span class="se">\</span>
