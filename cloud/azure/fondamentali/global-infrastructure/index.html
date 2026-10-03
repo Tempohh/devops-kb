@@ -6639,7 +6639,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6664,7 +6664,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6868,7 +6868,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6903,7 +6903,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6938,7 +6938,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24747,13 +24747,16 @@
 
 <h1 id="infrastruttura-globale-azure">Infrastruttura Globale Azure<a class="headerlink" href="#infrastruttura-globale-azure" title="Permanent link">&para;</a></h1>
 <h2 id="gerarchia-dellinfrastruttura">Gerarchia dell'Infrastruttura<a class="headerlink" href="#gerarchia-dellinfrastruttura" title="Permanent link">&para;</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Geography (es. Europe)
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>└── Region Pair (es. North Europe ↔ West Europe)
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    └── Region (es. Italy North)
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        └── Availability Zones (3 zone fisicamente separate)
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>            └── Datacenter
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                └── Server / Storage / Network
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Geography (es. Europe, Italy: perimetro di data residency/compliance)
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>└── Region (es. Italy North, West Europe)   ← alcune region hanno un Region Pair
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    └── Availability Zones (min. 3 zone fisicamente separate, nelle region con AZ)
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        └── Datacenter
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>            └── Server / Storage / Network
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Perché esistono le Geography</p>
+<p>Una <strong>Geography</strong> garantisce che dati e applicazioni restino entro un confine geopolitico/regolatorio (es. UE, Italia). Region e Region Pair di una geography sono scelte per rispettare data residency e compliance.</p>
+</div>
 <hr />
 <h2 id="region">Region<a class="headerlink" href="#region" title="Permanent link">&para;</a></h2>
 <p>Una <strong>Region</strong> è un'area geografica contenente uno o più datacenter collegati da una rete a bassa latenza.</p>
@@ -24765,7 +24768,9 @@
 - <code>Germany West Central</code> — Francoforte
 - <code>France Central</code> — Parigi
 - <code>Switzerland North</code> — Zurigo
-- <code>UK South</code> — Londra</p>
+- <code>UK South</code> — Londra
+- <code>Spain Central</code> — Madrid, <code>Poland Central</code> — Varsavia (region recenti, senza Region Pair)</p>
+<p>Le region più recenti possono avere disponibilità limitata di servizi/SKU rispetto a quelle mature: verificare sempre prima di scegliere la region.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Listare tutte le region disponibili per la subscription</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>az<span class="w"> </span>account<span class="w"> </span>list-locations<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[?metadata.regionType=='Physical'].{Name:name, DisplayName:displayName, PairedRegion:metadata.pairedRegion[0].name}"</span><span class="w"> </span><span class="se">\</span>
@@ -24810,9 +24815,9 @@
 <td>Azure SQL ZRS, Storage ZRS, Application Gateway</td>
 </tr>
 <tr>
-<td><strong>Non-regional</strong></td>
-<td>Servizi globali, non legati a zone</td>
-<td>Azure AD, DNS, Traffic Manager</td>
+<td><strong>Non-regional</strong> (always-available)</td>
+<td>Servizi globali, non legati a una region/zona</td>
+<td>Microsoft Entra ID, Azure DNS, Traffic Manager, Front Door</td>
 </tr>
 </tbody>
 </table>
@@ -24821,15 +24826,17 @@
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span>--name<span class="w"> </span>myvm<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span>--image<span class="w"> </span>Ubuntu2204<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span>--zone<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\ </span><span class="w">                   </span><span class="c1"># Zone 1, 2 o 3</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span>--size<span class="w"> </span>Standard_D2s_v3
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># Creare Public IP zone-redundant</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>az<span class="w"> </span>network<span class="w"> </span>public-ip<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span>--name<span class="w"> </span>myapp-pip<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span>--sku<span class="w"> </span>Standard<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span>--zone<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="m">3</span><span class="w">                  </span><span class="c1"># zone-redundant</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span>--zone<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span>--size<span class="w"> </span>Standard_D2s_v5
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># --zone accetta 1, 2 o 3</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Creare Public IP zone-redundant</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>az<span class="w"> </span>network<span class="w"> </span>public-ip<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span>--name<span class="w"> </span>myapp-pip<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span>--sku<span class="w"> </span>Standard<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">    </span>--zone<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="m">3</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># più zone insieme = IP zone-redundant</span>
 </span></code></pre></div>
 <hr />
 <h2 id="availability-set">Availability Set<a class="headerlink" href="#availability-set" title="Permanent link">&para;</a></h2>
@@ -24838,16 +24845,21 @@
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>az<span class="w"> </span>vm<span class="w"> </span>availability-set<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span>--name<span class="w"> </span>myapp-as<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span>--platform-fault-domain-count<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\ </span><span class="w">    </span><span class="c1"># max 3 — diversi rack fisici</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span>--platform-update-domain-count<span class="w"> </span><span class="m">5</span><span class="w">      </span><span class="c1"># max 20 — aggiornamenti sequenziali</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Deploy VM in Availability Set</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>az<span class="w"> </span>vm<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">    </span>--name<span class="w"> </span>myvm1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">    </span>--availability-set<span class="w"> </span>myapp-as<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span>--image<span class="w"> </span>Ubuntu2204
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span>--platform-fault-domain-count<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span>--platform-update-domain-count<span class="w"> </span><span class="m">5</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># fault domain: max 3 (rack fisici diversi); update domain: max 20 (riavvii di piattaforma sequenziali)</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># Deploy VM in Availability Set</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>az<span class="w"> </span>vm<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">    </span>--name<span class="w"> </span>myvm1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span>--availability-set<span class="w"> </span>myapp-as<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span>--image<span class="w"> </span>Ubuntu2204
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Mapping logico → fisico delle zone</p>
+<p>I numeri di zona (1, 2, 3) sono <strong>logici e per-subscription</strong>: la "zona 1" della subscription A può essere un datacenter fisico diverso dalla "zona 1" della subscription B. Per co-locare risorse di subscription diverse nella stessa zona fisica leggere <code>availabilityZoneMappings</code> (<code>az rest --method get --url "/subscriptions/&lt;sub-id&gt;/locations?api-version=2022-12-01"</code>) invece di assumere che i numeri coincidano.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">AZ vs Availability Set</p>
 <p>Preferire <strong>Availability Zones</strong> per nuovi deployment — protezione da guasti datacenter interi.
@@ -24882,7 +24894,7 @@ Gli Availability Set proteggono da guasti hardware/rack all'interno dello stesso
 </tr>
 <tr>
 <td>Germany West Central</td>
-<td>North Europe</td>
+<td>Germany North</td>
 </tr>
 <tr>
 <td>Switzerland North</td>
@@ -24894,10 +24906,14 @@ Gli Availability Set proteggono da guasti hardware/rack all'interno dello stesso
 </tr>
 </tbody>
 </table>
-<p><strong>Implicazioni pratiche:</strong>
-- Geo-redundant storage (GRS) replica nel pair automaticamente
-- Azure Site Recovery replica nel pair di default
-- Gli aggiornamenti del platform vengono rollati prima su una region, poi sull'altra
+<div class="admonition note">
+<p class="admonition-title">Region Pair: modello in evoluzione</p>
+<p>Le region più recenti (es. Spain Central, Poland Central) <strong>non hanno un pair</strong>: Microsoft le progetta con Availability Zones come primo livello di resilienza. Per il DR cross-region non assumere il pair: scegliere esplicitamente la region secondaria (stessa geography se richiesto da data residency). La tabella sopra è indicativa: la fonte autorevole è la pagina Microsoft <em>cross-region replication</em> (vedi Riferimenti). Alcuni pair non sono simmetrici.</p>
+</div>
+<p><strong>Implicazioni pratiche (per le region con pair):</strong>
+- Geo-redundant storage (GRS/GZRS) replica nel pair automaticamente, in modo asincrono (nessun SLA di RPO, tipicamente &lt;15 min)
+- Azure Site Recovery propone il pair come target di default (modificabile)
+- Gli aggiornamenti pianificati del platform vengono rollati su una region alla volta
 - In caso di outage regionale, Microsoft dà priorità al ripristino di una delle due region</p>
 <hr />
 <h2 id="sovereign-clouds">Sovereign Clouds<a class="headerlink" href="#sovereign-clouds" title="Permanent link">&para;</a></h2>
@@ -24921,20 +24937,27 @@ Gli Availability Set proteggono da guasti hardware/rack all'interno dello stesso
 <td>Operato da 21Vianet, separato da Azure globale</td>
 </tr>
 <tr>
-<td><strong>Azure Germany</strong> (legacy)</td>
-<td>Dati sensibili tedeschi</td>
-<td>Sostituito da Azure Germany (regioni standard + policy GDPR)</td>
+<td><strong>Azure Germany</strong> (legacy, chiuso 2021)</td>
+<td>Dati sensibili tedeschi (data trustee T-Systems)</td>
+<td>Dismesso: sostituito dalle region standard <code>Germany West Central</code>/<code>Germany North</code> con garanzie di data residency</td>
+</tr>
+<tr>
+<td><strong>Microsoft Sovereign Cloud</strong></td>
+<td>Organizzazioni UE con requisiti di sovranità</td>
+<td>Offerta a livelli sopra Azure pubblico (controlli di sovranità, Data Guardian, opzioni private/in-country): verificare la disponibilità corrente</td>
 </tr>
 </tbody>
 </table>
+<p>Azure Government include anche ambienti per classificazioni elevate (Secret/Top Secret) accessibili solo a clienti autorizzati.</p>
 <hr />
 <h2 id="rete-backbone-globale">Rete Backbone Globale<a class="headerlink" href="#rete-backbone-globale" title="Permanent link">&para;</a></h2>
 <p>Microsoft possiede e opera una rete privata <strong>WAN globale</strong> che collega tutte le region Azure:
-- Oltre <strong>175.000 km</strong> di fibra sottomarina e terrestre
+- Centinaia di migliaia di km di fibra sottomarina e terrestre, con punti di presenza (<strong>edge locations / PoP</strong>) vicini agli utenti
 - Traffico tra region Azure viaggia sulla rete privata Microsoft (non Internet pubblica)
-- <strong>Latenza garantita</strong> inter-region europea: tipicamente &lt;10ms</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Verificare latenza inter-region (da VM Azure)</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Usare Azure Network Watcher Connection Monitor</span>
+- Microsoft pubblica le <strong>statistiche di round-trip latency</strong> tra region (non è una latenza garantita da SLA): intra-Europa tipicamente decine di ms; verificare le tabelle ufficiali</p>
+<p>Gli edge PoP servono Front Door, CDN, ExpressRoute e l'ingresso del traffico sul backbone (<em>early exit</em>: il traffico entra nella rete Microsoft il prima possibile). <strong>Azure Extended Zones</strong> estendono una region parent a città specifiche per workload a bassissima latenza.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Misurare latenza inter-region da una VM Azure con Connection Monitor</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># (richiede l'agente Network Watcher installato sulla VM sorgente)</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>az<span class="w"> </span>network<span class="w"> </span>watcher<span class="w"> </span>connection-monitor<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span>--name<span class="w"> </span>latency-test<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
@@ -24945,7 +24968,7 @@ Gli Availability Set proteggono da guasti hardware/rack all'interno dello stesso
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-il-servizio-non-e-disponibile-nella-region-selezionata">Scenario 1 — Il servizio non è disponibile nella region selezionata<a class="headerlink" href="#scenario-1-il-servizio-non-e-disponibile-nella-region-selezionata" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> Al momento del deploy di una risorsa (es. VM SKU, servizio PaaS) compare l'errore <code>The requested size is not available in the location</code>.</p>
+<p><strong>Sintomo:</strong> Al momento del deploy di una risorsa (es. VM SKU, servizio PaaS) compare l'errore <code>SkuNotAvailable</code> / <code>The requested size is not available in the location</code>.</p>
 <p><strong>Causa:</strong> Non tutti i servizi o SKU sono disponibili in tutte le region. Le region più recenti (es. Italy North) hanno disponibilità limitata rispetto alle region mature.</p>
 <p><strong>Soluzione:</strong> Verificare la disponibilità del servizio nella region target e, se necessario, usare la region pair come alternativa.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Verificare quali SKU VM sono disponibili in una region</span>
@@ -24963,22 +24986,22 @@ Gli Availability Set proteggono da guasti hardware/rack all'interno dello stesso
 <hr />
 <h3 id="scenario-2-vm-deployata-in-una-zona-non-corrisponde-alle-aspettative-di-ha">Scenario 2 — VM deployata in una zona non corrisponde alle aspettative di HA<a class="headerlink" href="#scenario-2-vm-deployata-in-una-zona-non-corrisponde-alle-aspettative-di-ha" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Due VM dello stesso tier vengono deployate nella stessa zona fisica, vanificando la ridondanza di zona.</p>
-<p><strong>Causa:</strong> Se non si specifica esplicitamente la zona durante il deploy, Azure assegna la zona automaticamente, potendo posizionare più VM nella stessa.</p>
-<p><strong>Soluzione:</strong> Specificare sempre zone diverse esplicitamente per ciascuna VM critica.</p>
+<p><strong>Causa:</strong> Se non si specifica la zona, la VM è <strong>regionale (non zonale)</strong>: Azure la colloca dove vuole nella region, senza garanzia di separazione tra datacenter. Anche con zone indicate, ricordare il mapping logico→fisico per-subscription.</p>
+<p><strong>Soluzione:</strong> Specificare zone diverse esplicitamente per ciascuna VM critica (o usare una VM Scale Set multi-zona, che distribuisce le istanze automaticamente).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Deploy VM in zone diverse (zona 1 e zona 2)</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>az<span class="w"> </span>vm<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span>--name<span class="w"> </span>myvm-zone1<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span>--image<span class="w"> </span>Ubuntu2204<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span>--zone<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span>--size<span class="w"> </span>Standard_D2s_v3
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span>--size<span class="w"> </span>Standard_D2s_v5
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>az<span class="w"> </span>vm<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span>--name<span class="w"> </span>myvm-zone2<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span>--image<span class="w"> </span>Ubuntu2204<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">    </span>--zone<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">    </span>--size<span class="w"> </span>Standard_D2s_v3
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">    </span>--size<span class="w"> </span>Standard_D2s_v5
 </span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
 </span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="c1"># Verificare la zona assegnata a ciascuna VM</span>
 </span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>az<span class="w"> </span>vm<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
@@ -24989,25 +25012,26 @@ Gli Availability Set proteggono da guasti hardware/rack all'interno dello stesso
 <hr />
 <h3 id="scenario-3-geo-redundant-storage-non-replica-nella-region-attesa">Scenario 3 — Geo-redundant storage non replica nella region attesa<a class="headerlink" href="#scenario-3-geo-redundant-storage-non-replica-nella-region-attesa" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> I dati di uno storage account GRS non risultano nella region pair prevista (es. Italy North → Germany West Central).</p>
-<p><strong>Causa:</strong> La region pair viene assegnata da Microsoft e non è configurabile dall'utente. In alcuni casi la replica potrebbe essere in ritardo o la region pair è diversa da quella attesa.</p>
-<p><strong>Soluzione:</strong> Verificare la region pair reale tramite CLI e controllare il lag di replica.</p>
+<p><strong>Causa:</strong> La region pair è assegnata da Microsoft e non è configurabile; la tabella della KB può essere superata o non simmetrica. La replica GRS è asincrona: i dati possono non essere ancora presenti nella secondary (Last Sync Time).</p>
+<p><strong>Soluzione:</strong> Verificare la region pair reale tramite CLI e controllare <code>lastSyncTime</code>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Verificare la region pair di uno storage account</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>--name<span class="w"> </span>mystorageaccount<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"{PrimaryLocation:primaryLocation, SecondaryLocation:secondaryLocation, ReplicationStatus:statusOfPrimary}"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span>--output<span class="w"> </span>table
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Ottenere la region pair di una location</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>az<span class="w"> </span>account<span class="w"> </span>list-locations<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[?name=='italynorth'].{Name:name, PairedRegion:metadata.pairedRegion[0].name}"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">    </span>--output<span class="w"> </span>table
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span>--expand<span class="w"> </span>geoReplicationStats<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"{Primary:primaryLocation, Secondary:secondaryLocation, Sku:sku.name, LastSyncTime:geoReplicationStats.lastSyncTime}"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span>--output<span class="w"> </span>table
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># Ottenere la region pair di una location</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>az<span class="w"> </span>account<span class="w"> </span>list-locations<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[?name=='italynorth'].{Name:name, PairedRegion:metadata.pairedRegion[0].name}"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">    </span>--output<span class="w"> </span>table
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-accesso-a-azure-government-o-azure-china-fallisce-con-credenziali-globali">Scenario 4 — Accesso a Azure Government o Azure China fallisce con credenziali globali<a class="headerlink" href="#scenario-4-accesso-a-azure-government-o-azure-china-fallisce-con-credenziali-globali" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il login con <code>az login</code> riesce ma i comandi falliscono con <code>AuthorizationFailed</code> o resource non trovate quando si tenta di accedere a risorse sovereign cloud.</p>
 <p><strong>Causa:</strong> Azure Government e Azure China sono endpoint separati dal cloud globale. Le credenziali e i token del cloud globale non sono validi nei sovereign cloud.</p>
-<p><strong>Soluzione:</strong> Effettuare il login specificando l'ambiente corretto con <code>--environment</code>.</p>
+<p><strong>Soluzione:</strong> Effettuare il login specificando l'ambiente corretto con <code>az cloud set</code> prima di <code>az login</code>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Login su Azure Government</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>az<span class="w"> </span>cloud<span class="w"> </span><span class="nb">set</span><span class="w"> </span>--name<span class="w"> </span>AzureUSGovernment
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>az<span class="w"> </span>login
@@ -25029,7 +25053,7 @@ Gli Availability Set proteggono da guasti hardware/rack all'interno dello stesso
 <li><a href="https://azure.microsoft.com/global-infrastructure/">Azure Global Infrastructure</a></li>
 <li><a href="https://azure.microsoft.com/global-infrastructure/geographies/">Azure Geographies</a></li>
 <li><a href="https://learn.microsoft.com/azure/reliability/availability-zones-overview">Availability Zones</a></li>
-<li><a href="https://learn.microsoft.com/azure/reliability/cross-region-replication-azure">Azure Region Pairs</a></li>
+<li><a href="https://learn.microsoft.com/azure/reliability/cross-region-replication-azure">Azure Region Pairs / cross-region replication</a></li>
 </ul>
 
 

@@ -6630,7 +6630,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6674,7 +6674,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6699,7 +6699,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6892,7 +6892,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6927,7 +6927,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24761,12 +24761,19 @@
 <td>Cliente</td>
 <td>Cliente</td>
 <td>Cliente</td>
-<td>Condivisa</td>
+<td>Cliente</td>
 </tr>
 <tr>
 <td>Account e identità</td>
 <td>Cliente</td>
 <td>Cliente</td>
+<td>Cliente</td>
+<td>Cliente</td>
+</tr>
+<tr>
+<td>Infrastruttura di identità e directory</td>
+<td>Cliente</td>
+<td>Condivisa</td>
 <td>Condivisa</td>
 <td>Condivisa</td>
 </tr>
@@ -24780,8 +24787,8 @@
 <tr>
 <td>Controlli di rete</td>
 <td>Cliente</td>
+<td>Cliente</td>
 <td>Condivisa</td>
-<td>Microsoft</td>
 <td>Microsoft</td>
 </tr>
 <tr>
@@ -24814,6 +24821,12 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Perché le prime tre righe non cambiano mai</p>
+<p>Dati, dispositivi e account sono le uniche cose che Microsoft non può controllare per costruzione: decidi tu chi
+accede, da dove e con quali dati. Le altre righe "scorrono" verso Microsoft man mano che il servizio astrae più
+livelli dello stack. Matrice allineata alla versione ufficiale Microsoft Learn.</p>
+</div>
 <hr />
 <h2 id="responsabilita-microsoft-sempre">Responsabilità Microsoft (sempre)<a class="headerlink" href="#responsabilita-microsoft-sempre" title="Permanent link">&para;</a></h2>
 <ul>
@@ -24995,12 +25008,12 @@
 </tr>
 <tr>
 <td><strong>GDPR</strong></td>
-<td>Protezione dati EU</td>
+<td>Protezione dati EU (Azure fornisce DPA e strumenti; non esiste una "certificazione GDPR")</td>
 <td>Europa</td>
 </tr>
 <tr>
 <td><strong>HIPAA/HITECH</strong></td>
-<td>Dati sanitari USA</td>
+<td>Dati sanitari USA (attestazioni + BAA)</td>
 <td>USA</td>
 </tr>
 <tr>
@@ -25052,8 +25065,8 @@
 <td>Governance dati, classificazione, compliance</td>
 </tr>
 <tr>
-<td><strong>Azure Blueprints</strong> (legacy)</td>
-<td>Template ambiente conforme (sostituito da Template Specs + Policy)</td>
+<td><strong>Azure Blueprints</strong> (ritirato, EOL 11 luglio 2026)</td>
+<td>Non più utilizzabile: migrare a Template Specs + Deployment Stacks + Azure Policy</td>
 </tr>
 <tr>
 <td><strong>Microsoft Compliance Manager</strong></td>
@@ -25064,24 +25077,26 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Verificare il Secure Score corrente con Defender for Cloud</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>az<span class="w"> </span>security<span class="w"> </span>secure-score<span class="w"> </span>list<span class="w"> </span>--output<span class="w"> </span>table
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Elencare raccomandazioni attive di sicurezza</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>az<span class="w"> </span>security<span class="w"> </span>task<span class="w"> </span>list<span class="w"> </span>--output<span class="w"> </span>table
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Verificare le assegnazioni di Azure Policy su una subscription</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>az<span class="w"> </span>policy<span class="w"> </span>assignment<span class="w"> </span>list<span class="w"> </span>--query<span class="w"> </span><span class="s2">"[].{Name:name, Scope:scope, Policy:policyDefinitionId}"</span><span class="w"> </span>--output<span class="w"> </span>table
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Verificare risorse non conformi a una policy specifica</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>az<span class="w"> </span>policy<span class="w"> </span>state<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span>--filter<span class="w"> </span><span class="s2">"complianceState eq 'NonCompliant'"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[].{Resource:resourceId, Policy:policyDefinitionName}"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span>--output<span class="w"> </span>table
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Elencare raccomandazioni (assessment) non conformi</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>az<span class="w"> </span>security<span class="w"> </span>assessment<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[?status.code=='Unhealthy'].{Raccomandazione:displayName, Risorsa:resourceDetails.id}"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span>--output<span class="w"> </span>table
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Verificare le assegnazioni di Azure Policy su una subscription</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>az<span class="w"> </span>policy<span class="w"> </span>assignment<span class="w"> </span>list<span class="w"> </span>--query<span class="w"> </span><span class="s2">"[].{Name:name, Scope:scope, Policy:policyDefinitionId}"</span><span class="w"> </span>--output<span class="w"> </span>table
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Verificare risorse non conformi a una policy specifica</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>az<span class="w"> </span>policy<span class="w"> </span>state<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span>--filter<span class="w"> </span><span class="s2">"complianceState eq 'NonCompliant'"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[].{Resource:resourceId, Policy:policyDefinitionName}"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span>--output<span class="w"> </span>table
 </span></code></pre></div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-risorse-non-conformi-dopo-assegnazione-policy">Scenario 1 — Risorse non conformi dopo assegnazione policy<a class="headerlink" href="#scenario-1-risorse-non-conformi-dopo-assegnazione-policy" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Dopo aver assegnato una Azure Policy, le risorse esistenti risultano <code>NonCompliant</code> nel dashboard.</p>
-<p><strong>Causa:</strong> Le policy Azure hanno un ritardo di valutazione (fino a 30 minuti) e non si applicano retroattivamente in modo automatico alle risorse già esistenti senza un trigger di remediation.</p>
-<p><strong>Soluzione:</strong> Avviare un task di remediation esplicito per applicare la policy alle risorse esistenti.</p>
+<p><strong>Causa:</strong> Le policy Azure valutano anche le risorse esistenti (ritardo tipico di ~30 minuti dopo l'assegnazione, poi scansione ogni 24 h), quindi <code>NonCompliant</code> è il comportamento atteso. Gli effetti <code>deny</code>/<code>audit</code> non correggono nulla; solo <code>deployIfNotExists</code> e <code>modify</code> possono essere applicati alle risorse esistenti, e solo tramite un task di remediation esplicito (usa una managed identity con i permessi necessari).</p>
+<p><strong>Soluzione:</strong> Per policy con effetto <code>deployIfNotExists</code>/<code>modify</code>, avviare un task di remediation; per <code>audit</code>/<code>deny</code> correggere la risorsa a mano o con IaC.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Creare un task di remediation per risorse non conformi</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>az<span class="w"> </span>policy<span class="w"> </span>remediation<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"remediation-task-01"</span><span class="w"> </span><span class="se">\</span>
@@ -25100,8 +25115,8 @@
 <p><strong>Causa:</strong> In PaaS, la responsabilità è condivisa: Microsoft gestisce OS e runtime, ma la configurazione dell'applicazione, le variabili d'ambiente, le connessioni e i permessi rimangono responsabilità del cliente.</p>
 <p><strong>Soluzione:</strong> Verificare le raccomandazioni specifiche per categoria e applicare le correzioni sulle aree di competenza del cliente.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Filtrare raccomandazioni per risorsa PaaS specifica (es. App Service)</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>az<span class="w"> </span>security<span class="w"> </span>task<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[?contains(resourceId,'Microsoft.Web/sites')].{Task:name, Severity:severity, State:state}"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>az<span class="w"> </span>security<span class="w"> </span>assessment<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[?status.code=='Unhealthy' &amp;&amp; contains(resourceDetails.id,'Microsoft.Web/sites')].{Raccomandazione:displayName, Risorsa:resourceDetails.id}"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span>--output<span class="w"> </span>table
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Abilitare HTTPS-only su App Service (remediation tipica)</span>
@@ -25153,7 +25168,7 @@
 <li><a href="https://learn.microsoft.com/azure/security/fundamentals/shared-responsibility">Shared Responsibility in the Cloud</a></li>
 <li><a href="https://learn.microsoft.com/azure/compliance/">Azure Compliance Documentation</a></li>
 <li><a href="https://www.microsoft.com/trust-center">Azure Trust Center</a></li>
-<li><a href="https://learn.microsoft.com/security/benchmark/azure/">Azure Security Benchmark</a></li>
+<li><a href="https://learn.microsoft.com/security/benchmark/azure/">Microsoft Cloud Security Benchmark</a> (ex Azure Security Benchmark)</li>
 </ul>
 
 

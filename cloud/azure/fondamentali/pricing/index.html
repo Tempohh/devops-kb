@@ -6630,7 +6630,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6665,7 +6665,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6700,7 +6700,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6744,7 +6744,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6769,7 +6769,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24978,19 +24978,15 @@
 </ul>
 <h3 id="reserved-instances-ri">Reserved Instances (RI)<a class="headerlink" href="#reserved-instances-ri" title="Permanent link">&para;</a></h3>
 <p>Impegno di 1 o 3 anni per VM, SQL, Cosmos DB, ecc. — sconto fino al <strong>72%</strong> rispetto a PAYG.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Acquistare Reserved Instance (tramite portal o API)</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># Le RI sono acquistate a livello di subscription o shared (billing account)</span>
+<p>Le RI sono un <strong>impegno di capacità/tipo</strong> (es. famiglia VM + region): in cambio dello sconto, Azure applica automaticamente la tariffa ridotta alle risorse che corrispondono, fatturando l'impegno anche se non lo usi. Si acquistano da portal (Reservations) con scope <code>Single subscription</code>, <code>Resource group</code>, <code>Management group</code> o <code>Shared</code> (tutto il billing account).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Elenco reservation order (richiede l'estensione: az extension add --name reservation)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>az<span class="w"> </span>reservations<span class="w"> </span>reservation-order<span class="w"> </span>list<span class="w"> </span>--output<span class="w"> </span>table
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Verificare utilizzo RI esistenti</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>az<span class="w"> </span>consumption<span class="w"> </span>reservations<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[].{Name:name, Scope:properties.appliedScopes, Utilized:properties.utilization.aggregates[0].usageGrain}"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span>--output<span class="w"> </span>table
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Raccomandazioni RI da Advisor</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>az<span class="w"> </span>advisor<span class="w"> </span>recommendation<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span>--category<span class="w"> </span>Cost<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[?contains(shortDescription.problem, 'Reserved')].{Resource:resourceId, Savings:extendedProperties.annualSavingsAmount}"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">    </span>--output<span class="w"> </span>table
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Raccomandazioni di acquisto RI da Advisor</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>az<span class="w"> </span>advisor<span class="w"> </span>recommendation<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span>--category<span class="w"> </span>Cost<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[?contains(shortDescription.problem, 'reserved')].{Resource:resourceId, Savings:extendedProperties.annualSavingsAmount}"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span>--output<span class="w"> </span>table
 </span></code></pre></div>
 <table>
 <thead>
@@ -25016,9 +25012,10 @@
 <h3 id="azure-savings-plans">Azure Savings Plans<a class="headerlink" href="#azure-savings-plans" title="Permanent link">&para;</a></h3>
 <p><strong>Savings Plans</strong> sono impegni di spesa oraria (in USD) flessibili tra più servizi compute:</p>
 <ul>
-<li><strong>Compute Savings Plan:</strong> copre VM, AKS, Container Instances, Functions — flessibile tra size/region/OS</li>
-<li><strong>Sconto:</strong> fino al 65% rispetto PAYG</li>
-<li><strong>Differenza vs RI:</strong> RI = impegno su istanza specifica; Savings Plan = impegno su spesa compute totale</li>
+<li><strong>Compute Savings Plan:</strong> copre VM (quindi anche i nodi AKS), Dedicated Host, Container Instances, App Service Premium v3, Functions Premium — flessibile tra size/region/OS</li>
+<li><strong>Durata:</strong> 1 o 3 anni; <strong>sconto:</strong> fino al 65% rispetto PAYG</li>
+<li><strong>Differenza vs RI:</strong> RI = impegno su istanza specifica (sconto massimo, es. 72%); Savings Plan = impegno su spesa compute oraria, applicato ai consumi più costosi che rientrano nel perimetro (sconto minore, molta più flessibilità)</li>
+<li><strong>Attenzione:</strong> a differenza di molte RI, un Savings Plan non è scambiabile né rimborsabile</li>
 </ul>
 <h3 id="azure-spot-vms">Azure Spot VMs<a class="headerlink" href="#azure-spot-vms" title="Permanent link">&para;</a></h3>
 <p>Utilizzo di capacità compute non allocata a prezzi ridotti (fino al <strong>90%</strong> rispetto PAYG):</p>
@@ -25027,18 +25024,16 @@
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span>--name<span class="w"> </span>spot-worker<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span>--image<span class="w"> </span>Ubuntu2204<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>--size<span class="w"> </span>Standard_D4s_v3<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>--size<span class="w"> </span>Standard_D4s_v5<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span>--priority<span class="w"> </span>Spot<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span>--eviction-policy<span class="w"> </span>Deallocate<span class="w"> </span><span class="se">\ </span><span class="w">     </span><span class="c1"># Deallocate (default) o Delete</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span>--max-price<span class="w"> </span>-1<span class="w"> </span><span class="se">\ </span><span class="w">                   </span><span class="c1"># -1 = paga il prezzo Spot corrente (no cap)</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span>--eviction-policy<span class="w"> </span>Deallocate<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span>--max-price<span class="w"> </span>-1<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span>--output<span class="w"> </span>json
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Verificare prezzo Spot corrente per una size</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>az<span class="w"> </span>vm<span class="w"> </span>list-skus<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span>--location<span class="w"> </span>italynorth<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span>--size<span class="w"> </span>Standard_D4s_v3<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[].{Name:name, Location:locations[0]}"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span>--output<span class="w"> </span>table
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1"># --eviction-policy: Deallocate (default, i dischi restano e si paga lo storage) o Delete</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># --max-price -1: paga il prezzo Spot corrente, nessun cap di prezzo</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># Prezzo Spot corrente per una size (Azure Retail Prices API, pubblica, senza auth)</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">"https://prices.azure.com/api/retail/prices?\$filter=armRegionName eq 'italynorth' and armSkuName eq 'Standard_D4s_v5' and priceType eq 'Consumption' and contains(meterName,'Spot')"</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Spot VM — Eviction</p>
@@ -25046,7 +25041,7 @@
 Usare solo per workload interrompibili: batch, rendering, CI workers, ML training.</p>
 </div>
 <h3 id="azure-hybrid-benefit">Azure Hybrid Benefit<a class="headerlink" href="#azure-hybrid-benefit" title="Permanent link">&para;</a></h3>
-<p>Usa licenze Windows Server o SQL Server esistenti (con Software Assurance) su Azure — sconto fino al <strong>40%</strong> sulle VM Windows/SQL:</p>
+<p>Usa licenze Windows Server o SQL Server esistenti (con Software Assurance o subscription equivalente) su Azure: non paghi la componente licenza inclusa nel prezzo orario (sconto fino al <strong>40%</strong> sulle VM Windows, di più per SQL, cumulabile con RI):</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># VM Windows con Hybrid Benefit</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>az<span class="w"> </span>vm<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
@@ -25054,12 +25049,11 @@ Usare solo per workload interrompibili: batch, rendering, CI workers, ML trainin
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span>--image<span class="w"> </span>Win2022Datacenter<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span>--license-type<span class="w"> </span>Windows_Server<span class="w">    </span><span class="c1"># applica Hybrid Benefit</span>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># SQL VM con Hybrid Benefit</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>az<span class="w"> </span>vm<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># SQL Server su VM: la licenza si imposta sulla risorsa SQL VM (estensione sqlvm)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>az<span class="w"> </span>sql<span class="w"> </span>vm<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">    </span>--name<span class="w"> </span>mysqlvm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span>--image<span class="w"> </span>MicrosoftSQLServer:sql2022-ws2022:enterprise:latest<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span>--license-type<span class="w"> </span>AHUB<span class="w">              </span><span class="c1"># Azure Hybrid Use Benefit</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span>--license-type<span class="w"> </span>AHUB<span class="w">              </span><span class="c1"># Azure Hybrid Benefit</span>
 </span></code></pre></div>
 <hr />
 <h2 id="azure-free-tier">Azure Free Tier<a class="headerlink" href="#azure-free-tier" title="Permanent link">&para;</a></h2>
@@ -25093,8 +25087,9 @@ Usare solo per workload interrompibili: batch, rendering, CI workers, ML trainin
 - Azure Functions: 1 milione di esecuzioni/mese
 - Azure App Service: 10 web app F1 tier
 - Azure SQL: 100.000 vCore-secondi/mese (serverless)
-- Blob Storage: 5 GB LRS
-- Azure DevOps: 5 utenti + 1800 minuti pipeline/mese</p>
+- Azure Cosmos DB: 1000 RU/s + 25 GB (free tier, uno per account)
+- Azure DevOps: 5 utenti Basic gratuiti; i minuti di pipeline hosted gratuiti per nuove organizzazioni richiedono una richiesta di parallelismo gratuito</p>
+<p>I limiti cambiano: verificare sempre la <a href="https://azure.microsoft.com/free/">pagina Free</a> (es. Blob Storage 5 GB è nei <em>12 Months Free</em>, non Always Free).</p>
 <hr />
 <h2 id="azure-cost-management">Azure Cost Management<a class="headerlink" href="#azure-cost-management" title="Permanent link">&para;</a></h2>
 <h3 id="analisi-costi">Analisi Costi<a class="headerlink" href="#analisi-costi" title="Permanent link">&para;</a></h3>
@@ -25105,42 +25100,38 @@ Usare solo per workload interrompibili: batch, rendering, CI workers, ML trainin
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[].{Service:consumedService, Cost:pretaxCost, RG:instanceId}"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span>--output<span class="w"> </span>table
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># Analisi via Azure Cost Management API (più completa)</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># Disponibile in portal: Cost Management + Billing → Cost Analysis</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># Per account MCA (Microsoft Customer Agreement) i comandi `az consumption usage`</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># non sono supportati: usare Cost Analysis (portal) o la Query API</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>az<span class="w"> </span>costmanagement<span class="w"> </span>query<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span>--type<span class="w"> </span>ActualCost<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span>--scope<span class="w"> </span><span class="s2">"subscriptions/&lt;subscription-id&gt;"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span>--timeframe<span class="w"> </span>MonthToDate<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span>--dataset-aggregation<span class="w"> </span><span class="s1">'{"totalCost":{"name":"Cost","function":"Sum"}}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">    </span>--dataset-grouping<span class="w"> </span><span class="nv">name</span><span class="o">=</span>ResourceGroupName<span class="w"> </span><span class="nv">type</span><span class="o">=</span>Dimension
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># (richiede l'estensione: az extension add --name costmanagement)</span>
 </span></code></pre></div>
 <h3 id="budget-e-alert">Budget e Alert<a class="headerlink" href="#budget-e-alert" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Creare budget mensile per subscription</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>az<span class="w"> </span>consumption<span class="w"> </span>budget<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span>--budget-name<span class="w"> </span>prod-monthly<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span>--amount<span class="w"> </span><span class="m">5000</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span>--time-grain<span class="w"> </span>Monthly<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span>--start-date<span class="w"> </span><span class="m">2026</span>-01-01<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span>--end-date<span class="w"> </span><span class="m">2026</span>-12-31<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span>--category<span class="w"> </span>Cost<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">    </span>--notifications<span class="w"> </span><span class="s1">'[</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="s1">        {</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="s1">            "enabled": true,</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="s1">            "operator": "GreaterThan",</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="s1">            "threshold": 80,</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="s1">            "contactEmails": ["finops@company.com"],</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="s1">            "thresholdType": "Actual"</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="s1">        },</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="s1">        {</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="s1">            "enabled": true,</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="s1">            "operator": "GreaterThan",</span>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="s1">            "threshold": 100,</span>
-</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="s1">            "contactEmails": ["cto@company.com"],</span>
-</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="s1">            "thresholdType": "Actual"</span>
-</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="s1">        },</span>
-</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="s1">        {</span>
-</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="s1">            "enabled": true,</span>
-</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="s1">            "operator": "GreaterThan",</span>
-</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="s1">            "threshold": 110,</span>
-</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="s1">            "contactEmails": ["cto@company.com"],</span>
-</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="s1">            "thresholdType": "Forecasted"</span>
-</span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="s1">        }</span>
-</span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a><span class="s1">    ]'</span>
+<p>Un budget <strong>notifica soltanto</strong> (email o Action Group): non ferma né limita le risorse. Per un'azione automatica (es. spegnere VM) collegare un Action Group a Automation/Logic Apps.</p>
+<p>Il modo più affidabile da CLI è la Budgets API via <code>az rest</code> (le <code>notifications</code> sono un dizionario con chiave arbitraria, non una lista):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nv">SUB</span><span class="o">=</span><span class="k">$(</span>az<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>az<span class="w"> </span>rest<span class="w"> </span>--method<span class="w"> </span>put<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span>--url<span class="w"> </span><span class="s2">"https://management.azure.com/subscriptions/</span><span class="nv">$SUB</span><span class="s2">/providers/Microsoft.Consumption/budgets/prod-monthly?api-version=2023-05-01"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span>--body<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="s1">      "properties": {</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="s1">        "category": "Cost",</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="s1">        "amount": 5000,</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="s1">        "timeGrain": "Monthly",</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="s1">        "timePeriod": { "startDate": "2026-01-01T00:00:00Z", "endDate": "2026-12-31T00:00:00Z" },</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="s1">        "notifications": {</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="s1">          "actual80":   { "enabled": true, "operator": "GreaterThan", "threshold": 80,  "thresholdType": "Actual",     "contactEmails": ["finops@company.com"] },</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="s1">          "actual100":  { "enabled": true, "operator": "GreaterThan", "threshold": 100, "thresholdType": "Actual",     "contactEmails": ["cto@company.com"] },</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="s1">          "forecast110": { "enabled": true, "operator": "GreaterThan", "threshold": 110, "thresholdType": "Forecasted", "contactEmails": ["cto@company.com"] }</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="s1">        }</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="s1">      }</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="s1">    }'</span>
 </span></code></pre></div>
+<p><code>startDate</code> deve essere il primo giorno di un mese. Gli alert <code>Forecasted</code> anticipano lo sforamento prima che avvenga.</p>
 <h3 id="tag-per-cost-allocation">Tag per Cost Allocation<a class="headerlink" href="#tag-per-cost-allocation" title="Permanent link">&para;</a></h3>
 <p>I <strong>tag</strong> Azure sono coppie chiave-valore che permettono di raggruppare e allocare i costi:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Applicare tag a resource group</span>
@@ -25161,7 +25152,7 @@ Usare solo per workload interrompibili: batch, rendering, CI workers, ML trainin
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Tag Propagation</p>
-<p>I tag applicati a un Resource Group <strong>non si propagano automaticamente</strong> alle risorse contenute. Usare Azure Policy (Inherit a tag from resource group) per propagarli automaticamente.</p>
+<p>I tag applicati a un Resource Group <strong>non si propagano automaticamente</strong> alle risorse contenute. Usare Azure Policy (<em>Inherit a tag from the resource group if missing</em>, effect <code>modify</code>) oppure la funzione <strong>Tag inheritance</strong> di Cost Management (Settings → Configuration), che copia i tag di subscription/RG sui record di costo senza toccare le risorse.</p>
 </div>
 <hr />
 <h2 id="tco-calculator-e-pricing-calculator">TCO Calculator e Pricing Calculator<a class="headerlink" href="#tco-calculator-e-pricing-calculator" title="Permanent link">&para;</a></h2>
@@ -25207,11 +25198,11 @@ Usare solo per workload interrompibili: batch, rendering, CI workers, ML trainin
 </tr>
 <tr>
 <td><strong>Enterprise Agreement (EA)</strong></td>
-<td>Accordo aziendale 3 anni — sconti volume per grandi organizzazioni</td>
+<td>Accordo aziendale 3 anni — sconti volume per grandi organizzazioni; legacy, i nuovi clienti vengono indirizzati verso MCA</td>
 </tr>
 <tr>
 <td><strong>Microsoft Customer Agreement (MCA)</strong></td>
-<td>Accordo moderno per EA — sostituisce EA gradualmente</td>
+<td>Modello di contratto corrente (online o enterprise, <em>MCA-E</em>) — sostituisce EA/PAYG legacy</td>
 </tr>
 <tr>
 <td><strong>Cloud Solution Provider (CSP)</strong></td>
@@ -25223,12 +25214,13 @@ Usare solo per workload interrompibili: batch, rendering, CI workers, ML trainin
 </tr>
 </tbody>
 </table>
-<p><strong>Struttura billing EA/MCA:</strong></p>
+<p><strong>Struttura billing MCA:</strong></p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Billing Account (Azienda)
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>└── Billing Profile (Divisione / BU)
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>└── Billing Profile (Fattura / metodo di pagamento)
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    └── Invoice Section (Progetto / Team)
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        └── Subscription
 </span></code></pre></div>
+<p>Nell'EA legacy la gerarchia è diversa: <code>Enrollment → Department → Account → Subscription</code>.</p>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-budget-alert-non-arriva">Scenario 1 — Budget Alert non arriva<a class="headerlink" href="#scenario-1-budget-alert-non-arriva" title="Permanent link">&para;</a></h3>
@@ -25236,15 +25228,15 @@ Usare solo per workload interrompibili: batch, rendering, CI workers, ML trainin
 <p><strong>Causa:</strong> Latenza del Cost Management (dati aggiornati ogni 8-24h) oppure email finita in spam; in alcuni casi il budget è stato creato su subscription sbagliata o con <code>--end-date</code> già scaduta.</p>
 <p><strong>Soluzione:</strong> Verificare configurazione budget e testare manualmente l'alert.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Verificare budget esistenti e relative notifiche</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>az<span class="w"> </span>consumption<span class="w"> </span>budget<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[].{Name:name, Amount:amount, CurrentSpend:currentSpend.amount, Notifications:notifications}"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span>--output<span class="w"> </span>json
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># Controllare che la subscription sia corretta</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>az<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>--query<span class="w"> </span><span class="s2">"{Name:name, ID:id}"</span><span class="w"> </span>--output<span class="w"> </span>table
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># Revocare e ricreare il budget se la configurazione è corrotta</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>az<span class="w"> </span>consumption<span class="w"> </span>budget<span class="w"> </span>delete<span class="w"> </span>--budget-name<span class="w"> </span>prod-monthly
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nv">SUB</span><span class="o">=</span><span class="k">$(</span>az<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>az<span class="w"> </span>rest<span class="w"> </span>--method<span class="w"> </span>get<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span>--url<span class="w"> </span><span class="s2">"https://management.azure.com/subscriptions/</span><span class="nv">$SUB</span><span class="s2">/providers/Microsoft.Consumption/budgets?api-version=2023-05-01"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"value[].{Name:name, Amount:properties.amount, CurrentSpend:properties.currentSpend.amount, Notifications:properties.notifications}"</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Controllare che la subscription sia corretta</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>az<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>--query<span class="w"> </span><span class="s2">"{Name:name, ID:id}"</span><span class="w"> </span>--output<span class="w"> </span>table
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Ricreare il budget se la configurazione è errata (stesso PUT, sovrascrive)</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-costi-imprevisti-su-spot-vm-non-interrotte">Scenario 2 — Costi imprevisti su Spot VM non interrotte<a class="headerlink" href="#scenario-2-costi-imprevisti-su-spot-vm-non-interrotte" title="Permanent link">&para;</a></h3>
@@ -25269,15 +25261,13 @@ Usare solo per workload interrompibili: batch, rendering, CI workers, ML trainin
 <hr />
 <h3 id="scenario-3-reserved-instance-non-applicata-alle-vm">Scenario 3 — Reserved Instance non applicata alle VM<a class="headerlink" href="#scenario-3-reserved-instance-non-applicata-alle-vm" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Le VM continuano a essere fatturate a tariffa PAYG nonostante una RI acquistata.</p>
-<p><strong>Causa:</strong> La RI è stata acquistata con scope <code>Single subscription</code> e la VM gira su subscription diversa; oppure il <code>VM size</code> o la <code>region</code> non corrispondono esattamente alla RI; oppure la RI è scaduta.</p>
-<p><strong>Soluzione:</strong> Verificare scope, size e regione della RI.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Elenco RI con scope e dettagli</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>az<span class="w"> </span>consumption<span class="w"> </span>reservations<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[].{Name:name, Region:location, VMSize:sku.name, Scope:properties.appliedScopes, Expiry:properties.expiryDate}"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span>--output<span class="w"> </span>table
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Cambiare scope da single a shared (copre tutte le subscription del billing account)</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Eseguibile dal portal: Reservations → seleziona RI → Change scope → Shared</span>
+<p><strong>Causa:</strong> La RI è stata acquistata con scope <code>Single subscription</code> e la VM gira su subscription diversa; oppure la <code>region</code> o la famiglia VM non corrispondono alla RI (con <em>instance size flexibility</em>, attiva di default, la RI copre size diverse della stessa famiglia, non famiglie diverse); oppure la RI è scaduta.</p>
+<p><strong>Soluzione:</strong> Verificare scope, famiglia e regione della RI.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Elenco reservation order con stato e scadenza</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>az<span class="w"> </span>reservations<span class="w"> </span>reservation-order<span class="w"> </span>list<span class="w"> </span>--output<span class="w"> </span>table
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Cambiare scope da single a shared (copre tutte le subscription del billing account)</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Eseguibile dal portal: Reservations → seleziona RI → Change scope → Shared</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-tag-non-propagati-alle-risorse-figlie">Scenario 4 — Tag non propagati alle risorse figlie<a class="headerlink" href="#scenario-4-tag-non-propagati-alle-risorse-figlie" title="Permanent link">&para;</a></h3>
@@ -25308,7 +25298,7 @@ Usare solo per workload interrompibili: batch, rendering, CI workers, ML trainin
 <ul>
 <li><strong>Tag strategy prima del giorno 1:</strong> definire uno schema di tag obbligatori (<code>Environment</code>, <code>Team</code>, <code>CostCenter</code>, <code>Application</code>) e applicarlo via Azure Policy prima di creare le prime risorse.</li>
 <li><strong>RI su baseline, Savings Plan su variabilità:</strong> acquistare RI per workload stabili e prevedibili (DB, VM production); usare Compute Savings Plan per copertura flessibile su picchi imprevedibili.</li>
-<li><strong>Budget su ogni subscription non solo sul billing account:</strong> un budget a livello subscription blocca la sorpresa; un budget a livello EA/MCA offre visibilità aggregata ma non granularità.</li>
+<li><strong>Budget su ogni subscription non solo sul billing account:</strong> un budget a livello subscription intercetta lo sforamento prima della fattura (non blocca la spesa, avvisa); un budget a livello billing account offre visibilità aggregata ma non granularità.</li>
 <li><strong>Advisor Cost settimanale:</strong> eseguire regolarmente <code>az advisor recommendation list --category Cost</code> per intercettare RI inutilizzate, VM undersized e risorse orfane (disk, IP pubblici, ecc.).</li>
 <li><strong>Dev/Test subscription separata:</strong> usare subscription Dev/Test per ambienti non-prod — prezzi scontati fino al 55% su Windows VM e servizi PaaS.</li>
 </ul>
