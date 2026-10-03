@@ -9,14 +9,14 @@ related: [monitoring/fondamentali/opentelemetry, monitoring/tools/prometheus, mo
 official_docs: https://opentelemetry.io/docs/concepts/observability-primer/
 status: complete
 difficulty: beginner
-last_updated: 2026-03-25
+last_updated: 2026-10-03
 ---
 
 # I Tre Pilastri dell'Osservabilità
 
 ## Panoramica
 
-L'osservabilità è la capacità di comprendere lo stato interno di un sistema a partire dai suoi output esterni. In un sistema distribuito moderno, i "segnali" che emette un sistema si dividono in tre categorie fondamentali — metriche, log e tracce — ognuna con caratteristiche, costi e usi distinti. Insieme formano i **tre pilastri dell'osservabilità** (anche detti MELT: Metrics, Events/Logs, Logs, Traces) o la "triade della telemetria".
+L'osservabilità è la capacità di comprendere lo stato interno di un sistema a partire dai suoi output esterni. In un sistema distribuito moderno, i "segnali" che emette un sistema si dividono in tre categorie fondamentali — metriche, log e tracce — ognuna con caratteristiche, costi e usi distinti. Insieme formano i **tre pilastri dell'osservabilità** (anche detti MELT: Metrics, Events, Logs, Traces) o la "triade della telemetria".
 
 La differenza rispetto al monitoring tradizionale è sostanziale: il **monitoring** risponde a "il sistema funziona?" (domande note con risposte note), mentre l'**osservabilità** risponde a "perché il sistema si comporta così?" (domande non anticipate). Un sistema osservabile permette di diagnosticare problemi mai visti prima senza dover deployare nuova strumentazione.
 
@@ -405,83 +405,72 @@ sum by (service) (rate(http_requests_total[5m])) * 100
 
 ## Troubleshooting
 
-**Scenario 1: Alert "Error rate alto" ma non capisco quale componente**
+### Scenario 1 — Alert "Error rate alto" ma non so quale componente
 
-```
-Sintomo: alert Prometheus "error_rate > 5%" su payment-service
-Causa:   il servizio coinvolge 4 microservizi — non so quale fallisce
+**Sintomo**: alert Prometheus `error_rate > 5%` su `payment-service`.
 
-Soluzione:
-1. Apri Grafana → dashboard payment-service → guarda breakdown errori per span
-2. Cerca in Loki: {service="payment-service"} |= "ERROR" | json | line_format "{{.error}}"
-3. Prendi il trace_id dall'output del log
-4. Apri Grafana Tempo con quel trace_id
-5. Identifica quale span ha status=ERROR → è il componente che fallisce
+**Causa**: la richiesta attraversa 4 microservizi; la metrica aggregata dice *che* c'è un errore, non *dove*. Solo il `trace_id` nei log collega l'errore al singolo span.
 
-Comandi:
-# Loki query per errori recenti con trace_id
+**Soluzione**:
+
+1. Grafana → dashboard `payment-service` → breakdown errori
+2. Cerca in Loki gli errori recenti ed estrai il `trace_id`
+3. Apri quel `trace_id` in Grafana Tempo
+4. Lo span con `status=ERROR` è il componente che fallisce
+
+```logql
 {service="payment-service"} |= "ERROR" | json | line_format "{{.timestamp}} {{.trace_id}} {{.error}}"
 ```
 
-**Scenario 2: Latenza alta ma metriche aggregate sembrano normali**
+### Scenario 2 — Latenza alta ma metriche aggregate normali
 
-```
-Sintomo: utenti si lamentano di lentezza, ma p99 su Prometheus è OK
-Causa:   il problema riguarda un sottoinsieme di utenti (alta cardinalità)
+**Sintomo**: utenti segnalano lentezza, ma il p99 su Prometheus è nella norma.
 
-Soluzione:
-- Le metriche aggregate nascondono sottoset di traffico — è un limite del modello
-- Cerca in Loki i log con duration_ms > 2000 per identificare i pattern
-- Cerca in Tempo le tracce con latenza > 2s (Tempo supporta search per durata)
+**Causa**: il problema riguarda un sottoinsieme di utenti o endpoint; le metriche aggregate lo diluiscono (limite del modello, non bug). Log e tracce mantengono il dettaglio per singola richiesta.
 
-Query Loki:
+**Soluzione**: cerca nei log le richieste lente per individuare il pattern, poi in Tempo le tracce con durata alta (Tempo supporta la ricerca per durata).
+
+```logql
 {service="api"} | json | duration_ms > 2000 | line_format "{{.user_id}} {{.path}} {{.duration_ms}}ms"
-
-Query Tempo:
-minDuration=2s, service=api
 ```
 
-**Scenario 3: Log troppo voluminosi, storage in crescita esponenziale**
-
-```
-Sintomo: Loki storage cresce di 50GB/giorno, costi fuori controllo
-Causa:   log a livello DEBUG in produzione, o log di metriche che non appartengono ai log
-
-Soluzione:
-1. Identifica i servizi più prolissi:
-   # In Loki/Grafana: topk(10, sum by (service) (rate({} [5m])))
-
-2. Per ogni servizio problematico:
-   - Alzare il log level a INFO o WARNING in produzione
-   - Convertire i log periodici in metriche (es. "request completed in Xms" → histogram)
-   - Usare sampling sul log level DEBUG (es. 1% in produzione)
-
-3. Configura retention per log level:
-   - ERROR/WARNING: 90 giorni
-   - INFO: 30 giorni
-   - DEBUG: 7 giorni (se proprio necessario in prod)
+```text
+# Ricerca Tempo (TraceQL)
+{ resource.service.name = "api" && duration > 2s }
 ```
 
-**Scenario 4: Tracce incomplete — alcuni span mancano**
+### Scenario 3 — Log troppo voluminosi, storage in crescita
 
+**Sintomo**: lo storage di Loki cresce di 50 GB/giorno, costi fuori controllo.
+
+**Causa**: log a livello `DEBUG` in produzione, oppure log usati al posto di metriche (es. `request completed in Xms` a ogni richiesta).
+
+**Soluzione**:
+
+1. Identifica i servizi più prolissi
+2. Alza il log level a `INFO`/`WARNING` in produzione
+3. Converti i log periodici in metriche (histogram) e applica sampling al `DEBUG` (es. 1%)
+4. Retention differenziata: ERROR/WARNING 90 giorni, INFO 30, DEBUG 7
+
+```logql
+topk(10, sum by (service) (rate({job=~".+"}[5m])))
 ```
-Sintomo: le tracce mostrano gap (es. il span del DB non appare)
-Causa:   il context OTel non viene propagato correttamente attraverso i layer
 
-Soluzioni possibili:
-a) Libreria non instrumentata: verifica che l'SDK OTel supporti il driver DB in uso
-   (es. psycopg2 per Postgres richiede opentelemetry-instrumentation-psycopg2)
+### Scenario 4 — Tracce incomplete, span mancanti
 
-b) Context non propagato: il thread/goroutine che fa la query non riceve il context OTel
-   → In Go: assicurarsi di passare ctx a tutte le funzioni downstream
-   → In Java: usare MDC + OTel context propagation
+**Sintomo**: le tracce mostrano gap (es. lo span del DB non appare).
 
-c) Sampling aggressivo: la traccia è stata droppa dal sampler
-   → Abbassa il sampling rate o usa tail-based sampling nel Collector
+**Causa**: il context OTel non viene propagato tra i layer, la libreria non è instrumentata, oppure il sampler ha scartato la traccia.
 
-Verifica:
-kubectl logs deploy/otel-collector | grep "dropped"
-curl http://otel-collector:8888/metrics | grep otelcol_processor_dropped
+**Soluzione**:
+
+- *Libreria non instrumentata*: verifica che esista l'instrumentation per il driver (es. Postgres con `psycopg2` richiede `opentelemetry-instrumentation-psycopg2`)
+- *Context non propagato*: in Go passa `ctx` a tutte le funzioni downstream; in Java usa MDC + OTel context propagation
+- *Sampling aggressivo*: alza il sampling rate o usa tail-based sampling nel Collector
+
+```bash
+kubectl logs deploy/otel-collector | grep -i "dropped"
+curl -s http://otel-collector:8888/metrics | grep otelcol_processor_dropped
 ```
 
 ---
