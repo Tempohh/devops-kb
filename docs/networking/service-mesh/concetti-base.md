@@ -7,9 +7,10 @@ search_keywords: [service mesh pattern, sidecar proxy kubernetes, control plane 
 parent: networking/service-mesh/_index
 related: [networking/service-mesh/istio, networking/service-mesh/envoy, networking/service-mesh/linkerd, networking/api-gateway/pattern-base]
 official_docs: https://istio.io/latest/docs/concepts/what-is-istio/
-status: complete
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Service Mesh — Concetti Base
@@ -25,7 +26,7 @@ Un **service mesh** risolve questo problema spostando tutta la logica di comunic
 Questo argomento presuppone familiarità con:
 - [TCP/IP](../fondamentali/tcpip.md) — modello di rete, cos'è un pacchetto, come funziona il routing
 - [TLS/SSL Basics](../fondamentali/tls-ssl-basics.md) — TLS handshake, certificati, mutual TLS (mTLS)
-- Kubernetes di base — pod, container, namespace, Service (documentazione non ancora presente in questa KB)
+- Kubernetes di base — pod, container, namespace, Service ([Workloads](../../containers/kubernetes/workloads.md), [Networking](../../containers/kubernetes/networking.md))
 
 Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.
 
@@ -52,7 +53,7 @@ Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestu
 | **Retry e timeout** | Politiche configurabili globalmente o per route |
 | **Circuit breaking** | Isolamento automatico di servizi degradati |
 | **Fault injection** | Iniezione di delay o errori per chaos testing |
-| **Observability** | Distributed tracing, golden metrics (latency, errors, saturation) automatici |
+| **Observability** | Distributed tracing, golden metrics (latency, traffic/request rate, errors) automatici per ogni servizio |
 | **Service discovery** | Risoluzione dei servizi tramite il control plane |
 | **Authorization policy** | Regole allow/deny per ogni coppia sorgente-destinazione |
 
@@ -97,11 +98,14 @@ graph TB
 
 Il sidecar proxy viene iniettato automaticamente nei Pod tramite un **Mutating Admission Webhook** — un'estensione dell'API Kubernetes che intercetta le richieste di creazione degli oggetti e può modificarli prima che vengano salvati in etcd. Quando un Pod viene creato in un namespace con la label `istio-injection: enabled` (o equivalente), il control plane intercetta la richiesta all'API Server e modifica la specifica del Pod per aggiungere il container sidecar e un init container.
 
-```yaml
+```bash
 # Abilitare sidecar injection su un namespace
 kubectl label namespace production istio-injection=enabled
+```
 
+```yaml
 # Oppure su singolo Pod/Deployment con annotation
+# (nel pod template: spec.template.metadata)
 metadata:
   annotations:
     sidecar.istio.io/inject: "true"
@@ -114,6 +118,17 @@ L'init container configura regole **iptables** che reindirizzano tutto il traffi
 ### Rotazione certificati mTLS
 
 Il control plane agisce da **Certificate Authority (CA)**. Ad ogni sidecar viene emesso un certificato **SVID** (SPIFFE Verifiable Identity Document) con identità basata sul service account Kubernetes. **SPIFFE** (Secure Production Identity Framework for Everyone) è lo standard open per assegnare identità crittografiche ai workload in ambienti distribuiti, indipendentemente dall'infrastruttura sottostante. I certificati vengono ruotati automaticamente (tipicamente ogni 24h) senza downtime.
+
+### Alternative al sidecar: modalità sidecar-less
+
+Il modello sidecar ha costi noti: ogni Pod paga CPU/RAM del proxy, l'injection richiede il restart dei workload per aggiornare il proxy, e l'init container con iptables complica job e startup ordering. Per questo l'ecosistema si è evoluto verso modelli **sidecar-less**:
+
+- **Istio Ambient mode** (GA da Istio 1.24, novembre 2024): il data plane si divide in due livelli. Un **ztunnel** per nodo (DaemonSet, scritto in Rust) gestisce solo L4: mTLS, identità, autorizzazione base, tunnel **HBONE** (HTTP/2 CONNECT su porta 15008). Un **waypoint proxy** (Envoy) per namespace o servizio, opzionale, aggiunge le funzioni L7 (routing, retry, policy HTTP) solo dove servono. Si abilita con la label `istio.io/dataplane-mode=ambient` sul namespace, senza restart dei Pod.
+- **Cilium Service Mesh**: mTLS e funzioni L7 basate su eBPF nel kernel e su Envoy per nodo, senza sidecar.
+- **Linkerd** resta sidecar-based, con un proxy Rust (`linkerd2-proxy`) molto leggero.
+
+!!! note "Perché conta"
+    Ambient sposta il trade-off: meno overhead per Pod e adozione più semplice, ma il blast radius di un componente per nodo è maggiore e la maturità operativa è inferiore a quella del sidecar. I concetti di questa pagina (control plane, data plane, mTLS, xDS) restano validi in entrambi i modelli. Per i dettagli, vedere [Istio](istio.md).
 
 ## Service Mesh vs API Gateway
 
@@ -240,4 +255,4 @@ kubectl exec <pod-name> -c istio-proxy -- curl -s localhost:15000/stats | grep "
 - [Service Mesh Landscape — CNCF](https://landscape.cncf.io/card-mode?category=service-mesh)
 - [Pattern: Service Mesh — microservices.io](https://microservices.io/patterns/deployment/service-mesh.html)
 - [Istio Concepts](https://istio.io/latest/docs/concepts/)
-- [Linkerd Architecture](https://linkerd.io/2.14/reference/architecture/)
+- [Linkerd Architecture](https://linkerd.io/2/reference/architecture/)
