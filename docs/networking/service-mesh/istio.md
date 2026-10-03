@@ -14,7 +14,7 @@ related:
 official_docs: https://istio.io/latest/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-03
 ---
 
 # Istio
@@ -597,6 +597,64 @@ istioctl proxy-config log <pod-name>.<namespace> --level debug
 
 # Ripristinare il log level
 istioctl proxy-config log <pod-name>.<namespace> --level warning
+```
+
+### Scenario 1 — 503 `upstream connect error or disconnect/reset before headers`
+
+**Sintomo**: chiamate tra servizi falliscono con 503 e response flag `UF`/`UC` nei log del sidecar; nessun errore nell'applicazione.
+
+**Causa**: mismatch mTLS. Il destinatario ha `PeerAuthentication` STRICT ma il client non ha sidecar (o una `DestinationRule` forza `tls.mode: DISABLE`), quindi Envoy riceve plaintext e chiude la connessione.
+
+**Soluzione**: allineare le due policy, o passare temporaneamente a PERMISSIVE durante la migrazione.
+
+```bash
+istioctl x describe pod <pod>.<namespace>          # mostra mTLS effettivo
+kubectl get peerauthentication,destinationrule -A
+kubectl logs <pod> -c istio-proxy -n <namespace> | grep -E "UF|UC|URX"
+```
+
+### Scenario 2 — 404 / `NR` (no route) dall'Ingress Gateway
+
+**Sintomo**: richiesta esterna restituisce 404; nei log del gateway compare response flag `NR`.
+
+**Causa**: il `VirtualService` non referenzia il `Gateway` in `spec.gateways`, l'host non coincide, oppure Gateway e VS stanno in namespace diversi senza il prefisso `ns/name`. Senza route matching Envoy non sa dove inoltrare.
+
+**Soluzione**: verificare host, `gateways` e selector del Gateway; poi controllare le route realmente caricate sul proxy.
+
+```bash
+istioctl analyze -n production
+istioctl proxy-config route deploy/istio-ingressgateway -n istio-system
+kubectl logs deploy/istio-ingressgateway -n istio-system --tail=50
+```
+
+### Scenario 3 — Sidecar non iniettato o istiod non raggiungibile
+
+**Sintomo**: Pod con `1/1` container invece di `2/2`; oppure Pod nuovi bloccati con errore `failed calling webhook "namespace.sidecar-injector.istio.io"`.
+
+**Causa**: namespace senza label `istio-injection=enabled` (o `istio.io/rev` con revisioni), Pod creati prima della label (l'injection avviene solo alla creazione), oppure istiod down e `MutatingWebhookConfiguration` con `failurePolicy: Fail`.
+
+**Soluzione**: etichettare il namespace, riavviare i workload, verificare istiod.
+
+```bash
+kubectl get ns production --show-labels
+kubectl get pods -n istio-system -l app=istiod
+kubectl get mutatingwebhookconfiguration | grep istio
+kubectl rollout restart deployment -n production
+```
+
+### Scenario 4 — Proxy `STALE` in `proxy-status`
+
+**Sintomo**: `istioctl proxy-status` mostra `STALE` o `NOT SENT` per CDS/LDS/EDS/RDS; le modifiche a VirtualService/DestinationRule non hanno effetto.
+
+**Causa**: istiod sovraccarico o con pochi risorse, config rifiutata da Envoy (NACK) per YAML valido ma semanticamente errato, oppure connessione xDS persa.
+
+**Soluzione**: leggere il motivo del NACK, correggere la risorsa, scalare istiod se saturo.
+
+```bash
+istioctl proxy-status
+kubectl logs deploy/istiod -n istio-system | grep -i -E "nack|reject|error"
+kubectl top pod -n istio-system
+kubectl scale deploy/istiod -n istio-system --replicas=2
 ```
 
 ## Relazioni
