@@ -7,9 +7,10 @@ search_keywords: [AWS billing, AWS pricing, AWS Cost Explorer, AWS Budgets, Rese
 parent: cloud/aws/fondamentali/_index
 related: [cloud/aws/fondamentali/well-architected, cloud/aws/iam/organizations]
 official_docs: https://aws.amazon.com/pricing/
-status: complete
+status: needs-review
 difficulty: beginner
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Billing & Pricing AWS
@@ -22,10 +23,14 @@ AWS usa **3 driver fondamentali** di costo:
 |--------|--------|
 | **Compute** | EC2 ore/secondi, Lambda invocazioni+durata, ECS/Fargate vCPU+memoria |
 | **Storage** | S3 GB/mese, EBS GB provisioned, EFS GB usato |
-| **Data Transfer** | **Ingress: gratuito**. Egress verso Internet: a pagamento. Inter-Region: a pagamento. Intra-Region tra AZ: a pagamento (ridotto). Stessa AZ: gratuito. |
+| **Data Transfer** | **Ingress: gratuito**. Egress verso Internet: a pagamento (primi 100 GB/mese aggregati gratuiti). Inter-Region: a pagamento. Intra-Region tra AZ: a pagamento (ridotto). Stessa AZ: gratuito (via IP privato). |
 
 !!! tip "Regola data transfer"
     Dati che **entrano** in AWS (ingress) sono sempre gratuiti. Dati che **escono** (egress) costano. Questo incentiva ad architetture che processano i dati vicino alla source.
+
+!!! warning "Costi nascosti ricorrenti"
+    - **NAT Gateway**: oltre alla tariffa oraria, ~0,045 $/GB processato — il traffico verso S3/DynamoDB va instradato via **Gateway VPC Endpoint** (gratuito) per evitarlo.
+    - **IPv4 pubblici**: dal 2024 ogni indirizzo IPv4 pubblico costa ~0,005 $/ora (≈3,6 $/mese), anche se associato a istanza in uso. Importi indicativi: verificare sulla pagina pricing della Region.
 
 ---
 
@@ -33,7 +38,7 @@ AWS usa **3 driver fondamentali** di costo:
 
 ### On-Demand
 
-- Paga per **secondo** (Linux) o per **ora** (Windows)
+- Paga per **secondo** (minimo 60 s) per Linux; alcuni OS commerciali (es. RHEL, SUSE) possono avere billing orario — verificare sulla pagina pricing dell'OS scelto
 - Zero impegno, massima flessibilità
 - Prezzo più alto per unità — adatto per carichi variabili o testing
 
@@ -43,8 +48,8 @@ AWS usa **3 driver fondamentali** di costo:
 - Tipi di pagamento: All Upfront (max sconto), Partial Upfront, No Upfront
 - **Standard RI**: fixed instance type/family/OS/Region
 - **Convertible RI**: può cambiare instance family/OS — sconto minore (~54%)
-- **Scheduled RI**: finestre orarie specifiche (deprecato, sostituito da Savings Plans)
-- RI non usate possono essere **vendute nel Reserved Instance Marketplace**
+- **Scheduled RI**: finestre orarie specifiche (non più acquistabili; usare Savings Plans)
+- Le **Standard RI** non usate possono essere **vendute nel Reserved Instance Marketplace** (le Convertible no)
 
 ### Savings Plans
 
@@ -55,6 +60,7 @@ Più flessibili delle RI — impegno su **spesa $/ora** per 1 o 3 anni:
 | **Compute Savings Plans** | EC2 + Lambda + Fargate, qualsiasi Region/family/OS | ~66% |
 | **EC2 Instance Savings Plans** | EC2 specifica family + Region | ~72% |
 | **SageMaker Savings Plans** | SageMaker instance types | ~64% |
+| **Database Savings Plans** | RDS, Aurora, DynamoDB ecc. (introdotti a fine 2025; sconti inferiori) | fino a ~35% |
 
 !!! note "Savings Plans vs Reserved Instances"
     Per nuovi deployment: preferire **Savings Plans** (più flessibili). RI rimane conveniente per workload stabili con instance type fisso (es. RDS).
@@ -100,8 +106,11 @@ AWS offre un **Free Tier** per esplorare i servizi — 3 tipologie:
 | Tipo | Durata | Esempio |
 |------|--------|---------|
 | **Always Free** | Per sempre | Lambda 1M invocazioni/mese, DynamoDB 25GB, CloudWatch basic |
-| **12 Months Free** | 12 mesi dal signup | EC2 t2.micro 750h/mese, S3 5GB, RDS 750h/mese db.t2/t3.micro |
+| **12 Months Free** | 12 mesi dal signup (solo account creati prima del 15/07/2025) | EC2 t2.micro 750h/mese, S3 5GB, RDS 750h/mese db.t2/t3.micro |
 | **Trial** | Periodo limitato | SageMaker 2 mesi, Amazon Comprehend 3 mesi |
+
+!!! note "Nuovo modello Free Tier (account creati dal 15/07/2025)"
+    I nuovi account scelgono tra **Free plan** (fino a 6 mesi o esaurimento dei crediti, nessun addebito, alcuni servizi limitati) e **Paid plan** (crediti promozionali da consumare in 6 mesi, poi pay-as-you-go). Il modello a 12 mesi per servizio resta solo per gli account precedenti. Verificare importi e durata su [aws.amazon.com/free](https://aws.amazon.com/free/).
 
 **Servizi sempre gratuiti (selezione):**
 - Lambda: 1 milione richieste/mese + 400.000 GB-secondi
@@ -130,8 +139,8 @@ Console → Billing → Cost Explorer
 - Visualizza spesa **storica** e previsioni (forecasting a 12 mesi)
 - Filtri per: servizio, account, Region, tag, istanza type
 - **Savings Plans recommendations** — suggerisce quanto acquistare
-- **RI recommendations** — rightsizing RI
-- **Granularità**: giornaliera, mensile, oraria (solo ultimi 14 giorni)
+- **RI recommendations** — suggerisce quali RI acquistare
+- **Granularità**: giornaliera, mensile, oraria (solo ultimi 14 giorni, da abilitare nelle preferenze e a pagamento)
 - Report personalizzati salvabili
 
 ### AWS Budgets
@@ -168,12 +177,17 @@ aws budgets create-budget \
     }]'
 ```
 
+### AWS Cost Anomaly Detection
+
+- Rileva con ML spese anomale per servizio/account/tag/cost category e invia alert (email/SNS) con **root cause** (servizio, Region, account)
+- Gratuito; complementare a Budgets: Budgets segnala il superamento di una soglia fissa, Anomaly Detection il *cambio di pattern* anche sotto soglia
+
 ### AWS Cost Allocation Tags
 
 - Aggiungere **tag** alle risorse → visualizzare costi per tag in Cost Explorer
 - Tipi: **AWS-generated tags** (es. `aws:createdBy`) e **user-defined tags**
-- Tag devono essere **attivati** in Billing per apparire nei report (latenza ~24h)
-- Best practice: tag obbligatori con Config Rules (es. `Project`, `Team`, `Environment`)
+- Tag devono essere **attivati** in Billing per apparire nei report (latenza ~24h), anche gli AWS-generated; non sono retroattivi
+- Best practice: tag obbligatori con Config Rules o **Tag Policies** di Organizations (es. `Project`, `Team`, `Environment`)
 
 ```bash
 # Taggare una EC2 instance
@@ -186,13 +200,14 @@ aws ec2 create-tags \
 
 - Report **granulare** (per risorsa, per ora) esportato in S3
 - Formato CSV/Parquet — analizzabile con Athena, QuickSight, Redshift
+- Il CUR *legacy* è affiancato da **Data Exports** (Billing → Data Exports): **CUR 2.0** (schema fisso, query SQL prima dell'export) ed export **FOCUS 1.0** (standard FinOps multi-cloud) — preferirli per nuove configurazioni
 - Standard de-facto per FinOps (Financial Operations — gestione finanziaria del cloud) avanzato e multi-account billing
 
 ---
 
 ## AWS Trusted Advisor
 
-**Trusted Advisor** analizza il tuo account e fornisce raccomandazioni in 5 categorie:
+**Trusted Advisor** analizza il tuo account e fornisce raccomandazioni in 6 categorie:
 
 | Categoria | Check Esempio |
 |-----------|---------------|
@@ -200,15 +215,15 @@ aws ec2 create-tags \
 | **Security** | Security Groups troppo aperti, MFA su root, bucket S3 pubblici |
 | **Fault Tolerance** | AZ single point, backup EC2/RDS, Route 53 health checks |
 | **Performance** | EC2 con alta CPU, CloudFront ottimizzazioni |
-| **Service Limits** | Avvisi quando ci si avvicina ai limiti AWS |
-| **Service Quotas** (aggiunto 2023) | Monitoraggio quote servizi |
+| **Service Quotas** (ex Service Limits) | Avvisi quando ci si avvicina alle quote AWS |
+| **Operational Excellence** | Check su best practice operative |
 
 **Livelli di accesso:**
 
 | Piano Support | Check Disponibili |
 |---------------|-------------------|
-| Basic/Developer | 7 security check fondamentali |
-| Business/Enterprise | Tutti i check (oltre 500) |
+| Basic/Developer | Core check (security e service quotas) |
+| Business/Enterprise On-Ramp/Enterprise | Tutti i check (oltre 500) |
 
 ```bash
 # Trusted Advisor disponibile via Console e CLI
@@ -242,20 +257,22 @@ aws compute-optimizer get-ec2-instance-recommendations \
 | Piano | Prezzo | Technical Support | Response Time (Critical) |
 |-------|--------|-------------------|-----------------------------|
 | **Basic** | Gratuito | Nessuno | N/A |
-| **Developer** | $29/mese o 3% | Business hours email | 12h |
-| **Business** | $100/mese o 10/7/3% | 24/7 phone/email/chat | 1h |
+| **Developer** | $29/mese o 3% | Business hours email | N/A (system impaired: 12h) |
+| **Business** | $100/mese o 10/7/5/3% | 24/7 phone/email/chat | 1h |
 | **Enterprise On-Ramp** | $5.500/mese o 10/7/3% | 24/7 + pool di TAM (Technical Account Manager) | 30 min |
-| **Enterprise** | $15.000/mese o 10/7/3/1% | 24/7 + TAM dedicato | 15 min |
+| **Enterprise** | $15.000/mese o 10/7/5/3% | 24/7 + TAM dedicato | 15 min |
 
-**Nota:** la percentuale è applicata sulla spesa mensile AWS (es. Business = max(100$, 10% di spesa fino a 10K, 7% da 10K a 80K, 3% oltre).
+**Nota:** la percentuale è applicata sulla spesa mensile AWS (es. Business = max(100$, 10% fino a 10K, 7% da 10K a 80K, 5% da 80K a 250K, 3% oltre).
 
-**Incluso in tutti i piani:** AWS documentation, whitepapers, forum, Trusted Advisor (basic checks), AWS Personal Health Dashboard.
+<!-- REVIEW: verificare i nuovi piani annunciati a fine 2025 (Business Support+, Enterprise Support, Unified Operations: prezzi e response time) e se i piani legacy sopra sono ancora acquistabili -->
+
+**Incluso in tutti i piani:** AWS documentation, whitepapers, forum, Trusted Advisor (basic checks), AWS Health Dashboard (ex Personal Health Dashboard).
 
 ---
 
 ## Total Cost of Ownership (TCO)
 
-**AWS TCO Calculator** (ora integrato nel Pricing Calculator) confronta il costo di:
+Il vecchio **AWS TCO Calculator** è stato dismesso: oggi si usano **Migration Evaluator** (analisi del parco on-premises reale) e il **Pricing Calculator** per confrontare il costo di:
 - **On-premises** (hardware, datacenter, personale, licenze)
 - **AWS** (servizi cloud equivalenti)
 
@@ -276,7 +293,7 @@ Con **AWS Organizations** si possono consolidare i costi di più account:
 - **Consolidated Billing** — un'unica fattura per tutti gli account
 - **Volume discounts** — aggregazione utilizzo → pricing tier più vantaggioso (es. S3)
 - **Savings Plans e RI sharing** — un account acquista, tutti ne beneficiano (configurabile)
-- **Cost center tagging** — tag obbligatori per ogni account tramite Service Control Policy
+- **Cost center tagging** — tag obbligatori sulle risorse via Tag Policies / SCP con condizione `aws:RequestTag`
 
 ---
 
@@ -294,7 +311,7 @@ Con **AWS Organizations** si possono consolidare i costi di più account:
 3. Drilldown sul giorno dello spike → verificare quali risorse sono attive
 
 ```bash
-# Listar tutte le risorse costose con tag mancanti (possibile risorsa dimenticata)
+# Costo per servizio nel periodo (adattare le date)
 aws ce get-cost-and-usage \
     --time-period Start=2026-03-01,End=2026-03-28 \
     --granularity MONTHLY \
@@ -303,7 +320,7 @@ aws ce get-cost-and-usage \
     --query 'ResultsByTime[0].Groups[*].[Keys[0],Metrics.UnblendedCost.Amount]' \
     --output table
 
-# Verificare NAT Gateway attivi in tutte le Region
+# Verificare NAT Gateway attivi (solo Region corrente: ripetere con --region)
 aws ec2 describe-nat-gateways --filter Name=state,Values=available \
     --query 'NatGateways[*].[NatGatewayId,VpcId,State]' --output table
 ```
@@ -327,13 +344,14 @@ aws ce list-cost-allocation-tags \
     --status Active \
     --query 'CostAllocationTags[*].[TagKey,Status]' --output table
 
-# Non esiste CLI diretta per attivare i tag: operazione da console
-# Billing Console → Cost Allocation Tags → seleziona tag → "Activate"
+# Attivare un tag (alternativa alla console: Billing → Cost Allocation Tags)
+aws ce update-cost-allocation-tags-status \
+    --cost-allocation-tags-status TagKey=Project,Status=Active
 ```
 
 ---
 
-### Scenario 3 — Saving Plans o RI non applicati alle istanze
+### Scenario 3 — Savings Plans o RI non applicati alle istanze
 
 **Sintomo:** Le istanze continuano a essere fatturate a tariffa On-Demand nonostante l'acquisto di Reserved Instances o Savings Plans.
 
