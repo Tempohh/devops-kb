@@ -7,10 +7,10 @@ search_keywords: [border gateway protocol, bgp-4, ebgp, ibgp, asn, autonomous sy
 parent: networking/protocolli/_index
 related: [networking/kubernetes/cni, networking/sicurezza/ddos-protezione, networking/sicurezza/vpn-ipsec, networking/fondamentali/tcpip, cloud/aws/networking/vpc-avanzato, cloud/azure/networking/connettivita]
 official_docs: https://www.rfc-editor.org/rfc/rfc4271
-status: needs-review
+status: reviewed
 difficulty: advanced
-last_updated: 2026-09-26
-last_verified: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # BGP — Border Gateway Protocol
@@ -286,10 +286,10 @@ Requisiti ECMP: stessa lunghezza AS_PATH e stesso MED dai due tunnel; il router 
 Cilium annuncia Pod CIDR e Service (LoadBalancer/ExternalIP) al router **ToR** (Top-of-Rack, lo switch in cima al rack) con la CRD `CiliumBGPClusterConfig` (BGP Control Plane v2, Cilium ≥ 1.16).
 
 !!! note "Versione API"
-    Gli esempi usano `cilium.io/v2alpha1` (Cilium 1.16–1.17). <!-- REVIEW: verificare che da Cilium 1.18 le CRD BGP siano promosse a `cilium.io/v2` e aggiornare apiVersion degli esempi -->
+    Gli esempi usano `cilium.io/v2` (Cilium ≥ 1.18). Su Cilium 1.16–1.17 le stesse CRD sono `cilium.io/v2alpha1`: sostituire l'apiVersion se si usa una versione precedente.
 
 ```yaml
-apiVersion: cilium.io/v2alpha1
+apiVersion: cilium.io/v2
 kind: CiliumBGPClusterConfig
 metadata:
   name: tor-peering
@@ -307,7 +307,7 @@ spec:
           peerConfigRef:
             name: tor-peer-config
 ---
-apiVersion: cilium.io/v2alpha1
+apiVersion: cilium.io/v2
 kind: CiliumBGPPeerConfig
 metadata:
   name: tor-peer-config
@@ -325,7 +325,7 @@ spec:
         matchLabels:
           advertise: bgp
 ---
-apiVersion: cilium.io/v2alpha1
+apiVersion: cilium.io/v2
 kind: CiliumBGPAdvertisement
 metadata:
   name: pod-and-lb
