@@ -3,13 +3,13 @@ title: "Service Mesh — Concetti Base"
 slug: concetti-base
 category: networking
 tags: [service-mesh, sidecar, control-plane, data-plane, mtls, observability]
-search_keywords: [service mesh pattern, sidecar proxy kubernetes, control plane vs data plane, east-west traffic, west-east traffic, service mesh vs api gateway, service mesh features list, overhead service mesh latency, quando usare service mesh]
+search_keywords: [service mesh pattern, sidecar proxy kubernetes, control plane vs data plane, east-west traffic, west-east traffic, service mesh vs api gateway, service mesh features list, overhead service mesh latency, quando usare service mesh, mTLS, xDS, circuit breaking, sidecar injection, microservices networking]
 parent: networking/service-mesh/_index
-related: [networking/service-mesh/istio, networking/service-mesh/envoy, networking/service-mesh/linkerd, networking/api-gateway/pattern]
+related: [networking/service-mesh/istio, networking/service-mesh/envoy, networking/service-mesh/linkerd, networking/api-gateway/pattern-base]
 official_docs: https://istio.io/latest/docs/concepts/what-is-istio/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-10-03
 ---
 
 # Service Mesh — Concetti Base
