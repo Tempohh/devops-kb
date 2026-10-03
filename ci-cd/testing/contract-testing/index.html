@@ -3753,6 +3753,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-provider-verification-fallisce-con-interaction-not-found-state-handler-mancante" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Provider verification fallisce con "Interaction not found" / state handler mancante
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-can-i-deploy-restituisce-no" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — can-i-deploy restituisce "no"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-pact-file-non-viene-generato" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Pact file non viene generato
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-verifica-fallisce-su-un-campo-valore-esatto-invece-di-matcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Verifica fallisce su un campo (valore esatto invece di matcher)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-mismatch-dovuti-a-encoding-o-content-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Mismatch dovuti a encoding o Content-Type
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24839,6 +24900,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-provider-verification-fallisce-con-interaction-not-found-state-handler-mancante" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Provider verification fallisce con "Interaction not found" / state handler mancante
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-can-i-deploy-restituisce-no" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — can-i-deploy restituisce "no"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-pact-file-non-viene-generato" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Pact file non viene generato
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-verifica-fallisce-su-un-campo-valore-esatto-invece-di-matcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Verifica fallisce su un campo (valore esatto invece di matcher)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-mismatch-dovuti-a-encoding-o-content-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Mismatch dovuti a encoding o Content-Type
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -25475,18 +25597,52 @@
 </div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<dl>
-<dt><strong>Il provider verification fallisce con "Interaction not found"</strong></dt>
-<dd>Lo stato (<code>given</code>) non corrisponde a nessun handler nel provider. Verificare che il test provider definisca tutti gli stati usati nel consumer.</dd>
-<dt><strong>can-i-deploy restituisce "no"</strong></dt>
-<dd>Il contratto non è stato ancora verificato dal provider per quella combinazione versione/ambiente. Controllare nel broker UI se la verifica è completata o in errore.</dd>
-<dt><strong>Pact file non viene generato</strong></dt>
-<dd>Il test consumer non entra nel blocco <code>with pact:</code> o l'asserzione fallisce prima della chiamata. Il file viene scritto solo se il test ha eseguito almeno un'interazione.</dd>
-<dt><strong>Provider risponde ma la verifica fallisce su un campo</strong></dt>
-<dd>Controllare se si sta usando <code>Like()</code> o un valore esatto. Un valore esatto nel contratto fallisce se il provider restituisce qualcosa di diverso (es. prezzo aggiornato).</dd>
-<dt><strong>Encoding issues nel JSON del pact file</strong></dt>
-<dd>Assicurarsi che il provider ritorni <code>Content-Type: application/json; charset=utf-8</code>. Pact confronta le response come JSON, ma problemi di encoding possono causare mismatch.</dd>
-</dl>
+<h3 id="scenario-1-provider-verification-fallisce-con-interaction-not-found-state-handler-mancante">Scenario 1 — Provider verification fallisce con "Interaction not found" / state handler mancante<a class="headerlink" href="#scenario-1-provider-verification-fallisce-con-interaction-not-found-state-handler-mancante" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: la verifica del provider fallisce su interazioni che hanno uno stato (<code>given(...)</code>); nei log compare l'errore di provider state non trovato.</p>
+<p><strong>Causa</strong>: il provider non espone un handler per lo stato dichiarato dal consumer, quindi non può preparare i dati richiesti (es. <code>product 123 exists</code>) e la risposta reale non combacia.</p>
+<p><strong>Soluzione</strong>: implementare un endpoint di setup degli stati nel provider e passarlo al verifier; poi ricontrollare i nomi degli stati (sono case-sensitive).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Elenca gli stati richiesti dai contratti pubblicati</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>-u<span class="w"> </span>pactbroker:pactbroker<span class="w">   </span>http://pact-broker:9292/pacts/provider/ProductService/latest<span class="w">   </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.. | .providerStates? // empty'</span>
+</span></code></pre></div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Verifier: endpoint che imposta gli stati prima di ogni interazione</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">verifier</span><span class="o">.</span><span class="n">verify_with_broker</span><span class="p">(</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>    <span class="n">broker_url</span><span class="o">=</span><span class="n">PACT_BROKER_URL</span><span class="p">,</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="n">provider_states_setup_url</span><span class="o">=</span><span class="s2">"http://localhost:8000/_pact/provider_states"</span><span class="p">,</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="scenario-2-can-i-deploy-restituisce-no">Scenario 2 — <code>can-i-deploy</code> restituisce "no"<a class="headerlink" href="#scenario-2-can-i-deploy-restituisce-no" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: il job di CI si ferma con <code>Computer says no</code> e la colonna <code>SUCCESS?</code> è <code>false</code> o vuota.</p>
+<p><strong>Causa</strong>: il contratto della versione consumer non è ancora stato verificato dal provider presente nell'ambiente target (verifica non eseguita, fallita, o versione non registrata con <code>record-deployment</code>).</p>
+<p><strong>Soluzione</strong>: controllare i dettagli della matrice, rilanciare la verifica sul provider o registrare il deployment mancante.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pact-broker<span class="w"> </span>can-i-deploy<span class="w">   </span>--pacticipant<span class="w"> </span>OrderService<span class="w"> </span>--version<span class="w"> </span><span class="s2">"abc1234"</span><span class="w">   </span>--to-environment<span class="w"> </span>production<span class="w">   </span>--broker-base-url<span class="w"> </span>http://pact-broker:9292<span class="w">   </span>--output<span class="w"> </span>table<span class="w"> </span>--verbose
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># Se il provider è in produzione ma non registrato:</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>pact-broker<span class="w"> </span>record-deployment<span class="w"> </span>--pacticipant<span class="w"> </span>ProductService<span class="w">   </span>--version<span class="w"> </span>def5678<span class="w"> </span>--environment<span class="w"> </span>production<span class="w">   </span>--broker-base-url<span class="w"> </span>http://pact-broker:9292
+</span></code></pre></div>
+<h3 id="scenario-3-pact-file-non-viene-generato">Scenario 3 — Pact file non viene generato<a class="headerlink" href="#scenario-3-pact-file-non-viene-generato" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: la cartella <code>./pacts</code> è vuota dopo il test consumer; <code>pact-broker publish</code> non trova file.</p>
+<p><strong>Causa</strong>: il pact file viene scritto solo alla chiusura del mock server, dopo che almeno un'interazione è stata eseguita. Se il test non entra nel blocco <code>with pact:</code> o fallisce prima della chiamata al client, nessun file viene prodotto.</p>
+<p><strong>Soluzione</strong>: verificare che il client chiami davvero il mock server e che <code>pact_dir</code> sia scrivibile.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pytest<span class="w"> </span>tests/test_product_consumer.py<span class="w"> </span>-v<span class="w"> </span>-s
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>ls<span class="w"> </span>-la<span class="w"> </span>./pacts
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># Il mock server deve essere raggiungibile sulla porta configurata</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>curl<span class="w"> </span>-sv<span class="w"> </span>http://localhost:1234/<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head
+</span></code></pre></div>
+<h3 id="scenario-4-verifica-fallisce-su-un-campo-valore-esatto-invece-di-matcher">Scenario 4 — Verifica fallisce su un campo (valore esatto invece di matcher)<a class="headerlink" href="#scenario-4-verifica-fallisce-su-un-campo-valore-esatto-invece-di-matcher" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: il provider risponde 200 ma la verifica segnala <code>Expected "Widget Pro" but got "Widget Max"</code> o un mismatch di tipo.</p>
+<p><strong>Causa</strong>: il contratto usa un valore letterale al posto di un matcher (<code>Like()</code>, <code>integer</code>, ...); ogni cambiamento dei dati di test del provider rompe il contratto. Un mismatch di tipo indica invece una reale breaking change.</p>
+<p><strong>Soluzione</strong>: sostituire i valori non funzionali con matcher; se il tipo è cambiato davvero, concordare la modifica con il consumer.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Prima (rigido)</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"Widget Pro"</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># Dopo (matcher sul tipo)</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="s2">"name"</span><span class="p">:</span> <span class="n">Like</span><span class="p">(</span><span class="s2">"Widget Pro"</span><span class="p">)</span>
+</span></code></pre></div>
+<h3 id="scenario-5-mismatch-dovuti-a-encoding-o-content-type">Scenario 5 — Mismatch dovuti a encoding o Content-Type<a class="headerlink" href="#scenario-5-mismatch-dovuti-a-encoding-o-content-type" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: il body sembra identico ma la verifica fallisce con errori di parsing o di header (<code>Content-Type</code>).</p>
+<p><strong>Causa</strong>: Pact confronta le response come JSON in base al <code>Content-Type</code>; un header diverso (es. senza <code>charset=utf-8</code>, o <code>text/plain</code>) o caratteri non UTF-8 impediscono il parsing corretto.</p>
+<p><strong>Soluzione</strong>: far restituire al provider <code>application/json; charset=utf-8</code> e verificare gli header reali.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>curl<span class="w"> </span>-si<span class="w"> </span>-H<span class="w"> </span><span class="s2">"Accept: application/json"</span><span class="w"> </span>http://localhost:8000/products/123<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-n<span class="w"> </span><span class="m">15</span>
+</span></code></pre></div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">

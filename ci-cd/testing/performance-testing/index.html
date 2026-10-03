@@ -3721,6 +3721,78 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-k6-esce-con-codice-99-ma-non-e-chiaro-quale-threshold-ha-fallito" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — k6 esce con codice 99 ma non è chiaro quale threshold ha fallito
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-i-risultati-variano-molto-tra-run-diverse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — I risultati variano molto tra run diverse
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-latenza-alta-solo-allinizio-poi-si-stabilizza" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Latenza alta solo all'inizio, poi si stabilizza
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-k6-su-github-actions-fallisce-con-too-many-open-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — k6 su GitHub Actions fallisce con "too many open files"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-gatling-non-genera-il-report-html" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Gatling non genera il report HTML
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-6-error-rate-alta-durante-il-test-ma-assente-nei-log-del-servizio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 6 — Error rate alta durante il test ma assente nei log del servizio
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24705,6 +24777,78 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-k6-esce-con-codice-99-ma-non-e-chiaro-quale-threshold-ha-fallito" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — k6 esce con codice 99 ma non è chiaro quale threshold ha fallito
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-i-risultati-variano-molto-tra-run-diverse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — I risultati variano molto tra run diverse
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-latenza-alta-solo-allinizio-poi-si-stabilizza" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Latenza alta solo all'inizio, poi si stabilizza
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-k6-su-github-actions-fallisce-con-too-many-open-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — k6 su GitHub Actions fallisce con "too many open files"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-gatling-non-genera-il-report-html" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Gatling non genera il report HTML
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-6-error-rate-alta-durante-il-test-ma-assente-nei-log-del-servizio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 6 — Error rate alta durante il test ma assente nei log del servizio
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -25392,20 +25536,68 @@
 </div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<dl>
-<dt><strong>k6 esce con codice 99 ma non capisco quale threshold ha fallito</strong></dt>
-<dd>Il summary a fine test elenca esplicitamente i threshold falliti con i valori attuali vs richiesti. Se il summary è tagliato nel log CI, aggiungere <code>--summary-trend-stats</code> per includere tutti i percentili, o leggere il file JSON di output con <code>jq '.metrics | to_entries[] | select(.value.thresholds != null)'</code>.</dd>
-<dt><strong>I risultati variano molto tra run diverse</strong></dt>
-<dd>Cause comuni: (1) staging non isolato — altri job o test girano in parallelo. (2) Ramp-up troppo breve — il sistema non ha raggiunto lo steady state. (3) Dimensione del test troppo piccola — con poche centinaia di richieste, un outlier sposta significativamente i percentili. Aumentare la durata dello steady state a minimo 5 minuti.</dd>
-<dt><strong>La latenza è alta solo all'inizio poi si stabilizza</strong></dt>
-<dd>È il comportamento atteso durante il warm-up: JVM/Node.js JIT, riempimento del connection pool, cache warming. Soluzione: aggiungere uno stage di ramp-up di 2+ minuti e ignorare i primi dati nell'analisi. Se la latenza alta persiste oltre il warm-up, il problema è strutturale.</dd>
-<dt><strong>k6 su GitHub Actions fallisce con "too many open files"</strong></dt>
-<dd>Con molti VU (500+), k6 apre molte connessioni simultanee. Aggiungere al job: <code>run: ulimit -n 65536 &amp;&amp; k6 run ...</code>. Su runner self-hosted, configurare <code>/etc/security/limits.conf</code>.</dd>
-<dt><strong>Gatling non genera il report HTML</strong></dt>
-<dd>Il report viene generato solo al termine dello script, non durante l'esecuzione. Se il job CI viene interrotto (timeout), il report è incompleto. Aggiungere <code>if: always()</code> all'upload dell'artifact per recuperare i risultati parziali.</dd>
-<dt><strong>Error rate sale durante il load test ma non si vede nei log del servizio</strong></dt>
-<dd>L'errore può essere a livello di rete o load balancer prima di raggiungere l'applicazione. Verificare: (1) health check del load balancer — se il servizio supera il connection limit, le richieste vengono rifiutate dal LB. (2) <code>ulimit</code> del processo applicativo. (3) metriche del database — connection pool esaurito causa timeout upstream.</dd>
-</dl>
+<h3 id="scenario-1-k6-esce-con-codice-99-ma-non-e-chiaro-quale-threshold-ha-fallito">Scenario 1 — k6 esce con codice 99 ma non è chiaro quale threshold ha fallito<a class="headerlink" href="#scenario-1-k6-esce-con-codice-99-ma-non-e-chiaro-quale-threshold-ha-fallito" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: il job CI fallisce con exit code 99 e il log è lungo o troncato.</p>
+<p><strong>Causa</strong>: exit code 99 significa "threshold crossed". Il summary a fine test elenca i threshold falliti, ma può perdersi nel rumore del log CI.</p>
+<p><strong>Soluzione</strong>: leggere i threshold direttamente dall'export JSON (<code>--summary-export</code>) e includere tutti i percentili nel summary.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>k6<span class="w"> </span>run<span class="w"> </span>--summary-export<span class="o">=</span>results/summary.json<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span>--summary-trend-stats<span class="o">=</span><span class="s2">"min,avg,med,p(90),p(95),p(99),max"</span><span class="w"> </span>tests/performance/load-test.js
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"exit code: </span><span class="nv">$?</span><span class="s2">"</span><span class="w">   </span><span class="c1"># 99 = threshold fallito, 107 = errore di script</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># Metriche con almeno un threshold, con esito ok true/false</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>jq<span class="w"> </span><span class="s1">'.metrics | to_entries[] | select(.value.thresholds != null) | {metric: .key, thresholds: .value.thresholds}'</span><span class="w"> </span>results/summary.json
+</span></code></pre></div>
+<h3 id="scenario-2-i-risultati-variano-molto-tra-run-diverse">Scenario 2 — I risultati variano molto tra run diverse<a class="headerlink" href="#scenario-2-i-risultati-variano-molto-tra-run-diverse" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: p95 oscilla di ±30% tra run consecutive sullo stesso commit; il gate di regressione dà falsi positivi.</p>
+<p><strong>Causa</strong>: (1) staging non isolato, altri job girano in parallelo. (2) Ramp-up troppo breve: il sistema non raggiunge lo steady state. (3) Campione troppo piccolo: con poche centinaia di richieste un outlier sposta i percentili.</p>
+<p><strong>Soluzione</strong>: isolare lo staging, portare lo steady state ad almeno 5 minuti e verificare che il numero di richieste sia sufficiente (<code>http_reqs</code>).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Quante richieste ha raccolto la run? Sotto poche migliaia i percentili sono instabili</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>jq<span class="w"> </span><span class="s1">'.metrics.http_reqs.count'</span><span class="w"> </span>results/summary.json
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># Sono in esecuzione altri job sullo staging durante il test?</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>staging<span class="w"> </span>--sort-by<span class="o">=</span>cpu<span class="w"> </span><span class="p">|</span><span class="w"> </span>head
+</span></code></pre></div>
+<h3 id="scenario-3-latenza-alta-solo-allinizio-poi-si-stabilizza">Scenario 3 — Latenza alta solo all'inizio, poi si stabilizza<a class="headerlink" href="#scenario-3-latenza-alta-solo-allinizio-poi-si-stabilizza" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: i primi 1-2 minuti mostrano p95 molto alto, poi i valori rientrano nei threshold.</p>
+<p><strong>Causa</strong>: warm-up del servizio: JIT compilation (JVM/Node.js), riempimento del connection pool, cache fredde, DNS lookup.</p>
+<p><strong>Soluzione</strong>: aggiungere uno stage di ramp-up di 2+ minuti ed escludere il warm-up dai threshold con un tag di stage. Se la latenza resta alta dopo il warm-up, il problema è strutturale.</p>
+<div class="language-javascript highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">export</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nx">stages</span><span class="o">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nx">duration</span><span class="o">:</span><span class="w"> </span><span class="s1">'2m'</span><span class="p">,</span><span class="w"> </span><span class="nx">target</span><span class="o">:</span><span class="w"> </span><span class="mf">50</span><span class="w"> </span><span class="p">},</span><span class="w">  </span><span class="c1">// warm-up</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nx">duration</span><span class="o">:</span><span class="w"> </span><span class="s1">'5m'</span><span class="p">,</span><span class="w"> </span><span class="nx">target</span><span class="o">:</span><span class="w"> </span><span class="mf">50</span><span class="w"> </span><span class="p">},</span><span class="w">  </span><span class="c1">// misura</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">  </span><span class="p">],</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span><span class="nx">thresholds</span><span class="o">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">    </span><span class="c1">// il threshold conta solo le richieste taggate come "measure"</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">    </span><span class="s1">'http_req_duration{phase:measure}'</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s1">'p(95)&lt;500'</span><span class="p">],</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">  </span><span class="p">},</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="p">};</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="c1">// nel default function: http.get(url, { tags: { phase: 'measure' } })</span>
+</span></code></pre></div>
+<h3 id="scenario-4-k6-su-github-actions-fallisce-con-too-many-open-files">Scenario 4 — k6 su GitHub Actions fallisce con "too many open files"<a class="headerlink" href="#scenario-4-k6-su-github-actions-fallisce-con-too-many-open-files" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: errori <code>dial tcp: socket: too many open files</code> con 500+ VU.</p>
+<p><strong>Causa</strong>: ogni VU apre connessioni TCP, ognuna consuma un file descriptor; il limite di default (spesso 1024) viene superato.</p>
+<p><strong>Soluzione</strong>: alzare <code>ulimit -n</code> nello stesso step che lancia k6 (il limite vale per la shell corrente). Su runner self-hosted configurare <code>/etc/security/limits.conf</code>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nb">ulimit</span><span class="w"> </span>-n<span class="w"> </span><span class="m">65536</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>k6<span class="w"> </span>run<span class="w"> </span>tests/performance/stress-test.js
+</span></code></pre></div>
+<h3 id="scenario-5-gatling-non-genera-il-report-html">Scenario 5 — Gatling non genera il report HTML<a class="headerlink" href="#scenario-5-gatling-non-genera-il-report-html" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: la cartella <code>target/gatling-results/</code> manca o il report è incompleto.</p>
+<p><strong>Causa</strong>: il report viene generato solo a fine simulazione; se il job viene interrotto (timeout CI) o fallisce, resta parziale.</p>
+<p><strong>Soluzione</strong>: usare <code>if: always()</code> sull'upload dell'artifact e rigenerare il report dal <code>simulation.log</code> raccolto.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Rigenera il report da un log esistente (modalità reports-only)</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>mvn<span class="w"> </span>gatling:test<span class="w"> </span>-Dgatling.reportsOnly<span class="o">=</span>&lt;nome-cartella-run&gt;
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>ls<span class="w"> </span>target/gatling-results/*/simulation.log
+</span></code></pre></div>
+<h3 id="scenario-6-error-rate-alta-durante-il-test-ma-assente-nei-log-del-servizio">Scenario 6 — Error rate alta durante il test ma assente nei log del servizio<a class="headerlink" href="#scenario-6-error-rate-alta-durante-il-test-ma-assente-nei-log-del-servizio" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: k6 riporta <code>http_req_failed</code> &gt; 5%, ma l'applicazione non logga errori.</p>
+<p><strong>Causa</strong>: gli errori nascono prima dell'app: load balancer che rifiuta connessioni sopra il limite, <code>ulimit</code> del processo applicativo, connection pool del database esaurito che causa timeout upstream.</p>
+<p><strong>Soluzione</strong>: ispezionare gli status code restituiti e le metriche di LB e database.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Distribuzione degli status code (k6 --out json)</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'select(.type=="Point" and .metric=="http_reqs") | .data.tags.status'</span><span class="w"> </span>results/k6-results.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Limiti del processo applicativo e connessioni DB</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>cat<span class="w"> </span>/proc/<span class="k">$(</span>pgrep<span class="w"> </span>-f<span class="w"> </span>myapp<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1<span class="k">)</span>/limits<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"open files"</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>psql<span class="w"> </span>-c<span class="w"> </span><span class="s2">"SELECT count(*), state FROM pg_stat_activity GROUP BY state;"</span>
+</span></code></pre></div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
