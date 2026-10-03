@@ -4788,7 +4788,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -4813,7 +4813,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25290,7 +25290,7 @@
 </tr>
 </tbody>
 </table>
-<p>Con cross-zone disattivo ogni nodo invia traffico solo ai target della propria AZ: con 2 AZ e distribuzione target sbilanciata (es. 2 target in a, 8 in b) i primi ricevono il 50% del traffico ciascun nodo → <strong>hot spot</strong>. Attivarlo su NLB migliora la distribuzione ma introduce costo e latenza inter-AZ.</p>
+<p>Con cross-zone disattivo ogni nodo invia traffico solo ai target della propria AZ: con 2 AZ e distribuzione target sbilanciata (es. 2 target in a, 8 in b) ogni nodo riceve ~50% del traffico: i 2 target di a ne prendono il 25% ciascuno, gli 8 di b solo il 6,25% → <strong>hot spot</strong> su a. Attivarlo su NLB migliora la distribuzione ma introduce costo e latenza inter-AZ.</p>
 <h3 id="preservazione-client-ip-e-proxy-protocol-v2">Preservazione client IP e Proxy Protocol v2<a class="headerlink" href="#preservazione-client-ip-e-proxy-protocol-v2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>ALB</strong>: termina la connessione; il client IP arriva in <code>X-Forwarded-For</code>, protocollo in <code>X-Forwarded-Proto</code>, porta in <code>X-Forwarded-Port</code>.</li>
@@ -25307,7 +25307,7 @@
 <li>Un NLB può essere esposto come <strong>VPC Endpoint Service</strong> (PrivateLink): i consumer creano un Interface Endpoint nella propria VPC senza peering né sovrapposizione CIDR; il provider vede il traffico originato dal NLB.</li>
 </ul>
 <h3 id="gwlb-e-appliance-di-sicurezza">GWLB e appliance di sicurezza<a class="headerlink" href="#gwlb-e-appliance-di-sicurezza" title="Permanent link">&para;</a></h3>
-<p>Il <strong>Gateway Load Balancer</strong> si inserisce nel percorso di rete tramite <strong>Gateway Load Balancer Endpoint (GWLBE)</strong> e route table: il traffico viene incapsulato in <strong>GENEVE (UDP 6081)</strong> e inviato a una flotta di appliance (firewall, IDS/IPS, DPI) che lo restituisce dopo l'ispezione. Mantiene i flussi "sticky" (5-tuple) sulla stessa appliance e scala orizzontalmente.</p>
+<p>Il <strong>Gateway Load Balancer</strong> si inserisce nel percorso di rete tramite <strong>Gateway Load Balancer Endpoint (GWLBE)</strong> e route table: il traffico viene incapsulato in <strong>GENEVE</strong> (Generic Network Virtualization Encapsulation, UDP 6081; preserva il pacchetto originale e porta metadati di flusso) e inviato a una flotta di appliance (firewall, IDS/IPS, DPI) che lo restituisce dopo l'ispezione. Mantiene i flussi "sticky" (5-tuple) sulla stessa appliance e scala orizzontalmente.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Client ─► IGW ─► [route table] ─► GWLBE ─► GWLB ─(GENEVE:6081)─► Appliance fleet
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>                                                         ◄────────────────┘
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>                                   ◄─ GWLBE ◄─ GWLB ◄─ (dopo ispezione) ─► App subnet
@@ -25538,21 +25538,20 @@
 </span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="nt">metadata</span><span class="p">:</span>
 </span><span id="__span-5-32"><a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tcp-gateway</span>
 </span><span id="__span-5-33"><a id="__codelineno-5-33" name="__codelineno-5-33" href="#__codelineno-5-33"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
-</span><span id="__span-5-34"><a id="__codelineno-5-34" name="__codelineno-5-34" href="#__codelineno-5-34"></a><span class="w">    </span><span class="nt">service.beta.kubernetes.io/aws-load-balancer-type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">external</span>
-</span><span id="__span-5-35"><a id="__codelineno-5-35" name="__codelineno-5-35" href="#__codelineno-5-35"></a><span class="w">    </span><span class="nt">service.beta.kubernetes.io/aws-load-balancer-nlb-target-type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ip</span>
-</span><span id="__span-5-36"><a id="__codelineno-5-36" name="__codelineno-5-36" href="#__codelineno-5-36"></a><span class="w">    </span><span class="nt">service.beta.kubernetes.io/aws-load-balancer-scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">internet-facing</span>
-</span><span id="__span-5-37"><a id="__codelineno-5-37" name="__codelineno-5-37" href="#__codelineno-5-37"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-5-38"><a id="__codelineno-5-38" name="__codelineno-5-38" href="#__codelineno-5-38"></a><span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">LoadBalancer</span>
-</span><span id="__span-5-39"><a id="__codelineno-5-39" name="__codelineno-5-39" href="#__codelineno-5-39"></a><span class="w">  </span><span class="nt">loadBalancerClass</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">service.k8s.aws/nlb</span>
-</span><span id="__span-5-40"><a id="__codelineno-5-40" name="__codelineno-5-40" href="#__codelineno-5-40"></a><span class="w">  </span><span class="nt">selector</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> app</span><span class="p">:</span><span class="w"> </span><span class="nv">tcp-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
-</span><span id="__span-5-41"><a id="__codelineno-5-41" name="__codelineno-5-41" href="#__codelineno-5-41"></a><span class="w">  </span><span class="nt">ports</span><span class="p">:</span>
-</span><span id="__span-5-42"><a id="__codelineno-5-42" name="__codelineno-5-42" href="#__codelineno-5-42"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">443</span>
-</span><span id="__span-5-43"><a id="__codelineno-5-43" name="__codelineno-5-43" href="#__codelineno-5-43"></a><span class="w">      </span><span class="nt">targetPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8443</span>
+</span><span id="__span-5-34"><a id="__codelineno-5-34" name="__codelineno-5-34" href="#__codelineno-5-34"></a><span class="w">    </span><span class="nt">service.beta.kubernetes.io/aws-load-balancer-nlb-target-type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ip</span>
+</span><span id="__span-5-35"><a id="__codelineno-5-35" name="__codelineno-5-35" href="#__codelineno-5-35"></a><span class="w">    </span><span class="nt">service.beta.kubernetes.io/aws-load-balancer-scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">internet-facing</span>
+</span><span id="__span-5-36"><a id="__codelineno-5-36" name="__codelineno-5-36" href="#__codelineno-5-36"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-5-37"><a id="__codelineno-5-37" name="__codelineno-5-37" href="#__codelineno-5-37"></a><span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">LoadBalancer</span>
+</span><span id="__span-5-38"><a id="__codelineno-5-38" name="__codelineno-5-38" href="#__codelineno-5-38"></a><span class="w">  </span><span class="nt">loadBalancerClass</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">service.k8s.aws/nlb</span>
+</span><span id="__span-5-39"><a id="__codelineno-5-39" name="__codelineno-5-39" href="#__codelineno-5-39"></a><span class="w">  </span><span class="nt">selector</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> app</span><span class="p">:</span><span class="w"> </span><span class="nv">tcp-gateway</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span><span id="__span-5-40"><a id="__codelineno-5-40" name="__codelineno-5-40" href="#__codelineno-5-40"></a><span class="w">  </span><span class="nt">ports</span><span class="p">:</span>
+</span><span id="__span-5-41"><a id="__codelineno-5-41" name="__codelineno-5-41" href="#__codelineno-5-41"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">443</span>
+</span><span id="__span-5-42"><a id="__codelineno-5-42" name="__codelineno-5-42" href="#__codelineno-5-42"></a><span class="w">      </span><span class="nt">targetPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8443</span>
 </span></code></pre></div>
 <p>Con <code>target-type: ip</code> il rolling update di un Deployment può rimuovere un pod prima che l'ALB smetta di inviargli traffico: aggiungere un <strong>pod readiness gate</strong> (<code>elbv2.k8s.aws/pod-readiness-gate-inject: enabled</code> sul namespace) e un <code>preStop</code> sleep pari al deregistration delay.</p>
 <div class="admonition warning">
 <p class="admonition-title">Costo</p>
-<p>Ogni Ingress senza <code>group.name</code> crea un <strong>ALB dedicato</strong> (~16–22 $/mese + LCU). Raggruppare gli Ingress con <code>group.name</code> o usare un solo ALB con regole per host.</p>
+<p>Ogni Ingress senza <code>group.name</code> crea un <strong>ALB dedicato</strong> (~16–22 $/mese + LCU, <em>Load Balancer Capacity Unit</em>, l'unità di fatturazione basata su connessioni, richieste e byte; più i costi per IPv4 pubblici). Raggruppare gli Ingress con <code>group.name</code> o usare un solo ALB con regole per host.</p>
 </div>
 <hr />
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
@@ -25583,7 +25582,7 @@
 <h3 id="503-service-unavailable">503 Service Unavailable<a class="headerlink" href="#503-service-unavailable" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Sintomo</strong>: <code>503</code> generato dal LB (<code>target_status_code=-</code>).</li>
-<li><strong>Cause</strong>: nessun target registrato o healthy nel TG (e nessun fail-open possibile); TG vuoto dopo un deploy; capacità del LB in scaling.</li>
+<li><strong>Cause</strong>: nessun target <strong>registrato</strong> nel TG (con target registrati ma tutti unhealthy scatta il fail-open, quindi di norma non 503); TG vuoto dopo un deploy; regola con peso 0 su tutti i TG; capacità del LB in scaling.</li>
 <li><strong>Soluzione</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>aws<span class="w"> </span>elbv2<span class="w"> </span>describe-target-health<span class="w"> </span>--target-group-arn<span class="w"> </span><span class="s2">"</span><span class="nv">$TG_ARN</span><span class="s2">"</span>
 </span></code></pre></div>
