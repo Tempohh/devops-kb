@@ -7,7 +7,7 @@ search_keywords: [online schema change, OSC, zero downtime DDL, ddl senza downti
 parent: databases/fondamentali/_index
 related: [databases/fondamentali/schema-migrations, databases/fondamentali/indici, databases/fondamentali/transazioni-concorrenza, databases/postgresql/mvcc-vacuum, databases/mysql/architettura-replicazione, databases/postgresql/major-version-upgrade]
 official_docs: https://www.postgresql.org/docs/current/sql-altertable.html
-status: draft
+status: complete
 difficulty: advanced
 last_updated: 2026-10-03
 ---
