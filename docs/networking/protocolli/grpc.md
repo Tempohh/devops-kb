@@ -7,9 +7,10 @@ search_keywords: [google remote procedure call, protocol buffers, protobuf, grpc
 parent: networking/protocolli/_index
 related: [networking/protocolli/http2-http3, networking/protocolli/websocket, networking/service-mesh/istio, networking/api-gateway/pattern-base]
 official_docs: https://grpc.io/docs/
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # gRPC
@@ -52,6 +53,25 @@ message User {
 message ListUsersResponse {
   repeated User users = 1;
   string next_page_token = 2;
+}
+
+message ListUsersRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message CreateUserRequest {
+  string name = 1;
+  string email = 2;
+}
+
+message BatchCreateResponse {
+  int32 created_count = 1;
+}
+
+message ChatMessage {
+  string sender_id = 1;
+  string text = 2;
 }
 
 // Definizione del servizio
@@ -140,10 +160,18 @@ Client                          Server
 | 3 | INVALID_ARGUMENT | Input non valido |
 | 4 | DEADLINE_EXCEEDED | Timeout |
 | 5 | NOT_FOUND | Risorsa non trovata |
-| 7 | PERMISSION_DENIED | Autorizzazione negata |
+| 6 | ALREADY_EXISTS | Risorsa già esistente (create duplicata) |
+| 7 | PERMISSION_DENIED | Identità nota ma non autorizzata |
 | 8 | RESOURCE_EXHAUSTED | Rate limit, quota esaurita |
+| 9 | FAILED_PRECONDITION | Stato del sistema non adatto all'operazione (non ritentare finché non cambia) |
+| 10 | ABORTED | Conflitto di concorrenza (es. transazione); ritentare a livello di transazione |
+| 12 | UNIMPLEMENTED | Metodo non implementato/esposto dal server |
 | 13 | INTERNAL | Errore interno server |
-| 14 | UNAVAILABLE | Servizio non disponibile |
+| 14 | UNAVAILABLE | Servizio non disponibile — transitorio, **ritentabile** |
+| 16 | UNAUTHENTICATED | Credenziali mancanti o non valide |
+
+!!! note "Quali codici ritentare"
+    Di norma solo `UNAVAILABLE` è sicuro da ritentare automaticamente (e `DEADLINE_EXCEEDED`/`ABORTED` solo se l'operazione è idempotente). Ritentare `INVALID_ARGUMENT` o `FAILED_PRECONDITION` non può mai riuscire. Distinguere `UNAUTHENTICATED` (chi sei?) da `PERMISSION_DENIED` (non puoi farlo) evita loop di re-login inutili sul client.
 
 ## Configurazione & Pratica
 
@@ -166,7 +194,7 @@ import (
 
 type userServer struct {
     pb.UnimplementedUserServiceServer
-    // dipendenze (db, cache, ecc.)
+    db UserStore // dipendenze (db, cache, ecc.); interfaccia con FindUser(ctx, id)
 }
 
 func (s *userServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.User, error) {
@@ -218,8 +246,9 @@ import (
 )
 
 func main() {
-    conn, err := grpc.Dial(
-        "user-service:50051",
+    // grpc.Dial è deprecato: NewClient non connette subito (lazy) e usa il resolver DNS di default
+    conn, err := grpc.NewClient(
+        "dns:///user-service:50051",
         grpc.WithTransportCredentials(insecure.NewCredentials()),
         grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
     )
@@ -289,6 +318,9 @@ grpcurl \
 
 ### Kubernetes — gRPC con Ingress
 
+!!! warning "ingress-nginx è stato ritirato"
+    Il progetto Kubernetes `ingress-nginx` è stato dismesso a marzo 2026 (nessuna patch di sicurezza). Per nuovi deployment preferire **Gateway API** con `GRPCRoute` (GA) su un'implementazione attiva (Envoy Gateway, Istio, Cilium, NGINX Gateway Fabric). L'esempio sotto resta valido per cluster esistenti.
+
 ```yaml
 # Per gRPC su Kubernetes con NGINX Ingress Controller
 apiVersion: networking.k8s.io/v1
@@ -323,7 +355,7 @@ spec:
 - **Deadline everywhere**: ogni chiamata deve avere un timeout; propagare il context con deadline ai chiamati
 - **Interceptor per cross-cutting concerns**: logging, auth, tracing, rate limiting — non nel business logic
 - **Server reflection**: abilitare in dev/staging per grpcurl; disabilitare in produzione se non necessario
-- **Health checks**: implementare `grpc.health.v1.Health` — riconosciuto da Kubernetes liveness probe
+- **Health checks**: implementare `grpc.health.v1.Health`; Kubernetes lo interroga nativamente con `livenessProbe`/`readinessProbe: grpc: {port: 50051}` (GA dalla 1.27), senza binari `grpc_health_probe` nell'immagine
 - **Error handling**: usare sempre `status.Errorf(codes.X, "messaggio")` — mai errori Go grezzi
 - **Backward compatibility protobuf**: non rimuovere/rinominare field; aggiungere field con nuovi numeri; usare `optional` per field opzionali
 
@@ -336,7 +368,7 @@ spec:
 
 **Sintomo**: le chiamate falliscono con `rpc error: code = DeadlineExceeded` anche se il server risponde.
 
-**Causa**: la deadline (timeout assoluto propagato nell'header `grpc-timeout`) è più bassa della latenza reale, oppure una catena di servizi consuma il budget prima dell'ultimo hop.
+**Causa**: la deadline (il client la invia come timeout *residuo* nell'header `grpc-timeout`; ogni hop la ricalcola dal proprio `ctx`) è più bassa della latenza reale, oppure una catena di servizi consuma il budget prima dell'ultimo hop.
 
 **Soluzione**: misurare la latenza per metodo, alzare la deadline dove giustificato e propagare sempre il `ctx` ai servizi a valle, così il budget residuo è coerente.
 
@@ -373,7 +405,7 @@ kubectl get endpoints user-service
 # Service headless: il DNS restituisce tutti i pod IP
 kubectl get svc user-service -o jsonpath='{.spec.clusterIP}'   # deve essere None
 # Lato client Go: dial con dns:/// e policy round_robin
-#   grpc.NewClient("dns:///user-service:50051",
+#   grpc.NewClient("dns:///user-service-headless:50051",
 #     grpc.WithDefaultServiceConfig(`{"loadBalancingConfig":[{"round_robin":{}}]}`))
 ```
 
