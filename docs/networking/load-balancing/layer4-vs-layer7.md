@@ -9,7 +9,7 @@ related: [networking/load-balancing/algoritmi, networking/load-balancing/ha-e-fa
 official_docs: https://nginx.org/en/docs/stream/ngx_stream_core_module.html
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-10-03
 ---
 
 # Layer 4 vs Layer 7 Load Balancing
@@ -265,13 +265,62 @@ aws elbv2 create-rule \
 
 ## Troubleshooting
 
-| Sintomo | Layer | Causa | Soluzione |
-|---------|-------|-------|-----------|
-| Backend vede `127.0.0.1` come IP client | L7 | `X-Forwarded-For` non configurato | Aggiungere `proxy_set_header X-Forwarded-For` |
-| TLS handshake fallisce con database | L4 | Il LB non supporta TLS applicativo del DB | Usare TLS passthrough o L4 puro |
-| Routing non funziona per `/api/` | L7 | Path matching errato | Verificare con `curl -H "Host: ..."` |
-| WebSocket disconnesso dopo 60s | L7 | Timeout del LB | Aumentare `proxy_read_timeout` |
-| Distribuzione non uniforme | L4/L7 | Algoritmo non ottimale | Passare da Round Robin a Least Connections |
+### Scenario 1 — Backend vede l'IP del LB invece del client
+
+**Sintomo**: log applicativi e rate limiting mostrano sempre l'IP (o `127.0.0.1`) del load balancer.
+
+**Causa**: il LB (L7 o L4) apre una nuova connessione verso il backend, quindi l'IP sorgente è il suo. L'IP originale viaggia solo se esplicitamente propagato: header `X-Forwarded-For` (L7) o PROXY protocol (L4, header binario/testuale prima dei dati).
+
+**Soluzione**: L7 → impostare gli header; L4 → abilitare `proxy_protocol` sul LB **e** farlo accettare al backend (altrimenti il backend riceve byte spuri e rifiuta la connessione).
+
+```bash
+# Verifica header ricevuti dal backend
+curl -s -H "X-Forwarded-For: 203.0.113.9" https://api.example.com/debug/headers
+# Verifica PROXY protocol (nginx backend: listen 80 proxy_protocol;)
+curl -s --haproxy-protocol http://10.0.0.1:80/
+```
+
+### Scenario 2 — Handshake TLS fallisce verso il database
+
+**Sintomo**: `SSL routines:ssl3_get_record:wrong version number` o handshake timeout connettendosi al DB tramite LB.
+
+**Causa**: MySQL/PostgreSQL negoziano TLS *dentro* il protocollo applicativo (STARTTLS-like). Un LB che tenta di terminare TLS (L7) non capisce questo scambio e lo corrompe.
+
+**Soluzione**: usare L4 puro (`mode tcp` / `stream`) senza terminazione, lasciando che client e DB negozino TLS end-to-end.
+
+```bash
+openssl s_client -starttls postgres -connect lb.example.com:5432
+mysql -h lb.example.com --ssl-mode=REQUIRED -u app -p
+```
+
+### Scenario 3 — Routing `/api/` non applicato
+
+**Sintomo**: richieste a `/api/...` finiscono nel backend di default o rispondono 404.
+
+**Causa**: ordine/ACL errati (in HAProxy `use_backend` è valutato in ordine), `Host` header diverso da `server_name`, o `proxy_pass` con/senza slash finale che riscrive il path.
+
+**Soluzione**: testare con `Host` esplicito e validare la configurazione prima del reload.
+
+```bash
+curl -v -H "Host: api.example.com" https://10.0.0.1/api/users --resolve api.example.com:443:10.0.0.1
+nginx -t && nginx -s reload
+haproxy -c -f /etc/haproxy/haproxy.cfg
+```
+
+### Scenario 4 — WebSocket o connessioni lunghe cadono dopo 60s
+
+**Sintomo**: la connessione si chiude esattamente dopo ~60s di inattività (`1006 abnormal closure`, `504`).
+
+**Causa**: timeout di idle del LB (`proxy_read_timeout` Nginx = 60s di default; ALB idle timeout = 60s) più basso dell'intervallo tra i messaggi.
+
+**Soluzione**: alzare il timeout e/o inviare ping/keepalive applicativi più frequenti del timeout.
+
+```bash
+# Nginx: location /ws/ { proxy_read_timeout 3600s; }
+aws elbv2 modify-load-balancer-attributes \
+  --load-balancer-arn <alb-arn> \
+  --attributes Key=idle_timeout.timeout_seconds,Value=3600
+```
 
 ## Relazioni
 
