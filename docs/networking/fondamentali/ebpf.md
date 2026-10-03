@@ -7,7 +7,8 @@ search_keywords: [ebpf, extended bpf, berkeley packet filter, kernel programmabi
 parent: networking/fondamentali/_index
 related: [networking/kubernetes/cni, containers/kubernetes/sicurezza, security/runtime/seccomp-apparmor, networking/fondamentali/modello-osi, networking/fondamentali/network-troubleshooting]
 official_docs: https://ebpf.io/
-status: complete
+status: reviewed
+last_verified: 2026-10-03
 difficulty: advanced
 last_updated: 2026-09-27
 ---
@@ -23,7 +24,7 @@ Questa capacità trasforma il kernel Linux in una piattaforma programmabile: inv
 eBPF è rilevante per DevOps/SRE perché opera nel punto più efficiente della stack: **nel kernel, prima che i dati raggiungano lo userspace**. Questo elimina l'overhead degli approcci tradizionali basati su sidecar o agent userspace, e permette visibilità completa senza modificare le applicazioni.
 
 !!! warning "Requisiti kernel"
-    eBPF moderno richiede kernel Linux 5.8+ per le funzionalità complete (ring buffer, BTF, CO-RE). Alcune features (XDP, kprobes base) sono disponibili da Linux 4.x. Su kernel < 4.18 la support è limitata. Su Windows e macOS eBPF non è disponibile nativamente — gli strumenti basati su eBPF richiedono VM Linux o WSL2.
+    eBPF moderno richiede kernel Linux 5.8+ per le funzionalità complete (ring buffer, BTF, CO-RE). Alcune features (XDP, kprobes base) sono disponibili da Linux 4.x. Su kernel < 4.18 la support è limitata. Su macOS eBPF non è disponibile; su Windows esiste il progetto separato eBPF for Windows (non compatibile con i tool Linux come Cilium/Falco) — per gli strumenti di questa pagina servono una VM Linux o WSL2 (con kernel che abiliti BPF/BTF).
 
 ## Concetti Chiave
 
@@ -122,7 +123,7 @@ Kernel Linux — Hook Points eBPF
 | **kprobe / fentry** | Kernel functions | Tracing, profiling, debug |
 | **tracepoint** | Kernel events stabili | Syscall tracing (openat, connect, execve) |
 | **uprobe** | Userspace functions | Tracing applicazioni senza modificarle |
-| **LSM** | Linux Security Module | Runtime security enforcement (Tetragon) |
+| **LSM** | Linux Security Module | Runtime security enforcement (BPF LSM, richiede `CONFIG_BPF_LSM` e `lsm=...,bpf`) |
 | **cgroup** | Control groups | Network policy per cgroup (container) |
 | **socket** | Socket layer | Filtering pacchetti, load balancing L4 |
 
@@ -184,7 +185,9 @@ XDP è l'hook più veloce perché opera **nel driver della NIC**, prima che il p
 - `XDP_PASS` — passa il pacchetto al normale stack di rete
 - `XDP_TX` — rimanda il pacchetto sulla stessa NIC (reflection, echo server)
 - `XDP_REDIRECT` — forwards verso altra NIC o userspace via AF_XDP
-- `XDP_ABORTED` — errore nel programma, scarta + incrementa contatore errore
+- `XDP_ABORTED` — errore nel programma, scarta + genera il tracepoint `xdp_exception` (debuggabile con `perf`/bpftrace)
+
+**Modalità di attach:** *native* (`xdpdrv`, il driver NIC supporta XDP: massime prestazioni), *generic* (`xdpgeneric`, emulato nello stack: funziona ovunque ma senza il vantaggio di velocità, utile per test) e *offload* (`xdpoffload`, eseguito sulla SmartNIC).
 
 ### CO-RE (Compile Once, Run Everywhere)
 
@@ -207,8 +210,9 @@ bpftool feature probe | grep -E "program_type|map_type" | head -20
 `bpftool` è lo strumento CLI ufficiale per ispezionare e gestire programmi e map eBPF nel kernel.
 
 ```bash
-# Installa bpftool (su Ubuntu/Debian)
-apt-get install linux-tools-$(uname -r) linux-tools-common
+# Installa bpftool
+apt-get install linux-tools-$(uname -r) linux-tools-common   # Ubuntu
+apt-get install bpftool                                      # Debian 11+
 
 # Lista tutti i programmi eBPF attivi nel kernel
 bpftool prog list
@@ -235,7 +239,8 @@ bpftool feature probe
 # Genera skeleton C da un programma eBPF compilato
 bpftool gen skeleton myprog.o > myprog.skel.h
 
-# Mostra statistiche di esecuzione dei programmi
+# Statistiche di esecuzione (run_cnt/run_time_ns) richiedono di abilitarle: overhead minimo ma off di default
+sysctl -w kernel.bpf_stats_enabled=1
 bpftool prog show id 42 --pretty
 ```
 
@@ -268,13 +273,14 @@ bpftrace -e 'kprobe:tcp_connect {
     $sk = (struct sock *)arg0;
     printf("connect: %s → %s:%d\n",
         comm,
-        ntop(2, $sk->__sk_common.skc_daddr),
-        $sk->__sk_common.skc_dport >> 8);
+        ntop($sk->__sk_common.skc_daddr),
+        bswap($sk->__sk_common.skc_dport));   // dport è in network byte order
 }'
+# (su kernel senza BTF serve '#include <net/sock.h>' in uno script .bt)
 
 # Profiling CPU: flamegraph dati (stack traces ogni 99Hz per 30s)
 bpftrace -e 'profile:hz:99 { @[ustack, kstack] = count(); }' -c "sleep 30" > stacks.bt
-# Poi converti con flamegraph.pl per visualizzare
+# Poi: stackcollapse-bpftrace.pl stacks.bt | flamegraph.pl > flame.svg (repo brendangregg/FlameGraph)
 ```
 
 ### BCC Tools — Toolkit di Sistema
@@ -317,9 +323,13 @@ profile-bpfcc -F 99 30 > out.stacks  # 99Hz per 30s
 
 ```c
 // packet_counter.bpf.c — conta pacchetti per protocollo
+// vmlinux.h: tipi del kernel generati dal BTF, evita gli header kernel:
+//   bpftool btf dump file /sys/kernel/btf/vmlinux format c > vmlinux.h
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
+
+#define ETH_P_IP 0x0800   // le macro non sono nel BTF, vanno ridefinite
 
 // Map: protocol (u8) → packet count (u64)
 struct {
@@ -360,15 +370,19 @@ char LICENSE[] SEC("license") = "GPL";
 ```bash
 # Compila il programma eBPF
 clang -O2 -g -target bpf -D__TARGET_ARCH_x86 \
-    -I/usr/include/bpf \
+    -I. \
     -c packet_counter.bpf.c -o packet_counter.bpf.o
 
 # Carica su eth0 tramite bpftool
-bpftool prog load packet_counter.bpf.o /sys/fs/bpf/packet_counter
+# (pinmaps rende la map accessibile sotto /sys/fs/bpf)
+bpftool prog load packet_counter.bpf.o /sys/fs/bpf/packet_counter pinmaps /sys/fs/bpf
 bpftool net attach xdp pinned /sys/fs/bpf/packet_counter dev eth0
 
 # Leggi i contatori dalla map
 bpftool map dump pinned /sys/fs/bpf/proto_stats
+
+# Rimuovi il programma dalla NIC
+bpftool net detach xdp dev eth0
 ```
 
 ### eBPF in Kubernetes con Cilium
@@ -398,38 +412,28 @@ hubble observe --to-service default/frontend --follow
 cilium hubble ui &
 # Apre browser su http://localhost:12000
 
-# Verifica performance: statistiche eBPF
-cilium bpf stats list
-
-# Ispeziona le BPF maps di Cilium
-cilium bpf lb list          # Load balancer entries
-cilium bpf policy get --all # Policy enforcement entries
-cilium bpf ct list global   # Connection tracking table
+# Ispeziona le BPF maps di Cilium (comandi dell'agent: eseguirli nel pod cilium)
+kubectl -n kube-system exec ds/cilium -- cilium bpf lb list          # Load balancer entries
+kubectl -n kube-system exec ds/cilium -- cilium bpf policy get --all # Policy enforcement entries
+kubectl -n kube-system exec ds/cilium -- cilium bpf ct list global   # Connection tracking table
 ```
 
 ### eBPF per Runtime Security con Falco
 
 ```bash
-# Installa Falco con driver eBPF (nessun kernel module necessario)
+# Falco: driver "modern_eBPF" (CO-RE, kernel 5.8+ con BTF): nessun kernel module né compilazione sul nodo.
+# Il driver "ebpf" (probe legacy) è deprecato; il kernel module resta il fallback per kernel vecchi.
 helm repo add falcosecurity https://falcosecurity.github.io/charts
-helm install falco falcosecurity/falco \
-  --namespace falco --create-namespace \
-  --set driver.kind=ebpf \
-  --set driver.ebpf.path=/sys/kernel/btf/vmlinux
+helm install falco falcosecurity/falco   --namespace falco --create-namespace   --set driver.kind=modern_ebpf   -f custom-rules.yaml
 
-# Verifica che Falco usi eBPF
-kubectl logs -n falco daemonset/falco | grep "eBPF\|driver"
-# Using eBPF driver...
+# Verifica il driver in uso
+kubectl logs -n falco daemonset/falco | grep -i "driver\|modern"
+```
 
-# Regola Falco personalizzata: alert su exec in container privilegiato
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: falco-rules-custom
-  namespace: falco
-data:
-  custom_rules.yaml: |
+```yaml
+# custom-rules.yaml — regole custom caricate via values del chart (customRules)
+customRules:
+  custom_rules.yaml: |-
     - rule: Privileged Container Exec
       desc: Detect exec in privileged container
       condition: >
@@ -439,7 +443,6 @@ data:
         Exec in privileged container (user=%user.name cmd=%proc.cmdline
         container=%container.name image=%container.image.repository)
       priority: WARNING
-EOF
 ```
 
 ## Best Practices
@@ -448,7 +451,7 @@ EOF
     Non scrivere programmi eBPF in C raw a meno che non sia strettamente necessario. In ordine di preferenza: **usa uno strumento esistente** (Cilium, Falco, BCC tools) → **usa bpftrace per scripting one-off** → **usa libbpf con CO-RE** solo per programmi custom deployati in produzione.
 
 - **CO-RE obbligatorio per produzione**: usare sempre BTF + CO-RE con libbpf per portabilità kernel. Evitare BCC in produzione (richiede compilatore sul nodo)
-- **Limitare la complessità del verifier**: il verifier ha limiti di complexity; preferire helper functions `bpf_*` piuttosto che logica custom complessa. Testare con `bpftool prog verify`
+- **Limitare la complessità del verifier**: il verifier ha limiti di complexity; preferire helper functions `bpf_*` piuttosto che logica custom complessa. Il verifier gira al `bpftool prog load`: leggerne il log in fase di sviluppo
 - **Maps bounded**: definire sempre `max_entries` appropriato nelle maps. Maps illimitate causano memory pressure kernel; preferire `BPF_MAP_TYPE_LRU_HASH` per flow tables
 - **RingBuffer vs PerfEvent**: preferire `BPF_MAP_TYPE_RINGBUF` (Linux 5.8+) rispetto a perf event array per streaming eventi — minore overhead, no perdita dati per buffer overflow
 - **Gestire il fallback**: nei deployment Kubernetes, verificare che il kernel del nodo supporti le features eBPF richieste prima del deploy. Cilium in particolare richiede kernel 5.4+ (minimo) e 5.10+ (raccomandato)
@@ -456,7 +459,7 @@ EOF
 - **Monitoring dei programmi**: monitorare con `bpftool prog show` e metrics Prometheus esposte da Cilium/Falco — un programma che usa troppo CPU può impattare la latenza del kernel
 
 !!! warning "eBPF non è una sandbox impenetrabile"
-    Pur essendo sicuro per il kernel, un programma eBPF legge dati sensibili (syscall arguments, network payloads, process memory). Limitare con Seccomp chi può caricare programmi eBPF (`CAP_BPF` + `CAP_PERFMON` richiesti da kernel 5.8). In ambienti multi-tenant, considerare che Cilium e Falco richiedono privilegi elevati — gestire con PSA (Pod Security Admission) `restricted` profile separato.
+    Pur essendo sicuro per il kernel, un programma eBPF legge dati sensibili (syscall arguments, network payloads, process memory). Limitare con Seccomp chi può caricare programmi eBPF (`CAP_BPF` + `CAP_PERFMON` richiesti da kernel 5.8) e tenere `kernel.unprivileged_bpf_disabled=1` (o `2`). In ambienti multi-tenant, considerare che Cilium e Falco richiedono privilegi elevati — gestire con PSA (Pod Security Admission) `restricted` profile separato.
 
 ## Troubleshooting
 
@@ -478,10 +481,10 @@ if (count)
 ```
 
 ```bash
-# Log dettagliato del verifier (richiede kernel debug)
-bpftool prog load myprog.bpf.o /sys/fs/bpf/myprog 2>&1 | head -50
+# Il log del verifier è stampato su stderr al fallimento del load
+bpftool prog load myprog.bpf.o /sys/fs/bpf/myprog 2>&1 | tail -50
 
-# Aumenta il log level per più dettagli
+# Più dettaglio (log level libbpf debug + verifier)
 bpftool -d prog load myprog.bpf.o /sys/fs/bpf/myprog
 ```
 
@@ -525,7 +528,7 @@ kubectl logs -n kube-system daemonset/cilium | grep -E "ERROR|WARN|bpf"
 uname -r  # deve essere >= 5.4 per Cilium 1.15+
 # Per kube-proxy replacement: >= 5.10 raccomandato
 
-# Reset della configurazione BPF (ultima risorsa)
+# Flush del conntrack BPF (ultima risorsa: interrompe le connessioni in corso)
 kubectl exec -n kube-system daemonset/cilium -- cilium bpf ct flush global
 ```
 
@@ -562,9 +565,11 @@ bpftool prog show id <PROG_ID>
 # Profila il programma XDP
 bpftool prog profile id <PROG_ID> duration 5 cycles instructions
 
-# Se il programma è troppo lento: considera di usare TC invece di XDP
-# TC è più lento ma più flessibile e meno critico per la latenza
-bpftool net attach tc id <PROG_ID> dev eth0 ingress
+# Se il programma è troppo lento: considera TC (hook dopo l'allocazione di sk_buff,
+# più lento di XDP ma con più contesto e helper). Attach via tc (clsact + direct-action):
+tc qdisc add dev eth0 clsact
+tc filter add dev eth0 ingress bpf da obj myprog.bpf.o sec tc
+# Kernel 6.6+: attach "tcx" (multi-prog, senza qdisc), usato dalle versioni recenti di Cilium
 ```
 
 ## Relazioni
@@ -575,7 +580,7 @@ bpftool net attach tc id <PROG_ID> dev eth0 ingress
     **Approfondimento →** [CNI — Container Network Interface](../kubernetes/cni.md)
 
 ??? info "Runtime Security — Falco e Tetragon usano eBPF"
-    Falco usa eBPF per intercettare le syscall dei container e rilevare comportamenti anomali. Tetragon usa BPF LSM per enforcement delle policy direttamente nel kernel.
+    Falco usa eBPF per intercettare le syscall dei container e rilevare comportamenti anomali. Tetragon usa kprobe/tracepoint/BPF LSM per osservare e applicare policy direttamente nel kernel (es. kill del processo o override del return value).
 
     **Approfondimento →** [Security Runtime — Seccomp e AppArmor](../../security/runtime/seccomp-apparmor.md)
 
