@@ -4181,7 +4181,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -4206,7 +4206,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -4258,6 +4258,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Variazione per Tipo di Servizio">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#controlli-condivisi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controlli condivisi
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -24455,6 +24472,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Variazione per Tipo di Servizio">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#controlli-condivisi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controlli condivisi
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24786,7 +24820,7 @@
 <hr />
 <h2 id="variazione-per-tipo-di-servizio">Variazione per Tipo di Servizio<a class="headerlink" href="#variazione-per-tipo-di-servizio" title="Permanent link">&para;</a></h2>
 <p>La responsabilità del cliente <strong>cambia in base al tipo di servizio</strong>:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">IaaS — EC2</label><label for="__tabbed_1_2">PaaS — RDS / Lambda</label><label for="__tabbed_1_3">SaaS — S3 / DynamoDB</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">IaaS — EC2</label><label for="__tabbed_1_2">PaaS — RDS / Lambda</label><label for="__tabbed_1_3">Servizi astratti — S3 / DynamoDB</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <table>
@@ -24897,6 +24931,7 @@
 <p><strong>AWS gestisce OS e middleware — cliente gestisce configurazione e dati</strong></p>
 </div>
 <div class="tabbed-block">
+<p>AWS li chiama <em>abstracted services</em>: non sono SaaS in senso stretto (il cliente non usa un'applicazione finita), ma un'API su uno storage/database completamente gestito.</p>
 <table>
 <thead>
 <tr>
@@ -24912,12 +24947,12 @@
 <td></td>
 </tr>
 <tr>
-<td>Durabilità (11 9s S3)</td>
+<td>Durabilità (11 9s S3, progettata)</td>
 <td>✓</td>
 <td></td>
 </tr>
 <tr>
-<td>Disponibilità (SLA 99.99%)</td>
+<td>Disponibilità (SLA — Service Level Agreement — contrattuale, varia per servizio e classe)</td>
 <td>✓</td>
 <td></td>
 </tr>
@@ -24929,7 +24964,7 @@
 <tr>
 <td>Cifratura oggetti</td>
 <td></td>
-<td>✓ (attivare SSE)</td>
+<td>✓ (SSE-S3 è applicata di default dal 2023; scegliere SSE-KMS se servono controllo chiavi e audit)</td>
 </tr>
 <tr>
 <td>Versioning e lifecycle</td>
@@ -24939,7 +24974,7 @@
 <tr>
 <td>Blocco accesso pubblico</td>
 <td></td>
-<td>✓ (attivare)</td>
+<td>✓ (attivo di default sui nuovi bucket dal 2023; non disattivarlo)</td>
 </tr>
 <tr>
 <td>Dati e classificazione</td>
@@ -24951,6 +24986,38 @@
 </div>
 </div>
 </div>
+<div class="admonition note">
+<p class="admonition-title">Il confine dipende dal servizio, anche dentro la stessa categoria</p>
+<p>Su <strong>Lambda</strong> AWS gestisce OS e runtime, ma il cliente deve migrare il codice quando un runtime (es. versione vecchia di Node.js/Python) viene deprecato. Su <strong>RDS</strong> AWS rende disponibili le patch, ma il cliente decide la finestra di manutenzione, abilita <code>AutoMinorVersionUpgrade</code> e pianifica gli upgrade major.</p>
+</div>
+<h3 id="controlli-condivisi">Controlli condivisi<a class="headerlink" href="#controlli-condivisi" title="Permanent link">&para;</a></h3>
+<p>AWS distingue tre tipi di controlli. I <strong>controlli ereditati</strong> (es. sicurezza fisica) sono solo AWS; quelli <strong>specifici del cliente</strong> (es. classificazione dati) solo del cliente; i <strong>controlli condivisi</strong> si applicano a entrambi i livelli, con responsabilità diverse:</p>
+<table>
+<thead>
+<tr>
+<th>Controllo</th>
+<th>AWS</th>
+<th>Cliente</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Patch management</td>
+<td>Patch di infrastruttura e servizi gestiti</td>
+<td>Patch di guest OS e applicazioni</td>
+</tr>
+<tr>
+<td>Configuration management</td>
+<td>Config dei dispositivi/servizi AWS</td>
+<td>Config di OS, DB, applicazioni</td>
+</tr>
+<tr>
+<td>Awareness &amp; training</td>
+<td>Dipendenti AWS</td>
+<td>Dipendenti del cliente</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="compliance-condivisa">Compliance Condivisa<a class="headerlink" href="#compliance-condivisa" title="Permanent link">&para;</a></h2>
 <p>Anche la <strong>compliance</strong> segue il modello condiviso:</p>
@@ -24978,11 +25045,11 @@
 </tr>
 <tr>
 <td><strong>PCI DSS</strong></td>
-<td>Standard pagamenti — AWS ha QSA certificato</td>
+<td>Standard pagamenti — AWS è validato Level 1 Service Provider da un QSA (Qualified Security Assessor); la conformità della <em>tua</em> applicazione resta tua</td>
 </tr>
 <tr>
 <td><strong>HIPAA</strong></td>
-<td>Sanità USA — BAA disponibile con AWS</td>
+<td>Sanità USA — BAA (Business Associate Agreement) accettabile in Artifact; usare solo i servizi HIPAA-eligible</td>
 </tr>
 <tr>
 <td><strong>SOC &frac12;/3</strong></td>
@@ -24994,7 +25061,7 @@
 </tr>
 <tr>
 <td><strong>FedRAMP</strong></td>
-<td>US Government — AWS GovCloud</td>
+<td>US Government — autorizzazione per Region commerciali e per AWS GovCloud (US)</td>
 </tr>
 </tbody>
 </table>
@@ -25005,7 +25072,7 @@
 <p><strong>AWS è responsabile</strong> dell'hardware fisico, dell'hypervisor, della rete globale, e del runtime dei servizi gestiti.</p>
 <p><strong>Il cliente è responsabile</strong> di tutto ciò che configura: IAM, cifratura, Security Groups, dati, OS (se EC2), applicazione.</p>
 <p><strong>Domanda tipo esame:</strong> "Chi è responsabile del patching del database engine in RDS?"
-<strong>Risposta:</strong> AWS (perché RDS è un servizio gestito — il cliente non ha accesso all'OS)</p>
+<strong>Risposta:</strong> AWS (perché RDS è un servizio gestito — il cliente non ha accesso all'OS). Il cliente però configura finestra di manutenzione e minor upgrade automatici.</p>
 <p><strong>Domanda tipo:</strong> "Chi è responsabile del patching del sistema operativo su EC2?"
 <strong>Risposta:</strong> Il cliente (EC2 è IaaS — il cliente ha accesso root all'OS)</p>
 </div>
@@ -25013,7 +25080,7 @@
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-s3-bucket-accessibile-pubblicamente-per-errore">Scenario 1 — S3 bucket accessibile pubblicamente per errore<a class="headerlink" href="#scenario-1-s3-bucket-accessibile-pubblicamente-per-errore" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Dati esposti pubblicamente; alert da AWS Security Hub o Trusted Advisor: "S3 bucket is publicly accessible".</p>
-<p><strong>Causa:</strong> Il cliente ha configurato erroneamente la bucket policy o non ha attivato il "Block Public Access" — responsabilità del cliente secondo il modello condiviso.</p>
+<p><strong>Causa:</strong> Il cliente ha configurato erroneamente la bucket policy, riabilitato le ACL o disattivato il "Block Public Access" (attivo di default sui bucket creati dal 2023, ma non sui bucket più vecchi né a livello account se non impostato) — responsabilità del cliente secondo il modello condiviso.</p>
 <p><strong>Soluzione:</strong> Attivare immediatamente il blocco accesso pubblico e rivedere la policy.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Blocca accesso pubblico su un bucket specifico</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>aws<span class="w"> </span>s3api<span class="w"> </span>put-public-access-block<span class="w"> </span><span class="se">\</span>
@@ -25024,13 +25091,19 @@
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Verifica lo stato</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>aws<span class="w"> </span>s3api<span class="w"> </span>get-public-access-block<span class="w"> </span>--bucket<span class="w"> </span>my-bucket
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Audit: trova tutti i bucket pubblici nell'account</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>aws<span class="w"> </span>s3api<span class="w"> </span>list-buckets<span class="w"> </span>--query<span class="w"> </span><span class="s1">'Buckets[].Name'</span><span class="w"> </span>--output<span class="w"> </span>text<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">  </span>xargs<span class="w"> </span>-I<span class="w"> </span><span class="o">{}</span><span class="w"> </span>aws<span class="w"> </span>s3api<span class="w"> </span>get-public-access-block<span class="w"> </span>--bucket<span class="w"> </span><span class="o">{}</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Preferibile: blocco a livello account (copre tutti i bucket)</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>aws<span class="w"> </span>s3control<span class="w"> </span>put-public-access-block<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">  </span>--account-id<span class="w"> </span><span class="m">123456789012</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">  </span>--public-access-block-configuration<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="s2">"BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># Audit: stato per ogni bucket (errore NoSuchPublicAccessBlockConfiguration = nessun blocco configurato su quel bucket)</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>aws<span class="w"> </span>s3api<span class="w"> </span>list-buckets<span class="w"> </span>--query<span class="w"> </span><span class="s1">'Buckets[].Name'</span><span class="w"> </span>--output<span class="w"> </span>text<span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span><span class="s1">'\t'</span><span class="w"> </span><span class="s1">'\n'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span>xargs<span class="w"> </span>-I<span class="w"> </span><span class="o">{}</span><span class="w"> </span>aws<span class="w"> </span>s3api<span class="w"> </span>get-public-access-block<span class="w"> </span>--bucket<span class="w"> </span><span class="o">{}</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-ec2-compromessa-os-non-aggiornato">Scenario 2 — EC2 compromessa: OS non aggiornato<a class="headerlink" href="#scenario-2-ec2-compromessa-os-non-aggiornato" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> Notifica da Amazon Inspector o GuardDuty di vulnerabilità critica su istanza EC2; exploit noto sull'OS.</p>
+<p><strong>Sintomo:</strong> Finding di Amazon Inspector (scansione vulnerabilità/CVE) su istanza EC2, o finding di GuardDuty (rilevamento minacce) su attività sospetta; exploit noto sull'OS.</p>
 <p><strong>Causa:</strong> Il patching del sistema operativo su EC2 è responsabilità del cliente (IaaS). Il cliente non aveva attivato patch management automatico.</p>
 <p><strong>Soluzione:</strong> Applicare patch immediatamente tramite AWS Systems Manager Patch Manager.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Esegui patching immediato via SSM su istanza specifica</span>
@@ -25044,24 +25117,28 @@
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>aws<span class="w"> </span>ssm<span class="w"> </span>describe-instance-patch-states<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span>--instance-ids<span class="w"> </span><span class="s2">"i-0123456789abcdef0"</span>
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="c1"># Configura patching automatico (baseline di default)</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="c1"># Crea una patch baseline custom (Amazon Linux 2023; AL2 è a fine supporto)</span>
 </span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>aws<span class="w"> </span>ssm<span class="w"> </span>create-patch-baseline<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"AutoPatchBaseline"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span>--operating-system<span class="w"> </span><span class="s2">"AMAZON_LINUX_2"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span>--operating-system<span class="w"> </span><span class="s2">"AMAZON_LINUX_2023"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">  </span>--approval-rules<span class="w"> </span><span class="s1">'{"PatchRules":[{"PatchFilterGroup":{"PatchFilters":[{"Key":"SEVERITY","Values":["Critical","Important"]}]},"ApproveAfterDays":7}]}'</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="c1"># Crearla non basta: va resa default per il suo OS (o associata a un patch group)</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>aws<span class="w"> </span>ssm<span class="w"> </span>register-default-patch-baseline<span class="w"> </span>--baseline-id<span class="w"> </span>pb-0123456789abcdef0
 </span></code></pre></div>
+<p>Per patching ricorrente senza intervento manuale usare <strong>Patch Manager Quick Setup</strong> o una Maintenance Window che esegue <code>AWS-RunPatchBaseline</code>.</p>
 <hr />
 <h3 id="scenario-3-credenziali-iam-esposte-in-un-repository-pubblico">Scenario 3 — Credenziali IAM esposte in un repository pubblico<a class="headerlink" href="#scenario-3-credenziali-iam-esposte-in-un-repository-pubblico" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Alert di AWS (email o GuardDuty) per utilizzo anomalo di access key; oppure chiave trovata in commit GitHub.</p>
 <p><strong>Causa:</strong> La gestione delle credenziali IAM è responsabilità esclusiva del cliente. AWS non può impedire che il cliente esponga le proprie chiavi.</p>
-<p><strong>Soluzione:</strong> Revocare immediatamente la chiave compromessa, analizzare l'accesso, e ruotare le credenziali.</p>
+<p><strong>Soluzione:</strong> Revocare immediatamente la chiave compromessa, analizzare l'accesso, e ruotare le credenziali. Su chiavi rilevate pubblicamente AWS spesso allega in automatico la policy <code>AWSCompromisedKeyQuarantine</code> all'utente: è mitigazione, non sostituisce la rotazione. A monte: preferire ruoli IAM con credenziali temporanee (STS) alle access key a lungo termine, e secret scanning nei repository.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># 1. Disabilita immediatamente la chiave compromessa</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>aws<span class="w"> </span>iam<span class="w"> </span>update-access-key<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--access-key-id<span class="w"> </span>AKIAIOSFODNN7EXAMPLE<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--status<span class="w"> </span>Inactive<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--user-name<span class="w"> </span>my-user
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># 2. Verifica le azioni eseguite con la chiave (ultimi 90 giorni)</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># 2. Verifica le azioni eseguite con la chiave (lookup-events: solo management events, ultimi 90 giorni, per Region)</span>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>aws<span class="w"> </span>cloudtrail<span class="w"> </span>lookup-events<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span>--lookup-attributes<span class="w"> </span><span class="nv">AttributeKey</span><span class="o">=</span>AccessKeyId,AttributeValue<span class="o">=</span>AKIAIOSFODNN7EXAMPLE<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span>--max-results<span class="w"> </span><span class="m">50</span>
@@ -25076,8 +25153,8 @@
 <hr />
 <h3 id="scenario-4-confusione-su-chi-gestisce-il-patching-di-rds">Scenario 4 — Confusione su chi gestisce il patching di RDS<a class="headerlink" href="#scenario-4-confusione-su-chi-gestisce-il-patching-di-rds" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il team di sicurezza segnala che il database engine RDS non è aggiornato all'ultima versione; si chiede chi deve agire.</p>
-<p><strong>Causa:</strong> Fraintendimento del modello condiviso: per RDS (PaaS), AWS gestisce il patching del database engine e dell'OS sottostante. Il cliente non ha accesso diretto all'OS.</p>
-<p><strong>Soluzione:</strong> Verificare la versione e la policy di manutenzione automatica; per aggiornamenti di versione major, il cliente deve pianificare la migrazione.</p>
+<p><strong>Causa:</strong> Fraintendimento del modello condiviso: per RDS AWS gestisce l'OS sottostante e rende disponibili le patch dell'engine, ma sono applicate nella finestra di manutenzione e (per le minor) solo se <code>AutoMinorVersionUpgrade</code> è attivo. Il cliente non ha accesso diretto all'OS.</p>
+<p><strong>Soluzione:</strong> Verificare la versione e la policy di manutenzione automatica; per aggiornamenti di versione major, il cliente deve pianificare la migrazione. Restare su una versione engine a fine supporto comporta costi di Extended Support.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Verifica versione engine e prossimo maintenance window</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>aws<span class="w"> </span>rds<span class="w"> </span>describe-db-instances<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--query<span class="w"> </span><span class="s1">'DBInstances[*].{ID:DBInstanceIdentifier,Engine:Engine,Version:EngineVersion,AutoMinorUpgrade:AutoMinorVersionUpgrade,MaintenanceWindow:PreferredMaintenanceWindow}'</span>
