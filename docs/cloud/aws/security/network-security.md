@@ -7,9 +7,10 @@ search_keywords: [aws waf, web application firewall, owasp, sql injection, xss, 
 parent: cloud/aws/security/_index
 related: [cloud/aws/security/kms-secrets, cloud/aws/security/compliance-audit, cloud/aws/networking, cloud/aws/monitoring/cloudwatch]
 official_docs: https://docs.aws.amazon.com/waf/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # WAF, Shield, Network Firewall e Sicurezza di Rete AWS
@@ -89,8 +90,8 @@ aws wafv2 create-web-acl \
         "ManagedRuleGroupStatement": {
           "VendorName": "AWS",
           "Name": "AWSManagedRulesCommonRuleSet",
-          "ExcludedRules": [
-            {"Name": "SizeRestrictions_BODY"}
+          "RuleActionOverrides": [
+            {"Name": "SizeRestrictions_BODY", "ActionToUse": {"Count": {}}}
           ]
         }
       },
@@ -148,6 +149,11 @@ aws wafv2 associate-web-acl \
   --resource-arn arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-alb/abc123
 ```
 
+!!! note "Scope CLOUDFRONT, WCU e override in Count"
+    - Per proteggere CloudFront la Web ACL va creata con `--scope CLOUDFRONT` **sempre in `us-east-1`**; l'associazione avviene dalla distribution (`WebACLId`), non con `associate-web-acl`.
+    - Ogni regola consuma **WCU** (Web ACL Capacity Units); una Web ACL ha un limite di default di 1.500 WCU, quindi i managed rule group più pesanti vanno dimensionati.
+    - Sui rule group gestiti l'azione "Count" si imposta con `OverrideAction: {"Count": {}}` sull'intero gruppo, o con `RuleActionOverrides` sulla singola regola (che sostituisce il vecchio `ExcludedRules`, deprecato).
+
 ### Regole Custom
 
 ```bash
@@ -197,6 +203,7 @@ aws wafv2 create-regex-pattern-set \
   "Statement": {
     "RateBasedStatement": {
       "Limit": 50,
+      "EvaluationWindowSec": 300,
       "AggregateKeyType": "IP",
       "ScopeDownStatement": {
         "ByteMatchStatement": {
@@ -220,15 +227,17 @@ aws wafv2 create-regex-pattern-set \
 }
 ```
 
+`EvaluationWindowSec` (60, 120, 300 o 600 s) definisce la finestra in cui si contano le richieste; il default è 300 s. `rate-limit-body` deve essere dichiarato in `CustomResponseBodies` a livello di Web ACL, altrimenti la creazione fallisce.
+
 ### Logging WAF
 
 ```bash
-# Configurare logging verso S3
+# Configurare logging verso S3 (il nome del bucket DEVE iniziare con "aws-waf-logs-")
 aws wafv2 put-logging-configuration \
   --logging-configuration '{
     "ResourceArn": "arn:aws:wafv2:us-east-1:123456789012:regional/webacl/MyAppWebACL/abc123",
     "LogDestinationConfigs": [
-      "arn:aws:s3:::my-waf-logs"
+      "arn:aws:s3:::aws-waf-logs-myapp"
     ],
     "RedactedFields": [
       {"SingleHeader": {"Name": "authorization"}},
@@ -251,8 +260,11 @@ aws wafv2 put-logging-configuration \
 - **$5.00/Web ACL/mese**
 - **$1.00/regola/mese** (regole custom)
 - **$0.60 per 1 milione di richieste** ispezionate
-- **Bot Control:** $10/Web ACL/mese (Common) + $30 (Targeted)
-- **Fraud Control ATP/ACFP:** $30/Web ACL/mese + $1 per 1.000 richieste login
+- **Bot Control:** canone mensile per Web ACL + costo per milione di richieste, diverso tra livello Common e Targeted
+- **Fraud Control ATP/ACFP:** canone mensile per Web ACL + costo per 1.000 richieste di login analizzate
+<!-- REVIEW: verificare su https://aws.amazon.com/waf/pricing/ i prezzi esatti di Bot Control (Common/Targeted) e ATP/ACFP: le cifre precedenti ($30 Targeted, $30 ATP) erano probabilmente errate; verificare anche i piani flat-rate con CloudFront -->
+
+I prezzi cambiano nel tempo: verificare sempre la pagina ufficiale.
 
 ---
 
@@ -268,7 +280,7 @@ Shield Standard è automaticamente abilitato per tutti i clienti AWS, senza cost
 
 ### Shield Advanced ($3.000/mese/organizzazione)
 
-Shield Advanced offre:
+Richiede un impegno di sottoscrizione di 1 anno, più le tariffe di data transfer out sulle risorse protette. Shield Advanced offre:
 - **Protezione DDoS Layer 7** (in combinazione con WAF)
 - **SRT (Shield Response Team):** team di esperti AWS disponibili 24/7 per supporto durante attacchi
 - **Cost Protection:** rimborso dei costi AWS (EC2, ELB, CloudFront, Route 53) causati da un attacco DDoS
@@ -343,31 +355,29 @@ Il traffico viene diretto verso il Network Firewall tramite modifiche alle route
 ```bash
 # Creare regole Suricata per IPS
 cat > suricata-rules.rules << 'EOF'
-# Blocca SQL injection
-alert http any any -> $HOME_NET any (msg:"SQL Injection Attempt"; content:"UNION SELECT"; nocase; http_uri; sid:1000001; rev:1;)
+# SQL injection: con "drop" il pacchetto è scartato (IPS); con "alert" solo loggato (IDS)
+drop http any any -> $HOME_NET any (msg:"SQL Injection Attempt"; http.uri; content:"UNION SELECT"; nocase; sid:1000001; rev:1;)
 
-# Blocca port scanning
+# Port scanning: solo alert (rileva SYN ripetuti da una stessa sorgente)
 alert tcp any any -> $HOME_NET any (msg:"Port Scan Detected"; flags:S; threshold:type threshold,track by_src,count 10,seconds 60; sid:1000002; rev:1;)
 
-# Blocca traffico verso domini noti malware
+# Traffico verso domini noti malware
 drop dns any any -> any any (msg:"Known Malware Domain"; dns.query; content:"malware-c2.evil.com"; sid:1000003; rev:1;)
 EOF
 
-# Creare Rule Group con regole Suricata
+# Creare Rule Group con regole Suricata: RulesString vuole le regole separate da newline,
+# quindi si lascia a jq il compito di serializzare il file in una stringa JSON
+jq -Rs '{RulesSource: {RulesString: .}, StatefulRuleOptions: {RuleOrder: "STRICT_ORDER"}}' \
+  suricata-rules.rules > suricata-rulegroup.json
+
 aws network-firewall create-rule-group \
   --rule-group-name "SuricataRules" \
   --type STATEFUL \
   --capacity 100 \
-  --rule-group '{
-    "RulesSource": {
-      "RulesString": "'"$(cat suricata-rules.rules | tr '\n' ';' | sed 's/;$//')"'"
-    },
-    "StatefulRuleOptions": {
-      "RuleOrder": "STRICT_ORDER"
-    }
-  }'
+  --rule-group file://suricata-rulegroup.json
 
 # Creare Rule Group per domain filtering
+# (con una policy STRICT_ORDER anche questo gruppo deve essere STRICT_ORDER)
 aws network-firewall create-rule-group \
   --rule-group-name "BlockedDomains" \
   --type STATEFUL \
@@ -379,6 +389,9 @@ aws network-firewall create-rule-group \
         "TargetTypes": ["HTTP_HOST", "TLS_SNI"],
         "GeneratedRulesType": "DENYLIST"
       }
+    },
+    "StatefulRuleOptions": {
+      "RuleOrder": "STRICT_ORDER"
     }
   }'
 
@@ -389,8 +402,8 @@ aws network-firewall create-firewall-policy \
     "StatelessDefaultActions": ["aws:forward_to_sfe"],
     "StatelessFragmentDefaultActions": ["aws:drop"],
     "StatefulRuleGroupReferences": [
-      {"ResourceArn": "arn:aws:network-firewall:us-east-1:123456789012:stateful-rulegroup/SuricataRules"},
-      {"ResourceArn": "arn:aws:network-firewall:us-east-1:123456789012:stateful-rulegroup/BlockedDomains"}
+      {"ResourceArn": "arn:aws:network-firewall:us-east-1:123456789012:stateful-rulegroup/SuricataRules", "Priority": 1},
+      {"ResourceArn": "arn:aws:network-firewall:us-east-1:123456789012:stateful-rulegroup/BlockedDomains", "Priority": 2}
     ],
     "StatefulDefaultActions": ["aws:drop_established"],
     "StatefulEngineOptions": {
@@ -411,6 +424,12 @@ aws network-firewall create-firewall \
   --description "Network Firewall for production VPC"
 ```
 
+!!! note "STRICT_ORDER e priorità"
+    Con `RuleOrder: STRICT_ORDER` le regole sono valutate nell'ordine esatto dei gruppi (campo `Priority`, più basso = prima) e `StatefulDefaultActions` si applica solo al traffico che nessuna regola ha catturato. Il default `DEFAULT_ACTION_ORDER` invece valuta per tipo di azione (pass → drop → reject → alert) e non ammette default action. Tutti i rule group referenziati devono usare lo stesso ordinamento della policy.
+
+!!! tip "Novità"
+    Network Firewall supporta anche l'attachment diretto a un **Transit Gateway** (ispezione centralizzata senza VPC di ispezione dedicato) e rule group gestiti da AWS (es. Active Threat Defense). Verificare disponibilità regionale nella documentazione ufficiale.
+
 ### TLS Inspection
 
 Network Firewall può decriptare, ispezionare, e ri-cifrare il traffico HTTPS (SSL/TLS inspection) per rilevare minacce nascoste nel traffico cifrato.
@@ -426,7 +445,7 @@ aws network-firewall create-tls-inspection-configuration \
       }],
       "Scopes": [{
         "Sources": [{"AddressDefinition": "0.0.0.0/0"}],
-        "Destinations": [{"AddressDefinition": "$HOME_NET"}],
+        "Destinations": [{"AddressDefinition": "10.0.0.0/16"}],
         "SourcePorts": [{"FromPort": 0, "ToPort": 65535}],
         "DestinationPorts": [{"FromPort": 443, "ToPort": 443}],
         "Protocols": [6]
@@ -435,10 +454,27 @@ aws network-firewall create-tls-inspection-configuration \
   }'
 ```
 
+`AddressDefinition` accetta solo CIDR, non variabili Suricata come `$HOME_NET`: qui il CIDR del VPC. La configurazione TLS va poi referenziata nella firewall policy (`TLSInspectionConfigurationArn`). Il certificato ACM qui è quello **server** per l'ispezione del traffico inbound; per il traffico outbound serve invece una CA (`CertificateAuthorityArn`) con cui il firewall ri-firma i certificati, da distribuire come trusted ai client.
+
 ### Logging Network Firewall
 
+`update-logging-configuration` aggiunge o rimuove **una sola destinazione per chiamata**: per configurarne due servono due chiamate successive, ognuna con la configurazione completa risultante.
+
 ```bash
-# Configurare logging verso S3 e CloudWatch
+# 1) Destinazione FLOW su S3
+aws network-firewall update-logging-configuration \
+  --firewall-name "MyVPCFirewall" \
+  --logging-configuration '{
+    "LogDestinationConfigs": [
+      {
+        "LogType": "FLOW",
+        "LogDestinationType": "S3",
+        "LogDestination": {"bucketName": "my-nfw-logs", "prefix": "flow/"}
+      }
+    ]
+  }'
+
+# 2) Aggiungere la destinazione ALERT su CloudWatch Logs (ripetendo la precedente)
 aws network-firewall update-logging-configuration \
   --firewall-name "MyVPCFirewall" \
   --logging-configuration '{
@@ -467,7 +503,7 @@ I Security Groups sono il firewall di istanza in AWS: stateful (traccia lo stato
 
 - **Stateful:** se una connessione inbound è permessa, la risposta outbound è automaticamente permessa (e viceversa)
 - **Allow only:** si possono solo aggiungere regole Allow (non Deny)
-- **Applicati a risorse:** ogni risorsa (EC2, RDS, Lambda in VPC, ECS container) può avere fino a 5 SG
+- **Applicati a risorse:** ogni ENI (quindi EC2, RDS, Lambda in VPC, task ECS) può avere fino a 5 SG di default (quota aumentabile, con vincolo sul totale regole per ENI)
 - **Default:** tutto inbound bloccato, tutto outbound permesso
 
 ### Referenziare Altri Security Groups
@@ -489,13 +525,15 @@ aws ec2 authorize-security-group-ingress \
   --port 3306 \
   --source-group sg-app-servers
 
-# Referenziare SG cross-account (VPC Sharing)
+# Referenziare SG di un altro account (richiede VPC peering o VPC condiviso)
 aws ec2 authorize-security-group-ingress \
   --group-id sg-local \
-  --protocol tcp \
-  --port 80 \
-  --source-group sg-remote-account \
-  --source-group-owner-id 999888777666
+  --ip-permissions '[{
+    "IpProtocol": "tcp",
+    "FromPort": 80,
+    "ToPort": 80,
+    "UserIdGroupPairs": [{"GroupId": "sg-remote-account", "UserId": "999888777666"}]
+  }]'
 ```
 
 ### Managed Prefix Lists
@@ -523,6 +561,9 @@ aws ec2 authorize-security-group-ingress \
     "ToPort": 443,
     "PrefixListIds": [{"PrefixListId": "'"$CF_PREFIX_LIST_ID"'"}]
   }]'
+
+# Attenzione: la prefix list di CloudFront conta come ~55 regole nella quota
+# "regole per security group" (default 60): spesso serve alzare la quota.
 
 # Creare una Managed Prefix List custom
 aws ec2 create-managed-prefix-list \
@@ -585,7 +626,7 @@ aws ec2 create-network-acl-entry \
   --rule-action allow \
   --ingress
 
-# Allow ephemeral ports per risposte outbound (stateless!)
+# Allow ephemeral ports inbound per le risposte alle connessioni avviate dalla subnet (stateless!)
 aws ec2 create-network-acl-entry \
   --network-acl-id $NACL_ID \
   --rule-number 900 \
@@ -594,6 +635,17 @@ aws ec2 create-network-acl-entry \
   --cidr-block 0.0.0.0/0 \
   --rule-action allow \
   --ingress
+
+# Una NACL custom nega TUTTO l'outbound di default: servono regole egress esplicite,
+# altrimenti le risposte a HTTP/HTTPS (porte effimere del client) non escono
+aws ec2 create-network-acl-entry \
+  --network-acl-id $NACL_ID \
+  --rule-number 100 \
+  --protocol tcp \
+  --port-range From=1024,To=65535 \
+  --cidr-block 0.0.0.0/0 \
+  --rule-action allow \
+  --egress
 
 # Deny all inbound (rule number 1000 = catch-all)
 aws ec2 create-network-acl-entry \
@@ -647,7 +699,7 @@ aws ec2 describe-security-groups \
 
 ### WAF Best Practices
 
-1. **Iniziare in COUNT mode** — monitora senza bloccare per verificare falsi positivi
+1. **Iniziare in COUNT mode** — monitora senza bloccare per verificare falsi positivi (sui managed rule group: `OverrideAction: Count`)
 2. **AWS Managed Rules** sono il punto di partenza, poi aggiungere regole custom
 3. **Rate limiting** su tutti gli endpoint sensibili (login, registrazione, API)
 4. **Logging sempre attivo** — essenziale per analisi e forensics
@@ -683,7 +735,7 @@ aws wafv2 get-web-acl \
   --output table
 ```
 
-Dopo aver identificato la regola: impostare `ExcludedRules` nel `ManagedRuleGroupStatement` per escluderla, oppure aggiungere una regola Allow con priorità più bassa che fa match sul traffico legittimo prima che arrivi alle Managed Rules.
+Dopo aver identificato la regola: impostare `RuleActionOverrides` (azione `Count`) nel `ManagedRuleGroupStatement` per neutralizzarla, oppure aggiungere una regola Allow con un numero di priorità inferiore a quello del managed rule group, che fa match sul traffico legittimo prima che arrivi alle Managed Rules.
 
 ### Scenario 2 — Connettività EC2 Bloccata (Security Group / NACL)
 
@@ -722,7 +774,7 @@ aws ec2 describe-network-acls \
 
 **Sintomo:** Dopo il deployment del Network Firewall il traffico verso/da alcune destinazioni viene droppato silenziosamente; la connettività era funzionante prima.
 
-**Causa:** Le route tables del VPC non sono state aggiornate correttamente per dirigere il traffico attraverso il Firewall Endpoint, oppure le stateful rules hanno `StatefulDefaultActions: aws:drop_established` che scarta connessioni non esplicitamente permesse.
+**Causa:** Le route tables del VPC non sono state aggiornate correttamente per dirigere il traffico attraverso il Firewall Endpoint, oppure le stateful rules hanno `StatefulDefaultActions: aws:drop_established` che scarta connessioni non esplicitamente permesse. Un'altra causa tipica è il **routing asimmetrico**: il firewall è stateful, quindi andata e ritorno devono passare dallo stesso endpoint (stessa AZ).
 
 **Soluzione:** Verificare che le route tables usino il Firewall Endpoint come next-hop, e controllare i log ALERT/FLOW per identificare i pacchetti droppati.
 
@@ -743,7 +795,7 @@ aws network-firewall describe-firewall \
 aws logs filter-log-events \
   --log-group-name "/aws/network-firewall/alerts" \
   --start-time $(date -d '30 minutes ago' +%s000) \
-  --filter-pattern "{ $.event.action = \"blocked\" }" \
+  --filter-pattern '{ $.event.alert.action = "blocked" }' \
   --limit 50 \
   --query 'events[*].message' \
   --output text
