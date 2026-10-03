@@ -7,10 +7,10 @@ search_keywords: [GRPO, RLVR, LoRA fine-tuning, QLoRA, RLHF, DPO Direct Preferen
 parent: ai/training/_index
 related: [ai/training/_index, ai/training/valutazione, ai/fondamentali/deep-learning, ai/mlops/infrastruttura-gpu, ai/modelli/modelli-open-source]
 official_docs: https://huggingface.co/docs/trl/index
-status: needs-review
+status: reviewed
 difficulty: expert
-last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Fine-Tuning — LoRA, QLoRA, RLHF, DPO
@@ -40,8 +40,7 @@ Full Fine-Tuning:
     Gli esempi usano Llama 3.1 8B/70B per continuità con i numeri di VRAM. Il flusso è identico per le famiglie open-weight più recenti (Llama 4, Qwen3, Gemma 3, Mistral…): cambiano `model_id`, i nomi dei `target_modules` (verificali con `print(model)`) e il chat template.
 
 !!! warning "API TRL/Transformers in evoluzione"
-    `trl` cambia API spesso. Gli esempi seguono le versioni recenti: `processing_class` al posto di `tokenizer`, `eval_strategy` al posto di `evaluation_strategy`. Se vedi `TypeError: unexpected keyword argument`, controlla la versione installata (`pip show trl transformers`) e il changelog.
-    <!-- REVIEW: verificare nomi parametri SFTConfig (max_length vs max_seq_length), DPOConfig (max_prompt_length) sulla versione TRL corrente -->
+    `trl` cambia API spesso. Gli esempi seguono le versioni recenti (TRL 1.x, verificato su v1.14.1): `processing_class` al posto di `tokenizer`, `eval_strategy` al posto di `evaluation_strategy`, `max_length` in `SFTConfig` (non più `max_seq_length`), e `DPOConfig` senza `max_prompt_length` (resta solo `max_length`). Se vedi `TypeError: unexpected keyword argument`, controlla la versione installata (`pip show trl transformers`) e il changelog.
 
 ??? info "Quando NON fare fine-tuning"
     Se serve conoscenza aggiornata o proprietaria, di solito è meglio il RAG: il fine-tuning insegna stile e comportamento, non è un buon canale per iniettare fatti che cambiano. Parti sempre da prompt engineering e RAG; fine-tuna quando hai un task ripetitivo con metrica misurabile.
@@ -471,8 +470,7 @@ dpo_config = DPOConfig(
     learning_rate=5e-7,    # DPO usa LR molto più basso di SFT (full FT); con LoRA ~5e-6
     beta=0.1,              # temperatura KL — più alto = più conservativo
     bf16=True,
-    max_prompt_length=1024,
-    max_length=2048,
+    max_length=2048,       # prompt + risposta; max_prompt_length rimosso nelle versioni recenti di TRL
 )
 
 dpo_trainer = DPOTrainer(
@@ -601,8 +599,8 @@ python convert_hf_to_gguf.py ./llama3-devops-merged --outfile llama3-devops.gguf
 per_device_train_batch_size=1,         # da 2 a 1
 gradient_accumulation_steps=8,         # da 4 a 8 (effective batch invariato)
 
-# Leva 2: riduci max_seq_length
-max_seq_length=2048,                   # da 4096 a 2048
+# Leva 2: riduci la lunghezza di sequenza
+max_length=2048,                       # SFTConfig/DPOConfig (da 4096 a 2048); con Unsloth: max_seq_length
 
 # Leva 3: riduci rank LoRA (meno parametri addestrabili)
 r=8,                                   # da 16 a 8
@@ -656,8 +654,7 @@ prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_
 # Aumenta beta per penalizzare di più la divergenza dal ref model
 dpo_config = DPOConfig(
     beta=0.3,                  # da 0.1 a 0.3 (più conservativo)
-    max_prompt_length=512,     # riduci se i prompt sono molto lunghi
-    max_length=1024,
+    max_length=1024,           # riduci se prompt+risposte sono molto lunghi
     loss_type="sigmoid",       # default, più stabile di "hinge"
 )
 
