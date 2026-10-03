@@ -7,9 +7,10 @@ search_keywords: [dynamodb, nosql, key-value, document store, partition key, sor
 parent: cloud/aws/database/_index
 related: [cloud/aws/database/rds-aurora, cloud/aws/database/altri-db, cloud/aws/security/kms-secrets, cloud/aws/messaging/eventbridge-kinesis]
 official_docs: https://docs.aws.amazon.com/dynamodb/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Amazon DynamoDB — NoSQL Serverless
@@ -22,7 +23,7 @@ Amazon DynamoDB è un database NoSQL fully serverless, chiave-valore e documento
 - **Serverless:** nessun server da gestire, nessun patching, scaling automatico
 - **Performance:** latenza di lettura/scrittura in singola cifra di ms, sempre (anche a milioni di req/s)
 - **Scalabilità:** da zero a trilioni di item, fino a decine di milioni di richieste al secondo
-- **Disponibilità:** 99.999% SLA (Service Level Agreement — accordo sulla disponibilità garantita del servizio), dati replicati su 3 AZ automaticamente
+- **Disponibilità:** SLA (Service Level Agreement — accordo sulla disponibilità garantita del servizio) 99.99% per tabelle single-Region e 99.999% per Global Tables; dati replicati su 3 AZ automaticamente
 - **Nessuna join:** il modello di dati è denormalized-by-design
 - **Schema flessibile:** ogni item può avere attributi diversi (fatta eccezione per la primary key)
 
@@ -55,6 +56,7 @@ Ogni tabella deve avere una primary key, definita alla creazione e immutabile.
 - Un singolo attributo che identifica univocamente l'item
 - DynamoDB usa questo valore per distribuire i dati su partizioni fisiche tramite hashing
 - Esempio: `userId` per una tabella di utenti
+- Limite fisico: una singola partizione serve al massimo ~3.000 RCU e ~1.000 WCU al secondo, quindi una chiave "calda" va in throttling anche se la capacità totale della tabella è abbondante
 
 **Partition Key + Sort Key (HASH + RANGE Key) — Composite Primary Key:**
 - Due attributi: la partition key per la distribuzione, la sort key per l'ordinamento all'interno della partizione
@@ -158,13 +160,15 @@ aws application-autoscaling put-scaling-policy \
 
 DynamoDB gestisce automaticamente la capacità in base al traffico. Si paga per le richieste effettive (RRU/WRU).
 
-- **RRU — Request Read Unit:** $0.25 per milione di RRU (strongly consistent), $0.125 per milione (eventually consistent)
-- **WRU — Write Request Unit:** $1.25 per milione di WRU
+- **RRU — Request Read Unit:** ~$0.125 per milione (strongly consistent), ~$0.0625 per milione (eventually consistent)
+- **WRU — Write Request Unit:** ~$0.625 per milione
+
+Prezzi indicativi us-east-1 dopo il taglio del 50% sull'on-demand di novembre 2024 (verificare sempre [DynamoDB Pricing](https://aws.amazon.com/dynamodb/pricing/)). Le unità sono le stesse di RCU/WCU: 1 RRU = lettura strongly consistent fino a 4 KB, 1 WRU = scrittura fino a 1 KB.
 
 !!! tip "Provisioned vs On-Demand"
     - **On-Demand:** per traffic variabile, unpredictable, o applicazioni nuove. Non richiede capacity planning.
     - **Provisioned con Autoscaling:** per traffic prevedibile. Più economico di On-Demand per carichi costanti.
-    - Regola pratica: se paghi > $1.25/milione WRU on-demand per un carico stabile → valuta provisioned.
+    - Perché: on-demand ha un prezzo per richiesta più alto perché AWS tiene capacità disponibile per i picchi; con carico costante e utilizzo medio alto, provisioned (eventualmente con Reserved Capacity) costa meno. Regola pratica: se il traffico on-demand è stabile da mesi, confronta il costo con provisioned + autoscaling.
 
 ```bash
 # Cambiare una tabella da provisioned a on-demand
@@ -335,7 +339,7 @@ aws lambda create-event-source-mapping \
 
 ## TTL — Time To Live
 
-TTL permette di configurare la scadenza automatica degli item, evitando di dover eliminare manualmente i dati obsoleti. DynamoDB elimina gli item scaduti entro 48 ore dalla scadenza (best effort, non istantaneo).
+TTL permette di configurare la scadenza automatica degli item, evitando di dover eliminare manualmente i dati obsoleti. DynamoDB elimina gli item scaduti in background, tipicamente entro pochi giorni dalla scadenza (best effort, non istantaneo; la cancellazione non consuma WCU). Gli item scaduti ma non ancora eliminati compaiono ancora in Query/Scan: filtrarli lato applicazione con `FilterExpression` su `expiresAt`.
 
 **Use case:** sessioni utente, token di autenticazione, dati temporanei, cache entries.
 
@@ -412,8 +416,9 @@ Le Global Tables replicano automaticamente una tabella DynamoDB in **più Region
 
 **Caratteristiche:**
 - Replication quasi in real-time (< 1s tipicamente)
-- Conflitti di write: "last writer wins" basato su timestamp
-- Global Tables v2 (2019): versioning abilitato automaticamente
+- Conflitti di write: "last writer wins" basato su timestamp (modalità MREC — Multi-Region Eventual Consistency, il default)
+- Versione corrente: Global Tables 2019.11.21 (la versione 2017 è legacy). Richiede gli Streams attivi sulla tabella (abilitati automaticamente aggiungendo una replica)
+- Modalità **MRSC** (Multi-Region Strong Consistency, disponibile dal 2025): scritture replicate in modo sincrono, le strongly consistent read vedono sempre l'ultimo write confermato, senza conflitti LWW; costo: latenza di scrittura più alta. Richiede esattamente 3 Region (repliche o witness)
 
 ```bash
 # Creare tabella con Global Tables (aggiungere Region)
@@ -577,10 +582,10 @@ aws dynamodb restore-table-from-backup \
 
 ## Export to S3
 
-DynamoDB può esportare l'intera tabella su S3 in formato JSON o Parquet, senza impatto sulle performance della tabella. Utile per analytics con Athena, data lake, migrazione.
+DynamoDB può esportare l'intera tabella su S3 in formato DynamoDB JSON o Amazon Ion, senza impatto sulle performance della tabella. Utile per analytics con Athena, data lake, migrazione.
 
 ```bash
-# Esportare tabella su S3 (Parquet)
+# Esportare tabella su S3 (richiede PITR abilitato sulla tabella)
 aws dynamodb export-table-to-point-in-time \
   --table-arn arn:aws:dynamodb:us-east-1:123456789012:table/Orders \
   --s3-bucket my-data-lake \
@@ -588,13 +593,16 @@ aws dynamodb export-table-to-point-in-time \
   --export-format DYNAMODB_JSON \
   --export-time "2024-01-15T00:00:00Z"
 
-# Con Parquet per Athena
+# Formato Amazon Ion (alternativa a DYNAMODB_JSON)
 aws dynamodb export-table-to-point-in-time \
   --table-arn arn:aws:dynamodb:us-east-1:123456789012:table/Orders \
   --s3-bucket my-data-lake \
-  --s3-prefix dynamodb-exports/orders-parquet/ \
-  --export-format PARQUET
+  --s3-prefix dynamodb-exports/orders-ion/ \
+  --export-format ION
 ```
+
+!!! note "Formati e requisiti"
+    L'export supporta `DYNAMODB_JSON` e `ION`, non Parquet: per Athena si converte con Glue/CTAS. Richiede PITR (Point-In-Time Recovery) attivo; `--export-time` deve cadere nella finestra di 35 giorni. Esiste anche l'export incrementale, che esporta solo le modifiche tra due istanti.
 
 ---
 
@@ -616,9 +624,9 @@ aws dynamodb enable-kinesis-streaming-destination \
 | Classe | Costo Storage | Costo Throughput | Use Case |
 |--------|--------------|-----------------|---------|
 | **Standard** | $0.25/GB/mese | Normale | Dati acceduti frequentemente |
-| **Standard-IA** | $0.10/GB/mese (+75% throughput cost) | +25% più costoso | Dati acceduti raramente |
+| **Standard-IA** (Infrequent Access) | $0.10/GB/mese | ~+25% più costoso | Dati acceduti raramente |
 
-Standard-IA conviene per tabelle grandi dove l'accesso è infrequente (tabelle di log, archivio storico, audit trail).
+Standard-IA conviene per tabelle grandi dove l'accesso è infrequente (tabelle di log, archivio storico, audit trail). Perché: abbatte il costo di storage ma aumenta quello di throughput, quindi vale la pena quando lo storage pesa più del ~50% della spesa totale della tabella. Il cambio di classe è reversibile (con un limite di cambi per finestra di 30 giorni).
 
 ```bash
 # Cambiare la table class
@@ -689,12 +697,16 @@ response = table.query(
 )
 items = response['Items']
 
-# Paginazione (DynamoDB restituisce max 1 MB per chiamata)
+# Paginazione (DynamoDB restituisce max 1 MB per chiamata): ripetere gli
+# stessi parametri (incluso IndexName) aggiungendo ExclusiveStartKey
 while 'LastEvaluatedKey' in response:
     response = table.query(
-        KeyConditionExpression=Key('category').eq('electronics'),
-        ExclusiveStartKey=response['LastEvaluatedKey'],
-        Limit=20
+        KeyConditionExpression=Key('category').eq('electronics') & Key('price').lt(50),
+        IndexName='category-price-index',
+        FilterExpression=Attr('stock').gt(0),
+        Limit=20,
+        ScanIndexForward=False,
+        ExclusiveStartKey=response['LastEvaluatedKey']
     )
     items.extend(response['Items'])
 
@@ -708,11 +720,15 @@ response = table.scan(
 import concurrent.futures
 
 def scan_segment(segment_id, total_segments):
-    resp = table.scan(
-        Segment=segment_id,
-        TotalSegments=total_segments
-    )
-    return resp['Items']
+    # Ogni segmento va paginato con LastEvaluatedKey (max 1 MB per chiamata)
+    kwargs = {'Segment': segment_id, 'TotalSegments': total_segments}
+    items = []
+    while True:
+        resp = table.scan(**kwargs)
+        items.extend(resp['Items'])
+        if 'LastEvaluatedKey' not in resp:
+            return items
+        kwargs['ExclusiveStartKey'] = resp['LastEvaluatedKey']
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
     futures = [executor.submit(scan_segment, i, 4) for i in range(4)]
@@ -749,7 +765,7 @@ response = dynamodb.batch_get_item(
 
 ### Modello Dati
 
-1. **Single-Table Design:** consolidare entità correlate in un'unica tabella con overloaded keys. Riduce le chiamate API e i costi.
+1. **Single-Table Design:** consolidare entità correlate in un'unica tabella con overloaded keys, così una sola Query recupera entità collegate (niente join). Riduce le chiamate API ma rende il modello meno leggibile e più rigido da evolvere: con access pattern ancora instabili, più tabelle sono una scelta legittima.
 2. **Partition key ad alta cardinalità:** UUID, userId, productId — non status, country, category
 3. **Evitare hot partitions:** distribuire il carico su molte partition key
 4. **Sparse indexes:** usare GSI con attributi presenti solo su alcuni item (GSI non indicizza item senza quell'attributo)
@@ -764,7 +780,7 @@ response = dynamodb.batch_get_item(
 ### Costi
 
 1. **On-Demand per carichi variabili**, Provisioned + Autoscaling per carichi stabili
-2. **Standard-IA** per tabelle con > 1 GB e accesso infrequente
+2. **Standard-IA** quando lo storage supera ~50% del costo della tabella (accesso infrequente)
 3. **TTL** per eliminare automaticamente i dati scaduti
 4. **Export to S3** per analytics invece di query Scan frequenti
 
@@ -880,8 +896,8 @@ aws dynamodb update-item \
 
     **Approfondimento completo →** [RDS e Aurora](rds-aurora.md)
 
-??? info "DAX — Caching"
-    DAX è la cache nativa di DynamoDB. Per caching applicativo più generico considerare ElastiCache Redis.
+??? info "ElastiCache — Alternativa a DAX"
+    DAX è la cache nativa di DynamoDB (solo API DynamoDB). Per caching applicativo più generico, o per cachare risultati aggregati, considerare ElastiCache (Redis/Valkey).
 
     **Approfondimento completo →** [Altri Database AWS](altri-db.md)
 
