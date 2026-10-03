@@ -7,10 +7,10 @@ search_keywords: [tekton, tekton pipelines, tekton ci/cd, tekton kubernetes, clo
 parent: ci-cd/tools/_index
 related: [ci-cd/gitops/argocd, ci-cd/pipeline, ci-cd/strategie/pipeline-security, containers/openshift/gitops-pipelines, containers/kubernetes/operators-crd]
 official_docs: https://tekton.dev/docs/
-status: needs-review
+status: reviewed
 difficulty: advanced
-last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Tekton
@@ -19,7 +19,7 @@ last_verified: 2026-10-03
 
 Tekton è un framework open-source **Kubernetes-native** per la costruzione di pipeline CI/CD. A differenza di Jenkins, GitHub Actions o GitLab CI — sistemi esterni al cluster — Tekton si installa come estensione dell'API Kubernetes tramite CRD (Custom Resource Definition) e usa i pod Kubernetes come unità di esecuzione. Ogni step di una pipeline è un container, ogni task è un pod, ogni configurazione è un manifest YAML applicabile con `kubectl`. Questo approccio elimina la dipendenza da un server CI separato, sfrutta l'infrastruttura Kubernetes già esistente, e rende le pipeline portabili tra qualsiasi cluster.
 
-Tekton è un progetto open-source nato in Google (Knative Build) e graduato nella CD Foundation (2022); in seguito è passato sotto l'ombrello CNCF. <!-- REVIEW: verificare livello di maturità CNCF attuale (incubating/graduated) --> È alla base di OpenShift Pipelines (Red Hat) e usato come building block da altre soluzioni CI/CD cloud-native. Il pattern più comune è usare Tekton per la parte **CI** (build, test, push immagine) e ArgoCD per la parte **CD** (deploy GitOps-style) — complementari per natura.
+Tekton è un progetto open-source nato in Google (Knative Build) e graduato nella CD Foundation (2022); in seguito è stato accettato nella CNCF a livello **Incubating** (13 marzo 2026). È alla base di OpenShift Pipelines (Red Hat) e usato come building block da altre soluzioni CI/CD cloud-native. Il pattern più comune è usare Tekton per la parte **CI** (build, test, push immagine) e ArgoCD per la parte **CD** (deploy GitOps-style) — complementari per natura.
 
 !!! warning "Tekton NON è un sistema CI/CD completo out-of-the-box"
     Tekton è un framework a basso livello: non include UI avanzata, notifiche, policy di retention automatica, o dashboard ricca senza installare componenti aggiuntivi (Tekton Dashboard, Tekton Chains). Va usato quando si vuole controllo totale sulla pipeline come risorsa Kubernetes, non quando si vuole velocità di setup iniziale.
@@ -641,7 +641,7 @@ subjects:
 ## Best Practices
 
 !!! tip "Usa il catalog per task standard"
-    Non scrivere task per operazioni comuni. Il catalog Tekton (consultabile via [Artifact Hub](https://artifacthub.io/); il vecchio Tekton Hub è deprecato <!-- REVIEW: verificare stato di hub.tekton.dev -->) offre task certificate per git-clone, buildah, kaniko, helm-upgrade-from-repo, sonarqube-scanner, trivy, cosign. Usare task dal Hub riduce il codice da mantenere e garantisce versioning esplicito.
+    Non scrivere task per operazioni comuni. Il catalog Tekton (consultabile via [Artifact Hub](https://artifacthub.io/); l'istanza pubblica hub.tekton.dev è stata dismessa a gennaio 2026 e il repository archiviato a febbraio 2026) offre task certificate per git-clone, buildah, kaniko, helm-upgrade-from-repo, sonarqube-scanner, trivy, cosign. Usare task dal Hub riduce il codice da mantenere e garantisce versioning esplicito.
 
 ### Task Design
 
@@ -909,7 +909,7 @@ EOF
 ## Riferimenti
 
 - [Tekton — Documentazione ufficiale](https://tekton.dev/docs/)
-- [Tekton Hub — Catalog di Task riutilizzabili](https://hub.tekton.dev/)
+- [Artifact Hub — Tekton Catalog Tasks](https://artifacthub.io/packages/search?repo=tekton-catalog-tasks)
 - [Tekton Chains — Supply Chain Security](https://tekton.dev/docs/chains/)
 - [Tekton Pipelines — GitHub](https://github.com/tektoncd/pipeline)
 - [Tekton CLI (tkn)](https://tekton.dev/docs/cli/)
