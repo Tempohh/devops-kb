@@ -4648,7 +4648,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -4673,7 +4673,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24853,8 +24853,8 @@
 
 <h1 id="aws-vpc-lattice">AWS VPC Lattice<a class="headerlink" href="#aws-vpc-lattice" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p><strong>VPC Lattice</strong> è un servizio di <em>application networking</em> gestito da AWS (GA novembre 2023) che connette, monitora e mette in sicurezza le comunicazioni service-to-service a livello <strong>L7 (HTTP/HTTPS/gRPC)</strong>, senza richiedere sidecar, agent o modifiche al codice applicativo. Al posto di instradare pacchetti tra subnet (come Transit Gateway) o esporre singoli endpoint (come PrivateLink), Lattice ragiona in termini di <strong>servizi</strong>: un servizio consumer si connette a un servizio logico esposto tramite un <strong>service network</strong>, indipendentemente da dove girano i target reali (EC2, container ECS/EKS, pod Kubernetes, funzioni Lambda), anche across VPC e across account.</p>
-<p>Si usa quando serve connettività service-to-service governata da policy IAM a livello applicativo — architetture a microservizi multi-team, multi-account, dove ogni servizio deve autenticare ed autorizzare le chiamate in ingresso senza gestire certificati mTLS o un control plane di service mesh. <strong>Non</strong> si usa per instradamento di rete generico L3/L4 (resta compito di VPC Peering/Transit Gateway), né per traffico non-HTTP (Lattice non supporta UDP, e il supporto TCP è limitato rispetto a un NLB diretto).</p>
+<p><strong>VPC Lattice</strong> è un servizio di <em>application networking</em> gestito da AWS (GA marzo 2023) che connette, monitora e mette in sicurezza le comunicazioni service-to-service a livello <strong>L7 (HTTP/HTTPS/gRPC)</strong>, senza richiedere sidecar, agent o modifiche al codice applicativo. Al posto di instradare pacchetti tra subnet (come Transit Gateway) o esporre singoli endpoint (come PrivateLink), Lattice ragiona in termini di <strong>servizi</strong>: un servizio consumer si connette a un servizio logico esposto tramite un <strong>service network</strong>, indipendentemente da dove girano i target reali (EC2, container ECS/EKS, pod Kubernetes, funzioni Lambda), anche across VPC e across account.</p>
+<p>Si usa quando serve connettività service-to-service governata da policy IAM a livello applicativo — architetture a microservizi multi-team, multi-account, dove ogni servizio deve autenticare ed autorizzare le chiamate in ingresso senza gestire certificati mTLS o un control plane di service mesh. <strong>Non</strong> si usa per instradamento di rete generico L3/L4 (resta compito di VPC Peering/Transit Gateway), né per traffico non-HTTP (Lattice non supporta UDP; il TCP è supportato ma senza le funzioni L7 e con meno flessibilità di un NLB diretto).</p>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <div class="admonition note">
 <p class="admonition-title">I tre building block di VPC Lattice</p>
@@ -24876,7 +24876,7 @@
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>                                  condivisa via AWS RAM
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>                                  tra N account
 </span></code></pre></div>
-<p>Il traffico non attraversa mai route table o Internet Gateway del consumer: Lattice inietta un endpoint di rete gestito nella VPC associata (simile concettualmente a un Interface Endpoint PrivateLink, ma condiviso per l'intero service network invece che per singolo servizio). Il <strong>data plane è gestito da AWS</strong> — non ci sono sidecar da patchare, nessun control plane da operare (a differenza di un service mesh come Istio o App Mesh).</p>
+<p>Il traffico non passa da Internet Gateway né richiede modifiche alle route table del consumer: il DNS della VPC associata risolve i nomi dei servizi in indirizzi <strong>link-local</strong> (range <code>169.254.171.0/24</code>) gestiti da Lattice, e il traffico verso di essi è inoltrato al data plane AWS. Non c'è un ENI da gestire come in un Interface Endpoint PrivateLink: l'associazione è per l'intero service network invece che per singolo servizio. I Security Group dei target devono quindi autorizzare l'ingresso dalla <strong>managed prefix list</strong> <code>com.amazonaws.&lt;region&gt;.vpc-lattice</code>, non da SG dei consumer (vedi Troubleshooting). Il <strong>data plane è gestito da AWS</strong> — non ci sono sidecar da patchare, nessun control plane da operare (a differenza di un service mesh come Istio o App Mesh).</p>
 <p><strong>Confronto pratico con le alternative già coperte in <a href="../vpc-avanzato/">VPC Avanzato</a>:</strong></p>
 <table>
 <thead>
@@ -24896,7 +24896,7 @@
 </tr>
 <tr>
 <td><strong>Service Mesh (Istio, App Mesh)</strong></td>
-<td>Un mesh richiede sidecar proxy su ogni pod/istanza e un control plane da mantenere. Lattice è completamente gestito da AWS, senza sidecar: minore complessità operativa ma minore flessibilità (no traffic mirroring avanzato, no circuit breaking custom).</td>
+<td>Un mesh richiede sidecar proxy su ogni pod/istanza e un control plane da mantenere. Lattice è completamente gestito da AWS, senza sidecar: minore complessità operativa ma minore flessibilità (no traffic mirroring avanzato, no circuit breaking custom). <strong>AWS App Mesh</strong> ha raggiunto la fine del supporto il 30/09/2026: per workload ECS le alternative AWS sono Lattice o ECS Service Connect.</td>
 </tr>
 </tbody>
 </table>
@@ -24939,7 +24939,7 @@
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="s1">            "path": "/healthz",</span>
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="s1">            "healthyThresholdCount": 3,</span>
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="s1">            "unhealthyThresholdCount": 3,</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="s1">            "intervalSeconds": 15</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="s1">            "healthCheckIntervalSeconds": 15</span>
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="s1">        }</span>
 </span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'id'</span><span class="w"> </span>--output<span class="w"> </span>text<span class="k">)</span>
@@ -24958,14 +24958,16 @@
 </span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">    </span>--default-action<span class="w"> </span><span class="s1">'{"forward":{"targetGroups":[{"targetGroupIdentifier":"'</span><span class="nv">$TG_ID</span><span class="s1">'","weight":100}]}}'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'id'</span><span class="w"> </span>--output<span class="w"> </span>text<span class="k">)</span>
 </span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>
-</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="c1"># Regola: instradare /v2/* verso un target group canary con peso 10%</span>
-</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>aws<span class="w"> </span>vpc-lattice<span class="w"> </span>create-rule<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">    </span>--service-identifier<span class="w"> </span><span class="nv">$SVC_ID</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">    </span>--listener-identifier<span class="w"> </span><span class="nv">$LISTENER_ID</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"canary-v2"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="w">    </span>--priority<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="w">    </span>--match<span class="w"> </span><span class="s1">'{"httpMatch":{"pathMatch":{"match":{"prefix":"/v2/"}}}}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="w">    </span>--action<span class="w"> </span><span class="s1">'{"forward":{"targetGroups":[{"targetGroupIdentifier":"'</span><span class="nv">$TG_ID</span><span class="s1">'","weight":90},{"targetGroupIdentifier":"'</span><span class="nv">$TG_ID</span><span class="s1">'_CANARY","weight":10}]}}'</span>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="c1"># Regola: su /v2/* inviare il 10% del traffico a un target group canary</span>
+</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="c1"># (TG_CANARY_ID = secondo target group, creato come sopra)</span>
+</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a>aws<span class="w"> </span>vpc-lattice<span class="w"> </span>create-rule<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">    </span>--service-identifier<span class="w"> </span><span class="nv">$SVC_ID</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">    </span>--listener-identifier<span class="w"> </span><span class="nv">$LISTENER_ID</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"canary-v2"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="w">    </span>--priority<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="w">    </span>--match<span class="w"> </span><span class="s1">'{"httpMatch":{"pathMatch":{"match":{"prefix":"/v2/"}}}}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="w">    </span>--action<span class="w"> </span><span class="s1">'{"forward":{"targetGroups":[{"targetGroupIdentifier":"'</span><span class="nv">$TG_ID</span><span class="s1">'","weight":90},{"targetGroupIdentifier":"'</span><span class="nv">$TG_CANARY_ID</span><span class="s1">'","weight":10}]}}'</span>
+</span><span id="__span-2-42"><a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a><span class="c1"># NB: i placeholder sono variabili shell; '"$TG_CANARY_ID"' chiude/riapre il quoting singolo</span>
 </span></code></pre></div>
 <p>Per <strong>EKS</strong>, la registrazione dei target group avviene tipicamente tramite il <a href="https://github.com/aws/aws-application-networking-k8s">Gateway API Controller per VPC Lattice</a>, che mappa risorse Kubernetes <code>HTTPRoute</code>/<code>Gateway</code> direttamente su servizi e target group Lattice — evitando chiamate CLI manuali per ogni deploy.</p>
 <h3 id="auth-policy-iam-a-livello-di-servizio">Auth policy IAM a livello di servizio<a class="headerlink" href="#auth-policy-iam-a-livello-di-servizio" title="Permanent link">&para;</a></h3>
@@ -25016,7 +25018,7 @@
 <p>Creare service network separati per <code>prod</code>/<code>staging</code>/<code>dev</code> (o per bounded context) invece di un unico service network aziendale: limita il blast radius di una auth policy errata e semplifica l'auditing con AWS RAM.</p>
 </div>
 <ul>
-<li>Abilitare <strong>access logging</strong> (<code>vpc-lattice:AccessLogSubscription</code> verso CloudWatch Logs, S3 o Kinesis Firehose) su ogni servizio in produzione: è l'unico modo per avere visibilità sulle richieste L7 senza sidecar.</li>
+<li>Abilitare <strong>access logging</strong> (<code>aws vpc-lattice create-access-log-subscription</code> verso CloudWatch Logs, S3 o Kinesis Data Firehose) su ogni servizio in produzione: è l'unico modo per avere visibilità sulle richieste L7 senza sidecar.</li>
 <li>Preferire <strong>IP target type</strong> per task ECS in modalità <code>awsvpc</code> e per pod EKS — evita di dover gestire target group per singola istanza EC2 sottostante.</li>
 <li>Usare <strong>weighted routing</strong> per canary release invece di deployment blue/green completi: riduce il rischio senza duplicare l'infrastruttura compute.</li>
 <li>Applicare auth policy con <code>Condition</code> su <code>vpc-lattice-svcs:RequestMethod</code> o header custom per un controllo più granulare del semplice allow/deny per principal.</li>
@@ -25024,7 +25026,9 @@
 <div class="admonition warning">
 <p class="admonition-title">Limiti noti da verificare prima di adottare Lattice in produzione</p>
 <ul>
-<li><strong>Nessun supporto UDP</strong> — solo TCP-based (HTTP/HTTPS/gRPC, e TCP generico in preview/GA parziale a seconda della region). Per DNS, syslog o altri protocolli UDP serve un'alternativa (NLB diretto, TGW).</li>
+<li><strong>Nessun supporto UDP</strong> — solo HTTP/HTTPS/gRPC e TCP. Per DNS, syslog o altri protocolli UDP serve un'alternativa (NLB diretto, TGW).</li>
+<li><strong>Risorse non-servizio</strong>: per esporre database o altre risorse TCP/IP/DNS (non servizi HTTP) Lattice offre <em>resource gateway</em> + <em>resource configuration</em> (condivisibili via RAM) e i <em>service network endpoint</em> (VPC endpoint verso un service network): verificare nella User Guide se coprono il caso d'uso prima di ricorrere a PrivateLink.</li>
+<li><strong>Ambito regionale</strong>: service network e servizi sono regionali; il cross-region richiede soluzioni aggiuntive.</li>
 <li><strong>Latenza aggiuntiva</strong> rispetto a un NLB diretto o a PrivateLink puro — il data plane Lattice introduce un hop L7 in più; misurare con test di carico prima di usarlo su path critici a bassissima latenza.</li>
 <li><strong>Quote da controllare</strong>: numero massimo di service-network-service-association per service network, numero di VPC associabili, numero di target per target group — verificare i valori correnti in <a href="https://docs.aws.amazon.com/vpc-lattice/latest/ug/quotas.html">AWS Service Quotas</a> prima del design, perché cambiano nel tempo.</li>
 <li>Il DNS name generato è pensato per risoluzione interna al service network: per esporlo con un nome custom serve comunque un CNAME/alias Route 53 verso il DNS name di Lattice.</li>
@@ -25046,33 +25050,36 @@
 </span></code></pre></div></p>
 <h3 id="scenario-2-richieste-rifiutate-con-403-accessdeniedexception">Scenario 2 — Richieste rifiutate con <code>403 AccessDeniedException</code><a class="headerlink" href="#scenario-2-richieste-rifiutate-con-403-accessdeniedexception" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il client riceve <code>403</code> con corpo <code>AccessDeniedException</code> nonostante il servizio sia raggiungibile a livello di rete.</p>
-<p><strong>Causa:</strong> L'auth policy IAM del servizio non include il principal chiamante, oppure le credenziali della richiesta non sono firmate con SigV4 (richiesto quando <code>auth-type</code> del servizio è <code>AWS_IAM</code>).</p>
+<p><strong>Causa:</strong> L'auth policy IAM del servizio (o quella del service network, se ne ha una) non include il principal chiamante, oppure le credenziali della richiesta non sono firmate con SigV4 (richiesto quando <code>auth-type</code> è <code>AWS_IAM</code>; il servizio <code>vpc-lattice-svcs</code> va firmato).</p>
 <p><strong>Soluzione:</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Ispezionare l'auth policy corrente</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>aws<span class="w"> </span>vpc-lattice<span class="w"> </span>get-auth-policy<span class="w"> </span>--resource-identifier<span class="w"> </span><span class="nv">$SVC_ID</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Verificare che il ruolo chiamante abbia anche il permesso IAM lato client</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># (serve ENTRAMBI: permesso IAM del caller + Resource Policy del servizio)</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>aws<span class="w"> </span>iam<span class="w"> </span>simulate-principal-policy<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span>--policy-source-arn<span class="w"> </span>arn:aws:iam::111111111111:role/checkout-service-role<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span>--action-names<span class="w"> </span>vpc-lattice-svcs:Invoke<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span>--resource-arns<span class="w"> </span>arn:aws:vpc-lattice:eu-central-1:222222222222:service/<span class="nv">$SVC_ID</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Verificare il permesso IAM lato client (identity-based policy del caller).</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Cross-account servono ENTRAMBI: identity policy del caller + auth policy del servizio;</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># nello stesso account basta che uno dei due consenta (nessun Deny esplicito)</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>aws<span class="w"> </span>iam<span class="w"> </span>simulate-principal-policy<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span>--policy-source-arn<span class="w"> </span>arn:aws:iam::111111111111:role/checkout-service-role<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span>--action-names<span class="w"> </span>vpc-lattice-svcs:Invoke<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span>--resource-arns<span class="w"> </span>arn:aws:vpc-lattice:eu-central-1:222222222222:service/<span class="nv">$SVC_ID</span>
 </span></code></pre></div></p>
 <h3 id="scenario-3-target-group-in-stato-unhealthy-servizio-irraggiungibile">Scenario 3 — Target group in stato <code>Unhealthy</code>, servizio irraggiungibile<a class="headerlink" href="#scenario-3-target-group-in-stato-unhealthy-servizio-irraggiungibile" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Tutti i target registrati risultano <code>Unhealthy</code> in <code>list-targets</code>, il servizio risponde <code>503</code>.</p>
-<p><strong>Causa:</strong> Il Security Group associato ai target (task ECS/pod EKS) non permette traffico in ingresso dal Security Group associato al service network sulla porta di health check, oppure il path di health check configurato non esiste nell'applicazione.</p>
+<p><strong>Causa:</strong> Il Security Group dei target (task ECS/pod EKS) non permette l'ingresso dalla managed prefix list <code>com.amazonaws.&lt;region&gt;.vpc-lattice</code> (da cui originano sia il traffico sia gli health check) sulla porta del target group, oppure il path di health check non esiste nell'applicazione. Un SG dei consumer non è sorgente valida: il traffico arriva dal data plane Lattice.</p>
 <p><strong>Soluzione:</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Controllare stato e reason dei target</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>aws<span class="w"> </span>vpc-lattice<span class="w"> </span>list-targets<span class="w"> </span>--target-group-identifier<span class="w"> </span><span class="nv">$TG_ID</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'items[*].[id,status,reasonCode]'</span><span class="w"> </span>--output<span class="w"> </span>table
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Verificare che il SG dei target permetta ingresso dal SG lattice-consumer sulla porta configurata</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-security-groups<span class="w"> </span>--group-ids<span class="w"> </span>sg-TARGET<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'SecurityGroups[0].IpPermissions'</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Verificare che il SG dei target permetta l'ingresso dalla prefix list vpc-lattice sulla porta configurata</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-managed-prefix-lists<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span>--filters<span class="w"> </span><span class="nv">Name</span><span class="o">=</span>prefix-list-name,Values<span class="o">=</span>com.amazonaws.eu-central-1.vpc-lattice
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-security-groups<span class="w"> </span>--group-ids<span class="w"> </span>sg-TARGET<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'SecurityGroups[0].IpPermissions'</span>
 </span></code></pre></div></p>
 <h3 id="scenario-4-la-resource-share-ram-non-appare-nellaccount-consumer">Scenario 4 — La resource share RAM non appare nell'account consumer<a class="headerlink" href="#scenario-4-la-resource-share-ram-non-appare-nellaccount-consumer" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Dopo <code>create-resource-share</code>, l'account consumer non vede alcun invito e non può associare la propria VPC.</p>
-<p><strong>Causa:</strong> Il principal specificato in <code>--principals</code> è errato (Account ID sbagliato, o si è usato un OU ARN quando serve un Account ID diretto), oppure la resource share è stata creata senza <code>--principals</code> (share "privata" senza destinatari).</p>
+<p><strong>Causa:</strong> Il principal specificato in <code>--principals</code> è errato (Account ID sbagliato; un OU/Organization ARN funziona solo se la condivisione con AWS Organizations è abilitata in RAM), oppure la resource share è stata creata senza <code>--principals</code> (share "privata" senza destinatari).</p>
 <p><strong>Soluzione:</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Elencare gli inviti pendenti nell'account consumer</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>aws<span class="w"> </span>ram<span class="w"> </span>get-resource-share-invitations<span class="w"> </span><span class="se">\</span>
@@ -25090,8 +25097,8 @@
 <p><strong>Approfondimento completo →</strong> <a href="../vpc-avanzato/">VPC Avanzato</a></p>
 </details>
 <details class="info">
-<summary>Elastic Load Balancing — NLB/ALB come target</summary>
-<p>I target group Lattice possono puntare a un Network Load Balancer esistente davanti a un servizio, utile per migrare gradualmente un'architettura già basata su ALB/NLB verso Lattice senza riscrivere il load balancing applicativo.</p>
+<summary>Elastic Load Balancing — ALB come target</summary>
+<p>I target group Lattice supportano il tipo <code>ALB</code>: un Application Load Balancer esistente può essere registrato come target (un NLB no: per quello si usano target <code>IP</code>). Utile per migrare gradualmente un'architettura già basata su ALB verso Lattice senza riscrivere il load balancing applicativo.</p>
 <p><strong>Approfondimento completo →</strong> <a href="../elastic-load-balancing/">Elastic Load Balancing</a></p>
 </details>
 <details class="info">
