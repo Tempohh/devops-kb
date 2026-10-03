@@ -1,15 +1,16 @@
 ---
 title: "AKS & Container Instances"
-slug: aks-containers-azure
+slug: aks-containers
 category: cloud
 tags: [azure, aks, kubernetes, container-instances, acr, azure-container-registry, workload-identity]
 search_keywords: [AKS Azure Kubernetes Service, Azure Container Registry ACR, Container Instances ACI, Azure Container Apps, Workload Identity Federation, node pool, cluster autoscaler, AGIC Application Gateway Ingress, CSI driver Key Vault, KEDA autoscaling]
 parent: cloud/azure/compute/_index
 related: [cloud/azure/networking/vnet, cloud/azure/security/key-vault, cloud/azure/monitoring/monitor-log-analytics]
 official_docs: https://learn.microsoft.com/azure/aks/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # AKS & Container Instances
@@ -24,6 +25,12 @@ Azure offre diversi servizi per eseguire container, ognuno con livello di astraz
 | **Azure Container Apps** | Serverless containers (KEDA+Dapr) | Microservizi event-driven, API, background jobs | KEDA autoscale 0→N | Consumption (vCPU+mem/sec) |
 | **Container Instances (ACI)** | Container singoli | Task one-off, burst, sidecar pattern, CI jobs | No autoscale | Per-second (vCPU+mem) |
 | **App Service (containers)** | PaaS web hosting | Web app containerizzate semplici | App Service autoscale | App Service Plan |
+
+!!! note "Acronimi usati in questa pagina"
+    **KEDA** (Kubernetes Event-Driven Autoscaling): scala i pod in base a eventi (code, topic, metriche), anche fino a zero. **OIDC issuer**: endpoint che firma i token dei ServiceAccount, base della federazione con Entra ID. **CSI** (Container Storage Interface): standard per montare storage esterno (qui i segreti di Key Vault) come volume. **AGIC** (Application Gateway Ingress Controller): controller che programma Azure Application Gateway a partire dalle risorse Ingress. **WIF**: Workload Identity Federation.
+
+!!! tip "AKS Automatic"
+    Per team che non vogliono gestire node pool, upgrade e hardening, AKS offre la modalità **Automatic** (`az aks create --sku automatic`): node provisioning, autoscaling, networking, Workload Identity e monitoring sono preconfigurati con default di produzione. I comandi sotto descrivono invece AKS **Standard**, con controllo completo.
 
 ## Azure Container Registry (ACR)
 
@@ -72,7 +79,7 @@ az acr replication create \
 ### Private Endpoint per ACR
 
 ```bash
-# Disabilitare accesso pubblico
+# Disabilitare accesso pubblico (richiede SKU Premium per Private Link)
 az acr update \
   --name myacrprod2026 \
   --public-network-enabled false
@@ -91,6 +98,22 @@ az network private-endpoint create \
 az network private-dns zone create \
   --resource-group rg-platform-prod \
   --name "privatelink.azurecr.io"
+
+# Collegare la zona alla VNet, altrimenti il nome del registry risolve ancora l'IP pubblico
+az network private-dns link vnet create \
+  --resource-group rg-platform-prod \
+  --zone-name "privatelink.azurecr.io" \
+  --name link-vnet-prod \
+  --virtual-network vnet-prod \
+  --registration-enabled false
+
+# Registrare automaticamente i record A del Private Endpoint nella zona
+az network private-endpoint dns-zone-group create \
+  --resource-group rg-platform-prod \
+  --endpoint-name pep-acr-prod \
+  --name default \
+  --private-dns-zone "privatelink.azurecr.io" \
+  --zone-name acr
 ```
 
 ## AKS — Cluster Creation
@@ -104,24 +127,27 @@ LOCATION="westeurope"
 ACR_NAME="myacrprod2026"
 VNET_NAME="vnet-prod"
 SUBNET_NODES="snet-aks-nodes"
-SUBNET_SERVICES="snet-aks-services"
+# Versione supportata: la 1.31 è fuori supporto; usare una versione GA corrente
+K8S_VERSION=$(az aks get-versions --location $LOCATION --query "values[?isDefault].version | [0]" -o tsv)
 
 az aks create \
   --resource-group $RG \
   --name $CLUSTER_NAME \
   --location $LOCATION \
-  --kubernetes-version 1.31.0 \
+  --kubernetes-version $K8S_VERSION \
   --node-count 3 \
   --node-vm-size Standard_D4s_v5 \
   --nodepool-name systempool \
   --nodepool-labels role=system \
-  --os-disk-size-gb 128 \
+  --nodepool-taints CriticalAddonsOnly=true:NoSchedule \
+  --os-disk-size-gb 100 \
   --os-disk-type Ephemeral \
   --enable-managed-identity \
   --attach-acr $ACR_NAME \
   --network-plugin azure \
   --network-plugin-mode overlay \
-  --network-policy azure \
+  --network-dataplane cilium \
+  --network-policy cilium \
   --vnet-subnet-id $(az network vnet subnet show --resource-group $RG --vnet-name $VNET_NAME --name $SUBNET_NODES --query id -o tsv) \
   --service-cidr 172.16.0.0/16 \
   --dns-service-ip 172.16.0.10 \
@@ -142,7 +168,13 @@ az aks create \
 ```
 
 !!! note "network-plugin-mode overlay"
-    La modalità `overlay` del plugin Azure CNI usa sottoreti più efficienti per i pod (CIDR separato dai nodi), risolvendo il problema di esaurimento IP delle versioni precedenti. Raccomandato per nuovi cluster.
+    La modalità `overlay` del plugin Azure CNI assegna ai pod IP da un CIDR privato separato dalla subnet dei nodi: i pod non consumano IP della VNet, risolvendo l'esaurimento IP della modalità classica. Raccomandato per nuovi cluster.
+
+!!! note "Cilium come dataplane e network policy"
+    `--network-dataplane cilium` (eBPF) con overlay sostituisce kube-proxy/iptables e implementa le `NetworkPolicy` con migliori performance e observability. Azure Network Policy Manager (`--network-policy azure`) è in percorso di dismissione: per nuovi cluster preferire Cilium (verificare le date ufficiali di retirement sulla documentazione AKS).
+
+!!! note "Ephemeral OS disk e taint del system pool"
+    `--os-disk-size-gb` con disco Ephemeral deve stare nella *cache size* della VM (≈100 GiB per `Standard_D4s_v5`): valori maggiori fanno fallire la creazione. Il taint `CriticalAddonsOnly` tiene i workload applicativi fuori dal system pool, che resta dedicato a coredns, metrics-server e componenti AKS.
 
 ### Ottenere Credenziali kubectl
 
@@ -185,12 +217,13 @@ az aks nodepool add \
   --mode User
 
 # Aggiungere GPU node pool per ML workload
+# (la serie NCv3, es. NC6s_v3, è stata ritirata: usare T4/A100/H100; verificare disponibilità per regione)
 az aks nodepool add \
   --resource-group $RG \
   --cluster-name $CLUSTER_NAME \
   --name gpupool \
   --node-count 0 \
-  --node-vm-size Standard_NC6s_v3 \
+  --node-vm-size Standard_NC4as_T4_v3 \
   --node-taints sku=gpu:NoSchedule \
   --enable-cluster-autoscaler \
   --min-count 0 \
@@ -215,11 +248,13 @@ az aks nodepool add \
 
 ### Windows Node Pool
 
+Il nome di un node pool Windows può avere al massimo **6 caratteri** (Linux: 12), altrimenti la creazione fallisce.
+
 ```bash
 az aks nodepool add \
   --resource-group $RG \
   --cluster-name $CLUSTER_NAME \
-  --name winnodepool \
+  --name win01 \
   --os-type Windows \
   --node-vm-size Standard_D4s_v5 \
   --node-count 2
@@ -234,11 +269,12 @@ az aks get-upgrades \
   --name $CLUSTER_NAME \
   --output table
 
-# Upgrade control plane e node pool (rolling upgrade)
+# Upgrade control plane e node pool (rolling upgrade, una minor alla volta:
+# non si può saltare da 1.N a 1.N+2). NEW_VERSION = una delle versioni mostrate sopra.
 az aks upgrade \
   --resource-group $RG \
   --name $CLUSTER_NAME \
-  --kubernetes-version 1.31.2 \
+  --kubernetes-version $NEW_VERSION \
   --yes
 
 # Upgrade solo un node pool
@@ -246,7 +282,7 @@ az aks nodepool upgrade \
   --resource-group $RG \
   --cluster-name $CLUSTER_NAME \
   --name apppool \
-  --kubernetes-version 1.31.2
+  --kubernetes-version $NEW_VERSION
 ```
 
 ## Workload Identity Federation
@@ -389,7 +425,12 @@ spec:
 # Pod che usa il CSI driver
 apiVersion: v1
 kind: Pod
+metadata:
+  name: myapp-csi
+  labels:
+    azure.workload.identity/use: "true"   # necessario per l'autenticazione via Workload Identity
 spec:
+  serviceAccountName: myapp-serviceaccount  # SA con annotation client-id e federated credential
   volumes:
   - name: secrets-store
     csi:
@@ -411,6 +452,9 @@ spec:
 ## Application Gateway Ingress Controller (AGIC)
 
 AGIC usa Azure Application Gateway come Ingress controller per AKS, fornendo WAF, SSL termination e load balancing L7 managed.
+
+!!! note "Alternative per nuovi progetti"
+    **Application Gateway for Containers** è l'evoluzione di AGIC (basata su Gateway API, aggiornamenti di configurazione quasi in tempo reale, senza controller in-cluster per il data plane). Il controller NGINX Ingress community è stato dismesso (marzo 2026), quindi anche l'add-on *application routing* basato su NGINX va valutato con attenzione: per nuovi cluster preferire Gateway API / Application Gateway for Containers.
 
 ```yaml
 # Ingress con AGIC
@@ -459,6 +503,8 @@ ACI è il modo più semplice per eseguire container su Azure senza gestire infra
 
 ```bash
 # Container singolo semplice
+# ACI_IDENTITY_ID: resource ID di una user-assigned managed identity con ruolo AcrPull sull'ACR
+# (evita admin user e password nel registry)
 az container create \
   --resource-group $RG \
   --name aci-job-processor \
@@ -466,7 +512,8 @@ az container create \
   --cpu 2 \
   --memory 4 \
   --registry-login-server myacrprod2026.azurecr.io \
-  --assign-identity \
+  --assign-identity $ACI_IDENTITY_ID \
+  --acr-identity $ACI_IDENTITY_ID \
   --environment-variables \
     INPUT_BLOB=input-data \
     OUTPUT_BLOB=output-data \
@@ -525,6 +572,8 @@ properties:
     emptyDir: {}
   osType: Linux
   restartPolicy: OnFailure
+  subnetIds:                  # richiesto per ipAddress.type: Private (subnet delegata a ACI)
+  - id: /subscriptions/.../resourceGroups/rg-aks-prod/providers/Microsoft.Network/virtualNetworks/vnet-prod/subnets/snet-aci
   ipAddress:
     type: Private
     ports:
@@ -564,12 +613,14 @@ az containerapp env create \
   --logs-workspace-key $(az monitor log-analytics workspace get-shared-keys --resource-group $RG --workspace-name law-prod --query primarySharedKey -o tsv)
 
 # Creare Container App con scaling KEDA
+# --registry-identity system: la managed identity dell'app fa pull da ACR (serve AcrPull assegnato)
 az containerapp create \
   --resource-group $RG \
   --name mycontainerapp \
   --environment cae-prod \
   --image myacrprod2026.azurecr.io/myapp:latest \
   --registry-server myacrprod2026.azurecr.io \
+  --registry-identity system \
   --min-replicas 0 \
   --max-replicas 50 \
   --cpu 0.5 \
@@ -626,9 +677,15 @@ az aks nodepool upgrade \
   --name apppool \
   --node-image-only
 
-# Se il nodo è irrecuperabile: drain e delete (autoscaler ne crea uno nuovo)
+# Se il nodo è irrecuperabile: drain, poi eliminare la VM (non solo l'oggetto Node)
 kubectl drain <nome-nodo> --ignore-daemonsets --delete-emptydir-data
-kubectl delete node <nome-nodo>
+az aks nodepool delete-machines \
+  --resource-group $RG \
+  --cluster-name $CLUSTER_NAME \
+  --nodepool-name apppool \
+  --machine-names <nome-nodo>
+# Il cluster autoscaler (o lo scale manuale) riporta il pool al numero di nodi richiesto.
+# `kubectl delete node` da solo rimuove solo l'oggetto Kubernetes: la VM nello scale set resta.
 ```
 
 ---
