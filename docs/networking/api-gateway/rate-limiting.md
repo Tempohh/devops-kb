@@ -7,9 +7,10 @@ search_keywords: [rate limiting, throttling, token bucket, sliding window, fixed
 parent: networking/api-gateway/_index
 related: [networking/api-gateway/pattern-base, networking/api-gateway/kong, networking/sicurezza/ddos-protezione]
 official_docs: https://nginx.org/en/docs/http/ngx_http_limit_req_module.html
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Rate Limiting
@@ -70,8 +71,8 @@ Finestra corrente (14:05): 20 richieste, posizione nel minuto: 70%
 Stima: 80 × (1 - 0.70) + 20 = 80 × 0.30 + 20 = 24 + 20 = 44 richieste
 ```
 
-**Pros:** Memoria O(1), preciso (~0.1% errore), adatto per Redis.
-**Cons:** Approssimato (ma la precisione è accettabile per quasi tutti i casi d'uso).
+**Pros:** Memoria O(1) (due contatori per chiave), adatto per Redis (`INCR` + `EXPIRE`).
+**Cons:** Approssimato: assume traffico uniforme nella finestra precedente. L'errore misurato in produzione (es. Cloudflare) è trascurabile, accettabile per quasi tutti i casi d'uso.
 
 #### Token Bucket
 
@@ -130,7 +131,9 @@ API Gateway (istanza 1)     API Gateway (istanza 2)
          └──────────────────────┘
 ```
 
-**Script Lua per Sliding Window Counter in Redis:**
+**Script Lua per Sliding Window Log in Redis (sorted set):**
+
+Lo script gira in modo **atomico** su Redis (single-threaded): evita la race "leggi contatore → scrivi" che con comandi separati farebbe superare il limite sotto concorrenza.
 
 ```lua
 -- rate_limit.lua
@@ -138,6 +141,7 @@ local key = KEYS[1]
 local limit = tonumber(ARGV[1])
 local window = tonumber(ARGV[2])  -- in secondi
 local now = tonumber(ARGV[3])     -- timestamp corrente (ms)
+local member = ARGV[4]            -- id univoco richiesta (es. now + random): due richieste nello stesso ms non devono collidere
 
 -- Rimuovi entry vecchie (sliding window)
 redis.call('ZREMRANGEBYSCORE', key, 0, now - window * 1000)
@@ -150,7 +154,7 @@ if count >= limit then
 end
 
 -- Aggiungi la richiesta corrente
-redis.call('ZADD', key, now, now)
+redis.call('ZADD', key, now, member)
 redis.call('EXPIRE', key, window)
 return 1  -- OK
 ```
@@ -163,26 +167,37 @@ return 1  -- OK
 http {
     # Definisci zone di rate limiting (in http block)
 
+    # Retry-After solo sui 429 (altrimenti l'header finirebbe anche sui 200)
+    map $status $retry_after {
+        429     60;
+        default "";
+    }
+
     # Limite per IP: 10 req/secondo
     limit_req_zone $binary_remote_addr zone=per_ip:10m rate=10r/s;
 
+    # Limite stretto per login: 5 req/minuto per IP
+    limit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;
+
     # Limite per API token (header Authorization)
+    # Attenzione: se l'header è assente la chiave è vuota e la richiesta NON viene limitata
     limit_req_zone $http_authorization zone=per_token:10m rate=100r/m;
 
-    # Limite per combinazione IP+path
-    limit_req_zone $binary_remote_addr$request_uri zone=per_ip_path:20m rate=5r/s;
+    # Limite per combinazione IP+path ($uri, senza query string: evita chiavi illimitate)
+    limit_req_zone $binary_remote_addr$uri zone=per_ip_path:20m rate=5r/s;
 
     server {
-        listen 443 ssl http2;
+        listen 443 ssl;
+        http2 on;   # la direttiva "listen ... http2" è deprecata da nginx 1.25.1
 
         # Endpoint login: limite stretto anti-brute force
         location /auth/login {
-            limit_req zone=per_ip burst=5 nodelay;
+            limit_req zone=login burst=5 nodelay;
             limit_req_status 429;
 
-            # Header informativi al client
-            add_header Retry-After 60 always;
-            add_header X-RateLimit-Limit 5 always;
+            # Statico: Retry-After indicativo, non calcolato (nginx non espone il tempo residuo).
+            # $retry_after (map nel blocco http) vale 60 solo sui 429; add_header omette i valori vuoti.
+            add_header Retry-After $retry_after always;
             proxy_pass http://auth-service;
         }
 
@@ -196,7 +211,12 @@ http {
 }
 ```
 
+!!! note "Come funziona `burst` / `nodelay` (Nginx)"
+    Nginx implementa un leaky bucket: `rate` è la velocità di svuotamento, `burst` la coda massima di richieste in eccesso. Senza `nodelay` le richieste in burst vengono **ritardate** per rispettare il rate; con `nodelay` passano subito (consumando slot di burst che si liberano al ritmo di `rate`) e oltre il burst scatta il 429. Il contatore è **locale all'istanza** (shared memory della zone): con più repliche Nginx il limite effettivo è moltiplicato, serve un gateway con store Redis (es. Kong) o limiti calcolati per replica.
+
 ### Implementazione Custom in Go con Redis
+
+Versione sliding window log: la chiave **non** include il bucket temporale (altrimenti la finestra si azzererebbe a ogni cambio di bucket, diventando una fixed window) e l'operazione usa `TxPipeline` (MULTI/EXEC). Per garanzie rigorose sotto alta concorrenza preferire lo script Lua sopra: qui `ZADD` avviene prima di conoscere l'esito, quindi anche le richieste rifiutate consumano quota.
 
 ```go
 package ratelimit
@@ -204,6 +224,7 @@ package ratelimit
 import (
     "context"
     "fmt"
+    "net"
     "net/http"
     "strconv"
     "time"
@@ -221,13 +242,13 @@ func NewRateLimiter(rdb *redis.Client, limit int, window time.Duration) *RateLim
     return &RateLimiter{rdb: rdb, limit: limit, window: window}
 }
 
-// Allow verifica se la richiesta è consentita (sliding window counter)
+// Allow verifica se la richiesta è consentita (sliding window log)
 func (rl *RateLimiter) Allow(ctx context.Context, key string) (bool, *RateInfo, error) {
     now := time.Now()
     windowStart := now.Add(-rl.window)
-    redisKey := fmt.Sprintf("rate:%s:%d", key, now.Unix()/int64(rl.window.Seconds()))
+    redisKey := fmt.Sprintf("rate:%s", key)
 
-    pipe := rl.rdb.Pipeline()
+    pipe := rl.rdb.TxPipeline()
     pipe.ZRemRangeByScore(ctx, redisKey, "0", strconv.FormatInt(windowStart.UnixMilli(), 10))
     countCmd := pipe.ZCard(ctx, redisKey)
     pipe.ZAdd(ctx, redisKey, redis.Z{Score: float64(now.UnixMilli()), Member: now.UnixNano()})
@@ -259,10 +280,16 @@ type RateInfo struct {
 // Middleware HTTP
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        // Usa il token JWT o l'IP come chiave
+        // X-User-Id va impostato dal gateway dopo la validazione del JWT:
+        // se arriva dal client è falsificabile e aggirerebbe il limite.
         key := r.Header.Get("X-User-Id")
         if key == "" {
-            key = "ip:" + r.RemoteAddr
+            // RemoteAddr contiene "ip:porta": la porta cambia a ogni connessione
+            host, _, err := net.SplitHostPort(r.RemoteAddr)
+            if err != nil {
+                host = r.RemoteAddr
+            }
+            key = "ip:" + host
         }
 
         allowed, info, err := rl.Allow(r.Context(), key)
@@ -286,14 +313,9 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
         next.ServeHTTP(w, r)
     })
 }
-
-func max(a, b int) int {
-    if a > b {
-        return a
-    }
-    return b
-}
 ```
+
+`max` è un builtin da Go 1.21: non serve ridefinirlo.
 
 ### Header di Risposta Standard
 
@@ -319,6 +341,9 @@ Content-Type: application/json
 }
 ```
 
+!!! note "Standardizzazione header"
+    Gli `X-RateLimit-*` sono convenzione de facto (GitHub, Twitter) e **non** standard; in particolare `X-RateLimit-Reset` è un timestamp Unix in alcune API e un delta in secondi in altre. L'IETF sta standardizzando (draft `draft-ietf-httpapi-ratelimit-headers`) gli header `RateLimit-Policy` e `RateLimit` senza prefisso `X-`, con reset espresso in secondi relativi. `Retry-After` (RFC 9110) è invece standard e va sempre incluso nel 429. Documentare nel contratto API quale semantica si usa.
+
 ## Best Practices
 
 - **Rate limiting a più livelli**: globale (protezione sistema) + per client (equità) + per endpoint (protezione endpoint sensibili)
@@ -340,17 +365,18 @@ Content-Type: application/json
 **Soluzione:** Configurare Redis come store condiviso. Tutti i pod leggono e scrivono sullo stesso contatore atomico.
 
 ```bash
-# Verifica che il rate limiter usi Redis e non memoria locale
-# Esempio: Kong verifica configurazione plugin
-kubectl exec -n api-gateway deploy/kong -- kong config get | grep -A5 rate-limiting
+# Kong: verifica la policy del plugin via Admin API (deve essere "redis", non "local")
+kubectl exec -n api-gateway deploy/kong -- \
+  curl -s localhost:8001/plugins | jq '.data[] | select(.name=="rate-limiting") | .config | {policy, redis}'
 
-# Controlla la connettività Redis dai pod
-kubectl exec -n api-gateway deploy/kong -- redis-cli -h redis-service ping
+# Controlla la connettività Redis da un pod di debug (l'immagine Kong non include redis-cli)
+kubectl run redis-debug --rm -it --image=redis:7 --restart=Never -n api-gateway -- \
+  redis-cli -h redis-service ping
 # Expected: PONG
 
-# Ispeziona il contatore in Redis per un client specifico
-redis-cli -h redis-host KEYS "rate:*:user123*"
-redis-cli -h redis-host ZCARD "rate:user123:1234567890"
+# Ispeziona le chiavi in Redis (SCAN, non KEYS: KEYS blocca Redis su dataset grandi)
+redis-cli -h redis-host --scan --pattern "rate:*user123*"
+redis-cli -h redis-host ZCARD "rate:user123"   # chiave dell'esempio Go (sorted set)
 ```
 
 ---
@@ -364,15 +390,14 @@ redis-cli -h redis-host ZCARD "rate:user123:1234567890"
 **Soluzione:** Aumentare il burst o passare a Token Bucket che gestisce meglio i picchi controllati. Analizzare prima il pattern reale con i log.
 
 ```bash
-# Analizza la distribuzione delle richieste per secondo negli access log
-awk '{print $4}' /var/log/nginx/access.log | \
-  awk -F: '{print $1":"$2":"$3}' | sort | uniq -c | sort -rn | head -20
+# Analizza le richieste per secondo negli access log (campo 4 = [dd/Mon/yyyy:HH:MM:SS, già al secondo)
+awk '{print $4}' /var/log/nginx/access.log | sort | uniq -c | sort -rn | head -20
 
 # Nginx: aumenta il burst e usa nodelay per non accodare
 # Prima: limit_req zone=per_token burst=5 nodelay;
 # Dopo:  limit_req zone=per_token burst=20 nodelay;
 
-# Verifica il tasso effettivo richieste al secondo per un client
+# Verifica il tasso effettivo richieste al secondo per un client (chiave sorted set dell'esempio Go)
 redis-cli -h redis-host ZCOUNT "rate:user123" \
   "$(date -d '1 second ago' +%s%3N)" "$(date +%s%3N)"
 ```
@@ -383,9 +408,9 @@ redis-cli -h redis-host ZCOUNT "rate:user123" \
 
 **Sintomo:** Dopo un'interruzione Redis, il rate limiting smette di funzionare e tutto il traffico passa senza limiti. Oppure, viceversa, tutto il traffico viene bloccato.
 
-**Causa:** Il codice non gestisce l'errore Redis: o fa fallback permissivo (lascia passare tutto) o fallback restrittivo (blocca tutto). Nessuno dei due è il comportamento corretto in produzione.
+**Causa:** Il codice non gestisce l'errore Redis: o fa **fail-open** (lascia passare tutto: backend esposto) o **fail-closed** (blocca tutto: Redis diventa un single point of failure dell'intera API). Entrambi sono scelte di default accidentali, non decise.
 
-**Soluzione:** Implementare un circuit breaker su Redis con fallback a rate limiting locale degradato. Il comportamento atteso durante outage Redis: applicare un limite locale più permissivo, loggare l'anomalia.
+**Soluzione:** Scegliere esplicitamente. Per API pubbliche generiche il compromesso usuale è fail-open con circuit breaker su Redis e fallback a rate limiting locale per istanza (limite più permissivo, anomalia loggata e allarmata); per endpoint sensibili (login) valutare fail-closed. In Kong il parametro `fault_tolerant` del plugin `rate-limiting` (default `true`) implementa il fail-open: se Redis non risponde la richiesta passa senza limite.
 
 ```bash
 # Verifica lo stato di Redis
@@ -395,11 +420,9 @@ redis-cli -h redis-host info replication | grep role
 # Controlla gli errori di connessione nei log del gateway
 kubectl logs -n api-gateway deploy/api-gateway --since=10m | grep -i "redis\|rate.*error\|circuit"
 
-# Monitora le metriche di connessione Redis in Prometheus (se disponibile)
-curl -s http://gateway:9090/metrics | grep redis_pool_connections
-
-# Test di resilienza: simula outage Redis
-kubectl exec -n redis deploy/redis -- redis-cli DEBUG SLEEP 30
+# Test di resilienza (solo in ambiente di test; DEBUG è disabilitato su molti Redis gestiti):
+# blocca Redis per 30 secondi
+redis-cli -h redis-test DEBUG SLEEP 30
 # Osserva il comportamento del gateway durante questi 30 secondi
 ```
 
@@ -417,7 +440,7 @@ kubectl exec -n redis deploy/redis -- redis-cli DEBUG SLEEP 30
 # Estrai richieste per minuto per client dagli access log Nginx
 # (assumendo formato: IP - - [timestamp] "METHOD path" status bytes)
 awk '{print $1, substr($4,2,17)}' /var/log/nginx/access.log | \
-  awk '{print $1, substr($2,1,16)}' | sort | uniq -c | \
+  sort | uniq -c | \
   awk '{print $1}' | sort -n | awk '
     BEGIN { n=0 }
     { vals[n++]=$1 }

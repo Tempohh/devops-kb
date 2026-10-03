@@ -422,7 +422,13 @@ try {
         # Chiamare force-complete su rate limit marcherebbe il task come skipped
         # e verrebbe perso definitivamente senza essere mai completato.
 
-        $isRateLimited = $rateLimitPatterns | Where-Object { $output -imatch $_ }
+        # I pattern si cercano solo in un output di errore (exit != 0) o brevissimo
+        # (il messaggio reale del CLI e' una riga). Un riepilogo di task lungo che
+        # PARLA di rate limiting (es. review di api-gateway/rate-limiting.md) non e'
+        # un rate limit: prima lo era, e il task veniva rieseguito all'infinito.
+        $outText = ($output | Out-String).Trim()
+        $isRateLimited = ($exitCode -ne 0 -or $outText.Length -lt 500) -and
+                         ($rateLimitPatterns | Where-Object { $outText -imatch $_ })
 
         if ($isRateLimited -or $exitCode -eq 529) {
 

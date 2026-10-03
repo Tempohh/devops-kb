@@ -131,7 +131,11 @@ def find_claude() -> str | None:
 def is_rate_limited(text: str, exit_code: int) -> bool:
     if exit_code == 529:
         return True
-    low = text.lower()
+    # Solo output di errore o brevissimo: un riepilogo lungo che parla di rate
+    # limiting (es. review di rate-limiting.md) non e' un rate limit (criticita' #8).
+    low = text.strip().lower()
+    if exit_code == 0 and len(low) >= 500:
+        return False
     return any(re.search(p, low) for p in RATE_LIMIT_PATTERNS)
 
 
