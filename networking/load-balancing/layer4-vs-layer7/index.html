@@ -21671,6 +21671,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-backend-vede-lip-del-lb-invece-del-client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Backend vede l'IP del LB invece del client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-handshake-tls-fallisce-verso-il-database" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Handshake TLS fallisce verso il database
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-routing-api-non-applicato" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Routing /api/ non applicato
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-websocket-o-connessioni-lunghe-cadono-dopo-60s" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — WebSocket o connessioni lunghe cadono dopo 60s
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24714,6 +24764,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-backend-vede-lip-del-lb-invece-del-client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Backend vede l'IP del LB invece del client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-handshake-tls-fallisce-verso-il-database" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Handshake TLS fallisce verso il database
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-routing-api-non-applicato" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Routing /api/ non applicato
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-websocket-o-connessioni-lunghe-cadono-dopo-60s" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — WebSocket o connessioni lunghe cadono dopo 60s
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -25146,48 +25246,39 @@
 <li><strong>Timeout</strong>: configurare timeout appropriati — connessioni WebSocket necessitano timeout molto più alti di HTTP standard</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Sintomo</th>
-<th>Layer</th>
-<th>Causa</th>
-<th>Soluzione</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Backend vede <code>127.0.0.1</code> come IP client</td>
-<td>L7</td>
-<td><code>X-Forwarded-For</code> non configurato</td>
-<td>Aggiungere <code>proxy_set_header X-Forwarded-For</code></td>
-</tr>
-<tr>
-<td>TLS handshake fallisce con database</td>
-<td>L4</td>
-<td>Il LB non supporta TLS applicativo del DB</td>
-<td>Usare TLS passthrough o L4 puro</td>
-</tr>
-<tr>
-<td>Routing non funziona per <code>/api/</code></td>
-<td>L7</td>
-<td>Path matching errato</td>
-<td>Verificare con <code>curl -H "Host: ..."</code></td>
-</tr>
-<tr>
-<td>WebSocket disconnesso dopo 60s</td>
-<td>L7</td>
-<td>Timeout del LB</td>
-<td>Aumentare <code>proxy_read_timeout</code></td>
-</tr>
-<tr>
-<td>Distribuzione non uniforme</td>
-<td>L4/L7</td>
-<td>Algoritmo non ottimale</td>
-<td>Passare da Round Robin a Least Connections</td>
-</tr>
-</tbody>
-</table>
+<h3 id="scenario-1-backend-vede-lip-del-lb-invece-del-client">Scenario 1 — Backend vede l'IP del LB invece del client<a class="headerlink" href="#scenario-1-backend-vede-lip-del-lb-invece-del-client" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: log applicativi e rate limiting mostrano sempre l'IP (o <code>127.0.0.1</code>) del load balancer.</p>
+<p><strong>Causa</strong>: il LB (L7 o L4) apre una nuova connessione verso il backend, quindi l'IP sorgente è il suo. L'IP originale viaggia solo se esplicitamente propagato: header <code>X-Forwarded-For</code> (L7) o PROXY protocol (L4, header binario/testuale prima dei dati).</p>
+<p><strong>Soluzione</strong>: L7 → impostare gli header; L4 → abilitare <code>proxy_protocol</code> sul LB <strong>e</strong> farlo accettare al backend (altrimenti il backend riceve byte spuri e rifiuta la connessione).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Verifica header ricevuti dal backend</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">"X-Forwarded-For: 203.0.113.9"</span><span class="w"> </span>https://api.example.com/debug/headers
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Verifica PROXY protocol (nginx backend: listen 80 proxy_protocol;)</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>curl<span class="w"> </span>-s<span class="w"> </span>--haproxy-protocol<span class="w"> </span>http://10.0.0.1:80/
+</span></code></pre></div>
+<h3 id="scenario-2-handshake-tls-fallisce-verso-il-database">Scenario 2 — Handshake TLS fallisce verso il database<a class="headerlink" href="#scenario-2-handshake-tls-fallisce-verso-il-database" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>SSL routines:ssl3_get_record:wrong version number</code> o handshake timeout connettendosi al DB tramite LB.</p>
+<p><strong>Causa</strong>: MySQL/PostgreSQL negoziano TLS <em>dentro</em> il protocollo applicativo (STARTTLS-like). Un LB che tenta di terminare TLS (L7) non capisce questo scambio e lo corrompe.</p>
+<p><strong>Soluzione</strong>: usare L4 puro (<code>mode tcp</code> / <code>stream</code>) senza terminazione, lasciando che client e DB negozino TLS end-to-end.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>openssl<span class="w"> </span>s_client<span class="w"> </span>-starttls<span class="w"> </span>postgres<span class="w"> </span>-connect<span class="w"> </span>lb.example.com:5432
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>mysql<span class="w"> </span>-h<span class="w"> </span>lb.example.com<span class="w"> </span>--ssl-mode<span class="o">=</span>REQUIRED<span class="w"> </span>-u<span class="w"> </span>app<span class="w"> </span>-p
+</span></code></pre></div>
+<h3 id="scenario-3-routing-api-non-applicato">Scenario 3 — Routing <code>/api/</code> non applicato<a class="headerlink" href="#scenario-3-routing-api-non-applicato" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: richieste a <code>/api/...</code> finiscono nel backend di default o rispondono 404.</p>
+<p><strong>Causa</strong>: ordine/ACL errati (in HAProxy <code>use_backend</code> è valutato in ordine), <code>Host</code> header diverso da <code>server_name</code>, o <code>proxy_pass</code> con/senza slash finale che riscrive il path.</p>
+<p><strong>Soluzione</strong>: testare con <code>Host</code> esplicito e validare la configurazione prima del reload.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>curl<span class="w"> </span>-v<span class="w"> </span>-H<span class="w"> </span><span class="s2">"Host: api.example.com"</span><span class="w"> </span>https://10.0.0.1/api/users<span class="w"> </span>--resolve<span class="w"> </span>api.example.com:443:10.0.0.1
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>nginx<span class="w"> </span>-t<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nginx<span class="w"> </span>-s<span class="w"> </span>reload
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>haproxy<span class="w"> </span>-c<span class="w"> </span>-f<span class="w"> </span>/etc/haproxy/haproxy.cfg
+</span></code></pre></div>
+<h3 id="scenario-4-websocket-o-connessioni-lunghe-cadono-dopo-60s">Scenario 4 — WebSocket o connessioni lunghe cadono dopo 60s<a class="headerlink" href="#scenario-4-websocket-o-connessioni-lunghe-cadono-dopo-60s" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: la connessione si chiude esattamente dopo ~60s di inattività (<code>1006 abnormal closure</code>, <code>504</code>).</p>
+<p><strong>Causa</strong>: timeout di idle del LB (<code>proxy_read_timeout</code> Nginx = 60s di default; ALB idle timeout = 60s) più basso dell'intervallo tra i messaggi.</p>
+<p><strong>Soluzione</strong>: alzare il timeout e/o inviare ping/keepalive applicativi più frequenti del timeout.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Nginx: location /ws/ { proxy_read_timeout 3600s; }</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>aws<span class="w"> </span>elbv2<span class="w"> </span>modify-load-balancer-attributes<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--load-balancer-arn<span class="w"> </span>&lt;alb-arn&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>--attributes<span class="w"> </span><span class="nv">Key</span><span class="o">=</span>idle_timeout.timeout_seconds,Value<span class="o">=</span><span class="m">3600</span>
+</span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
 <summary>Algoritmi di Load Balancing</summary>

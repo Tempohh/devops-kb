@@ -25071,7 +25071,7 @@
 - <strong>Multiple connessioni TCP</strong>: i browser aprono 6–8 connessioni parallele per aggirare l'HOL blocking, ma questo spreca risorse e aumenta la latenza (ogni connessione richiede un handshake)
 - <strong>Header verbosi e non compressi</strong>: ogni richiesta ripete gli stessi header (User-Agent, Cookie, Accept) in chiaro
 - <strong>Nessun server push</strong>: il server non può inviare risorse proattivamente</p>
-<p><strong>HTTP/2</strong> (2015, RFC 7540) risolve questi problemi rimanendo su TCP, introducendo un layer di framing binario sopra TLS.</p>
+<p><strong>HTTP/2</strong> (2015, RFC 7540, aggiornata da RFC 9113 nel 2022) risolve questi problemi rimanendo su TCP, introducendo un layer di framing binario sopra TLS.</p>
 <p><strong>HTTP/3</strong> (2022, RFC 9114) va oltre: abbandona TCP e costruisce HTTP sopra QUIC (UDP-based), eliminando il HOL blocking anche a livello di trasporto.</p>
 <hr />
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
@@ -25172,7 +25172,7 @@
 <h3 id="http2-server-push-deprecato-in-pratica">HTTP/2: Server Push (Deprecato in pratica)<a class="headerlink" href="#http2-server-push-deprecato-in-pratica" title="Permanent link">&para;</a></h3>
 <p>Il server push permetteva al server di inviare risorse proattivamente (es. CSS e JS insieme all'HTML, senza che il client le richiedesse). In pratica si è rivelato difficile da ottimizzare (rischio di inviare risorse già in cache) ed è stato deprecato in Chrome nel 2022. Preferire preload links (<code>&lt;link rel="preload"&gt;</code>).</p>
 <h3 id="http2-stream-prioritization">HTTP/2: Stream Prioritization<a class="headerlink" href="#http2-stream-prioritization" title="Permanent link">&para;</a></h3>
-<p>HTTP/2 supportava una gerarchia di priorità degli stream (albero di dipendenze). In pratica raramente implementata correttamente dai server. HTTP/3 utilizza invece <strong>QPACK prioritization</strong> più semplice.</p>
+<p>HTTP/2 supportava una gerarchia di priorità degli stream (albero di dipendenze). In pratica raramente implementata correttamente dai server. HTTP/3 utilizza invece le <strong>Extensible Priorities</strong> (RFC 9218), più semplici: header <code>Priority</code> con urgency (0–7) e flag <code>incremental</code>, senza albero di dipendenze. (QPACK, invece, è la compressione header di HTTP/3, non gestisce priorità.)</p>
 <hr />
 <h2 id="confronto-performance">Confronto Performance<a class="headerlink" href="#confronto-performance" title="Permanent link">&para;</a></h2>
 <table>
@@ -25416,7 +25416,8 @@
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="https://www.rfc-editor.org/rfc/rfc7540">RFC 7540 — HTTP/2</a></li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9113">RFC 9113 — HTTP/2 (obsoleta RFC 7540)</a></li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9218">RFC 9218 — Extensible Prioritization Scheme for HTTP</a></li>
 <li><a href="https://www.rfc-editor.org/rfc/rfc9114">RFC 9114 — HTTP/3</a></li>
 <li><a href="https://www.rfc-editor.org/rfc/rfc7541">RFC 7541 — HPACK: Header Compression for HTTP/2</a></li>
 <li><a href="https://http2.github.io/">http2.github.io — Risorse ufficiali HTTP/2</a></li>
