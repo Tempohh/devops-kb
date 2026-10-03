@@ -7,9 +7,10 @@ search_keywords: [devsecops, shift left security, sast, dast, sca, sbom, softwar
 parent: ci-cd/strategie/_index
 related: [ci-cd/strategie/_index, ci-cd/github-actions/enterprise, ci-cd/jenkins/security-governance, security/supply-chain]
 official_docs: https://slsa.dev/
-status: complete
+status: reviewed
 difficulty: expert
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Pipeline Security — DevSecOps
@@ -29,11 +30,14 @@ DevSecOps integra la sicurezza in ogni fase del ciclo di sviluppo software, tras
 │ hadolint     │  CodeQL)     │              │ (Trivy)      │ (Falco)      │
 │ pre-commit   │ Hadolint     │ DAST (ZAP)   │ SBOM gen     │ SIEM         │
 │ hooks        │ IaC scanning │              │ Image sign   │ monitoring   │
-│              │ (tfsec, kics)│              │ (Cosign)     │              │
+│              │(Trivy, kics) │              │ (Cosign)     │              │
 ├──────────────┼──────────────┼──────────────┼──────────────┼──────────────┤
 │  Costo:  1x  │   Costo: 10x │  Costo: 50x  │ Costo: 100x  │ Costo: 1000x │
 └──────────────┴──────────────┴──────────────┴──────────────┴──────────────┘
 ```
+
+!!! note "Moltiplicatori di costo"
+    I fattori 1x…1000x sono un **ordine di grandezza indicativo** (il costo di rimedio cresce quanto più tardi si scopre il difetto), non misure da una fonte specifica.
 
 ## 2. Secret Scanning
 
@@ -44,24 +48,27 @@ DevSecOps integra la sicurezza in ogni fase del ciclo di sviluppo software, tras
 brew install gitleaks   # macOS
 # Linux: scaricare da github.com/gitleaks/gitleaks/releases
 
-# Scansione manuale
-gitleaks detect --source . --report-path gitleaks-report.json
+# Scansione manuale della storia git
+# (dalla v8.19 `detect`/`protect` sono deprecati: usare `git` e `dir`)
+gitleaks git --report-path gitleaks-report.json .
 
-# Scansione di un commit specifico
-gitleaks detect --source . --log-opts="HEAD~1..HEAD"
+# Scansione di un range di commit specifico
+gitleaks git --log-opts="HEAD~1..HEAD" .
+
+# Scansione di file/cartelle senza storia git
+gitleaks dir .
 
 # Installazione come pre-commit hook con pre-commit framework
-# .pre-commit-config.yaml
+# .pre-commit-config.yaml — l'hook ufficiale è già definito nel repo gitleaks
 repos:
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.2
+    rev: v8.28.0   # usare l'ultima release: verificare su GitHub
     hooks:
       - id: gitleaks
-        name: Detect secrets with gitleaks
-        language: golang
-        entry: gitleaks protect --staged --redact -v
-        pass_filenames: false
 ```
+
+!!! tip "Perché pre-commit **e** CI"
+    Il pre-commit hook è aggirabile (`git commit --no-verify`, hook non installato): è un acceleratore per lo sviluppatore, non un controllo. Il gate vincolante è lo scan in CI. Un secret già pushato va comunque **revocato/ruotato**: riscrivere la storia non basta.
 
 ### Configurazione gitleaks Custom
 
@@ -79,7 +86,6 @@ useDefault = true
   description = "MyOrg Internal API Key"
   regex = '''MYORG_[A-Z0-9]{32}'''
   keywords = ["MYORG_"]
-  severity = "Critical"
   tags = ["api-key", "myorg"]
 
 [[rules]]
@@ -137,7 +143,7 @@ jobs:
           fetch-depth: 0
 
       - name: TruffleHog — scan secrets
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3   # meglio ancora: pin a SHA (vedi sezione 10)
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
@@ -184,7 +190,7 @@ jobs:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}  # Opzionale per Semgrep Cloud
 
       - name: Upload SARIF results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: semgrep-results.sarif
@@ -196,7 +202,7 @@ jobs:
 # rules/security/no-sql-injection.yml
 rules:
   - id: sql-injection-risk
-    patterns:
+    pattern-either:   # OR tra i pattern (con `patterns` sarebbero in AND)
       - pattern: |
           String $QUERY = "SELECT * FROM " + $INPUT;
       - pattern: |
@@ -212,17 +218,13 @@ rules:
 
   - id: hardcoded-password
     patterns:
-      - pattern: |
-          String PASSWORD = "...";
-      - pattern: |
-          password = "$VALUE"
-          where:
-            - metavariable-regex:
-                metavariable: $VALUE
-                regex: '^[A-Za-z0-9!@#$%^&*()_+]{8,}$'
+      - pattern: password = "$VALUE"
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: '^[A-Za-z0-9!@#$%^&*()_+]{8,}$'
     message: Password hardcoded nel codice. Usare variabili d'ambiente o secret manager.
     severity: WARNING
-    languages: [java, python, javascript]
+    languages: [python, javascript]
 ```
 
 ```bash
@@ -255,7 +257,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
@@ -265,7 +267,7 @@ jobs:
               - vendor/**
       - if: matrix.language == 'java-kotlin'
         run: mvn --batch-mode compile -DskipTests
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
 ```
 
 ## 4. SCA — Software Composition Analysis
@@ -287,9 +289,11 @@ SCA analizza le dipendenze del progetto per vulnerabilità note (CVE) e problemi
       --enableRetired
       --failOnCVSS 7
       --suppression suppression.xml
+  env:
+    NVD_API_KEY: ${{ secrets.NVD_API_KEY }}   # senza API key il download NVD è lentissimo/rate-limited
 
 - name: Upload results
-  uses: github/codeql-action/upload-sarif@v3
+  uses: github/codeql-action/upload-sarif@v4
   with:
     sarif_file: reports/dependency-check-report.sarif
 ```
@@ -363,11 +367,14 @@ grype sbom:./sbom.cdx.json --fail-on high
     grype sbom:./sbom.cdx.json --fail-on high --output sarif --file grype-results.sarif
 
 - name: Upload vulnerability results
-  uses: github/codeql-action/upload-sarif@v3
+  uses: github/codeql-action/upload-sarif@v4
   if: always()
   with:
     sarif_file: grype-results.sarif
 ```
+
+!!! note "Perché SBOM + scan separati"
+    L'SBOM è un inventario generato una volta al build; rilanciare `grype sbom:` giorni dopo rivaluta lo stesso inventario contro CVE nuove **senza ripullare l'immagine**. Così si risponde a "siamo esposti a CVE-X?" in secondi su tutto il parco artefatti.
 
 ## 5. Container Security
 
@@ -385,7 +392,7 @@ grype sbom:./sbom.cdx.json --fail-on high
     exit-code: '1'         # Fallisce se trovate vuln CRITICAL/HIGH
     ignore-unfixed: true    # Ignora vuln senza patch disponibile
     vuln-type: 'os,library'
-    scanners: 'vuln,config,secret'
+    scanners: 'vuln,misconfig,secret'
 
 # Trivy per IaC (Terraform, Kubernetes, Dockerfile)
 - name: Trivy IaC scan
@@ -398,19 +405,20 @@ grype sbom:./sbom.cdx.json --fail-on high
     severity: 'CRITICAL,HIGH,MEDIUM'
     trivy-config: trivy.yaml  # Configurazione custom
 
-# trivy.yaml
+# trivy.yaml (le chiavi riflettono le flag CLI; `security-checks` è stato sostituito da `scanners`)
 severity:
   - CRITICAL
   - HIGH
-misconfiguration:
-  ignore-unfixed: false
-  exit-code: 1
+exit-code: 1
 scan:
-  security-checks:
+  scanners:
     - vuln
-    - config
+    - misconfig
     - secret
 ```
+
+!!! warning "Pin delle action di scanning"
+    `@master`/`@main` esegue codice mutabile con accesso al repo e ai secret del job. Gli scanner sono bersagli di supply chain attack come qualsiasi altra dipendenza: pinnare a tag immutabile o, meglio, a commit SHA (sezione 10).
 
 ```bash
 # Trivy da CLI: scan completo di un'immagine
@@ -469,10 +477,9 @@ DAST testa l'applicazione in esecuzione, simulando attacchi reali su endpoint HT
 name: DAST — OWASP ZAP
 
 on:
-  workflow_dispatch:
-  # Eseguito dopo deploy in staging
-  deployment:
-    environments: [staging]
+  workflow_dispatch:           # lanciabile dalla pipeline di deploy dopo il rilascio in staging
+  schedule:
+    - cron: '0 2 * * 0'        # full scan settimanale
 
 jobs:
   dast:
@@ -483,7 +490,7 @@ jobs:
         with:
           target: 'https://staging.myapp.example.com'
           rules_file_name: '.zap/rules.tsv'    # Override di specifiche regole
-          cmd_options: '-a'                     # Accetta certificati self-signed
+          cmd_options: '-a'                     # Include anche le regole passive in alpha (più rumore)
           allow_issue_writing: true
           issue_title: 'ZAP Baseline Report'
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -569,6 +576,9 @@ jobs:
         # - Registra la firma in Rekor (log di trasparenza pubblico)
         # - NON richiede una chiave privata da conservare
 
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
       - name: Attach SBOM attestation
         run: |
           # Genera SBOM
@@ -582,6 +592,9 @@ jobs:
             --type cyclonedx \
             ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
 ```
+
+!!! note "Cosign 3.x"
+    Cosign 3 ha introdotto il nuovo formato *bundle* Sigstore e il signing config (TUF) come default; i comandi `sign`/`verify`/`attest` mostrati restano gli stessi, ma verificare con una versione di `cosign` coerente con quella usata per firmare. Il log pubblico Rekor rende **visibili** nome repo/workflow: per repository privati valutare un'istanza Sigstore privata.
 
 ```bash
 # Verifica della firma in produzione (prima di pullare l'immagine)
@@ -600,16 +613,26 @@ cosign verify-attestation \
 
 ### SLSA Framework (Supply chain Levels for Software Artifacts)
 
-SLSA definisce 4 livelli di sicurezza per la supply chain del software:
+SLSA (v1.0+) definisce la **Build track** con livelli da L0 a L3 (i vecchi L4 / "hermetic + two-party review" della v0.1 sono stati rimossi dalla spec corrente; i requisiti sulla sorgente sono in una Source track separata):
 
 | Livello | Requisiti | Come raggiungere |
 |---------|-----------|-----------------|
-| **SLSA 1** | Provenance (origine) documentata | Build automatizzato con SBOM generato |
-| **SLSA 2** | Build service non modificabile, versionato | CI/CD su piattaforma managed (GitHub Actions, GitLab CI) |
-| **SLSA 3** | Build isolato, firma dell'artefatto | Runner ephemeral, Cosign firma, OIDC keyless |
-| **SLSA 4** | Two-party review, hermetic build | Build hermetic (no network), code review obbligatorio, reproducible build |
+| **Build L1** | Provenance esiste (anche non firmata) | Build scriptato che emette provenance |
+| **Build L2** | Provenance **firmata** dalla piattaforma di build (hosted) | CI managed (GitHub Actions, GitLab CI) + attestazione firmata |
+| **Build L3** | Build isolati tra loro; chiave di firma non accessibile agli step di build; provenance non falsificabile | Reusable workflow SLSA generator o `actions/attest-build-provenance`, runner ephemeral |
 
-**Raggiungere SLSA 3 con GitHub Actions:**
+**Perché L3 richiede un reusable workflow:** la provenance è firmata da un job *separato* dal build, che il codice del progetto non può alterare; così un build compromesso non può dichiarare provenance falsa.
+
+**Raggiungere SLSA Build L3 con GitHub Actions:**
+
+```yaml
+# Alternativa nativa (più semplice): attestazione GitHub dell'artefatto
+- uses: actions/attest-build-provenance@v3
+  with:
+    subject-path: target/myapp.jar
+# richiede permissions: id-token: write, attestations: write, contents: read
+# verifica: gh attestation verify target/myapp.jar --repo my-org/my-repo
+```
 
 ```yaml
 # Genera provenance SLSA con action ufficiale
@@ -717,8 +740,7 @@ policies/
 # policies/kubernetes.rego — Policy per manifesti Kubernetes
 package kubernetes
 
-import future.keywords.contains
-import future.keywords.if
+import rego.v1   # OPA/Conftest recenti: v1 è il default, l'import resta valido
 
 # DENY: container senza limiti di risorse
 deny contains msg if {
@@ -764,8 +786,7 @@ warn contains msg if {
 # policies/dockerfile.rego — Policy per Dockerfile
 package dockerfile
 
-import future.keywords.contains
-import future.keywords.if
+import rego.v1
 
 # DENY: utente root nel Dockerfile
 deny contains msg if {
@@ -795,8 +816,10 @@ warn contains msg if {
 # GitHub Actions — Policy gates in pipeline
 - name: Validate Kubernetes manifests
   run: |
-    curl -L https://github.com/open-policy-agent/conftest/releases/latest/download/conftest_Linux_x86_64.tar.gz \
-      | tar xzf - -C /usr/local/bin conftest
+    # Pin della versione (gli asset includono la versione nel nome); verificare anche il checksum
+    CONFTEST_VERSION=0.62.0
+    curl -sSL "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz" \
+      | sudo tar xzf - -C /usr/local/bin conftest
     conftest test k8s/ \
       --policy policies/ \
       --output=json \
@@ -814,11 +837,11 @@ warn contains msg if {
 
 | Tool | Categoria | Open Source | Integrazione principale | Note |
 |------|-----------|-------------|------------------------|------|
-| **gitleaks** | Secret scanning | Sì (MIT) | Pre-commit, CI/CD | ~20k stars, veloce |
+| **gitleaks** | Secret scanning | Sì (MIT) | Pre-commit, CI/CD | Veloce, regole TOML custom |
 | **trufflehog** | Secret scanning | Sì (AGPL-3) | CI/CD, pre-commit | Verifica secrets reali via API |
-| **Semgrep** | SAST | Core OSS (LGPL) | CI/CD, IDE | 2500+ regole, custom rules |
+| **Semgrep** | SAST | Core OSS (LGPL) | CI/CD, IDE | Regole custom in YAML; registry ufficiale con licenza propria |
 | **CodeQL** | SAST | Gratis per OSS | GitHub (GHAS) | Profondo, analisi semantica |
-| **SonarQube** | SAST + Quality | Community free | CI/CD, IDE | Quality gates configurabili |
+| **SonarQube** | SAST + Quality | Community Build free (feature limitate) | CI/CD, IDE | Quality gates configurabili |
 | **OWASP Dep-Check** | SCA | Sì (Apache-2) | Maven, Gradle, CI/CD | NVD database |
 | **Snyk** | SCA | Freemium | CI/CD, IDE | Veloce, fix suggeriti |
 | **Grype** | SCA + Container | Sì (Apache-2) | CI/CD, CLI | Ancora da Anchore |
@@ -828,8 +851,32 @@ warn contains msg if {
 | **Syft** | SBOM generation | Sì (Apache-2) | CI/CD, CLI | CycloneDX e SPDX |
 | **Cosign** | Image signing | Sì (Apache-2) | CI/CD, K8s admission | Parte di Sigstore |
 | **Conftest** | Policy gates | Sì (Apache-2) | CI/CD | OPA policy per qualsiasi config |
-| **tfsec** / **tflint** | IaC SAST | Sì | CI/CD | Terraform security scanning |
+| **Checkov** / **KICS** | IaC SAST | Sì (Apache-2) | CI/CD | Terraform, K8s, CloudFormation. `tfsec` è confluito in Trivy (usare `trivy config`) |
 | **kube-bench** | K8s hardening | Sì (Apache-2) | CI/CD, cluster audit | CIS Kubernetes Benchmark |
+
+## 10. Hardening della Pipeline Stessa
+
+La pipeline ha accesso a secret, registry e produzione: è essa stessa un bersaglio (es. compromissione di `tj-actions/changed-files`, marzo 2025: tag riscritto per esfiltrare i secret dai log dei workflow). Misure minime:
+
+- **Pin delle action a commit SHA** (i tag sono mutabili): `uses: actions/checkout@<sha40> # v4.x.x`; mantenere aggiornato con Dependabot/Renovate.
+- **`permissions` minimi** a livello workflow (`contents: read`) e ampliati solo per job; `GITHUB_TOKEN` di default read-only.
+- **Mai `pull_request_target` + checkout del codice del PR**: esegue codice non fidato con secret e token in scrittura.
+- **Niente interpolazione diretta di input non fidati** (`${{ github.event.pull_request.title }}`) in `run:`: passarli via `env:` per evitare script injection.
+- **Environment con approvazioni** e secret OIDC a breve durata al posto di credenziali statiche cloud.
+- **Runner ephemeral**, nessun riuso di workspace tra job di progetti diversi.
+- **Scan dei workflow stessi**: `zizmor` o `actionlint` individuano questi pattern.
+
+```yaml
+permissions:
+  contents: read
+jobs:
+  build:
+    steps:
+      - name: Safe use of untrusted input
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}   # via env, non inline nel comando
+        run: echo "$PR_TITLE"
+```
 
 ## Troubleshooting
 
@@ -943,10 +990,7 @@ trivy image --ignorefile .trivyignore ghcr.io/my-org/myapp:latest
 **Soluzione:** Passare da `--config auto` a configurazioni mirate per linguaggio e framework. Sopprimere le regole rumorose con `# nosemgrep` inline o con `paths` di ignore nel file di configurazione.
 
 ```yaml
-# .semgrep.yml — configurazione mirata al posto di --config auto
-rules: []  # Nessuna regola custom locale
-
-# In GitHub Actions: usare ruleset specifici
+# In GitHub Actions: ruleset mirati al posto di --config auto
 - name: Semgrep scan mirato
   run: |
     semgrep ci \
@@ -960,7 +1004,8 @@ rules: []  # Nessuna regola custom locale
 
 ```bash
 # Soppressione inline per un finding specifico (documentare il motivo)
-result = eval(user_input)  # nosemgrep: dangerous-eval -- input validato upstream da schema JSON
+# Motivo: input validato upstream da schema JSON
+result = eval(user_input)  # nosemgrep: dangerous-eval
 
 # Verifica quale regola genera un finding specifico
 semgrep --config auto --verbose src/app.py 2>&1 | grep "rule-id"
