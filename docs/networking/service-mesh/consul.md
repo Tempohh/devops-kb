@@ -12,9 +12,10 @@ related:
   - security/secret-management/vault
   - security/autenticazione/mtls-spiffe
 official_docs: https://developer.hashicorp.com/consul/docs
-status: complete
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Consul
@@ -37,7 +38,10 @@ Questo lo rende la scelta tipica per infrastrutture **ibride** o in migrazione v
 Ogni nodo del cluster Consul esegue un **agente**, in due modalità:
 
 - **Server**: mantiene lo stato del cluster tramite **Raft consensus** (algoritmo che elegge un leader e replica il log solo con maggioranza dei nodi, il *quorum*), replica il catalogo servizi, risponde alle query DNS/HTTP. Tipicamente 3 o 5 server per datacenter (quorum dispari).
-- **Client**: gira su ogni nodo applicativo (VM o come DaemonSet in k8s), inoltra le richieste ai server e esegue gli health check locali.
+- **Client**: gira su ogni nodo applicativo VM/bare metal, inoltra le richieste ai server e esegue gli health check locali.
+
+!!! note "Kubernetes: architettura consul-dataplane (consul-k8s ≥ 1.0 / Consul ≥ 1.14)"
+    Su Kubernetes i client agent (DaemonSet) e il gossip **non sono più usati** di default: ogni pod mesh ha un processo **consul-dataplane** che avvolge Envoy e parla direttamente via gRPC con i server. Motivo: meno porte/gossip da aprire, niente agent per nodo da aggiornare, sidecar più leggero. Il modello client+gossip resta per VM e Nomad.
 
 ### Gossip protocol (Serf)
 
@@ -60,27 +64,30 @@ graph TB
 
         subgraph VM["VM Legacy"]
             vmapp["app legacy\n:8080"]
+            vmsidecar["Envoy sidecar\n(Connect)"]
             vmagent["Consul Client Agent"]
         end
 
         subgraph K8s["Kubernetes"]
             subgraph PodA["Pod: checkout"]
                 appA["checkout app"]
-                sidecarA["Envoy sidecar\n(Consul Connect)"]
+                sidecarA["consul-dataplane\n+ Envoy"]
             end
             syncns["consul-k8s\ncatalog sync"]
         end
     end
 
     vmagent -- "gossip (Serf)" --> s1
-    syncns -- "gossip (Serf)" --> s1
+    sidecarA -- "gRPC (xDS, discovery)" --> s1
+    syncns -- "API catalogo" --> s1
     s1 -- "Raft replication" --> s2
     s1 -- "Raft replication" --> s3
 
     vmagent -- "registra servizio" --> s1
     syncns -- "sync catalogo k8s <-> VM" --> s1
 
-    sidecarA -- "mTLS Connect" --> vmapp
+    sidecarA -- "mTLS Connect" --> vmsidecar
+    vmsidecar --> vmapp
 ```
 
 ### Consul on Kubernetes
@@ -88,8 +95,7 @@ graph TB
 Il deployment su Kubernetes avviene tramite **Helm chart ufficiale** (`consul-k8s`), che installa:
 
 - Consul server (StatefulSet) — o punta a server esterni già esistenti
-- Consul client (DaemonSet) su ogni nodo
-- **Connect Inject** webhook — inietta automaticamente il sidecar Envoy nei pod annotati
+- **Connect Inject** webhook — inietta automaticamente il sidecar (consul-dataplane + Envoy) nei pod annotati
 - **Catalog Sync** — sincronizza bidirezionalmente i servizi tra il catalogo Consul (VM, Nomad) e i Service Kubernetes
 
 ### mTLS: Connect CA
@@ -102,7 +108,16 @@ Consul Connect fornisce mTLS automatico tra i servizi tramite una **Certificate 
 
 ### Intentions — autorizzazione L4/L7
 
-Le **intentions** sono le regole allow/deny che definiscono quali servizi possono comunicare tra loro, equivalenti concettualmente alle `AuthorizationPolicy` di Istio ma più semplici (modello a coppie source→destination).
+Le **intentions** sono le regole allow/deny che definiscono quali servizi possono comunicare tra loro, equivalenti concettualmente alle `AuthorizationPolicy` di Istio ma più semplici (modello a coppie source→destination). Sono applicate dal sidecar Envoy del *destinatario*; a L4 si basano sull'identità SPIFFE del certificato client, a L7 (con protocollo `http`) possono filtrare per path/metodo/header.
+
+!!! warning "Default allow senza ACL"
+    Se il sistema ACL è disabilitato o ha `default_policy = allow`, le intentions senza match risultano **allow**. Il deny-all effettivo richiede ACL con default `deny` oppure un'intention `* → *` deny esplicita.
+
+!!! note "Licenza e stato del prodotto"
+    Da agosto 2023 Consul (come tutto HashiCorp) è rilasciato con licenza **BSL 1.1**, non più MPL: l'uso interno è libero, ma non si può offrirlo come servizio concorrente. HashiCorp è stata acquisita da IBM (chiusura 2025). Le feature Enterprise (namespaces, admin partitions) restano a pagamento. Valutare la licenza prima dell'adozione.
+
+!!! note "CLI vs config entry"
+    I comandi `consul intention ...` usati sotto sono comodi per prove ma sono il modello legacy; in produzione si preferisce il config entry `service-intentions` (o la CRD `ServiceIntentions` su k8s), versionabile in Git.
 
 ## Configurazione & Pratica
 
@@ -137,8 +152,9 @@ kubectl get pods -n consul
 
 ### Registrare un servizio VM legacy
 
+File `/etc/consul.d/legacy-app.json` sull'agent client della VM. Il blocco `connect.sidecar_service` registra anche un proxy: serve perché il servizio sia raggiungibile via mTLS dal mesh.
+
 ```json
-// /etc/consul.d/legacy-app.json sull'agent client della VM
 {
   "service": {
     "name": "legacy-billing",
@@ -148,7 +164,8 @@ kubectl get pods -n consul
       "http": "http://localhost:8080/health",
       "interval": "10s",
       "timeout": "2s"
-    }
+    },
+    "connect": { "sidecar_service": {} }
   }
 }
 ```
@@ -157,9 +174,12 @@ kubectl get pods -n consul
 # Ricaricare la configurazione dell'agent client
 consul reload
 
+# Avviare il sidecar Envoy della VM (richiede envoy nel PATH)
+consul connect envoy -sidecar-for legacy-billing &
+
 # Verificare che il servizio sia registrato e sano
 consul catalog services
-consul health check legacy-billing
+curl -s http://127.0.0.1:8500/v1/health/service/legacy-billing?passing
 ```
 
 ### Sidecar injection su Kubernetes (annotation)
@@ -221,7 +241,7 @@ consul intention create -deny "*" "*"
 consul intention check checkout legacy-billing
 ```
 
-```hcl
+```yaml
 # Alternativa dichiarativa via CRD su Kubernetes
 apiVersion: consul.hashicorp.com/v1alpha1
 kind: ServiceIntentions
@@ -262,7 +282,7 @@ consul watch -type=key -key=config/checkout/max_retries my-reload-script.sh
     A differenza di Istio (che riusa il control plane Kubernetes), Consul richiede di mantenere un cluster server dedicato con il proprio quorum Raft e gossip pool. In ambienti puramente Kubernetes questo è complessità aggiuntiva non giustificata se non serve l'integrazione VM/ibrida.
 
 - **ACL (Access Control List) abilitate in produzione**: senza ACL chiunque può scrivere nel catalogo o nel KV store. Abilitare `acl.enabled = true` con default policy `deny`.
-- **Mesh Gateway per multi-datacenter**: per comunicazione cross-datacenter senza esporre ogni singolo servizio, usare i Mesh Gateway invece di aprire rotte dirette.
+- **Mesh Gateway per multi-datacenter**: per comunicazione cross-datacenter senza esporre ogni singolo servizio, usare i Mesh Gateway invece di aprire rotte dirette. Per collegare cluster/partizioni oggi si preferisce il **cluster peering** (relazione 1:1 con scambio di token, nessun pool WAN condiviso) alla federazione WAN tradizionale.
 - **Terminating Gateway per servizi esterni non mesh-aware**: registrare database o API esterne dietro un Terminating Gateway per portarle sotto mTLS Connect senza modificarle.
 
 ## Troubleshooting
@@ -284,7 +304,7 @@ dig @127.0.0.1 -p 8600 legacy-billing.service.consul
 
 ### Scenario 2 — Sidecar Envoy non iniettato
 
-**Sintomo**: il pod parte con un solo container, nessun `consul-connect-envoy-sidecar`.
+**Sintomo**: il pod parte con un solo container, nessun container `consul-dataplane` (nelle versioni pre-1.0 di consul-k8s: `envoy-sidecar`) né init container `consul-connect-inject-init`.
 
 **Causa**: webhook `connect-inject` (mutating admission webhook che modifica il pod alla creazione) disabilitato, annotation mancante, o pod creato prima dell'abilitazione.
 
@@ -334,8 +354,7 @@ kubectl logs -n consul consul-server-0   # Kubernetes
 ```bash
 helm get values consul -n consul | grep -A4 syncCatalog
 kubectl logs -n consul deploy/consul-sync-catalog
-kubectl exec -n default <pod> -c consul-connect-envoy-sidecar -- \
-  wget -qO- http://localhost:19000/config_dump   # config Envoy effettiva
+kubectl exec -n consul consul-server-0 -- consul catalog services   # cosa vede il catalogo
 ```
 
 ## Relazioni
