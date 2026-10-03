@@ -7,16 +7,19 @@ search_keywords: [container network interface, cni plugin, pod networking, overl
 parent: networking/kubernetes/_index
 related: [networking/kubernetes/network-policies, networking/kubernetes/ingress, networking/service-mesh/istio, containers/kubernetes/networking]
 official_docs: https://www.cni.dev/docs/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # CNI — Container Network Interface
 
 ## Panoramica
 
-CNI (Container Network Interface) è la specifica che definisce come i plugin di rete devono configurare le interfacce di rete nei container. Quando Kubernetes crea un pod, chiama il plugin CNI per assegnare un IP al pod, configurare le route necessarie e garantire la connettività con il resto del cluster. Senza un CNI plugin installato, i pod restano in stato `Pending`.
+CNI (Container Network Interface) è la specifica che definisce come i plugin di rete devono configurare le interfacce di rete nei container. Quando Kubernetes crea un pod, chiama il plugin CNI per assegnare un IP al pod, configurare le route necessarie e garantire la connettività con il resto del cluster. Senza un CNI plugin installato i nodi restano `NotReady` (kubelet: `network plugin not ready`), i pod applicativi non vengono schedulati (taint `node.kubernetes.io/not-ready`) e quelli già assegnati restano in `ContainerCreating`; anche CoreDNS resta `Pending`.
+
+**Meccanismo:** il container runtime (containerd/CRI-O) crea il network namespace del pod, poi esegue il binario CNI indicato in `/etc/cni/net.d/` (cercato in `/opt/cni/bin/`) con comando `ADD` e la configurazione JSON su stdin; il plugin crea la coppia **veth** (cavo virtuale tra namespace del pod e host), assegna l'IP (tramite il plugin **IPAM**) e imposta le route, restituendo il risultato in JSON. Alla cancellazione del pod viene invocato `DEL`. Per questo il CNI è un'interfaccia a eseguibili, non un demone che Kubernetes chiama via API.
 
 La scelta del CNI plugin è una delle decisioni architetturali più importanti in un cluster Kubernetes: impatta performance, funzionalità di sicurezza (Network Policy), osservabilità e compatibilità con il cloud provider. I tre CNI più diffusi sono **Flannel** (semplicità), **Calico** (BGP + NetworkPolicy avanzate) e **Cilium** (eBPF, massima performance e osservabilità).
 
@@ -56,14 +59,14 @@ Il CNI deve garantire che Pod A (10.244.0.1) possa raggiungere Pod C (10.244.1.1
 |-----------|--------------|-----|--------|
 | **Overlay (VXLAN/Geneve)** | Incapsula i pacchetti pod in pacchetti UDP della rete fisica | Funziona su qualsiasi rete fisica | Overhead di incapsulamento, MTU |
 | **BGP (no overlay)** | Annuncia le route pod via BGP alla rete fisica | Nessun overhead, performance native | Richiede switch/router con supporto BGP |
-| **eBPF (kernel bypass)** | Processa i pacchetti nel kernel con eBPF senza userspace | Massima performance, ricca osservabilità | Kernel Linux 5.8+ richiesto |
+| **eBPF (kernel bypass)** | Processa i pacchetti nel kernel con eBPF senza userspace | Massima performance, ricca osservabilità | Richiede kernel Linux recente (minimo 4.19.57, consigliato 5.10+ per le feature complete) |
 
 ## Confronto CNI Plugin
 
 | Feature | Flannel | Calico | Cilium |
 |---------|---------|--------|--------|
 | Meccanismo | VXLAN overlay | BGP o VXLAN | eBPF |
-| NetworkPolicy | No (solo base) | Sì (avanzate) | Sì (L3/L4/L7) |
+| NetworkPolicy | No (nessun enforcement) | Sì (avanzate) | Sì (L3/L4/L7) |
 | Performance | Media | Alta | Massima |
 | Osservabilità | Minima | Media | Eccellente (Hubble) |
 | Complessità | Bassa | Media | Alta |
@@ -131,8 +134,9 @@ Cilium usa programmi eBPF caricati nel kernel Linux per processare i pacchetti s
 ### Installare Flannel
 
 ```bash
-# Installazione base (dopo kubeadm init con --pod-network-cidr=10.244.0.0/16)
-kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+# Installazione base (dopo kubeadm init con --pod-network-cidr=10.244.0.0/16,
+# il CIDR di default nel manifest Flannel)
+kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
 
 # Verifica
 kubectl get pods -n kube-flannel
@@ -151,17 +155,21 @@ helm install calico projectcalico/tigera-operator \
 # Attendi che i pod siano Ready
 kubectl get pods -n calico-system -w
 
-# Configura IP pool
+# Configura IP pool e modalità di rete tramite la risorsa Installation
+# (con il tigera-operator l'IPPool viene generato da qui)
 cat <<EOF | kubectl apply -f -
-apiVersion: projectcalico.org/v3
-kind: IPPool
+apiVersion: operator.tigera.io/v1
+kind: Installation
 metadata:
-  name: default-ipv4-ippool
+  name: default
 spec:
-  cidr: 10.244.0.0/16
-  ipipMode: Never         # BGP puro, no overlay
-  natOutgoing: true
-  disabled: false
+  calicoNetwork:
+    bgp: Enabled
+    ipPools:
+      - name: default-ipv4-ippool
+        cidr: 10.244.0.0/16
+        encapsulation: None     # BGP puro, no overlay
+        natOutgoing: Enabled
 EOF
 ```
 
@@ -173,7 +181,8 @@ curl -L --remote-name-all https://github.com/cilium/cilium-cli/releases/latest/d
 tar xzvf cilium-linux-amd64.tar.gz && mv cilium /usr/local/bin/
 
 # Installa Cilium nel cluster
-cilium install --version 1.15.0
+# (usare una release stabile corrente, vedi https://github.com/cilium/cilium/releases)
+cilium install --version <X.Y.Z>
 
 # Verifica status e connettività
 cilium status --wait
@@ -218,8 +227,8 @@ ls /opt/cni/bin/    # Binari plugin CNI
 kubectl exec mypod -- ip link show eth0
 # 2: eth0@if123: mtu 1450
 
-# Verifica in Calico
-kubectl get configmap calico-config -n kube-system -o yaml | grep mtu
+# Verifica in Calico (installazione via operator)
+kubectl get installation default -o jsonpath='{.spec.calicoNetwork.mtu}'
 ```
 
 ## Best Practices
@@ -246,7 +255,7 @@ kubectl describe pod <pod-name>
 # Cercare: "failed to set up pod network" o "network plugin not ready"
 
 # Verifica che i pod CNI siano Running su TUTTI i nodi
-kubectl get pods -n kube-system -l k8s-app=flannel    # Flannel
+kubectl get pods -n kube-flannel -l app=flannel         # Flannel
 kubectl get pods -n calico-system                       # Calico
 kubectl get pods -n kube-system -l k8s-app=cilium      # Cilium
 
@@ -305,13 +314,10 @@ tcpdump -i eth0 udp port 8472 -n
 kubectl exec <pod-name> -- ip link show eth0
 # "mtu 1500" con VXLAN è sbagliato — deve essere ~1450
 
-# Verifica MTU configurata in Calico
-kubectl get configmap calico-config -n kube-system -o yaml | grep -i mtu
-
-# Imposta MTU in Calico (veth MTU)
-kubectl patch configmap calico-config -n kube-system \
-  --type merge \
-  -p '{"data":{"veth_mtu":"1440"}}'
+# Imposta MTU in Calico (installazione via operator; valore = MTU del pod)
+kubectl patch installation default --type merge \
+  -p '{"spec":{"calicoNetwork":{"mtu":1450}}}'
+# Installazione da manifest: configmap calico-config (kube-system), chiave veth_mtu
 
 # Verifica MTU nodo
 ip link show flannel.1   # Flannel: deve essere ~1450
@@ -353,13 +359,16 @@ kubectl exec test-a -- wget -T3 -q http://<IP_POD_B>:80
 # Se risponde: policy non applicata → CNI non la supporta
 
 # Per Cilium: verifica policy enforcement
-cilium policy get
-kubectl exec -n kube-system cilium-<hash> -- cilium policy trace \
-  --src-k8s-pod default:test-a --dst-k8s-pod default:test-b --dport 80
+cilium status
+hubble observe --verdict DROPPED --namespace default   # pacchetti scartati dalle policy
+kubectl exec -n kube-system cilium-<hash> -- cilium-dbg endpoint list   # policy enforcement per endpoint
 
 # Cleanup test
 kubectl delete networkpolicy test-deny
 ```
+
+!!! note "CNI dei cloud provider"
+    Sui cluster gestiti il CNI è spesso scelto dal provider: **AWS VPC CNI** (EKS) assegna ai pod IP reali della VPC (niente overlay, ma consumo di IP della subnet), **Azure CNI** (AKS) fa lo stesso con la VNet, mentre GKE usa il proprio dataplane (Dataplane V2, basato su Cilium). Cilium e Calico sono comunque installabili in modalità chained/overlay su questi servizi.
 
 ## Relazioni
 
