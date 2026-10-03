@@ -5,11 +5,12 @@ category: cloud
 tags: [azure, azure-monitor, log-analytics, metrics, alerts, workbooks, diagnostic-settings, kql]
 search_keywords: [Azure Monitor metrics logs traces, Log Analytics Workspace KQL Kusto, Diagnostic Settings resource logs, Azure Monitor Agent AMA OMS MMA, metric alert log alert activity log alert, Action Group email SMS webhook, Workbooks dashboard, Container Insights AKS pods, data retention archive, Azure Monitor for VMs]
 parent: cloud/azure/monitoring/_index
-related: [cloud/azure/compute/virtual-machines, cloud/azure/compute/aks-containers, cloud/azure/security/defender-sentinel]
+related: [cloud/azure/compute/virtual-machines, cloud/azure/compute/aks-containers, cloud/azure/security/defender-sentinel, cloud/azure/monitoring/application-insights]
 official_docs: https://learn.microsoft.com/azure/azure-monitor/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Azure Monitor & Log Analytics
@@ -97,7 +98,10 @@ az monitor metrics list \
 
 ## Diagnostic Settings
 
-I Diagnostic Settings abilitano l'invio di logs e metriche delle risorse Azure a Log Analytics, Storage Account e/o Event Hubs.
+I Diagnostic Settings abilitano l'invio di logs e metriche delle risorse Azure a Log Analytics, Storage Account e/o Event Hubs. Servono perché i **resource logs** non sono raccolti di default: senza un Diagnostic Setting la risorsa li scarta (solo metriche piattaforma e Activity Log sono automatici).
+
+!!! warning "retentionPolicy deprecato"
+    Il campo `retentionPolicy` dei Diagnostic Settings è deprecato: la retention si gestisce sul workspace/tabella (o con lifecycle management sullo Storage Account), non per singolo setting. Per questo gli esempi seguenti non lo usano.
 
 ```bash
 # Diagnostic Settings per una VM (Azure Monitor Agent — vedi sotto per AMA)
@@ -107,11 +111,11 @@ az monitor diagnostic-settings create \
   --name diag-appservice-prod \
   --workspace $LAW_ID \
   --logs '[
-    {"category": "AppServiceHTTPLogs", "enabled": true, "retentionPolicy": {"enabled": false}},
-    {"category": "AppServiceAppLogs", "enabled": true, "retentionPolicy": {"enabled": false}},
-    {"category": "AppServiceAuditLogs", "enabled": true, "retentionPolicy": {"enabled": false}},
-    {"category": "AppServiceIPSecAuditLogs", "enabled": true, "retentionPolicy": {"enabled": false}},
-    {"category": "AppServicePlatformLogs", "enabled": true, "retentionPolicy": {"enabled": false}}
+    {"category": "AppServiceHTTPLogs", "enabled": true},
+    {"category": "AppServiceAppLogs", "enabled": true},
+    {"category": "AppServiceAuditLogs", "enabled": true},
+    {"category": "AppServiceIPSecAuditLogs", "enabled": true},
+    {"category": "AppServicePlatformLogs", "enabled": true}
   ]' \
   --metrics '[{"category": "AllMetrics", "enabled": true}]'
 
@@ -147,7 +151,7 @@ az monitor diagnostic-settings create \
 
 ## Azure Monitor Agent (AMA)
 
-AMA è l'agente unificato per raccogliere log e metriche dalle VM, sostituendo i deprecati MMA (Microsoft Monitoring Agent) e OMS Agent.
+AMA è l'agente unificato per raccogliere log e metriche dalle VM, sostituendo MMA (Microsoft Monitoring Agent, alias Log Analytics agent) e OMS Agent, **ritirati il 31 agosto 2024**: non ricevono più supporto e vanno migrati ad AMA. A differenza degli agent legacy, AMA non ha configurazione locale: *cosa* raccogliere è definito centralmente nelle Data Collection Rules (DCR), associabili a molte VM, e l'autenticazione usa la managed identity della VM.
 
 ```bash
 # Installare AMA su VM Linux
@@ -257,7 +261,7 @@ Perf
 // 2. Top 10 errori nelle ultime 24 ore per applicazione
 AppExceptions
 | where TimeGenerated > ago(24h)
-| summarize ErrorCount = count() by AppRoleName, ExceptionType, outerMessage
+| summarize ErrorCount = count() by AppRoleName, ExceptionType, OuterMessage
 | order by ErrorCount desc
 | take 10
 
@@ -303,7 +307,7 @@ Perf
 // 8. Conta richieste per status code nell'ultima ora (webapp)
 AppRequests
 | where TimeGenerated > ago(1h)
-| summarize Count = count() by ResultCode = tostring(toint(Success) * 200 + toint(!Success) * 500)
+| summarize Count = count() by ResultCode
 | render piechart
 
 // 9. Memory usage trend
@@ -338,34 +342,38 @@ az monitor metrics alert create \
   --description "CPU media sopra 85% per 5 minuti" \
   --action $(az monitor action-group show --resource-group $RG --name ag-ops-team --query id -o tsv)
 
-# Alert su più VM (dimension)
+# Alert multi-risorsa: una sola regola su più VM (stessa subscription e region).
+# Con scope = resource group/subscription servono tipo e region; ogni VM è valutata separatamente.
 az monitor metrics alert create \
   --resource-group $RG \
-  --name alert-cpu-vmss \
-  --scopes $(az vmss show --resource-group $RG --name vmss-web-frontend --query id -o tsv) \
+  --name alert-cpu-all-vms \
+  --scopes /subscriptions/SUB_ID/resourceGroups/$RG \
+  --target-resource-type Microsoft.Compute/virtualMachines \
+  --target-resource-region $LOCATION \
   --condition "avg Percentage CPU > 90" \
   --window-size 5m \
   --evaluation-frequency 1m \
   --severity 1 \
-  --target-resource-type Microsoft.Compute/virtualMachineScaleSets
+  --action $(az monitor action-group show --resource-group $RG --name ag-ops-team --query id -o tsv)
 ```
 
 ### Log Alert (KQL-based)
 
 ```bash
-# Alert quando ci sono errori 500 nella webapp
+# Alert quando ci sono errori 5xx nella webapp
+# (estensione scheduled-query: az extension add --name scheduled-query)
+# La condizione referenzia la query per nome (q1) e ne valuta il numero di righe.
 az monitor scheduled-query create \
-  --resource-group rg-webapp-prod \
+  --resource-group $RG \
   --name alert-http500-myapp \
-  --scopes $(az webapp show --resource-group rg-webapp-prod --name myapp-prod --query id -o tsv) \
-  --condition-query "AppServiceHTTPLogs | where ScStatus >= 500 | summarize Count = count()" \
-  --condition-threshold 5 \
-  --condition-operator GreaterThan \
+  --scopes $LAW_ID \
+  --condition "count 'q1' > 5" \
+  --condition-query q1="AppServiceHTTPLogs | where ScStatus >= 500" \
   --evaluation-frequency 5m \
   --window-duration 5m \
   --severity 2 \
-  --description "Più di 5 errori HTTP 500 in 5 minuti" \
-  --action $(az monitor action-group show --resource-group $RG --name ag-ops-team --query id -o tsv)
+  --description "Più di 5 errori HTTP 5xx in 5 minuti" \
+  --action-groups $(az monitor action-group show --resource-group $RG --name ag-ops-team --query id -o tsv)
 ```
 
 ### Activity Log Alert
@@ -377,7 +385,7 @@ az monitor activity-log alert create \
   --name alert-rg-deletion \
   --scopes /subscriptions/SUB_ID \
   --condition category=Administrative and operationName=Microsoft.Resources/subscriptions/resourceGroups/delete and status=Succeeded \
-  --action $(az monitor action-group show --resource-group $RG --name ag-ops-team --query id -o tsv)
+  --action-group $(az monitor action-group show --resource-group $RG --name ag-ops-team --query id -o tsv)
 ```
 
 ## Action Groups
@@ -391,15 +399,16 @@ az monitor action-group create \
   --name ag-ops-team \
   --short-name OpsTeam \
   --action email ops-lead john.doe@example.com \
-  --action sms sms-oncall +39555123456 \
+  --action sms sms-oncall 39 555123456 \
   --action webhook webhook-slack "https://hooks.slack.com/services/..." \
-  --action logic-app logic-app-itsm /subscriptions/SUB_ID/resourceGroups/rg-security/providers/Microsoft.Logic/workflows/create-ticket true
+  --action logic-app logic-app-itsm /subscriptions/SUB_ID/resourceGroups/rg-security/providers/Microsoft.Logic/workflows/create-ticket "https://<logic-app-callback-url>"
+# sms: NOME PREFISSO_PAESE NUMERO (senza + e spazi); logic-app: NOME RESOURCE_ID CALLBACK_URL
 
 # Aggiornare Action Group aggiungendo Azure Function
 az monitor action-group update \
   --resource-group $RG \
   --name ag-ops-team \
-  --add-action azureFunctionReceiver \
+  --add-action azure-function \
     function-auto-remediate \
     /subscriptions/SUB_ID/resourceGroups/rg-functions/providers/Microsoft.Web/sites/func-remediation \
     auto_scale_out \
@@ -411,34 +420,34 @@ az monitor action-group update \
 I Workbooks Azure Monitor sono dashboard interattivi parametrizzati che combinano query KQL con visualizzazioni.
 
 ```bash
-# Listare workbook templates predefiniti (gallery)
-az monitor workbook template list \
+# Creare workbook personalizzato (richiede JSON di definizione; estensione application-insights)
+# <!-- REVIEW: verificare sintassi/parametri di `az monitor app-insights workbook create` nella versione corrente dell'estensione -->
+az monitor app-insights workbook create \
   --resource-group $RG \
-  --output table
-
-# Creare workbook personalizzato (richiede JSON di definizione)
-az monitor workbook create \
-  --resource-group $RG \
-  --name "workbook-webapp-dashboard" \
+  --name "$(uuidgen)" \
   --display-name "Web App Performance Dashboard" \
   --kind shared \
+  --category workbook \
   --serialized-data @workbook-definition.json \
-  --source-id $LAW_ID
+  --location $LOCATION
 ```
+
+In pratica i workbook si costruiscono dal portale (galleria template) e si versionano esportando il JSON per ripubblicarlo via IaC (ARM/Bicep/Terraform `azurerm_application_insights_workbook`).
 
 Workbook predefiniti utili:
 - **Performance** (VM): CPU, memoria, disco, rete per flotta VM
 - **Failures** (Application Insights): eccezioni, request failure, dependency failure
 - **Traffic** (App Service): throughput, latency, errori per endpoint
-- **Azure AD Sign-ins**: analisi pattern di accesso
+- **Microsoft Entra ID Sign-ins** (ex Azure AD): analisi pattern di accesso
 - **AKS**: node health, pod metrics, cluster overview
 
 ## Azure Monitor for VMs (VM Insights)
 
-VM Insights abilita monitoring avanzato per VM: performance chart, dependency map, health model.
+VM Insights abilita monitoring avanzato per VM: performance chart e dependency map. Oggi si basa su AMA + una DCR dedicata (creata dal portale con "Enable" in VM Insights); il **Dependency Agent** è opzionale e serve solo alla funzione *Map* (tabella `VMConnection`), non alle performance.
+<!-- REVIEW: verificare lo stato di ritiro del Dependency Agent e la raccomandazione Microsoft attuale per la dependency map -->
 
 ```bash
-# Abilitare VM Insights (richiede AMA + Dependency Agent)
+# Dependency Agent (solo per la Map; richiede AMA già installato)
 az vm extension set \
   --resource-group $RG \
   --vm-name my-vm \
@@ -462,7 +471,7 @@ VMConnection
 ## Container Insights (AKS Monitoring)
 
 ```bash
-# Abilitare Container Insights su AKS
+# Abilitare Container Insights su AKS (usa AMA con managed identity sul cluster)
 az aks enable-addons \
   --resource-group rg-aks-prod \
   --name aks-prod-westeurope \
@@ -478,16 +487,13 @@ az monitor metrics list \
 ```
 
 ```kql
-// Pod CPU usage per namespace
-KubePodInventory
+// CPU per container (InstanceName è il path del container nel cluster; l'ultimo segmento è il nome)
+Perf
 | where TimeGenerated > ago(1h)
-| join kind=leftouter (
-    Perf
-    | where ObjectName == "K8SContainer" and CounterName == "cpuUsageNanoCores"
-    | summarize AvgCPU = avg(CounterValue) by InstanceName
-) on $left.ContainerID == $right.InstanceName
-| summarize AvgCPU = avg(AvgCPU) by Namespace, PodName
-| order by AvgCPU desc
+| where ObjectName == "K8SContainer" and CounterName == "cpuUsageNanoCores"
+| summarize AvgCPUnc = avg(CounterValue) by InstanceName
+| order by AvgCPUnc desc
+| take 20
 
 // Pod in CrashLoopBackOff
 KubePodInventory
@@ -495,14 +501,18 @@ KubePodInventory
 | where ContainerStatus == "Waiting" and ContainerStatusReason == "CrashLoopBackOff"
 | project TimeGenerated, Namespace, PodName, ContainerName, ContainerStatusReason
 
-// Log di container specifico
-ContainerLog
+// Log di container specifico (ContainerLogV2: schema attuale, default per i nuovi cluster;
+// la tabella legacy ContainerLog è deprecata)
+ContainerLogV2
 | where TimeGenerated > ago(1h)
-| where Namespace == "production"
+| where PodNamespace == "production"
 | where PodName contains "myapp"
 | project TimeGenerated, PodName, ContainerName, LogMessage
 | order by TimeGenerated desc
 ```
+
+!!! tip "Metriche con Managed Prometheus"
+    Per le metriche di cluster/pod la scelta attuale è **Azure Monitor managed service for Prometheus** + Azure Managed Grafana (query PromQL, costo per sample ingerito), lasciando a Container Insights i log (`ContainerLogV2`) e l'inventario. Evita di ingerire in `Perf`/`InsightsMetrics` metriche che Prometheus già copre.
 
 ## Data Retention e Costi
 
@@ -520,17 +530,23 @@ az monitor log-analytics workspace table update \
   --name AuditLogs \
   --total-retention-time 2557  # 7 anni total: 90 gg interactive + resto archive
 
-# Stimare costo ingestione dati
-# Log Analytics: ~$2.30/GB ingested (PerGB2018 tier, West Europe)
-# Retention: prime 31 giorni gratuiti, poi ~$0.10/GB/mese
+# Stimare costo ingestione dati (ordini di grandezza, i prezzi variano per region/valuta:
+# verificare sulla pricing page)
+# Log Analytics: ~$2.3-2.8/GB ingerito (Pay-as-you-go, piano tabella Analytics)
+# Retention: prime 31 giorni inclusi, poi ~$0.10/GB/mese
 # Archive: ~$0.02/GB/mese
 
 # Configurare data cap (protezione da spike ingestione dati)
 az monitor log-analytics workspace update \
   --resource-group $RG \
   --workspace-name $LAW_NAME \
-  --daily-quota-gb 10
+  --quota 10
 ```
+
+Il costo dipende soprattutto dall'ingestione, quindi le leve sono: **piano tabella** (*Analytics* per query e alert completi; *Basic*/*Auxiliary* per log ad alto volume e basso valore, ingestione molto più economica ma query limitate e senza alert classici), **commitment tier** (sconto da ~100 GB/giorno) e **DCR transformation** per filtrare/ridurre le colonne prima dell'ingestione.
+
+!!! warning "Daily cap"
+    Raggiunto il cap, il workspace **smette di ingerire** i dati fatturabili fino al reset giornaliero: si perdono log (e alert basati su di essi). Usalo come protezione di costo su ambienti non-prod; in produzione preferisci alert sull'ingestione.
 
 ## Best Practices
 
@@ -539,7 +555,8 @@ az monitor log-analytics workspace update \
 - Separa workspace per ambienti di produzione e non-produzione per isolamento RBAC e costi
 - Imposta **daily quota** sul workspace per protezione da spike di ingestione
 - Usa **Archive tier** per log di compliance long-term invece di mantenere tutto nello interactive tier
-- Per alert, privilegia **Metric Alert** (valutazione ogni minuto) su **Log Alert** (minimum 5 minuti) quando possibile
+- Per alert, privilegia **Metric Alert** (valutazione ogni minuto, bassa latenza, costo minore) su **Log Alert** (query KQL, più flessibile ma con latenza di ingestione e costo per regola) quando la metrica esiste già
+- Gestisci Workspace, DCR, Diagnostic Settings e alert come codice (Bicep/Terraform) e assegna i Diagnostic Settings con **Azure Policy** (`DeployIfNotExists`) così le nuove risorse nascono già monitorate
 
 ## Troubleshooting
 
@@ -626,10 +643,11 @@ az monitor metrics alert show \
   --query "{enabled: enabled, severity: severity, fired: criteria}"
 
 # Testare l'Action Group inviando una notifica di test
-az monitor action-group test \
+az monitor action-group test-notifications create \
   --resource-group $RG \
-  --name ag-ops-team \
-  --alert-type "Metric"
+  --action-group ag-ops-team \
+  --alert-type metricstaticthreshold \
+  --add-action email ops-lead john.doe@example.com
 
 # Per log alert: verificare che la query restituisca dati
 # Eseguire manualmente la query KQL nel workspace nel periodo di valutazione
@@ -671,7 +689,7 @@ az monitor log-analytics workspace table list \
   --output table
 
 # Ripristinare dati da archive per query (restore job, costo aggiuntivo)
-az monitor log-analytics workspace table restore \
+az monitor log-analytics workspace table restore create \
   --resource-group $RG \
   --workspace-name $LAW_NAME \
   --name AuditLogs_RST \
@@ -679,6 +697,25 @@ az monitor log-analytics workspace table restore \
   --start-restore-time "2025-01-01T00:00:00Z" \
   --end-restore-time "2025-01-31T23:59:59Z"
 ```
+
+Alternativa al restore: una **search job** esegue una ricerca asincrona sui dati archiviati e ne scrive i risultati in una tabella `_SRCH` interrogabile.
+
+## Relazioni
+
+??? info "Defender for Cloud & Sentinel"
+    Sentinel è un SIEM costruito *sopra* un Log Analytics Workspace: usa le stesse tabelle e KQL, e il costo di ingestione si somma. Per questo la scelta di workspace (uno centrale vs uno per ambiente) è anche una decisione di sicurezza.
+
+    **Approfondimento completo →** [Defender & Sentinel](../security/defender-sentinel.md)
+
+??? info "AKS e Container Insights"
+    Container Insights è l'integrazione di questo workspace con AKS (log container, inventario pod); le metriche applicative si affiancano con Managed Prometheus.
+
+    **Approfondimento completo →** [AKS & Containers](../compute/aks-containers.md)
+
+??? info "Application Insights"
+    Application Insights (APM, tracing distribuito) in modalità workspace-based scrive nelle stesse tabelle (`AppRequests`, `AppExceptions`, …) usate nelle query sopra.
+
+    **Approfondimento completo →** [Application Insights](application-insights.md)
 
 ## Riferimenti
 
