@@ -9,7 +9,7 @@ related: [ci-cd/strategie/pipeline-security, ci-cd/github-actions/workflow-avanz
 official_docs: https://docs.pact.io/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-10-03
 ---
 
 # Contract Testing
@@ -558,20 +558,83 @@ oasdiff breaking openapi-v1.yaml openapi-v2.yaml
 
 ## Troubleshooting
 
-**Il provider verification fallisce con "Interaction not found"**
-: Lo stato (`given`) non corrisponde a nessun handler nel provider. Verificare che il test provider definisca tutti gli stati usati nel consumer.
+### Scenario 1 — Provider verification fallisce con "Interaction not found" / state handler mancante
 
-**can-i-deploy restituisce "no"**
-: Il contratto non è stato ancora verificato dal provider per quella combinazione versione/ambiente. Controllare nel broker UI se la verifica è completata o in errore.
+**Sintomo**: la verifica del provider fallisce su interazioni che hanno uno stato (`given(...)`); nei log compare l'errore di provider state non trovato.
 
-**Pact file non viene generato**
-: Il test consumer non entra nel blocco `with pact:` o l'asserzione fallisce prima della chiamata. Il file viene scritto solo se il test ha eseguito almeno un'interazione.
+**Causa**: il provider non espone un handler per lo stato dichiarato dal consumer, quindi non può preparare i dati richiesti (es. `product 123 exists`) e la risposta reale non combacia.
 
-**Provider risponde ma la verifica fallisce su un campo**
-: Controllare se si sta usando `Like()` o un valore esatto. Un valore esatto nel contratto fallisce se il provider restituisce qualcosa di diverso (es. prezzo aggiornato).
+**Soluzione**: implementare un endpoint di setup degli stati nel provider e passarlo al verifier; poi ricontrollare i nomi degli stati (sono case-sensitive).
 
-**Encoding issues nel JSON del pact file**
-: Assicurarsi che il provider ritorni `Content-Type: application/json; charset=utf-8`. Pact confronta le response come JSON, ma problemi di encoding possono causare mismatch.
+```bash
+# Elenca gli stati richiesti dai contratti pubblicati
+curl -s -u pactbroker:pactbroker   http://pact-broker:9292/pacts/provider/ProductService/latest   | jq '.. | .providerStates? // empty'
+```
+
+```python
+# Verifier: endpoint che imposta gli stati prima di ogni interazione
+verifier.verify_with_broker(
+    broker_url=PACT_BROKER_URL,
+    provider_states_setup_url="http://localhost:8000/_pact/provider_states",
+)
+```
+
+### Scenario 2 — `can-i-deploy` restituisce "no"
+
+**Sintomo**: il job di CI si ferma con `Computer says no` e la colonna `SUCCESS?` è `false` o vuota.
+
+**Causa**: il contratto della versione consumer non è ancora stato verificato dal provider presente nell'ambiente target (verifica non eseguita, fallita, o versione non registrata con `record-deployment`).
+
+**Soluzione**: controllare i dettagli della matrice, rilanciare la verifica sul provider o registrare il deployment mancante.
+
+```bash
+pact-broker can-i-deploy   --pacticipant OrderService --version "abc1234"   --to-environment production   --broker-base-url http://pact-broker:9292   --output table --verbose
+
+# Se il provider è in produzione ma non registrato:
+pact-broker record-deployment --pacticipant ProductService   --version def5678 --environment production   --broker-base-url http://pact-broker:9292
+```
+
+### Scenario 3 — Pact file non viene generato
+
+**Sintomo**: la cartella `./pacts` è vuota dopo il test consumer; `pact-broker publish` non trova file.
+
+**Causa**: il pact file viene scritto solo alla chiusura del mock server, dopo che almeno un'interazione è stata eseguita. Se il test non entra nel blocco `with pact:` o fallisce prima della chiamata al client, nessun file viene prodotto.
+
+**Soluzione**: verificare che il client chiami davvero il mock server e che `pact_dir` sia scrivibile.
+
+```bash
+pytest tests/test_product_consumer.py -v -s
+ls -la ./pacts
+# Il mock server deve essere raggiungibile sulla porta configurata
+curl -sv http://localhost:1234/ 2>&1 | head
+```
+
+### Scenario 4 — Verifica fallisce su un campo (valore esatto invece di matcher)
+
+**Sintomo**: il provider risponde 200 ma la verifica segnala `Expected "Widget Pro" but got "Widget Max"` o un mismatch di tipo.
+
+**Causa**: il contratto usa un valore letterale al posto di un matcher (`Like()`, `integer`, ...); ogni cambiamento dei dati di test del provider rompe il contratto. Un mismatch di tipo indica invece una reale breaking change.
+
+**Soluzione**: sostituire i valori non funzionali con matcher; se il tipo è cambiato davvero, concordare la modifica con il consumer.
+
+```python
+# Prima (rigido)
+"name": "Widget Pro"
+# Dopo (matcher sul tipo)
+"name": Like("Widget Pro")
+```
+
+### Scenario 5 — Mismatch dovuti a encoding o Content-Type
+
+**Sintomo**: il body sembra identico ma la verifica fallisce con errori di parsing o di header (`Content-Type`).
+
+**Causa**: Pact confronta le response come JSON in base al `Content-Type`; un header diverso (es. senza `charset=utf-8`, o `text/plain`) o caratteri non UTF-8 impediscono il parsing corretto.
+
+**Soluzione**: far restituire al provider `application/json; charset=utf-8` e verificare gli header reali.
+
+```bash
+curl -si -H "Accept: application/json" http://localhost:8000/products/123 | head -n 15
+```
 
 ---
 
