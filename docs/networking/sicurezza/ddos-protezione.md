@@ -7,9 +7,10 @@ search_keywords: [distributed denial of service, ddos attack, volumetric attack,
 parent: networking/sicurezza/_index
 related: [networking/sicurezza/firewall-waf, networking/api-gateway/rate-limiting, networking/fondamentali/tcpip]
 official_docs: https://aws.amazon.com/shield/
-status: complete
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Protezione DDoS
@@ -71,7 +72,7 @@ Attaccante                              Server Vittima
     │ (migliaia al secondo)                   │ ... SYN backlog pieno
     │                                        │
     │                                  Nuove connessioni legittime
-    │                                  vengono droppate (ECONNREFUSED)
+    │                                  vengono droppate (timeout del client)
 ```
 
 **Mitigazione**: SYN cookies — il server non alloca stato finché il client non completa il 3-way handshake.
@@ -98,7 +99,14 @@ while True:
     time.sleep(15)
 ```
 
-**Mitigazione**: timeout aggressivi sulle connessioni, `LimitRequestLine`, worker process multipli, `mod_reqtimeout`.
+**Mitigazione**: timeout aggressivi su header/body (Apache `mod_reqtimeout`, Nginx `client_header_timeout`), limite di connessioni per IP, reverse proxy con architettura a eventi (Nginx, CDN) davanti ai backend: bufferizza la richiesta completa prima di inoltrarla, quindi i worker applicativi non restano bloccati. I server a thread/process per connessione (Apache prefork/worker) sono i più vulnerabili.
+
+!!! warning "Solo per test autorizzati"
+    Lo script sopra è didattico: eseguirlo contro sistemi non propri è illegale.
+
+### HTTP/2 Rapid Reset e attacchi L7 moderni
+
+**HTTP/2 Rapid Reset** (CVE-2023-44487, ottobre 2023) sfrutta il multiplexing di HTTP/2: il client apre uno stream e lo annulla subito con `RST_STREAM`, ripetendo in massa. Il limite `MAX_CONCURRENT_STREAMS` non conta gli stream già resettati, quindi con poche connessioni si genera un enorme volume di richieste (record da decine di milioni di req/s) mentre il server spende CPU per ogni stream creato e annullato. Mitigazione: aggiornare web server/proxy alle versioni patchate (Nginx, Envoy, HAProxy, Go `net/http` ecc. hanno limiti sul tasso di reset), oppure far terminare HTTP/2 a una CDN/WAF che assorbe l'attacco. Gli attacchi L7 odierni sono tipicamente HTTP/2-3 su botnet di dispositivi IoT/VM compromesse, con richieste "legittime" che il solo rate limiting per IP non distingue: servono fingerprinting (JA3/JA4), bot score e challenge.
 
 ## Strategie di Mitigazione
 
@@ -123,17 +131,17 @@ Cloudflare / AWS Shield Network
 Infrastruttura cliente
 ```
 
-Cloudflare e AWS Shield Advanced operano su reti da >100 Tbps — praticamente immuni agli attacchi volumetrici.
+Le reti dei grandi provider hanno capacità di centinaia di Tbps, superiore ai record di attacco pubblici (multi-Tbps, fino a ordini di grandezza oltre 10 Tbps nel 2025): per un cliente tipico gli attacchi volumetrici sono assorbiti. Il meccanismo: con **anycast** lo stesso prefisso IP è annunciato da tutti i PoP, quindi ogni bot raggiunge il PoP più vicino e l'attacco si frammenta geograficamente invece di convergere su un solo link. Il traffico è poi filtrato (scrubbing) e solo quello lecito va all'origine.
 
 ### 2. BGP Blackholing / Null Routing
 
-In caso di attacco massiccio, annunciare via BGP che il target IP deve essere scartato da tutti i provider upstream. Il traffico viene droppato il più vicino possibile all'attaccante.
+In caso di attacco massiccio, annunciare via BGP (RTBH, Remote Triggered Black Hole) che il target IP deve essere scartato dal provider upstream. Il traffico viene droppato sul bordo della rete dell'ISP, prima di saturare il tuo link. La community standard è `65535:666` (BLACKHOLE, RFC 7999), ma molti ISP ne definiscono una propria e accettano di solito solo prefissi /32 (IPv4) o /128 (IPv6).
 
 ```bash
 # Comunica all'ISP di fare null routing via BGP community
-# (ogni ISP ha la propria community di blackholing)
+# (verificare la community supportata dal proprio ISP)
 
-# Esempio Juniper: annuncia la route con community 65535:666 (RTBH)
+# Esempio Juniper (schema semplificato): annuncia la route con community 65535:666 (RTBH)
 set routing-options static route 203.0.113.100/32 discard
 
 # Via BGP verso l'ISP (community RTBH)
@@ -155,8 +163,11 @@ http {
 
     # Limita richieste per IP
     limit_req_zone $binary_remote_addr zone=req_limit:10m rate=30r/m;
+    limit_req_status 429;   # default 503: 429 distingue il throttling da un errore backend
+    limit_conn_status 429;
 
-    # Blocca User-Agent noti di bot DDoS
+    # Blocca User-Agent di scanner noti (filtro banale: l'UA è falsificabile,
+    # non ferma una botnet — riduce solo il rumore)
     map $http_user_agent $bad_bot {
         ~*(masscan|nikto|sqlmap|nmap) 1;
         default 0;
@@ -184,7 +195,8 @@ http {
         # (configurato in sysctl, non nginx)
 
         location / {
-            # Anti-scraping: CAPTCHA challenge per rate alto
+            # Override del limite a livello server (le direttive limit_req
+            # in location sostituiscono quelle ereditate): burst più stretto
             limit_req zone=req_limit burst=5;
             proxy_pass http://backend;
         }
@@ -212,17 +224,28 @@ net.ipv4.conf.default.rp_filter = 1
 # Ignora broadcast ICMP (Smurf attack)
 net.ipv4.icmp_echo_ignore_broadcasts = 1
 
-# Limita la velocità dei pacchetti ICMP
+# Rate limit delle risposte ICMP di errore: il valore è in ms tra due
+# pacchetti (100 = max ~10/s), non pacchetti al secondo
 net.ipv4.icmp_ratelimit = 100
+```
 
+```bash
 # Applica
 sysctl -p /etc/sysctl.d/99-ddos-protection.conf
 ```
 
+!!! note "SYN cookies: quando scattano"
+    Con `tcp_syncookies = 1` (default sulla maggior parte delle distro) il kernel usa i cookie solo quando il backlog è pieno, codificando lo stato nel numero di sequenza del SYN-ACK. Costo: si perdono alcune opzioni TCP (es. window scaling) per le connessioni nate in quella fase.
+
 ### 4. AWS Shield e WAF
 
+AWS Shield **Standard** è incluso gratis su tutti gli account (protezione L3/L4 automatica). **Shield Advanced** è a pagamento (sottoscrizione annuale, costo fisso mensile elevato + data transfer) e aggiunge protezione L7 con WAF, accesso alla Shield Response Team (SRT, ex DRT), cost protection e mitigazione automatica L7.
+
 ```bash
-# Abilitare AWS Shield Advanced su una risorsa
+# Sottoscrivere Shield Advanced (impegno annuale, a livello account)
+aws shield create-subscription
+
+# Autorizza la SRT ad accedere ai log WAF/access
 aws shield associate-drt-log-bucket \
   --log-bucket my-access-logs-bucket
 
@@ -231,8 +254,10 @@ aws shield create-protection \
   --name "prod-cloudfront" \
   --resource-arn arn:aws:cloudfront::123456789:distribution/ABCDEF
 
-# WAF Rule per rate limiting IP
+# WAF: blocklist IP statica (da referenziare in una regola IPSetReferenceStatement)
+# Nota: per scope CLOUDFRONT la regione deve essere us-east-1
 aws wafv2 create-ip-set \
+  --region us-east-1 \
   --name block-ips \
   --scope CLOUDFRONT \
   --ip-address-version IPV4 \
@@ -240,9 +265,11 @@ aws wafv2 create-ip-set \
 
 # Rate limiting: max 2000 req/5min per IP
 aws wafv2 create-web-acl \
+  --region us-east-1 \
   --name "ddos-protection" \
   --scope CLOUDFRONT \
   --default-action Allow={} \
+  --visibility-config SampledRequestsEnabled=true,CloudWatchMetricsEnabled=true,MetricName=ddos-protection \
   --rules '[{
     "Name": "IPRateLimit",
     "Priority": 1,
@@ -263,8 +290,10 @@ aws wafv2 create-web-acl \
 
 ### 5. Cloudflare — Configurazione Anti-DDoS
 
-```yaml
-# Cloudflare Firewall Rules (via Terraform)
+La protezione DDoS L3/L4/L7 di Cloudflare è attiva di default su tutti i piani (ruleset *managed*); le regole sotto servono ad **alterare sensibilità/azione** di singole regole. Gli ID sono quelli dei managed ruleset pubblici (verificarli con l'API `rulesets` prima dell'uso). La sintassi a blocchi `rules { }` è del provider Terraform v4; dal v5 `rules` è un attributo lista (`rules = [{ ... }]`).
+
+```hcl
+# Cloudflare DDoS override (via Terraform, provider v4)
 resource "cloudflare_ruleset" "ddos_l7" {
   zone_id     = var.zone_id
   name        = "DDoS L7 Override"
@@ -290,7 +319,7 @@ resource "cloudflare_ruleset" "ddos_l7" {
   }
 }
 
-# Bot Management Rule
+# Bot Management Rule (richiede Bot Management, piano Enterprise)
 resource "cloudflare_ruleset" "bot_management" {
   zone_id = var.zone_id
   name    = "Bot Management"
@@ -338,6 +367,9 @@ groups:
 - name: ddos
   rules:
   - alert: HighConnectionsPerIP
+    # Richiede una metrica con label per client IP (es. da log parsing con
+    # mtail/Vector/Loki): NON esiste nell'exporter nginx standard e ha
+    # cardinalità alta — limitare a top-N o fare il calcolo nei log.
     expr: |
       sum by (remote_addr) (
         rate(nginx_http_requests_total[1m])
@@ -348,8 +380,8 @@ groups:
 
   - alert: HighErrorRate
     expr: |
-      rate(nginx_http_requests_total{status=~"5.."}[5m]) /
-      rate(nginx_http_requests_total[5m]) > 0.1
+      sum(rate(nginx_http_requests_total{status=~"5.."}[5m])) /
+      sum(rate(nginx_http_requests_total[5m])) > 0.1
     for: 2m
     annotations:
       summary: "Error rate > 10% — possibile attacco L7"
@@ -382,7 +414,7 @@ groups:
 
 ### Scenario 1 — SYN flood: connessioni legittime rifiutate
 
-**Sintomo**: i client ricevono timeout o `ECONNREFUSED`; `ss` mostra migliaia di socket in `SYN_RECV`.
+**Sintomo**: i client ricevono timeout (i SYN scartati non ricevono risposta; `ECONNREFUSED` indica invece una porta chiusa o un RST); `ss` mostra migliaia di socket in `SYN_RECV`.
 
 **Causa**: il SYN backlog (coda delle connessioni half-open) è saturo di SYN con IP spoofato che non completeranno mai l'handshake.
 
@@ -424,7 +456,9 @@ nginx -T 2>/dev/null | grep -E 'client_(header|body)_timeout|limit_conn'
 **Soluzione**: accettare traffico sull'origin solo dai range della CDN (o via tunnel/mTLS) e, se l'IP è esposto, cambiarlo.
 
 ```bash
-# Consenti solo i range Cloudflare (lista ufficiale)
+# Consenti solo i range Cloudflare (lista ufficiale; aggiungere anche /ips-v6
+# e rieseguire periodicamente: i range cambiano). Alternative più robuste:
+# Authenticated Origin Pulls (mTLS) o Cloudflare Tunnel (nessuna porta esposta)
 for ip in $(curl -s https://www.cloudflare.com/ips-v4); do
   ufw allow from "$ip" to any port 443 proto tcp
 done
@@ -461,7 +495,7 @@ aws wafv2 get-sampled-requests --web-acl-arn "$ACL_ARN" \
 ??? info "Rate Limiting — Throttling delle API"
     Il rate limiting è la prima linea di difesa contro attacchi applicativi.
 
-    **Approfondimento →** [Rate Limiting](../../networking/api-gateway/rate-limiting.md)
+    **Approfondimento →** [Rate Limiting](../api-gateway/rate-limiting.md)
 
 ## Riferimenti
 
