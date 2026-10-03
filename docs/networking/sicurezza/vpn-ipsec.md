@@ -9,7 +9,7 @@ related: [networking/sicurezza/firewall-waf, networking/sicurezza/zero-trust, ne
 official_docs: https://www.wireguard.com/papers/wireguard.pdf
 status: complete
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-10-03
 ---
 
 # VPN e IPsec
@@ -299,13 +299,79 @@ aws ec2 describe-vpn-connections --vpn-connection-ids vpn-xxx
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| Tunnel non si stabilisce | Porta UDP 500/4500 bloccata | Aprire porte firewall |
-| WireGuard: handshake ma nessun traffico | `AllowedIPs` non corretti | Verificare subnet nella configurazione |
-| IPsec: `NO_PROPOSAL_CHOSEN` | Algoritmi non compatibili | Allineare cipher suite tra i due estremi |
-| Tunnel cade ogni ora | Rekeying fallisce | Verificare certificati e clock NTP sincronizzato |
-| Latenza alta | Fragmentation | Ridurre MTU, abilitare MSS clamping |
+### Scenario 1 — Tunnel IPsec non si stabilisce
+
+**Sintomo**: `ipsec statusall` non mostra SA; nei log compaiono retransmit di `IKE_SA_INIT` senza risposta.
+
+**Causa**: porte UDP 500 (IKE) e 4500 (NAT-T, NAT Traversal: incapsulamento ESP in UDP) bloccate da firewall/security group. ESP (protocollo IP 50) non passa dietro NAT senza NAT-T.
+
+**Soluzione**: aprire UDP 500/4500 (e protocollo 50 se non c'è NAT) tra i due peer, poi verificare che i pacchetti arrivino.
+
+```bash
+tcpdump -ni eth0 'udp port 500 or udp port 4500 or esp'
+ipsec up ikev2-vpn
+```
+
+### Scenario 2 — WireGuard: handshake riuscito ma nessun traffico
+
+**Sintomo**: `wg show` indica `latest handshake` recente, ma `ping 172.16.0.1` va in timeout.
+
+**Causa**: `AllowedIPs` fa da tabella di routing e da filtro in ingresso (cryptokey routing): se la subnet remota non è elencata, i pacchetti vengono scartati. Altre cause: `net.ipv4.ip_forward=0` o regole FORWARD mancanti.
+
+**Soluzione**: aggiungere la subnet in `AllowedIPs`, abilitare il forwarding e ricaricare.
+
+```bash
+sysctl -w net.ipv4.ip_forward=1
+wg show wg0 allowed-ips
+ip route get 172.16.0.1          # deve passare da wg0
+wg syncconf wg0 <(wg-quick strip wg0)
+```
+
+### Scenario 3 — IPsec: `NO_PROPOSAL_CHOSEN`
+
+**Sintomo**: la negoziazione IKE fallisce con `received NO_PROPOSAL_CHOSEN notify error`.
+
+**Causa**: i due estremi non hanno nessuna combinazione in comune di cifratura, integrità o DH group (es. un lato solo `aes256-sha256-modp2048`, l'altro solo gruppi deprecati).
+
+**Soluzione**: leggere le proposal sul responder e allinearle esplicitamente con `ike=` ed `esp=`.
+
+```bash
+journalctl -u strongswan | grep -iE 'proposal|NO_PROPOSAL'
+# in ipsec.conf, su entrambi i lati:
+#   ike=aes256-sha256-modp2048!
+#   esp=aes256-sha256-modp2048!
+ipsec reload && ipsec up conn-name
+```
+
+### Scenario 4 — Tunnel cade a intervalli regolari (es. ogni ora)
+
+**Sintomo**: connessione stabile poi caduta periodica, coincidente con `ikelifetime`/`keylife`.
+
+**Causa**: il rekeying (rinegoziazione delle chiavi) fallisce: certificato scaduto o non valido, orologi non sincronizzati, lifetime diversi tra i peer, DPD (Dead Peer Detection) che cancella la SA.
+
+**Soluzione**: sincronizzare NTP, verificare la validità dei certificati, allineare i lifetime e usare `dpdaction=restart` sui peer site-to-site.
+
+```bash
+timedatectl status | grep -i synchronized
+openssl x509 -in /etc/ipsec.d/certs/server-cert.pem -noout -dates
+ipsec statusall | grep -E 'rekey|established'
+```
+
+### Scenario 5 — Latenza alta o connessioni che si bloccano su transfer grandi
+
+**Sintomo**: ping funziona, ma SSH/HTTPS si bloccano o sono lenti con payload grandi.
+
+**Causa**: l'incapsulamento aggiunge overhead (ESP ~50-70 byte, WireGuard 60-80 byte); i pacchetti superano la MTU del path e vengono frammentati o scartati (ICMP "fragmentation needed" filtrato → PMTUD, Path MTU Discovery, rotto).
+
+**Soluzione**: ridurre la MTU dell'interfaccia tunnel (WireGuard: 1420 default) e applicare MSS clamping (limitare la Maximum Segment Size TCP).
+
+```bash
+ping -M do -s 1372 <remote-host>     # trova la MTU massima senza frammentare
+ip link set dev wg0 mtu 1380
+iptables -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+```
+
+### Comandi di debug generali
 
 ```bash
 # Debug WireGuard

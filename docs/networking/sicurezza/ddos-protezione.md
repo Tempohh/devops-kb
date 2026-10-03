@@ -9,7 +9,7 @@ related: [networking/sicurezza/firewall-waf, networking/api-gateway/rate-limitin
 official_docs: https://aws.amazon.com/shield/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-10-03
 ---
 
 # Protezione DDoS
@@ -379,6 +379,77 @@ groups:
 | CPU alta, poche richieste | Slowloris / SSL exhaustion | Timeout aggressivi, CAPTCHA |
 | CPU media, molte richieste | HTTP flood L7 | Rate limiting, bot challenge |
 | Solo un endpoint colpito | DDoS applicativo mirato | WAF rule specifica, aumentare cache |
+
+### Scenario 1 — SYN flood: connessioni legittime rifiutate
+
+**Sintomo**: i client ricevono timeout o `ECONNREFUSED`; `ss` mostra migliaia di socket in `SYN_RECV`.
+
+**Causa**: il SYN backlog (coda delle connessioni half-open) è saturo di SYN con IP spoofato che non completeranno mai l'handshake.
+
+**Soluzione**: attivare i SYN cookies (il kernel non alloca stato finché l'ACK finale non arriva), ridurre i retry SYN-ACK e aumentare il backlog.
+
+```bash
+ss -n state syn-recv | wc -l
+sysctl net.ipv4.tcp_syncookies
+sysctl -w net.ipv4.tcp_syncookies=1
+sysctl -w net.ipv4.tcp_synack_retries=2
+sysctl -w net.ipv4.tcp_max_syn_backlog=4096
+# Verifica drop del backlog
+nstat -az TcpExtListenOverflows TcpExtTCPReqQFullDrop
+```
+
+### Scenario 2 — Slowloris: worker esauriti con CPU e banda basse
+
+**Sintomo**: il sito non risponde ma traffico e CPU sono normali; molte connessioni `ESTABLISHED` da pochi IP, con richieste mai complete.
+
+**Causa**: header HTTP inviati goccia a goccia tengono occupati i worker/connessioni del server fino all'esaurimento del pool.
+
+**Soluzione**: timeout stretti su header/body, limite di connessioni per IP e reverse proxy (Nginx/CDN) davanti ai worker, che bufferizza le richieste complete prima di inoltrarle.
+
+```bash
+# Top IP per connessioni sulla porta 443
+ss -Htn state established '( sport = :443 )' | awk '{print $4}' | cut -d: -f1 | sort | uniq -c | sort -rn | head
+# Blocco temporaneo di un offender
+iptables -A INPUT -s 198.51.100.7 -j DROP
+# Verifica timeout Nginx attivi
+nginx -T 2>/dev/null | grep -E 'client_(header|body)_timeout|limit_conn'
+```
+
+### Scenario 3 — Attacco bypassa la CDN colpendo l'IP origine
+
+**Sintomo**: la CDN mostra traffico normale ma l'origin è saturo; i log origin riportano richieste con `Host` corretto da IP non CDN.
+
+**Causa**: l'IP origine è noto (record DNS storici, certificati in Certificate Transparency, email header) e raggiungibile direttamente, quindi la protezione CDN viene aggirata.
+
+**Soluzione**: accettare traffico sull'origin solo dai range della CDN (o via tunnel/mTLS) e, se l'IP è esposto, cambiarlo.
+
+```bash
+# Consenti solo i range Cloudflare (lista ufficiale)
+for ip in $(curl -s https://www.cloudflare.com/ips-v4); do
+  ufw allow from "$ip" to any port 443 proto tcp
+done
+ufw deny 443/tcp
+# Controlla se l'origin risponde direttamente
+curl -sk --resolve example.com:443:203.0.113.10 https://example.com -o /dev/null -w '%{http_code}\n'
+```
+
+### Scenario 4 — Rate limiting blocca utenti legittimi (falsi positivi)
+
+**Sintomo**: utenti dietro NAT aziendale o carrier-grade NAT ricevono `429`/`503`; picchi di traffico lecito (campagne, release) vengono bloccati.
+
+**Causa**: il limite per IP raggruppa molti utenti dietro lo stesso indirizzo pubblico; le soglie fisse non tengono conto dei picchi legittimi.
+
+**Soluzione**: aumentare `burst`, chiavare il limite su identità (API key, cookie di sessione) invece che sul solo IP, mettere in allowlist i range noti e partire in modalità *count/log* prima di bloccare.
+
+```bash
+# Quante richieste sono state rifiutate da Nginx
+grep -c ' 503 ' /var/log/nginx/access.log
+grep 'limiting requests' /var/log/nginx/error.log | tail -20
+# AWS WAF: regola rate-based in modalità Count per tarare la soglia
+aws wafv2 get-sampled-requests --web-acl-arn "$ACL_ARN" \
+  --rule-metric-name IPRateLimit --scope CLOUDFRONT \
+  --time-window StartTime=2026-10-03T08:00:00Z,EndTime=2026-10-03T09:00:00Z --max-items 50
+```
 
 ## Relazioni
 
