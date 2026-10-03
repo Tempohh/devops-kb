@@ -7,9 +7,10 @@ search_keywords: [feature flag, feature toggle, feature switch, release toggle, 
 parent: ci-cd/strategie/_index
 related: [ci-cd/strategie/deployment-strategies, ci-cd/strategie/trunk-based-development, ci-cd/gitops/argocd, ci-cd/testing/contract-testing]
 official_docs: https://openfeature.dev/
-status: complete
+status: needs-review
 difficulty: intermediate
 last_updated: 2026-03-29
+last_verified: 2026-10-03
 ---
 
 # Feature Flags
@@ -98,7 +99,7 @@ Un sistema di feature flag si compone di:
 
 ### OpenFeature — Standard CNCF
 
-OpenFeature è lo standard vendor-neutral per l'integrazione di feature flags, progetto CNCF graduato nel 2024. Definisce un'API uniforme che permette di cambiare provider (LaunchDarkly → Unleash → Flipt) senza modificare il codice applicativo. L'SDK si registra contro un provider e il codice applicativo usa sempre la stessa interfaccia indipendentemente dal backend.
+OpenFeature è lo standard vendor-neutral per l'integrazione di feature flags, progetto CNCF (livello *incubating*; non ancora graduated). Definisce un'API uniforme che permette di cambiare provider (LaunchDarkly → Unleash → Flipt) senza modificare il codice applicativo. L'SDK si registra contro un provider e il codice applicativo usa sempre la stessa interfaccia indipendentemente dal backend.
 
 !!! note "Perché OpenFeature"
     Prima di OpenFeature, ogni cambio di provider richiedeva di riscrivere tutte le chiamate all'SDK proprietario. Con OpenFeature, si cambia solo il provider registrato — il codice applicativo resta invariato.
@@ -122,9 +123,11 @@ Quando il codice chiama `getBooleanValue("flag-key", false, context)`, l'SDK ese
 
 Il rollout percentuale usa un hash deterministico sull'`userId` (o altro attributo stabile). Questo garantisce che lo stesso utente veda sempre la stessa variante — nessun switching casuale ad ogni request.
 
+L'algoritmo di hash dipende dal prodotto (es. murmur3 in Unleash, crc32 in Flipt, SHA-1 in LaunchDarkly); lo schema è identico:
+
 ```
-userId "abc123" → murmur3(userId) → 0.37 → < 0.40 (40%) → flag ON
-userId "xyz789" → murmur3(userId) → 0.82 → > 0.40 (40%) → flag OFF
+userId "abc123" → hash(flagKey + userId) → 0.37 → < 0.40 (40%) → flag ON
+userId "xyz789" → hash(flagKey + userId) → 0.82 → > 0.40 (40%) → flag OFF
 ```
 
 Aumentare la percentuale da 40% a 60% include deterministicamente più utenti — chi era già ON rimane ON. La coerenza dell'esperienza utente è garantita anche con più istanze del servizio.
@@ -184,6 +187,7 @@ import (
 
 func main() {
     // Configura il provider Flipt
+    // <!-- REVIEW: verificare nome costruttore (NewProvider?) e formato address nella versione corrente del provider -->
     provider, err := flipt.New(
         flipt.WithAddress("https://flipt.mycompany.internal:9000"),
         flipt.WithNamespace("production"),
@@ -238,6 +242,7 @@ ldclient.set_config(Config("sdk-your-sdk-key-here"))
 ld_client = ldclient.get()
 
 # Wrapper OpenFeature — il codice sotto non sa che backend usa
+# <!-- REVIEW: verificare package/import del provider LaunchDarkly per Python OpenFeature -->
 from openfeature.contrib.provider.launchdarkly import LaunchDarklyProvider
 api.set_provider(LaunchDarklyProvider(ld_client))
 client = api.get_client("payment-service")
@@ -263,8 +268,10 @@ ui_variant = client.get_string_value("checkout-ui-variant", "control", context)
 # Number flag — ops flag per configurazione dinamica
 rate_limit = client.get_integer_value("api-rate-limit-per-minute", 100, context)
 
-# Track evento per A/B testing — associa l'utente al risultato
-ld_client.track("checkout-completed", context.targeting_key, metric_value=order.total)
+# Track evento per A/B testing — l'SDK nativo LD (v9+) vuole un ldclient Context, non una stringa
+from ldclient import Context
+ld_context = Context.builder("user-12345").kind("user").build()
+ld_client.track("checkout-completed", ld_context, metric_value=order_total)
 ```
 
 ### Flipt — Deploy Self-Hosted su Kubernetes
@@ -288,7 +295,7 @@ spec:
     spec:
       containers:
         - name: flipt
-          image: flipt/flipt:v1.39.0
+          image: flipt/flipt:v1.39.0   # esempio: pinnare sempre la versione, verificare l'ultima release (esiste anche Flipt v2)
           ports:
             - containerPort: 8080   # HTTP UI e REST API
             - containerPort: 9000   # gRPC (preferito per SDK)
@@ -346,29 +353,33 @@ curl -X POST https://flipt.mycompany.internal/api/v1/namespaces/default/flags \
     "type": "BOOLEAN_FLAG_TYPE"
   }'
 
-# Creare targeting rule — solo utenti con plan=enterprise al 100%
-curl -X POST https://flipt.mycompany.internal/api/v1/namespaces/default/flags/new-checkout-flow/rules \
-  -H "Content-Type: application/json" \
-  -d '{
-    "rank": 1,
-    "segmentKey": "enterprise-users",
-    "distributions": [{"variant_key": "on", "rollout": 100}]
-  }'
-
-# Aggiungere rollout percentuale per tutti gli altri utenti (10%)
+# Flag booleani: il targeting si fa con i "rollouts" (le "rules" sono per i flag VARIANT).
+# Rank 1 — segmento enterprise-users al 100% (il segmento va creato prima)
 curl -X POST https://flipt.mycompany.internal/api/v1/namespaces/default/flags/new-checkout-flow/rollouts \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $FLIPT_TOKEN" \
+  -d '{
+    "rank": 1,
+    "segment": {"segmentKey": "enterprise-users", "value": true}
+  }'
+
+# Rank 2 — rollout percentuale per tutti gli altri utenti (10%)
+curl -X POST https://flipt.mycompany.internal/api/v1/namespaces/default/flags/new-checkout-flow/rollouts \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $FLIPT_TOKEN" \
   -d '{
     "rank": 2,
     "threshold": {"percentage": 10.0, "value": true}
   }'
 
-# Verificare la valutazione di un flag per un utente specifico
-curl -X POST https://flipt.mycompany.internal/api/v1/namespaces/default/evaluation/boolean \
+# Verificare la valutazione di un flag per un utente specifico (Evaluation API, campi camelCase)
+curl -X POST https://flipt.mycompany.internal/evaluate/v1/boolean \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $FLIPT_TOKEN" \
   -d '{
-    "flag_key": "new-checkout-flow",
-    "entity_id": "user-12345",
+    "namespaceKey": "default",
+    "flagKey": "new-checkout-flow",
+    "entityId": "user-12345",
     "context": {"plan": "enterprise", "country": "IT"}
   }'
 ```
@@ -377,7 +388,6 @@ curl -X POST https://flipt.mycompany.internal/api/v1/namespaces/default/evaluati
 
 ```yaml
 # docker-compose per Unleash (sviluppo locale / staging)
-version: '3.8'
 services:
   unleash:
     image: unleashorg/unleash-server:6
@@ -421,8 +431,8 @@ client.initialize_client()
 context = {"userId": "user-12345", "properties": {"plan": "enterprise"}}
 is_enabled = client.is_enabled("new-payment-flow", context)
 
-# Gradual rollout — Unleash gestisce la percentuale con strategy "gradualRolloutUserId"
-# configurata nell'UI: 10% degli userId → ON
+# Gradual rollout — Unleash gestisce la percentuale con la strategy "flexibleRollout"
+# (la vecchia "gradualRolloutUserId" è deprecata), configurata nell'UI: 10% degli userId → ON
 is_in_rollout = client.is_enabled("beta-dashboard", {"userId": "user-12345"})
 ```
 
@@ -613,7 +623,8 @@ kubectl logs -l app=my-app -n production --since=10m \
 # Verificare il TTL configurato nell'SDK
 grep -rn "cache\|ttl\|polling\|refresh" src/config/feature-flags.*
 
-# Attendere il prossimo polling cycle o forzare refresh se l'SDK lo supporta
+# Attendere il prossimo polling cycle, oppure usare un endpoint di refresh
+# se l'app lo espone (esempio ipotetico, non fornito dagli SDK)
 curl -X POST https://my-app.internal/admin/flags/refresh
 ```
 
@@ -689,8 +700,9 @@ context = EvaluationContext(attributes={"plan": "enterprise"})
 ```bash
 # Testare la valutazione dello stesso userId più volte — deve essere identica
 for i in {1..5}; do
-  curl -s -X POST https://flipt.mycompany.internal/api/v1/namespaces/default/evaluation/boolean \
-    -d '{"flag_key": "new-feature", "entity_id": "user-12345"}' \
+  curl -s -X POST https://flipt.mycompany.internal/evaluate/v1/boolean \
+    -H "Content-Type: application/json" \
+    -d '{"namespaceKey": "default", "flagKey": "new-feature", "entityId": "user-12345"}' \
     | jq .enabled
 done
 # Tutti i risultati devono essere uguali
