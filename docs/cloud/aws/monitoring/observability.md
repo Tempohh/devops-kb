@@ -7,9 +7,10 @@ search_keywords: [x-ray, distributed tracing, service map, segments, subsegments
 parent: cloud/aws/monitoring/_index
 related: [cloud/aws/monitoring/cloudwatch, cloud/aws/security/compliance-audit, cloud/aws/ci-cd/code-services]
 official_docs: https://docs.aws.amazon.com/xray/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # X-Ray, OpenTelemetry, Managed Grafana e Prometheus
@@ -26,6 +27,9 @@ Questo documento copre il layer di observability avanzata su AWS: distributed tr
 
 AWS X-Ray è il servizio di distributed tracing di AWS. Permette di tracciare le richieste attraverso microservizi, identificare colli di bottiglia, errori e dipendenze in un sistema distribuito.
 
+!!! warning "X-Ray SDK e Daemon: fine supporto — strumentare con OpenTelemetry"
+    Dal 2025 AWS ha messo in *maintenance mode* gli **X-Ray SDK** (Python, Java, Node.js, Go, .NET, Ruby) e il **X-Ray Daemon**, con end of support annunciato per il 25/02/2026. Il **servizio** X-Ray (backend, Service Map, sampling, Groups) resta vivo: cambia solo il modo di inviare i dati. Per nuovo codice usare **OpenTelemetry/ADOT** (vedi sotto), che esporta verso X-Ray via OTLP o exporter `awsxray`. Le sezioni "X-Ray SDK" e "X-Ray Daemon" servono a capire e migrare codice legacy. Verificare la data esatta nella [documentazione ufficiale](https://docs.aws.amazon.com/xray/).
+
 **Integrazione nativa con:**
 - AWS Lambda
 - Amazon ECS e EKS
@@ -33,7 +37,7 @@ AWS X-Ray è il servizio di distributed tracing di AWS. Permette di tracciare le
 - AWS API Gateway
 - AWS ALB (trace headers)
 - AWS Elastic Beanstalk
-- AWS App Mesh (Envoy proxy integration)
+- AWS App Mesh (Envoy proxy integration — servizio dismesso da AWS, end of support 30/09/2026; per nuovi carichi usare ECS Service Connect o VPC Lattice)
 - AWS Step Functions
 
 ### Concetti Fondamentali
@@ -46,20 +50,19 @@ AWS X-Ray è il servizio di distributed tracing di AWS. Permette di tracciare le
 
 **Annotations:** metadati indicizzati (string, number, boolean) su cui si può fare query/filter nella X-Ray console. Limitati a 50 per trace.
 
-**Metadata:** metadati non indicizzati (qualsiasi oggetto JSON). Non filtrabili ma visibili nei trace details. Limite 64 KB per segment.
+**Metadata:** metadati non indicizzati (qualsiasi oggetto JSON). Non filtrabili ma visibili nei trace details. Contano nel limite di 64 KB del segment document intero.
 
 ### Sampling
 
 X-Ray non registra ogni singola richiesta per evitare costi eccessivi. La **sampling rule** determina quale percentuale di richieste registrare.
 
-**Default sampling rule:** 1 richiesta per secondo + 5% delle richieste successive per host.
+**Default sampling rule:** 1 richiesta al secondo (*reservoir*, condiviso tra tutti gli host del servizio) + 5% (*fixed rate*) delle richieste successive. Le regole sono valutate per `Priority` crescente; vince la prima che corrisponde. Gli SDK/collector scaricano le regole dal servizio, quindi cambiarle non richiede redeploy.
 
 ```bash
 # Creare una sampling rule custom
 aws xray create-sampling-rule \
   --sampling-rule '{
     "RuleName": "HighVolumeEndpoint",
-    "RuleARN": "",
     "ResourceARN": "*",
     "Priority": 1,
     "FixedRate": 0.01,
@@ -92,7 +95,8 @@ aws xray create-sampling-rule \
 ### X-Ray SDK — Instrumentazione
 
 ```python
-# Python — Flask + DynamoDB
+# Python — Flask + DynamoDB (SDK legacy, in maintenance mode: per nuovo codice vedi sezione ADOT/OTel)
+import time
 from aws_xray_sdk.core import xray_recorder
 from aws_xray_sdk.core import patch_all
 from aws_xray_sdk.ext.flask.middleware import XRayMiddleware
@@ -158,11 +162,12 @@ def handler(event, context):
 
 ### X-Ray Daemon
 
-Il X-Ray Daemon è un processo leggero che raccoglie i dati di trace dall'applicazione (via UDP porta 2000) e li invia al servizio X-Ray in batch. Richiesto per EC2/on-premises, già incluso in Lambda e ECS Fargate.
+Il X-Ray Daemon è un processo leggero che raccoglie i dati di trace dall'applicazione (via UDP porta 2000) e li invia al servizio X-Ray in batch. Richiesto per EC2/on-premises e per ECS/Fargate (come sidecar); già incluso in Lambda (e Elastic Beanstalk, che lo installa sulle piattaforme supportate). Come l'SDK, è in maintenance mode: il sostituto è l'ADOT Collector (che ascolta OTLP e invia a X-Ray).
 
 ```bash
-# Installare il daemon su EC2 Amazon Linux
-sudo yum install -y xray
+# Installare il daemon su EC2 Amazon Linux (RPM scaricato da S3, non è nei repo yum di default)
+curl https://s3.us-east-2.amazonaws.com/aws-xray-assets.us-east-2/xray-daemon/aws-xray-daemon-3.x.rpm -o /tmp/xray.rpm
+sudo yum install -y /tmp/xray.rpm
 
 # Configurare il daemon
 cat > /etc/amazon/xray/cfg.yaml << 'EOF'
@@ -209,8 +214,8 @@ aws xray create-group \
 
 # Query per trace specifici via CLI
 aws xray get-trace-summaries \
-  --start-time 2024-01-15T00:00:00Z \
-  --end-time 2024-01-16T00:00:00Z \
+  --start-time 2026-10-02T00:00:00Z \
+  --end-time 2026-10-03T00:00:00Z \
   --filter-expression "error = true AND annotation.orderId = \"ORDER-12345\""
 
 # Ottenere trace completi
@@ -237,7 +242,8 @@ ADOT è la distribuzione OpenTelemetry certificata da AWS. OpenTelemetry è lo s
 - Vendor-neutral: cambiare backend (X-Ray, Jaeger, Zipkin, Datadog) senza modificare il codice
 - Unico SDK per trace + metrics + logs
 - Ecosistema più ampio: integrazioni con molti framework e librerie
-- Standard di settore (CNCF Graduated project)
+- Standard di settore (progetto CNCF, livello *Incubating*)
+- È la strada raccomandata da AWS ora che X-Ray SDK e Daemon sono in fine supporto
 
 ### Architettura ADOT
 
@@ -260,6 +266,9 @@ ADOT è la distribuzione OpenTelemetry certificata da AWS. OpenTelemetry è lo s
 ```yaml
 # otelcol-config.yaml
 extensions:
+  sigv4auth:            # firma SigV4 con le credenziali IAM del task/pod (richiesta da AMP)
+    region: us-east-1
+    service: aps
   health_check:
   pprof:
     endpoint: 0.0.0.0:1777
@@ -323,7 +332,7 @@ exporters:
     log_group_name: '/aws/otel/logs'
 
 service:
-  extensions: [health_check, pprof, zpages]
+  extensions: [sigv4auth, health_check, pprof, zpages]
   pipelines:
     traces:
       receivers: [otlp]
@@ -345,11 +354,14 @@ service:
 
 ```python
 from opentelemetry import trace, metrics
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-from opentelemetry.instrumentation.boto3 import Boto3Instrumentor
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+from opentelemetry.instrumentation.botocore import BotocoreInstrumentor  # boto3 usa botocore sotto
 from opentelemetry.instrumentation.flask import FlaskInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 import flask
@@ -369,7 +381,7 @@ trace.set_tracer_provider(trace_provider)
 
 # Auto-instrumentazione
 FlaskInstrumentor().instrument()
-Boto3Instrumentor().instrument()
+BotocoreInstrumentor().instrument()
 RequestsInstrumentor().instrument()
 
 # Setup Metrics
@@ -411,11 +423,16 @@ def create_order():
 ### ADOT su EKS (Add-on)
 
 ```bash
-# Installare ADOT operator via EKS add-on
+# L'add-on ADOT richiede cert-manager nel cluster (webhook dell'operator)
+# Elencare le versioni compatibili con la versione di Kubernetes del cluster
+aws eks describe-addon-versions --addon-name adot \
+  --kubernetes-version 1.33 --query 'addons[0].addonVersions[*].addonVersion'
+
+# Installare l'operator ADOT via EKS add-on (usare una versione dall'elenco sopra)
 aws eks create-addon \
   --cluster-name my-eks-cluster \
   --addon-name adot \
-  --addon-version v0.88.0-eksbuild.1
+  --addon-version <versione-dall-elenco>
 
 # Creare un OpenTelemetryCollector CRD
 kubectl apply -f - << 'EOF'
@@ -428,6 +445,10 @@ spec:
   mode: DaemonSet
   serviceAccount: otel-collector-sa
   config: |
+    extensions:
+      sigv4auth:
+        region: us-east-1
+        service: aps
     receivers:
       otlp:
         protocols:
@@ -451,6 +472,7 @@ spec:
         auth:
           authenticator: sigv4auth
     service:
+      extensions: [sigv4auth]
       pipelines:
         traces:
           receivers: [otlp]
@@ -504,11 +526,11 @@ scrape_configs:
     metrics_path: /metrics
 EOF
 
-# Query PromQL tramite AWS CLI
-aws amp query-metrics \
-  --workspace-id $WORKSPACE_ID \
-  --query 'rate(http_requests_total{job="order-service", status_code=~"5.."}[5m])' \
-  --time $(date +%s)
+# Query PromQL: l'AWS CLI NON ha un comando di query per AMP.
+# Si usa l'API Prometheus-compatibile firmata SigV4, es. con awscurl (pip install awscurl)
+awscurl --service aps --region us-east-1 \
+  "${WORKSPACE_ENDPOINT}api/v1/query" \
+  -d 'query=rate(http_requests_total{job="order-service",status_code=~"5.."}[5m])'
 
 # Creare Alerting Rules
 aws amp create-rule-groups-namespace \
@@ -530,7 +552,7 @@ groups:
           description: "Error rate is {{ $value | humanizePercentage }}"
 
       - alert: HighLatency
-        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) > 2
         for: 3m
         labels:
           severity: critical
@@ -539,6 +561,9 @@ groups:
 EOF
 )"
 ```
+
+!!! note "Le alerting rule da sole non notificano"
+    AMP valuta le regole, ma l'invio delle notifiche richiede un **alert manager definition** nello stesso workspace (`aws amp put-alert-manager-definition`) con receiver SNS. Senza, gli alert restano visibili ma non partono.
 
 ---
 
@@ -556,19 +581,27 @@ aws grafana create-workspace \
   --workspace-data-sources CLOUDWATCH PROMETHEUS XRAY ATHENA \
   --workspace-notification-destinations SNS
 
-# Creare un API key per automazione
-aws grafana create-workspace-api-key \
-  --workspace-id ws-1234567890 \
-  --key-name "terraform-automation" \
-  --key-role ADMIN \
+# Automazione: preferire un service account + token (le API key sono deprecate in Grafana)
+aws grafana create-workspace-service-account \
+  --workspace-id g-1234567890 \
+  --name "terraform-automation" \
+  --grafana-role ADMIN
+
+aws grafana create-workspace-service-account-token \
+  --workspace-id g-1234567890 \
+  --service-account-id 2 \
+  --name "terraform-token" \
   --seconds-to-live 86400
 ```
+
+!!! note "Workspace ID"
+    Gli ID dei workspace AMG hanno prefisso `g-`, non `ws-` (che è degli workspace AMP).
 
 ### Configurare Data Sources via API
 
 ```bash
 GRAFANA_URL="https://g-1234567890.grafana-workspace.us-east-1.amazonaws.com"
-API_KEY="your-api-key"
+API_KEY="token-del-service-account"
 
 # Aggiungere CloudWatch come data source
 curl -X POST "$GRAFANA_URL/api/datasources" \
@@ -657,15 +690,15 @@ curl -X POST "$GRAFANA_URL/api/datasources" \
 
 ### ADOT vs X-Ray SDK nativo
 
-- **X-Ray SDK nativo:** più semplice, zero config, ideale per applicazioni pure AWS
-- **ADOT:** per architetture multi-cloud, team con esperienza OTel, o quando si vuole portabilità del codice verso altri provider
+- **X-Ray SDK nativo:** legacy (maintenance mode, fine supporto 2026). Mantenerlo solo su codice esistente in attesa di migrazione
+- **ADOT / OpenTelemetry:** scelta di default per nuovo codice, anche su AWS puro: stesso SDK per trace+metrics+logs, portabilità verso altri backend, supporto attivo. Il backend può restare X-Ray (anche via endpoint OTLP nativo di X-Ray / CloudWatch Application Signals)
 
 ### Prometheus/Grafana
 
 1. **Recording rules** per pre-calcolare aggregazioni costose
 2. **Alert fatigue** — configurare allarmi con significato operativo, non ogni metrica
 3. **Dashboard-as-code** — versionare i dashboard Grafana in Git (Terraform/Jsonnet)
-4. **Retention** — AMP ha retention configurabile; spostare metriche storiche su S3 via regole di recording
+4. **Retention** — AMP conserva le metriche 150 giorni di default; la retention è configurabile per workspace (fino a ~3 anni, con costo di storage crescente). Non esiste export nativo su S3: per lo storico a lungo termine abbassare la cardinalità con recording rules, non spostare i dati
 
 ---
 
@@ -675,7 +708,7 @@ curl -X POST "$GRAFANA_URL/api/datasources" \
 
 1. Verificare che X-Ray Active Tracing sia abilitato sul servizio (Lambda, API GW, ECS)
 2. Verificare che il ruolo IAM abbia `xray:PutTraceSegments` e `xray:PutTelemetryRecords`
-3. Verificare che il X-Ray Daemon sia in esecuzione e raggiungibile (porta 2000 UDP)
+3. Verificare che il X-Ray Daemon (o l'ADOT Collector, porte 4317/4318) sia in esecuzione e raggiungibile (daemon: porta 2000 UDP)
 4. Verificare le sampling rules — potrebbe star campionando 0% del traffico
 
 ```bash
@@ -716,10 +749,8 @@ aws iam list-attached-role-policies \
   --query 'AttachedPolicies[*].PolicyName'
 
 # Testare query PromQL direttamente tramite AWS CLI per isolare il problema
-aws amp query-metrics \
-  --workspace-id $WORKSPACE_ID \
-  --query 'up' \
-  --time $(date +%s)
+awscurl --service aps --region us-east-1 \
+  "${WORKSPACE_ENDPOINT}api/v1/query" -d 'query=up'
 ```
 
 ### Scenario 4 — X-Ray Daemon perde dati in ambienti ad alto volume
