@@ -7,9 +7,10 @@ search_keywords: [AWS EC2, Elastic Compute Cloud, instance types, t3, m5, c5, r5
 parent: cloud/aws/compute/_index
 related: [cloud/aws/compute/ec2-autoscaling, cloud/aws/storage/ebs-efs-fsx, cloud/aws/networking/vpc, cloud/aws/iam/_index]
 official_docs: https://docs.aws.amazon.com/ec2/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # EC2 — Elastic Compute Cloud
@@ -56,14 +57,16 @@ Additional characters:
 
 | Famiglia | Tipo | Esempi | Use case |
 |----------|------|--------|----------|
-| **General Purpose** | Bilanciato CPU/Mem | t3, t4g, m5, m6g, m7g | Web server, dev, app generiche |
-| **Compute Optimized** | CPU alta | c5, c6g, c7g | Batch, ML inference, gaming |
-| **Memory Optimized** | Molta RAM | r5, r6g, x2gd, z1d | Database in-memory, SAP, Redis |
-| **Storage Optimized** | I/O locale alto | i3, i4i, d3, h1 | Database NoSQL, data warehouse |
-| **Accelerated** | GPU/FPGA | p3, p4, g4dn, g5, f1 | ML training, rendering, HPC |
+| **General Purpose** | Bilanciato CPU/Mem | t3, t4g, m6i, m7g, m8g | Web server, dev, app generiche |
+| **Compute Optimized** | CPU alta | c6i, c7g, c8g | Batch, ML inference, gaming |
+| **Memory Optimized** | Molta RAM | r6i, r7g, r8g, x2gd | Database in-memory, SAP, Redis |
+| **Storage Optimized** | I/O locale alto | i3en, i4i, d3 | Database NoSQL, data warehouse |
+| **Accelerated** | GPU / acceleratori ML | g5, g6, p4d, p5, trn1, inf2 | ML training/inference, rendering, HPC |
 | **HPC** (High Performance Computing) | Networking ultra-basso | hpc6a, hpc7g | Simulazioni scientifiche |
 
-**Graviton (ARM):** istanze `g` (m6g, c7g, r7g) — 20-40% prezzo/performance migliore vs x86 equivalente. Raccomandato per nuovi workloads.
+Le generazioni nuove escono di continuo: verifica quelle disponibili nella tua Region con `aws ec2 describe-instance-type-offerings` prima di standardizzare un tipo.
+
+**Graviton (ARM):** istanze con suffisso `g` (m7g, c8g, r8g) — AWS dichiara fino al 40% di miglior rapporto prezzo/performance rispetto a x86 equivalente. Raccomandato per nuovi workload; richiede binari/immagini container compilati per `arm64` (multi-arch build), quindi verificare le dipendenze native prima della migrazione.
 
 **Burstable (T instances):** le istanze t3, t3a e t4g usano un sistema di **CPU Credits**. L'idea è che l'istanza ha una "baseline" di utilizzo CPU garantita (es. 20% per t3.small). Quando la CPU è sotto questa baseline, si accumulano crediti; quando si supera, si consumano. Questo le rende economiche per workload con utilizzo medio basso ma con spike occasionali (es. un server di sviluppo, un sito con traffico variabile). Con la modalità `unlimited`, l'istanza può fare burst illimitato anche a crediti esauriti, ma si paga il surplus — da monitorare per evitare sorprese in fattura.
 
@@ -74,13 +77,21 @@ Additional characters:
 Un'**AMI** è il template da cui vengono lanciate le istanze EC2 (OS + software + configurazione).
 
 **Tipi:**
-- **AWS Managed**: Amazon Linux 2023, Ubuntu, Windows Server — mantenute da AWS
-- **AWS Marketplace**: immagini di vendor terzi (Palo Alto, CentOS, Kali...)
-- **Community AMI**: condivise dalla community (non supportate)
+- **AMI ufficiali del provider**: Amazon Linux 2023 e Windows Server (AWS); Ubuntu (Canonical), RHEL, Rocky/Alma Linux (vendor/community ufficiali, pubblicate su AWS)
+- **AWS Marketplace**: immagini di vendor terzi (Palo Alto, Fortinet, Kali...)
+- **Community AMI**: condivise dalla community (non supportate, verificare l'owner)
 - **Custom**: create da te (dorate, con software preinstallato)
 
+!!! warning "Amazon Linux 2 è fuori supporto"
+    Amazon Linux 2 ha raggiunto la fine del supporto il 30/06/2026. Per nuove istanze usare **Amazon Linux 2023** (dnf, IMDSv2 di default) e pianificare la migrazione delle AMI esistenti.
+
 ```bash
-# Cercare AMI Amazon Linux 2023
+# Ultima AMI Amazon Linux 2023 via SSM Parameter (metodo consigliato: nessun filtro da mantenere)
+aws ssm get-parameter \
+    --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
+    --query 'Parameter.Value' --output text
+
+# In alternativa, cercarla con describe-images
 aws ec2 describe-images \
     --owners amazon \
     --filters 'Name=name,Values=al2023-ami-2023.*-x86_64' \
@@ -112,16 +123,17 @@ aws ec2 modify-image-attribute \
 
 ## Lanciare un'Istanza EC2
 
+Note sui parametri: `--subnet-id` determina la AZ; `--iam-instance-profile` associa il ruolo IAM (evita credenziali statiche sull'istanza); `--user-data` è lo script di bootstrap; `HttpTokens=required` forza IMDSv2. I commenti non possono stare dopo il `\` di continuazione riga, quindi sono qui sopra.
+
 ```bash
-# Lanciare istanza con configurazione completa
 aws ec2 run-instances \
-    --image-id ami-0a1b2c3d4e5f67890 \           # AMI ID
+    --image-id ami-0a1b2c3d4e5f67890 \
     --instance-type t3.medium \
-    --key-name my-key-pair \                      # SSH key
+    --key-name my-key-pair \
     --security-group-ids sg-xxxx \
-    --subnet-id subnet-xxxx \                     # subnet (AZ)
-    --iam-instance-profile Name=MyEC2Profile \   # IAM Role
-    --ebs-optimized \                             # EBS ottimizzato
+    --subnet-id subnet-xxxx \
+    --iam-instance-profile Name=MyEC2Profile \
+    --ebs-optimized \
     --block-device-mappings '[{
         "DeviceName": "/dev/xvda",
         "Ebs": {
@@ -133,21 +145,20 @@ aws ec2 run-instances \
             "DeleteOnTermination": true
         }
     }]' \
-    --user-data file://userdata.sh \              # script eseguito al boot
-    --metadata-options HttpTokens=required \      # IMDSv2 obbligatorio
-    --tag-specifications 'ResourceType=instance,Tags=[
-        {Key=Name,Value=my-ec2},
-        {Key=Environment,Value=prod},
-        {Key=Team,Value=platform}
-    ]' \
+    --user-data file://userdata.sh \
+    --metadata-options HttpTokens=required,HttpPutResponseHopLimit=1 \
+    --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=my-ec2},{Key=Environment,Value=prod},{Key=Team,Value=platform}]' \
     --count 1
 ```
+
+!!! note "Hop limit e container"
+    `HttpPutResponseHopLimit=1` impedisce che il token IMDSv2 attraversi un hop di rete in più, quindi i container in bridge network non raggiungono l'IMDS. Se i container sull'host devono usare il ruolo dell'istanza, alza il valore a `2` (consapevole che amplia la superficie SSRF); su EKS preferisci IRSA / Pod Identity.
 
 ---
 
 ## User Data
 
-Lo **User Data** è uno script eseguito **una sola volta** al primo avvio dell'istanza, prima che diventi disponibile. È il meccanismo per automatizzare la configurazione iniziale: installare pacchetti, avviare servizi, scaricare il codice applicativo. Lo script gira come root, quindi ha pieno controllo sul sistema.
+Lo **User Data** è uno script eseguito da **cloud-init** **una sola volta**, al primo boot dell'istanza (l'istanza risulta `running` mentre lo script è ancora in corso: non coincide con "pronta"). È il meccanismo per automatizzare la configurazione iniziale: installare pacchetti, avviare servizi, scaricare il codice applicativo. Lo script gira come root. Dimensione massima: **16 KB** (prima della codifica base64); per payload più grandi scarica lo script da S3.
 
 Un'alternativa moderna e più scalabile allo User Data è **AWS Systems Manager (SSM)**: permette di gestire la configurazione delle istanze in modo centralizzato e di eseguire comandi su flotte di istanze senza SSH. Lo User Data rimane utile per bootstrap semplici; per configurazioni complesse si preferisce SSM oppure strumenti di configuration management come Ansible o Chef.
 
@@ -185,8 +196,10 @@ echo "User Data completato $(date)" >> /var/log/user-data.log
 # Verificare output User Data (dal cloud-init log)
 cat /var/log/cloud-init-output.log
 
-# Recuperare User Data dall'istanza via IMDS
-curl http://169.254.169.254/latest/user-data
+# Recuperare User Data dall'istanza via IMDS (con IMDSv2 serve il token, vedi sezione IMDS)
+TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" \
+    -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/user-data
 ```
 
 ---
@@ -226,6 +239,23 @@ IDENTITY=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" \
 
 ---
 
+## Modelli di Acquisto
+
+Lo stesso tipo di istanza costa molto diversamente a seconda dell'impegno preso. Scegliere il modello giusto è di solito la leva di risparmio più grande su EC2.
+
+| Modello | Impegno | Sconto indicativo vs On-Demand | Quando usarlo |
+|---------|---------|-------------------------------|---------------|
+| **On-Demand** | Nessuno, pay-per-second | — | Workload imprevedibili, test, baseline iniziale |
+| **Savings Plans** | 1 o 3 anni su $/ora di spesa | fino a ~66% (Compute SP), fino a ~72% (EC2 Instance SP) | Carico stabile; Compute SP si applica anche a Fargate/Lambda e cambia famiglia/Region |
+| **Reserved Instances** | 1 o 3 anni su tipo/Region | fino a ~72% (Standard) | Legacy; oggi i Savings Plans sono più flessibili |
+| **Spot** | Nessuno, ma interrompibile con 2 minuti di preavviso | fino a ~90% | Batch, CI runner, big data, nodi stateless fault-tolerant |
+| **Dedicated Hosts / Instances** | Server fisico dedicato | Costo maggiore | Licenze per-socket/per-core BYOL, compliance |
+| **Capacity Reservations** | Nessuno sul tempo, paghi la capacità riservata | — | Garantire capacità in una AZ (DR, eventi di picco) |
+
+Gli sconti sono valori massimi dichiarati da AWS e variano per tipo, Region e termini: verifica sulla [pagina prezzi](https://aws.amazon.com/ec2/pricing/). **Perché Spot funziona:** AWS vende la capacità inutilizzata e la riprende quando serve; l'applicazione deve quindi gestire l'interruzione (evento IMDS `spot/instance-action`, EventBridge) e diversificare su più tipi/AZ (es. tramite Auto Scaling Group con mixed instances policy).
+
+---
+
 ## Placement Groups
 
 I **Placement Groups** controllano dove vengono fisicamente collocate le istanze all'interno dell'infrastruttura AWS. Di default, AWS distribuisce le istanze per minimizzare il rischio di guasti correlati. Con i Placement Groups puoi sovrascrivere questo comportamento per ottimizzare in base alle esigenze del tuo workload — massima bandwidth (cluster), massima disponibilità (spread), o un compromesso per sistemi distribuiti come Kafka (partition).
@@ -240,8 +270,7 @@ I **Placement Groups** controllano dove vengono fisicamente collocate le istanze
 # Creare Cluster Placement Group
 aws ec2 create-placement-group \
     --group-name hpc-cluster \
-    --strategy cluster \
-    --partition-count 0    # non applicabile per cluster
+    --strategy cluster
 
 # Creare Partition Placement Group
 aws ec2 create-placement-group \
@@ -259,10 +288,10 @@ aws ec2 run-instances \
 
 ## EC2 Nitro System
 
-Il **Nitro System** è l'hypervisor di nuova generazione AWS — dedicato hardware NVMe SSD e SR-IOV (Single Root I/O Virtualization — tecnica che permette a una scheda di rete di presentarsi come più interfacce virtuali indipendenti) networking.
+Il **Nitro System** è la piattaforma di virtualizzazione di nuova generazione AWS: un hypervisor leggero (basato su KVM) più schede dedicate (Nitro Cards) che spostano networking, storage EBS/NVMe e sicurezza su hardware dedicato, liberando quasi tutta la CPU dell'host per le istanze. Il networking usa SR-IOV (Single Root I/O Virtualization — tecnica che permette a una scheda di rete di presentarsi come più interfacce virtuali indipendenti).
 
-- Quasi-bare-metal performance (overhead hypervisor <1%)
-- ENA (Elastic Network Adapter): fino a **100 Gbps** per `u-6tb1.112xlarge`
+- Performance prossime al bare-metal (overhead di virtualizzazione minimo)
+- ENA (Elastic Network Adapter): decine di Gbps, fino a 200 Gbps su tipi network-optimized (es. `c6in`)
 - EFA (Elastic Fabric Adapter): per HPC/MPI (Message Passing Interface — standard di comunicazione tra processi paralleli in cluster HPC), latency simil-bare-metal
 - NVMe SSD locale: I/O diretto senza hypervisor (istanze `i4i`, `c5d`, ecc.)
 - **EBS-optimized** nativo: bandwidth dedicata per EBS (no condivisione con rete)
@@ -287,11 +316,12 @@ I due metodi alternativi moderni — **Session Manager** e **EC2 Instance Connec
 # Creare key pair
 aws ec2 create-key-pair \
     --key-name my-key \
-    --key-type ed25519 \             # ED25519 più sicuro di RSA
+    --key-type ed25519 \
     --key-format pem \
     --query 'KeyMaterial' \
     --output text > my-key.pem
 chmod 400 my-key.pem
+# ED25519: più compatto e moderno di RSA, ma NON supportato per le istanze Windows (usa RSA)
 
 # SSH con key pair
 ssh -i my-key.pem ec2-user@<PUBLIC_IP>
@@ -308,6 +338,8 @@ aws ec2-instance-connect send-ssh-public-key \
 ssh ec2-user@<PUBLIC_IP>    # Valido per 60 secondi
 ```
 
+Per istanze solo in subnet privata, **EC2 Instance Connect Endpoint** permette SSH/RDP senza IP pubblico né bastion (`aws ec2-instance-connect ssh --instance-id i-xxxx`). Session Manager richiede SSM Agent e un instance profile con `AmazonSSMManagedInstanceCore`.
+
 ---
 
 ## Storage EC2
@@ -317,7 +349,7 @@ ssh ec2-user@<PUBLIC_IP>    # Valido per 60 secondi
 # - NVMe SSD fisicamente sul server
 # - Dati persi se istanza viene stoppata/terminata
 # - Solo alcune famiglie: i3, i4i, c5d, m5d...
-# - Altissimi IOPS (fino a 3.3M IOPS su i4i.32xlarge)
+# - Altissimi IOPS (milioni sulle taglie più grandi di i4i)
 # - Usare per tmp, cache, buffer — mai per dati persistenti
 
 # EBS (Elastic Block Store) — persistente
@@ -347,11 +379,12 @@ aws ec2 run-instances \
     --block-device-mappings '[{
         "DeviceName": "/dev/xvda",
         "Ebs": {
-            "Encrypted": true,       # OBBLIGATORIO per hibernate
-            "VolumeSize": 50         # >= RAM size
+            "Encrypted": true,
+            "VolumeSize": 50
         }
     }]' \
     ...
+# Encrypted=true è obbligatorio per hibernate; VolumeSize deve poter contenere OS + RAM
 
 # Hibernare istanza
 aws ec2 stop-instances \
@@ -439,8 +472,7 @@ curl -H "X-aws-ec2-metadata-token: $(curl -X PUT http://169.254.169.254/latest/a
     http://169.254.169.254/latest/user-data
 
 # Se si vuole ri-eseguire User Data su un'istanza esistente (dev/test)
-sudo cloud-init clean --logs
-sudo cloud-init init
+sudo cloud-init clean --logs --reboot   # azzera lo stato e riesegue cloud-init al reboot
 ```
 
 ---
@@ -465,8 +497,9 @@ aws ec2 describe-images \
 
 # Provare una AZ diversa (se problema di capacità)
 aws ec2 run-instances \
-    --subnet-id subnet-yyyy \   # subnet in AZ diversa
+    --subnet-id subnet-yyyy \
     ...
+# subnet-yyyy deve trovarsi in una AZ diversa
 
 # Verificare disponibilità del tipo di istanza per AZ
 aws ec2 describe-instance-type-offerings \
