@@ -8285,7 +8285,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -8329,7 +8329,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -8354,7 +8354,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24860,6 +24860,7 @@
 
 
 <h1 id="arm-templates-bicep">ARM Templates &amp; Bicep<a class="headerlink" href="#arm-templates-bicep" title="Permanent link">&para;</a></h1>
+<p><strong>ARM</strong> (Azure Resource Manager) è il layer di controllo di Azure: ogni deploy, da portale, CLI o IaC (<em>Infrastructure as Code</em>), diventa una chiamata ARM. Un <strong>ARM template</strong> è il formato JSON dichiarativo accettato da ARM; <strong>Bicep</strong> è un DSL (<em>Domain-Specific Language</em>) che viene transpilato in ARM JSON prima del deploy. Perché esiste: il JSON è verboso e difficile da leggere/modularizzare. Come funziona: <code>az deployment</code> compila il <code>.bicep</code> in JSON e lo invia ad ARM, che calcola le dipendenze e crea le risorse in parallelo. Nessun tfstate da gestire: lo stato "vero" è quello delle risorse in Azure.</p>
 <h2 id="confronto-iac-azure">Confronto IaC Azure<a class="headerlink" href="#confronto-iac-azure" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -24907,14 +24908,18 @@
 </tr>
 <tr>
 <td><strong>Azure Developer CLI</strong></td>
-<td>Bicep + convention</td>
-<td>Nessuno</td>
+<td>Bicep (o Terraform) + convention</td>
+<td>Nessuno (solo config ambiente locale in <code>.azure/</code>)</td>
 <td>No</td>
 <td>Bassa</td>
 <td>Sviluppo rapido app</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Terraform vs OpenTofu</p>
+<p>OpenTofu è il fork open source di Terraform (Linux Foundation) e usa lo stesso provider <code>azurerm</code> e gli stessi backend: gli esempi Terraform di questa pagina valgono per entrambi.</p>
+</div>
 <hr />
 <h2 id="bicep">Bicep<a class="headerlink" href="#bicep" title="Permanent link">&para;</a></h2>
 <p><strong>Bicep</strong> è il linguaggio DSL nativo di Azure per Infrastructure as Code. Transpila in ARM JSON ma ha sintassi molto più leggibile. È la scelta raccomandata da Microsoft per IaC su Azure.</p>
@@ -24947,7 +24952,7 @@
 </span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>var webAppName = '${appName}-${environment}-${suffix}'
 </span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>var sqlServerName = 'sql-${appName}-${environment}-${suffix}'
 </span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>var sqlDbName = '${appName}-db'
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>var keyVaultName = 'kv-${appName}-${suffix}'    // max 24 chars
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>var keyVaultName = take('kv-${appName}-${suffix}', 24)    // max 24 chars: take() evita l'overflow
 </span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>var tags = {
 </span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>  Environment: environment
 </span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>  Application: appName
@@ -24995,9 +25000,9 @@
 </span><span id="__span-0-74"><a id="__codelineno-0-74" name="__codelineno-0-74" href="#__codelineno-0-74"></a>      ]
 </span><span id="__span-0-75"><a id="__codelineno-0-75" name="__codelineno-0-75" href="#__codelineno-0-75"></a>    }
 </span><span id="__span-0-76"><a id="__codelineno-0-76" name="__codelineno-0-76" href="#__codelineno-0-76"></a>  }
-</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77" href="#__codelineno-0-77"></a>  dependsOn: [
-</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78" href="#__codelineno-0-78"></a>    keyVaultAccessPolicy               // KV policy deve esistere prima
-</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79" href="#__codelineno-0-79"></a>  ]
+</span><span id="__span-0-77"><a id="__codelineno-0-77" name="__codelineno-0-77" href="#__codelineno-0-77"></a>  // NIENTE dependsOn su keyVaultRoleAssignment: la role assignment usa
+</span><span id="__span-0-78"><a id="__codelineno-0-78" name="__codelineno-0-78" href="#__codelineno-0-78"></a>  // webApp.identity.principalId, quindi dipende già da webApp → sarebbe una dipendenza circolare.
+</span><span id="__span-0-79"><a id="__codelineno-0-79" name="__codelineno-0-79" href="#__codelineno-0-79"></a>  // I Key Vault reference vengono risolti a runtime da App Service, non al deploy.
 </span><span id="__span-0-80"><a id="__codelineno-0-80" name="__codelineno-0-80" href="#__codelineno-0-80"></a>}
 </span><span id="__span-0-81"><a id="__codelineno-0-81" name="__codelineno-0-81" href="#__codelineno-0-81"></a>
 </span><span id="__span-0-82"><a id="__codelineno-0-82" name="__codelineno-0-82" href="#__codelineno-0-82"></a>// ── Deployment Slot (staging) — solo prod ─────────────────────────────────
@@ -25073,7 +25078,7 @@
 </span><span id="__span-0-152"><a id="__codelineno-0-152" name="__codelineno-0-152" href="#__codelineno-0-152"></a>}
 </span><span id="__span-0-153"><a id="__codelineno-0-153" name="__codelineno-0-153" href="#__codelineno-0-153"></a>
 </span><span id="__span-0-154"><a id="__codelineno-0-154" name="__codelineno-0-154" href="#__codelineno-0-154"></a>// ── RBAC: Web App → Key Vault ─────────────────────────────────────────────
-</span><span id="__span-0-155"><a id="__codelineno-0-155" name="__codelineno-0-155" href="#__codelineno-0-155"></a>resource keyVaultAccessPolicy 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+</span><span id="__span-0-155"><a id="__codelineno-0-155" name="__codelineno-0-155" href="#__codelineno-0-155"></a>resource keyVaultRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 </span><span id="__span-0-156"><a id="__codelineno-0-156" name="__codelineno-0-156" href="#__codelineno-0-156"></a>  name: guid(keyVault.id, webApp.id, '4633458b-17de-408a-b874-0445c86b69e6')
 </span><span id="__span-0-157"><a id="__codelineno-0-157" name="__codelineno-0-157" href="#__codelineno-0-157"></a>  scope: keyVault
 </span><span id="__span-0-158"><a id="__codelineno-0-158" name="__codelineno-0-158" href="#__codelineno-0-158"></a>  properties: {
@@ -25092,363 +25097,395 @@
 </span><span id="__span-0-171"><a id="__codelineno-0-171" name="__codelineno-0-171" href="#__codelineno-0-171"></a>output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 </span><span id="__span-0-172"><a id="__codelineno-0-172" name="__codelineno-0-172" href="#__codelineno-0-172"></a>output keyVaultName string = keyVault.name
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Rete privata</p>
+<p>Con <code>publicNetworkAccess: 'Disabled'</code> su SQL e Key Vault l'esempio <strong>non è funzionante end-to-end</strong>: servono Private Endpoint + Private DNS Zone e VNet Integration sulla Web App (non mostrati). Senza, l'app non risolve i Key Vault reference e non raggiunge il DB. Il secret con la connection string va inoltre preferibilmente sostituito da autenticazione Entra ID (managed identity) verso SQL.</p>
+</div>
 <h3 id="parametri-file">Parametri File<a class="headerlink" href="#parametri-file" title="Permanent link">&para;</a></h3>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">// prod.parameters.json</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="p">{</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">"$schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#"</span><span class="p">,</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">"contentVersion"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1.0.0.0"</span><span class="p">,</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">"parameters"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nt">"environment"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"prod"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">"appName"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ecommerce"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">"appServiceSku"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"P2v3"</span><span class="w"> </span><span class="p">},</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nt">"sqlAdminPassword"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">      </span><span class="nt">"reference"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">        </span><span class="nt">"keyVault"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">          </span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/subscriptions/XXXX/resourceGroups/secrets-rg/providers/Microsoft.KeyVault/vaults/deploy-secrets"</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">        </span><span class="p">},</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">        </span><span class="nt">"secretName"</span><span class="p">:</span><span class="w"> </span><span class="s2">"sql-admin-password"</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">      </span><span class="p">}</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="p">}</span>
+<p>Formato nativo consigliato: <strong><code>.bicepparam</code></strong> (GA da Bicep 0.18), tipizzato e validato contro il template tramite <code>using</code>; il JSON sotto resta valido e necessario per ARM puro.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>// prod.bicepparam
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>using './main.bicep'
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>param environment = 'prod'
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>param appName = 'ecommerce'
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>param appServiceSku = 'P2v3'
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>// secret letto da Key Vault a deploy-time (il vault deve avere enabledForTemplateDeployment)
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>param sqlAdminPassword = az.getSecret('&lt;SUB_ID&gt;', 'secrets-rg', 'deploy-secrets', 'sql-admin-password')
+</span></code></pre></div>
+<p>Equivalente in JSON:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1">// prod.parameters.json</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="p">{</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">"$schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#"</span><span class="p">,</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">"contentVersion"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1.0.0.0"</span><span class="p">,</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">"parameters"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="nt">"environment"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"prod"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="nt">"appName"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ecommerce"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">"appServiceSku"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"P2v3"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">"sqlAdminPassword"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">      </span><span class="nt">"reference"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">        </span><span class="nt">"keyVault"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">          </span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/subscriptions/XXXX/resourceGroups/secrets-rg/providers/Microsoft.KeyVault/vaults/deploy-secrets"</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">        </span><span class="p">},</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">        </span><span class="nt">"secretName"</span><span class="p">:</span><span class="w"> </span><span class="s2">"sql-admin-password"</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">      </span><span class="p">}</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="p">}</span>
 </span></code></pre></div>
 <hr />
 <h3 id="deploy-bicep">Deploy Bicep<a class="headerlink" href="#deploy-bicep" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Validare (dry-run sintattico)</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>az<span class="w"> </span>bicep<span class="w"> </span>build<span class="w"> </span>--file<span class="w"> </span>main.bicep
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># What-if — mostra cosa cambierà SENZA applicare</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>az<span class="w"> </span>deployment<span class="w"> </span>group<span class="w"> </span>what-if<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span>--template-file<span class="w"> </span>main.bicep<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span>--parameters<span class="w"> </span>@prod.parameters.json
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Deploy effettivo</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>az<span class="w"> </span>deployment<span class="w"> </span>group<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span>--template-file<span class="w"> </span>main.bicep<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span>--parameters<span class="w"> </span>@prod.parameters.json<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"deploy-</span><span class="k">$(</span>date<span class="w"> </span>+%Y%m%d-%H%M%S<span class="k">)</span><span class="s2">"</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="c1"># Controllare output del deployment</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>az<span class="w"> </span>deployment<span class="w"> </span>group<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span>--name<span class="w"> </span>deploy-20260226-143000<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span>--query<span class="w"> </span>properties.outputs
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="c1"># Deploy a livello Subscription (es. creare Resource Groups)</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>az<span class="w"> </span>deployment<span class="w"> </span>sub<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">    </span>--location<span class="w"> </span>italynorth<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">    </span>--template-file<span class="w"> </span>subscription.bicep
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>
-</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="c1"># Deploy a livello Management Group (es. policy)</span>
-</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>az<span class="w"> </span>deployment<span class="w"> </span>mg<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">    </span>--management-group-id<span class="w"> </span>mg-production<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="w">    </span>--location<span class="w"> </span>italynorth<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="w">    </span>--template-file<span class="w"> </span>mg-policy.bicep
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Compilare/validare sintassi (genera main.json, non contatta Azure)</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>az<span class="w"> </span>bicep<span class="w"> </span>build<span class="w"> </span>--file<span class="w"> </span>main.bicep
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Validazione lato ARM (controlla anche parametri e quote, senza creare nulla)</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>az<span class="w"> </span>deployment<span class="w"> </span>group<span class="w"> </span>validate<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span>--template-file<span class="w"> </span>main.bicep<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span>--parameters<span class="w"> </span>@prod.parameters.json
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># What-if — mostra cosa cambierà SENZA applicare</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>az<span class="w"> </span>deployment<span class="w"> </span>group<span class="w"> </span>what-if<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span>--template-file<span class="w"> </span>main.bicep<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span>--parameters<span class="w"> </span>@prod.parameters.json
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># Deploy effettivo</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>az<span class="w"> </span>deployment<span class="w"> </span>group<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">    </span>--template-file<span class="w"> </span>main.bicep<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">    </span>--parameters<span class="w"> </span>@prod.parameters.json<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"deploy-</span><span class="k">$(</span>date<span class="w"> </span>+%Y%m%d-%H%M%S<span class="k">)</span><span class="s2">"</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="c1"># Controllare output del deployment</span>
+</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>az<span class="w"> </span>deployment<span class="w"> </span>group<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">    </span>--name<span class="w"> </span>deploy-20260226-143000<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="w">    </span>--query<span class="w"> </span>properties.outputs
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="c1"># Deploy a livello Subscription (es. creare Resource Groups)</span>
+</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>az<span class="w"> </span>deployment<span class="w"> </span>sub<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a><span class="w">    </span>--location<span class="w"> </span>italynorth<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a><span class="w">    </span>--template-file<span class="w"> </span>subscription.bicep
+</span><span id="__span-3-33"><a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>
+</span><span id="__span-3-34"><a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a><span class="c1"># Deploy a livello Management Group (es. policy)</span>
+</span><span id="__span-3-35"><a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>az<span class="w"> </span>deployment<span class="w"> </span>mg<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-36"><a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a><span class="w">    </span>--management-group-id<span class="w"> </span>mg-production<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-37"><a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a><span class="w">    </span>--location<span class="w"> </span>italynorth<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-38"><a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a><span class="w">    </span>--template-file<span class="w"> </span>mg-policy.bicep
 </span></code></pre></div>
 <hr />
 <h3 id="moduli-bicep">Moduli Bicep<a class="headerlink" href="#moduli-bicep" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>// modules/app-service.bicep — modulo riutilizzabile
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>@description('Nome App Service')
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>param name string
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>param location string
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>param planId string
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>param environmentVars object = {}
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>resource webApp 'Microsoft.Web/sites@2023-12-01' = {
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>  name: name
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>  location: location
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>  properties: {
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    serverFarmId: planId
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    siteConfig: {
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>      appSettings: [for key in objectKeys(environmentVars): {
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>        name: key
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>        value: environmentVars[key]
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>      }]
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    }
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>  }
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>}
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>
-</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>output appUrl string = 'https://${webApp.properties.defaultHostName}'
-</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>output principalId string = webApp.identity.principalId
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>// modules/app-service.bicep — modulo riutilizzabile
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>@description('Nome App Service')
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>param name string
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>param location string
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>param planId string
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>param environmentVars object = {}
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>resource webApp 'Microsoft.Web/sites@2023-12-01' = {
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>  name: name
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>  location: location
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>  identity: {
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    type: 'SystemAssigned'            // necessario per l'output principalId
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>  }
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>  properties: {
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    serverFarmId: planId
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    siteConfig: {
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>      appSettings: [for key in objectKeys(environmentVars): {
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>        name: key
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>        value: environmentVars[key]
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>      }]
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    }
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>  }
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>}
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>output appUrl string = 'https://${webApp.properties.defaultHostName}'
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>output principalId string = webApp.identity.principalId
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>// main.bicep — usa il modulo
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>module frontendApp './modules/app-service.bicep' = {
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  name: 'frontendDeploy'
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>  params: {
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    name: 'myapp-frontend'
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    location: location
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    planId: appServicePlan.id
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    environmentVars: {
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>      API_URL: 'https://api.myapp.com'
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>      ENVIRONMENT: environment
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    }
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>  }
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>}
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>output frontendUrl string = frontendApp.outputs.appUrl
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>// main.bicep — usa il modulo
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>module frontendApp './modules/app-service.bicep' = {
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  name: 'frontendDeploy'
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  params: {
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    name: 'myapp-frontend'
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    location: location
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    planId: appServicePlan.id
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    environmentVars: {
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>      API_URL: 'https://api.myapp.com'
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>      ENVIRONMENT: environment
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    }
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>  }
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>}
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>output frontendUrl string = frontendApp.outputs.appUrl
 </span></code></pre></div>
 <h3 id="bicep-registry-moduli-condivisi-su-acr">Bicep Registry (Moduli Condivisi su ACR)<a class="headerlink" href="#bicep-registry-moduli-condivisi-su-acr" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Pubblicare modulo su ACR</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>az<span class="w"> </span>bicep<span class="w"> </span>publish<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span>--file<span class="w"> </span>modules/app-service.bicep<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span>--target<span class="w"> </span>br:myacr.azurecr.io/bicep/app-service:v1.0
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># Usare modulo da registry</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># in main.bicep:</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>module<span class="w"> </span>webApp<span class="w"> </span><span class="s1">'br:myacr.azurecr.io/bicep/app-service:v1.0'</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">{</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">  </span>name:<span class="w"> </span><span class="s1">'webAppDeploy'</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span>params:<span class="w"> </span><span class="o">{</span><span class="w"> </span>...<span class="w"> </span><span class="o">}</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="o">}</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># Public Bicep Registry (Microsoft)</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>module<span class="w"> </span>keyVault<span class="w"> </span><span class="s1">'br/public:avm/res/key-vault/vault:0.6.0'</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">{</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span>name:<span class="w"> </span><span class="s1">'keyVaultDeploy'</span>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">  </span>params:<span class="w"> </span><span class="o">{</span><span class="w"> </span>...<span class="w"> </span><span class="o">}</span>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="o">}</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Pubblicare modulo su ACR</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>az<span class="w"> </span>bicep<span class="w"> </span>publish<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span>--file<span class="w"> </span>modules/app-service.bicep<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span>--target<span class="w"> </span>br:myacr.azurecr.io/bicep/app-service:v1.0
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Usare modulo da registry</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># in main.bicep:</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>module<span class="w"> </span>webApp<span class="w"> </span><span class="s1">'br:myacr.azurecr.io/bicep/app-service:v1.0'</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">{</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span>name:<span class="w"> </span><span class="s1">'webAppDeploy'</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">  </span>params:<span class="w"> </span><span class="o">{</span><span class="w"> </span>...<span class="w"> </span><span class="o">}</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="o">}</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Public Bicep Registry (Microsoft)</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1"># (AVM = Azure Verified Modules; fissare sempre una versione esistente, vedi tag nel registry)</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>module<span class="w"> </span>keyVault<span class="w"> </span><span class="s1">'br/public:avm/res/key-vault/vault:&lt;VERSIONE&gt;'</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">{</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">  </span>name:<span class="w"> </span><span class="s1">'keyVaultDeploy'</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">  </span>params:<span class="w"> </span><span class="o">{</span><span class="w"> </span>...<span class="w"> </span><span class="o">}</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="o">}</span>
 </span></code></pre></div>
 <hr />
 <h2 id="arm-templates-json">ARM Templates (JSON)<a class="headerlink" href="#arm-templates-json" title="Permanent link">&para;</a></h2>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">"$schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"</span><span class="p">,</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">"contentVersion"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1.0.0.0"</span><span class="p">,</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">"parameters"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">"storageAccountName"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">      </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">,</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">      </span><span class="nt">"minLength"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">      </span><span class="nt">"maxLength"</span><span class="p">:</span><span class="w"> </span><span class="mi">24</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">  </span><span class="p">},</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span><span class="nt">"variables"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span><span class="nt">"sku"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Standard_LRS"</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span><span class="p">},</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">  </span><span class="nt">"resources"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">    </span><span class="p">{</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">      </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Microsoft.Storage/storageAccounts"</span><span class="p">,</span>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">      </span><span class="nt">"apiVersion"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2023-01-01"</span><span class="p">,</span>
-</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">      </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"[parameters('storageAccountName')]"</span><span class="p">,</span>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">      </span><span class="nt">"location"</span><span class="p">:</span><span class="w"> </span><span class="s2">"[resourceGroup().location]"</span><span class="p">,</span>
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">      </span><span class="nt">"sku"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">        </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"[variables('sku')]"</span>
-</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">      </span><span class="p">},</span>
-</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">      </span><span class="nt">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"StorageV2"</span><span class="p">,</span>
-</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="w">      </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="w">        </span><span class="nt">"minimumTlsVersion"</span><span class="p">:</span><span class="w"> </span><span class="s2">"TLS1_2"</span><span class="p">,</span>
-</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="w">        </span><span class="nt">"allowBlobPublicAccess"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="w">        </span><span class="nt">"supportsHttpsTrafficOnly"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="w">      </span><span class="p">}</span>
-</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="w">  </span><span class="p">],</span>
-</span><span id="__span-6-31"><a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a><span class="w">  </span><span class="nt">"outputs"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="w">    </span><span class="nt">"storageEndpoint"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a><span class="w">      </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">,</span>
-</span><span id="__span-6-34"><a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a><span class="w">      </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"[reference(parameters('storageAccountName')).primaryEndpoints.blob]"</span>
-</span><span id="__span-6-35"><a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-6-36"><a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-6-37"><a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">"$schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"</span><span class="p">,</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">"contentVersion"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1.0.0.0"</span><span class="p">,</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">"parameters"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="nt">"storageAccountName"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">      </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">,</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">      </span><span class="nt">"minLength"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">      </span><span class="nt">"maxLength"</span><span class="p">:</span><span class="w"> </span><span class="mi">24</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span><span class="p">},</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">  </span><span class="nt">"variables"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span><span class="nt">"sku"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Standard_LRS"</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span><span class="p">},</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">  </span><span class="nt">"resources"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span><span class="p">{</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">      </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Microsoft.Storage/storageAccounts"</span><span class="p">,</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">      </span><span class="nt">"apiVersion"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2023-01-01"</span><span class="p">,</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">      </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"[parameters('storageAccountName')]"</span><span class="p">,</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">      </span><span class="nt">"location"</span><span class="p">:</span><span class="w"> </span><span class="s2">"[resourceGroup().location]"</span><span class="p">,</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">      </span><span class="nt">"sku"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">        </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"[variables('sku')]"</span>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">      </span><span class="p">},</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="w">      </span><span class="nt">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"StorageV2"</span><span class="p">,</span>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="w">      </span><span class="nt">"properties"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="w">        </span><span class="nt">"minimumTlsVersion"</span><span class="p">:</span><span class="w"> </span><span class="s2">"TLS1_2"</span><span class="p">,</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="w">        </span><span class="nt">"allowBlobPublicAccess"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="w">        </span><span class="nt">"supportsHttpsTrafficOnly"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="w">      </span><span class="p">}</span>
+</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="w">  </span><span class="p">],</span>
+</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="w">  </span><span class="nt">"outputs"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a><span class="w">    </span><span class="nt">"storageEndpoint"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-33"><a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a><span class="w">      </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">,</span>
+</span><span id="__span-7-34"><a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a><span class="w">      </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"[reference(parameters('storageAccountName')).primaryEndpoints.blob]"</span>
+</span><span id="__span-7-35"><a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-7-36"><a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-7-37"><a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a><span class="p">}</span>
 </span></code></pre></div>
 <p><strong>Deployment modes:</strong>
 - <code>--mode Incremental</code> (default): aggiunge/modifica risorse, non elimina quelle assenti nel template
 - <code>--mode Complete</code>: elimina TUTTE le risorse nel Resource Group non presenti nel template — <strong>usare con cautela</strong></p>
 <hr />
 <h2 id="deployment-stacks">Deployment Stacks<a class="headerlink" href="#deployment-stacks" title="Permanent link">&para;</a></h2>
-<p><strong>Deployment Stacks</strong> (GA 2024) gestisce il lifecycle completo delle risorse: crea, aggiorna e <strong>elimina</strong> le risorse rimosse dal template (simile a Terraform plan/apply):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Creare stack</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>az<span class="w"> </span>stack<span class="w"> </span>group<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span>--name<span class="w"> </span>production-stack<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span>--template-file<span class="w"> </span>main.bicep<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span>--parameters<span class="w"> </span>@prod.parameters.json<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span>--deny-settings-mode<span class="w"> </span>none<span class="w"> </span><span class="se">\ </span><span class="w">         </span><span class="c1"># DenyDelete, DenyWriteAndDelete, none</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span>--action-on-unmanage<span class="w"> </span>deleteAll<span class="w">       </span><span class="c1"># deleteAll, deleteResources, detachAll</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Update stack (rimuove risorse non più nel template)</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>az<span class="w"> </span>stack<span class="w"> </span>group<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span>--name<span class="w"> </span>production-stack<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">    </span>--template-file<span class="w"> </span>main.bicep<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span>--parameters<span class="w"> </span>@prod.parameters.json
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1"># Eliminare stack (e le risorse gestite)</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>az<span class="w"> </span>stack<span class="w"> </span>group<span class="w"> </span>delete<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">    </span>--name<span class="w"> </span>production-stack<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">    </span>--action-on-unmanage<span class="w"> </span>deleteAll
+<p><strong>Deployment Stacks</strong> (GA 2024) trattano il deployment come un'unità gestita: ARM ricorda quali risorse appartengono allo stack e, al redeploy, <strong>elimina o scollega</strong> quelle rimosse dal template (<code>--action-on-unmanage</code>). Perché: il deploy Bicep standard è incrementale e lascia orfane le risorse tolte dal codice; la modalità Complete le elimina ma agisce sull'intero RG ed è rischiosa. Differenza da Terraform: non c'è file di stato (lo stack vive in ARM) e non esiste un <code>plan</code> equivalente (il <code>what-if</code> non è supportato sugli stack).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Creare stack (lo stesso comando aggiorna uno stack esistente; non c'è "az stack group update")</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># --deny-settings-mode: none | denyDelete | denyWriteAndDelete</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># --action-on-unmanage: detachAll | deleteResources | deleteAll</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>az<span class="w"> </span>stack<span class="w"> </span>group<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span>--name<span class="w"> </span>production-stack<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span>--template-file<span class="w"> </span>main.bicep<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span>--parameters<span class="w"> </span>@prod.parameters.json<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span>--deny-settings-mode<span class="w"> </span>denyDelete<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span>--action-on-unmanage<span class="w"> </span>deleteResources
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># Eliminare stack (e le risorse gestite)</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>az<span class="w"> </span>stack<span class="w"> </span>group<span class="w"> </span>delete<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">    </span>--name<span class="w"> </span>production-stack<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">    </span>--action-on-unmanage<span class="w"> </span>deleteAll
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Attenzione</p>
+<p><code>deleteAll</code> elimina anche i resource group gestiti dallo stack. Con dati stateful usare <code>detachAll</code> o <code>deleteResources</code> e <code>--deny-settings-mode denyDelete</code> per proteggere le risorse da cancellazioni fuori dallo stack.</p>
+</div>
 <hr />
 <h2 id="azure-developer-cli-azd">Azure Developer CLI (azd)<a class="headerlink" href="#azure-developer-cli-azd" title="Permanent link">&para;</a></h2>
 <p><strong>azd</strong> è il CLI developer-friendly per applicazioni Azure: combina IaC (Bicep) + deployment applicativo + CI/CD setup in un unico workflow:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Installare azd</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>winget<span class="w"> </span>install<span class="w"> </span>microsoft.azd<span class="w">    </span><span class="c1"># Windows</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>brew<span class="w"> </span>tap<span class="w"> </span>azure/azd<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>brew<span class="w"> </span>install<span class="w"> </span>azd<span class="w">    </span><span class="c1"># macOS</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Inizializzare progetto (da template o da codice esistente)</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>azd<span class="w"> </span>init<span class="w"> </span>--template<span class="w"> </span>todo-nodejs-mongo<span class="w">    </span><span class="c1"># da template galleria</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>azd<span class="w"> </span>init<span class="w">                                  </span><span class="c1"># da progetto esistente (analizza codice)</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># Struttura generata:</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="c1"># ├── azure.yaml          # definizione servizi</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># ├── infra/</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># │   ├── main.bicep</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1"># │   ├── main.parameters.json</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># │   └── modules/</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1"># └── src/</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="c1"># Provision infrastruttura + Deploy applicazione</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>azd<span class="w"> </span>up<span class="w">                          </span><span class="c1"># = azd provision + azd deploy</span>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="c1"># Solo infrastruttura</span>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>azd<span class="w"> </span>provision
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="c1"># Solo deploy applicazione</span>
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>azd<span class="w"> </span>deploy
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>
-</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="c1"># Configurare pipeline CI/CD automaticamente</span>
-</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>azd<span class="w"> </span>pipeline<span class="w"> </span>config<span class="w">             </span><span class="c1"># GitHub Actions o Azure DevOps</span>
-</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>
-</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="c1"># Eliminare tutto (infra + risorse)</span>
-</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>azd<span class="w"> </span>down<span class="w"> </span>--force<span class="w"> </span>--purge
-</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a>
-</span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a><span class="c1"># Variabili e secrets</span>
-</span><span id="__span-8-33"><a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>azd<span class="w"> </span>env<span class="w"> </span><span class="nb">set</span><span class="w"> </span>MY_VAR<span class="w"> </span>value
-</span><span id="__span-8-34"><a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a>azd<span class="w"> </span>env<span class="w"> </span>get-values
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Installare azd</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>winget<span class="w"> </span>install<span class="w"> </span>microsoft.azd<span class="w">    </span><span class="c1"># Windows</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>brew<span class="w"> </span>tap<span class="w"> </span>azure/azd<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>brew<span class="w"> </span>install<span class="w"> </span>azd<span class="w">    </span><span class="c1"># macOS</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Inizializzare progetto (da template o da codice esistente)</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>azd<span class="w"> </span>init<span class="w"> </span>--template<span class="w"> </span>todo-nodejs-mongo<span class="w">    </span><span class="c1"># da template galleria</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>azd<span class="w"> </span>init<span class="w">                                  </span><span class="c1"># da progetto esistente (analizza codice)</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1"># Struttura generata:</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># ├── azure.yaml          # definizione servizi</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># ├── infra/</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># │   ├── main.bicep</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="c1"># │   ├── main.parameters.json</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="c1"># │   └── modules/</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="c1"># └── src/</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="c1"># Provision infrastruttura + Deploy applicazione</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>azd<span class="w"> </span>up<span class="w">                          </span><span class="c1"># = azd provision + azd deploy</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="c1"># Solo infrastruttura</span>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>azd<span class="w"> </span>provision
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="c1"># Solo deploy applicazione</span>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a>azd<span class="w"> </span>deploy
+</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a>
+</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="c1"># Configurare pipeline CI/CD automaticamente</span>
+</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a>azd<span class="w"> </span>pipeline<span class="w"> </span>config<span class="w">             </span><span class="c1"># GitHub Actions o Azure DevOps</span>
+</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a>
+</span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a><span class="c1"># Eliminare tutto (infra + risorse)</span>
+</span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a>azd<span class="w"> </span>down<span class="w"> </span>--force<span class="w"> </span>--purge
+</span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a>
+</span><span id="__span-9-32"><a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a><span class="c1"># Variabili e secrets</span>
+</span><span id="__span-9-33"><a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a>azd<span class="w"> </span>env<span class="w"> </span><span class="nb">set</span><span class="w"> </span>MY_VAR<span class="w"> </span>value
+</span><span id="__span-9-34"><a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a>azd<span class="w"> </span>env<span class="w"> </span>get-values
 </span></code></pre></div>
 <p><strong><code>azure.yaml</code> esempio:</strong>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ecommerce-platform</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">template</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">todo-nodejs@0.0.1-beta</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="nt">services</span><span class="p">:</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span><span class="nt">api</span><span class="p">:</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="nt">project</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./src/api</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span><span class="nt">language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">appservice</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">  </span><span class="nt">web</span><span class="p">:</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">    </span><span class="nt">project</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./src/web</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">    </span><span class="nt">language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">js</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">staticwebapp</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="nt">hooks</span><span class="p">:</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">  </span><span class="nt">predeploy</span><span class="p">:</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">    </span><span class="nt">shell</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sh</span>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./scripts/seed-db.sh</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ecommerce-platform</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">template</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">todo-nodejs@0.0.1-beta</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="nt">services</span><span class="p">:</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="nt">api</span><span class="p">:</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="nt">project</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./src/api</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span><span class="nt">language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">appservice</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span><span class="nt">web</span><span class="p">:</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span><span class="nt">project</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./src/web</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">    </span><span class="nt">language</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">js</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">staticwebapp</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="nt">hooks</span><span class="p">:</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">  </span><span class="nt">predeploy</span><span class="p">:</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">    </span><span class="nt">shell</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sh</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">    </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./scripts/seed-db.sh</span>
 </span></code></pre></div></p>
 <hr />
 <h2 id="terraform-su-azure">Terraform su Azure<a class="headerlink" href="#terraform-su-azure" title="Permanent link">&para;</a></h2>
-<div class="language-hcl highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># main.tf</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nb">terraform</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nb">required_providers</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="nb">azurerm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">      </span><span class="na">source</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">"hashicorp/azurerm"</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">      </span><span class="na">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"~&gt; 3.100"</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span><span class="kr">backend</span><span class="w"> </span><span class="nv">"azurerm"</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span><span class="na">resource_group_name</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">"terraform-state-rg"</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">    </span><span class="na">storage_account_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"tfstatemycompany"</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">    </span><span class="na">container_name</span><span class="w">       </span><span class="o">=</span><span class="w"> </span><span class="s2">"tfstate"</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">    </span><span class="na">key</span><span class="w">                  </span><span class="o">=</span><span class="w"> </span><span class="s2">"production/main.tfstate"</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="p">}</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="kr">provider</span><span class="w"> </span><span class="nv">"azurerm"</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">  </span><span class="nb">features</span><span class="w"> </span><span class="p">{}</span>
-</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="w">  </span><span class="na">use_oidc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="no">true</span><span class="c1">                      # GitHub Actions OIDC (no client secret)</span>
-</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="p">}</span>
-</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a>
-</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="kr">resource</span><span class="w"> </span><span class="nc">"azurerm_resource_group"</span><span class="w"> </span><span class="nv">"main"</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">  </span><span class="na">name</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="s2">"myapp-${var.environment}-rg"</span>
-</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a><span class="w">  </span><span class="na">location</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">var.location</span>
-</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="w">  </span><span class="na">tags</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="nv">local.common_tags</span>
-</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="p">}</span>
-</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a>
-</span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="kr">resource</span><span class="w"> </span><span class="nc">"azurerm_service_plan"</span><span class="w"> </span><span class="nv">"main"</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a><span class="w">  </span><span class="na">name</span><span class="w">                </span><span class="o">=</span><span class="w"> </span><span class="s2">"asp-myapp-${var.environment}"</span>
-</span><span id="__span-10-30"><a id="__codelineno-10-30" name="__codelineno-10-30" href="#__codelineno-10-30"></a><span class="w">  </span><span class="na">resource_group_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">azurerm_resource_group.main.name</span>
-</span><span id="__span-10-31"><a id="__codelineno-10-31" name="__codelineno-10-31" href="#__codelineno-10-31"></a><span class="w">  </span><span class="na">location</span><span class="w">            </span><span class="o">=</span><span class="w"> </span><span class="nv">azurerm_resource_group.main.location</span>
-</span><span id="__span-10-32"><a id="__codelineno-10-32" name="__codelineno-10-32" href="#__codelineno-10-32"></a><span class="w">  </span><span class="na">os_type</span><span class="w">             </span><span class="o">=</span><span class="w"> </span><span class="s2">"Linux"</span>
-</span><span id="__span-10-33"><a id="__codelineno-10-33" name="__codelineno-10-33" href="#__codelineno-10-33"></a><span class="w">  </span><span class="na">sku_name</span><span class="w">            </span><span class="o">=</span><span class="w"> </span><span class="nv">var.environment</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s2">"prod" ? "P1v3" : "B1"</span>
-</span><span id="__span-10-34"><a id="__codelineno-10-34" name="__codelineno-10-34" href="#__codelineno-10-34"></a><span class="p">}</span>
+<div class="language-hcl highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># main.tf</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nb">terraform</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nb">required_providers</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="nb">azurerm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">      </span><span class="na">source</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">"hashicorp/azurerm"</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">      </span><span class="na">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"~&gt; 4.0"</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span><span class="kr">backend</span><span class="w"> </span><span class="nv">"azurerm"</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">    </span><span class="na">resource_group_name</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">"terraform-state-rg"</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">    </span><span class="na">storage_account_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"tfstatemycompany"</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">    </span><span class="na">container_name</span><span class="w">       </span><span class="o">=</span><span class="w"> </span><span class="s2">"tfstate"</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">    </span><span class="na">key</span><span class="w">                  </span><span class="o">=</span><span class="w"> </span><span class="s2">"production/main.tfstate"</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">    </span><span class="na">use_oidc</span><span class="w">             </span><span class="o">=</span><span class="w"> </span><span class="no">true</span><span class="c1">        # backend: OIDC (Entra ID) invece di access key</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">    </span><span class="na">use_azuread_auth</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="no">true</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="p">}</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="kr">provider</span><span class="w"> </span><span class="nv">"azurerm"</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">  </span><span class="nb">features</span><span class="w"> </span><span class="p">{}</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">  </span><span class="na">subscription_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">var.subscription_id</span><span class="c1">   # obbligatorio da azurerm 4.0</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="w">  </span><span class="na">use_oidc</span><span class="w">        </span><span class="o">=</span><span class="w"> </span><span class="no">true</span><span class="c1">                  # GitHub Actions OIDC (no client secret)</span>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="p">}</span>
+</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a>
+</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="kr">resource</span><span class="w"> </span><span class="nc">"azurerm_resource_group"</span><span class="w"> </span><span class="nv">"main"</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a><span class="w">  </span><span class="na">name</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="s2">"myapp-${var.environment}-rg"</span>
+</span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a><span class="w">  </span><span class="na">location</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">var.location</span>
+</span><span id="__span-11-28"><a id="__codelineno-11-28" name="__codelineno-11-28" href="#__codelineno-11-28"></a><span class="w">  </span><span class="na">tags</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="nv">local.common_tags</span>
+</span><span id="__span-11-29"><a id="__codelineno-11-29" name="__codelineno-11-29" href="#__codelineno-11-29"></a><span class="p">}</span>
+</span><span id="__span-11-30"><a id="__codelineno-11-30" name="__codelineno-11-30" href="#__codelineno-11-30"></a>
+</span><span id="__span-11-31"><a id="__codelineno-11-31" name="__codelineno-11-31" href="#__codelineno-11-31"></a><span class="kr">resource</span><span class="w"> </span><span class="nc">"azurerm_service_plan"</span><span class="w"> </span><span class="nv">"main"</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-11-32"><a id="__codelineno-11-32" name="__codelineno-11-32" href="#__codelineno-11-32"></a><span class="w">  </span><span class="na">name</span><span class="w">                </span><span class="o">=</span><span class="w"> </span><span class="s2">"asp-myapp-${var.environment}"</span>
+</span><span id="__span-11-33"><a id="__codelineno-11-33" name="__codelineno-11-33" href="#__codelineno-11-33"></a><span class="w">  </span><span class="na">resource_group_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">azurerm_resource_group.main.name</span>
+</span><span id="__span-11-34"><a id="__codelineno-11-34" name="__codelineno-11-34" href="#__codelineno-11-34"></a><span class="w">  </span><span class="na">location</span><span class="w">            </span><span class="o">=</span><span class="w"> </span><span class="nv">azurerm_resource_group.main.location</span>
+</span><span id="__span-11-35"><a id="__codelineno-11-35" name="__codelineno-11-35" href="#__codelineno-11-35"></a><span class="w">  </span><span class="na">os_type</span><span class="w">             </span><span class="o">=</span><span class="w"> </span><span class="s2">"Linux"</span>
+</span><span id="__span-11-36"><a id="__codelineno-11-36" name="__codelineno-11-36" href="#__codelineno-11-36"></a><span class="w">  </span><span class="na">sku_name</span><span class="w">            </span><span class="o">=</span><span class="w"> </span><span class="nv">var.environment</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s2">"prod" ? "P1v3" : "B1"</span>
+</span><span id="__span-11-37"><a id="__codelineno-11-37" name="__codelineno-11-37" href="#__codelineno-11-37"></a><span class="p">}</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Workflow Terraform</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>terraform<span class="w"> </span>init
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>terraform<span class="w"> </span>plan<span class="w"> </span>-var-file<span class="o">=</span>prod.tfvars<span class="w"> </span>-out<span class="o">=</span>tfplan
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>terraform<span class="w"> </span>apply<span class="w"> </span>tfplan
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>terraform<span class="w"> </span>destroy
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Workflow Terraform</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>terraform<span class="w"> </span>init
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>terraform<span class="w"> </span>plan<span class="w"> </span>-var-file<span class="o">=</span>prod.tfvars<span class="w"> </span>-out<span class="o">=</span>tfplan
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>terraform<span class="w"> </span>apply<span class="w"> </span>tfplan
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>terraform<span class="w"> </span>destroy
 </span></code></pre></div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-deployment-fallisce-con-conflict-su-risorsa-esistente">Scenario 1 — Deployment fallisce con "Conflict" su risorsa esistente<a class="headerlink" href="#scenario-1-deployment-fallisce-con-conflict-su-risorsa-esistente" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>az deployment group create</code> restituisce errore <code>409 Conflict</code> su una risorsa già presente nel Resource Group.</p>
 <p><strong>Causa:</strong> La risorsa esiste ma con proprietà incompatibili (es. SKU non modificabile dopo creazione, o nome già preso da altra subscription).</p>
-<p><strong>Soluzione:</strong> Verificare lo stato della risorsa con <code>az resource show</code>, usare <code>what-if</code> per identificare i conflitti prima del deploy. Per risorse non modificabili, eliminare e ricreare.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Identificare la risorsa in conflitto</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>az<span class="w"> </span>resource<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span>--ids<span class="w"> </span>/subscriptions/&lt;SUB&gt;/resourceGroups/&lt;RG&gt;/providers/Microsoft.Web/serverfarms/&lt;NAME&gt;
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># What-if per vedere differenze senza applicare</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>az<span class="w"> </span>deployment<span class="w"> </span>group<span class="w"> </span>what-if<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">    </span>--template-file<span class="w"> </span>main.bicep<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">    </span>--parameters<span class="w"> </span>@prod.parameters.json
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="c1"># Se necessario: eliminare e ricreare la risorsa problematica</span>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>az<span class="w"> </span>resource<span class="w"> </span>delete<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">    </span>--ids<span class="w"> </span>/subscriptions/&lt;SUB&gt;/resourceGroups/&lt;RG&gt;/providers/Microsoft.Web/serverfarms/&lt;NAME&gt;
+<p><strong>Soluzione:</strong> Verificare lo stato della risorsa con <code>az resource show</code>, usare <code>what-if</code> per identificare i conflitti prima del deploy. Per risorse non modificabili, eliminare e ricreare (attenzione alla perdita di dati su risorse stateful).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Identificare la risorsa in conflitto</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>az<span class="w"> </span>resource<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span>--ids<span class="w"> </span>/subscriptions/&lt;SUB&gt;/resourceGroups/&lt;RG&gt;/providers/Microsoft.Web/serverfarms/&lt;NAME&gt;
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># What-if per vedere differenze senza applicare</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>az<span class="w"> </span>deployment<span class="w"> </span>group<span class="w"> </span>what-if<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">    </span>--template-file<span class="w"> </span>main.bicep<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">    </span>--parameters<span class="w"> </span>@prod.parameters.json
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="c1"># Se necessario: eliminare e ricreare la risorsa problematica</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>az<span class="w"> </span>resource<span class="w"> </span>delete<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">    </span>--ids<span class="w"> </span>/subscriptions/&lt;SUB&gt;/resourceGroups/&lt;RG&gt;/providers/Microsoft.Web/serverfarms/&lt;NAME&gt;
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-errore-bcp057-the-name-does-not-exist-in-the-current-context">Scenario 2 — Errore "BCP057: The name does not exist in the current context"<a class="headerlink" href="#scenario-2-errore-bcp057-the-name-does-not-exist-in-the-current-context" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>az bicep build</code> fallisce con errore <code>BCP057</code> riferito a un simbolo non trovato (es. variabile, resource, modulo).</p>
-<p><strong>Causa:</strong> Riferimento a una risorsa o variabile definita dopo il punto di utilizzo, oppure typo nel nome simbolico. Bicep richiede che le dipendenze siano dichiarate nello stesso scope.</p>
-<p><strong>Soluzione:</strong> Controllare l'ordine delle dichiarazioni, verificare i nomi esatti (case-sensitive), usare <code>dependsOn</code> esplicito se necessario.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Compilare e vedere tutti gli errori</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>az<span class="w"> </span>bicep<span class="w"> </span>build<span class="w"> </span>--file<span class="w"> </span>main.bicep
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Linting con regole estese</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>az<span class="w"> </span>bicep<span class="w"> </span>lint<span class="w"> </span>--file<span class="w"> </span>main.bicep
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1"># Installare/aggiornare Bicep CLI</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>az<span class="w"> </span>bicep<span class="w"> </span>upgrade
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>az<span class="w"> </span>bicep<span class="w"> </span>version
+<p><strong>Causa:</strong> Typo nel nome simbolico (case-sensitive), simbolo definito in un altro file/modulo non importato, o accesso a una risorsa figlia fuori scope. L'ordine delle dichiarazioni <strong>non</strong> conta: Bicep costruisce il grafo delle dipendenze dai riferimenti, quindi <code>dependsOn</code> esplicito serve solo per dipendenze non espresse da un riferimento (e mai per BCP057).</p>
+<p><strong>Soluzione:</strong> Verificare il nome esatto del simbolo, che sia dichiarato nello stesso file (o esposto come <code>output</code> del modulo), e che <code>param</code>/<code>var</code> esistano.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Compilare e vedere tutti gli errori</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>az<span class="w"> </span>bicep<span class="w"> </span>build<span class="w"> </span>--file<span class="w"> </span>main.bicep
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Linting con regole estese</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>az<span class="w"> </span>bicep<span class="w"> </span>lint<span class="w"> </span>--file<span class="w"> </span>main.bicep
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Installare/aggiornare Bicep CLI</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>az<span class="w"> </span>bicep<span class="w"> </span>upgrade
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>az<span class="w"> </span>bicep<span class="w"> </span>version
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-what-if-mostra-nochange-ma-le-risorse-non-vengono-create">Scenario 3 — What-if mostra "NoChange" ma le risorse non vengono create<a class="headerlink" href="#scenario-3-what-if-mostra-nochange-ma-le-risorse-non-vengono-create" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il comando <code>what-if</code> non mostra modifiche, ma le risorse attese non esistono nel Resource Group.</p>
 <p><strong>Causa:</strong> Spesso dovuto a condizioni <code>if (...)</code> nel template che valutano a <code>false</code> per i parametri forniti, oppure il deployment punta al Resource Group sbagliato.</p>
 <p><strong>Soluzione:</strong> Verificare i parametri passati, controllare le condizioni nei blocchi <code>if</code>, e confermare il Resource Group target.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Verificare che il Resource Group sia quello corretto</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>az<span class="w"> </span>group<span class="w"> </span>show<span class="w"> </span>--name<span class="w"> </span>myapp-rg
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Controllare i parametri effettivi del deployment</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>az<span class="w"> </span>deployment<span class="w"> </span>group<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span>--name<span class="w"> </span>deploy-20260226-143000<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span>--query<span class="w"> </span>properties.parameters
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># Elencare tutte le risorse nel RG per confronto</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>az<span class="w"> </span>resource<span class="w"> </span>list<span class="w"> </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span>--output<span class="w"> </span>table
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Verificare che il Resource Group sia quello corretto</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>az<span class="w"> </span>group<span class="w"> </span>show<span class="w"> </span>--name<span class="w"> </span>myapp-rg
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># Controllare i parametri effettivi del deployment</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>az<span class="w"> </span>deployment<span class="w"> </span>group<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">    </span>--name<span class="w"> </span>deploy-20260226-143000<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">    </span>--query<span class="w"> </span>properties.parameters
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="c1"># Elencare tutte le risorse nel RG per confronto</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>az<span class="w"> </span>resource<span class="w"> </span>list<span class="w"> </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span>--output<span class="w"> </span>table
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-terraform-error-acquiring-the-state-lock">Scenario 4 — Terraform: "Error acquiring the state lock"<a class="headerlink" href="#scenario-4-terraform-error-acquiring-the-state-lock" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>terraform plan</code> o <code>terraform apply</code> fallisce con <code>Error acquiring the state lock</code> su Azure Blob Storage.</p>
-<p><strong>Causa:</strong> Un precedente processo Terraform è terminato in modo anomalo lasciando un lock attivo sul blob, oppure un altro utente/pipeline sta eseguendo operazioni in parallelo.</p>
-<p><strong>Soluzione:</strong> Verificare che non ci siano operazioni Terraform attive in altre pipeline, poi rimuovere il lock manualmente se orfano.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Verificare lo stato del lock (nel container tfstate)</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>az<span class="w"> </span>storage<span class="w"> </span>blob<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span>--account-name<span class="w"> </span>tfstatemycompany<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span>--container-name<span class="w"> </span>tfstate<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"production/main.tfstate.lock"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">    </span>--auth-mode<span class="w"> </span>login
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="c1"># Forzare sblocco (solo se si è certi che nessun altro processo è attivo)</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>terraform<span class="w"> </span>force-unlock<span class="w"> </span>&lt;LOCK_ID&gt;
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="c1"># In alternativa: eliminare il blob di lock direttamente</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>az<span class="w"> </span>storage<span class="w"> </span>blob<span class="w"> </span>delete<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">    </span>--account-name<span class="w"> </span>tfstatemycompany<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="w">    </span>--container-name<span class="w"> </span>tfstate<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"production/main.tfstate.lock"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a><span class="w">    </span>--auth-mode<span class="w"> </span>login
+<p><strong>Causa:</strong> Il backend <code>azurerm</code> implementa il lock come <strong>lease sul blob dello state stesso</strong> (<code>production/main.tfstate</code>), non come blob <code>.lock</code> separato. Un processo terminato in modo anomalo, o una pipeline concorrente, lascia il lease attivo.</p>
+<p><strong>Soluzione:</strong> Verificare che non ci siano operazioni Terraform attive in altre pipeline, poi sbloccare.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Verificare lo stato del lease sul blob di state</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>az<span class="w"> </span>storage<span class="w"> </span>blob<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span>--account-name<span class="w"> </span>tfstatemycompany<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">    </span>--container-name<span class="w"> </span>tfstate<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"production/main.tfstate"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">    </span>--auth-mode<span class="w"> </span>login<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"properties.lease"</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1"># Forzare sblocco (solo se si è certi che nessun altro processo è attivo)</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>terraform<span class="w"> </span>force-unlock<span class="w"> </span>&lt;LOCK_ID&gt;<span class="w">      </span><span class="c1"># LOCK_ID è riportato nel messaggio di errore</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="c1"># In alternativa: rompere il lease direttamente</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>az<span class="w"> </span>storage<span class="w"> </span>blob<span class="w"> </span>lease<span class="w"> </span><span class="k">break</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="w">    </span>--account-name<span class="w"> </span>tfstatemycompany<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="w">    </span>--container-name<span class="w"> </span>tfstate<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="w">    </span>--blob-name<span class="w"> </span><span class="s2">"production/main.tfstate"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="w">    </span>--auth-mode<span class="w"> </span>login
 </span></code></pre></div>
+<div class="admonition danger">
+<p class="admonition-title">Non eliminare il blob</p>
+<p>Cancellare <code>main.tfstate</code> distrugge lo state: Terraform perderebbe traccia di tutte le risorse gestite.</p>
+</div>
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
