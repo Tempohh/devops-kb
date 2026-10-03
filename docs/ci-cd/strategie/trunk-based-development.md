@@ -7,9 +7,10 @@ search_keywords: [TBD, trunk based development, GitFlow, short-lived branches, m
 parent: ci-cd/strategie/_index
 related: [ci-cd/strategie/deployment-strategies, ci-cd/strategie/feature-flags, ci-cd/testing/contract-testing, ci-cd/gitops/argocd]
 official_docs: https://trunkbaseddevelopment.com/
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-03-24
+last_verified: 2026-10-03
 ---
 
 # Trunk-Based Development
@@ -116,19 +117,30 @@ Quando il team è pronto, si attiva il flag — senza alcun deploy.
 
 ```bash
 # Proteggere il trunk con regole di branch
-# GitHub — via UI o GitHub CLI
+# GitHub CLI: gli oggetti annidati vanno passati come JSON via --input
+# (--field non interpreta stringhe JSON come oggetti)
 gh api repos/{owner}/{repo}/branches/main/protection \
-  --method PUT \
-  --field required_status_checks='{"strict":true,"contexts":["ci/tests","ci/lint"]}' \
-  --field enforce_admins=false \
-  --field required_pull_request_reviews='{"required_approving_review_count":1}' \
-  --field restrictions=null
+  --method PUT --input - <<'EOF'
+{
+  "required_status_checks": {"strict": true, "contexts": ["ci/tests", "ci/lint"]},
+  "enforce_admins": false,
+  "required_pull_request_reviews": {"required_approving_review_count": 1},
+  "restrictions": null
+}
+EOF
 ```
+
+!!! tip "Merge queue"
+    Con molti commit al giorno, `strict: true` costringe a rifare il rebase su ogni PR. Una **merge queue** (GitHub merge queue, GitLab merge trains) testa le PR in coda sull'ultimo stato del trunk e le integra in serie: il trunk resta verde senza rebase manuali. Richiede il trigger `merge_group` nel workflow CI.
+
+!!! note "Push diretto vs PR"
+    La protezione sopra impone PR + CI: è la variante "short-lived branch". Il push diretto su `main` (flusso base) è praticabile solo in team piccoli e affiatati, con pre-commit hook e CI post-merge rapida; a scala si usano PR brevi.
 
 ### Pre-commit hooks per qualità locale
 
 ```bash
 # .pre-commit-config.yaml
+# I rev sono esempi: aggiornare con `pre-commit autoupdate`
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
@@ -178,15 +190,11 @@ jobs:
       - name: Lint
         run: flake8 .
 
-      - name: Test
-        run: pytest --cov=app --cov-report=xml
-
-      - name: Coverage gate
-        run: |
-          coverage=$(python -c "import xml.etree.ElementTree as ET; t=ET.parse('coverage.xml').getroot(); print(float(t.attrib['line-rate'])*100)")
-          echo "Coverage: $coverage%"
-          python -c "assert float('$coverage') >= 80, f'Coverage {$coverage}% < 80%'"
+      - name: Test + coverage gate
+        run: pytest --cov=app --cov-report=xml --cov-fail-under=80
 ```
+
+Con una merge queue aggiungere `merge_group:` ai trigger `on:`.
 
 ### Branch by Abstraction — Esempio pratico
 
@@ -247,12 +255,16 @@ git commit -m "fix stuff and add new feature and refactor auth"
 ### Strategia di merge
 
 ```bash
-# Preferire squash merge per PR piccole
+# Preferire squash merge per PR piccole (di norma dal pulsante della PR)
+git checkout main && git pull
 git merge --squash feature/xxx
-
-# O rebase per preservare storia lineare
-git rebase main
+git commit -m "feat(checkout): ..."
 git push origin main
+
+# O rebase del branch su main prima del merge, per storia lineare
+git checkout feature/xxx
+git rebase main
+git push --force-with-lease origin feature/xxx
 
 # Evitare merge commit "noiosi" su PR a singolo commit
 ```
@@ -315,7 +327,7 @@ gh api repos/{owner}/{repo}/branches/main/protection | jq '.required_status_chec
 **Soluzione — Lifecycle dei flag:**
 ```python
 # Flag con data di scadenza esplicita
-@feature_flag(name="new-checkout-flow", expires="2026-06-01")
+@feature_flag(name="new-checkout-flow", expires="2027-01-31")
 def new_checkout_handler(request):
     ...
 ```
