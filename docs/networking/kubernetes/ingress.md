@@ -7,9 +7,10 @@ search_keywords: [kubernetes ingress, ingress controller, nginx ingress, traefik
 parent: networking/kubernetes/_index
 related: [networking/kubernetes/network-policies, networking/kubernetes/cni, networking/api-gateway/pattern-base, networking/load-balancing/layer4-vs-layer7, containers/kubernetes/networking]
 official_docs: https://kubernetes.io/docs/concepts/services-networking/ingress/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Ingress e Ingress Controller
@@ -37,7 +38,10 @@ Senza Ingress, l'unico modo per esporre un servizio è tramite `Service.type=Loa
 
 Kubernetes ha due API per il routing HTTP:
 - **Ingress** (stabile, ampiamente supportato): semplice, limitato — funziona per la maggior parte dei casi
-- **Gateway API** (più nuovo, in GA da Kubernetes 1.28): più espressivo, supporta protocolli multipli (gRPC, TCP), gestione basata su ruoli — la direzione futura
+- **Gateway API** (API `v1` GA da ottobre 2023, v1.0): più espressivo, supporta protocolli multipli (gRPC, TCP), gestione basata su ruoli — la direzione futura. Non è built-in in Kubernetes: i CRD si installano a parte e serve un'implementazione (controller) compatibile. Ingress è API congelata (feature-frozen): non riceve nuove funzionalità, le estensioni passano da annotation specifiche del controller.
+
+!!! warning "ingress-nginx è ritirato (marzo 2026)"
+    Il progetto community `kubernetes/ingress-nginx` ha terminato il best-effort maintenance a **marzo 2026**: nessuna nuova release, bugfix o patch di sicurezza. Non adottarlo su nuovi cluster; per quelli esistenti pianificare la migrazione verso Gateway API o un altro controller mantenuto (Traefik, HAProxy Ingress, F5 NGINX Ingress Controller, Envoy Gateway / NGINX Gateway Fabric via Gateway API). Gli esempi `nginx.ingress.kubernetes.io/*` sotto restano validi per i cluster che lo usano ancora, ma sono debito tecnico.
 
 ## Architettura / Come Funziona
 
@@ -74,8 +78,11 @@ Client ──[TLS]──> Ingress Controller ──[HTTP]──> Backend Service
 
 ### Installazione Nginx Ingress Controller
 
+!!! warning "Solo per cluster legacy"
+    Vedi l'avviso di ritiro sopra: usare questa procedura solo per ambienti esistenti/di test.
+
 ```bash
-# Con Helm (raccomandato)
+# Con Helm
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm install ingress-nginx ingress-nginx/ingress-nginx \
   --namespace ingress-nginx \
@@ -100,24 +107,14 @@ metadata:
   name: my-ingress
   namespace: production
   annotations:
-    # Rewrite: /api/users → /users (rimuove il prefix /api)
+    # Rewrite: /api/v1/users/42 → /42 (il 2° capture group $2 = tutto dopo il prefix).
+    # ATTENZIONE: l'annotation vale per TUTTE le regole dell'Ingress; per questo
+    # il frontend (senza capture group) sta in un Ingress separato (vedi sotto).
     nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
   ingressClassName: nginx  # Specifica quale Ingress Controller usare
 
   rules:
-  # Host-based routing
-  - host: app.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: frontend-service
-            port:
-              number: 80
-
   - host: api.example.com
     http:
       paths:
@@ -137,6 +134,26 @@ spec:
             name: order-service
             port:
               number: 8080
+---
+# Host-based routing: Ingress separato, senza rewrite (altrimenti "/" verrebbe riscritto con $2 vuoto)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend-ingress
+  namespace: production
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: app.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80
 ```
 
 ### TLS con cert-manager e Let's Encrypt
@@ -147,7 +164,7 @@ helm repo add jetstack https://charts.jetstack.io
 helm install cert-manager jetstack/cert-manager \
   --namespace cert-manager \
   --create-namespace \
-  --set installCRDs=true
+  --set crds.enabled=true   # sostituisce il deprecato installCRDs=true (cert-manager ≥ 1.15)
 ```
 
 ```yaml
@@ -216,8 +233,8 @@ metadata:
     nginx.ingress.kubernetes.io/auth-url: "http://oauth2-proxy.auth.svc/oauth2/auth"
     nginx.ingress.kubernetes.io/auth-signin: "https://auth.example.com/oauth2/start"
 
-    # Whitelist IP
-    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,192.168.0.0/16"
+    # Allowlist IP (whitelist-source-range è il nome legacy, ancora accettato)
+    nginx.ingress.kubernetes.io/allowlist-source-range: "10.0.0.0/8,192.168.0.0/16"
 
     # Timeout custom
     nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
@@ -235,7 +252,9 @@ metadata:
     nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
 ```
 
-### Gateway API (Kubernetes 1.28+ GA)
+### Gateway API (v1 GA)
+
+Prerequisiti: CRD Gateway API installati e un controller che li implementa. Qui l'esempio usa NGINX Gateway Fabric; di norma la `GatewayClass` la crea il controller stesso all'installazione. Approfondimento completo in [Gateway API](gateway-api.md).
 
 ```yaml
 # GatewayClass — definisce il tipo di gateway
@@ -244,7 +263,7 @@ kind: GatewayClass
 metadata:
   name: nginx
 spec:
-  controllerName: k8s.nginx.org/nginx-gateway-controller
+  controllerName: gateway.nginx.org/nginx-gateway-controller
 
 ---
 # Gateway — istanza del gateway con listener
@@ -295,7 +314,8 @@ spec:
 - **Resource requests e limits**: il pod nginx-ingress deve avere limits definiti per evitare che consumi tutto il CPU in caso di spike
 - **`ssl-redirect: "true"` sempre**: forzare HTTPS in produzione
 - **Monitorare le metriche Nginx**: l'Ingress Controller espone metriche Prometheus — configurare alert su error rate e latenza
-- **Gateway API per nuovi cluster**: se si parte da zero su Kubernetes 1.28+, preferire Gateway API per la sua flessibilità futura
+- **Gateway API per nuovi cluster**: Ingress è feature-frozen e ingress-nginx è ritirato; per nuove installazioni preferire Gateway API con un controller mantenuto
+- **Non dipendere da annotation specifiche del controller**: rendono la migrazione costosa (lo strumento `ingress2gateway` converte solo i casi base)
 
 ## Troubleshooting
 
@@ -380,8 +400,8 @@ kubectl get ingress my-ingress -n production -o yaml | grep cert-manager
 **Soluzione:** Configurare il controller per fidarsi dell'header `X-Forwarded-Proto` dal load balancer, oppure usare `use-forwarded-headers: "true"` nella ConfigMap.
 
 ```bash
-# Verifica header ricevuti dal controller
-kubectl exec -n ingress-nginx <nginx-pod> -- curl -sI http://localhost/healthz
+# Verifica il redirect dal lato esterno (Location punta sempre a https:// = loop)
+curl -sIL --max-redirs 5 http://app.example.com/
 
 # Abilita proxy headers nella ConfigMap del controller
 kubectl edit configmap ingress-nginx-controller -n ingress-nginx
@@ -407,6 +427,11 @@ kubectl exec -n ingress-nginx <nginx-pod> -- nginx -T | grep -A3 "ssl_redirect"
     Limitare il traffico verso i pod dell'Ingress Controller.
 
     **Approfondimento →** [Network Policies](network-policies.md)
+
+??? info "Gateway API — successore di Ingress"
+    Modello a ruoli (GatewayClass/Gateway/HTTPRoute), più protocolli, canary nativo.
+
+    **Approfondimento →** [Gateway API](gateway-api.md)
 
 ## Riferimenti
 
