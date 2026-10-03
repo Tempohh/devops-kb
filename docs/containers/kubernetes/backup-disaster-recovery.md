@@ -9,7 +9,7 @@ related: [containers/kubernetes/storage, containers/kubernetes/architettura, con
 official_docs: https://velero.io/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-10-02
+last_updated: 2026-10-03
 ---
 
 # Kubernetes Backup & Disaster Recovery
@@ -331,8 +331,14 @@ velero restore create dr-$(date +%Y%m%d) --from-backup shop-20261002
 
 ## Troubleshooting
 
-**Backup in stato `PartiallyFailed`**
-Sintomo: `velero backup describe` mostra `Phase: PartiallyFailed` ed `Errors: N`. Causa tipica: alcune risorse o volumi non sono stati salvati (permessi RBAC, hook falliti, snapshot non riuscito, API di CRD non più servita). Soluzione:
+### Scenario 1 — Backup in stato `PartiallyFailed`
+
+**Sintomo**: `velero backup describe` mostra `Phase: PartiallyFailed` ed `Errors: N`.
+
+**Causa**: alcune risorse o volumi non sono stati salvati (permessi RBAC, hook falliti, snapshot non riuscito, API di CRD non più servita).
+
+**Soluzione**:
+
 ```bash
 velero backup describe <nome> --details
 velero backup logs <nome> | grep -iE "error|level=error"
@@ -340,8 +346,14 @@ kubectl -n velero logs deploy/velero | tail -100
 ```
 Correggere la causa (spesso hook con `onError: Fail` o timeout) e rilanciare il backup. Un backup `PartiallyFailed` **è ripristinabile solo per le parti salvate**: non considerarlo valido per il DR.
 
-**Volumi non inclusi nel backup**
-Sintomo: il restore crea i PVC vuoti o li omette. Causa: il PVC non ha `VolumeSnapshotClass` etichettata, il driver CSI non supporta snapshot, oppure con FSB il volume non è stato opt-in (`--default-volumes-to-fs-backup` assente e nessuna annotation `backup.velero.io/backup-volumes`). Soluzione:
+### Scenario 2 — Volumi non inclusi nel backup
+
+**Sintomo**: il restore crea i PVC vuoti o li omette.
+
+**Causa**: il PVC non ha `VolumeSnapshotClass` etichettata, il driver CSI non supporta snapshot, oppure con FSB il volume non è stato opt-in (`--default-volumes-to-fs-backup` assente e nessuna annotation `backup.velero.io/backup-volumes`).
+
+**Soluzione**:
+
 ```bash
 kubectl get volumesnapshotclass -o yaml | grep -B3 velero.io/csi-volumesnapshot-class
 kubectl -n shop get pod <pod> -o jsonpath='{.metadata.annotations}'
@@ -349,11 +361,27 @@ velero backup describe <nome> --details | sed -n '/Volumes:/,$p'
 ```
 Etichettare la `VolumeSnapshotClass` o attivare l'FSB. I volumi `emptyDir`, `hostPath` e i `projected` non vengono salvati come dati.
 
-**Restore che lascia i PVC in `Pending`**
-Sintomo: `kubectl get pvc` mostra `Pending` dopo il restore. Cause: la StorageClass originale non esiste sul cluster di destinazione, `volumeBindingMode: WaitForFirstConsumer` senza Pod schedulabili, zona diversa per il volume. Soluzione: creare la StorageClass mancante o usare la ConfigMap `change-storage-class`; verificare con `kubectl describe pvc <nome>` gli eventi `ProvisioningFailed`. Vedi [Storage](storage.md).
+### Scenario 3 — Restore che lascia i PVC in `Pending`
 
-**BSL in stato `Unavailable`**
-Sintomo: `velero backup-location get` mostra `Unavailable`, i backup restano in `New`/`FailedValidation`. Cause: Secret delle credenziali errato o scaduto, bucket inesistente, policy IAM senza `s3:PutObject/GetObject/DeleteObject/ListBucket`, endpoint o region sbagliata. Soluzione:
+**Sintomo**: `kubectl get pvc` mostra `Pending` dopo il restore.
+
+**Causa**: la StorageClass originale non esiste sul cluster di destinazione, `volumeBindingMode: WaitForFirstConsumer` senza Pod schedulabili, zona diversa per il volume.
+
+**Soluzione**: creare la StorageClass mancante o usare la ConfigMap `change-storage-class`; verificare gli eventi `ProvisioningFailed`. Vedi [Storage](storage.md).
+
+```bash
+kubectl describe pvc <nome> -n shop-restore | sed -n '/Events:/,$p'
+kubectl get storageclass
+```
+
+### Scenario 4 — BSL in stato `Unavailable`
+
+**Sintomo**: `velero backup-location get` mostra `Unavailable`, i backup restano in `New`/`FailedValidation`.
+
+**Causa**: Secret delle credenziali errato o scaduto, bucket inesistente, policy IAM senza `s3:PutObject/GetObject/DeleteObject/ListBucket`, endpoint o region sbagliata.
+
+**Soluzione**:
+
 ```bash
 kubectl -n velero get secret cloud-credentials -o jsonpath='{.data.cloud}' | base64 -d
 kubectl -n velero logs deploy/velero | grep -i "backup store"
@@ -361,11 +389,30 @@ velero backup-location get
 ```
 Aggiornare il Secret e riavviare il Deployment `velero`. Preferire identità federate (IRSA, Workload Identity) alle chiavi statiche, che scadono o ruotano.
 
-**Restore con errori su CRD / versioni API**
-Sintomo: `Restore` in `PartiallyFailed` con `no matches for kind "X" in version "Y"` o `the server could not find the requested resource`. Causa: il cluster di destinazione ha una versione di Kubernetes diversa (API rimosse) o i CRD non sono ancora installati. Soluzione: installare prima operatori/CRD (via Helm/ArgoCD), poi lanciare il restore; Velero ripristina la versione preferita dell'API (`EnableAPIGroupVersions` aiuta tra versioni). Per upgrade difficili ripristinare prima su un cluster di staging della stessa versione.
+### Scenario 5 — Restore con errori su CRD / versioni API
 
-**Restore che sovrascrive/salta oggetti esistenti**
-Sintomo: `Warning: already exists`. Comportamento standard: Velero non modifica risorse esistenti (`--existing-resource-policy=none`). Per aggiornarle usare `--existing-resource-policy=update`, oppure eliminare prima il namespace.
+**Sintomo**: `Restore` in `PartiallyFailed` con `no matches for kind "X" in version "Y"` o `the server could not find the requested resource`.
+
+**Causa**: il cluster di destinazione ha una versione di Kubernetes diversa (API rimosse) o i CRD non sono ancora installati.
+
+**Soluzione**: installare prima operatori/CRD (via Helm/ArgoCD), poi lanciare il restore; Velero ripristina la versione preferita dell'API (`EnableAPIGroupVersions` aiuta tra versioni). Per upgrade difficili ripristinare prima su un cluster di staging della stessa versione.
+
+```bash
+velero restore describe <nome> --details | grep -i "no matches"
+kubectl api-resources | grep -i <kind>
+```
+
+### Scenario 6 — Restore che salta oggetti esistenti
+
+**Sintomo**: `Warning: already exists` nel log del restore, risorse non aggiornate.
+
+**Causa**: comportamento standard, Velero non modifica risorse esistenti (`--existing-resource-policy=none`) per non sovrascrivere stato vivo.
+
+**Soluzione**: usare `--existing-resource-policy=update` oppure eliminare prima il namespace.
+
+```bash
+velero restore create --from-backup shop-20261002 --existing-resource-policy=update
+```
 
 ## Relazioni
 
