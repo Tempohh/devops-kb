@@ -7,16 +7,16 @@ search_keywords: [Cloud Armor, GCP WAF, Google Cloud Armor, VPC Service Controls
 parent: cloud/gcp/security/_index
 related: [cloud/gcp/security/kms-secret-manager, cloud/gcp/iam/iam-service-accounts, cloud/gcp/networking/vpc, cloud/aws/security/network-security, cloud/aws/security/compliance-audit]
 official_docs: https://cloud.google.com/armor/docs
-status: draft
+status: complete
 difficulty: advanced
-last_updated: 2026-10-02
+last_updated: 2026-10-03
 ---
 
 # Protezione di Rete e Detection su GCP
 
 ## Panoramica
 
-GCP separa la protezione a livello di rete/perimetro in tre servizi complementari che rispondono a domande diverse: **Cloud Armor** filtra il traffico L7 in ingresso verso i servizi dietro un Global Load Balancer (è il WAF/anti-DDoS di GCP); **VPC Service Controls** crea un perimetro a livello di API che impedisce l'esfiltrazione di dati anche quando le credenziali IAM sono valide; **Security Command Center** è il layer di detection/CSPM che aggrega misconfigurazioni, vulnerabilità e minacce attive su tutto l'estate GCP.
+GCP separa la protezione a livello di rete/perimetro in tre servizi complementari che rispondono a domande diverse: **Cloud Armor** filtra il traffico L7 in ingresso verso i servizi dietro un Global Load Balancer (è il WAF/anti-DDoS di GCP); **VPC Service Controls** crea un perimetro a livello di API che impedisce l'esfiltrazione di dati anche quando le credenziali IAM sono valide; **Security Command Center** è il layer di detection/CSPM (Cloud Security Posture Management, verifica continua delle misconfigurazioni) che aggrega misconfigurazioni, vulnerabilità e minacce attive su tutto l'estate GCP.
 
 **Quando servono:**
 - Servizi pubblici (API, web app) dietro Global External Load Balancer esposti a traffico internet non fidato → Cloud Armor
@@ -44,17 +44,17 @@ Cloud Armor opera a livello di **Load Balancer**, non di singola VM o servizio: 
 | **Adaptive Protection** | Modello ML che rileva pattern di attacco L7 (DDoS applicativo) e genera automaticamente regole di mitigazione suggerite |
 
 !!! warning "Le regole si valutano in ordine di priorità, non di specificità"
-    Cloud Armor valuta le regole in ordine di **priorità numerica crescente** (0 = più alta) e si ferma alla prima che matcha. Una regola generica con priorità più bassa (numero più piccolo) di una regola specifica la ignora completamente — causa comune di "la regola non si applica".
+    Cloud Armor valuta le regole in ordine di **priorità numerica crescente** (0 = più alta) e si ferma alla prima che matcha. Una regola generica con numero di priorità più piccolo di una regola specifica (quindi valutata prima) la rende irraggiungibile — causa comune di "la regola non si applica".
 
 ### Preconfigured WAF Rules — Sensitivity Level
 
-Le regole OWASP CRS hanno un **sensitivity level** (1-4, default 4 = più permissivo in termini di blocco, meno falsi positivi) che bilancia copertura contro falsi positivi:
+Le regole OWASP CRS (Core Rule Set, set open-source di firme ModSecurity per attacchi web) hanno un **sensitivity level** (1-4) che bilancia copertura contro falsi positivi: ogni livello include le firme dei livelli inferiori, quindi salendo si aggiungono firme più aggressive.
 
 ```
-Livello 1 → massima protezione, più falsi positivi (richiede tuning attento)
-Livello 2 → protezione alta
-Livello 3 → bilanciato (consigliato come punto di partenza)
-Livello 4 → default, minimo rischio di falsi positivi, copertura minore
+Livello 1 → poche firme ad alta confidenza, minimo rischio di falsi positivi (punto di partenza)
+Livello 2 → copertura maggiore, qualche falso positivo da tarare
+Livello 3 → protezione alta, tuning necessario
+Livello 4 → massima copertura, più falsi positivi (richiede tuning attento)
 ```
 
 !!! tip "Preview mode prima di enforcing"
