@@ -7,9 +7,10 @@ search_keywords: [firewall stateful stateless, next gen firewall ngfw, web appli
 parent: networking/sicurezza/_index
 related: [networking/sicurezza/zero-trust, networking/sicurezza/ddos-protezione, networking/sicurezza/vpn-ipsec]
 official_docs: https://netfilter.org/documentation/
-status: complete
+status: reviewed
 difficulty: expert
-last_updated: 2026-03-09
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Firewall e WAF
@@ -189,12 +190,20 @@ nft add rule inet filter input ct state established,related accept
 nft add rule inet filter input tcp dport 22 ct state new accept
 nft add rule inet filter input tcp dport { 80, 443 } ct state new accept
 
-# Rate limiting con nftables
+# Rate limiting GLOBALE (tutte le sorgenti sommate): non equivale all'esempio iptables per-IP
 nft add rule inet filter input tcp dport 22 ct state new \
   limit rate 5/minute burst 3 packets accept
 
+# Rate limiting PER IP sorgente: meter dinamico (equivalente a hashlimit --hashlimit-mode srcip)
+nft add set inet filter ssh_meter '{ type ipv4_addr; flags dynamic; timeout 1m; }'
+nft add rule inet filter input tcp dport 22 ct state new \
+  add @ssh_meter '{ ip saddr limit rate 5/minute burst 3 packets }' accept
+
 # File di configurazione /etc/nftables.conf
 ```
+
+!!! note "iptables-nft"
+    Su distro recenti il comando `iptables` è spesso `iptables-nft`: sintassi iptables, ma regole salvate nel kernel via nftables. Non mescolare regole iptables-legacy e nft sullo stesso host senza verificare con `iptables --version` quale backend è attivo, altrimenti le regole finiscono in due ruleset separati.
 
 **Vantaggi nftables su iptables:**
 - Sintassi più coerente e leggibile
@@ -308,29 +317,37 @@ securityRules:
 
 ### OWASP ModSecurity Core Rule Set (CRS)
 
-Il ModSecurity CRS è il set di regole open source più diffuso per WAF. Protegge dalle OWASP Top 10:
+Il CRS è il set di regole open source più diffuso per WAF (progetto OWASP). Funziona con **anomaly scoring**: ogni regola che matcha somma punti allo score della richiesta, e la richiesta viene bloccata solo se lo score supera una soglia. Perché: una singola regola con falso positivo non blocca da sola, e si può calibrare il rigore. Copre in modo mirato soprattutto le categorie "da payload", mappate qui sulla OWASP Top 10:2021:
 
-- **A01 — Broken Access Control**: rilevamento di path traversal (../), directory listing
-- **A02 — Cryptographic Failures**: rilevamento di trasmissione dati sensibili
-- **A03 — Injection**: SQL injection, command injection, LDAP injection
-- **A05 — Security Misconfiguration**: rilevamento di header di sicurezza mancanti
-- **A06 — Vulnerable Components**: rilevamento di exploit noti
-- **A07 — Auth Failures**: brute force, credential stuffing
-- **A08 — Software Integrity**: deserializzazione insicura
-- **A10 — SSRF**: Server-Side Request Forgery
+- **A01 — Broken Access Control**: path traversal (`../`), local file inclusion
+- **A03 — Injection**: SQL injection, XSS, command injection, LDAP injection
+- **A06 — Vulnerable Components**: pattern di exploit noti (es. Log4Shell, Spring4Shell)
+- **A07 — Auth Failures**: protezioni parziali (scanner, session fixation); brute force e credential stuffing richiedono rate limiting/bot control
+- **A08 — Software Integrity**: deserializzazione insicura (Java, PHP)
+- **A10 — SSRF**: pattern verso metadata endpoint e IP interni
+
+!!! note "Cosa un WAF non copre"
+    Le categorie *Cryptographic Failures*, *Insecure Design* e gran parte di *Security Misconfiguration* non sono rilevabili ispezionando richieste HTTP: vanno risolte nel design e nella configurazione. Nella OWASP Top 10:2025 la numerazione cambia (Security Misconfiguration sale a A02, Injection scende ad A05, SSRF confluisce in A01, nuove voci *Software Supply Chain Failures* e *Mishandling of Exceptional Conditions*): verificare sempre l'edizione citata.
+
+!!! warning "ModSecurity v2 è a fine vita"
+    ModSecurity v2 (modulo Apache) è EOL da luglio 2024. Per nginx si usa libmodsecurity (v3) con connector; l'alternativa moderna, compatibile con le regole CRS, è **[Coraza](https://coraza.io/)** (Go, integrabile in Envoy, Caddy, Traefik, proxy-wasm).
 
 ```apache
-# Configurazione ModSecurity base (Apache/nginx)
+# Configurazione ModSecurity base (CRS 4.x)
 SecRuleEngine On
 SecAuditLog /var/log/modsec_audit.log
 SecAuditLogParts ABIJDEFHZ
 
-# Paranoia Level (1=minimo falsi positivi, 4=massima sicurezza)
-SecAction "id:900000,phase:1,nolog,pass,t:none,setvar:tx.paranoia_level=2"
-
-# Abilita CRS
+# Abilita CRS: crs-setup.conf va incluso PRIMA delle regole
 Include /etc/modsecurity/crs/crs-setup.conf
 Include /etc/modsecurity/crs/rules/*.conf
+```
+
+Il rigore si regola in `crs-setup.conf` (CRS 4.x) con il **paranoia level** (1 = pochi falsi positivi, 4 = massima copertura ma molto tuning) e la soglia di anomalia:
+
+```apache
+SecAction "id:900000,phase:1,pass,nolog,setvar:tx.blocking_paranoia_level=2"
+SecAction "id:900110,phase:1,pass,nolog,setvar:tx.inbound_anomaly_score_threshold=5,setvar:tx.outbound_anomaly_score_threshold=4"
 ```
 
 ### AWS WAF
@@ -345,6 +362,13 @@ resource "aws_wafv2_web_acl" "main" {
 
   default_action {
     allow {}
+  }
+
+  # Obbligatorio a livello di WebACL
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "production-waf"
+    sampled_requests_enabled   = true
   }
 
   # AWS Managed Rules: Core Rule Set
@@ -401,25 +425,25 @@ I falsi positivi sono il problema principale dei WAF in produzione. Approccio co
 4. **Gradual enforcement**: abilitare Prevention/Block regola per regola
 5. **Monitoring continuo**: alert su spike di blocked requests
 
-```python
-# Esempio di esclusione in AWS WAF per falso positivo
-# Esclude la regola SQLi per la path /api/v1/query che usa SQL-like syntax legittimamente
-{
-  "ExcludedRules": [
-    {
-      "Name": "SQLi_QUERYARGUMENTS"
-    }
-  ],
-  "ScopeDownStatement": {
-    "ByteMatchStatement": {
-      "SearchString": "/api/v1/query",
-      "FieldToMatch": {"UriPath": {}},
-      "TextTransformations": [{"Priority": 0, "Type": "NONE"}],
-      "PositionalConstraint": "STARTS_WITH"
+In AWS WAF il modo corretto per neutralizzare un falso positivo è `rule_action_override` dentro il managed rule group: la singola regola passa a `count` (viene loggata ma non blocca) mentre le altre restano in blocco. Per limitare l'eccezione a una path si usa uno `scope_down_statement` sul gruppo, con `not_statement` per escludere dall'ispezione la sola `/api/v1/query`.
+
+```hcl
+managed_rule_group_statement {
+  name        = "AWSManagedRulesSQLiRuleSet"
+  vendor_name = "AWS"
+
+  # SQLi_QUERYARGUMENTS in sola osservazione: l'API accetta sintassi SQL-like
+  rule_action_override {
+    name = "SQLi_QUERYARGUMENTS"
+    action_to_use {
+      count {}
     }
   }
 }
 ```
+
+!!! tip "Preferire l'override alla disattivazione"
+    `count` mantiene visibilità nei log e nelle metriche: se la regola inizia a matchare su payload davvero malevoli lo si vede. Disattivare del tutto la regola la rende invisibile.
 
 ## Architettura DMZ
 
@@ -548,7 +572,7 @@ aws wafv2 get-sampled-requests \
 - [nftables wiki](https://wiki.nftables.org/)
 - [AWS Security Groups documentation](https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html)
 - [AWS Network ACLs](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html)
-- [Azure NSG documentation](https://docs.microsoft.com/azure/virtual-network/network-security-groups-overview)
+- [Azure NSG documentation](https://learn.microsoft.com/azure/virtual-network/network-security-groups-overview)
 - [OWASP ModSecurity Core Rule Set](https://coreruleset.org/)
 - [AWS WAF documentation](https://docs.aws.amazon.com/waf/)
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
