@@ -5387,7 +5387,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -5412,7 +5412,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -5922,7 +5922,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25691,8 +25691,7 @@
 </div>
 <div class="admonition warning">
 <p class="admonition-title">SSE-C disabilitato di default sui nuovi bucket</p>
-<p>AWS ha annunciato che, a partire da aprile 2026, SSE-C è disabilitato di default sui nuovi bucket e va riabilitato esplicitamente via <code>PutBucketEncryption</code> (blocco dei tipi di cifratura). Preferire SSE-KMS salvo requisiti specifici di custodia esterna della chiave.
-<!-- REVIEW: verificare data e dettagli esatti del cambio di default SSE-C su docs.aws.amazon.com --></p>
+<p>Dal 6 aprile 2026 SSE-C è disabilitato di default su tutti i nuovi bucket general purpose (rollout progressivo nelle Region; esclusi Middle East Bahrain e UAE). È disabilitato anche sui bucket esistenti di account che non hanno alcun oggetto SSE-C; se anche un solo bucket dell'account contiene oggetti SSE-C, nessun bucket dell'account viene modificato. Per riabilitarlo, impostare <code>BlockedEncryptionTypes</code> a <code>NONE</code> nella configurazione di default encryption via <code>PutBucketEncryption</code>. Preferire SSE-KMS salvo requisiti specifici di custodia esterna della chiave.</p>
 </div>
 <h3 id="dsse-kms-dual-layer-server-side-encryption">DSSE-KMS (Dual-Layer Server-Side Encryption)<a class="headerlink" href="#dsse-kms-dual-layer-server-side-encryption" title="Permanent link">&para;</a></h3>
 <p>Doppio layer di cifratura KMS (due data key separate). Richiesto da alcuni framework di compliance governativi. Non è necessario per la maggior parte dei workload.</p>
@@ -25820,8 +25819,7 @@
 <h2 id="s3-object-lambda">S3 Object Lambda<a class="headerlink" href="#s3-object-lambda" title="Permanent link">&para;</a></h2>
 <div class="admonition warning">
 <p class="admonition-title">Non disponibile per nuovi clienti</p>
-<p>Dal 7 novembre 2025 S3 Object Lambda è in modalità manutenzione: non è più disponibile per nuovi clienti (gli esistenti continuano a usarlo). Alternative: trasformare in una Lambda/API dietro CloudFront o API Gateway, oppure produrre copie derivate (es. dataset senza PII) con una pipeline event-driven e servirle da un bucket/Access Point dedicato.
-<!-- REVIEW: verificare lo stato attuale dell'annuncio AWS di availability change per Object Lambda --></p>
+<p>Dal 7 novembre 2025 S3 Object Lambda è disponibile solo per i clienti esistenti e per alcuni partner APN selezionati (gli esistenti continuano a usarlo; AWS garantisce solo miglioramenti di sicurezza e disponibilità, nessuna nuova funzionalità). Alternative: Dynamic Image Transformation for Amazon CloudFront, Lambda invocata via CloudFront (origin con Function URL) o API Gateway, elaborazione nel client, oppure copie derivate (es. dataset senza PII) prodotte con una pipeline event-driven e servite da un bucket/Access Point dedicato.</p>
 </div>
 <p>S3 Object Lambda permette di trasformare l'output di <code>GetObject</code> (e <code>HeadObject</code>/<code>ListObjects</code>) con una funzione Lambda prima che venga restituito al richiedente. Non modifica l'oggetto originale.</p>
 <p><strong>Use case:</strong>
@@ -26026,8 +26024,7 @@
 - Input per S3 Batch Operations</p>
 <div class="admonition tip">
 <p class="admonition-title">S3 Metadata</p>
-<p>Per inventari quasi in tempo reale, AWS offre anche <strong>S3 Metadata</strong>, che mantiene i metadati degli oggetti in tabelle Apache Iceberg interrogabili con Athena. Inventory resta la scelta più semplice ed economica per report periodici.
-<!-- REVIEW: verificare stato GA e tipi di tabella (journal / live inventory) di S3 Metadata --></p>
+<p>Per inventari quasi in tempo reale, AWS offre anche <strong>S3 Metadata</strong>, che mantiene i metadati degli oggetti in tabelle Apache Iceberg read-only gestite da S3 (in un table bucket <code>aws-s3</code>), interrogabili con Athena, EMR, Redshift e Spark. Per ogni bucket general purpose la configurazione può avere fino a tre tabelle: <strong>journal</strong> (obbligatoria; eventi di upload/update/delete quasi in tempo reale), <strong>live inventory</strong> (opzionale; stato corrente di oggetti e versioni, aggiornato in genere entro un'ora dopo il backfill iniziale a pagamento) e <strong>annotation</strong> (opzionale; annotazioni sugli oggetti). Inventory resta la scelta più semplice ed economica per report periodici.</p>
 </div>
 <hr />
 <h2 id="s3-batch-operations">S3 Batch Operations<a class="headerlink" href="#s3-batch-operations" title="Permanent link">&para;</a></h2>

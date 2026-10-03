@@ -5378,7 +5378,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -5422,7 +5422,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -5447,7 +5447,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25514,7 +25514,7 @@
 - <strong>Scoped a una singola Availability Zone</strong> — un volume EBS può essere attaccato solo a istanze nella stessa AZ
 - <strong>Persistente</strong> — i dati sopravvivono al riavvio e allo stop dell'istanza
 - <strong>Detachable</strong> — può essere staccato da un'istanza e riattaccato a un'altra (nella stessa AZ)
-- <strong>Dimensione:</strong> da 1 GB fino a 64 TB (dipende dal tipo)</p>
+- <strong>Dimensione:</strong> da 1 GiB fino a 64 TiB (gp3 e io2 Block Express; gp2, io1, st1, sc1 fino a 16 TiB)</p>
 <div class="admonition warning">
 <p class="admonition-title">EBS è AZ-locked</p>
 <p>Se si vuole spostare un volume EBS in un'altra AZ o Region, bisogna creare uno snapshot e poi creare un nuovo volume dallo snapshot nella AZ/Region di destinazione.</p>
@@ -25536,9 +25536,9 @@
 <tr>
 <td><strong>gp3</strong></td>
 <td>SSD General Purpose</td>
-<td>16.000</td>
-<td>1.000 MB/s</td>
-<td>1 GB–16 TB</td>
+<td>80.000</td>
+<td>2.000 MiB/s</td>
+<td>1 GiB–64 TiB</td>
 <td>$0.08/GB/mese</td>
 <td>Default per quasi tutto</td>
 </tr>
@@ -25597,11 +25597,10 @@
 - Throughput limitato a 250 MB/s</p>
 <p><strong>gp3:</strong>
 - IOPS <strong>separati dalla dimensione</strong>: baseline 3.000 IOPS (gratis, indipendentemente dal size)
-- IOPS configurabili a pagamento oltre i 3.000 inclusi ($0.005/IOPS provisioned sopra i 3.000), fino a 16.000 IOPS totali nella tabella sopra
-- Throughput: baseline 125 MB/s incluso, configurabile a pagamento fino a 1.000 MB/s
-- Il rapporto IOPS/GB è limitato (max 500 IOPS per GB provisioned)</p>
-<!-- REVIEW: AWS ha annunciato nel 2025 limiti gp3 più alti (fino a 64 TiB, 80.000 IOPS, 2.000 MiB/s). Verificare su docs.aws.amazon.com/ebs/latest/userguide/general-purpose.html e aggiornare tabella tipi volume -->
-
+- IOPS configurabili a pagamento oltre i 3.000 inclusi ($0.005/IOPS provisioned sopra i 3.000), fino a 80.000 IOPS (volumi ≥ 160 GiB)
+- Throughput: baseline 125 MiB/s incluso, configurabile a pagamento fino a 2.000 MiB/s (richiede ≥ 8.000 IOPS e ≥ 16 GiB; rapporto 0,25 MiB/s per IOPS)
+- Il rapporto IOPS/GiB è limitato (max 500 IOPS per GiB provisioned)
+- Su AWS Outposts gp3 resta limitato a 16 TiB, 16.000 IOPS e 1.000 MiB/s</p>
 <div class="admonition note">
 <p class="admonition-title">Come si ottiene la performance</p>
 <p>Su gp2 le IOPS dipendono dalla dimensione perché il volume accumula crediti burst in un bucket (BurstBalance) proporzionale ai GB. gp3 elimina il bucket: IOPS e throughput sono provisioned indipendentemente dalla capacità, quindi la performance è prevedibile e non esiste più il rischio di esaurire il burst.</p>
@@ -25804,7 +25803,7 @@
 <h3 id="performance-modes">Performance Modes<a class="headerlink" href="#performance-modes" title="Permanent link">&para;</a></h3>
 <p><strong>General Purpose (default):</strong>
 - Latenza più bassa (sub-ms per operazioni metadata)
-- Max 35.000 IOPS con throughput Bursting/Provisioned (con Elastic i limiti IOPS sono molto più alti)
+- Fino a 250.000 operazioni di file al secondo (con Elastic i limiti IOPS sono quelli indicati sotto)
 - Uso raccomandato per la maggior parte dei workload: web server, CMS, container</p>
 <p><strong>Max I/O (legacy):</strong>
 - Throughput aggregato più alto, a scapito della latenza (più alta)
@@ -25841,8 +25840,7 @@
 </tr>
 </tbody>
 </table>
-<!-- REVIEW: verificare limiti correnti Elastic per file system (AWS ha alzato i limiti nel 2024: fino a 20 GiB/s read e 5 GiB/s write nelle Region principali) -->
-
+<p>Limiti default Elastic per file system Regional: in 11 Region principali (us-east-&frac12;, us-west-2, ap-south-1, ap-northeast-2, ap-southeast-&frac12;, ap-northeast-1, eu-central-1, eu-west-&frac12;) fino a <strong>60 GiB/s read</strong> e <strong>5 GiB/s write</strong>; nelle altre Region 20 GiB/s read e 1 GiB/s write. IOPS max Elastic: 250.000 read (dati frequenti), 90.000 read (dati infrequenti), 50.000 write; i limiti sono aumentabili via AWS Support. Per client NFS: 1.500 MiB/s con Elastic e amazon-efs-utils ≥ 2.0 (500 MiB/s altrimenti).</p>
 <div class="admonition tip">
 <p class="admonition-title">Elastic vs Provisioned</p>
 <p>Elastic costa per GB trasferito: conviene se l'utilizzo medio è sotto circa il 5% del picco. Con carico alto e costante Provisioned può costare meno.</p>
@@ -26011,12 +26009,13 @@
 <h3 id="fsx-for-netapp-ontap">FSx for NetApp ONTAP<a class="headerlink" href="#fsx-for-netapp-ontap" title="Permanent link">&para;</a></h3>
 <p>File system enterprise basato su NetApp ONTAP managed da AWS. Il più versatile: supporta NFS, SMB, iSCSI (Internet Small Computer System Interface) contemporaneamente, con feature enterprise come deduplica, compressione, thin provisioning.</p>
 <p><strong>Caratteristiche:</strong>
-- Multi-protocol: NFS v3/v4, SMB 2.x/3.x, iSCSI
+- Multi-protocol: NFS v3/v4, SMB 2.x/3.x, iSCSI e NVMe/TCP (NVMe/TCP solo su file system di seconda generazione, dal luglio 2024)
 - Deduplica e compressione dei dati (riduzione storage significativa)
 - Thin provisioning (allocazione virtuale)
 - SnapMirror: replica ONTAP verso ONTAP (on-premises a FSx ONTAP)
 - FlexClone: cloni istantanei di volumi (utili per test/dev)
-- Scalabilità: tier SSD fino a centinaia di TiB per file system più un capacity pool tier (storage a oggetti, economico) per i dati freddi
+- Scalabilità: tier SSD fino a 192 TiB (prima generazione), 512 TiB (seconda generazione Multi-AZ) o fino a 1 PiB (seconda generazione Single-AZ scale-out, 512 TiB per HA pair, fino a 12 HA pair, 200.000 IOPS per pair), più un capacity pool tier (storage a oggetti, economico) per i dati freddi
+- Throughput max seconda generazione: 6.144 MBps Multi-AZ, 73.728 MBps Single-AZ con 12 HA pair
 - Le SVM (Storage Virtual Machine) sono i contenitori logici di volumi, con endpoint e credenziali admin propri
 - Use case: lift &amp; shift di applicazioni enterprise NetApp, SAP, Oracle</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Creare FSx for NetApp ONTAP</span>
@@ -26035,7 +26034,7 @@
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Password admin</p>
-<p>Non scrivere la password <code>fsxadmin</code> in chiaro nella shell history o negli script: recuperarla da Secrets Manager. <!-- REVIEW: verificare limiti capacità correnti ONTAP (scale-out Gen2) e protocolli (NVMe/TCP) --></p>
+<p>Non scrivere la password <code>fsxadmin</code> in chiaro nella shell history o negli script: recuperarla da Secrets Manager.</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Nota</p>
@@ -26044,16 +26043,12 @@
 <h3 id="fsx-for-openzfs">FSx for OpenZFS<a class="headerlink" href="#fsx-for-openzfs" title="Permanent link">&para;</a></h3>
 <p>File system ZFS managed ad alte performance. Snapshot istantanei, cloni, compressione nativa.</p>
 <p><strong>Caratteristiche:</strong>
-- Throughput nell'ordine di 10+ GB/s, IOPS fino a 1 milione (i limiti variano per deployment type)
-- NFS v3 e v4.x</p>
-<!-- REVIEW: verificare limiti correnti per Single-AZ/Multi-AZ e supporto di protocolli aggiuntivi (SMB/iSCSI) -->
-
-<ul>
-<li>Snapshot istantanei (zero-copy), cloni da snapshot</li>
-<li>Compressione Z-Standard</li>
-<li>Deployment: Single-AZ (ottimizzato per performance) o Multi-AZ</li>
-<li>Use case: database analitici, data science, applicazioni POSIX ad alta performance</li>
-</ul>
+- Fino a 21 GB/s e milioni di IOPS (latenza di centinaia di µs) per dati in cache; fino a 10 GB/s e 400.000 IOPS da disco (Single-AZ 2 e Multi-AZ; Single-AZ 1 ha limiti inferiori)
+- Solo NFS (v3, v4.0, v4.1, v4.2): nessun supporto SMB né iSCSI
+- Deployment: Multi-AZ (HA), Single-AZ (HA) e Single-AZ (non-HA); storage class SSD (provisioned) o Intelligent-Tiering (elastico)
+- Snapshot istantanei (zero-copy), cloni da snapshot
+- Compressione Z-Standard
+- Use case: database analitici, data science, applicazioni POSIX ad alta performance</p>
 <h3 id="confronto-fsx">Confronto FSx<a class="headerlink" href="#confronto-fsx" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -26151,7 +26146,7 @@
 <p>La Snow Family è una suite di dispositivi fisici per il trasferimento di dati offline e per l'edge computing in location senza connettività affidabile.</p>
 <div class="admonition warning">
 <p class="admonition-title">Disponibilità ridotta</p>
-<p>AWS ha chiuso ai nuovi clienti Snowcone (novembre 2024) e Snowball Edge (novembre 2025); Snowmobile non è più offerto. Per nuove migrazioni usare AWS DataSync, AWS Transfer Family, Direct Connect o Data Transfer Terminal. Le sezioni seguenti restano come riferimento per clienti esistenti e per l'esame di certificazione. <!-- REVIEW: verificare date e stato esatto di ogni dispositivo su docs.aws.amazon.com/snowball (availability change) --></p>
+<p>Snowcone è stato dismesso il 12 novembre 2024 (non ordinabile né da nuovi né da clienti esistenti); Snowball Edge è disponibile solo ai clienti esistenti da novembre 2025; Snowmobile è stato dismesso nel 2024. Per nuove migrazioni usare AWS DataSync, AWS Transfer Family, Direct Connect o Data Transfer Terminal. Le sezioni seguenti restano come riferimento per clienti esistenti e per l'esame di certificazione.</p>
 </div>
 <p><strong>Quando usare Snow invece di trasferimento via Internet:</strong>
 - Quantità di dati &gt; 10 TB (con connessione a 1 Gbps il trasferimento prende circa 1 giorno, e la banda è raramente dedicata al 100%)
