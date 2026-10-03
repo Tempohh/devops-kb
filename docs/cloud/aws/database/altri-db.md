@@ -3,13 +3,14 @@ title: "Altri Database AWS — ElastiCache, Redshift, Neptune, DocumentDB e altr
 slug: altri-db
 category: cloud
 tags: [aws, elasticache, redis, memcached, redshift, neptune, documentdb, memorydb, keyspaces, timestream, qldb, opensearch, data-warehouse, graph-database, in-memory-cache]
-search_keywords: [elasticache, redis, memcached, cache aside, write through, write behind, cluster mode, redshift, spectrum, redshift serverless, ra3, concurrency scaling, materialized views, neptune, gremlin, sparql, opencypher, graph analytics, documentdb, mongodb compatible, memorydb for redis, keyspaces, cassandra, cql, timestream, qldb, database selection, cache patterns, redis auth, elasticache serverless]
+search_keywords: [valkey, redis oss, zero-etl, neptune analytics, graphrag, timestream for influxdb, qldb end of support, elasticache, redis, memcached, cache aside, write through, write behind, cluster mode, redshift, spectrum, redshift serverless, ra3, concurrency scaling, materialized views, neptune, gremlin, sparql, opencypher, graph analytics, documentdb, mongodb compatible, memorydb for redis, keyspaces, cassandra, cql, timestream, qldb, database selection, cache patterns, redis auth, elasticache serverless]
 parent: cloud/aws/database/_index
 related: [cloud/aws/database/rds-aurora, cloud/aws/database/dynamodb, cloud/aws/security/kms-secrets, cloud/aws/messaging/sqs-sns]
 official_docs: https://aws.amazon.com/products/databases/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Altri Database AWS — ElastiCache, Redshift, Neptune, DocumentDB e altri
@@ -35,24 +36,27 @@ ElastiCache è il servizio di cache in-memory managed di AWS. Supporta due engin
 | Pub/Sub | Sì | No |
 | Scripting Lua | Sì | No |
 | Backup | Sì (snapshot su S3) | No |
-| Multi-thread | No (single-thread per operazione) | Sì |
+| Multi-thread | Esecuzione comandi single-thread; I/O di rete multi-thread (da Redis 7.0 / ElastiCache 7.1) | Sì |
 | Failover automatico | Sì | No |
 | **Raccomandazione** | Quasi sempre | Solo se multi-thread è critico |
 
 !!! tip "Scegliere quasi sempre Redis"
     A meno che non si abbia uno specifico bisogno di multi-threading puro per CPU-bound cache operations, Redis è la scelta corretta per la sua ricchezza di funzionalità.
 
+!!! warning "Redis OSS → Valkey"
+    Dopo il cambio di licenza di Redis (2024) la community ha creato **Valkey** (fork open source sotto Linux Foundation, API-compatibile con Redis OSS 7.2). ElastiCache e MemoryDB supportano Valkey come engine (`--engine valkey`), con prezzi più bassi di Redis OSS (circa -20% node-based, -33% serverless). Redis OSS su ElastiCache resta fermo alla 7.1: per nuovi deployment preferire **Valkey**. Gli esempi `--engine redis` di questa pagina funzionano identici con `valkey` (cambiano engine-version e parameter group, es. `default.valkey7.cluster.on`). Verificare le versioni Valkey correnti nella documentazione ElastiCache.
+
 ### Redis — Cluster Mode Disabled vs Enabled
 
 **Cluster Mode Disabled:**
 - 1 shard: 1 Primary + fino a 5 Replicas
-- Massimo ~500 GB per nodo (dipende dal tipo di istanza)
+- Capacità limitata dalla memoria del singolo nodo (dataset intero in RAM su ogni nodo; dipende dal tipo di istanza)
 - Singola partition key space
 - Multi-AZ con failover automatico
 
 **Cluster Mode Enabled:**
-- Fino a 500 shard (sharding automatico)
-- Fino a 6.7 TB di storage aggregato (esempio: 500 shard × ~13 GB r6g.large)
+- Fino a 500 nodi per cluster (shard × (1 + repliche): es. 500 shard senza repliche, o 250 shard con 1 replica); sharding automatico su 16384 hash slot
+- Storage aggregato = somma della memoria dei primary (dipende da tipo di nodo e numero di shard)
 - Scaling orizzontale: aggiungere/rimuovere shard online
 - Richiede supporto nel client per il routing (Cluster-aware client)
 
@@ -70,7 +74,7 @@ aws elasticache create-replication-group \
   --multi-az-enabled \
   --at-rest-encryption-enabled \
   --transit-encryption-enabled \
-  --auth-token "MySecureRedisPassword123!" \
+  --auth-token "$REDIS_AUTH_TOKEN" \
   --cache-parameter-group-name default.redis7.cluster.on \
   --security-group-ids sg-1234567890 \
   --cache-subnet-group-name my-cache-subnet-group
@@ -85,12 +89,15 @@ aws elasticache create-replication-group \
   --automatic-failover-enabled \
   --at-rest-encryption-enabled \
   --transit-encryption-enabled \
-  --auth-token "MySecureRedisPassword123!"
+  --auth-token "$REDIS_AUTH_TOKEN"
 ```
+
+!!! tip "Credenziali"
+    L'AUTH token (16-128 caratteri, richiede `--transit-encryption-enabled`) non va scritto in chiaro negli script: leggerlo da Secrets Manager. In alternativa usare **RBAC** (utenti + ACL, Redis 6+) o **IAM authentication**, che evitano password statiche. Stesso criterio per le password `master-user-password` degli altri esempi della pagina (in produzione: `--manage-master-user-password` dove supportato, es. RDS/Redshift/DocumentDB).
 
 ### ElastiCache Serverless
 
-ElastiCache Serverless scala automaticamente in base al traffico per Redis e Memcached. Nessun provisioning di nodi o shard.
+ElastiCache Serverless scala automaticamente in base al traffico per Redis, Valkey e Memcached. Nessun provisioning di nodi o shard; si paga per GB-ora di dati e per ECPU consumate (ElastiCache Processing Unit).
 
 ```bash
 # Creare cache serverless Redis
@@ -163,6 +170,7 @@ def update_user(user_id: str, data: dict) -> dict:
 
 **Session Store con Redis:**
 ```python
+import time
 import uuid
 
 def create_session(user_id: str) -> str:
@@ -206,7 +214,7 @@ def is_rate_limited(user_id: str, limit: int = 100, window: int = 60) -> bool:
     key = f"rate_limit:{user_id}"
     pipe = r.pipeline()
     pipe.incr(key)
-    pipe.expire(key, window)
+    pipe.expire(key, window, nx=True)  # TTL impostato solo al primo hit: finestra fissa (richiede Redis/Valkey >= 7)
     count, _ = pipe.execute()
     return count > limit
 ```
@@ -221,7 +229,7 @@ Redshift è il data warehouse managed di AWS, basato su PostgreSQL modificato co
 
 - **Leader Node:** riceve le query, pianifica l'esecuzione, aggrega i risultati
 - **Compute Nodes:** eseguono le operazioni effettive (query execution, storage)
-  - **DC2** (Dense Compute): SSD locale, fino a 2.56 TB per nodo, storage locale
+  - **DC2** (Dense Compute): SSD locale, fino a 2.56 TB per nodo, compute/storage accoppiati. Generazione legacy: per nuovi cluster usare RA3
   - **RA3** (Redshift Managed Storage): storage su S3 (Redshift Managed Storage), compute/storage separati
 
 **Nodi RA3 — Separazione Compute/Storage:**
@@ -249,7 +257,7 @@ aws redshift create-cluster \
 
 ### Redshift Serverless
 
-Redshift Serverless scala automaticamente la capacità di compute in base alle query. Nessun cluster da gestire.
+Redshift Serverless scala automaticamente la capacità di compute in base alle query. Nessun cluster da gestire. La capacità si misura in **RPU** (Redshift Processing Unit, 1 RPU = 16 GB RAM): `base-capacity` è il punto di partenza, `max-capacity` il tetto di costo. Si paga per RPU-secondo di utilizzo effettivo (idle = 0).
 
 ```bash
 # Creare Redshift Serverless namespace e workgroup
@@ -325,17 +333,20 @@ READRATIO 50;  -- usa max 50% del throughput DynamoDB
 
 **Concurrency Scaling:** aggiunge automaticamente capacità di compute burst per gestire picchi di query concorrenti.
 
-```sql
--- Abilitare Concurrency Scaling per workgroup specifici
-ALTER WORKLOAD 'analytics_team'
-SET concurrency_scaling = auto;
+Non esiste un comando SQL per attivarlo: si abilita per **coda WLM** (campo `concurrency_scaling` nel parameter group del cluster provisioned). Le query idonee eccedenti la capacità vengono instradate su cluster aggiuntivi; un certo numero di ore al giorno è gratuito, il resto è a consumo (limite regolabile con `max_concurrency_scaling_clusters`). In Redshift Serverless non serve: la scalatura è intrinseca.
+
+```bash
+aws redshift modify-cluster-parameter-group \
+  --parameter-group-name my-wlm-pg \
+  --parameters 'ParameterName=wlm_json_configuration,ParameterValue=[{"name":"analytics_team","user_group":["analytics"],"query_concurrency":5,"concurrency_scaling":"auto"}]'
 ```
 
 **Materialized Views:** pre-calcola e materializza il risultato di query complesse per accesso rapido.
 
 ```sql
--- Creare Materialized View
-CREATE MATERIALIZED VIEW daily_sales_summary AS
+-- Creare Materialized View (AUTO REFRESH YES: refresh incrementale automatico quando possibile)
+CREATE MATERIALIZED VIEW daily_sales_summary
+AUTO REFRESH YES AS
 SELECT
   DATE_TRUNC('day', order_date) as day,
   product_id,
@@ -345,12 +356,15 @@ SELECT
 FROM orders
 GROUP BY 1, 2;
 
--- Refresh della Materialized View
+-- Refresh manuale (opzionale con AUTO REFRESH)
 REFRESH MATERIALIZED VIEW daily_sales_summary;
 
 -- Query sulla Materialized View (molto più veloce)
 SELECT * FROM daily_sales_summary WHERE day = CURRENT_DATE - 1;
 ```
+
+!!! tip "Zero-ETL"
+    Per portare dati OLTP in Redshift senza pipeline, esistono le **zero-ETL integrations** (Aurora, RDS, DynamoDB → Redshift, replica quasi real-time): alternativa a COPY/DMS per analytics sui dati operazionali.
 
 ### Redshift ML
 
@@ -395,7 +409,7 @@ Neptune è il graph database managed di AWS, ottimizzato per archiviare e naviga
 
 ### Architettura
 
-- Storage condiviso simile ad Aurora: 6 copie su 3 AZ, crescita automatica fino a 64 TB
+- Storage condiviso simile ad Aurora: 6 copie su 3 AZ, crescita automatica fino a 128 TiB (engine recenti; 64 TiB sulle versioni più vecchie)
 - Primary + fino a 15 Read Replicas
 - Failover automatico < 30s
 
@@ -434,7 +448,7 @@ RETURN a1.accountId, a2.accountId, addr.address, merchant.name
 
 ### Neptune Analytics
 
-Neptune Analytics è un motore in-memory per analytics su grafi (fino a 30 milioni di nodi), con algoritmi graph built-in (PageRank, shortest path, community detection).
+Neptune Analytics è un motore in-memory per analytics su grafi (dimensionato in memoria provisioned, in m-NCU, fino a miliardi di relazioni), con algoritmi graph built-in (PageRank, shortest path, community detection) e **vector search** per GraphRAG (retrieval su knowledge graph per applicazioni LLM). Query via openCypher. Complementare a Neptune Database (OLTP su grafo), non sostitutivo.
 
 ```bash
 # Creare un Neptune Analytics graph
@@ -442,14 +456,14 @@ aws neptune-graph create-graph \
   --graph-name fraud-analysis \
   --provisioned-memory 16 \
   --vector-search-configuration dimension=128 \
-  --public-connectivity false
+  --no-public-connectivity
 
-# Caricare dati da S3
+# Creare il grafo caricando i dati da S3 (alternativa a create-graph: crea e importa in un colpo)
 aws neptune-graph create-graph-using-import-task \
-  --graph-id graph-id \
+  --graph-name fraud-analysis-imported \
   --source "s3://my-bucket/graph-data/" \
-  --role-arn arn:aws:iam::123456789012:role/NeptuneRole \
-  --import-options '{"neptune": {"preserveDefaultVertexLabels": true}}'
+  --format CSV \
+  --role-arn arn:aws:iam::123456789012:role/NeptuneRole
 ```
 
 ### Use Case Neptune
@@ -468,11 +482,12 @@ aws neptune-graph create-graph-using-import-task \
 DocumentDB è un database di documenti JSON managed, compatibile con l'API MongoDB. Non è MongoDB: è una reimplementazione parziale dell'API MongoDB da zero da parte di AWS.
 
 !!! warning "DocumentDB NON è MongoDB"
-    DocumentDB emula il driver wire protocol di MongoDB 4.0/5.0 ma non è 100% compatibile. Alcune feature di MongoDB non sono supportate. Verificare la compatibility matrix prima della migrazione.
+    DocumentDB emula il wire protocol di MongoDB (engine 3.6/4.0/5.0, più recenti versioni successive) ma non è 100% compatibile: alcune feature e operatori MongoDB non sono supportati. Verificare la compatibility matrix prima della migrazione.
 
 ### Architettura
 
-- Simile ad Aurora: cluster volume condiviso, 6 copie su 3 AZ, crescita automatica fino a 64 TB
+- Simile ad Aurora: cluster volume condiviso, 6 copie su 3 AZ, crescita automatica fino a 128 TiB
+- Opzioni: storage **I/O-optimized** (niente costo per I/O, conviene con I/O > ~25% della spesa) ed **Elastic Clusters** (sharding orizzontale per scaling di write e storage oltre il singolo writer)
 - 1 Primary + fino a 15 Read Replicas
 - Failover automatico
 
@@ -527,16 +542,16 @@ results = collection.aggregate(pipeline)
 
 ---
 
-## Amazon MemoryDB for Redis
+## Amazon MemoryDB (Valkey / Redis OSS)
 
-MemoryDB è un database Redis fully managed con **durabilità** (a differenza di ElastiCache che è cache). Usa un transaction log Multi-AZ per garantire che i dati non vengano mai persi.
+MemoryDB è un database Valkey/Redis OSS fully managed con **durabilità** (a differenza di ElastiCache che è cache). Usa un transaction log Multi-AZ per garantire che i dati non vengano mai persi: ogni write è replicata sul log prima dell'ack al client, quindi un failover non perde dati confermati (costo: latenza di write di singole cifre ms, contro sub-ms di ElastiCache). Supporta anche vector search.
 
 **Differenza fondamentale con ElastiCache Redis:**
 - ElastiCache Redis: cache, può perdere dati in caso di failover (a seconda della config)
 - MemoryDB: database primary, durabilità garantita via transaction log, RPO quasi zero
 
 **Caratteristiche:**
-- Compatibile con Redis API (stessi comandi, stessi client)
+- Compatibile con Redis/Valkey API (stessi comandi, stessi client)
 - Multi-AZ con transaction log su ogni write
 - Snapshot su S3 per backup
 - Cluster Mode per sharding
@@ -554,6 +569,7 @@ aws memorydb create-cluster \
   --num-shards 2 \
   --num-replicas-per-shard 1 \
   --tls-enabled \
+  --engine valkey \
   --snapshot-retention-limit 7 \
   --kms-key-id alias/my-memorydb-key
 ```
@@ -573,6 +589,8 @@ Keyspaces è il servizio managed per Apache Cassandra su AWS. Compatibile con il
 **Use case:** migrazione di workload Cassandra esistenti, wide-column NoSQL per time-series e IoT.
 
 ```python
+from datetime import datetime
+
 from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
 from ssl import SSLContext, PROTOCOL_TLSv1_2, CERT_REQUIRED
@@ -619,19 +637,19 @@ session.execute("""
 |----------|---------|--------|
 | **OLTP relazionale** | RDS MySQL/PostgreSQL | SQL standard, ACID completo |
 | **OLTP alto throughput cloud-native** | Aurora MySQL/PostgreSQL | 5x MySQL, failover < 30s |
-| **OLTP serverless variabile** | Aurora Serverless v2 | Auto-scale 0.5-256 ACU |
+| **OLTP serverless variabile** | Aurora Serverless v2 | Auto-scale 0-256 ACU (0 = auto-pause) |
 | **NoSQL chiave-valore/documento** | DynamoDB | Serverless, single-digit ms, infinite scale |
 | **Cache, sessioni, pub/sub** | ElastiCache Redis | Sub-ms latency, strutture dati avanzate |
 | **Cache semplice e veloce** | ElastiCache Memcached | Multi-thread, semplice |
-| **Redis come database primario** | MemoryDB for Redis | Durabilità + Redis API |
+| **Valkey/Redis come database primario** | MemoryDB | Durabilità + API Valkey/Redis |
 | **Data Warehouse / OLAP** | Amazon Redshift | Colonnare, petabyte scale, SQL |
 | **Analytics serverless** | Redshift Serverless | No cluster management |
 | **Data lake queries** | Athena | SQL su S3, serverless, pay-per-query |
 | **Graph database** | Amazon Neptune | Property graph o RDF |
 | **MongoDB workloads** | DocumentDB | MongoDB-compatible API |
 | **Apache Cassandra workloads** | Amazon Keyspaces | CQL-compatible, serverless |
-| **Time series (IoT, metriche)** | Amazon Timestream | Time series ottimizzato |
-| **Ledger immutabile** | Amazon QLDB | Cryptographically verifiable |
+| **Time series (IoT, metriche)** | Timestream for InfluxDB | Time series, API InfluxDB (Timestream for LiveAnalytics chiuso ai nuovi clienti) |
+| **Ledger immutabile** | Aurora PostgreSQL + audit/hash chain | QLDB dismesso il 31/07/2025 |
 | **Search full-text** | OpenSearch Service | Elasticsearch/OpenSearch managed |
 
 ---
@@ -640,7 +658,10 @@ session.execute("""
 
 Database specializzato per dati time-series (IoT, metriche, telemetria). Ordini di grandezza più veloce e meno costoso di un database relazionale per time-series.
 
-**Caratteristiche:**
+!!! warning "Due prodotti, uno chiuso ai nuovi clienti"
+    **Timestream for LiveAnalytics** (engine descritto sotto, API `timestream-write`/`timestream-query`) non accetta più nuovi clienti dal giugno 2025: i clienti esistenti continuano a usarlo e AWS indica come strada di migrazione **Timestream for InfluxDB** (InfluxDB 2/3 managed, API e Telegraf nativi) o l'export verso altri store. Per nuovi progetti usare Timestream for InfluxDB, oppure Managed Service for Prometheus / CloudWatch per metriche infrastrutturali. Verificare lo stato corrente su AWS prima di decidere.
+
+**Caratteristiche (LiveAnalytics):**
 - Scritture: scala automaticamente a miliardi di eventi/giorno
 - Query: SQL-like con funzioni time-series built-in
 - Storage tiering: memoria (query veloci) → magnetico (archivio economico)
@@ -690,9 +711,12 @@ result = query_client.query(
 
 ## Amazon QLDB
 
-QLDB (Quantum Ledger Database) è un database ledger completamente managed, immutabile e crittograficamente verificabile. Ogni modifica è registrata in un journal append-only con digest SHA-256.
+!!! danger "QLDB è dismesso"
+    AWS ha chiuso Amazon QLDB: **end of support 31 luglio 2025**. Non è più utilizzabile per nuovi workload e i dati esistenti dovevano essere migrati prima di quella data. AWS raccomanda **Aurora PostgreSQL** (con tabelle append-only, trigger di audit e hash chain applicativa) per il caso d'uso ledger; la sezione sotto resta come riferimento per capire sistemi legacy e il pattern.
 
-**Caratteristiche:**
+QLDB (Quantum Ledger Database) era un database ledger managed, immutabile e crittograficamente verificabile. Ogni modifica era registrata in un journal append-only con digest SHA-256.
+
+**Caratteristiche (storiche):**
 - Tutte le modifiche sono verificabili crittograficamente (impossibile alterare la storia)
 - SQL-like query language (PartiQL)
 - Serverless
@@ -713,11 +737,12 @@ QLDB (Quantum Ledger Database) è un database ledger completamente managed, immu
 2. **TTL sempre** — evitare cache stale a lunga vita
 3. **Eviction policy appropriata:** `allkeys-lru` per cache generale, `volatile-lru` se si mixano dati con e senza TTL
 4. **Cluster Mode** per carichi elevati che superano la capacità di un singolo nodo
-5. **Redis AUTH + TLS** sempre in produzione
+5. **TLS + autenticazione** (RBAC/IAM, in alternativa AUTH token) sempre in produzione
+6. **Valkey** per nuovi deployment (più economico, API compatibile)
 
 ### Redshift
 
-1. **RA3** per nuovi cluster (compute/storage separati, più flessibile)
+1. **Serverless** per carichi variabili, **RA3** per carichi stabili e prevedibili (compute/storage separati)
 2. **Distribution key e sort key** corrette per le query più frequenti
 3. **WLM (Workload Management)** per separare query heavy da quelle leggere
 4. **VACUUM e ANALYZE** regolari per performance ottimali
@@ -756,23 +781,23 @@ Cause comuni:
 ### Scenario 2 — Redshift: Query Lente
 
 ```sql
--- Identificare query lente
-SELECT query, duration, userid, starttime
-FROM stl_query
-WHERE duration > 60000000  -- > 60 secondi
-ORDER BY duration DESC
+-- Identificare query lente (provisioned e serverless: vista SYS, durata in microsecondi)
+SELECT query_id, elapsed_time, user_id, start_time
+FROM sys_query_history
+WHERE elapsed_time > 60000000  -- > 60 secondi
+ORDER BY elapsed_time DESC
 LIMIT 20;
 
 -- Analizzare un piano di esecuzione
 EXPLAIN SELECT * FROM large_table WHERE category = 'A';
 
--- Verificare la distribuzione dei dati (skew)
-SELECT slice, COUNT(*)
-FROM stv_blocklist
-WHERE tbl = (SELECT id FROM stv_tbl_perm WHERE name = 'my_table')
-GROUP BY slice
-ORDER BY slice;
+-- Verificare skew di distribuzione e statistiche stale (skew_rows vicino a 1 = bilanciato)
+SELECT "table", diststyle, skew_rows, stats_off, unsorted
+FROM svv_table_info
+ORDER BY skew_rows DESC NULLS LAST;
 ```
+
+Le vecchie tabelle `STL_*`/`STV_*` (es. `stl_query`) esistono solo su cluster provisioned e sono in via di sostituzione dalle viste `SYS_*`, uniche disponibili in Serverless.
 
 ### Scenario 3 — DocumentDB: Errori di Connessione TLS
 
@@ -805,11 +830,12 @@ mongosh --tls --tlsCAFile global-bundle.pem \
 
 **Soluzione:**
 1. Interrogare `stl_load_errors` per il dettaglio riga/colonna dell'errore
-2. Verificare che il ruolo IAM abbia `s3:GetObject` e `s3:ListBucket` sul bucket sorgente
+2. Verificare che il ruolo IAM sia associato al cluster/namespace (`aws redshift describe-clusters --query 'Clusters[].IamRoles'`) e abbia `s3:GetObject` e `s3:ListBucket` sul bucket sorgente
 3. Aggiungere `MAXERROR N` per tollerare un numero limitato di righe errate in sviluppo
 
 ```sql
--- Identificare gli errori di caricamento
+-- Identificare gli errori di caricamento dell'ultimo COPY
+-- (provisioned: stl_load_errors; Serverless: sys_load_error_detail con colonne analoghe)
 SELECT
   filename,
   line_number,
@@ -820,9 +846,6 @@ FROM stl_load_errors
 WHERE query = pg_last_copy_id()
 ORDER BY line_number
 LIMIT 50;
-
--- Verificare i diritti IAM associati al cluster
-SELECT iam_roles FROM svv_attached_masking_policy;
 
 -- Rieseguire il COPY con MAXERROR per isolare il problema
 COPY my_table
