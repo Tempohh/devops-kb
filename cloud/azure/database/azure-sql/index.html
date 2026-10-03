@@ -7734,7 +7734,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7759,7 +7759,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -8131,7 +8131,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -25142,7 +25142,7 @@
 <thead>
 <tr>
 <th>Tier</th>
-<th>IOPS</th>
+<th>Storage / IOPS</th>
 <th>SLA</th>
 <th>HA</th>
 <th>In-Memory OLTP</th>
@@ -25152,30 +25152,34 @@
 <tbody>
 <tr>
 <td><strong>General Purpose</strong></td>
-<td>7000 IOPS/file</td>
+<td>Remote storage (Premium); IOPS crescono con vCore e dimensione file</td>
 <td>99.99%</td>
-<td>Remote storage</td>
+<td>Compute stateless + remote storage</td>
 <td>No</td>
-<td>No (a pagamento)</td>
+<td>Solo geo-replica (a pagamento)</td>
 </tr>
 <tr>
 <td><strong>Business Critical</strong></td>
-<td>Local SSD, 200K IOPS</td>
+<td>Local SSD, fino a ~200K IOPS (crescono con vCore)</td>
 <td>99.99%</td>
-<td>Local SSD HA</td>
+<td>Always On con 3+ repliche su local SSD</td>
 <td>Sì</td>
-<td>1 gratuita</td>
+<td>1 inclusa (read scale-out)</td>
 </tr>
 <tr>
 <td><strong>Hyperscale</strong></td>
-<td>Scalabile</td>
-<td>99.99%</td>
-<td>Multi-layer</td>
+<td>Architettura multi-layer (page server), storage fino a 128 TB</td>
+<td>99.95–99.99% (dipende da repliche/zone)</td>
+<td>Fino a 4 HA replica</td>
 <td>No</td>
 <td>Fino a 30 named replicas</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Perché i tier differiscono</p>
+<p>In General Purpose il compute è separato dallo storage remoto: dopo un failover un nuovo nodo si riaggancia ai file (latenza I/O più alta, ma costo minore). In Business Critical i dati stanno su SSD locale replicato tra nodi (stile Availability Group): I/O a bassa latenza e failover rapido, a costo maggiore.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">RG</span><span class="o">=</span><span class="s2">"rg-database-prod"</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">LOCATION</span><span class="o">=</span><span class="s2">"westeurope"</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nv">SERVER_NAME</span><span class="o">=</span><span class="s2">"sqlsrv-prod-2026"</span>
@@ -25226,7 +25230,7 @@
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--name<span class="w"> </span>myapp-serverless<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>--edition<span class="w"> </span>GeneralPurpose<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span>--family<span class="w"> </span>Gen5<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span>--capacity<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span>--capacity<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span>--compute-model<span class="w"> </span>Serverless<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span>--auto-pause-delay<span class="w"> </span><span class="m">60</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span>--min-capacity<span class="w"> </span><span class="m">0</span>.5<span class="w"> </span><span class="se">\</span>
@@ -25240,12 +25244,16 @@
 </span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">  </span>--auto-pause-delay<span class="w"> </span><span class="m">120</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">  </span>--min-capacity<span class="w"> </span><span class="m">1</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Capacity in Serverless</p>
+<p>Con <code>--compute-model Serverless</code>, <code>--capacity</code> è il massimo di vCore e deve coincidere con <code>--max-capacity</code>; <code>--min-capacity</code> è il minimo. <code>--auto-pause-delay</code> è in minuti (minimo 15, <code>-1</code> disabilita la pausa).</p>
+</div>
 <div class="admonition tip">
 <p class="admonition-title">Serverless: Quando Usarlo</p>
 <p>Serverless è ideale per database di dev/test, applicazioni con picchi imprevedibili, o SaaS con molti tenant piccoli. Non usarlo per workload con latency critica: il resume dopo auto-pause può richiedere qualche secondo.</p>
 </div>
 <h2 id="hyperscale">Hyperscale<a class="headerlink" href="#hyperscale" title="Permanent link">&para;</a></h2>
-<p>Hyperscale è l'opzione di scalabilità estrema di Azure SQL Database: storage fino a 100 TB, scaling quasi istantaneo, named replicas per read-scaling, rapid restore.</p>
+<p>Hyperscale è l'opzione di scalabilità estrema di Azure SQL Database: storage fino a 128 TB, scaling quasi istantaneo, named replicas per read-scaling, rapid restore.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Creare database Hyperscale</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>az<span class="w"> </span>sql<span class="w"> </span>db<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
@@ -25270,7 +25278,7 @@
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Hyperscale vs Business Critical</p>
-<p>Hyperscale scala storage illimitato e ha rapid restore, ma non ha in-memory OLTP. Business Critical ha local SSD per massima performance I/O e una read replica gratuita. Scegli in base al bottleneck: storage/scale (Hyperscale) vs latency I/O (Business Critical).</p>
+<p>Hyperscale scala storage fino a 128 TB e ha rapid restore (snapshot su storage, tempi quasi indipendenti dalla dimensione), ma non ha in-memory OLTP. Business Critical ha local SSD per massima performance I/O e una read replica gratuita. Scegli in base al bottleneck: storage/scale (Hyperscale) vs latency I/O (Business Critical).</p>
 </div>
 <h2 id="elastic-pool">Elastic Pool<a class="headerlink" href="#elastic-pool" title="Permanent link">&para;</a></h2>
 <p>Gli Elastic Pool permettono a più database di condividere un pool di risorse (vCore o DTU), ottimizzando i costi per workload con picchi distribuiti nel tempo (come applicazioni SaaS multi-tenant).</p>
@@ -25346,7 +25354,7 @@
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Grace Period</p>
-<p><code>--grace-period 1</code> significa: Azure aspetta 1 ora prima di eseguire il failover automatico dopo aver perso il contatto con la primaria. Valori bassi riducono RTO ma aumentano il rischio di split-brain. In produzione, valuta almeno 1 ora.</p>
+<p><code>--grace-period 1</code> (in ore) significa: Azure aspetta 1 ora prima di eseguire il failover automatico <em>con possibile perdita di dati</em> dopo aver perso il contatto con la primaria. Il failover è asincrono: transazioni non ancora replicate vanno perse. Valori bassi riducono l'RTO ma aumentano il rischio di perdita dati per outage transitori; 1 ora è il minimo. Per perdita dati zero, usa failover manuale (<code>set-primary</code>) con sincronizzazione completa.</p>
 </div>
 <h2 id="backup">Backup<a class="headerlink" href="#backup" title="Permanent link">&para;</a></h2>
 <p>Azure SQL esegue backup automatici:
@@ -25358,28 +25366,34 @@
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--server<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$DB_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>--backup-storage-redundancy<span class="w"> </span>Geo<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span>--retention<span class="w"> </span><span class="m">35</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># Long-Term Retention (LTR) — fino a 10 anni</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>az<span class="w"> </span>sql<span class="w"> </span>db<span class="w"> </span>ltr-policy<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span>--server<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span>--database<span class="w"> </span><span class="nv">$DB_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">  </span>--weekly-retention<span class="w"> </span>P4W<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span>--monthly-retention<span class="w"> </span>P12M<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">  </span>--yearly-retention<span class="w"> </span>P5Y<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">  </span>--week-of-year<span class="w"> </span><span class="m">1</span>
-</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="c1"># Restore database a punto temporale specifico</span>
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>az<span class="w"> </span>sql<span class="w"> </span>db<span class="w"> </span>restore<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">  </span>--server<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$DB_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="w">  </span>--dest-name<span class="w"> </span>myapp-restored<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="w">  </span>--time<span class="w"> </span><span class="s2">"2026-02-25T10:00:00"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="w">  </span>--dest-resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="w">  </span>--dest-server<span class="w"> </span><span class="nv">$SERVER_NAME</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>--backup-storage-redundancy<span class="w"> </span>Geo
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># Retention PITR (1-35 giorni; default 7)</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>az<span class="w"> </span>sql<span class="w"> </span>db<span class="w"> </span>str-policy<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span>--server<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$DB_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span>--retention-days<span class="w"> </span><span class="m">35</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="c1"># Long-Term Retention (LTR) — fino a 10 anni</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>az<span class="w"> </span>sql<span class="w"> </span>db<span class="w"> </span>ltr-policy<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">  </span>--server<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">  </span>--database<span class="w"> </span><span class="nv">$DB_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">  </span>--weekly-retention<span class="w"> </span>P4W<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">  </span>--monthly-retention<span class="w"> </span>P12M<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">  </span>--yearly-retention<span class="w"> </span>P5Y<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">  </span>--week-of-year<span class="w"> </span><span class="m">1</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="c1"># Restore database a punto temporale specifico</span>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>az<span class="w"> </span>sql<span class="w"> </span>db<span class="w"> </span>restore<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="w">  </span>--server<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$DB_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="w">  </span>--dest-name<span class="w"> </span>myapp-restored<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-31"><a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a><span class="w">  </span>--time<span class="w"> </span><span class="s2">"2026-02-25T10:00:00"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="w">  </span>--dest-resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a><span class="w">  </span>--dest-server<span class="w"> </span><span class="nv">$SERVER_NAME</span>
 </span></code></pre></div>
 <h2 id="auditing-e-microsoft-defender-for-sql">Auditing e Microsoft Defender for SQL<a class="headerlink" href="#auditing-e-microsoft-defender-for-sql" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Abilitare auditing su server SQL</span>
@@ -25390,21 +25404,16 @@
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span>--log-analytics-workspace-resource-id<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>monitor<span class="w"> </span>log-analytics<span class="w"> </span>workspace<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span>rg-monitoring<span class="w"> </span>--workspace-name<span class="w"> </span>law-prod<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span>--log-analytics-target-state<span class="w"> </span>Enabled
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># Abilitare Defender for SQL (rileva SQL injection, anomalie accesso)</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># Abilitare Advanced Threat Protection (rileva SQL injection, anomalie accesso)</span>
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>az<span class="w"> </span>sql<span class="w"> </span>server<span class="w"> </span>advanced-threat-protection-setting<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span>--server<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span>--state<span class="w"> </span>Enabled
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="c1"># Abilitare Vulnerability Assessment</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>az<span class="w"> </span>sql<span class="w"> </span>server<span class="w"> </span>vulnerability-assessment<span class="w"> </span>setting<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">  </span>--server<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">  </span>--storage-account<span class="w"> </span>mystorageaccount2026<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">  </span>--storage-key<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>keys<span class="w"> </span>list<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--account-name<span class="w"> </span>mystorageaccount2026<span class="w"> </span>--query<span class="w"> </span><span class="s2">"[0].value"</span><span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">  </span>--recurr-scans-day-of-week<span class="w"> </span>Sunday<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">  </span>--recurr-scans-time<span class="w"> </span><span class="m">00</span>:00
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Defender for SQL e Vulnerability Assessment</p>
+<p>Il modo consigliato di attivare Defender for SQL è a livello subscription tramite il piano <em>Defender for Databases / SQL</em> in Microsoft Defender for Cloud, che copre anche Vulnerability Assessment. Il VA usa la configurazione <em>express</em> (nessun storage account da gestire): evita la vecchia configurazione <em>classic</em> con storage account e chiave.</p>
+</div>
 <h2 id="autenticazione">Autenticazione<a class="headerlink" href="#autenticazione" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Abilitare autenticazione Entra ID sul server SQL</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>az<span class="w"> </span>sql<span class="w"> </span>server<span class="w"> </span>ad-admin<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
@@ -25427,29 +25436,49 @@
 </span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="c1"># )</span>
 </span></code></pre></div>
 <h2 id="private-endpoint-per-azure-sql">Private Endpoint per Azure SQL<a class="headerlink" href="#private-endpoint-per-azure-sql" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Disabilitare accesso pubblico</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>az<span class="w"> </span>sql<span class="w"> </span>server<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Creare Private Endpoint</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>az<span class="w"> </span>network<span class="w"> </span>private-endpoint<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--restrict-outbound-network-access<span class="w"> </span><span class="nb">false</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span>--public-network-access<span class="w"> </span>Disabled
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># Creare Private Endpoint</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>az<span class="w"> </span>network<span class="w"> </span>private-endpoint<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">  </span>--name<span class="w"> </span>pep-sql-prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">  </span>--vnet-name<span class="w"> </span>vnet-prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">  </span>--subnet<span class="w"> </span>snet-private-endpoints<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">  </span>--private-connection-resource-id<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>sql<span class="w"> </span>server<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">  </span>--group-ids<span class="w"> </span>sqlServer<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">  </span>--connection-name<span class="w"> </span>conn-sql-prod
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="c1"># DNS zona privata</span>
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a>az<span class="w"> </span>network<span class="w"> </span>private-dns<span class="w"> </span>zone<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"privatelink.database.windows.net"</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--name<span class="w"> </span>pep-sql-prod<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--vnet-name<span class="w"> </span>vnet-prod<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span>--subnet<span class="w"> </span>snet-private-endpoints<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span>--private-connection-resource-id<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>sql<span class="w"> </span>server<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span>--group-ids<span class="w"> </span>sqlServer<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">  </span>--connection-name<span class="w"> </span>conn-sql-prod
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># DNS zona privata</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>az<span class="w"> </span>network<span class="w"> </span>private-dns<span class="w"> </span>zone<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"privatelink.database.windows.net"</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="c1"># Collegare la zona DNS alla VNet</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>az<span class="w"> </span>network<span class="w"> </span>private-dns<span class="w"> </span>link<span class="w"> </span>vnet<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">  </span>--zone-name<span class="w"> </span><span class="s2">"privatelink.database.windows.net"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">  </span>--name<span class="w"> </span>link-vnet-prod<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="w">  </span>--virtual-network<span class="w"> </span>vnet-prod<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="w">  </span>--registration-enabled<span class="w"> </span><span class="nb">false</span>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="c1"># Registrare automaticamente il record A del PE nella zona</span>
+</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a>az<span class="w"> </span>network<span class="w"> </span>private-endpoint<span class="w"> </span>dns-zone-group<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="w">  </span>--endpoint-name<span class="w"> </span>pep-sql-prod<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="w">  </span>--name<span class="w"> </span>default<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a><span class="w">  </span>--private-dns-zone<span class="w"> </span><span class="s2">"privatelink.database.windows.net"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a><span class="w">  </span>--zone-name<span class="w"> </span>sql
+</span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a>
+</span><span id="__span-9-32"><a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a><span class="c1"># Solo dopo aver verificato la risoluzione DNS privata: disabilitare accesso pubblico</span>
+</span><span id="__span-9-33"><a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a>az<span class="w"> </span>sql<span class="w"> </span>server<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-34"><a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-35"><a id="__codelineno-9-35" name="__codelineno-9-35" href="#__codelineno-9-35"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-36"><a id="__codelineno-9-36" name="__codelineno-9-36" href="#__codelineno-9-36"></a><span class="w">  </span>--enable-public-network<span class="w"> </span><span class="nb">false</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Ordine delle operazioni</p>
+<p>Disabilitare l'accesso pubblico prima che PE e DNS privato funzionino interrompe tutti i client. Senza il record nella zona <code>privatelink</code>, il nome del server risolve all'IP pubblico e la connessione fallisce.</p>
+</div>
 <h2 id="transparent-data-encryption-tde-con-cmk">Transparent Data Encryption (TDE) con CMK<a class="headerlink" href="#transparent-data-encryption-tde-con-cmk" title="Permanent link">&para;</a></h2>
+<p>TDE è attivo di default con una chiave gestita da Microsoft (service-managed). La CMK serve solo per requisiti di compliance/controllo della chiave. Il server deve avere una <strong>managed identity</strong> (user-assigned consigliata) con permessi <code>get</code>, <code>wrapKey</code>, <code>unwrapKey</code> sulla chiave (o ruolo RBAC <em>Key Vault Crypto Service Encryption User</em>); se la chiave è revocata o cancellata, il database diventa inaccessibile.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Abilitare TDE con Customer-managed Key (CMK)</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>az<span class="w"> </span>sql<span class="w"> </span>server<span class="w"> </span>tde-key<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
@@ -25473,30 +25502,23 @@
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span>--address-prefixes<span class="w"> </span><span class="m">10</span>.0.20.0/24<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span>--delegations<span class="w"> </span>Microsoft.Sql/managedInstances
 </span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="c1"># Creare SQL Managed Instance (operazione richiede 4-6 ore)</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>az<span class="w"> </span>sql<span class="w"> </span>mi<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">  </span>--name<span class="w"> </span>sqlmi-prod-2026<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span>--location<span class="w"> </span><span class="nv">$LOCATION</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>--admin-user<span class="w"> </span>sqladmin<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">  </span>--admin-password<span class="w"> </span><span class="s2">"</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-base64<span class="w"> </span><span class="m">32</span><span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">  </span>--subnet<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>network<span class="w"> </span>vnet<span class="w"> </span>subnet<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--vnet-name<span class="w"> </span>vnet-prod<span class="w"> </span>--name<span class="w"> </span>snet-sql-mi<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">  </span>--sku-name<span class="w"> </span>GP_Gen5<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">  </span>--vcores<span class="w"> </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">  </span>--storage-size-in-gb<span class="w"> </span><span class="m">256</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">  </span>--license-type<span class="w"> </span>BasePrice<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">  </span>--zone-redundant<span class="w"> </span><span class="nb">true</span>
-</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a>
-</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="c1"># Link Feature: replica asincrona da SQL Server on-premises a SQL MI</span>
-</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="c1"># (per migrazione zero-downtime e disaster recovery)</span>
-</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a>az<span class="w"> </span>sql<span class="w"> </span>mi<span class="w"> </span>link<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a><span class="w">  </span>--instance-name<span class="w"> </span>sqlmi-prod-2026<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-28"><a id="__codelineno-11-28" name="__codelineno-11-28" href="#__codelineno-11-28"></a><span class="w">  </span>--name<span class="w"> </span>my-link<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-29"><a id="__codelineno-11-29" name="__codelineno-11-29" href="#__codelineno-11-29"></a><span class="w">  </span>--primary-availability-group-name<span class="w"> </span>AGPrimary<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-30"><a id="__codelineno-11-30" name="__codelineno-11-30" href="#__codelineno-11-30"></a><span class="w">  </span>--target-database<span class="w"> </span>myapp<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-31"><a id="__codelineno-11-31" name="__codelineno-11-31" href="#__codelineno-11-31"></a><span class="w">  </span>--source-endpoint<span class="w"> </span><span class="s2">"192.168.1.100:5022"</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="c1"># Creare SQL Managed Instance (operazione lunga: da decine di minuti a diverse ore;</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># la prima istanza in una subnet vuota è la più lenta. Usare --no-wait e monitorare)</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>az<span class="w"> </span>sql<span class="w"> </span>mi<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span>--name<span class="w"> </span>sqlmi-prod-2026<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>--location<span class="w"> </span><span class="nv">$LOCATION</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">  </span>--admin-user<span class="w"> </span>sqladmin<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">  </span>--admin-password<span class="w"> </span><span class="s2">"</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-base64<span class="w"> </span><span class="m">32</span><span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">  </span>--subnet<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>network<span class="w"> </span>vnet<span class="w"> </span>subnet<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--vnet-name<span class="w"> </span>vnet-prod<span class="w"> </span>--name<span class="w"> </span>snet-sql-mi<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">  </span>--sku-name<span class="w"> </span>GP_Gen5<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">  </span>--vcores<span class="w"> </span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">  </span>--storage-size-in-gb<span class="w"> </span><span class="m">256</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">  </span>--license-type<span class="w"> </span>BasePrice<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="w">  </span>--zone-redundant<span class="w"> </span><span class="nb">true</span>
 </span></code></pre></div>
+<p><code>--license-type BasePrice</code> applica Azure Hybrid Benefit (licenza SQL Server già posseduta); il default <code>LicenseIncluded</code> include il costo della licenza.</p>
+<p><strong>Managed Instance link</strong>: replica asincrona (tecnologia Distributed Availability Group) da SQL Server on-premises/VM a SQL MI, utile per migrazione con downtime minimo e DR. Si configura dalla procedura guidata in SSMS o con <code>az sql mi link create</code>; i requisiti (versione SQL Server, connettività porta 5022, certificati) sono nella documentazione ufficiale.</p>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Usa sempre <code>--zone-redundant true</code> per database di produzione (99.99% SLA)</li>
@@ -25505,11 +25527,11 @@
 <li>Usa <strong>Entra ID authentication</strong> e disabilita la SQL authentication dove possibile</li>
 <li>Configura <strong>Private Endpoint</strong> e disabilita l'accesso pubblico per sicurezza</li>
 <li>Per Elastic Pool, monitora <code>eDTU_used</code> / vCore: se un tenant usa sempre &gt;50%, spostarlo fuori dal pool</li>
-<li>Usa <strong>Azure SQL Analytics</strong> workbook in Azure Monitor per visibilità performantica</li>
+<li>Per monitoring delle performance usa <strong>Query Store / Query Performance Insight</strong> e <strong>Database Watcher</strong> (monitoring gestito per Azure SQL); verifica lo stato di <em>Azure SQL Analytics</em>, in dismissione a favore di Database Watcher</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-connessione-rifiutata-timeout-dal-client">Scenario 1 — Connessione rifiutata / timeout dal client<a class="headerlink" href="#scenario-1-connessione-rifiutata-timeout-dal-client" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> L'applicazione riceve <code>Cannot open server 'X' requested by the login</code> o timeout di connessione anche con credenziali corrette.</p>
+<p><strong>Sintomo:</strong> L'applicazione riceve <code>Cannot open server 'X' requested by the login. Client with IP address 'Y' is not allowed to access the server</code> o timeout di connessione anche con credenziali corrette.</p>
 <p><strong>Causa:</strong> Firewall del server SQL non include l'IP del client, oppure l'accesso pubblico è disabilitato senza Private Endpoint raggiungibile dalla rete del client.</p>
 <p><strong>Soluzione:</strong> Verificare le regole firewall e aggiungere l'IP o il range necessario.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Listare regole firewall attive</span>
@@ -25534,7 +25556,7 @@
 </span></code></pre></div>
 <h3 id="scenario-2-database-raggiunge-il-limite-di-storage">Scenario 2 — Database raggiunge il limite di storage<a class="headerlink" href="#scenario-2-database-raggiunge-il-limite-di-storage" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Errori <code>The database has reached its size quota</code> o <code>INSERT failed: database is full</code>. Il database smette di accettare scritture.</p>
-<p><strong>Causa:</strong> Il database ha raggiunto il valore <code>--max-size</code> configurato. Comune in database con crescita rapida o log transaction non purgati.</p>
+<p><strong>Causa:</strong> Il database ha raggiunto il valore <code>--max-size</code> configurato. Comune in database con crescita rapida (errore 40544). Il transaction log non conta nel <code>--max-size</code>: il limite riguarda i dati.</p>
 <p><strong>Soluzione:</strong> Aumentare la dimensione massima o liberare spazio eliminando dati/indici obsoleti.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Verificare dimensione corrente e massima</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>az<span class="w"> </span>sql<span class="w"> </span>db<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
@@ -25559,7 +25581,7 @@
 </span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a><span class="c1"># GROUP BY t.name ORDER BY TotalMB DESC</span>
 </span></code></pre></div>
 <h3 id="scenario-3-failover-group-in-stato-degradato-o-catch_up-lento">Scenario 3 — Failover Group in stato degradato o CATCH_UP lento<a class="headerlink" href="#scenario-3-failover-group-in-stato-degradato-o-catch_up-lento" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> <code>az sql failover-group show</code> riporta <code>replicationState: CATCH_UP</code> da molto tempo o <code>SUSPENDED</code>. Il failover automatico non avviene come previsto.</p>
+<p><strong>Sintomo:</strong> il link di replica mostra <code>replication_state_desc</code> = <code>CATCH_UP</code> da molto tempo o <code>SUSPENDED</code>. Il failover automatico non avviene come previsto.</p>
 <p><strong>Causa:</strong> Lag di replica elevato tra primaria e secondaria (workload pesante, rete degradata, o secondaria sottodimensionata). In stato <code>SUSPENDED</code> la replica è ferma.</p>
 <p><strong>Soluzione:</strong> Verificare il replication lag, controllare le metriche di rete, e se necessario ridimensionare la secondaria per allinearla alla primaria.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Controllare stato del failover group</span>
@@ -25567,22 +25589,26 @@
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span>--server<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span>--name<span class="w"> </span>fg-myapp-prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"{state:replicationState, role:role, partnerServers:partnerServers}"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"{policy:readWriteEndpoint.failoverPolicy, graceMin:readWriteEndpoint.failoverWithDataLossGracePeriodMinutes, partners:partnerServers}"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">  </span>--output<span class="w"> </span>json
 </span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="c1"># Controllare metriche di replica dal portale (replication_lag_sec)</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>az<span class="w"> </span>monitor<span class="w"> </span>metrics<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">  </span>--resource<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>sql<span class="w"> </span>db<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--server<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$DB_NAME</span><span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">  </span>--metric<span class="w"> </span><span class="s2">"replication_lag_sec"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">  </span>--interval<span class="w"> </span>PT1M<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="c1"># Stato dei link di replica per database</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>az<span class="w"> </span>sql<span class="w"> </span>db<span class="w"> </span>replica<span class="w"> </span>list-links<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">  </span>--server<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$DB_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">  </span>--output<span class="w"> </span>table
 </span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># Verificare service tier della secondaria (deve essere uguale alla primaria)</span>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>az<span class="w"> </span>sql<span class="w"> </span>db<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">  </span>--resource-group<span class="w"> </span>rg-database-dr<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">  </span>--server<span class="w"> </span>sqlsrv-dr-northeurope<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$DB_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"currentSku"</span><span class="w"> </span>--output<span class="w"> </span>json
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># Lag di replica: eseguire in T-SQL sulla primaria</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="c1"># SELECT partner_server, replication_state_desc, replication_lag_sec</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="c1"># FROM sys.dm_geo_replication_link_status;</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a>
+</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="c1"># Verificare service tier della secondaria (deve essere uguale alla primaria)</span>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a>az<span class="w"> </span>sql<span class="w"> </span>db<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">  </span>--resource-group<span class="w"> </span>rg-database-dr<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="w">  </span>--server<span class="w"> </span>sqlsrv-dr-northeurope<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$DB_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-25"><a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"currentSku"</span><span class="w"> </span>--output<span class="w"> </span>json
 </span></code></pre></div>
 <h3 id="scenario-4-performance-degradata-query-lente-su-azure-sql-database">Scenario 4 — Performance degradata: query lente su Azure SQL Database<a class="headerlink" href="#scenario-4-performance-degradata-query-lente-su-azure-sql-database" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Query che prima completavano in pochi ms ora impiegano secondi. CPU o DTU/vCore al 100% su Azure Monitor.</p>
@@ -25594,14 +25620,8 @@
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span>--metric<span class="w"> </span><span class="s2">"cpu_percent,dtu_consumption_percent,deadlock"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span>--interval<span class="w"> </span>PT5M<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">  </span>--output<span class="w"> </span>table
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="c1"># Ottenere suggerimenti automatici di performance (Index Advisor)</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>az<span class="w"> </span>sql<span class="w"> </span>db<span class="w"> </span>op<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">  </span>--server<span class="w"> </span><span class="nv">$SERVER_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">  </span>--database<span class="w"> </span><span class="nv">$DB_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">  </span>--output<span class="w"> </span>table
 </span></code></pre></div>
+<p><code>dtu_consumption_percent</code> esiste solo nel modello DTU; in vCore usa <code>cpu_percent</code>. Per suggerimenti automatici attiva <strong>Automatic Tuning</strong> (create/drop index, force last good plan) e consulta le raccomandazioni con <code>SELECT * FROM sys.dm_db_tuning_recommendations;</code>.</p>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1">-- Top 5 query per CPU (eseguire su database target)</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">TOP</span><span class="w"> </span><span class="mi">5</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="n">qs</span><span class="p">.</span><span class="n">total_worker_time</span><span class="o">/</span><span class="n">qs</span><span class="p">.</span><span class="n">execution_count</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">avg_cpu_us</span><span class="p">,</span>
