@@ -10973,6 +10973,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-hpa-bloccato-a-minreplicas-non-scala" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — HPA bloccato a minReplicas / non scala
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-hpa-scala-ma-non-raggiunge-il-valore-atteso" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — HPA scala ma non raggiunge il valore atteso
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-vpa-in-loop-di-evict-o-raccomandazioni-non-applicate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — VPA in loop di evict o raccomandazioni non applicate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-keda-non-scala" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — KEDA non scala
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-cluster-autoscaler-non-aggiunge-o-non-rimuove-nodi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Cluster Autoscaler non aggiunge o non rimuove nodi
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24680,6 +24741,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-hpa-bloccato-a-minreplicas-non-scala" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — HPA bloccato a minReplicas / non scala
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-hpa-scala-ma-non-raggiunge-il-valore-atteso" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — HPA scala ma non raggiunge il valore atteso
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-vpa-in-loop-di-evict-o-raccomandazioni-non-applicate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — VPA in loop di evict o raccomandazioni non applicate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-keda-non-scala" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — KEDA non scala
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-cluster-autoscaler-non-aggiunge-o-non-rimuove-nodi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Cluster Autoscaler non aggiunge o non rimuove nodi
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -25113,8 +25235,8 @@
 </span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">    </span><span class="nt">annotations</span><span class="p">:</span>
 </span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">      </span><span class="nt">eks.amazonaws.com/role-arn</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::123456789:role/ClusterAutoscalerRole</span>
 </span></code></pre></div>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Annotazione su node group per CA</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># Aggiungere sui nodi (gestito da ASG tags in AWS):</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Annotazione sui POD (non sui nodi): permette al CA di evictarli</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># anche se altrimenti bloccherebbero lo scale-down (es. local storage)</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="nt">cluster-autoscaler.kubernetes.io/safe-to-evict</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
 </span></code></pre></div>
 <div class="admonition warning">
@@ -25153,53 +25275,55 @@
 - Pattern sicuro: VPA su <code>memory</code> + HPA su <code>cpu</code> o custom metric.</p>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<p><strong>HPA bloccato a minReplicas / non scala</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Verificare stato HPA</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>hpa<span class="w"> </span>web-app-hpa
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Errori comuni:</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1"># "unable to get metrics for resource cpu" → Metrics Server non installato/funzionante</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1"># "missing request for cpu" → Il container non ha requests definiti (OBBLIGATORIO)</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="c1"># "invalid metrics (0 invalid out of 1)"  → Regola Prometheus Adapter errata</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="c1"># Verificare Metrics Server</span>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deployment<span class="w"> </span>metrics-server<span class="w"> </span>-n<span class="w"> </span>kube-system
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>production
-</span></code></pre></div></p>
-<p><strong>HPA scala ma non raggiunge il valore atteso</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Calcolo manuale per debug</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>web-app-hpa<span class="w"> </span>-o<span class="w"> </span>yaml
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># Verificare: status.currentMetrics vs spec.metrics[].target</span>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Verificare: status.conditions (ScalingLimited = MaxReplicas raggiunto)</span>
-</span></code></pre></div></p>
-<p><strong>VPA rimuove risorse invece di aumentarle</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Vedere raccomandazioni correnti</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>vpa<span class="w"> </span>web-app-vpa<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.recommendation}'</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Se VPA evict loop → controllare minAllowed/maxAllowed troppo stretti</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="c1"># Se VPA non aggiorna → verificare che admission webhook sia attivo</span>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>vpa
-</span></code></pre></div></p>
-<p><strong>KEDA non scala</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Stato ScaledObject</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>scaledobject<span class="w"> </span>kafka-consumer-scaler
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># Verificare trigger (es. connettività Kafka)</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>keda<span class="w"> </span>deployment/keda-operator<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>kafka-consumer-scaler
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="c1"># Metriche KEDA esposte come external metrics</span>
-</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>--raw<span class="w"> </span><span class="s2">"/apis/external.metrics.k8s.io/v1beta1"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
-</span></code></pre></div></p>
-<p><strong>Cluster Autoscaler non aggiunge nodi</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Log CA</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>deployment/cluster-autoscaler<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"scale up"</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># Errori comuni:</span>
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="c1"># "pod didn't trigger scale-up" → Pod è schedulabile su nodo esistente</span>
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="c1"># "node group min size reached" → ASG min size = current nodes</span>
-</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="c1"># "waiting for initial delay" → scale-down-delay-after-add non ancora scaduto</span>
-</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="c1"># Verificare che i pod Pending abbiano tollerazioni corrette per i node groups</span>
-</span></code></pre></div></p>
+<h3 id="scenario-1-hpa-bloccato-a-minreplicas-non-scala">Scenario 1 — HPA bloccato a minReplicas / non scala<a class="headerlink" href="#scenario-1-hpa-bloccato-a-minreplicas-non-scala" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>kubectl get hpa</code> mostra <code>&lt;unknown&gt;/70%</code> nei TARGETS e le repliche restano a <code>minReplicas</code>.</p>
+<p><strong>Causa</strong>: l'HPA non riesce a leggere le metriche. Cause tipiche: Metrics Server assente o non sano; container senza <code>resources.requests.cpu</code> (l'utilizzo % è calcolato rispetto ai requests, senza requests il calcolo è impossibile); regola Prometheus Adapter errata.</p>
+<p><strong>Soluzione</strong>: leggere <code>Conditions</code>/<code>Events</code> dell'HPA e verificare la catena delle metriche.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>hpa<span class="w"> </span>web-app-hpa
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># "unable to get metrics for resource cpu"  → Metrics Server non installato/funzionante</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># "missing request for cpu"                 → definire requests sul container</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># "invalid metrics (0 invalid out of 1)"    → regola Prometheus Adapter errata</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deployment<span class="w"> </span>metrics-server<span class="w"> </span>-n<span class="w"> </span>kube-system
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>production
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>--raw<span class="w"> </span><span class="s2">"/apis/custom.metrics.k8s.io/v1beta1"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
+</span></code></pre></div>
+<h3 id="scenario-2-hpa-scala-ma-non-raggiunge-il-valore-atteso">Scenario 2 — HPA scala ma non raggiunge il valore atteso<a class="headerlink" href="#scenario-2-hpa-scala-ma-non-raggiunge-il-valore-atteso" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: le repliche si fermano sotto il numero atteso e il carico resta alto.</p>
+<p><strong>Causa</strong>: <code>maxReplicas</code> raggiunto (condition <code>ScalingLimited</code>), oppure le <code>behavior.scaleUp.policies</code> limitano il ritmo di crescita, oppure i pod nuovi restano <code>Pending</code> per mancanza di nodi.</p>
+<p><strong>Soluzione</strong>: confrontare metrica corrente e target, controllare condition e pod Pending.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>web-app-hpa<span class="w"> </span>-o<span class="w"> </span>yaml
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># status.currentMetrics vs spec.metrics[].target</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># status.conditions: ScalingLimited=True → maxReplicas o policy troppo stretti</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>production<span class="w"> </span>--field-selector<span class="o">=</span>status.phase<span class="o">=</span>Pending
+</span></code></pre></div>
+<h3 id="scenario-3-vpa-in-loop-di-evict-o-raccomandazioni-non-applicate">Scenario 3 — VPA in loop di evict o raccomandazioni non applicate<a class="headerlink" href="#scenario-3-vpa-in-loop-di-evict-o-raccomandazioni-non-applicate" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: i pod vengono ricreati di continuo, oppure le risorse non cambiano mai.</p>
+<p><strong>Causa</strong>: <code>minAllowed</code>/<code>maxAllowed</code> troppo stretti fanno oscillare la raccomandazione; in modalità <code>Auto</code> ogni cambio richiede un evict. Se le risorse non si aggiornano, l'admission webhook del VPA non è attivo (la mutazione dei pod avviene lì).</p>
+<p><strong>Soluzione</strong>: allargare i limiti, passare a <code>Initial</code>/<code>Off</code>, verificare i componenti VPA.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>vpa<span class="w"> </span>web-app-vpa<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.recommendation}'</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>vpa
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>mutatingwebhookconfigurations<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>vpa
+</span></code></pre></div>
+<h3 id="scenario-4-keda-non-scala">Scenario 4 — KEDA non scala<a class="headerlink" href="#scenario-4-keda-non-scala" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>ScaledObject</code> con <code>READY=False</code> o <code>ACTIVE=False</code>, deployment fermo (anche a 0 con lag presente).</p>
+<p><strong>Causa</strong>: trigger non raggiungibile (broker o credenziali errati), <code>activationLagThreshold</code> non superato, oppure API external metrics non registrata.</p>
+<p><strong>Soluzione</strong>: ispezionare lo stato dello ScaledObject e i log dell'operator.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>scaledobject<span class="w"> </span>kafka-consumer-scaler
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>keda<span class="w"> </span>deployment/keda-operator<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>kafka-consumer-scaler
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>apiservice<span class="w"> </span>v1beta1.external.metrics.k8s.io
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>kubectl<span class="w"> </span>get<span class="w"> </span>--raw<span class="w"> </span><span class="s2">"/apis/external.metrics.k8s.io/v1beta1"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
+</span></code></pre></div>
+<h3 id="scenario-5-cluster-autoscaler-non-aggiunge-o-non-rimuove-nodi">Scenario 5 — Cluster Autoscaler non aggiunge o non rimuove nodi<a class="headerlink" href="#scenario-5-cluster-autoscaler-non-aggiunge-o-non-rimuove-nodi" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: pod <code>Pending</code> che non triggerano scale-up, oppure nodi sottoutilizzati mai rimossi.</p>
+<p><strong>Causa</strong>: il pod è schedulabile altrove o non ha tolleration/selector compatibili con nessun node group; ASG al <code>max size</code>; scale-down bloccato da PDB, pod con local storage, pod senza controller o con annotation <code>safe-to-evict: "false"</code>.</p>
+<p><strong>Soluzione</strong>: leggere log e ConfigMap di stato del CA.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>deployment/cluster-autoscaler<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-Ei<span class="w"> </span><span class="s2">"scale.?up|scale.?down|unremovable"</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>cluster-autoscaler-status<span class="w"> </span>-o<span class="w"> </span>yaml
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="c1"># "pod didn't trigger scale-up"  → schedulabile su nodo esistente o nessun node group idoneo</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># "max node group size reached"  → alzare il max dell'ASG</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pdb<span class="w"> </span>-A
+</span></code></pre></div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">

@@ -11268,6 +11268,78 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-backup-in-stato-partiallyfailed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Backup in stato PartiallyFailed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-volumi-non-inclusi-nel-backup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Volumi non inclusi nel backup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-restore-che-lascia-i-pvc-in-pending" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Restore che lascia i PVC in Pending
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-bsl-in-stato-unavailable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — BSL in stato Unavailable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-restore-con-errori-su-crd-versioni-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Restore con errori su CRD / versioni API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-6-restore-che-salta-oggetti-esistenti" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 6 — Restore che salta oggetti esistenti
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24780,6 +24852,78 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-backup-in-stato-partiallyfailed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Backup in stato PartiallyFailed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-volumi-non-inclusi-nel-backup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Volumi non inclusi nel backup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-restore-che-lascia-i-pvc-in-pending" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Restore che lascia i PVC in Pending
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-bsl-in-stato-unavailable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — BSL in stato Unavailable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-restore-con-errori-su-crd-versioni-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Restore con errori su CRD / versioni API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-6-restore-che-salta-oggetti-esistenti" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 6 — Restore che salta oggetti esistenti
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -25319,33 +25463,53 @@
 <p>1) Dichiarare l'incidente e fissare il punto di ripristino. 2) Creare il cluster da IaC. 3) Installare Velero con BSL <code>ReadOnly</code>. 4) Ripristinare CRD/operatori e poi i namespace per priorità. 5) Verificare PVC <code>Bound</code>, Pod <code>Ready</code>, smoke test applicativi. 6) Spostare DNS/traffico. 7) Post-mortem e aggiornamento del runbook.</p>
 </div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<p><strong>Backup in stato <code>PartiallyFailed</code></strong>
-Sintomo: <code>velero backup describe</code> mostra <code>Phase: PartiallyFailed</code> ed <code>Errors: N</code>. Causa tipica: alcune risorse o volumi non sono stati salvati (permessi RBAC, hook falliti, snapshot non riuscito, API di CRD non più servita). Soluzione:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>velero<span class="w"> </span>backup<span class="w"> </span>describe<span class="w"> </span>&lt;nome&gt;<span class="w"> </span>--details
+<h3 id="scenario-1-backup-in-stato-partiallyfailed">Scenario 1 — Backup in stato <code>PartiallyFailed</code><a class="headerlink" href="#scenario-1-backup-in-stato-partiallyfailed" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>velero backup describe</code> mostra <code>Phase: PartiallyFailed</code> ed <code>Errors: N</code>.</p>
+<p><strong>Causa</strong>: alcune risorse o volumi non sono stati salvati (permessi RBAC, hook falliti, snapshot non riuscito, API di CRD non più servita).</p>
+<p><strong>Soluzione</strong>:</p>
+<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>velero<span class="w"> </span>backup<span class="w"> </span>describe<span class="w"> </span>&lt;nome&gt;<span class="w"> </span>--details
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>velero<span class="w"> </span>backup<span class="w"> </span>logs<span class="w"> </span>&lt;nome&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-iE<span class="w"> </span><span class="s2">"error|level=error"</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>velero<span class="w"> </span>logs<span class="w"> </span>deploy/velero<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-100
 </span></code></pre></div>
 Correggere la causa (spesso hook con <code>onError: Fail</code> o timeout) e rilanciare il backup. Un backup <code>PartiallyFailed</code> <strong>è ripristinabile solo per le parti salvate</strong>: non considerarlo valido per il DR.</p>
-<p><strong>Volumi non inclusi nel backup</strong>
-Sintomo: il restore crea i PVC vuoti o li omette. Causa: il PVC non ha <code>VolumeSnapshotClass</code> etichettata, il driver CSI non supporta snapshot, oppure con FSB il volume non è stato opt-in (<code>--default-volumes-to-fs-backup</code> assente e nessuna annotation <code>backup.velero.io/backup-volumes</code>). Soluzione:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>volumesnapshotclass<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-B3<span class="w"> </span>velero.io/csi-volumesnapshot-class
+<h3 id="scenario-2-volumi-non-inclusi-nel-backup">Scenario 2 — Volumi non inclusi nel backup<a class="headerlink" href="#scenario-2-volumi-non-inclusi-nel-backup" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: il restore crea i PVC vuoti o li omette.</p>
+<p><strong>Causa</strong>: il PVC non ha <code>VolumeSnapshotClass</code> etichettata, il driver CSI non supporta snapshot, oppure con FSB il volume non è stato opt-in (<code>--default-volumes-to-fs-backup</code> assente e nessuna annotation <code>backup.velero.io/backup-volumes</code>).</p>
+<p><strong>Soluzione</strong>:</p>
+<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>volumesnapshotclass<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-B3<span class="w"> </span>velero.io/csi-volumesnapshot-class
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>shop<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>&lt;pod&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.metadata.annotations}'</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>velero<span class="w"> </span>backup<span class="w"> </span>describe<span class="w"> </span>&lt;nome&gt;<span class="w"> </span>--details<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">'/Volumes:/,$p'</span>
 </span></code></pre></div>
 Etichettare la <code>VolumeSnapshotClass</code> o attivare l'FSB. I volumi <code>emptyDir</code>, <code>hostPath</code> e i <code>projected</code> non vengono salvati come dati.</p>
-<p><strong>Restore che lascia i PVC in <code>Pending</code></strong>
-Sintomo: <code>kubectl get pvc</code> mostra <code>Pending</code> dopo il restore. Cause: la StorageClass originale non esiste sul cluster di destinazione, <code>volumeBindingMode: WaitForFirstConsumer</code> senza Pod schedulabili, zona diversa per il volume. Soluzione: creare la StorageClass mancante o usare la ConfigMap <code>change-storage-class</code>; verificare con <code>kubectl describe pvc &lt;nome&gt;</code> gli eventi <code>ProvisioningFailed</code>. Vedi <a href="../storage/">Storage</a>.</p>
-<p><strong>BSL in stato <code>Unavailable</code></strong>
-Sintomo: <code>velero backup-location get</code> mostra <code>Unavailable</code>, i backup restano in <code>New</code>/<code>FailedValidation</code>. Cause: Secret delle credenziali errato o scaduto, bucket inesistente, policy IAM senza <code>s3:PutObject/GetObject/DeleteObject/ListBucket</code>, endpoint o region sbagliata. Soluzione:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>velero<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>cloud-credentials<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.cloud}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>velero<span class="w"> </span>logs<span class="w"> </span>deploy/velero<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"backup store"</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>velero<span class="w"> </span>backup-location<span class="w"> </span>get
+<h3 id="scenario-3-restore-che-lascia-i-pvc-in-pending">Scenario 3 — Restore che lascia i PVC in <code>Pending</code><a class="headerlink" href="#scenario-3-restore-che-lascia-i-pvc-in-pending" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>kubectl get pvc</code> mostra <code>Pending</code> dopo il restore.</p>
+<p><strong>Causa</strong>: la StorageClass originale non esiste sul cluster di destinazione, <code>volumeBindingMode: WaitForFirstConsumer</code> senza Pod schedulabili, zona diversa per il volume.</p>
+<p><strong>Soluzione</strong>: creare la StorageClass mancante o usare la ConfigMap <code>change-storage-class</code>; verificare gli eventi <code>ProvisioningFailed</code>. Vedi <a href="../storage/">Storage</a>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pvc<span class="w"> </span>&lt;nome&gt;<span class="w"> </span>-n<span class="w"> </span>shop-restore<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">'/Events:/,$p'</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>storageclass
+</span></code></pre></div>
+<h3 id="scenario-4-bsl-in-stato-unavailable">Scenario 4 — BSL in stato <code>Unavailable</code><a class="headerlink" href="#scenario-4-bsl-in-stato-unavailable" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>velero backup-location get</code> mostra <code>Unavailable</code>, i backup restano in <code>New</code>/<code>FailedValidation</code>.</p>
+<p><strong>Causa</strong>: Secret delle credenziali errato o scaduto, bucket inesistente, policy IAM senza <code>s3:PutObject/GetObject/DeleteObject/ListBucket</code>, endpoint o region sbagliata.</p>
+<p><strong>Soluzione</strong>:</p>
+<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>velero<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>cloud-credentials<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.cloud}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>velero<span class="w"> </span>logs<span class="w"> </span>deploy/velero<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"backup store"</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>velero<span class="w"> </span>backup-location<span class="w"> </span>get
 </span></code></pre></div>
 Aggiornare il Secret e riavviare il Deployment <code>velero</code>. Preferire identità federate (IRSA, Workload Identity) alle chiavi statiche, che scadono o ruotano.</p>
-<p><strong>Restore con errori su CRD / versioni API</strong>
-Sintomo: <code>Restore</code> in <code>PartiallyFailed</code> con <code>no matches for kind "X" in version "Y"</code> o <code>the server could not find the requested resource</code>. Causa: il cluster di destinazione ha una versione di Kubernetes diversa (API rimosse) o i CRD non sono ancora installati. Soluzione: installare prima operatori/CRD (via Helm/ArgoCD), poi lanciare il restore; Velero ripristina la versione preferita dell'API (<code>EnableAPIGroupVersions</code> aiuta tra versioni). Per upgrade difficili ripristinare prima su un cluster di staging della stessa versione.</p>
-<p><strong>Restore che sovrascrive/salta oggetti esistenti</strong>
-Sintomo: <code>Warning: already exists</code>. Comportamento standard: Velero non modifica risorse esistenti (<code>--existing-resource-policy=none</code>). Per aggiornarle usare <code>--existing-resource-policy=update</code>, oppure eliminare prima il namespace.</p>
+<h3 id="scenario-5-restore-con-errori-su-crd-versioni-api">Scenario 5 — Restore con errori su CRD / versioni API<a class="headerlink" href="#scenario-5-restore-con-errori-su-crd-versioni-api" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>Restore</code> in <code>PartiallyFailed</code> con <code>no matches for kind "X" in version "Y"</code> o <code>the server could not find the requested resource</code>.</p>
+<p><strong>Causa</strong>: il cluster di destinazione ha una versione di Kubernetes diversa (API rimosse) o i CRD non sono ancora installati.</p>
+<p><strong>Soluzione</strong>: installare prima operatori/CRD (via Helm/ArgoCD), poi lanciare il restore; Velero ripristina la versione preferita dell'API (<code>EnableAPIGroupVersions</code> aiuta tra versioni). Per upgrade difficili ripristinare prima su un cluster di staging della stessa versione.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>velero<span class="w"> </span>restore<span class="w"> </span>describe<span class="w"> </span>&lt;nome&gt;<span class="w"> </span>--details<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"no matches"</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>kubectl<span class="w"> </span>api-resources<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>&lt;kind&gt;
+</span></code></pre></div>
+<h3 id="scenario-6-restore-che-salta-oggetti-esistenti">Scenario 6 — Restore che salta oggetti esistenti<a class="headerlink" href="#scenario-6-restore-che-salta-oggetti-esistenti" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>Warning: already exists</code> nel log del restore, risorse non aggiornate.</p>
+<p><strong>Causa</strong>: comportamento standard, Velero non modifica risorse esistenti (<code>--existing-resource-policy=none</code>) per non sovrascrivere stato vivo.</p>
+<p><strong>Soluzione</strong>: usare <code>--existing-resource-policy=update</code> oppure eliminare prima il namespace.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>velero<span class="w"> </span>restore<span class="w"> </span>create<span class="w"> </span>--from-backup<span class="w"> </span>shop-20261002<span class="w"> </span>--existing-resource-policy<span class="o">=</span>update
+</span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
 <summary>Storage Kubernetes — Approfondimento</summary>
