@@ -3,13 +3,14 @@ title: "Fine-Tuning — LoRA, QLoRA, RLHF, DPO"
 slug: fine-tuning
 category: ai
 tags: [fine-tuning, lora, qlora, rlhf, dpo, peft, sft]
-search_keywords: [LoRA fine-tuning, QLoRA, RLHF, DPO Direct Preference Optimization, PEFT parameter efficient, Unsloth, TRL HuggingFace, SFT supervised fine-tuning, reward model, PPO reinforcement learning, dataset Alpaca, ShareGPT format, NF4 quantization, adapter, instruction tuning, preference dataset]
+search_keywords: [GRPO, RLVR, LoRA fine-tuning, QLoRA, RLHF, DPO Direct Preference Optimization, PEFT parameter efficient, Unsloth, TRL HuggingFace, SFT supervised fine-tuning, reward model, PPO reinforcement learning, dataset Alpaca, ShareGPT format, NF4 quantization, adapter, instruction tuning, preference dataset]
 parent: ai/training/_index
 related: [ai/training/_index, ai/training/valutazione, ai/fondamentali/deep-learning, ai/mlops/infrastruttura-gpu, ai/modelli/modelli-open-source]
 official_docs: https://huggingface.co/docs/trl/index
-status: complete
+status: needs-review
 difficulty: expert
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Fine-Tuning — LoRA, QLoRA, RLHF, DPO
@@ -27,12 +28,23 @@ Il full fine-tuning aggiorna tutti i parametri del modello. Costa enormemente in
 ```
 Full Fine-Tuning:
 - Tutti i parametri vengono aggiornati (7B → 7 miliardi di gradienti)
-- Richede FP16/BF16 weights + optimizer states (Adam: 4× weights) + gradients
-- Llama 3.1 8B full FT: ~128 GB VRAM minima
+- Richiede pesi BF16 + gradienti + optimizer states Adam (FP32 master weights, momento, varianza)
+  → ~16 byte/parametro in mixed precision
+- Llama 3.1 8B full FT: ~128 GB VRAM (8B × 16 byte), prima delle attivazioni
 - Raramente necessario: quasi sempre PEFT è sufficiente
 ```
 
-**Quando usare:** mai in pratica, a meno di avere un dataset di milioni di esempi e accesso a cluster GPU enterprise. Anche Meta e Anthropic usano varianti di PEFT per i propri modelli.
+**Quando usare:** solo con dataset molto grandi (continued pre-training, cambio di lingua/dominio profondo) e accesso a cluster GPU. Per adattare stile, formato o competenze di task, PEFT basta e costa 10-100× meno.
+
+!!! note "Modelli negli esempi"
+    Gli esempi usano Llama 3.1 8B/70B per continuità con i numeri di VRAM. Il flusso è identico per le famiglie open-weight più recenti (Llama 4, Qwen3, Gemma 3, Mistral…): cambiano `model_id`, i nomi dei `target_modules` (verificali con `print(model)`) e il chat template.
+
+!!! warning "API TRL/Transformers in evoluzione"
+    `trl` cambia API spesso. Gli esempi seguono le versioni recenti: `processing_class` al posto di `tokenizer`, `eval_strategy` al posto di `evaluation_strategy`. Se vedi `TypeError: unexpected keyword argument`, controlla la versione installata (`pip show trl transformers`) e il changelog.
+    <!-- REVIEW: verificare nomi parametri SFTConfig (max_length vs max_seq_length), DPOConfig (max_prompt_length) sulla versione TRL corrente -->
+
+??? info "Quando NON fare fine-tuning"
+    Se serve conoscenza aggiornata o proprietaria, di solito è meglio il RAG: il fine-tuning insegna stile e comportamento, non è un buon canale per iniettare fatti che cambiano. Parti sempre da prompt engineering e RAG; fine-tuna quando hai un task ripetitivo con metrica misurabile.
 
 ## 2. LoRA — Low-Rank Adaptation
 
@@ -44,14 +56,16 @@ LoRA congela i pesi originali del modello e inserisce matrici di aggiornamento a
 Peso originale W (frozen): d × k  (es. 4096 × 4096 = 16.7M parametri)
 
 LoRA aggiunge:
-  A: d × r  (es. 4096 × 16 = 65.5K parametri)
-  B: r × k  (es. 16 × 4096 = 65.5K parametri)
+  B: d × r  (es. 4096 × 16 = 65.5K parametri, inizializzata a zero)
+  A: r × k  (es. 16 × 4096 = 65.5K parametri, init gaussiana)
 
 Output = W·x + (B·A)·x × (alpha/r)
 
-Parametri addestrati: 2 × d × r = 131K invece di 16.7M
+Parametri addestrati: r × (d + k) = 131K invece di 16.7M
 Riduzione: 99.2% dei parametri!
 ```
+
+**Perché funziona:** l'ipotesi del paper è che l'aggiornamento `ΔW` necessario per adattare il modello abbia rango intrinseco basso, quindi lo si approssima con `B·A`. `B` parte da zero, quindi a inizio training il modello è identico al base. A fine training `B·A` si può sommare a `W` (merge, vedi sezione 8) senza costo extra in inferenza.
 
 | Hyperparametro | Descrizione | Valori Tipici |
 |---------------|-------------|---------------|
@@ -61,6 +75,7 @@ Riduzione: 99.2% dei parametri!
 | `dropout` | Dropout nelle matrici LoRA | 0.05-0.1 |
 
 ```python
+import torch
 from peft import LoraConfig, get_peft_model, TaskType
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -90,7 +105,8 @@ lora_config = LoraConfig(
 # Applica LoRA al modello
 model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
-# trainable params: 20,185,088 || all params: 8,051,224,576 || trainable%: 0.2508
+# trainable params: 41,943,040 || all params: 8,072,204,288 || trainable%: 0.5196
+# (r=16 su tutti e 7 i moduli lineari di Llama 3.1 8B)
 ```
 
 ## 3. QLoRA — LoRA con Quantizzazione 4-bit
@@ -105,9 +121,11 @@ Llama 3.1 8B:
   NF4:    ~4.5 GB VRAM → si fa fine-tuning su GPU da 8-12 GB!
 
 Llama 3.1 70B:
-  FP16:  ~140 GB VRAM (4-5 A100)
-  NF4:   ~40 GB VRAM (1-2 A100 o 2 RTX 4090)
+  FP16:  ~140 GB solo pesi (2× 80 GB minimo, più training: 4× 80 GB)
+  NF4:   ~40 GB solo pesi (1× A100/H100 80 GB, o 2× RTX 4090 con batch piccoli)
 ```
+
+**Perché NF4:** i pesi di un LLM sono distribuiti circa normalmente; NF4 posiziona i 16 livelli di quantizzazione sui quantili di una normale, perdendo meno informazione di un INT4 uniforme. Il *double quant* quantizza anche le costanti di scala (~0,4 bit/parametro risparmiati). I gradienti passano attraverso i pesi quantizzati (dequantizzati al volo in BF16) e aggiornano solo gli adapter LoRA.
 
 ```python
 from transformers import AutoModelForCausalLM, BitsAndBytesConfig
@@ -139,7 +157,7 @@ model = get_peft_model(model, lora_config)
 
 ### QLoRA con Unsloth (Consigliato)
 
-Unsloth è una libreria che ottimizza il fine-tuning con patch custom di Triton/CUDA: 2-5× più veloce di vanilla HuggingFace, 50-70% meno VRAM.
+Unsloth è una libreria che ottimizza il fine-tuning con kernel custom Triton/CUDA: dichiara 2-5× di velocità rispetto a HuggingFace vanilla e 50-70% in meno di VRAM (numeri del vendor, variano con modello e hardware). Si integra con TRL (`SFTTrainer`, `DPOTrainer`, `GRPOTrainer`).
 
 ```python
 # pip install unsloth
@@ -179,8 +197,8 @@ model.print_trainable_parameters()
 [
     {
         "instruction": "Analizza questo manifest Kubernetes e identifica problemi di sicurezza",
-        "input": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: myapp\nspec:\n  template:\n    spec:\n      containers:\n      - name: app\n        image: myapp:latest\n        securityContext:\n          runAsRoot: true",
-        "output": "PROBLEMI IDENTIFICATI:\n1. **CRITICO** - runAsRoot: true: Il container gira come root. Usa runAsNonRoot: true e specifica runAsUser con UID non-root (es. 1000).\n2. **HIGH** - Nessun SecurityContext a livello pod.\n3. **MEDIUM** - Tag 'latest' per l'immagine: usa tag specifici per reproducibilità."
+        "input": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: myapp\nspec:\n  template:\n    spec:\n      containers:\n      - name: app\n        image: myapp:latest\n        securityContext:\n          runAsUser: 0",
+        "output": "PROBLEMI IDENTIFICATI:\n1. **CRITICO** - runAsUser: 0: Il container gira come root. Usa runAsNonRoot: true e specifica runAsUser con UID non-root (es. 1000).\n2. **HIGH** - Nessun SecurityContext a livello pod.\n3. **MEDIUM** - Tag 'latest' per l'immagine: usa tag specifici per reproducibilità."
     }
 ]
 ```
@@ -206,7 +224,11 @@ model.print_trainable_parameters()
 
 ### Qualità dei Dati
 
+Il formato conta meno del contenuto, ma deve essere coerente: usa sempre il chat template del modello (`tokenizer.apply_chat_template`) sia in training sia in inferenza, altrimenti il modello vede token di controllo diversi da quelli appresi.
+
 ```python
+import json
+
 # Checklist per la qualità del dataset
 quality_criteria = {
     "completezza": "La risposta è completa e non tronca informazioni importanti?",
@@ -228,18 +250,19 @@ def filter_dataset(examples: list[dict]) -> list[dict]:
         if len(response) < 100:
             continue
 
-        # Filtra risposte che probabilmente sono allucinazioni
-        hallucination_patterns = [
-            "non esiste", "inventato", "non posso confermare",
-            "come IA non", "come modello AI"
+        # Filtra rifiuti/boilerplate tipici di dati sintetici generati da altri LLM
+        # (euristica grezza: non rileva vere allucinazioni, per quelle serve verifica
+        # umana o LLM-as-judge)
+        boilerplate_patterns = [
+            "come ia non", "come modello ai", "as an ai", "non posso aiutarti"
         ]
-        if any(p in response.lower() for p in hallucination_patterns):
+        if any(p in response.lower() for p in boilerplate_patterns):
             continue
 
-        # Filtra duplicati
         filtered.append(ex)
 
-    return list({json.dumps(ex): ex for ex in filtered}.values())  # dedup
+    # Dedup esatta (per near-duplicates usa MinHash/embedding)
+    return list({json.dumps(ex, sort_keys=True): ex for ex in filtered}.values())
 ```
 
 ## 5. Supervised Fine-Tuning (SFT)
@@ -247,29 +270,24 @@ def filter_dataset(examples: list[dict]) -> list[dict]:
 Il SFT addestra il modello su coppie (instruction, response) di alta qualità.
 
 ```python
+import json
 from trl import SFTTrainer, SFTConfig
-from transformers import TrainingArguments
 from datasets import Dataset
 
-# Prepara dataset
+# Prepara dataset in formato conversazionale ("messages"):
+# SFTTrainer applica da solo il chat template del tokenizer (niente token a mano)
 def format_alpaca(example: dict) -> dict:
-    """Formatta un esempio Alpaca nel formato chat del modello."""
+    """Converte un esempio Alpaca in messaggi chat."""
+    user = example["instruction"]
     if example.get("input"):
-        text = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-Sei un esperto DevOps e SRE.<|eot_id|><|start_header_id|>user<|end_header_id|>
-{example['instruction']}
-
-{example['input']}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-{example['output']}<|eot_id|>"""
-    else:
-        text = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-Sei un esperto DevOps e SRE.<|eot_id|><|start_header_id|>user<|end_header_id|>
-{example['instruction']}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-{example['output']}<|eot_id|>"""
-    return {"text": text}
+        user += "\n\n" + example["input"]
+    return {"messages": [
+        {"role": "system", "content": "Sei un esperto DevOps e SRE."},
+        {"role": "user", "content": user},
+        {"role": "assistant", "content": example["output"]},
+    ]}
 
 # Carica e formatta dataset
-import json
 with open("devops_dataset.json") as f:
     raw_data = json.load(f)
 
@@ -287,19 +305,20 @@ training_args = SFTConfig(
     learning_rate=2e-4,              # LoRA tipicamente usa LR più alto
     bf16=True,
     logging_steps=10,
-    evaluation_strategy="steps",
+    eval_strategy="steps",
     eval_steps=100,
-    save_steps=200,
+    save_strategy="steps",
+    save_steps=200,                  # multiplo di eval_steps (richiesto da load_best_model_at_end)
     save_total_limit=3,
     load_best_model_at_end=True,
-    max_seq_length=4096,
-    dataset_text_field="text",       # campo del dataset con il testo formattato
+    max_length=4096,                 # nelle versioni TRL meno recenti: max_seq_length
+    assistant_only_loss=False,       # True = loss solo sui token dell'assistant (richiede template con generation tags)
     report_to="wandb",               # traccia su W&B
 )
 
 trainer = SFTTrainer(
     model=model,
-    tokenizer=tokenizer,
+    processing_class=tokenizer,
     args=training_args,
     train_dataset=train_val["train"],
     eval_dataset=train_val["test"],
@@ -312,7 +331,7 @@ trainer.save_model()
 
 ## 6. RLHF — Reinforcement Learning from Human Feedback
 
-RLHF è la tecnica usata per allineare i modelli alle preferenze umane (come in ChatGPT e Claude). È complessa da implementare correttamente.
+RLHF è la tecnica usata per allineare i modelli alle preferenze umane (resa popolare da InstructGPT/ChatGPT). Il flusso: SFT → reward model addestrato su preferenze umane → ottimizzazione della policy con RL (PPO) contro il reward model, con penalità KL per non allontanarsi dal modello SFT. È complessa da implementare correttamente: 3-4 modelli in memoria e forte sensibilità agli iperparametri.
 
 ### Step 1: SFT (Supervised Fine-Tuning)
 
@@ -348,8 +367,8 @@ reward_config = RewardConfig(
 )
 
 reward_trainer = RewardTrainer(
-    model=reward_model,     # copia del SFT model con head lineare
-    tokenizer=tokenizer,
+    model=reward_model,     # copia del SFT model con head lineare (AutoModelForSequenceClassification, num_labels=1)
+    processing_class=tokenizer,
     args=reward_config,
     train_dataset=preference_dataset,
 )
@@ -357,6 +376,9 @@ reward_trainer.train()
 ```
 
 ### Step 3: PPO Training
+
+!!! warning "API legacy"
+    Lo snippet sotto usa l'interfaccia classica di `PPOTrainer` (`step`, `generate`, `log_stats`), rimossa/riscritta nelle versioni recenti di TRL (la nuova API è basata su `PPOConfig` + `reward_model`/`value_model` e `trainer.train()`). Serve a illustrare il ciclo concettuale (generate → reward → update con KL penalty); per codice eseguibile segui la documentazione TRL della tua versione. Nella pratica, per la maggior parte dei casi, vedi DPO e GRPO più sotto.
 
 ```python
 from trl import PPOTrainer, PPOConfig, AutoModelForCausalLMWithValueHead
@@ -420,10 +442,10 @@ from trl import DPOTrainer, DPOConfig
 dpo_dataset = [
     {
         "prompt": "Come scrivo un Dockerfile sicuro per un'app Node.js?",
-        "chosen": """FROM node:20-alpine AS builder
+        "chosen": """FROM node:22-alpine
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 COPY . .
 USER node
 EXPOSE 3000
@@ -433,7 +455,7 @@ Note di sicurezza:
 - Alpine riduce attack surface
 - npm ci invece di npm install per reproducibilità
 - USER node: non gira come root
-- Stage multi-stage non necessario se solo production""",
+- Tag specifico (non latest) per build riproducibili""",
         "rejected": """FROM node:latest
 WORKDIR /app
 COPY . .
@@ -446,7 +468,7 @@ dpo_config = DPOConfig(
     output_dir="./dpo_model",
     num_train_epochs=3,
     per_device_train_batch_size=2,
-    learning_rate=5e-7,    # DPO usa LR più basso di SFT
+    learning_rate=5e-7,    # DPO usa LR molto più basso di SFT (full FT); con LoRA ~5e-6
     beta=0.1,              # temperatura KL — più alto = più conservativo
     bf16=True,
     max_prompt_length=1024,
@@ -455,10 +477,11 @@ dpo_config = DPOConfig(
 
 dpo_trainer = DPOTrainer(
     model=model,           # SFT model da allineare
-    ref_model=ref_model,   # copia frozen del SFT model
+    ref_model=ref_model,   # copia frozen del SFT model (None se model ha adapter PEFT:
+                           # il reference è il modello con adapter disattivato → risparmia VRAM)
     args=dpo_config,
     train_dataset=Dataset.from_list(dpo_dataset),
-    tokenizer=tokenizer,
+    processing_class=tokenizer,
 )
 
 dpo_trainer.train()
@@ -474,6 +497,36 @@ dpo_trainer.train()
 | Compute | 3× più del SFT | 2× del SFT |
 | Dataset | Prompts + preferenze | Solo preferenze |
 | **Consiglio** | Per ricerca avanzata | **Per pratica: usa DPO** |
+
+### GRPO e RLVR — RL per reasoning
+
+Dal 2025 il metodo RL dominante per modelli di ragionamento (stile DeepSeek-R1) è **GRPO** (Group Relative Policy Optimization) con **RLVR** (Reinforcement Learning with Verifiable Rewards). Invece di un reward model appreso, il reward è una funzione deterministica (test che passano, risposta matematica esatta, output che rispetta uno schema). Per ogni prompt si campiona un gruppo di risposte e il vantaggio di ciascuna è calcolato rispetto alla media del gruppo: niente value model, meno memoria di PPO.
+
+**Quando usarlo:** task con verifica automatica (codice, matematica, parsing strutturato, generazione di manifest validabili con `kubectl --dry-run`/`kubeconform`). Per preferenze soggettive (tono, stile) resta DPO.
+
+```python
+from trl import GRPOTrainer, GRPOConfig
+
+def reward_valid_json(completions, **kwargs) -> list[float]:
+    """Reward verificabile: 1.0 se l'output è JSON valido, altrimenti 0.0."""
+    rewards = []
+    for c in completions:
+        text = c if isinstance(c, str) else c[0]["content"]  # formato standard vs conversazionale
+        try:
+            json.loads(text)
+            rewards.append(1.0)
+        except ValueError:
+            rewards.append(0.0)
+    return rewards
+
+trainer = GRPOTrainer(
+    model="./llama3-devops-ft",          # modello SFT di partenza
+    reward_funcs=reward_valid_json,
+    args=GRPOConfig(output_dir="./grpo_model", num_generations=8, bf16=True),
+    train_dataset=prompts_dataset,       # colonna "prompt"
+)
+trainer.train()
+```
 
 ## 8. Merge e Deployment
 
@@ -500,14 +553,10 @@ merged_model.push_to_hub("myorg/llama3-devops-expert")
 tokenizer.push_to_hub("myorg/llama3-devops-expert")
 ```
 
-```bash
-# Quantizza per deployment
-python -c "
-from transformers import AutoModelForCausalLM, AutoTokenizer
-model = AutoModelForCausalLM.from_pretrained('./llama3-devops-merged')
-# Poi usa llama.cpp per quantizzare in GGUF:
-"
+In alternativa al merge: vLLM può servire l'adapter a runtime (`--enable-lora --lora-modules nome=./adapter`), utile per molti adapter su un solo base model.
 
+```bash
+# Quantizza per deployment (richiede llama.cpp clonato e compilato)
 # Conversione in GGUF con llama.cpp
 python convert_hf_to_gguf.py ./llama3-devops-merged --outfile llama3-devops.gguf
 
@@ -521,9 +570,11 @@ python convert_hf_to_gguf.py ./llama3-devops-merged --outfile llama3-devops.gguf
 |---------|--------|----------|-------------|-----------------|
 | Llama 3.1 8B | QLoRA (NF4) | 8 GB | 12-16 GB | RTX 3090/4090, A10 |
 | Llama 3.1 8B | LoRA (BF16) | 24 GB | 40 GB | A100 40GB |
-| Llama 3.1 70B | QLoRA (NF4) | 40 GB | 2×40 GB | 2× A100 40GB |
+| Llama 3.1 70B | QLoRA (NF4) | 48 GB | 80 GB | 1× A100/H100 80GB |
 | Llama 3.1 70B | LoRA (BF16) | 160 GB | 4×80 GB | 4× A100 80GB |
-| Llama 3.1 405B | QLoRA (NF4) | 200 GB | 4×80 GB | 4× H100 80GB |
+| Llama 3.1 405B | QLoRA (NF4) | ~250 GB | 4×80 GB | 4× H100 80GB (o 8×) |
+
+*Stime indicative: dipendono da `max_seq_length`, batch size e gradient checkpointing.*
 
 ## Best Practices
 
