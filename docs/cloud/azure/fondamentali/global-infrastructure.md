@@ -7,9 +7,10 @@ search_keywords: [Azure regions, Azure region pairs, Availability Zones AZ, Edge
 parent: cloud/azure/fondamentali/_index
 related: [cloud/azure/fondamentali/shared-responsibility, cloud/azure/networking/vnet]
 official_docs: https://azure.microsoft.com/global-infrastructure/
-status: complete
+status: reviewed
 difficulty: beginner
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Infrastruttura Globale Azure
@@ -17,13 +18,15 @@ last_updated: 2026-03-28
 ## Gerarchia dell'Infrastruttura
 
 ```
-Geography (es. Europe)
-└── Region Pair (es. North Europe ↔ West Europe)
-    └── Region (es. Italy North)
-        └── Availability Zones (3 zone fisicamente separate)
-            └── Datacenter
-                └── Server / Storage / Network
+Geography (es. Europe, Italy: perimetro di data residency/compliance)
+└── Region (es. Italy North, West Europe)   ← alcune region hanno un Region Pair
+    └── Availability Zones (min. 3 zone fisicamente separate, nelle region con AZ)
+        └── Datacenter
+            └── Server / Storage / Network
 ```
+
+!!! note "Perché esistono le Geography"
+    Una **Geography** garantisce che dati e applicazioni restino entro un confine geopolitico/regolatorio (es. UE, Italia). Region e Region Pair di una geography sono scelte per rispettare data residency e compliance.
 
 ---
 
@@ -41,6 +44,9 @@ Una **Region** è un'area geografica contenente uno o più datacenter collegati 
 - `France Central` — Parigi
 - `Switzerland North` — Zurigo
 - `UK South` — Londra
+- `Spain Central` — Madrid, `Poland Central` — Varsavia (region recenti, senza Region Pair)
+
+Le region più recenti possono avere disponibilità limitata di servizi/SKU rispetto a quelle mature: verificare sempre prima di scegliere la region.
 
 ```bash
 # Listare tutte le region disponibili per la subscription
@@ -78,7 +84,7 @@ Region: Italy North
 |------|-------------|--------|
 | **Zonal** | Risorsa deployata in una zona specifica | VM, Managed Disks, IP pubblici |
 | **Zone-Redundant** | Replicato automaticamente su 3 zone | Azure SQL ZRS, Storage ZRS, Application Gateway |
-| **Non-regional** | Servizi globali, non legati a zone | Azure AD, DNS, Traffic Manager |
+| **Non-regional** (always-available) | Servizi globali, non legati a una region/zona | Microsoft Entra ID, Azure DNS, Traffic Manager, Front Door |
 
 ```bash
 # Deploy VM in Availability Zone specifica
@@ -86,15 +92,17 @@ az vm create \
     --resource-group myapp-rg \
     --name myvm \
     --image Ubuntu2204 \
-    --zone 1 \                    # Zone 1, 2 o 3
-    --size Standard_D2s_v3
+    --zone 1 \
+    --size Standard_D2s_v5
+# --zone accetta 1, 2 o 3
 
 # Creare Public IP zone-redundant
 az network public-ip create \
     --resource-group myapp-rg \
     --name myapp-pip \
     --sku Standard \
-    --zone 1 2 3                  # zone-redundant
+    --zone 1 2 3
+# più zone insieme = IP zone-redundant
 ```
 
 ---
@@ -108,8 +116,9 @@ Gli **Availability Set** garantiscono HA distribuendo VM su fault domain e updat
 az vm availability-set create \
     --resource-group myapp-rg \
     --name myapp-as \
-    --platform-fault-domain-count 2 \     # max 3 — diversi rack fisici
-    --platform-update-domain-count 5      # max 20 — aggiornamenti sequenziali
+    --platform-fault-domain-count 2 \
+    --platform-update-domain-count 5
+# fault domain: max 3 (rack fisici diversi); update domain: max 20 (riavvii di piattaforma sequenziali)
 
 # Deploy VM in Availability Set
 az vm create \
@@ -118,6 +127,9 @@ az vm create \
     --availability-set myapp-as \
     --image Ubuntu2204
 ```
+
+!!! warning "Mapping logico → fisico delle zone"
+    I numeri di zona (1, 2, 3) sono **logici e per-subscription**: la "zona 1" della subscription A può essere un datacenter fisico diverso dalla "zona 1" della subscription B. Per co-locare risorse di subscription diverse nella stessa zona fisica leggere `availabilityZoneMappings` (`az rest --method get --url "/subscriptions/<sub-id>/locations?api-version=2022-12-01"`) invece di assumere che i numeri coincidano.
 
 !!! note "AZ vs Availability Set"
     Preferire **Availability Zones** per nuovi deployment — protezione da guasti datacenter interi.
@@ -135,14 +147,17 @@ Ogni Region Azure è accoppiata con un'altra Region nella stessa area geografica
 | West Europe | North Europe |
 | UK South | UK West |
 | France Central | France South |
-| Germany West Central | North Europe |
+| Germany West Central | Germany North |
 | Switzerland North | Switzerland West |
 | Norway East | Norway West |
 
-**Implicazioni pratiche:**
-- Geo-redundant storage (GRS) replica nel pair automaticamente
-- Azure Site Recovery replica nel pair di default
-- Gli aggiornamenti del platform vengono rollati prima su una region, poi sull'altra
+!!! note "Region Pair: modello in evoluzione"
+    Le region più recenti (es. Spain Central, Poland Central) **non hanno un pair**: Microsoft le progetta con Availability Zones come primo livello di resilienza. Per il DR cross-region non assumere il pair: scegliere esplicitamente la region secondaria (stessa geography se richiesto da data residency). La tabella sopra è indicativa: la fonte autorevole è la pagina Microsoft *cross-region replication* (vedi Riferimenti). Alcuni pair non sono simmetrici.
+
+**Implicazioni pratiche (per le region con pair):**
+- Geo-redundant storage (GRS/GZRS) replica nel pair automaticamente, in modo asincrono (nessun SLA di RPO, tipicamente <15 min)
+- Azure Site Recovery propone il pair come target di default (modificabile)
+- Gli aggiornamenti pianificati del platform vengono rollati su una region alla volta
 - In caso di outage regionale, Microsoft dà priorità al ripristino di una delle due region
 
 ---
@@ -153,20 +168,25 @@ Ogni Region Azure è accoppiata con un'altra Region nella stessa area geografica
 |-------|-------------|------------|
 | **Azure Government** | Agenzie US Federal, State, Local | Fisicamente separato, operato da US citizens screened |
 | **Azure China (21Vianet)** | Organizzazioni in Cina | Operato da 21Vianet, separato da Azure globale |
-| **Azure Germany** (legacy) | Dati sensibili tedeschi | Sostituito da Azure Germany (regioni standard + policy GDPR) |
+| **Azure Germany** (legacy, chiuso 2021) | Dati sensibili tedeschi (data trustee T-Systems) | Dismesso: sostituito dalle region standard `Germany West Central`/`Germany North` con garanzie di data residency |
+| **Microsoft Sovereign Cloud** | Organizzazioni UE con requisiti di sovranità | Offerta a livelli sopra Azure pubblico (controlli di sovranità, Data Guardian, opzioni private/in-country): verificare la disponibilità corrente |
+
+Azure Government include anche ambienti per classificazioni elevate (Secret/Top Secret) accessibili solo a clienti autorizzati.
 
 ---
 
 ## Rete Backbone Globale
 
 Microsoft possiede e opera una rete privata **WAN globale** che collega tutte le region Azure:
-- Oltre **175.000 km** di fibra sottomarina e terrestre
+- Centinaia di migliaia di km di fibra sottomarina e terrestre, con punti di presenza (**edge locations / PoP**) vicini agli utenti
 - Traffico tra region Azure viaggia sulla rete privata Microsoft (non Internet pubblica)
-- **Latenza garantita** inter-region europea: tipicamente <10ms
+- Microsoft pubblica le **statistiche di round-trip latency** tra region (non è una latenza garantita da SLA): intra-Europa tipicamente decine di ms; verificare le tabelle ufficiali
+
+Gli edge PoP servono Front Door, CDN, ExpressRoute e l'ingresso del traffico sul backbone (*early exit*: il traffico entra nella rete Microsoft il prima possibile). **Azure Extended Zones** estendono una region parent a città specifiche per workload a bassissima latenza.
 
 ```bash
-# Verificare latenza inter-region (da VM Azure)
-# Usare Azure Network Watcher Connection Monitor
+# Misurare latenza inter-region da una VM Azure con Connection Monitor
+# (richiede l'agente Network Watcher installato sulla VM sorgente)
 az network watcher connection-monitor create \
     --name latency-test \
     --resource-group myapp-rg \
@@ -181,7 +201,7 @@ az network watcher connection-monitor create \
 
 ### Scenario 1 — Il servizio non è disponibile nella region selezionata
 
-**Sintomo:** Al momento del deploy di una risorsa (es. VM SKU, servizio PaaS) compare l'errore `The requested size is not available in the location`.
+**Sintomo:** Al momento del deploy di una risorsa (es. VM SKU, servizio PaaS) compare l'errore `SkuNotAvailable` / `The requested size is not available in the location`.
 
 **Causa:** Non tutti i servizi o SKU sono disponibili in tutte le region. Le region più recenti (es. Italy North) hanno disponibilità limitata rispetto alle region mature.
 
@@ -207,9 +227,9 @@ az provider show \
 
 **Sintomo:** Due VM dello stesso tier vengono deployate nella stessa zona fisica, vanificando la ridondanza di zona.
 
-**Causa:** Se non si specifica esplicitamente la zona durante il deploy, Azure assegna la zona automaticamente, potendo posizionare più VM nella stessa.
+**Causa:** Se non si specifica la zona, la VM è **regionale (non zonale)**: Azure la colloca dove vuole nella region, senza garanzia di separazione tra datacenter. Anche con zone indicate, ricordare il mapping logico→fisico per-subscription.
 
-**Soluzione:** Specificare sempre zone diverse esplicitamente per ciascuna VM critica.
+**Soluzione:** Specificare zone diverse esplicitamente per ciascuna VM critica (o usare una VM Scale Set multi-zona, che distribuisce le istanze automaticamente).
 
 ```bash
 # Deploy VM in zone diverse (zona 1 e zona 2)
@@ -218,14 +238,14 @@ az vm create \
     --name myvm-zone1 \
     --image Ubuntu2204 \
     --zone 1 \
-    --size Standard_D2s_v3
+    --size Standard_D2s_v5
 
 az vm create \
     --resource-group myapp-rg \
     --name myvm-zone2 \
     --image Ubuntu2204 \
     --zone 2 \
-    --size Standard_D2s_v3
+    --size Standard_D2s_v5
 
 # Verificare la zona assegnata a ciascuna VM
 az vm list \
@@ -240,16 +260,17 @@ az vm list \
 
 **Sintomo:** I dati di uno storage account GRS non risultano nella region pair prevista (es. Italy North → Germany West Central).
 
-**Causa:** La region pair viene assegnata da Microsoft e non è configurabile dall'utente. In alcuni casi la replica potrebbe essere in ritardo o la region pair è diversa da quella attesa.
+**Causa:** La region pair è assegnata da Microsoft e non è configurabile; la tabella della KB può essere superata o non simmetrica. La replica GRS è asincrona: i dati possono non essere ancora presenti nella secondary (Last Sync Time).
 
-**Soluzione:** Verificare la region pair reale tramite CLI e controllare il lag di replica.
+**Soluzione:** Verificare la region pair reale tramite CLI e controllare `lastSyncTime`.
 
 ```bash
 # Verificare la region pair di uno storage account
 az storage account show \
     --name mystorageaccount \
     --resource-group myapp-rg \
-    --query "{PrimaryLocation:primaryLocation, SecondaryLocation:secondaryLocation, ReplicationStatus:statusOfPrimary}" \
+    --expand geoReplicationStats \
+    --query "{Primary:primaryLocation, Secondary:secondaryLocation, Sku:sku.name, LastSyncTime:geoReplicationStats.lastSyncTime}" \
     --output table
 
 # Ottenere la region pair di una location
@@ -266,7 +287,7 @@ az account list-locations \
 
 **Causa:** Azure Government e Azure China sono endpoint separati dal cloud globale. Le credenziali e i token del cloud globale non sono validi nei sovereign cloud.
 
-**Soluzione:** Effettuare il login specificando l'ambiente corretto con `--environment`.
+**Soluzione:** Effettuare il login specificando l'ambiente corretto con `az cloud set` prima di `az login`.
 
 ```bash
 # Login su Azure Government
@@ -292,4 +313,4 @@ az login
 - [Azure Global Infrastructure](https://azure.microsoft.com/global-infrastructure/)
 - [Azure Geographies](https://azure.microsoft.com/global-infrastructure/geographies/)
 - [Availability Zones](https://learn.microsoft.com/azure/reliability/availability-zones-overview)
-- [Azure Region Pairs](https://learn.microsoft.com/azure/reliability/cross-region-replication-azure)
+- [Azure Region Pairs / cross-region replication](https://learn.microsoft.com/azure/reliability/cross-region-replication-azure)
