@@ -7,16 +7,17 @@ search_keywords: [hypertext transfer protocol, http/1.1, http/2, https, ssl, tls
 parent: networking/fondamentali/_index
 related: [networking/fondamentali/tls-ssl-basics, networking/protocolli/http2-http3, networking/sicurezza/firewall-waf]
 official_docs: https://developer.mozilla.org/en-US/docs/Web/HTTP
-status: complete
+status: reviewed
 difficulty: beginner
-last_updated: 2026-03-29
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # HTTP e HTTPS
 
 ## Panoramica
 
-HTTP (HyperText Transfer Protocol) è il protocollo applicativo fondamentale del Web, definito su TCP (porta 80) per la comunicazione client-server. Segue un modello request-response: il client invia una richiesta, il server risponde con dati e metadati. HTTPS è HTTP con crittografia TLS (Transport Layer Security), che opera sulla porta 443 e garantisce confidenzialità, integrità e autenticazione del server. Oggi HTTPS è lo standard de facto per qualsiasi servizio web.
+HTTP (HyperText Transfer Protocol) è il protocollo applicativo fondamentale del Web per la comunicazione client-server. HTTP/1.1 e HTTP/2 viaggiano su TCP (porta 80 in chiaro), HTTP/3 su QUIC (UDP). Segue un modello request-response: il client invia una richiesta, il server risponde con dati e metadati. HTTPS è HTTP con crittografia TLS (Transport Layer Security), che opera di norma sulla porta 443 e garantisce confidenzialità, integrità e autenticazione del server. Oggi HTTPS è lo standard de facto per qualsiasi servizio web.
 
 HTTP è stateless per design: ogni richiesta è indipendente e il server non mantiene stato tra le richieste. La gestione dello stato avviene tramite meccanismi aggiuntivi come cookie, session token o JWT (JSON Web Token — token firmato crittograficamente che contiene informazioni sull'identità dell'utente, senza richiedere al server di memorizzare sessioni).
 
@@ -35,7 +36,7 @@ HTTP è stateless per design: ogni richiesta è indipendente e il server non man
 | OPTIONS | Descrive le opzioni di comunicazione | Sì | No |
 
 !!! note "Idempotenza"
-    Un'operazione idempotente produce lo stesso risultato se eseguita più volte. GET, PUT, DELETE sono idempotenti; POST non lo è (eseguirlo due volte crea due risorse).
+    Un'operazione idempotente produce lo stesso effetto sul server se eseguita più volte. GET, HEAD, OPTIONS, PUT, DELETE sono idempotenti; POST non lo è (eseguirlo due volte crea due risorse) e PATCH non lo è garantito. Conta per i retry automatici: client e proxy possono ripetere in sicurezza solo metodi idempotenti. Diverso da *safe* (RFC 9110): GET, HEAD, OPTIONS non modificano lo stato; PUT e DELETE sono idempotenti ma non safe.
 
 ### Status Codes
 
@@ -43,7 +44,7 @@ HTTP è stateless per design: ogni richiesta è indipendente e il server non man
 |-------|-----------|---------------|
 | 1xx | Informational | 100 Continue |
 | 2xx | Success | 200 OK, 201 Created, 204 No Content |
-| 3xx | Redirection | 301 Moved Permanently, 302 Found, 304 Not Modified |
+| 3xx | Redirection | 301 Moved Permanently, 302 Found, 304 Not Modified, 307/308 (come 302/301 ma preservano metodo e body) |
 | 4xx | Client Error | 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 429 Too Many Requests |
 | 5xx | Server Error | 500 Internal Server Error, 502 Bad Gateway, 503 Service Unavailable, 504 Gateway Timeout |
 
@@ -106,14 +107,15 @@ Client                          Server
 
 HTTP/1.1 introduce **persistent connections** (keep-alive): la stessa connessione TCP viene riusata per più richieste, evitando il costo del handshake per ogni richiesta.
 
-```bash
-# Header che controlla il comportamento
+In HTTP/1.1 le connessioni sono persistenti **per default**; `Connection: close` le chiude esplicitamente. L'header `Connection: keep-alive` serve solo con HTTP/1.0 e il parametro `Keep-Alive` (timeout/max) è un hint non vincolante: i limiti reali si configurano sul server (es. `keepalive_timeout` in Nginx).
+
+```http
 Connection: keep-alive
 Keep-Alive: timeout=5, max=1000
 ```
 
 !!! warning "Head-of-Line Blocking in HTTP/1.1"
-    HTTP/1.1 soffre di HOL (Head-of-Line) blocking: le richieste vengono processate in ordine su una connessione — se la prima è lenta, blocca tutte le successive. I browser aprono 6-8 connessioni parallele per aggirarlo. HTTP/2 risolve questo con il multiplexing.
+    HTTP/1.1 soffre di HOL (Head-of-Line) blocking: le risposte vengono restituite in ordine su una connessione (il pipelining è di fatto disattivato nei browser) — se la prima è lenta, blocca tutte le successive. I browser aprono ~6 connessioni parallele per host per aggirarlo. HTTP/2 risolve il blocco a livello HTTP con il multiplexing, ma resta quello a livello TCP; HTTP/3 (QUIC) lo elimina.
 
 ## Configurazione & Pratica
 
@@ -160,7 +162,8 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;            # Nginx >= 1.25.1; la forma `listen ... http2` è deprecata
     server_name example.com;
 
     ssl_certificate     /etc/ssl/certs/example.crt;
@@ -169,15 +172,15 @@ server {
     # TLS 1.2+ only, strong ciphers
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
-    ssl_prefer_server_ciphers on;
+    ssl_prefer_server_ciphers off;   # i cipher TLS 1.2 elencati sono tutti forti: lascia scegliere al client
 
     # HSTS — forza HTTPS per 1 anno
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
     # Security headers
-    add_header X-Content-Type-Options nosniff;
-    add_header X-Frame-Options DENY;
-    add_header Content-Security-Policy "default-src 'self'";
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Content-Security-Policy "default-src 'self'" always;
 
     location / {
         proxy_pass http://backend:8080;
@@ -189,13 +192,16 @@ server {
 }
 ```
 
+!!! warning "Ereditarietà di add_header"
+    In Nginx le direttive `add_header` di un livello vengono ereditate solo se il livello inferiore (es. un `location`) non ne definisce nessuna. Se un `location` aggiunge un proprio `add_header`, gli header di sicurezza del `server` spariscono: ridichiararli o usare un `include`. `always` li emette anche sulle risposte 4xx/5xx.
+
 ### Caching HTTP
 
 ```http
 # Cache per 1 ora
 Cache-Control: max-age=3600
 
-# Cache pubblica (CDN) + privata (browser) — 1h CDN, 5min browser
+# Browser 1h, cache condivise (CDN/proxy) 5min: s-maxage prevale su max-age per le shared cache
 Cache-Control: public, max-age=3600, s-maxage=300
 
 # Non cacheable
@@ -215,13 +221,13 @@ If-None-Match: "33a64df551425fcc55e4d42a148795d9f25f89d4"
 
 **Sicurezza:**
 - Usare sempre HTTPS, mai HTTP in produzione
-- Abilitare HSTS con `includeSubDomains` e `preload`
-- Impostare security headers: `X-Content-Type-Options`, `X-Frame-Options`, `CSP`
+- Abilitare HSTS con `includeSubDomains`; `preload` (inclusione nella lista dei browser) solo dopo aver verificato che TUTTI i sottodomini servano HTTPS, perché è difficile da revocare
+- Impostare security headers: `X-Content-Type-Options`, `CSP` (con `frame-ancestors`, che sostituisce il legacy `X-Frame-Options`)
 - Cookie sicuri: `HttpOnly`, `Secure`, `SameSite=Strict`
 - Rate limiting per prevenire abusi (429 Too Many Requests)
 
 **Performance:**
-- Abilitare HTTP/2 (multiplexing, header compression, server push)
+- Abilitare HTTP/2 (multiplexing, header compression HPACK); il server push è stato rimosso da Chrome e di fatto abbandonato
 - Configurare caching appropriato con `Cache-Control` e `ETag`
 - Compressione gzip/brotli per le risposte
 - Minimizzare i redirect (ogni redirect aggiunge un RTT — Round-Trip Time, il tempo per un pacchetto di andare dal client al server e tornare)
@@ -236,7 +242,7 @@ If-None-Match: "33a64df551425fcc55e4d42a148795d9f25f89d4"
 
 ### Scenario 1 — ERR_SSL_PROTOCOL_ERROR / Handshake TLS fallito
 
-**Sintomo:** Il browser mostra `ERR_SSL_PROTOCOL_ERROR` o `SSL_ERROR_HANDSHAKE_FAILURE_ALERT`; `curl` riporta `SSL routines:ssl3_get_server_certificate:certificate verify failed`.
+**Sintomo:** Il browser mostra `ERR_SSL_PROTOCOL_ERROR` o `SSL_ERROR_HANDSHAKE_FAILURE_ALERT`; `curl` riporta `SSL certificate problem: unable to get local issuer certificate` (o `certificate has expired`).
 
 **Causa:** Versione TLS non supportata (es. server accetta solo TLS 1.3 ma client supporta solo 1.2), cipher suite incompatibili, certificato scaduto o emesso da CA non riconosciuta.
 
@@ -338,7 +344,8 @@ curl -v -X OPTIONS \
      https://api.example.com/resource
 
 # Decodificare JWT per verificare scadenza
-echo "TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool
+# (JWT è base64url senza padding: converti l'alfabeto e aggiungi '=')
+echo "TOKEN" | cut -d. -f2 | tr '_-' '/+' | awk '{while(length($0)%4)$0=$0"=";print}' | base64 -d | python3 -m json.tool
 
 # Header Nginx per CORS (esempio)
 # add_header 'Access-Control-Allow-Origin' 'https://frontend.example.com';
