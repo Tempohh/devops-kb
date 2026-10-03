@@ -9,7 +9,7 @@ related: [monitoring/tools/prometheus, monitoring/alerting/alertmanager, monitor
 official_docs: https://github.com/prometheus/blackbox_exporter
 status: complete
 difficulty: intermediate
-last_updated: 2026-10-02
+last_updated: 2026-10-03
 ---
 
 # Synthetic Monitoring
@@ -208,13 +208,76 @@ const { chromium } = require("playwright");
 
 ## Troubleshooting
 
-| Sintomo | Causa probabile | Soluzione |
-|---|---|---|
-| `probe_success == 0` ma il sito è raggiungibile da browser | Probe da regione/rete con problemi propri (firewall, routing, DNS locale al probe) | Verificare lo stesso probe da un'altra region; richiedere quorum multi-region prima di alertare |
-| Probe HTTPS fallisce con errore certificato, ma il browser non mostra warning | Blackbox Exporter non ha la CA custom nel trust store, o `insecure_skip_verify` disattivato su certificati self-signed interni | Montare la CA interna nel container dell'exporter o usare un modulo dedicato con `tls_config.ca_file` |
-| `probe_duration_seconds` alto ma l'app non è lenta internamente | Exporter sotto carico, troppi probe concorrenti sulla stessa istanza | Scalare orizzontalmente il Blackbox Exporter o aumentare `scrape_interval` per target non critici |
-| Alert di scadenza certificato non scatta mai | Modulo configurato con `fail_if_not_ssl: false` o target non valida correttamente la catena | Verificare `probe_ssl_earliest_cert_expiry` con query diretta su Prometheus; controllare che il modulo HTTPS sia quello effettivamente usato dal job |
-| Script Playwright sintetico fallisce in CI ma funziona in locale | Timeout troppo stretti, differenze di rendering headless, selettori instabili | Aumentare timeout di `waitForSelector`, usare selettori basati su `data-testid` invece di classi CSS fragili |
+### Scenario 1 — `probe_success == 0` ma il sito funziona da browser
+
+**Sintomo**: alert `EndpointDown` attivo, ma l'endpoint risponde correttamente da un browser esterno.
+
+**Causa**: il probe gira da una region/rete con problemi propri (firewall, routing, DNS locale al probe), non del target. Con una sola location il falso positivo è inevitabile.
+
+**Soluzione**: ripetere il probe da un'altra region e richiedere quorum multi-region prima di alertare. Il debug mostra in quale fase fallisce.
+
+```bash
+# Debug del probe con output dettagliato (fasi DNS/connect/TLS/processing)
+curl -s "http://blackbox-exporter:9115/probe?target=https://api.example.com/health&module=http_2xx&debug=true"
+```
+
+### Scenario 2 — Probe HTTPS fallisce con errore certificato, il browser no
+
+**Sintomo**: `probe_success == 0` e nel debug compare `x509: certificate signed by unknown authority`.
+
+**Causa**: l'exporter ha un trust store minimale e non conosce la CA interna, oppure il target usa un certificato self-signed e `insecure_skip_verify` è disattivato (corretto di default).
+
+**Soluzione**: montare la CA interna nel container e indicarla in un modulo dedicato, invece di disabilitare la verifica.
+
+```yaml
+modules:
+  http_2xx_internal_ca:
+    prober: http
+    http:
+      tls_config:
+        ca_file: /etc/blackbox/internal-ca.pem
+```
+
+### Scenario 3 — `probe_duration_seconds` alto ma l'app non è lenta
+
+**Sintomo**: latenza del probe elevata e irregolare, mentre le metriche applicative interne sono normali.
+
+**Causa**: Blackbox Exporter sotto carico (troppi probe concorrenti su una sola istanza), oppure rallentano le fasi DNS/connect/TLS e non l'applicazione.
+
+**Soluzione**: scomporre la durata per fase, poi scalare l'exporter o aumentare `scrape_interval` per target non critici.
+
+```promql
+# Durata per fase (resolve, connect, tls, processing, transfer)
+probe_http_duration_seconds{instance="https://api.example.com/health"}
+```
+
+### Scenario 4 — Alert di scadenza certificato non scatta mai
+
+**Sintomo**: certificato scaduto o vicino alla scadenza, ma `TLSCertExpiringSoon` non si attiva.
+
+**Causa**: la serie `probe_ssl_earliest_cert_expiry` è assente (modulo non HTTPS o target in HTTP con `fail_if_not_ssl: false`); un'espressione su serie mancante non produce mai risultati.
+
+**Soluzione**: verificare che la serie esista e che il job usi il modulo giusto.
+
+```promql
+# Deve restituire una serie per ogni target HTTPS
+probe_ssl_earliest_cert_expiry
+# Giorni residui
+(probe_ssl_earliest_cert_expiry - time()) / 86400
+```
+
+### Scenario 5 — Script Playwright sintetico fallisce in CI ma non in locale
+
+**Sintomo**: `TimeoutError: page.waitForSelector` solo nella pipeline.
+
+**Causa**: timeout troppo stretti su runner più lenti, differenze di rendering headless, selettori basati su classi CSS instabili.
+
+**Soluzione**: aumentare i timeout, usare selettori `data-testid` e raccogliere una trace per l'analisi.
+
+```bash
+npx playwright test --trace on
+npx playwright show-trace test-results/*/trace.zip
+```
 
 ## Relazioni
 
