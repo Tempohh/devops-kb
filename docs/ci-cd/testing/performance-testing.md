@@ -7,9 +7,10 @@ search_keywords: [performance testing, load testing, stress testing, soak testin
 parent: ci-cd/testing/_index
 related: [ci-cd/testing/test-strategy, ci-cd/testing/contract-testing, monitoring/sre/slo-sla-sli, monitoring/tools/grafana, monitoring/sre/chaos-engineering]
 official_docs: https://k6.io/docs/
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Performance Testing in CI/CD
@@ -276,7 +277,10 @@ on:
 
 env:
   BASE_URL: https://staging.example.com
-  K6_VERSION: '0.51.0'
+
+permissions:
+  contents: read
+  pull-requests: write  # necessario per commentare la PR
 
 jobs:
   performance-test:
@@ -286,20 +290,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
       - name: Run k6 load test
-        uses: grafana/k6-action@v0.3.0
-        with:
-          filename: tests/performance/load-test.js
-          flags: >
-            --out json=results/k6-results.json
-            --out csv=results/k6-metrics.csv
-            --summary-trend-stats="min,avg,med,p(90),p(95),p(99),max"
+        # k6 esce con codice 99 se i threshold falliscono:
+        # il job fallisce da solo, nessun check aggiuntivo necessario.
+        # tee salva il summary testuale (stdout) per il commento sulla PR.
+        run: |
+          mkdir -p results
+          set -o pipefail
+          k6 run \
+            --summary-export=results/summary.json \
+            --out json=results/k6-results.json \
+            --summary-trend-stats="min,avg,med,p(90),p(95),p(99),max" \
+            tests/performance/load-test.js | tee results/k6-summary.txt
         env:
           BASE_URL: ${{ env.BASE_URL }}
           API_KEY: ${{ secrets.STAGING_API_KEY }}
-
-      # k6 esce con codice 99 se i threshold falliscono
-      # GitHub Actions fallisce il job automaticamente — nessun check aggiuntivo necessario
 
       - name: Upload risultati
         if: always()  # anche se il test fallisce, vogliamo i risultati
@@ -310,14 +318,13 @@ jobs:
           retention-days: 30
 
       - name: Commenta PR con summary
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            // Leggi il summary prodotto da k6
             const summary = fs.readFileSync('results/k6-summary.txt', 'utf8');
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -325,18 +332,25 @@ jobs:
             });
 ```
 
+!!! note "Perché `setup-k6-action` e non `k6-action`"
+    `grafana/k6-action` (v0.3.0) è un wrapper Docker datato. `grafana/setup-k6-action` installa il binario `k6` sul runner, così lo lanci con `run:` come qualsiasi CLI: controlli exit code, pipe e flag senza i vincoli dell'action. Esiste anche `grafana/run-k6-action` se preferisci l'approccio dichiarativo.
+
 ### k6 in GitLab CI
 
 ```yaml
 # .gitlab-ci.yml (estratto stage performance)
 performance-test:
   stage: performance
-  image: grafana/k6:latest
+  image:
+    name: grafana/k6:latest
+    entrypoint: [""]  # l'immagine ha ENTRYPOINT k6: GitLab deve poter eseguire lo script
   variables:
     BASE_URL: "https://staging.example.com"
   script:
+    - mkdir -p results
     - k6 run
         --out json=results/k6-results.json
+        --summary-export=results/summary.json
         --summary-trend-stats="min,avg,med,p(90),p(95),p(99),max"
         --env BASE_URL=$BASE_URL
         --env API_KEY=$STAGING_API_KEY
@@ -346,9 +360,8 @@ performance-test:
     paths:
       - results/
     expire_in: 30 days
-    reports:
-      # GitLab legge il report JUnit per mostrare pass/fail inline
-      junit: results/k6-junit.xml
+    # Per il report JUnit inline serve handleSummary() con una lib di conversione:
+    # k6 non produce JUnit nativamente.
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "schedule"
@@ -361,19 +374,23 @@ performance-test:
 # scripts/compare-baseline.sh
 # Confronta i risultati correnti con la baseline salvata
 
-RESULTS_FILE="results/k6-results.json"
+# Usa il file di --summary-export (JSON aggregato), NON --out json (stream NDJSON di punti)
+RESULTS_FILE="results/summary.json"
 BASELINE_FILE="baselines/performance-baseline.json"
 REGRESSION_THRESHOLD=10  # % di regressione tollerata
 
 if [ ! -f "$BASELINE_FILE" ]; then
   echo "Nessuna baseline trovata. Salvando la run corrente come baseline."
+  mkdir -p "$(dirname "$BASELINE_FILE")"
   cp "$RESULTS_FILE" "$BASELINE_FILE"
   exit 0
 fi
 
-# Estrai p95 dalla run corrente e dalla baseline
-CURRENT_P95=$(jq '.metrics.http_req_duration.values["p(95)"]' "$RESULTS_FILE")
-BASELINE_P95=$(jq '.metrics.http_req_duration.values["p(95)"]' "$BASELINE_FILE")
+# Estrai p95: il formato cambia tra versioni di k6 (con o senza il livello "values"),
+# il fallback (.values // .) copre entrambi
+P95_QUERY='.metrics.http_req_duration | (.values // .) | .["p(95)"]'
+CURRENT_P95=$(jq "$P95_QUERY" "$RESULTS_FILE")
+BASELINE_P95=$(jq "$P95_QUERY" "$BASELINE_FILE")
 
 echo "Baseline p95: ${BASELINE_P95}ms"
 echo "Current p95: ${CURRENT_P95}ms"
@@ -406,10 +423,9 @@ fi
     path: baselines/
 
 - name: Run performance test
-  uses: grafana/k6-action@v0.3.0
-  with:
-    filename: tests/performance/load-test.js
-    flags: --out json=results/k6-results.json
+  run: |
+    mkdir -p results
+    k6 run --summary-export=results/summary.json tests/performance/load-test.js
 
 - name: Verifica regressione vs baseline
   run: bash scripts/compare-baseline.sh
@@ -419,7 +435,7 @@ fi
   uses: actions/upload-artifact@v4
   with:
     name: performance-baseline
-    path: results/k6-results.json
+    path: baselines/performance-baseline.json  # lo script la aggiorna se la run è migliore
     overwrite: true
 ```
 
@@ -499,10 +515,10 @@ class UserLoadSimulation extends Simulation {
 ```yaml
 # GitHub Actions con Gatling
 - name: Run Gatling simulation
-  run: |
-    mvn gatling:test \
-      -DAPI_KEY=${{ secrets.STAGING_API_KEY }} \
-      -DBASE_URL=https://staging.example.com
+  env:
+    # la simulation legge System.getenv("API_KEY"): va passata come env var, non come -D
+    API_KEY: ${{ secrets.STAGING_API_KEY }}
+  run: mvn gatling:test
 
 - name: Upload Gatling report
   if: always()
@@ -514,10 +530,10 @@ class UserLoadSimulation extends Simulation {
 
 ### Output e Dashboard con Grafana
 
-k6 può inviare le metriche in real-time a Grafana tramite InfluxDB o Prometheus Remote Write:
+k6 può inviare le metriche in real-time a Grafana tramite Prometheus Remote Write (percorso consigliato) o InfluxDB. L'output InfluxDB v1 è legacy: verifica che sia disponibile nella tua versione di k6 (in alcune release è fornito come estensione xk6) prima di adottarlo.
 
 ```bash
-# Output su InfluxDB (Grafana stack locale)
+# Output su InfluxDB v1 (Grafana stack locale, legacy)
 k6 run \
   --out influxdb=http://localhost:8086/k6 \
   tests/performance/load-test.js
@@ -531,7 +547,6 @@ k6 run --out experimental-prometheus-rw tests/performance/load-test.js
 
 ```yaml
 # docker-compose per stack locale k6 + InfluxDB + Grafana
-version: "3.8"
 services:
   influxdb:
     image: influxdb:1.8-alpine
@@ -568,6 +583,9 @@ services:
 
 !!! tip "Regressione automatica vs threshold fissi"
     I threshold fissi (p95 < 500ms) sono necessari ma non sufficienti. Aggiungere il confronto con la baseline per rilevare regressioni anche all'interno dei threshold — se in questa release p95 è passato da 150ms a 450ms, è un segnale da investigare anche se ancora sotto la soglia.
+
+!!! tip "Closed model vs open model: `stages` non garantisce un RPS"
+    Con `stages` su VU (closed model) ogni VU attende la risposta prima di inviare la richiesta successiva: se il server rallenta, il throughput *cala* e nasconde il problema (coordinated omission). Per testare "1000 req/s" a prescindere dalla latenza usa l'executor `constant-arrival-rate` (o `ramping-arrival-rate`) in `scenarios`, che fissa il tasso di arrivo come in Gatling `constantUsersPerSec` (open model). Imposta `preAllocatedVUs` sufficienti.
 
 !!! warning "Test da laptop = risultati inutili"
     Eseguire k6 o Gatling dalla propria macchina introduce variabili incontrollabili: latenza di rete variabile, throttling del sistema operativo, interruzioni di altri processi. I test di performance devono girare sempre in ambienti CI con risorse dedicate e rete stabile verso lo staging.
