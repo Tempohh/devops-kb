@@ -20714,7 +20714,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -20739,7 +20739,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24900,19 +24900,19 @@
 <td><strong>3</strong></td>
 <td><strong>Trasporto</strong></td>
 <td>Comunicazione end-to-end tra processi; affidabilità (TCP) o velocità (UDP)</td>
-<td>TCP, UDP, SCTP, QUIC</td>
+<td>TCP, UDP, SCTP, QUIC (QUIC viaggia sopra UDP, base di HTTP/3)</td>
 </tr>
 <tr>
 <td><strong>2</strong></td>
 <td><strong>Internet</strong></td>
 <td>Instradamento dei pacchetti tra reti; indirizzamento logico globale</td>
-<td>IP (IPv4/IPv6), ICMP, IGMP, ARP, OSPF, BGP</td>
+<td>IP (IPv4/IPv6), ICMP, IGMP; routing OSPF (direttamente su IP) e BGP (su TCP, formalmente applicativo)</td>
 </tr>
 <tr>
 <td><strong>1</strong></td>
 <td><strong>Accesso alla Rete (Link)</strong></td>
 <td>Trasmissione fisica dei dati sul segmento di rete locale</td>
-<td>Ethernet, Wi-Fi (802.11), PPP, ATM</td>
+<td>Ethernet, Wi-Fi (802.11), PPP; ARP/NDP (mappatura IP→MAC)</td>
 </tr>
 </tbody>
 </table>
@@ -24964,21 +24964,25 @@
 </tbody>
 </table>
 <h3 id="il-three-way-handshake-tcp">Il Three-Way Handshake TCP<a class="headerlink" href="#il-three-way-handshake-tcp" title="Permanent link">&para;</a></h3>
-<p>L'instaurazione di una connessione TCP richiede 3 scambi:</p>
+<p>L'instaurazione di una connessione TCP richiede 3 scambi (servono a sincronizzare i numeri di sequenza di entrambe le direzioni e a verificare che entrambi gli host siano raggiungibili):</p>
 <ol>
 <li><strong>SYN</strong>: il client invia un segmento con flag SYN e numero di sequenza iniziale (ISN) casuale</li>
 <li><strong>SYN-ACK</strong>: il server risponde con SYN+ACK, confermando l'ISN del client e inviando il proprio</li>
 <li><strong>ACK</strong>: il client conferma l'ISN del server</li>
 </ol>
-<p>La chiusura richiede un four-way handshake (FIN, ACK, FIN, ACK) per chiudere entrambe le direzioni indipendentemente (half-close).</p>
+<p>La chiusura richiede un four-way handshake (FIN, ACK, FIN, ACK) per chiudere entrambe le direzioni indipendentemente (half-close). Chi invia il primo FIN (active close) finisce in <code>TIME_WAIT</code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Controllo di congestione</p>
+<p>Oltre al controllo di flusso (finestra annunciata dal ricevente), TCP limita l'invio con una <em>congestion window</em> stimata dal mittente (slow start, poi algoritmi come CUBIC o BBR). Su Linux: <code>sysctl net.ipv4.tcp_congestion_control</code>. È spesso la vera causa di throughput basso su link con alta latenza o perdita.</p>
+</div>
 <h2 id="come-funziona">Come Funziona<a class="headerlink" href="#come-funziona" title="Permanent link">&para;</a></h2>
 <h3 id="incapsulazione-dei-dati">Incapsulazione dei Dati<a class="headerlink" href="#incapsulazione-dei-dati" title="Permanent link">&para;</a></h3>
 <pre class="mermaid"><code>flowchart TD
-    App["Applicazione\n(HTTP Request: GET /index.html)"]
-    Trans["Livello Trasporto\nSegmento TCP\nHeader: Porta src=54321, dst=443, SEQ, ACK, Flags"]
-    Net["Livello Internet\nPacchetto IP\nHeader: IP src=192.168.1.10, dst=93.184.216.34, TTL=64, Protocol=6"]
-    Link["Accesso alla Rete\nFrame Ethernet\nHeader: MAC src, MAC dst | Trailer: FCS"]
-    Bits["Bit sul mezzo fisico\n(cavo, fibra, RF)"]
+    App["Applicazione&lt;br/&gt;(HTTP Request: GET /index.html)"]
+    Trans["Livello Trasporto&lt;br/&gt;Segmento TCP&lt;br/&gt;Header: Porta src=54321, dst=443, SEQ, ACK, Flags"]
+    Net["Livello Internet&lt;br/&gt;Pacchetto IP&lt;br/&gt;Header: IP src=192.168.1.10, dst=93.184.216.34, TTL=64, Protocol=6"]
+    Link["Accesso alla Rete&lt;br/&gt;Frame Ethernet&lt;br/&gt;Header: MAC src, MAC dst | Trailer: FCS"]
+    Bits["Bit sul mezzo fisico&lt;br/&gt;(cavo, fibra, RF)"]
 
     App --&gt;|"incapsula in segmento"| Trans
     Trans --&gt;|"incapsula in pacchetto"| Net
@@ -25000,8 +25004,8 @@
     C-&gt;&gt;S: ACK (ACK=y+1)
 
     Note over C,S: Fase 3 — Scambio HTTP
-    C-&gt;&gt;S: GET /index.html HTTP/1.1\nHost: example.com
-    S--&gt;&gt;C: HTTP/1.1 200 OK\nContent-Type: text/html\n\n&lt;html&gt;...&lt;/html&gt;
+    C-&gt;&gt;S: GET /index.html HTTP/1.1 (Host: example.com)
+    S--&gt;&gt;C: HTTP/1.1 200 OK (Content-Type: text/html, body HTML)
 
     Note over C,S: Fase 4 — Chiusura connessione TCP
     C-&gt;&gt;S: FIN
@@ -25098,7 +25102,7 @@
 </span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>
 </span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="c1"># Testare connettività TCP a una porta specifica</span>
 </span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>nc<span class="w"> </span>-zv<span class="w"> </span><span class="m">8</span>.8.8.8<span class="w"> </span><span class="m">443</span><span class="w">     </span><span class="c1"># Connessione TCP a Google DNS su porta 443</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>nc<span class="w"> </span>-zv<span class="w"> </span>-u<span class="w"> </span><span class="m">8</span>.8.8.8<span class="w"> </span><span class="m">53</span><span class="w">   </span><span class="c1"># Connessione UDP a Google DNS su porta 53</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>nc<span class="w"> </span>-zv<span class="w"> </span>-u<span class="w"> </span><span class="m">8</span>.8.8.8<span class="w"> </span><span class="m">53</span><span class="w">   </span><span class="c1"># Probe UDP: inaffidabile, "succeeded" non prova che il servizio risponda (UDP non ha handshake)</span>
 </span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>
 </span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="c1"># ARP — mappatura IP → MAC</span>
 </span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>arp<span class="w"> </span>-n<span class="w">                  </span><span class="c1"># Tabella ARP corrente</span>
@@ -25119,7 +25123,7 @@
 <li><strong>Comprendi i numeri di porta</strong>: porte &lt; 1024 sono privilegiate (richiedono root). Le porte 1024-49151 sono registrate (IANA — Internet Assigned Numbers Authority, l'ente che gestisce l'assegnazione globale di indirizzi IP, numeri AS e numeri di porta). Le porte 49152-65535 sono ephemeral (usate dai client per le connessioni uscenti).</li>
 <li><strong>Monitora lo stato TCP</strong>: <code>ss -s</code> mostra il conteggio delle connessioni per stato (ESTABLISHED, TIME_WAIT, CLOSE_WAIT). <strong>TIME_WAIT</strong> è lo stato post-chiusura in cui il sistema attende che eventuali pacchetti in ritardo vengano ricevuti (dura 2×MSL, tipicamente 60s). <strong>CLOSE_WAIT</strong> indica che il lato remoto ha chiuso ma la connessione locale non è ancora stata chiusa dall'applicazione. Un accumulo anomalo di entrambi indica problemi nell'applicazione.</li>
 <li><strong>Attenzione al TTL</strong>: il TTL IP serve anche per diagnosticare. Un TTL di 64 suggerisce Linux, 128 Windows, 255 dispositivi di rete. Il numero di hop si calcola come <code>TTL_iniziale - TTL_ricevuto</code>.</li>
-<li><strong>MTU e frammentazione</strong>: la MTU (Maximum Transmission Unit — dimensione massima del frame trasmissibile sul mezzo) standard Ethernet è 1500 byte. VPN e tunneling riducono l'MTU effettiva. Usa <code>ping -M do -s 1472</code> per verificare la MTU path (1472 + 28 header IP/ICMP = 1500).</li>
+<li><strong>MTU e frammentazione</strong>: la MTU (Maximum Transmission Unit — dimensione massima del payload IP trasmissibile in un frame) standard Ethernet è 1500 byte. VPN e tunneling riducono l'MTU effettiva. Usa <code>ping -M do -s 1472</code> per verificare la MTU path (1472 + 28 header IP/ICMP = 1500; <code>-M do</code> imposta Don't Fragment, quindi un pacchetto troppo grande fallisce invece di essere frammentato). Se l'ICMP è filtrato la Path MTU Discovery si rompe ("black hole": connessioni che si bloccano sui pacchetti grandi); mitigazione: MSS clamping sul gateway.</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="nessuna-connettivita">Nessuna Connettività<a class="headerlink" href="#nessuna-connettivita" title="Permanent link">&para;</a></h3>
@@ -25162,15 +25166,16 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Contare connessioni in TIME_WAIT</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>ss<span class="w"> </span>-tan<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>TIME-WAIT<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Se eccessivo (&gt; 10k), abilitare TCP reuse</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>sysctl<span class="w"> </span>net.ipv4.tcp_tw_reuse<span class="o">=</span><span class="m">1</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># Oppure ridurre fin_timeout</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>sysctl<span class="w"> </span>net.ipv4.tcp_fin_timeout<span class="o">=</span><span class="m">15</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># TIME_WAIT dura fisso 60s su Linux (non configurabile) ed è normale sul lato che chiude per primo.</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Se eccessivo (&gt; 10k) e un client/proxy esaurisce le porte effimere:</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>sysctl<span class="w"> </span>net.ipv4.tcp_tw_reuse<span class="o">=</span><span class="m">1</span><span class="w">   </span><span class="c1"># riusa socket TIME_WAIT solo per connessioni in USCITA (richiede timestamps TCP)</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Meglio: keep-alive / connection pooling e ampliare net.ipv4.ip_local_port_range</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Nota: tcp_fin_timeout NON riguarda TIME_WAIT (agisce su FIN_WAIT_2)</span>
 </span></code></pre></div>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://www.rfc-editor.org/rfc/rfc791">RFC 791 — Internet Protocol (IPv4)</a></li>
-<li><a href="https://www.rfc-editor.org/rfc/rfc793">RFC 793 — Transmission Control Protocol</a></li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9293">RFC 9293 — Transmission Control Protocol (sostituisce RFC 793)</a></li>
 <li><a href="https://www.rfc-editor.org/rfc/rfc768">RFC 768 — User Datagram Protocol</a></li>
 <li><a href="https://www.rfc-editor.org/rfc/rfc1122">RFC 1122 — Requirements for Internet Hosts</a></li>
 <li><a href="http://www.tcpipguide.com/">TCP/IP Guide — Charles M. Kozierok</a></li>
