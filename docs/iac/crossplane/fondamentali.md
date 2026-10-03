@@ -10,9 +10,14 @@ official_docs: https://docs.crossplane.io/
 status: needs-review
 difficulty: advanced
 last_updated: 2026-10-02
+last_verified: 2026-10-03
 ---
 
 # Crossplane — Fondamentali
+
+!!! warning "Versione: esempi in stile Crossplane v1 / Upbound provider v1"
+    Gli esempi di questa pagina usano la API v1 (Composition `mode: Resources` con `patches`, `connectionDetails`, Claim, `provider-aws-*` v1.x). Crossplane v2 (2025) ha cambiato il modello: XR namespaced come default (i Claim restano solo in modalità legacy), solo Composition `mode: Pipeline` (patch-and-transform nativo rimosso: si usa `function-patch-and-transform`), connection details nativi e `deletionPolicy` sostituiti da logica nelle funzioni e `managementPolicies`, provider con MR namespaced (`*.m.upbound.io`).
+    <!-- REVIEW: riscrivere Composition/XRD/Claim/connection secret in stile v2 (Pipeline, XR namespaced, scope XRD) e verificare versioni provider/chart correnti; vedi prop-140 -->
 
 ## Panoramica
 
@@ -157,7 +162,7 @@ Crossplane è "Terraform-via-Kubernetes-API": stessa idea dichiarativa (desired 
 
 | Aspetto | Terraform | Crossplane |
 |---|---|---|
-| Stato | State file (locale o remote backend: S3+DynamoDB) | Oggetti Kubernetes in etcd (nessuno state file separato) |
+| Stato | State file (locale o remote backend, es. S3 con locking) | Oggetti Kubernetes in etcd (nessuno state file separato) |
 | Ciclo di esecuzione | On-demand: `plan` → review → `apply` | Control loop continuo: reconcile ogni N secondi, sempre attivo |
 | Drift correction | Manuale: serve rieseguire `plan`/`apply` per rilevare drift | Automatica: il controller rileva e corregge il drift senza intervento umano |
 | Autenticazione/autorizzazione | IAM cloud + backend state separato (es. policy S3 bucket) | RBAC Kubernetes nativo (Role/RoleBinding sugli XR/Claim) |
@@ -196,7 +201,7 @@ Perché è "control loop e non on-demand": non serve che un umano lanci `pulumi 
 
 ### Layered Composition e Funzioni (Composition Functions)
 
-Le versioni recenti di Crossplane (v1.14+) sostituiscono il patching dichiarativo delle Composition con **Composition Functions**: pipeline di funzioni (container OCI, tipicamente scritte in Go/Python) che ricevono l'XR in input e producono i Managed Resource in output, abilitando logica condizionale complessa (loop, if/else) impossibile con il solo patching YAML.
+Le versioni recenti di Crossplane (Functions GA dalla v1.17; unica modalità supportata in v2) sostituiscono il patching nativo delle Composition con **Composition Functions**: pipeline di funzioni (container OCI, tipicamente scritte in Go/Python) che ricevono l'XR in input e producono i Managed Resource in output, abilitando logica condizionale complessa (loop, if/else) impossibile con il solo patching YAML.
 
 ```yaml
 apiVersion: apiextensions.crossplane.io/v1
@@ -408,11 +413,12 @@ Il warning in [Best Practices](#best-practices) dice di trattare una Composition
 
 **Livello 1 — `crossplane render` (offline, nessun cluster)**
 
-Dalla v1.14, il comando `crossplane render` compila claim + composite + function-pipeline di una Composition e stampa i Managed Resource risultanti, senza toccare alcun cluster reale. Serve a validare che il patching/function pipeline produca l'output atteso, in locale o in CI, in pochi secondi:
+Il comando `crossplane render` (introdotto come `crossplane beta render` in v1.14, ora stabile) compila claim + composite + function-pipeline di una Composition e stampa i Managed Resource risultanti, senza toccare alcun cluster reale. Serve a validare che il patching/function pipeline produca l'output atteso, in locale o in CI, in pochi secondi:
 
 ```bash
 # render.sh — xr.yaml è l'XR di esempio, composition.yaml la Composition sotto test,
 # functions.yaml dichiara le function usate dalla pipeline (se mode: Pipeline)
+# Le function della pipeline girano come container: serve Docker locale
 crossplane render xr.yaml composition.yaml functions.yaml > rendered-output.yaml
 
 # Diff contro uno snapshot committato: se cambia senza che il PR lo documenti, fallisce
@@ -462,7 +468,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: crossplane/setup-crossplane-cli@v1
+      - name: Installare crossplane CLI
+        run: |
+          curl -sL https://raw.githubusercontent.com/crossplane/crossplane/main/install.sh | sh
+          sudo mv crossplane /usr/local/bin/
       - name: Render e confronta con snapshot
         run: |
           crossplane render compositions/xdatabase/xr.yaml \
@@ -474,7 +483,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: helm/kind-action@v1
-      - run: curl -sSf https://kyverno.github.io/chainsaw/install.sh | sh
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go install github.com/kyverno/chainsaw@latest   # pinnare una versione in produzione
       - run: chainsaw test compositions/xdatabase/chainsaw-test.yaml
 ```
 
@@ -542,7 +554,7 @@ kubectl logs -n crossplane-system deploy/crossplane -f
 ```
 **Soluzione:** correggere il path del patch o il valore di default nello schema XRD, poi riapplicare la Composition (il reconciler la rilegge automaticamente al prossimo ciclo).
 
-### Permessi RBAC del provider service account insufficienti
+### Permessi IAM delle credenziali del provider insufficienti
 **Sintomo:** la Managed Resource resta in `Ready: False` con evento `AccessDenied` o `UnauthorizedOperation` nei log, pur avendo un `ProviderConfig` valido.
 **Causa:** le credenziali cloud referenziate nel `ProviderConfig` non hanno i permessi IAM necessari per l'azione richiesta (es. `rds:CreateDBInstance`).
 ```bash
@@ -576,7 +588,7 @@ kubectl get database checkout-db -n team-checkout -o yaml | grep -A3 composition
     **Approfondimento →** [Terraform Fondamentali](../terraform/fondamentali.md)
 
 ??? info "Terraform State Management — Confronto Gestione Stato"
-    Il problema di stato condiviso, locking e drift che Terraform risolve con backend remoti (S3+DynamoDB) è risolto in Crossplane nativamente da etcd e dal control loop, senza bisogno di un layer separato di locking.
+    Il problema di stato condiviso, locking e drift che Terraform risolve con backend remoti (es. S3 con locking) è risolto in Crossplane nativamente da etcd e dal control loop, senza bisogno di un layer separato di locking.
 
     **Approfondimento →** [Terraform State Management](../terraform/state-management.md)
 
