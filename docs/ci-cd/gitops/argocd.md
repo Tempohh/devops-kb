@@ -7,10 +7,10 @@ search_keywords: [argocd, argocd application, argocd app of apps, argocd applica
 parent: ci-cd/gitops/_index
 related: [ci-cd/gitops/_index, ci-cd/gitops/flux, containers/kubernetes/_index, containers/helm/_index, containers/kustomize/_index]
 official_docs: https://argo-cd.readthedocs.io/
-status: needs-review
+status: reviewed
 difficulty: advanced
-last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # ArgoCD
@@ -66,7 +66,7 @@ ArgoCD è uno strumento GitOps dichiarativo per Kubernetes che si installa come 
 ### Installazione
 
 ```bash
-# Installazione con kubectl (sostituire <versione> con una release 3.x reale, es. v3.1.0:
+# Installazione con kubectl (sostituire <versione> con una release 3.x reale, es. v3.5.3:
 # fissare SEMPRE la versione, "stable" si muove e rende l'installazione non riproducibile)
 kubectl create namespace argocd
 kubectl apply -n argocd -f \
@@ -567,41 +567,43 @@ spec:
 
 ## ArgoCD Image Updater
 
-ArgoCD Image Updater monitora i registry Docker e aggiorna automaticamente il tag dell'immagine nel repository Git.
+ArgoCD Image Updater monitora i registry di container image e aggiorna automaticamente il tag dell'immagine (via commit su Git o direttamente su ArgoCD). Dalla **v1.0** la configurazione è **CRD-based** (`ImageUpdater`), non più via annotation sull'Application; le annotation sono il modello legacy 0.x. Ultima release verificata: v1.3.0 (agosto 2026).
 
-<!-- REVIEW: verificare Image Updater 1.x (configurazione via CRD ImageUpdater invece delle annotation) e la versione corrente; le annotation sotto sono il modello 0.x/legacy -->
+```bash
+# Installazione v1.x (il controller osserva di default solo il proprio namespace)
+kubectl apply -n argocd -f \
+  https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/stable/config/install.yaml
+# In produzione fissare una release (es. v1.3.0) al posto di "stable"
+```
 
 ```yaml
-# Installazione (fissare una release reale, <versione> = tag della release 0.x o 1.x)
-kubectl apply -n argocd -f \
-  https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/<versione>/manifests/install.yaml
-
-# Annotazioni sull'Application per configurare l'aggiornamento
-apiVersion: argoproj.io/v1alpha1
-kind: Application
+# Configurazione v1.x: una CR ImageUpdater seleziona le Application e le immagini
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
 metadata:
-  name: myapp
+  name: myapp-updater
   namespace: argocd
-  annotations:
-    # Lista immagini da monitorare
-    argocd-image-updater.argoproj.io/image-list: |
-      myapp=ghcr.io/my-org/myapp
-
-    # Strategia di aggiornamento: semver, latest, digest, name
-    argocd-image-updater.argoproj.io/myapp.update-strategy: semver
-
-    # Constraint semver
-    argocd-image-updater.argoproj.io/myapp.allow-tags: regexp:^v[0-9]+\.[0-9]+\.[0-9]+$
-
-    # Come aggiornare: git (commit nel repo) o argocd (aggiornamento diretto)
-    argocd-image-updater.argoproj.io/write-back-method: git
-
-    # Branch su cui fare il commit
-    argocd-image-updater.argoproj.io/git-branch: main
-
-    # File da aggiornare (per Kustomize)
-    argocd-image-updater.argoproj.io/myapp.kustomize.image-name: ghcr.io/my-org/myapp
+spec:
+  writeBackConfig:
+    method: git                  # git (commit nel repo) oppure argocd
+    gitConfig:
+      branch: main
+      repository: https://github.com/my-org/gitops-manifests.git
+  applicationRefs:
+    - namePattern: "myapp-*"     # Application da gestire
+      images:
+        - alias: myapp
+          imageName: "ghcr.io/my-org/myapp:~1"   # constraint semver
+          commonUpdateSettings:
+            updateStrategy: semver               # semver, newest-build, digest, alphabetical
+            allowTags: "regexp:^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+          manifestTargets:
+            kustomize:
+              name: ghcr.io/my-org/myapp         # nome immagine in kustomization.yaml
 ```
+
+!!! note "Migrazione da 0.x"
+    Le annotation `argocd-image-updater.argoproj.io/*` (`image-list`, `<alias>.update-strategy`, `write-back-method`, `git-branch`, ...) sono deprecate in 1.x. Per le equivalenze consultare la documentazione della versione 1.x.
 
 ## Argo Rollouts — Progressive Delivery
 
