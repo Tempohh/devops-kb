@@ -7,17 +7,17 @@ search_keywords: [backstage, backstage.io, internal developer platform, IDP, dev
 parent: ci-cd/platform-engineering/_index
 related: [ci-cd/gitops/argocd, ci-cd/github-actions/workflow-avanzati, containers/kubernetes/_index]
 official_docs: https://backstage.io/docs
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-03-25
-last_verified: 2026-10-03
+last_verified: 2026-10-04
 ---
 
 # Backstage
 
 ## Panoramica
 
-Backstage è una piattaforma open-source per la costruzione di **Internal Developer Portals (IDP)** — portali centralizzati che unificano strumenti, documentazione, infrastruttura e catalogo dei servizi in un'unica interfaccia per i team di sviluppo. Creato da Spotify nel 2016 e donato alla CNCF nel 2020 (Sandbox) e promosso a Incubating nel 2022 <!-- REVIEW: verificare maturity level CNCF attuale (graduation) -->, Backstage risolve il problema della complessità che cresce linearmente con il numero di microservizi: in un ecosistema con 100+ servizi, i developer perdono tempo a cercare chi possiede cosa, dove si trova la documentazione, come si fa il deploy, quali API esistono.
+Backstage è una piattaforma open-source per la costruzione di **Internal Developer Portals (IDP)** — portali centralizzati che unificano strumenti, documentazione, infrastruttura e catalogo dei servizi in un'unica interfaccia per i team di sviluppo. Creato da Spotify nel 2016 e donato alla CNCF nel 2020 (Sandbox) e promosso a Incubating nel 2022, tuttora a livello Incubating (non graduated, verificato ottobre 2026), Backstage risolve il problema della complessità che cresce linearmente con il numero di microservizi: in un ecosistema con 100+ servizi, i developer perdono tempo a cercare chi possiede cosa, dove si trova la documentazione, come si fa il deploy, quali API esistono.
 
 Il cuore di Backstage è il **Software Catalog** — un registro centralizzato di tutti i componenti software, API, risorse infrastrutturali e team, navigabile via UI e interrogabile via API. Attorno al catalog si integrano: **TechDocs** (documentazione-as-code pubblicata automaticamente), **Scaffolder** (template per creare nuovi servizi seguendo le best practice aziendali), e un ecosistema di **Plugin** (1000+ nella community) che portano visibilità su Kubernetes, CI/CD, Alerting, Cloud costs e molto altro — tutto in un'unica finestra.
 
