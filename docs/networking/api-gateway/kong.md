@@ -7,9 +7,10 @@ search_keywords: [kong gateway, kong plugin, kong admin api, kong manager, kong 
 parent: networking/api-gateway/_index
 related: [networking/api-gateway/pattern-base, networking/api-gateway/rate-limiting, networking/kubernetes/ingress]
 official_docs: https://docs.konghq.com/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Kong API Gateway
@@ -18,7 +19,10 @@ last_updated: 2026-03-29
 
 Kong è l'API gateway open source più diffuso, costruito su **Nginx/OpenResty** (Nginx + LuaJIT). Offre un'architettura plugin-based che permette di estendere le funzionalità senza modificare il core. Kong si configura tramite una Admin API REST (o dichiarativamente con Kong Deck), persiste la configurazione in PostgreSQL o in modalità DB-less via file YAML, e si integra nativamente con Kubernetes tramite il Kong Ingress Controller (KIC).
 
-Kong è disponibile in versione **open source** (OSS, con ~40 plugin ufficiali) e **Enterprise** (con funzionalità avanzate come Developer Portal, RBAC granulare, Analytics). Per la maggior parte dei casi d'uso, Kong OSS è sufficiente.
+Kong è disponibile in versione **open source** (OSS, con ~40 plugin ufficiali), **Enterprise** (Developer Portal, RBAC granulare, Analytics) e come SaaS **Konnect** (control plane gestito da Kong). Per la maggior parte dei casi d'uso la base OSS è sufficiente.
+
+!!! warning "Stato dell'edizione OSS"
+    Dalla serie 3.10 Kong ha smesso di pubblicare nuove release/immagini della sola edizione OSS: la 3.9 è l'ultima (le immagini `kong:3.9` restano disponibili). Le versioni successive escono come Kong Gateway con licenza *free mode* (senza funzionalità Enterprise a pagamento). Verificare sul sito ufficiale licenza e tag da usare prima di adottarlo.
 
 ## Concetti Chiave
 
@@ -41,7 +45,7 @@ Consumer →  Identità del client (per rate limiting, auth per-consumer)
 | Modalità | Storage | Pro | Contro |
 |----------|---------|-----|--------|
 | **DB Mode** (PostgreSQL) | Database | Admin API completa, UI Manager | Dipende da DB |
-| **DB-less** | File YAML/JSON | Nessuna dipendenza esterna | Solo Config file push, no Admin API runtime |
+| **DB-less** | File YAML/JSON (`KONG_DECLARATIVE_CONFIG`) o `POST /config` | Nessuna dipendenza esterna | Admin API in sola lettura (config solo via file o `/config`); `deck` non applicabile |
 | **Hybrid Mode** | Control Plane (DB) + Data Plane (DB-less) | Separazione CP/DP | Più complesso |
 
 ## Architettura / Come Funziona
@@ -78,8 +82,6 @@ Kong Admin API (porta 8001 HTTP / 8444 HTTPS)
 
 ```yaml
 # docker-compose.yaml
-version: '3.8'
-
 services:
   kong-db:
     image: postgres:15
@@ -94,7 +96,7 @@ services:
       interval: 10s
 
   kong-migration:
-    image: kong:3.5
+    image: kong:3.9
     command: kong migrations bootstrap
     environment:
       KONG_DATABASE: postgres
@@ -107,7 +109,7 @@ services:
         condition: service_healthy
 
   kong:
-    image: kong:3.5
+    image: kong:3.9
     environment:
       KONG_DATABASE: postgres
       KONG_PG_HOST: kong-db
@@ -118,7 +120,7 @@ services:
       KONG_ADMIN_ACCESS_LOG: /dev/stdout
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ERROR_LOG: /dev/stderr
-      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001   # solo demo: Admin API senza auth, vedi warning sotto
       KONG_PROXY_LISTEN: 0.0.0.0:8000, 0.0.0.0:8443 ssl
     ports:
       - "8000:8000"   # HTTP proxy
@@ -133,6 +135,9 @@ services:
 volumes:
   kong_data:
 ```
+
+!!! warning "Non esporre l'Admin API"
+    L'Admin API (8001) non ha autenticazione di default e controlla l'intero gateway. In produzione metterla in ascolto su `127.0.0.1` o rete privata, oppure proteggerla con RBAC (Enterprise) o con una Route Kong con auth.
 
 ### Configurazione via Admin API
 
@@ -167,18 +172,24 @@ curl -X POST http://localhost:8001/services/user-service/plugins \
   -d name=rate-limiting \
   -d 'config.minute=100' \
   -d 'config.policy=redis' \
-  -d 'config.redis_host=redis' \
-  -d 'config.redis_port=6379'
+  -d 'config.redis.host=redis' \
+  -d 'config.redis.port=6379'
 
 # 7. Aggiungi CORS
 curl -X POST http://localhost:8001/services/user-service/plugins \
   -d name=cors \
   -d 'config.origins[]=https://myapp.example.com' \
-  -d 'config.methods[]=GET,POST,PUT,DELETE' \
-  -d 'config.headers[]=Authorization,Content-Type'
+  -d 'config.methods[]=GET' \
+  -d 'config.methods[]=POST' \
+  -d 'config.methods[]=PUT' \
+  -d 'config.methods[]=DELETE' \
+  -d 'config.headers[]=Authorization' \
+  -d 'config.headers[]=Content-Type'
 ```
 
-### Configurazione Dichiarativa (DB-less) con Kong Deck
+### Configurazione Dichiarativa con decK
+
+decK sincronizza un file YAML con una Kong in **DB mode** (o un control plane Hybrid/Konnect) tramite Admin API. In **DB-less** puro non funziona: lì lo stesso formato YAML si carica con `KONG_DECLARATIVE_CONFIG` o `POST /config`.
 
 ```yaml
 # kong.yaml — Configurazione dichiarativa (per deck sync)
@@ -217,8 +228,9 @@ services:
           minute: 100
           hour: 5000
           policy: redis
-          redis_host: redis
-          redis_port: 6379
+          redis:               # da Kong 3.8; i vecchi redis_host/redis_port sono deprecati
+            host: redis
+            port: 6379
 
       - name: request-transformer
         config:
@@ -236,7 +248,7 @@ consumers:
   - username: mobile-app
     jwt_secrets:
       - algorithm: HS256
-        secret: "$(SECRET_JWT_KEY)"
+        secret: ${{ env "DECK_SECRET_JWT_KEY" }}   # env var DECK_*, non committare il segreto
 
   - username: web-app
     jwt_secrets:
@@ -267,14 +279,14 @@ upstreams:
 ```
 
 ```bash
-# Applica la configurazione con deck
-deck sync --kong-addr http://localhost:8001 --state kong.yaml
-
 # Verifica differenze prima di applicare
-deck diff --kong-addr http://localhost:8001 --state kong.yaml
+deck gateway diff --kong-addr http://localhost:8001 kong.yaml
+
+# Applica la configurazione
+deck gateway sync --kong-addr http://localhost:8001 kong.yaml
 
 # Esporta configurazione attuale
-deck dump --kong-addr http://localhost:8001 --output-file kong-current.yaml
+deck gateway dump --kong-addr http://localhost:8001 --output-file kong-current.yaml
 ```
 
 ### Kong Ingress Controller (Kubernetes)
@@ -282,6 +294,7 @@ deck dump --kong-addr http://localhost:8001 --output-file kong-current.yaml
 ```yaml
 # Installa KIC con Helm
 # helm install kong kong/ingress -n kong --create-namespace
+# Per nuovi progetti Kong raccomanda anche Gateway API (HTTPRoute) al posto di Ingress
 
 # Configurazione Ingress con Kong
 apiVersion: networking.k8s.io/v1
@@ -315,8 +328,9 @@ plugin: rate-limiting
 config:
   minute: 100
   policy: redis
-  redis_host: redis
-  redis_port: 6379
+  redis:
+    host: redis
+    port: 6379
 
 ---
 apiVersion: configuration.konghq.com/v1
@@ -331,12 +345,12 @@ config:
 
 ## Best Practices
 
-- **DB-less in produzione per Kubernetes**: più semplice, nessuna dipendenza da PostgreSQL — configurazione come ConfigMap
+- **DB-less in produzione per Kubernetes**: più semplice, nessuna dipendenza da PostgreSQL. Con KIC il controller traduce Ingress/CRD in config e la spinge ai nodi Kong: nessun file da scrivere a mano
 - **Separare plugin globali da specifici**: applicare autenticazione e logging globalmente, rate limiting e trasformazioni per Service
 - **Consumer per applicazione, non per utente**: i Consumer Kong rappresentano applicazioni client, non utenti finali (gli utenti sono nel JWT)
 - **Health check sugli Upstream**: configurare sempre health check attivi per rilevare backend degradati
 - **Usare deck**: gestire la configurazione come codice con versioning Git
-- **Plugin ordering**: l'ordine di esecuzione dei plugin è predefinito (authentication → rate limiting → transform) — verificare la priorità se si aggiungono plugin custom
+- **Plugin ordering**: l'ordine è fissato dalla `PRIORITY` di ciascun plugin (più alta = prima; non dipende dall'ordine di creazione): auth → rate limiting → transform. Nei plugin custom definire `PRIORITY`; il riordino dinamico è solo Enterprise
 
 ## Troubleshooting
 
@@ -385,18 +399,19 @@ redis-cli -h redis ping
 
 **Causa:** Il path nella Route non corrisponde esattamente (case sensitive, trailing slash), oppure `strip_path` è configurato diversamente da quanto atteso, oppure la configurazione non è stata applicata (deck non eseguito).
 
-**Soluzione:** Verificare il matching esatto e usare `deck diff` per confrontare configurazione desiderata vs attuale.
+**Soluzione:** Verificare il matching esatto e usare `deck gateway diff` per confrontare configurazione desiderata vs attuale.
 
 ```bash
 # Verifica route configurate sul service
 curl http://localhost:8001/services/user-service/routes | jq '.data[] | {name, paths, strip_path, methods}'
 
-# Usa header debug per vedere quale route viene valutata (solo dev)
+# Header debug per vedere quale route viene valutata (solo dev; richiede
+# request_debug abilitato, e dalla 3.6 anche il token di request_debug_token)
 curl -I http://localhost:8000/api/v1/users -H "Kong-Debug: 1"
 # Risposta includerà: Kong-Route-Id, Kong-Service-Id
 
 # Confronta config dichiarativa vs stato attuale
-deck diff --kong-addr http://localhost:8001 --state kong.yaml
+deck gateway diff --kong-addr http://localhost:8001 kong.yaml
 ```
 
 ### Scenario 4 — Backend non raggiungibile (502/503)
@@ -439,8 +454,8 @@ curl http://localhost:8001/routes/<route-id>/plugins | jq '.data[] | {name, enab
 # Plugin globali (applicati a tutto il traffico)
 curl http://localhost:8001/plugins | jq '.data[] | select(.service == null and .route == null) | .name'
 
-# Verifica priorità esecuzione plugin (campo priority)
-curl http://localhost:8001/plugins/<plugin-id> | jq '{name: .name, enabled: .enabled}'
+# Dettaglio di un plugin (scope e stato). La priorità sta nel codice del plugin, non nell'entità
+curl http://localhost:8001/plugins/<plugin-id> | jq '{name, enabled, service, route, consumer}'
 ```
 
 ## Relazioni
