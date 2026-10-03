@@ -7,9 +7,10 @@ search_keywords: [Azure Service Bus, Service Bus Queue, Service Bus Topic, Servi
 parent: cloud/azure/messaging/_index
 related: [cloud/azure/messaging/event-hubs, cloud/azure/compute/app-service-functions, cloud/azure/storage/blob-storage]
 official_docs: https://learn.microsoft.com/azure/service-bus-messaging/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Azure Service Bus & Event Grid
@@ -30,7 +31,7 @@ last_updated: 2026-03-29
 | Geo-DR | No | No | Sì |
 | VNet Integration | No | No | Sì |
 | Dedicated | No | No | Sì |
-| Prezzo | ~$0.05/M op | ~$0.10/M op | da $670/mese |
+| Prezzo | ~$0.05/M op | ~$10/mese base (include 12,5M op) + ~$0.80/M op extra | da ~$670/mese per Messaging Unit |
 
 ---
 
@@ -49,13 +50,19 @@ az servicebus queue create \
     --resource-group myapp-rg \
     --namespace-name myapp-servicebus \
     --name orders-queue \
-    --max-size 5120 \                             # MB: 1024, 2048, 3072, 4096, 5120
-    --lock-duration PT2M \                        # ISO 8601: 2 minuti (default 1 min, max 5 min)
-    --default-message-time-to-live P14D \         # TTL: 14 giorni
+    --max-size 5120 \
+    --lock-duration PT2M \
+    --default-message-time-to-live P14D \
     --dead-lettering-on-message-expiration true \
-    --duplicate-detection-history-time-window PT10M \   # finestra deduplica (max 7 giorni)
+    --duplicate-detection-history-time-window PT10M \
     --enable-duplicate-detection true \
-    --max-delivery-count 5                        # max retry prima di DLQ
+    --max-delivery-count 5
+# --max-size: MB (1024..5120 su Standard)
+# --lock-duration: ISO 8601, default 1 min, max 5 min
+# --default-message-time-to-live: P14D = 14 giorni
+# --duplicate-detection-history-time-window: finestra deduplica, max 7 giorni
+# --max-delivery-count: max tentativi prima di DLQ
+# Per le sessioni (vedi sotto) aggiungere --enable-session true (va deciso alla creazione)
 
 # Creare Topic
 az servicebus topic create \
@@ -92,7 +99,7 @@ az servicebus topic subscription rule create \
     --subscription-name notification-subscription \
     --name order-created-filter \
     --filter-type CorrelationFilter \
-    --correlation-filter-properties eventType=order.created
+    --correlation-filter-property eventType=order.created
 ```
 
 ---
@@ -152,7 +159,7 @@ def process_orders():
         ) as receiver:
             for msg in receiver:
                 try:
-                    order = json.loads(msg.body)
+                    order = json.loads(str(msg))      # msg.body è un generatore di bytes: usare str(msg)
                     process_order(order)
                     receiver.complete_message(msg)         # rimuove dalla queue
                 except Exception as e:
@@ -185,7 +192,7 @@ def receive_session(session_id: str):
             session_id=session_id
         ) as receiver:
             for msg in receiver:
-                process_order(json.loads(msg.body))
+                process_order(json.loads(str(msg)))
                 receiver.complete_message(msg)
 ```
 
@@ -193,12 +200,10 @@ def receive_session(session_id: str):
 
 ### Dead Letter Queue (DLQ)
 
-```bash
-# Listare messaggi in DLQ (via CLI)
-# La DLQ si accede con path: queuename/$DeadLetterQueue
+La DLQ è una sub-queue (`<queue>/$deadletterqueue`): non ha consumer propri e i messaggi non scadono. Ci finiscono per `max-delivery-count` superato, TTL scaduto (se abilitato), errore nei filtri, o `dead_letter_message()` esplicito.
 
-# Via SDK Python
-from azure.servicebus import ServiceBusSubQueue
+```python
+from azure.servicebus import ServiceBusClient, ServiceBusSubQueue
 
 def inspect_dlq():
     with ServiceBusClient(NAMESPACE, credential) as client:
@@ -222,8 +227,8 @@ def inspect_dlq():
 | **Duplicate Detection** | Ignora messaggi con stesso MessageId in finestra temporale | `--enable-duplicate-detection true` |
 | **Scheduled Messages** | Messaggio visibile a orario futuro | `scheduled_enqueue_time_utc` nel SDK |
 | **Deferred Messages** | Consumer posticipa elaborazione per dopo | `receiver.defer_message(msg)` |
-| **Transactions** | Operazioni atomiche su più entità | `ServiceBusClient.get_queue_sender` dentro `transaction()` |
-| **Message Lock Renewal** | Estende lock durante elaborazione lunga | `receiver.renew_message_lock(msg)` |
+| **Transactions** | Operazioni atomiche su più entità Send-via su più entità dello stesso namespace (vedi docs *Transaction processing*) |
+| **Message Lock Renewal** | Estende lock durante elaborazione lunga `AutoLockRenewer` (SDK) o `receiver.renew_message_lock(msg)` |
 
 ---
 
@@ -261,14 +266,15 @@ az eventgrid system-topic event-subscription create \
     --endpoint /subscriptions/$SUB_ID/.../functions/ProcessBlob \
     --included-event-types Microsoft.Storage.BlobCreated \
     --subject-begins-with /blobServices/default/containers/uploads/ \
-    --deadletter-endpoint /subscriptions/$SUB_ID/.../blobServices/default/containers/dlq/blobs \
+    --deadletter-endpoint /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.Storage/storageAccounts/mystorageaccount/blobServices/default/containers/dlq \
     --max-delivery-attempts 10 \
-    --event-ttl 1440 \                     # minuti: 24 ore
-    --retry-policy max-number-of-attempts=10
+    --event-ttl 1440
+# --event-ttl in minuti (1440 = 24 ore, massimo); --max-delivery-attempts max 30
+# --deadletter-endpoint = resource ID del container blob (non /blobs)
 
-# Listare tipi di eventi per ogni risorsa
-az eventgrid event-subscription list-global-by-subscription-for-topic-type \
-    --topic-type Microsoft.Storage.StorageAccounts
+# Listare i tipi di evento di un topic type
+az eventgrid topic-type list-event-types \
+    --name Microsoft.Storage.StorageAccounts
 ```
 
 ### Custom Topic
@@ -279,8 +285,9 @@ TOPIC_ENDPOINT=$(az eventgrid topic create \
     --resource-group myapp-rg \
     --name myapp-events \
     --location italynorth \
-    --input-schema cloudeventschemav1_0 \    # CloudEvents 1.0 (standard) o EventGridSchema
+    --input-schema cloudeventschemav1_0 \
     --query endpoint -o tsv)
+# --input-schema: cloudeventschemav1_0 (standard CNCF) | eventgridschema | customeventschema
 
 # Ottenere access key (per invio — usare Managed Identity in produzione)
 TOPIC_KEY=$(az eventgrid topic key list \
@@ -295,8 +302,9 @@ az eventgrid event-subscription create \
     --endpoint-type servicebusqueue \
     --endpoint /subscriptions/$SUB_ID/.../queues/orders-queue \
     --event-delivery-schema cloudeventschemav1_0 \
-    --advanced-filter data.amount NumberGreaterThan 100 \     # filtro sul payload
-    --included-event-types order.created order.updated
+    --advanced-filter data.amount NumberGreaterThan 100 \
+    --included-event-types com.myapp.order.created com.myapp.order.updated
+# --advanced-filter filtra sul payload (data.*); i type devono coincidere con CloudEvent.type
 ```
 
 ### Inviare CloudEvents (Standard Raccomandato)
@@ -380,9 +388,9 @@ def process_order_event(event: func.EventGridEvent) -> None:
 }
 ```
 
-### Event Grid Namespace (Nuovo — 2024)
+### Event Grid Namespace (pull delivery e MQTT)
 
-**Event Grid Namespace** introduce il modello **pull-based** e supporto **MQTT** — ideale per IoT e scenari dove il subscriber non è sempre online:
+**Event Grid Namespace** (GA dal 2024) introduce il modello **pull-based** e supporto **MQTT** — ideale per IoT e scenari dove il subscriber non è sempre online:
 
 ```bash
 # Creare Namespace
@@ -440,7 +448,7 @@ def reprocess_dlq():
             with client.get_queue_sender(QUEUE_NAME) as sender:
                 msgs = dlq_receiver.receive_messages(max_message_count=100, max_wait_time=5)
                 for msg in msgs:
-                    new_msg = ServiceBusMessage(body=msg.body)
+                    new_msg = ServiceBusMessage(str(msg), application_properties=msg.application_properties)
                     sender.send_messages(new_msg)
                     dlq_receiver.complete_message(msg)
 ```
@@ -453,28 +461,18 @@ def reprocess_dlq():
 
 **Causa:** Il lock-duration della queue (default 1 min, max 5 min) è scaduto prima che l'elaborazione terminasse. Service Bus ha rimesso il messaggio disponibile.
 
-**Soluzione:** Rinnovare il lock periodicamente durante elaborazione lunga, oppure aumentare `--lock-duration` fino a PT5M. Per elaborazioni > 5 min usare deferred messages.
+**Soluzione:** Rinnovare il lock durante elaborazione lunga (`AutoLockRenewer` lo fa in background, anche oltre 5 min), oppure aumentare `--lock-duration` fino a PT5M. I deferred message NON servono a questo: servono a posticipare un messaggio fuori ordine e recuperarlo per `sequence_number`.
 
 ```python
-import asyncio
-from azure.servicebus.aio import ServiceBusClient as AsyncServiceBusClient
+from azure.servicebus import AutoLockRenewer
 
-async def process_with_lock_renewal(msg):
-    """Rinnova il lock ogni 60s durante elaborazione."""
-    async def renew_lock():
-        while True:
-            await asyncio.sleep(60)
-            try:
-                await receiver.renew_message_lock(msg)
-            except Exception:
-                break
-
-    renewal_task = asyncio.create_task(renew_lock())
-    try:
-        await do_long_processing(msg)
-        await receiver.complete_message(msg)
-    finally:
-        renewal_task.cancel()
+renewer = AutoLockRenewer(max_lock_renewal_duration=900)   # rinnova fino a 15 min
+with ServiceBusClient(NAMESPACE, credential) as client:
+    with client.get_queue_receiver(QUEUE_NAME, auto_lock_renewer=renewer) as receiver:
+        for msg in receiver:
+            do_long_processing(msg)
+            receiver.complete_message(msg)
+renewer.close()
 ```
 
 ```bash
@@ -492,7 +490,7 @@ az servicebus queue update \
 
 **Sintomo:** Gli eventi vengono pubblicati (HTTP 200 dal publisher) ma il webhook handler non li riceve. Nessun errore visibile nella sottoscrizione.
 
-**Causa 1:** La sottoscrizione è in stato `SubscriptionValidationFailed` — Event Grid richiede un handshake di validazione al momento della creazione. Se l'endpoint non ha risposto con `validationResponse`, la sottoscrizione è disabilitata.
+**Causa 1:** Handshake di validazione fallito alla creazione della sottoscrizione (`provisioningState` non `Succeeded`). Con EventGridSchema Event Grid invia un POST con `validationCode` e il webhook deve rispondere con `validationResponse`; con CloudEvents v1.0 l'handshake è una richiesta HTTP `OPTIONS` (header `WebHook-Request-Origin`) a cui rispondere con `WebHook-Allowed-Origin`.
 
 **Causa 2:** L'endpoint non è raggiungibile pubblicamente (es. `localhost`) o restituisce status != 200.
 
@@ -511,9 +509,9 @@ az monitor metrics list \
     --metric "DeliveryAttemptFailCount" \
     --interval PT1H
 
-# Risposta corretta all'handshake di validazione (webhook handler)
-# Event Grid invia POST con validationCode — il webhook deve rispondere:
+# Handshake EventGridSchema: POST con validationCode -> rispondere
 # { "validationResponse": "<validationCode>" }
+# Handshake CloudEvents v1.0: OPTIONS -> rispondere con header WebHook-Allowed-Origin
 ```
 
 ---
