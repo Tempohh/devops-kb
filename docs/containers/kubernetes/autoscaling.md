@@ -9,7 +9,7 @@ related: [containers/kubernetes/workloads, containers/kubernetes/scheduling-avan
 official_docs: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-24
+last_updated: 2026-10-03
 ---
 
 # Kubernetes Autoscaling
@@ -326,8 +326,8 @@ rbac:
 ```
 
 ```yaml
-# Annotazione su node group per CA
-# Aggiungere sui nodi (gestito da ASG tags in AWS):
+# Annotazione sui POD (non sui nodi): permette al CA di evictarli
+# anche se altrimenti bloccherebbero lo scale-down (es. local storage)
 cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
 ```
 
@@ -377,61 +377,83 @@ cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
 
 ## Troubleshooting
 
-**HPA bloccato a minReplicas / non scala**
+### Scenario 1 — HPA bloccato a minReplicas / non scala
+
+**Sintomo**: `kubectl get hpa` mostra `<unknown>/70%` nei TARGETS e le repliche restano a `minReplicas`.
+
+**Causa**: l'HPA non riesce a leggere le metriche. Cause tipiche: Metrics Server assente o non sano; container senza `resources.requests.cpu` (l'utilizzo % è calcolato rispetto ai requests, senza requests il calcolo è impossibile); regola Prometheus Adapter errata.
+
+**Soluzione**: leggere `Conditions`/`Events` dell'HPA e verificare la catena delle metriche.
+
 ```bash
-# Verificare stato HPA
 kubectl describe hpa web-app-hpa
+# "unable to get metrics for resource cpu"  → Metrics Server non installato/funzionante
+# "missing request for cpu"                 → definire requests sul container
+# "invalid metrics (0 invalid out of 1)"    → regola Prometheus Adapter errata
 
-# Errori comuni:
-# "unable to get metrics for resource cpu" → Metrics Server non installato/funzionante
-# "missing request for cpu" → Il container non ha requests definiti (OBBLIGATORIO)
-# "invalid metrics (0 invalid out of 1)"  → Regola Prometheus Adapter errata
-
-# Verificare Metrics Server
 kubectl get deployment metrics-server -n kube-system
 kubectl top pods -n production
+kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1" | jq .
 ```
 
-**HPA scala ma non raggiunge il valore atteso**
+### Scenario 2 — HPA scala ma non raggiunge il valore atteso
+
+**Sintomo**: le repliche si fermano sotto il numero atteso e il carico resta alto.
+
+**Causa**: `maxReplicas` raggiunto (condition `ScalingLimited`), oppure le `behavior.scaleUp.policies` limitano il ritmo di crescita, oppure i pod nuovi restano `Pending` per mancanza di nodi.
+
+**Soluzione**: confrontare metrica corrente e target, controllare condition e pod Pending.
+
 ```bash
-# Calcolo manuale per debug
 kubectl get hpa web-app-hpa -o yaml
-# Verificare: status.currentMetrics vs spec.metrics[].target
-# Verificare: status.conditions (ScalingLimited = MaxReplicas raggiunto)
+# status.currentMetrics vs spec.metrics[].target
+# status.conditions: ScalingLimited=True → maxReplicas o policy troppo stretti
+kubectl get pods -n production --field-selector=status.phase=Pending
 ```
 
-**VPA rimuove risorse invece di aumentarle**
+### Scenario 3 — VPA in loop di evict o raccomandazioni non applicate
+
+**Sintomo**: i pod vengono ricreati di continuo, oppure le risorse non cambiano mai.
+
+**Causa**: `minAllowed`/`maxAllowed` troppo stretti fanno oscillare la raccomandazione; in modalità `Auto` ogni cambio richiede un evict. Se le risorse non si aggiornano, l'admission webhook del VPA non è attivo (la mutazione dei pod avviene lì).
+
+**Soluzione**: allargare i limiti, passare a `Initial`/`Off`, verificare i componenti VPA.
+
 ```bash
-# Vedere raccomandazioni correnti
 kubectl get vpa web-app-vpa -o jsonpath='{.status.recommendation}'
-
-# Se VPA evict loop → controllare minAllowed/maxAllowed troppo stretti
-# Se VPA non aggiorna → verificare che admission webhook sia attivo
 kubectl get pods -n kube-system | grep vpa
+kubectl get mutatingwebhookconfigurations | grep vpa
 ```
 
-**KEDA non scala**
+### Scenario 4 — KEDA non scala
+
+**Sintomo**: `ScaledObject` con `READY=False` o `ACTIVE=False`, deployment fermo (anche a 0 con lag presente).
+
+**Causa**: trigger non raggiungibile (broker o credenziali errati), `activationLagThreshold` non superato, oppure API external metrics non registrata.
+
+**Soluzione**: ispezionare lo stato dello ScaledObject e i log dell'operator.
+
 ```bash
-# Stato ScaledObject
 kubectl describe scaledobject kafka-consumer-scaler
-
-# Verificare trigger (es. connettività Kafka)
 kubectl logs -n keda deployment/keda-operator | grep kafka-consumer-scaler
-
-# Metriche KEDA esposte come external metrics
+kubectl get apiservice v1beta1.external.metrics.k8s.io
 kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1" | jq .
 ```
 
-**Cluster Autoscaler non aggiunge nodi**
-```bash
-# Log CA
-kubectl logs -n kube-system deployment/cluster-autoscaler | grep "scale up"
+### Scenario 5 — Cluster Autoscaler non aggiunge o non rimuove nodi
 
-# Errori comuni:
-# "pod didn't trigger scale-up" → Pod è schedulabile su nodo esistente
-# "node group min size reached" → ASG min size = current nodes
-# "waiting for initial delay" → scale-down-delay-after-add non ancora scaduto
-# Verificare che i pod Pending abbiano tollerazioni corrette per i node groups
+**Sintomo**: pod `Pending` che non triggerano scale-up, oppure nodi sottoutilizzati mai rimossi.
+
+**Causa**: il pod è schedulabile altrove o non ha tolleration/selector compatibili con nessun node group; ASG al `max size`; scale-down bloccato da PDB, pod con local storage, pod senza controller o con annotation `safe-to-evict: "false"`.
+
+**Soluzione**: leggere log e ConfigMap di stato del CA.
+
+```bash
+kubectl logs -n kube-system deployment/cluster-autoscaler | grep -Ei "scale.?up|scale.?down|unremovable"
+kubectl -n kube-system get configmap cluster-autoscaler-status -o yaml
+# "pod didn't trigger scale-up"  → schedulabile su nodo esistente o nessun node group idoneo
+# "max node group size reached"  → alzare il max dell'ASG
+kubectl get pdb -A
 ```
 
 ---
