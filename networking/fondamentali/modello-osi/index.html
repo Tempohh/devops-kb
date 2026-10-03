@@ -20679,7 +20679,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -20704,7 +20704,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24934,6 +24934,11 @@
 </tr>
 </tbody>
 </table>
+<p>Sigle usate nel documento: <strong>MAC</strong> (Media Access Control, indirizzo hardware della NIC), <strong>VLAN</strong> (Virtual LAN, segmentazione L2), <strong>STP</strong> (Spanning Tree Protocol, evita loop L2), <strong>ARP</strong> (Address Resolution Protocol, traduce IP in MAC), <strong>FCS</strong> (Frame Check Sequence, checksum del frame).</p>
+<div class="admonition note">
+<p class="admonition-title">Layer 5-7 nella pratica</p>
+<p>Nei protocolli reali i layer 5, 6 e 7 non sono separabili: una singola libreria (es. un client HTTP con TLS) implementa sessione, cifratura e applicazione insieme. Per questo TCP/IP li fonde in un solo layer. Il valore di OSI qui è diagnostico, non architetturale.</p>
+</div>
 <h3 id="pdu-per-livello">PDU per Livello<a class="headerlink" href="#pdu-per-livello" title="Permanent link">&para;</a></h3>
 <p>Ogni livello incapsula i dati in una struttura chiamata PDU (Protocol Data Unit):</p>
 <table>
@@ -24979,27 +24984,26 @@
 <p>Quando un'applicazione invia dati, questi vengono "avvolti" in header successivi mentre scendono dallo stack. Il ricevitore li "svolge" risalendo lo stack.</p>
 <pre class="mermaid"><code>flowchart TD
     subgraph SENDER["Mittente (Encapsulation)"]
-        A7["L7 – Applicazione\nDati applicativi (HTTP request)"]
-        A6["L6 – Presentazione\nDati + Cifratura TLS"]
-        A5["L5 – Sessione\nDati + Gestione sessione"]
-        A4["L4 – Trasporto\nSegmento TCP\n(Header: porta src/dst, seq, ack)"]
-        A3["L3 – Rete\nPacchetto IP\n(Header: IP src/dst, TTL)"]
-        A2["L2 – Data Link\nFrame Ethernet\n(Header: MAC src/dst, FCS)"]
-        A1["L1 – Fisico\nBit sul cavo / segnale RF"]
+        A7["L7 – Applicazione&lt;br/&gt;Dati applicativi (HTTP request)"]
+        A6["L6 – Presentazione&lt;br/&gt;Dati + Cifratura TLS"]
+        A5["L5 – Sessione&lt;br/&gt;Dati + Gestione sessione"]
+        A4["L4 – Trasporto&lt;br/&gt;Segmento TCP&lt;br/&gt;(Header: porta src/dst, seq, ack)"]
+        A3["L3 – Rete&lt;br/&gt;Pacchetto IP&lt;br/&gt;(Header: IP src/dst, TTL)"]
+        A2["L2 – Data Link&lt;br/&gt;Frame Ethernet&lt;br/&gt;(Header: MAC src/dst, FCS)"]
+        A1["L1 – Fisico&lt;br/&gt;Bit sul cavo / segnale RF"]
         A7 --&gt; A6 --&gt; A5 --&gt; A4 --&gt; A3 --&gt; A2 --&gt; A1
     end
 
     subgraph RECEIVER["Ricevitore (Decapsulation)"]
-        B1["L1 – Fisico\nRicezione bit"]
-        B2["L2 – Data Link\nVerifica Frame, rimuove header MAC"]
-        B3["L3 – Rete\nVerifica Pacchetto, rimuove header IP"]
-        B4["L4 – Trasporto\nVerifica Segmento, rimuove header TCP"]
-        B5["L5 – Sessione\nGestione sessione"]
-        B6["L6 – Presentazione\nDecifratura TLS"]
-        B7["L7 – Applicazione\nDati ricevuti dall'applicazione"]
+        B1["L1 – Fisico&lt;br/&gt;Ricezione bit"]
+        B2["L2 – Data Link&lt;br/&gt;Verifica Frame, rimuove header MAC"]
+        B3["L3 – Rete&lt;br/&gt;Verifica Pacchetto, rimuove header IP"]
+        B4["L4 – Trasporto&lt;br/&gt;Verifica Segmento, rimuove header TCP"]
+        B5["L5 – Sessione&lt;br/&gt;Gestione sessione"]
+        B6["L6 – Presentazione&lt;br/&gt;Decifratura TLS"]
+        B7["L7 – Applicazione&lt;br/&gt;Dati ricevuti dall'applicazione"]
         B1 --&gt; B2 --&gt; B3 --&gt; B4 --&gt; B5 --&gt; B6 --&gt; B7
     end
-
     A1 --&gt;|"Mezzo trasmissivo"| B1</code></pre>
 <h3 id="regola-dei-layer-adiacenti">Regola dei Layer Adiacenti<a class="headerlink" href="#regola-dei-layer-adiacenti" title="Permanent link">&para;</a></h3>
 <p>Ogni livello comunica solo con i livelli adiacenti: riceve servizi dal livello inferiore e li offre al livello superiore. Il livello N vede solo il suo header; tutto ciò che viene dal livello N+1 è "payload" opaco.</p>
@@ -25100,7 +25104,7 @@
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Attenzione</p>
-<p>Nei moderni stack TLS, la cifratura avviene nel Layer 6 (Presentazione) del modello OSI, ma nel Layer 4 (Trasporto) del TCP/IP. Questa asimmetria causa spesso confusione. Ricorda che OSI è un modello astratto.</p>
+<p>TLS non ha una collocazione univoca. Per convenzione didattica è associato al Layer 6 (Presentazione) di OSI, ma nello stack reale gira sopra TCP ed è parte del layer Applicazione di TCP/IP (spesso detto "L4.5"). In HTTP/3 il handshake TLS 1.3 è integrato in QUIC, che gira su UDP. Anche ARP è ambiguo: sta tra L2 e L3. OSI è un modello di ragionamento, non una mappa esatta dei protocolli reali.</p>
 </div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
@@ -25148,7 +25152,7 @@
 <hr />
 <h3 id="scenario-3-ping-funziona-ma-la-connessione-tcp-non-si-stabilisce-sospetto-l4">Scenario 3 — <code>ping</code> funziona ma la connessione TCP non si stabilisce (sospetto L4)<a class="headerlink" href="#scenario-3-ping-funziona-ma-la-connessione-tcp-non-si-stabilisce-sospetto-l4" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>ping &lt;host&gt;</code> risponde correttamente (L3 ok), ma <code>curl</code>, <code>telnet</code>, o la propria applicazione non riesce a connettersi alla porta target. Il three-way handshake TCP non completa.</p>
-<p><strong>Causa:</strong> Firewall (iptables, security group, ACL) che blocca la porta specifica; servizio non in ascolto sulla porta attesa; conntrack table piena; porta in TIME_WAIT che impedisce il riutilizzo.</p>
+<p><strong>Causa:</strong> Firewall (iptables, security group, ACL) che blocca la porta specifica; servizio non in ascolto sulla porta attesa; conntrack table piena (pacchetti droppati).</p>
 <p><strong>Soluzione:</strong> Verificare che il servizio sia in ascolto e che non ci siano regole di firewall bloccanti.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Verificare se la porta è aperta sul host remoto</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>nc<span class="w"> </span>-zv<span class="w"> </span>&lt;host&gt;<span class="w"> </span>&lt;porta&gt;
