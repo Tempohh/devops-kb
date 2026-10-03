@@ -7,9 +7,10 @@ search_keywords: [websocket protocol, ws, wss, full-duplex, bidirectional, real-
 parent: networking/protocolli/_index
 related: [networking/fondamentali/http-https, networking/protocolli/http2-http3, networking/protocolli/grpc]
 official_docs: https://www.rfc-editor.org/rfc/rfc6455
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # WebSocket
@@ -60,13 +61,16 @@ Client                                Server
   |    Sec-WebSocket-Accept: s3pPLMBiTxaQ...|
   |                                      |
   |══ WebSocket frames (full-duplex) ════|
-  |   Client→Server: {"type":"msg","text":"ciao"}
-  |   Server→Client: {"type":"msg","from":"Bob","text":"ciao"}
-  |   Server→Client: {"type":"ping"}
-  |   Client→Server: {"type":"pong"}
+  |   Client→Server: text frame  {"type":"msg","text":"ciao"}
+  |   Server→Client: text frame  {"type":"msg","from":"Bob","text":"ciao"}
+  |   Server→Client: Ping frame (opcode 0x9, control frame)
+  |   Client→Server: Pong frame (opcode 0xA, control frame)
 ```
 
-Il campo `Sec-WebSocket-Accept` è il SHA-1 della `Sec-WebSocket-Key` concatenata con un GUID fisso — meccanismo anti-cache, non autentica il server.
+Il campo `Sec-WebSocket-Accept` è la codifica base64 dello SHA-1 di `Sec-WebSocket-Key` concatenata con un GUID fisso (`258EAFA5-E914-47DA-95CA-C5AB0DC85B11`). Prova che il server ha capito il protocollo WebSocket (evita che un server HTTP qualsiasi o una cache intermedia scambi la richiesta per una normale) — non autentica né il server né il client.
+
+!!! note "Masking"
+    Tutti i frame **client→server** sono mascherati (campo `MASK=1`, chiave XOR di 32 bit casuale per frame): serve a impedire che un client malevolo faccia interpretare dati scelti da lui come richieste HTTP a proxy intermedi (cache poisoning). I frame server→client non sono mascherati.
 
 ### Frame WebSocket
 
@@ -96,6 +100,8 @@ Le connessioni WebSocket inattive vengono chiuse da proxy e firewall. Il meccani
 Server → Client: Ping frame (ogni 30s)
 Client → Server: Pong frame (automatico o esplicito)
 ```
+
+Ping e Pong sono **control frame** del protocollo, distinti dai messaggi applicativi. L'API `WebSocket` del browser non permette di inviare ping né di osservare i pong: il browser risponde ai ping da solo. Per un heartbeat lato client (es. rilevare un server muto) serve quindi un messaggio applicativo `{"type":"ping"}`.
 
 ## Configurazione & Pratica
 
@@ -179,11 +185,13 @@ function closeConnection() {
 ```nginx
 upstream websocket_backend {
     server 127.0.0.1:8080;
-    # Per WebSocket non usare least_conn o ip_hash — le connessioni sono già persistenti
+    # least_conn è adatto (le connessioni sono long-lived: round-robin può sbilanciare).
+    # ip_hash serve solo se il protocollo richiede sticky session (es. fallback long-polling di Socket.IO)
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;   # nginx >= 1.25.1 (la forma "listen ... http2" è deprecata). I browser fanno comunque l'upgrade WebSocket su HTTP/1.1
     server_name example.com;
 
     location /ws {
@@ -232,7 +240,8 @@ spec:
 
 ## Best Practices
 
-- **Autenticazione**: WebSocket non ha un meccanismo di auth nativo — usare JWT nell'URL (`?token=...`) o cookie HttpOnly per il primo handshake HTTP
+- **Autenticazione**: WebSocket non ha un meccanismo di auth nativo e l'API del browser non permette header custom (`Authorization`). Opzioni: cookie `HttpOnly`/`Secure`/`SameSite` sull'handshake; ticket monouso a vita breve ottenuto via REST e passato nell'URL; oppure token inviato come primo messaggio. Evitare JWT long-lived in `?token=...`: finisce nei log di proxy e server
+- **Controllo `Origin`**: i browser inviano `Origin` nell'handshake ma la same-origin policy **non** si applica a WebSocket. Se l'auth è via cookie, senza verifica dell'`Origin` lato server un sito terzo può aprire il socket con le credenziali della vittima (Cross-Site WebSocket Hijacking, CSWSH). Validare `Origin` contro una allowlist e rifiutare con `403`
 - **Heartbeat**: implementare ping/pong per rilevare connessioni morte (proxy e firewall chiudono connessioni inattive dopo 60-120s)
 - **Riconnessione esponenziale**: il client deve riconnettersi automaticamente con backoff esponenziale + jitter
 - **Messaggio con schema**: definire un formato JSON consistente con `type`, `payload`, `id` per ogni messaggio
@@ -246,7 +255,7 @@ spec:
 
 **Sintomo:** Il client riceve `200 OK` o `400 Bad Request` invece di `101 Switching Protocols`. La connessione WebSocket non si stabilisce mai.
 
-**Causa:** Il reverse proxy (Nginx, HAProxy, AWS ALB) non propaga gli header `Upgrade` e `Connection: upgrade`, oppure usa HTTP/2 che non supporta l'upgrade WebSocket.
+**Causa:** Il reverse proxy (Nginx, HAProxy, AWS ALB) non propaga gli header `Upgrade` e `Connection: upgrade` (Nginx per default parla HTTP/1.0 verso l'upstream e li scarta), oppure la richiesta arriva su HTTP/2, dove il meccanismo `Upgrade` non esiste (WebSocket su HTTP/2 richiede l'extended CONNECT di RFC 8441, supportato solo da alcuni stack).
 
 **Soluzione:** Aggiungere nella configurazione del proxy gli header obbligatori per il protocollo WebSocket upgrade, e forzare HTTP/1.1 sul backend.
 
@@ -270,6 +279,8 @@ curl -v \
   -H "Sec-WebSocket-Version: 13" \
   https://example.com/ws
 # Atteso nella risposta: HTTP/1.1 101 Switching Protocols
+# curl non parla WebSocket: dopo il 101 resta appeso, interrompere con Ctrl+C (o aggiungere --max-time 5).
+# Aggiungere --http1.1 per evitare la negoziazione HTTP/2 via ALPN. Alternativa: websocat
 ```
 
 ---
@@ -337,10 +348,13 @@ ws.on('message', (message) => {
 });
 ```
 
+!!! warning "Garanzie di consegna"
+    Redis Pub/Sub è *at-most-once*: se un'istanza è in restart o disconnessa, perde i messaggi pubblicati nel frattempo. Per consegna affidabile o replay dopo riconnessione usare Redis Streams o Kafka, e far inviare al client l'ultimo `id` ricevuto per recuperare il gap.
+
 Verifica la connettività Redis:
 ```bash
 redis-cli -h redis-host ping
-redis-cli -h redis-host monitor  # Monitora i messaggi in transito
+redis-cli -h redis-host monitor  # Solo debug: rallenta sensibilmente Redis, evitare in produzione
 ```
 
 ---
