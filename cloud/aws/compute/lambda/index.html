@@ -5037,7 +5037,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -5062,7 +5062,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -5092,6 +5092,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Fondamentali">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lambda-durable-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lambda durable functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lambda-managed-instances" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lambda Managed Instances
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -5227,6 +5255,17 @@
     <span class="md-ellipsis">
       
         Lambda Power Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#snapstart-per-java" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SnapStart per Java
       
     </span>
   </a>
@@ -24549,6 +24588,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Fondamentali">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lambda-durable-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lambda durable functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lambda-managed-instances" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lambda Managed Instances
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24683,6 +24750,17 @@
     <span class="md-ellipsis">
       
         Lambda Power Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#snapstart-per-java" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SnapStart per Java
       
     </span>
   </a>
@@ -24996,7 +25074,7 @@
 </span></code></pre></div>
 <hr />
 <h2 id="fondamentali">Fondamentali<a class="headerlink" href="#fondamentali" title="Permanent link">&para;</a></h2>
-<p><strong>Limiti (fine 2025 — verificare su <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>):</strong></p>
+<p><strong>Limiti (ottobre 2026 — verificare su <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>):</strong></p>
 <table>
 <thead>
 <tr>
@@ -25007,7 +25085,7 @@
 <tbody>
 <tr>
 <td>Timeout massimo</td>
-<td>15 minuti (default alla creazione: 3 s)</td>
+<td>15 minuti (default alla creazione: 3 s); fino a 90 minuti per funzioni Managed Instances invocate in async o via event source mapping</td>
 </tr>
 <tr>
 <td>Memoria</td>
@@ -25015,7 +25093,7 @@
 </tr>
 <tr>
 <td>vCPU</td>
-<td>Proporzionale alla memoria (6 vCPU a 10 GB)</td>
+<td>Proporzionale alla memoria (1 vCPU a 1.769 MB, 6 vCPU a 10 GB)</td>
 </tr>
 <tr>
 <td>Storage temporaneo (/tmp)</td>
@@ -25039,7 +25117,7 @@
 </tr>
 <tr>
 <td>Concurrency default</td>
-<td>1000 per account per Region (account nuovi: spesso molto meno, verificare con <code>get-account-settings</code>)</td>
+<td>1000 per account per Region (gli account nuovi hanno quote ridotte di concurrency e memoria, alzate automaticamente in base all'uso; verificare con <code>get-account-settings</code>)</td>
 </tr>
 <tr>
 <td>Scaling rate</td>
@@ -25051,13 +25129,27 @@
 <p class="admonition-title">Vita dell'execution environment</p>
 <p>Un ambiente può restare caldo per minuti/ore ed essere riusato da più invocazioni, ma AWS <strong>non garantisce</strong> nessuna durata: può essere riciclato in qualsiasi momento (anche dopo ~poche ore al massimo). Non farci affidamento per cache o stato; il cold start si ripresenta ad ogni nuovo ambiente (scale-out, deploy, riciclo).</p>
 </div>
-<p><strong>Runtime supportati (fine 2025):</strong> Node.js 20/22/24, Python 3.11–3.14, Java 17/21/25, .NET 8, Ruby 3.2–3.4, Go e altri linguaggi compilati via OS-only runtime <code>provided.al2023</code>. I runtime vengono deprecati periodicamente (es. Node.js 18, Python 3.8-3.9): controlla la <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html">lista aggiornata</a> prima di scegliere.</p>
-<div class="admonition info">
-<p class="admonition-title">Novità recenti (re:Invent 2025)</p>
-<p><strong>Lambda durable functions</strong> (workflow con checkpoint/replay fino a lunga durata, in codice) e <strong>Lambda Managed Instances</strong> (funzioni su istanze EC2 gestite, per carichi costanti) ampliano i casi d'uso oltre il modello classico. Non sono trattate qui.
-<!-- REVIEW: verificare disponibilità/regioni/pricing di durable functions e Managed Instances ed eventualmente aggiungere sezioni dedicate --></p>
-</div>
-<p><strong>Architetture:</strong> <code>arm64</code> (Graviton) costa ~20% in meno per GB-secondo e offre in genere miglior price-performance (fino a ~34% secondo AWS); <code>x86_64</code> resta necessario se le dipendenze native non hanno build ARM.</p>
+<p><strong>Runtime supportati (ottobre 2026):</strong> Node.js 22/24, Python 3.10–3.14, Java 8/11/17 (varianti <code>.al2023</code> o AL2), Java 21/25, .NET 8/10, Ruby 3.3/3.4/4.0, Go e altri linguaggi compilati via OS-only runtime <code>provided.al2023</code>. Node.js 26 e Python 3.15 sono in <strong>public preview</strong> (no SLA, non per produzione; GA prevista novembre 2026). Node.js 20, Python 3.9, Ruby 3.2 e <code>provided.al2</code> sono già deprecati; in scadenza <code>python3.10</code> (31 ott 2026), <code>dotnet8</code> e <code>dotnet9</code> (10 nov 2026). Amazon Linux 2 è a fine vita il 30 giugno 2026: preferisci runtime basati su AL2023. Lambda rilascia un runtime solo quando la versione del linguaggio raggiunge la fase LTS. Controlla la <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html">lista aggiornata</a> prima di scegliere.</p>
+<p><strong>Architetture:</strong> <code>arm64</code> (Graviton) costa ~20% in meno per GB-secondo e offre in genere miglior price-performance (fino a ~34% secondo AWS); <code>x86_64</code> resta necessario se le dipendenze native non hanno build ARM. Tutti i runtime gestiti supportano entrambe.</p>
+<h3 id="lambda-durable-functions">Lambda durable functions<a class="headerlink" href="#lambda-durable-functions" title="Permanent link">&para;</a></h3>
+<p>Le <strong>durable functions</strong> sono normali funzioni Lambda con un meccanismo di <strong>checkpoint/replay</strong>: il codice può restare in esecuzione (con attese e pause) fino a <strong>un anno</strong>, sopravvivendo a interruzioni. Ad ogni ripresa il codice riparte dall'inizio, ma le operazioni già completate vengono saltate usando i risultati salvati. Si usa il <em>Durable Execution SDK</em> (JavaScript/TypeScript, Python, Java, .NET) che fornisce un <code>DurableContext</code> con operazioni durevoli: <strong>step</strong> (logica con retry e checkpoint automatici), <strong>wait</strong> (sospende senza costi di compute), callback per eventi esterni.</p>
+<ul>
+<li>Runtime gestiti: <code>nodejs22.x</code>/<code>nodejs24.x</code>, <code>python3.13</code>/<code>python3.14</code>, <code>java17</code>/<code>java21</code>/<code>java25</code>, <code>dotnet8</code>/<code>dotnet10</code>; altri via container image.</li>
+<li>Si abilita alla creazione: <code>--durable-config '{"ExecutionTimeout": 3600, "RetentionPeriodInDays": 7}'</code>.</li>
+<li>Quote chiave: 3.000 operazioni durevoli per esecuzione, 100 MB di dati persistiti per esecuzione (non aumentabili).</li>
+<li>Pricing: compute Lambda standard + <strong>$8,00 per milione di operazioni durevoli</strong>, $0,25/GB di dati scritti, $0,15/GB-mese di retention.</li>
+<li>Includi l'SDK nel package (non affidarti a quello del runtime) e usa versioni/alias, non <code>$LATEST</code>, per le esecuzioni in corso.</li>
+<li>Rispetto a Step Functions: durable functions = workflow nel codice, accoppiati alla business logic; Step Functions = DSL/visual designer, integrazioni native con 220+ servizi, zero manutenzione.</li>
+</ul>
+<h3 id="lambda-managed-instances">Lambda Managed Instances<a class="headerlink" href="#lambda-managed-instances" title="Permanent link">&para;</a></h3>
+<p>Eseguono funzioni Lambda su <strong>istanze EC2 current-generation nel tuo account</strong> (anche Graviton4), gestite da Lambda (patching, routing, scaling). Adatte a carichi <strong>alti e prevedibili</strong>; non scalano a zero per istanza e non hanno cold start (scaling asincrono basato su CPU, regge il raddoppio del traffico in ~5 minuti).</p>
+<ul>
+<li>Si crea un <strong>capacity provider</strong> (VPC, requisiti istanza, scaling), poi si collega la funzione e si pubblica una versione; Lambda avvia 3 istanze di default per resilienza AZ.</li>
+<li><strong>Multi-concurrency</strong>: un execution environment gestisce più invocazioni contemporanee → thread safety e stato condiviso vanno gestiti per runtime.</li>
+<li>Isolamento: container su EC2 Nitro (non Firecracker); il capacity provider è il confine di sicurezza.</li>
+<li>Runtime: Java 21+, Python 3.13+, Node.js 22+, .NET 8+, Rust (<code>provided.al2023</code>).</li>
+<li>Pricing: $0,20 per milione di richieste + prezzo EC2 + <strong>15% di management fee</strong> sul prezzo on-demand dell'istanza; Savings Plans/RI si applicano solo al compute EC2, non alla fee.</li>
+</ul>
 <hr />
 <h2 id="creare-e-configurare-una-lambda">Creare e Configurare una Lambda<a class="headerlink" href="#creare-e-configurare-una-lambda" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Creare execution role</span>
@@ -25390,7 +25482,7 @@
 <hr />
 <h2 id="lambda-power-tuning">Lambda Power Tuning<a class="headerlink" href="#lambda-power-tuning" title="Permanent link">&para;</a></h2>
 <p><strong>AWS Lambda Power Tuning</strong> è uno State Machine Step Functions che identifica la configurazione ottimale memoria/costo.</p>
-<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Installa tramite SAR (Serverless Application Repository)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Installa tramite SAR (Serverless Application Repository)</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:451282441545:applications~aws-lambda-power-tuning</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Esegui con payload di test per trovare il sweet spot memoria/costo</span>
@@ -25398,29 +25490,23 @@
 </span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># Output: grafico costo vs durata e la configurazione consigliata (strategy: cost, speed o balanced)</span>
 </span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Perché serve: CPU e prezzo crescono con la memoria, ma la durata cala → più memoria può costare meno</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>---
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>## SnapStart per Java
+<hr />
+<h2 id="snapstart-per-java">SnapStart per Java<a class="headerlink" href="#snapstart-per-java" title="Permanent link">&para;</a></h2>
+<p><strong>SnapStart</strong> riduce drasticamente il cold start (Java 11+, Python 3.12+ e .NET 8+; non Node.js, Ruby né OS-only runtime) eseguendo la fase init una sola volta alla pubblicazione di una versione: Lambda salva uno snapshot (memoria + disco) dell'ambiente inizializzato e lo ripristina per i nuovi ambienti invece di rieseguire l'init. Attenzione a ciò che l'init cattura: connessioni di rete, seed random e dati temporanei vanno rigenerati con i <em>runtime hooks</em>. Non è compatibile con Provisioned Concurrency, EFS, S3 Files e <code>/tmp</code> &gt; 512 MB. Funziona solo su versioni pubblicate (o alias che puntano a versioni), non su <code>$LATEST</code>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>aws<span class="w"> </span>lambda<span class="w"> </span>update-function-configuration<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">    </span>--function-name<span class="w"> </span>MyJavaFunction<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span>--snap-start<span class="w"> </span><span class="nv">ApplyOn</span><span class="o">=</span>PublishedVersions
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>**SnapStart** riduce drasticamente il cold start (Java 11+ e, più di recente, Python 3.12+ e .NET 8+) eseguendo la fase init una sola volta alla pubblicazione di una versione: Lambda salva uno snapshot (memoria + disco) dell'ambiente inizializzato e lo ripristina per i nuovi ambienti invece di rieseguire l'init. Attenzione a ciò che l'init cattura: connessioni di rete, seed random e dati temporanei vanno rigenerati con i *runtime hooks*. Non è compatibile con Provisioned Concurrency, EFS e `/tmp` &gt; 512 MB.
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>```bash
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>aws lambda update-function-configuration \
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>    --function-name MyJavaFunction \
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>    --snap-start ApplyOn=PublishedVersions
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a># Pubblicare versione (SnapStart si attiva solo su versioni pubblicate)
-</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>aws lambda publish-version --function-name MyJavaFunction
-</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>
-</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a># Creare alias che punta alla versione con SnapStart
-</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>aws lambda create-alias \
-</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a>    --function-name MyJavaFunction \
-</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a>    --name prod \
-</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a>    --function-version 1
-</span></code></pre></div></p>
-<p><strong>Risultato:</strong> AWS indica miglioramenti fino a ~10× sui cold start (tipicamente da multi-secondo a sub-secondo restore per Java); il guadagno dipende dal tempo di init. SnapStart non è gratuito: si pagano cache dello snapshot e restore.</p>
-<!-- REVIEW: verificare prezzi SnapStart correnti per runtime -->
-
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1"># Pubblicare versione (SnapStart si attiva solo su versioni pubblicate)</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>aws<span class="w"> </span>lambda<span class="w"> </span>publish-version<span class="w"> </span>--function-name<span class="w"> </span>MyJavaFunction
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="c1"># Creare alias che punta alla versione con SnapStart</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>aws<span class="w"> </span>lambda<span class="w"> </span>create-alias<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">    </span>--function-name<span class="w"> </span>MyJavaFunction<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">    </span>--name<span class="w"> </span>prod<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">    </span>--function-version<span class="w"> </span><span class="m">1</span>
+</span></code></pre></div>
+<p><strong>Risultato:</strong> AWS indica miglioramenti fino a ~10× sui cold start (tipicamente da multi-secondo a sub-secondo restore per Java); il guadagno dipende dal tempo di init. Costi: per i runtime <strong>Java gestiti SnapStart non ha costi aggiuntivi</strong>; per <strong>Python e .NET</strong> si pagano cache dello snapshot (minimo 3 ore per versione pubblicata, finché la versione resta attiva: elimina le versioni inutilizzate) e restore, in funzione della memoria configurata. La durata fatturata include init, caricamento runtime e runtime hooks.</p>
 <p>Dalla fine del 2025 anche la fase <strong>init</strong> è fatturata per tutti i runtime gestiti: un init pesante costa, non solo rallenta.</p>
 <hr />
 <h2 id="pricing-lambda">Pricing Lambda<a class="headerlink" href="#pricing-lambda" title="Permanent link">&para;</a></h2>
@@ -25428,7 +25514,8 @@
 <ul>
 <li><strong>$0.20 per 1 milione di invocazioni</strong> (+ 1M gratuite/mese)</li>
 <li><strong>$0.0000166667 per GB-secondo</strong> x86_64 (+ 400.000 GB-secondi/mese gratuiti); arm64 $0.0000133334 (~20% in meno)</li>
-<li>Provisioned Concurrency: ~$0.0000041667 per GB-secondo provisionato (più la durata d'uso a tariffa ridotta)</li>
+<li>Provisioned Concurrency: ~$0.0000041667 per GB-secondo provisionato (fatturato dall'attivazione alla disattivazione, arrotondato a 5 minuti) + durata d'uso a tariffa ridotta ($0.0000097222 per GB-secondo)</li>
+<li>Durable functions e Managed Instances hanno componenti di costo aggiuntivi (vedi sezioni dedicate in Fondamentali)</li>
 </ul>
 <p><strong>Esempio:</strong> funzione 512 MB, 100ms durata, 10M invocazioni/mese:
 - <code>10M × $0.20/1M = $2 (invocazioni)</code>
