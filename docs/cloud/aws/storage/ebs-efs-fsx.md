@@ -7,9 +7,10 @@ search_keywords: [ebs, elastic block store, efs, elastic file system, fsx, fsx l
 parent: cloud/aws/storage/_index
 related: [cloud/aws/storage/s3, cloud/aws/compute/ec2, cloud/aws/database/rds-aurora, cloud/aws/security/kms-secrets]
 official_docs: https://docs.aws.amazon.com/ebs/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # EBS, EFS, FSx, Storage Gateway e Snow Family
@@ -55,8 +56,14 @@ EBS fornisce volumi di storage a blocchi persistenti per le istanze EC2. Funzion
 
 **gp3:**
 - IOPS **separati dalla dimensione**: baseline 3.000 IOPS (gratis, indipendentemente dal size)
-- IOPS configurabili fino a 16.000 IOPS aggiuntivi a pagamento ($0.005/IOPS provisioned sopra i 3.000)
-- Throughput configurabile fino a 1.000 MB/s
+- IOPS configurabili a pagamento oltre i 3.000 inclusi ($0.005/IOPS provisioned sopra i 3.000), fino a 16.000 IOPS totali nella tabella sopra
+- Throughput: baseline 125 MB/s incluso, configurabile a pagamento fino a 1.000 MB/s
+- Il rapporto IOPS/GB è limitato (max 500 IOPS per GB provisioned)
+
+<!-- REVIEW: AWS ha annunciato nel 2025 limiti gp3 più alti (fino a 64 TiB, 80.000 IOPS, 2.000 MiB/s). Verificare su docs.aws.amazon.com/ebs/latest/userguide/general-purpose.html e aggiornare tabella tipi volume -->
+
+!!! note "Come si ottiene la performance"
+    Su gp2 le IOPS dipendono dalla dimensione perché il volume accumula crediti burst in un bucket (BurstBalance) proporzionale ai GB. gp3 elimina il bucket: IOPS e throughput sono provisioned indipendentemente dalla capacità, quindi la performance è prevedibile e non esiste più il rischio di esaurire il burst.
 - Sempre più economico di gp2 a parità di prestazioni
 
 !!! tip "Migra da gp2 a gp3"
@@ -91,12 +98,14 @@ aws ec2 attach-volume \
   --device /dev/xvdf
 
 # Dopo l'attach, formattare e montare (su Linux)
+# Su istanze Nitro il device appare come /dev/nvme1n1, non /dev/xvdf: verificare con lsblk
 lsblk
-sudo mkfs -t xfs /dev/xvdf
+sudo mkfs -t xfs /dev/nvme1n1
 sudo mkdir /data
-sudo mount /dev/xvdf /data
-# Per mount persistente al reboot
-echo '/dev/xvdf /data xfs defaults,nofail 0 2' | sudo tee -a /etc/fstab
+sudo mount /dev/nvme1n1 /data
+# Per mount persistente al reboot usare l'UUID (i nomi device NVMe possono cambiare tra reboot)
+UUID=$(sudo blkid -s UUID -o value /dev/nvme1n1)
+echo "UUID=$UUID /data xfs defaults,nofail 0 2" | sudo tee -a /etc/fstab
 ```
 
 ### Multi-Attach (io1/io2)
@@ -222,8 +231,8 @@ aws dlm create-lifecycle-policy \
 
 ### Cifratura EBS
 
-- Tutti i dati a riposo sono cifrati con AES-256 tramite AWS KMS
-- Tutti i dati in transito tra l'istanza e il volume sono cifrati
+- La cifratura è **opt-in** per volume (o per default a livello account/Region, vedi sotto): i volumi cifrati usano AES-256 tramite AWS KMS
+- Su un volume cifrato sono cifrati dati a riposo, dati in transito tra istanza e volume, snapshot e volumi derivati (sulle istanze supportate)
 - Snapshot di volumi cifrati sono automaticamente cifrati
 - Volumi creati da snapshot cifrati sono automaticamente cifrati
 - Si può abilitare la cifratura di default a livello account/Region
@@ -282,24 +291,29 @@ aws efs create-mount-target \
 
 **General Purpose (default):**
 - Latenza più bassa (sub-ms per operazioni metadata)
-- Max 35.000 IOPS
-- Uso raccomanato per la maggior parte dei workload: web server, CMS, container
+- Max 35.000 IOPS con throughput Bursting/Provisioned (con Elastic i limiti IOPS sono molto più alti)
+- Uso raccomandato per la maggior parte dei workload: web server, CMS, container
 
-**Max I/O:**
-- Throughput aggregato più alto
-- Latenza più alta (~10ms)
+**Max I/O (legacy):**
+- Throughput aggregato più alto, a scapito della latenza (più alta)
 - Progettato per workload massivamente paralleli: HPC, big data analytics, media processing
+- **Non supportato** con Elastic throughput né con i file system One Zone
 
 !!! note "General Purpose vs Max I/O"
-    Il 99% dei workload funziona bene con General Purpose. Max I/O è necessario solo per applicazioni con migliaia di thread che accedono al file system contemporaneamente (es. cluster HPC con 1.000+ nodi).
+    AWS raccomanda General Purpose per tutti i workload: con Elastic throughput elimina quasi sempre la necessità di Max I/O. Il performance mode si sceglie solo alla creazione e non è modificabile dopo.
 
 ### Throughput Modes
 
 | Modo | Comportamento | Use Case |
 |------|-------------|---------|
-| **Bursting** (legacy) | Throughput proporzionale allo storage (1 MB/s per TB) con burst; legato alla dimensione | File system piccoli con accesso intermittente |
-| **Provisioned** | Throughput fisso indipendentemente dallo storage | Throughput prevedibile richiesto, storage piccolo |
-| **Elastic** (raccomandato) | Scale automatico in base al workload, fino a 3 GB/s write / 10 GB/s read | Workload variabile, cloud-native |
+| **Bursting** (legacy) | Baseline proporzionale allo storage (50 MiB/s per TiB) con burst a crediti; legato alla dimensione | File system grandi con accesso intermittente |
+| **Provisioned** | Throughput fisso indipendentemente dallo storage, pagato a parte | Throughput prevedibile richiesto, storage piccolo |
+| **Elastic** (raccomandato) | Scale automatico in base al workload; si paga il throughput effettivamente usato | Workload variabile/imprevedibile, cloud-native |
+
+<!-- REVIEW: verificare limiti correnti Elastic per file system (AWS ha alzato i limiti nel 2024: fino a 20 GiB/s read e 5 GiB/s write nelle Region principali) -->
+
+!!! tip "Elastic vs Provisioned"
+    Elastic costa per GB trasferito: conviene se l'utilizzo medio è sotto circa il 5% del picco. Con carico alto e costante Provisioned può costare meno.
 
 ```bash
 # Cambiare throughput mode a Elastic
@@ -316,7 +330,7 @@ aws efs update-file-system \
 | **Standard-IA** | $0.025 | slightly higher | Accesso infrequente (risparmio ~92% vs Standard) |
 | **Archive** | $0.008 | slightly higher | Dati acceduti raramente (risparmio ~97% vs Standard) |
 
-*Costo di retrieval per IA: $0.01/GB. Prezzi us-east-1.*
+*Costo di retrieval per IA: $0.01/GB. Prezzi us-east-1. Esistono anche le classi One Zone (singola AZ, ~47% più economiche) per dati ricreabili. L'Archive richiede throughput Elastic o Provisioned.*
 
 **EFS Lifecycle Management:** transizione automatica tra tieri in base all'ultimo accesso.
 
@@ -336,7 +350,10 @@ aws efs put-lifecycle-configuration \
 ```bash
 # Installare il mount helper
 sudo yum install -y amazon-efs-utils  # Amazon Linux
-sudo apt-get install -y amazon-efs-utils  # Ubuntu/Debian
+# Ubuntu/Debian: il pacchetto non è nei repository ufficiali, va compilato (.deb) dal repo aws/efs-utils su GitHub
+# In alternativa montare con il client NFS standard (senza TLS):
+# sudo apt-get install -y nfs-common
+# sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport fs-1234567890.efs.us-east-1.amazonaws.com:/ /mnt/efs
 
 # Montare il file system (con TLS — raccomandato)
 sudo mount -t efs -o tls fs-1234567890:/ /mnt/efs
@@ -429,7 +446,10 @@ File system Lustre managed ad alte performance, progettato per HPC, ML training,
 - **Integrazione nativa con S3**: i file S3 appaiono come file nel file system Lustre; le scritture possono essere sincronizzate indietro su S3
 - Deployment types:
   - **Scratch** (temporaneo, no replication, altissima performance, economico): HPC jobs che non necessitano di persistenza
-  - **Persistent** (replicato su 2 server, tolleranza ai guasti): workload ML con dati persistenti
+  - **Persistent** (dati replicati all'interno della stessa AZ, file server sostituiti automaticamente): workload ML con dati persistenti
+
+!!! warning "Solo singola AZ"
+    FSx for Lustre vive sempre in una sola AZ: in caso di perdita dell'AZ i dati persistent non sono disponibili. Per DR usare backup o export su S3.
 
 ```bash
 # Creare FSx for Lustre collegato a S3
@@ -442,14 +462,22 @@ aws fsx create-file-system \
     "ExportPath": "s3://my-ml-data/results/",
     "DeploymentType": "PERSISTENT_2",
     "PerUnitStorageThroughput": 250,
-    "DataCompressionType": "LZ4",
-    "AutoImportPolicy": "NEW_CHANGED_DELETED"
+    "DataCompressionType": "LZ4"
   }'
 
-# Montare FSx for Lustre su un'istanza EC2
-sudo amazon-linux-extras install -y lustre
+# Per PERSISTENT_2 il link a S3 si crea con una Data Repository Association
+# (ImportPath/ExportPath nel create-file-system valgono solo per SCRATCH_1/SCRATCH_2/PERSISTENT_1)
+aws fsx create-data-repository-association \
+  --file-system-id fs-1234567890 \
+  --file-system-path /datasets \
+  --data-repository-path s3://my-ml-data/datasets/ \
+  --s3 '{"AutoImportPolicy":{"Events":["NEW","CHANGED","DELETED"]},"AutoExportPolicy":{"Events":["NEW","CHANGED","DELETED"]}}'
+
+# Montare FSx for Lustre su un'istanza EC2 (Amazon Linux 2023)
+sudo dnf install -y lustre-client
+# <mount-name> si ottiene da: aws fsx describe-file-systems (LustreConfiguration.MountName)
 sudo mount -t lustre -o relatime,flock \
-  fs-1234567890.fsx.us-east-1.amazonaws.com@tcp:/fsx \
+  fs-1234567890.fsx.us-east-1.amazonaws.com@tcp:/<mount-name> \
   /mnt/fsx
 ```
 
@@ -463,7 +491,8 @@ File system enterprise basato su NetApp ONTAP managed da AWS. Il più versatile:
 - Thin provisioning (allocazione virtuale)
 - SnapMirror: replica ONTAP verso ONTAP (on-premises a FSx ONTAP)
 - FlexClone: cloni istantanei di volumi (utili per test/dev)
-- Scalabilità: storage capacity fino a 192 TB per storage virtual machine (SVM)
+- Scalabilità: tier SSD fino a centinaia di TiB per file system più un capacity pool tier (storage a oggetti, economico) per i dati freddi
+- Le SVM (Storage Virtual Machine) sono i contenitori logici di volumi, con endpoint e credenziali admin propri
 - Use case: lift & shift di applicazioni enterprise NetApp, SAP, Oracle
 
 ```bash
@@ -478,17 +507,25 @@ aws fsx create-file-system \
     "AutomaticBackupRetentionDays": 30,
     "PreferredSubnetId": "subnet-1234567890",
     "RouteTableIds": ["rtb-1234567890"],
-    "FsxAdminPassword": "SecurePassword123!"
+    "FsxAdminPassword": "<password-da-secrets-manager>"
   }'
 ```
+
+!!! warning "Password admin"
+    Non scrivere la password `fsxadmin` in chiaro nella shell history o negli script: recuperarla da Secrets Manager. <!-- REVIEW: verificare limiti capacità correnti ONTAP (scale-out Gen2) e protocolli (NVMe/TCP) -->
+
+!!! note "Nota"
+    FSx for ONTAP ha come riferimento il tool NetApp per la replica: **SnapMirror** replica ONTAP→ONTAP (non verso S3).
 
 ### FSx for OpenZFS
 
 File system ZFS managed ad alte performance. Snapshot istantanei, cloni, compressione nativa.
 
 **Caratteristiche:**
-- Throughput fino a 12,5 GB/s, IOPS fino a 1 milione
+- Throughput nell'ordine di 10+ GB/s, IOPS fino a 1 milione (i limiti variano per deployment type)
 - NFS v3 e v4.x
+<!-- REVIEW: verificare limiti correnti per Single-AZ/Multi-AZ e supporto di protocolli aggiuntivi (SMB/iSCSI) -->
+
 - Snapshot istantanei (zero-copy), cloni da snapshot
 - Compressione Z-Standard
 - Deployment: Single-AZ (ottimizzato per performance) o Multi-AZ
@@ -501,8 +538,8 @@ File system ZFS managed ad alte performance. Snapshot istantanei, cloni, compres
 | Protocollo | SMB | Lustre/POSIX | NFS/SMB/iSCSI | NFS |
 | OS | Windows | Linux | Linux/Windows | Linux |
 | AD Integration | Sì | No | Sì (con AD) | No |
-| S3 Integration | No | Nativa | Via SnapMirror | No |
-| Multi-AZ | Sì | Persistent only | Sì | Sì |
+| S3 Integration | No | Nativa | Indiretta (es. DataSync) | No |
+| Multi-AZ | Sì | No (solo singola AZ) | Sì | Sì |
 | Deduplica | No | No | Sì | No |
 | Use case | Windows workload | HPC/ML | Enterprise/lift&shift | POSIX ad alte perf |
 
@@ -540,6 +577,9 @@ Fornisce volumi iSCSI all'ambiente on-premises. Due modalità:
 On-premises (iSCSI client) → Volume Gateway → S3/EBS Snapshots
 ```
 
+!!! note "FSx File Gateway"
+    Il tipo *Amazon FSx File Gateway* (cache locale verso FSx for Windows) non è più disponibile ai nuovi clienti dal 2024: per nuovi progetti usare File Gateway verso S3 o accesso diretto a FSx via Direct Connect/VPN.
+
 ### Tape Gateway
 
 Emula una Virtual Tape Library (VTL) iSCSI. Le applicazioni di backup (Veeam, Backup Exec, NetBackup) scrivono su nastri virtuali che vengono archiviati su S3 o S3 Glacier.
@@ -556,8 +596,11 @@ Backup Software → Tape Gateway (VTL) → S3 / S3 Glacier
 
 La Snow Family è una suite di dispositivi fisici per il trasferimento di dati offline e per l'edge computing in location senza connettività affidabile.
 
+!!! warning "Disponibilità ridotta"
+    AWS ha chiuso ai nuovi clienti Snowcone (novembre 2024) e Snowball Edge (novembre 2025); Snowmobile non è più offerto. Per nuove migrazioni usare AWS DataSync, AWS Transfer Family, Direct Connect o Data Transfer Terminal. Le sezioni seguenti restano come riferimento per clienti esistenti e per l'esame di certificazione. <!-- REVIEW: verificare date e stato esatto di ogni dispositivo su docs.aws.amazon.com/snowball (availability change) -->
+
 **Quando usare Snow invece di trasferimento via Internet:**
-- Quantità di dati > 10 TB (con connessione a 1 Gbps il trasferimento prenderebbe > 1 giorno)
+- Quantità di dati > 10 TB (con connessione a 1 Gbps il trasferimento prende circa 1 giorno, e la banda è raramente dedicata al 100%)
 - Connettività limitata o inaffidabile
 - Necessità di elaborazione edge in ambienti remoti (navi, miniere, zone di conflitto)
 
@@ -613,17 +656,19 @@ Un camion (container 45 piedi) con fino a **100 PB di storage**. Per migrazioni 
 2. AWS spedisce il dispositivo
 3. Collegare al network on-premises
 4. Copiare dati (NFS, S3 compatible endpoint, SMB)
-   - Snowball Client: aws snowball cp per trasferimenti
+   - Endpoint S3-compatible del dispositivo con AWS CLI
    - AWS OpsHub: GUI per gestione dispositivo
-5. Rispedire il dispositivo ad AWS
+5. Rispedire il dispositivo ad AWS (l'etichetta di spedizione E Ink si aggiorna da sola)
 6. AWS carica i dati su S3
-7. AWS cancella il dispositivo (certificazione E-Ink)
+7. AWS cancella i dati dal dispositivo secondo lo standard NIST 800-88
 ```
 
 ```bash
-# Usare la CLI per copiare su Snowball (tramite manifest e unlock code ricevuti via email)
-snowball cp /local/data/ s3://my-bucket/data/ \
-  --profile snowball
+# Copiare su Snowball Edge via endpoint S3-compatible (credenziali ottenute con snowballEdge unlock-device / list-access-keys)
+aws s3 cp /local/data/ s3://my-bucket/data/ --recursive \
+  --endpoint-url https://192.0.2.10:8443 \
+  --ca-bundle snowball-ca.pem \
+  --profile snowballEdge
 
 # Copiare su Snowcone via DataSync
 aws datasync create-task \
@@ -670,7 +715,7 @@ Verificare `/etc/fstab` — usare `nofail` option:
 ### EFS: Errore di Mount "Connection Timed Out"
 
 1. Verificare Security Group del mount target (porta 2049 NFS deve essere aperta dall'istanza EC2)
-2. Verificare che l'istanza sia nella stessa VPC del file system
+2. Verificare che l'istanza abbia routing verso il mount target (stessa VPC, oppure peering/Transit Gateway/VPN/Direct Connect) e che il DNS risolva il mount target
 3. Verificare che il mount helper `amazon-efs-utils` sia installato
 
 ```bash
