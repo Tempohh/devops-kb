@@ -7,9 +7,10 @@ search_keywords: [rds, relational database service, aurora, multi-az, read repli
 parent: cloud/aws/database/_index
 related: [cloud/aws/database/dynamodb, cloud/aws/database/altri-db, cloud/aws/security/kms-secrets, cloud/aws/monitoring/cloudwatch]
 official_docs: https://docs.aws.amazon.com/rds/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # RDS e Aurora — Database Relazionali Managed
@@ -28,12 +29,15 @@ Amazon Relational Database Service (RDS) è il servizio managed per database rel
 
 | Engine | Versioni | Note |
 |--------|---------|------|
-| MySQL | 5.7, 8.0 | Il più comune; compatibile con Aurora MySQL |
-| PostgreSQL | 12–16 | Feature-rich; compatibile con Aurora PostgreSQL |
-| MariaDB | 10.5, 10.6, 10.11 | Fork MySQL; alcune feature aggiuntive |
-| Oracle | 19c, 21c | BYOL (Bring Your Own License) o License Included |
+| MySQL | 8.0, 8.4 (LTS) | Il più comune; compatibile con Aurora MySQL. 5.7 è fuori supporto standard |
+| PostgreSQL | 13–18 | Feature-rich; compatibile con Aurora PostgreSQL. Le versioni EOL (≤12) passano in Extended Support |
+| MariaDB | 10.6, 10.11, 11.4 | Fork MySQL; alcune feature aggiuntive |
+| Oracle | 19c | BYOL (Bring Your Own License) o License Included |
 | SQL Server | 2016, 2017, 2019, 2022 | License Included; BYOL per versioni SE2 |
 | IBM Db2 | 11.5 | Aggiunto nel 2024 |
+
+!!! warning "Extended Support a pagamento"
+    Quando una versione major raggiunge l'EOL community, RDS/Aurora la mantiene in **Extended Support** (fino a 3 anni) con un sovrapprezzo per vCPU-ora, e dopo la scadenza esegue l'upgrade forzato. Le versioni supportate cambiano spesso: verificarle con `aws rds describe-db-engine-versions --engine mysql --query 'DBEngineVersions[].EngineVersion'` invece di fidarsi della tabella.
 
 ### Instance Classes
 
@@ -67,7 +71,7 @@ aws rds create-db-instance \
   --engine mysql \
   --engine-version 8.0 \
   --master-username admin \
-  --master-user-password MySecurePassword123! \
+  --manage-master-user-password \
   --allocated-storage 100 \
   --storage-type gp3 \
   --iops 3000 \
@@ -89,7 +93,10 @@ aws rds reboot-db-instance \
   --force-failover
 ```
 
-**Multi-AZ Cluster (Novità):** RDS supporta ora anche un deployment Multi-AZ con 1 writer + 2 reader automatici (diverso dalle Read Replicas classiche), con failover < 35 secondi.
+!!! tip "Password gestita da RDS"
+    `--manage-master-user-password` fa creare e ruotare a RDS la password master in Secrets Manager (cifrata con KMS): niente password in chiaro nella shell history, negli script o nello state IaC. Il secret si legge da `MasterUserSecret.SecretArn`.
+
+**Multi-AZ DB Cluster:** deployment alternativo (solo MySQL e PostgreSQL) con 1 writer + 2 reader in 3 AZ, replica semi-sincrona. A differenza della standby classica i 2 reader **sono leggibili** (reader endpoint) e il failover è tipicamente < 35 secondi. Costa di più (3 istanze) ma evita di comprare Aurora quando servono solo HA rapida e letture.
 
 ### Read Replicas
 
@@ -97,7 +104,7 @@ Le Read Replicas sono copie asincrone del database primario, accessibili per le 
 
 **Caratteristiche:**
 - Replica **asincrona** (possibile lag, non garantisce consistency immediata)
-- Fino a **15 Read Replicas** per istanza RDS (5 per MySQL)
+- Fino a **15 Read Replicas** per istanza RDS MySQL/MariaDB/PostgreSQL (5 per Oracle e SQL Server)
 - Possono essere in **Region diverse** (Cross-Region Read Replica) per DR o utenti globali
 - Ogni replica ha il proprio endpoint di connessione
 - Possono essere **promosse** a database standalone (irreversibile — non è più una replica)
@@ -159,7 +166,7 @@ RDS Proxy è un proxy fully managed che si interpone tra l'applicazione e RDS, g
 - IAM authentication (token IAM invece di password)
 - Integrazione con Secrets Manager (rotazione automatica credenziali)
 - Failover ridotto del 66% rispetto a connessione diretta
-- Supporta: MySQL, PostgreSQL, SQL Server, Aurora MySQL/PostgreSQL
+- Supporta: MySQL, MariaDB, PostgreSQL, SQL Server, Aurora MySQL/PostgreSQL
 
 ```bash
 # Creare RDS Proxy
@@ -308,7 +315,7 @@ mysql --host=my-prod-db.xxxxx.rds.amazonaws.com \
       --port=3306 \
       --user=iam_user \
       --password="$TOKEN" \
-      --ssl-ca=rds-ca-2019-root.pem \
+      --ssl-ca=global-bundle.pem \
       --enable-cleartext-plugin
 ```
 
@@ -317,6 +324,12 @@ mysql --host=my-prod-db.xxxxx.rds.amazonaws.com \
 **Enhanced Monitoring:** metriche OS con granularità fino a 1 secondo (CPU per processo, memoria, I/O, filesystem). Dati inviati a CloudWatch Logs.
 
 **Performance Insights:** strumento di analisi delle query. Identifica quali query consumano più risorse, breakdown per wait event, top SQL, top host.
+
+<!-- REVIEW: verificare stato/date di EOL di Performance Insights a favore di CloudWatch Database Insights (modalità Standard/Advanced) e retention 731 giorni -->
+!!! note "Database Insights"
+    AWS sta sostituendo Performance Insights con **CloudWatch Database Insights**, che aggiunge vista di flotta e correlazione con le metriche CloudWatch. Per i cluster nuovi preferire Database Insights; i flag `--enable-performance-insights` restano utili per istanze esistenti.
+
+Il bundle CA `global-bundle.pem` si scarica da `https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem`; i vecchi certificati `rds-ca-2019` sono scaduti.
 
 ```bash
 # Abilitare Enhanced Monitoring
@@ -337,7 +350,7 @@ aws rds modify-db-instance \
 
 ## Amazon Aurora
 
-Aurora è un database relazionale cloud-native sviluppato da AWS, compatibile con MySQL 5.7/8.0 e PostgreSQL 12–16. Non è semplicemente MySQL/PostgreSQL su un'architettura migliorata: l'engine di storage è stato completamente riscritto per il cloud.
+Aurora è un database relazionale cloud-native sviluppato da AWS, compatibile con MySQL 8.0/8.4 (Aurora MySQL v3/v4) e PostgreSQL 13+. Non è semplicemente MySQL/PostgreSQL su un'architettura migliorata: l'engine di storage è stato completamente riscritto per il cloud.
 
 ### Architettura Aurora — Storage Cluster
 
@@ -368,9 +381,9 @@ L'elemento distintivo di Aurora è il **Cluster Volume** condiviso:
 aws rds create-db-cluster \
   --db-cluster-identifier my-aurora-cluster \
   --engine aurora-mysql \
-  --engine-version 8.0.mysql_aurora.3.04.0 \
+  --engine-version 8.0.mysql_aurora.3.10.0 \
   --master-username admin \
-  --master-user-password MySecurePassword123! \
+  --manage-master-user-password \
   --vpc-security-group-ids sg-1234567890 \
   --db-subnet-group-name my-db-subnet-group \
   --backup-retention-period 7 \
@@ -402,11 +415,12 @@ aws rds describe-db-clusters \
 
 ### Aurora Serverless v2
 
-Aurora Serverless v2 scala automaticamente in base al carico, da 0.5 a 256 ACU (Aurora Capacity Units). Ogni ACU corrisponde approssimativamente a 2 GB RAM + vCPU proporzionale.
+Aurora Serverless v2 scala automaticamente in base al carico, da 0 (con auto-pause) o 0.5 fino a 256 ACU (Aurora Capacity Units). Ogni ACU corrisponde approssimativamente a 2 GiB RAM + vCPU proporzionale. Serverless v1 è stato dismesso (EOL marzo 2025): v2 è l'unica opzione.
 
 **Vantaggi:**
 - Non paghi per capacità non utilizzata
-- Scale in/out in frazioni di secondo (vs v1 che aveva cold start di minuti)
+- Scale in/out in frazioni di secondo, in-place, senza disconnettere i client
+- Con `MinCapacity=0` e `SecondsUntilAutoPause` l'istanza va in pausa quando inattiva (nessun costo compute, resume in ~15 s): ideale per dev/test
 - Può coesistere con istanze provisioniali nello stesso cluster
 
 **Use case ideali:**
@@ -419,9 +433,9 @@ Aurora Serverless v2 scala automaticamente in base al carico, da 0.5 a 256 ACU (
 aws rds create-db-cluster \
   --db-cluster-identifier my-serverless-cluster \
   --engine aurora-postgresql \
-  --engine-version 15.4 \
+  --engine-version 16.4 \
   --master-username admin \
-  --master-user-password MySecurePassword123! \
+  --manage-master-user-password \
   --serverless-v2-scaling-configuration MinCapacity=0.5,MaxCapacity=64 \
   --storage-encrypted
 
@@ -442,20 +456,14 @@ aws rds modify-db-cluster \
 
 Aurora Global Database permette di avere **un primary** in una Region e fino a **5 secondary** in altre Region, con:
 - **RPO** (Recovery Point Objective — massima perdita di dati accettabile) **< 1 secondo** (replication lag tipicamente < 1s)
-- **RTO** (Recovery Time Objective — tempo massimo di ripristino del servizio) **< 1 minuto** (failover gestito manualmente)
+- **RTO** (Recovery Time Objective — tempo massimo di ripristino del servizio) tipicamente di **minuti** (il failover cross-Region è avviato da te o dalla tua automazione, e l'applicazione deve puntare al nuovo endpoint)
 - Secondary Region è read-only (può essere promossa a primary in caso di disaster)
 
 ```bash
-# Creare un Aurora Global Database
+# Creare un Aurora Global Database a partire da un cluster esistente (diventa il primary)
 aws rds create-global-cluster \
   --global-cluster-identifier my-global-db \
-  --engine aurora-mysql \
-  --engine-version 8.0.mysql_aurora.3.04.0
-
-# Associare il cluster primario
-aws rds modify-db-cluster \
-  --db-cluster-identifier my-aurora-cluster \
-  --global-cluster-identifier my-global-db
+  --source-db-cluster-identifier arn:aws:rds:us-east-1:123456789012:cluster:my-aurora-cluster
 
 # Aggiungere una Region secondaria
 aws rds create-db-cluster \
@@ -466,10 +474,16 @@ aws rds create-db-cluster \
   --storage-encrypted \
   --kms-key-id arn:aws:kms:eu-west-1:123456789012:key/mrk-5678
 
-# Failover managed (promuovi region secondaria)
+# Switchover pianificato (nessuna perdita dati, ruoli scambiati: manutenzione, DR drill)
+aws rds switchover-global-cluster \
+  --global-cluster-identifier my-global-db \
+  --target-db-cluster-identifier arn:aws:rds:eu-west-1:123456789012:cluster:my-aurora-eu
+
+# Failover non pianificato (Region primaria down): possibile perdita dei dati non ancora replicati
 aws rds failover-global-cluster \
   --global-cluster-identifier my-global-db \
-  --target-db-cluster-arn arn:aws:rds:eu-west-1:123456789012:cluster:my-aurora-eu
+  --target-db-cluster-identifier arn:aws:rds:eu-west-1:123456789012:cluster:my-aurora-eu \
+  --allow-data-loss
 ```
 
 ### Aurora Backtrack
@@ -487,8 +501,9 @@ Backtrack permette di "tornare indietro nel tempo" su un cluster Aurora MySQL se
 aws rds create-db-cluster \
   --db-cluster-identifier my-aurora-cluster \
   --engine aurora-mysql \
-  --backtrack-window 72 \  # ore
+  --backtrack-window 259200 \
   # ... altri parametri ...
+# --backtrack-window è in SECONDI (259200 = 72 ore)
 
 # Eseguire il backtrack
 aws rds backtrack-db-cluster \
@@ -515,11 +530,17 @@ aws rds switchover-blue-green-deployment \
   --blue-green-deployment-identifier bgd-1234567890 \
   --switchover-timeout 300  # secondi di attesa per completamento transazioni
 
-# Eliminare il blue (vecchio) dopo verifica
+# Dopo lo switchover il vecchio blue viene rinominato (suffisso -old1) e resta in piedi:
+# eliminare prima il deployment (rimuove solo il tracking), poi l'istanza vecchia dopo verifica
 aws rds delete-blue-green-deployment \
-  --blue-green-deployment-identifier bgd-1234567890 \
-  --delete-source
+  --blue-green-deployment-identifier bgd-1234567890
+aws rds delete-db-instance \
+  --db-instance-identifier my-prod-db-old1 \
+  --skip-final-snapshot
 ```
+
+!!! note "Come funziona"
+    Green è una copia sincronizzata via replica logica (MySQL binlog / PostgreSQL logical replication) mantenuta aggiornata dal blue. Lo switchover mette il blue in sola lettura, attende che green recuperi il lag, poi scambia i nomi degli endpoint: l'app non cambia connection string. Il rollback richiede un nuovo deployment: dopo lo switchover la replica verso il vecchio blue non prosegue.
 
 ### Aurora I/O-Optimized
 
@@ -537,22 +558,22 @@ aws rds modify-db-cluster \
 
 ### Aurora ML Integration
 
-Aurora può fare chiamate dirette a SageMaker (per inferenza ML custom) e Amazon Comprehend (per analisi del sentiment) tramite SQL.
+Aurora può fare chiamate dirette a SageMaker (inferenza ML custom) e Amazon Comprehend (sentiment) tramite SQL. Richiede un IAM role associato al cluster (`aws rds add-role-to-db-cluster --feature-name ...`) con permessi sul servizio ML.
 
 ```sql
--- Aurora MySQL + SageMaker: classificare il sentiment di review
-SELECT product_id, review_text,
-  aws_sagemaker_invoke_endpoint(
-    'my-sentiment-endpoint',
-    '{"text": "', review_text, '"}'
-  ) AS sentiment_prediction
-FROM product_reviews
-WHERE review_date > '2024-01-01';
-
--- Aurora PostgreSQL + Comprehend: analisi sentiment nativa
-SELECT review_id,
-  aws_comprehend_detect_sentiment(review_text, 'en') AS sentiment
+-- Aurora MySQL + Comprehend: funzione nativa
+SELECT review_id, aws_comprehend_detect_sentiment(review_text, 'en') AS sentiment
 FROM product_reviews;
+
+-- Aurora MySQL + SageMaker: si dichiara una stored function che punta all'endpoint
+CREATE FUNCTION predict_sentiment (review_text TEXT) RETURNS VARCHAR(20) CHARSET utf8mb4
+  ALIAS aws_sagemaker_invoke_endpoint
+  ENDPOINT NAME 'my-sentiment-endpoint';
+
+-- Aurora PostgreSQL: estensione aws_ml (CREATE EXTENSION aws_ml)
+SELECT review_id, s.sentiment
+FROM product_reviews,
+  LATERAL aws_comprehend.detect_sentiment(review_text, 'en') AS s;
 ```
 
 ---
@@ -563,7 +584,7 @@ FROM product_reviews;
 |---------|---------------------|------------------------|
 | Storage | EBS (provisioned) | Cluster Volume (auto-growing) |
 | Max Storage | 64 TB | 128 TB |
-| Replicas | 5 Read Replicas | 15 Aurora Replicas |
+| Replicas | fino a 15 Read Replicas (5 Oracle/SQL Server) | 15 Aurora Replicas |
 | Failover | ~60–120s (Multi-AZ) | < 30s |
 | Replication | Asincrona | Near-sync (< 100ms) |
 | Storage durability | 99.99% (Multi-AZ EBS) | 6 copie su 3 AZ |
