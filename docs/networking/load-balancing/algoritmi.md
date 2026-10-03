@@ -7,9 +7,10 @@ search_keywords: [round robin, least connections, least conn, ip hash, random, w
 parent: networking/load-balancing/_index
 related: [networking/load-balancing/layer4-vs-layer7, networking/load-balancing/ha-e-failover]
 official_docs: https://nginx.org/en/docs/http/ngx_http_upstream_module.html
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Algoritmi di Load Balancing
@@ -29,6 +30,7 @@ L'algoritmo di load balancing determina come il traffico viene distribuito tra i
 | Least Response Time | Sì | Sì | No | Medio |
 | Random | No | No | No | Minimo |
 | Consistent Hash | No | No | Sì | Medio |
+| Power of Two Choices | Sì (2 campioni) | Sì | No | Basso |
 
 ## Algoritmi Principali
 
@@ -69,11 +71,13 @@ Server C (weight 1) → 1 richiesta ogni 8
 upstream backend {
     server 10.0.0.1:8080 weight=5;  # Server potente
     server 10.0.0.2:8080 weight=2;  # Server medio
-    server 10.0.0.3:8080 weight=1;  # Server debole o canary (1%)
+    server 10.0.0.3:8080 weight=1;  # Server debole (1/8 = 12,5% del traffico)
 }
 ```
 
-**Uso pratico:** Canary deployment (inviare 1-5% del traffico a una nuova versione), migrazione graduale, backend con hardware diverso.
+Nginx usa uno *smooth* weighted round robin: le richieste del server pesante sono intercalate (A B A C A B A A), non raggruppate in burst.
+
+**Uso pratico:** Canary deployment (inviare 1-5% del traffico a una nuova versione, vedi Scenario 4 per il calcolo dei pesi), migrazione graduale, backend con hardware diverso.
 
 ### Least Connections
 
@@ -97,7 +101,7 @@ upstream backend {
 }
 ```
 
-```
+```text
 # HAProxy
 backend app_pool
     balance leastconn
@@ -107,15 +111,17 @@ backend app_pool
 
 ### IP Hash
 
-Calcola un hash dell'IP del client e lo mappa in modo deterministico a un server backend. Lo stesso client andrà sempre sullo stesso backend (finché il backend è disponibile). Implementa la **session affinity** basata su IP.
+Calcola un hash dell'IP del client e lo mappa in modo deterministico a un server backend. Lo stesso client andrà sempre sullo stesso backend (finché il pool non cambia). Implementa la **session affinity** basata su IP. In HAProxy l'equivalente è `balance source`.
 
-```
+```text
 Client 192.168.1.10 → hash(192.168.1.10) % 3 = 1 → Server B (sempre)
 Client 10.0.0.50    → hash(10.0.0.50) % 3 = 0    → Server A (sempre)
 ```
 
+Il modulo sul numero di server è il punto debole: se N cambia (scale-out, backend rimosso), la maggior parte dei client viene rimappata. Il Consistent Hashing (sotto) risolve questo problema. In Nginx `ip_hash` per IPv4 usa solo i primi 3 ottetti (/24), quindi client della stessa subnet finiscono sullo stesso backend.
+
 **Quando usare:** Applicazioni con sessioni server-side (state nel filesystem, in-memory), WebSocket (le connessioni sono persistenti), applicazioni che non possono usare sessioni distribuite.
-**Svantaggio:** Se un backend cade, tutti i suoi client devono migrare. Distribuzione potenzialmente sbilanciata se pochi IP grandi (NAT aziendale).
+**Svantaggio:** Se un backend cade, tutti i suoi client devono migrare. Distribuzione potenzialmente sbilanciata se pochi IP grandi (NAT — Network Address Translation — aziendale: molti utenti condividono un solo IP pubblico).
 
 ```nginx
 upstream backend {
@@ -126,24 +132,41 @@ upstream backend {
 }
 ```
 
-### Least Response Time (Nginx Plus / HAProxy)
+### Least Response Time (Nginx Plus, Envoy)
 
-Combina connessioni attive e latenza misurata: invia la richiesta al server con il minor numero di connessioni attive E il minor tempo di risposta medio. Più sofisticato di Least Connections ma richiede misurazioni attive.
+Combina connessioni attive e latenza misurata: invia la richiesta al server con il minor numero di connessioni attive E il minor tempo di risposta medio. Più sofisticato di Least Connections ma richiede misurazioni continue sul traffico reale.
 
 ```nginx
 # Nginx Plus (commerciale)
 upstream backend {
-    least_time header;  # last_byte per considerare la risposta completa
+    least_time header;  # header = tempo al primo byte; last_byte = risposta completa
     server 10.0.0.1:8080;
     server 10.0.0.2:8080;
 }
 ```
 
+!!! note "HAProxy non ha un algoritmo least-response-time"
+    HAProxy non offre un `balance` basato sulla latenza: si usa `leastconn` oppure `random(2)` (vedi sotto). Envoy invece fornisce `LEAST_REQUEST` (con P2C) e, nelle versioni recenti, bilanciamento sensibile alla latenza (peak EWMA — media mobile esponenziale — è l'approccio usato da Linkerd).
+
+### Random e Power of Two Choices (P2C)
+
+**Random** sceglie un backend a caso: nessuno stato, ottimo con molti LB indipendenti che non condividono informazioni. **Power of Two Choices** estrae a caso *due* backend e sceglie quello con meno connessioni: si ottiene quasi la qualità di Least Connections senza scansionare tutti i server né sincronizzare lo stato tra più istanze di LB (evita l'effetto "herd": tutti gli LB che mandano insieme il burst sul server momentaneamente meno carico).
+
+```nginx
+upstream backend {
+    random two least_conn;   # P2C in Nginx
+    server 10.0.0.1:8080;
+    server 10.0.0.2:8080;
+    server 10.0.0.3:8080;
+}
 ```
+
+```text
 # HAProxy
 backend app_pool
-    balance leastconn
-    option http-server-close  # Necessario per misurare latenza
+    balance random(2)        # P2C: 2 candidati, sceglie il meno carico
+    server s1 10.0.0.1:8080 check
+    server s2 10.0.0.2:8080 check
 ```
 
 ### Consistent Hashing
@@ -160,13 +183,15 @@ upstream backend {
 }
 ```
 
+Meccanismo: server e chiavi sono mappati sullo stesso anello di hash; ogni chiave va al primo server incontrato in senso orario. Rimuovere un server sposta solo le sue chiavi sul successivo (circa 1/N del totale invece di quasi tutte). In HAProxy: `balance source` (o `balance uri`) con `hash-type consistent`. Varianti più recenti (Maglev, bounded loads) limitano anche lo sbilanciamento; Envoy le espone come `MAGLEV` e `RING_HASH`.
+
 **Quando usare:** Backend stateful con caching (Memcached, Varnish), quando aggiungere/rimuovere server deve impattare il minimo di client.
 
 ## Sticky Sessions con Cookie
 
 Per applicazioni stateful, IP Hash è approssimativo (più client dietro NAT vanno sullo stesso server). La soluzione migliore è la **sticky session con cookie**:
 
-```
+```text
 # HAProxy — Cookie-based sticky session
 backend app_pool
     balance roundrobin
@@ -204,9 +229,9 @@ Il LB inserisce un cookie nella risposta con l'ID del server. Le richieste succe
 
 **Sintomo:** Un backend riceve molte più connessioni degli altri nonostante Round Robin sia configurato; il carico CPU/memoria è fortemente asimmetrico.
 
-**Causa:** Round Robin distribuisce le *nuove connessioni* equamente, ma le connessioni HTTP keep-alive rimangono aperte. Se i client riutilizzano le connessioni, alcune finiscono concentrate su pochi backend. Anche richieste con latenza molto diversa (alcune istantanee, altre lente) possono saturare un singolo server.
+**Causa:** Round Robin conta le assegnazioni, non il carico. Un LB L7 (Nginx, HAProxy in modalità http) alterna per *richiesta*, ma se alcune richieste durano molto più di altre un backend accumula richieste lente in corso e si satura. Con un LB L4 (o gRPC/HTTP/2 con connessioni long-lived) il bilanciamento avviene per *connessione*: poche connessioni multiplexate pesanti possono finire sullo stesso backend e restarci per ore.
 
-**Soluzione:** Passare a Least Connections che bilancia sulle connessioni *attive* anziché sul conteggio delle nuove.
+**Soluzione:** Passare a Least Connections, che bilancia sulle connessioni *attive* anziché sul conteggio delle assegnazioni. Per gRPC usare un LB L7 che bilancia per richiesta/stream.
 
 ```nginx
 upstream backend {
@@ -218,11 +243,11 @@ upstream backend {
 ```
 
 ```bash
-# Verificare distribuzione connessioni attive su Nginx
-nginx -T | grep -A5 "upstream"
+# Nginx OSS non espone contatori per upstream: contare le connessioni verso ogni backend
+ss -tn state established '( dport = :8080 )' | awk 'NR>1 {print $4}' | sort | uniq -c
 
-# HAProxy: controllare distribuzione tramite stats
-echo "show stat" | socat stdio /var/run/haproxy/admin.sock | cut -d',' -f1,2,48
+# HAProxy: pxname, svname, scur (sessioni correnti), stot (sessioni totali)
+echo "show stat" | socat stdio /var/run/haproxy/admin.sock | cut -d',' -f1,2,5,8
 ```
 
 ### Scenario 2 — Backend sovraccarico con IP Hash (traffico NAT)
@@ -233,7 +258,7 @@ echo "show stat" | socat stdio /var/run/haproxy/admin.sock | cut -d',' -f1,2,48
 
 **Soluzione:** Sostituire IP Hash con sticky session basata su cookie, che distribuisce i client individualmente anche se provengono dallo stesso IP.
 
-```
+```text
 # HAProxy — Cookie sticky session
 backend app_pool
     balance roundrobin
@@ -279,7 +304,7 @@ upstream backend {
 
 **Causa:** Il peso (weight) non è proporzionale alla somma totale dei pesi. Errore comune: `weight=1` su 3 server totali equivale a 33%, non all'1%.
 
-**Soluzione:** Calcolare i pesi in modo che la somma rifletta la percentuale desiderata. Per il 2% su 3 server: un server con `weight=98` e uno con `weight=2`.
+**Soluzione:** Calcolare i pesi in modo che la somma rifletta la percentuale desiderata. Per il 2% su 3 server: due stabili con `weight=49` e il canary con `weight=2` (somma 100).
 
 ```nginx
 upstream backend {
@@ -291,9 +316,8 @@ upstream backend {
 ```
 
 ```bash
-# Verificare distribuzione reale analizzando i log
-grep "upstream_addr" /var/log/nginx/access.log \
-  | awk '{print $NF}' | sort | uniq -c | sort -rn
+# Verificare distribuzione reale: richiede $upstream_addr come ULTIMO campo del log_format
+awk '{print $NF}' /var/log/nginx/access.log | sort | uniq -c | sort -rn
 
 # Formula: percentuale canary = weight_canary / sum(all_weights)
 python3 -c "print(f'Canary: {2/(49+49+2)*100:.1f}%')"
