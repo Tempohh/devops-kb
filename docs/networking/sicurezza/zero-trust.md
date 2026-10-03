@@ -7,9 +7,10 @@ search_keywords: [zero trust network, ztna, zero trust architecture, never trust
 parent: networking/sicurezza/_index
 related: [networking/sicurezza/vpn-ipsec, networking/sicurezza/firewall-waf, networking/sicurezza/wireguard, networking/service-mesh/istio, networking/kubernetes/network-policies, security/network/zero-trust]
 official_docs: https://csrc.nist.gov/publications/detail/sp/800-207/final
-status: complete
+status: needs-review
 difficulty: advanced
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Zero Trust Networking
@@ -18,7 +19,7 @@ last_updated: 2026-10-03
 
 Zero Trust (ZT) è un paradigma di sicurezza basato sul principio **"never trust, always verify"**: nessun utente, dispositivo o servizio è considerato fidato per default, indipendentemente dalla sua posizione di rete (interno o esterno). Ogni accesso viene autenticato, autorizzato e continuamente verificato. Zero Trust sostituisce il modello tradizionale "castle and moat" dove tutto dentro il perimetro è fidato.
 
-Il modello è definito da NIST SP 800-207 e deriva dall'esperienza di Google con BeyondCorp (2011). I pilastri principali sono: **verifica esplicita dell'identità**, **accesso con privilegi minimi**, e **assunzione di breach** (assumere che la rete interna sia già compromessa).
+Il modello è definito da NIST SP 800-207 (2020) e deriva dall'esperienza di Google con BeyondCorp (iniziato internamente nel 2011, pubblicato dal 2014). I pilastri principali sono: **verifica esplicita dell'identità**, **accesso con privilegi minimi**, e **assunzione di breach** (assumere che la rete interna sia già compromessa).
 
 ## Prerequisiti
 
@@ -45,6 +46,8 @@ Questo fallisce in scenari moderni:
 - **Supply chain attacks**: codice di terze parti compromette il perimetro dall'interno
 
 ### Principi NIST 800-207
+
+Sintesi dei 7 *tenets* di NIST SP 800-207 (il tenet sulla raccolta di telemetria per migliorare la postura è assorbito nel monitoraggio continuo):
 
 1. **Tutte le risorse sono considerate non fidate** indipendentemente dalla posizione di rete
 2. **Tutte le comunicazioni sono cifrate** — anche nella rete interna
@@ -77,8 +80,14 @@ Questo fallisce in scenari moderni:
 ```
 
 **Subject** = chi accede (utente + dispositivo + servizio)
-**Policy Engine** = decide se l'accesso è consentito basandosi su policy e data sources
-**Policy Enforcement Point** = l'entità che concede/nega l'accesso fisicamente (proxy, gateway, sidecar)
+**Policy Engine (PE)** = decide se l'accesso è consentito, valutando policy e *data sources* (IdP, MDM, SIEM, threat intelligence)
+**Policy Administrator (PA)** = traduce la decisione del PE in comandi al PEP (es. emette il token/sessione di accesso)
+**Policy Enforcement Point (PEP)** = l'entità che concede/nega l'accesso fisicamente (proxy, gateway, sidecar)
+
+PE + PA formano il **Policy Decision Point (PDP)** (control plane); il PEP è il data plane. Separarli permette di cambiare policy senza toccare i punti di enforcement. Il PEP non decide mai da solo: se il PDP è irraggiungibile, la scelta tra fail-closed (sicuro, ma blocca) e cache dell'ultima decisione è un compromesso da definire esplicitamente.
+
+!!! note "Sigle"
+    **IdP** = Identity Provider (autentica e rilascia token); **MDM** = Mobile Device Management (inventario e conformità dei dispositivi); **SIEM** = Security Information and Event Management (correlazione log di sicurezza); **IAP** = Identity-Aware Proxy (proxy che autorizza per identità, non per IP); **ZTNA** = Zero Trust Network Access.
 
 ## Architettura / Come Funziona
 
@@ -87,7 +96,7 @@ Questo fallisce in scenari moderni:
 ```
 Utente remoto
   │
-  ├── Identity Provider (Okta, Azure AD)
+  ├── Identity Provider (Okta, Microsoft Entra ID, già Azure AD)
   │     ├── Autenticazione MFA
   │     ├── SSO (SAML/OIDC)
   │     └── Emissione token (JWT)
@@ -127,7 +136,8 @@ Policy: service-a PUÒ chiamare service-b su /api/v1/users
 
 ```yaml
 # 1. Abilita mTLS strict in tutto il namespace (ogni comunicazione cifrata e autenticata)
-apiVersion: security.istio.io/v1beta1
+# security.istio.io/v1 è GA dalla 1.22; v1beta1 resta accettata sulle versioni precedenti
+apiVersion: security.istio.io/v1
 kind: PeerAuthentication
 metadata:
   name: default
@@ -138,7 +148,7 @@ spec:
 
 ---
 # 2. Authorization Policy — chi può chiamare chi
-apiVersion: security.istio.io/v1beta1
+apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
   name: api-service-policy
@@ -170,8 +180,13 @@ spec:
 
 ### Identity-Aware Proxy con Cloudflare Access
 
-```yaml
-# terraform/cloudflare_access.tf
+!!! warning "Versione provider"
+    Esempio scritto per il provider Terraform Cloudflare v4. Dalla v5 le risorse sono rinominate `cloudflare_zero_trust_access_*` e le policy sono oggetti riutilizzabili collegati all'applicazione (non più `application_id` sulla policy). Verificare la documentazione del provider prima di usarlo.
+
+<!-- REVIEW: verificare sintassi esatta equivalente per provider Cloudflare v5 (cloudflare_zero_trust_access_application / _policy) -->
+
+```hcl
+# terraform/cloudflare_access.tf (provider cloudflare ~> 4.x)
 
 # Definisce l'applicazione protetta
 resource "cloudflare_access_application" "internal_app" {
@@ -219,7 +234,7 @@ Fase 1 — Visibilità (settimane 1-4):
   ✓ MFA per tutti gli utenti
 
 Fase 2 — Identità (mesi 1-3):
-  ✓ Identity Provider centralizzato (Okta, Azure AD)
+  ✓ Identity Provider centralizzato (Okta, Microsoft Entra ID)
   ✓ SSO per tutte le applicazioni
   ✓ Device enrollment nell'MDM
   ✓ Revoca accesso VPN per le app migrate a IAP
@@ -241,16 +256,19 @@ Fase 4 — Dati (mesi 6-12):
 SPIFFE (Secure Production Identity Framework for Everyone) standardizza l'identità dei workload tramite certificati X.509 con URI SAN (SPIFFE ID):
 
 ```bash
-# Installa SPIRE Server (gestisce l'identità dei workload)
+# Installa SPIRE Server (gestisce l'identità dei workload).
+# Per prove locali; in Kubernetes usare l'Helm chart ufficiale (spiffe/helm-charts-hardened)
+# e fissare una versione 1.x corrente invece di "latest".
 docker run -d --name spire-server \
   -p 8081:8081 \
-  ghcr.io/spiffe/spire-server:1.8.0 \
+  ghcr.io/spiffe/spire-server:<versione-1.x> \
   -config /opt/spire/conf/server/server.conf
 
 # Registra un workload
+# parentID = SPIFFE ID dell'agent del nodo (formato k8s_psat: .../agent/k8s_psat/<cluster>/<node-uid>)
 spire-server entry create \
   -spiffeID spiffe://example.org/ns/production/sa/api-service \
-  -parentID spiffe://example.org/spire/agent/k8s_psat/production/node1 \
+  -parentID spiffe://example.org/spire/agent/k8s_psat/<cluster>/<node-uid> \
   -selector k8s:ns:production \
   -selector k8s:sa:api-service
 
@@ -310,8 +328,10 @@ resource "cloudflare_device_posture_rule" "client_cert" {
 istioctl proxy-config secret <pod> -n production
 istioctl analyze -n production
 
-# Verifica SPIFFE ID certificato in un pod
-kubectl exec mypod -- cat /var/run/secrets/... | openssl x509 -noout -text | grep URI
+# Verifica SPIFFE ID del certificato workload di Istio (il sidecar lo tiene in memoria, non su disco)
+istioctl proxy-config secret <pod> -n production -o json \
+  | jq -r '.dynamicActiveSecrets[0].secret.tlsCertificate.certificateChain.inlineBytes' \
+  | base64 -d | openssl x509 -noout -text | grep URI
 
 # Log Cloudflare Access
 # Dashboard → Zero Trust → Logs → Access Requests
