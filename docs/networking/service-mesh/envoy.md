@@ -7,16 +7,17 @@ search_keywords: [envoy proxy, envoy xds, data plane, control plane, sidecar pro
 parent: networking/service-mesh/_index
 related: [networking/service-mesh/istio, networking/service-mesh/concetti-base, networking/protocolli/grpc]
 official_docs: https://www.envoyproxy.io/docs/
-status: complete
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Envoy Proxy
 
 ## Panoramica
 
-Envoy è un proxy L4/L7 open source ad alte prestazioni, progettato da Lyft e ora gestito dalla CNCF. È il **data plane** di riferimento per service mesh come Istio e il componente centrale di molti API gateway (Kong, Ambassador). A differenza di Nginx e HAProxy, Envoy è progettato nativamente per ambienti cloud-native: configurazione dinamica via API (xDS), osservabilità integrata (metriche, tracing, access log), e supporto nativo per gRPC, HTTP/2 e HTTP/3.
+Envoy è un proxy L4/L7 open source ad alte prestazioni, progettato da Lyft e ora gestito dalla CNCF. È il **data plane** di riferimento per service mesh come Istio e il componente centrale di molti API gateway basati su Kubernetes Gateway API (Envoy Gateway, Emissary-ingress, Contour, Gloo). A differenza di Nginx e HAProxy, Envoy è progettato nativamente per ambienti cloud-native: configurazione dinamica via API (xDS), osservabilità integrata (metriche, tracing, access log), e supporto nativo per gRPC, HTTP/2 e HTTP/3.
 
 Envoy opera solitamente come **sidecar proxy** — un container affiancato ad ogni istanza applicativa — intercettando tutto il traffico in entrata e uscita. Questo pattern centralizza il networking (retry, circuit breaking, mTLS, tracing) senza modificare il codice applicativo.
 
@@ -72,7 +73,7 @@ I filtri HTTP di Envoy processano le richieste in pipeline:
 http_filters:
   - name: envoy.filters.http.jwt_authn      # Verifica JWT
   - name: envoy.filters.http.cors           # CORS
-  - name: envoy.filters.http.rate_limit     # Rate limiting
+  - name: envoy.filters.http.ratelimit      # Rate limiting globale (servizio esterno)
   - name: envoy.filters.http.router         # Routing (sempre ultimo)
 ```
 
@@ -159,24 +160,26 @@ static_resources:
 admin:
   address:
     socket_address:
-      address: 0.0.0.0
+      address: 127.0.0.1   # Admin solo su loopback (vedi Best Practices)
       port_value: 9901
 ```
 
-### Outlier Detection (Circuit Breaking)
+### Circuit Breaking e Outlier Detection
+
+Sono due meccanismi distinti. I **circuit breaker** (`circuit_breakers`, sopra) limitano le risorse verso un cluster (connessioni, richieste pendenti, retry): superata la soglia Envoy risponde subito 503 con flag `UO`, proteggendo il backend dal sovraccarico. L'**outlier detection** *espelle* temporaneamente i singoli host che falliscono, così il load balancer smette di usarli.
 
 ```yaml
 clusters:
 - name: backend_service
   outlier_detection:
-    # Rimuove endpoint dopo 5 errori 5xx in 10 secondi
+    # Espelle l'host dopo 5 errori 5xx CONSECUTIVI
     consecutive_5xx: 5
-    interval: 10s
-    base_ejection_time: 30s
-    max_ejection_percent: 50  # Max 50% degli endpoint rimossi contemporaneamente
+    interval: 10s              # ogni quanto Envoy analizza gli host (sweep)
+    base_ejection_time: 30s    # durata base espulsione (cresce a ogni espulsione successiva)
+    max_ejection_percent: 50   # Max 50% degli endpoint rimossi contemporaneamente (default 10%)
     consecutive_gateway_failure: 5
+    enforcing_consecutive_gateway_failure: 100  # default 0: senza questo il rilevamento gateway non espelle
     success_rate_minimum_hosts: 3
-    success_rate_stale_after_warm_up_window: 300s
 ```
 
 ### mTLS con SDS
@@ -193,6 +196,7 @@ transport_socket:
         sds_config:
           api_config_source:
             api_type: GRPC
+            transport_api_version: V3
             grpc_services:
             - envoy_grpc:
                 cluster_name: xds_cluster
@@ -231,7 +235,6 @@ curl -X POST localhost:9901/healthcheck/fail  # Segnala unhealthy
 
 ```yaml
 # docker-compose.yaml
-version: '3.8'
 services:
   app:
     image: myapp:latest
@@ -240,12 +243,15 @@ services:
       - "8080"
 
   envoy:
-    image: envoyproxy/envoy:v1.29-latest
+    # Fissare una release supportata (le vecchie minor non ricevono patch di sicurezza)
+    image: envoyproxy/envoy:v1.34-latest
     ports:
-      - "10000:10000"  # Proxy port
-      - "9901:9901"    # Admin port
+      - "10000:10000"            # Proxy port
+      - "127.0.0.1:9901:9901"    # Admin port, solo loopback host
     volumes:
       - ./envoy.yaml:/etc/envoy/envoy.yaml
+    # In container l'admin deve fare bind su 0.0.0.0 (nell'envoy.yaml) perché il port
+    # mapping funzioni: l'esposizione è limitata dal "127.0.0.1:" sopra.
     command: ["envoy", "-c", "/etc/envoy/envoy.yaml"]
     depends_on:
       - app
@@ -263,6 +269,8 @@ http_connection_manager:
         collector_cluster: zipkin_cluster
         collector_endpoint: "/api/v2/spans"
         collector_endpoint_version: HTTP_JSON
+    # Jaeger accetta Zipkin (qui) o OTLP: il tracer nativo Jaeger è stato rimosso,
+    # per nuovi setup preferire envoy.tracers.opentelemetry (OTLP).
     # Campionamento 1% del traffico in produzione (value è una percentuale:
     # 100 = tutto, troppo costoso in produzione per volume di span e overhead)
     random_sampling:
@@ -274,7 +282,7 @@ http_connection_manager:
 - **xDS dinamico in produzione**: non usare configurazione statica — usare control plane (Istio, Consul) per aggiornare senza riavvii
 - **Admin API**: non esporre mai la porta Admin (9901) pubblicamente — solo localhost o rete interna
 - **Circuit breaker**: configurare sempre outlier detection per isolare backend difettosi
-- **Timeout gerarchici**: definire timeout a livello di route (specifico) e cluster (fallback) — sempre più granulare vince
+- **Timeout a livelli**: `timeout` di route (richiesta totale, default 15s), `connect_timeout` di cluster (solo handshake TCP), idle timeout di connessione/stream — sono indipendenti, non si sovrascrivono: dimensionarli coerentemente (il timeout di route deve coprire retry × per-try timeout)
 - **Header propagation**: propagare `x-request-id`, `x-b3-traceid` etc. — Envoy li usa per il tracing distribuito
 - **Graceful shutdown**: usare `healthcheck/fail` prima di fermare Envoy per drenare le connessioni
 
@@ -284,7 +292,8 @@ http_connection_manager:
 |---------|-------|-----------|
 | `upstream connect error` | Backend non raggiungibile | Verificare endpoint e health check |
 | `upstream request timeout` | Backend lento | Aumentare timeout nella route config |
-| `no healthy upstream` | Circuit breaker attivato | Verificare outlier_detection, ridurre `max_ejection_percent` |
+| `no healthy upstream` (`UH`) | Tutti gli host unhealthy o espulsi da outlier detection | Verificare health check e outlier_detection, ridurre `max_ejection_percent` |
+| 503 con flag `UO` | Circuit breaker (limiti `max_connections`/`max_pending_requests`/`max_requests`) superato | Alzare le soglie o scalare il backend; controllare `upstream_rq_pending_overflow` |
 | `431 Request Header Fields Too Large` | Header troppo grandi | Aumentare `max_request_headers_kb` |
 | Latenza anomala | Retry storm | Verificare retry policy, aggiungere retry budget |
 
@@ -356,6 +365,9 @@ curl -s localhost:9901/server_info | jq .state
     Istio usa Envoy come sidecar proxy e lo configura tramite le API xDS.
 
     **Approfondimento →** [Istio](istio.md)
+
+!!! note "Istio ambient mode"
+    In Istio ambient mode il L4 (mTLS, identità) è gestito da `ztunnel` per nodo, un proxy Rust **non** basato su Envoy; Envoy resta nei *waypoint proxy* per le funzioni L7. Il sidecar Envoy rimane il modello classico.
 
 ??? info "Service Mesh — Concetti Base"
     Envoy implementa il data plane del pattern service mesh.
