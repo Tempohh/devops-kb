@@ -1,22 +1,28 @@
 ---
 title: "Azure Well-Architected Framework"
-slug: well-architected-azure
+slug: well-architected
 category: cloud
 tags: [azure, well-architected, waf, reliability, security, cost-optimization, performance, operational-excellence]
 search_keywords: [Azure Well-Architected Framework, WAF Azure, 5 pilastri Azure, Reliability Azure, Security pillar, Cost Optimization Azure, Performance Efficiency, Operational Excellence, Azure Advisor, workload assessment, trade-offs]
 parent: cloud/azure/fondamentali/_index
 related: [cloud/azure/monitoring/_index, cloud/azure/security/_index]
 official_docs: https://learn.microsoft.com/azure/well-architected/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Azure Well-Architected Framework
 
 Il **Azure Well-Architected Framework (WAF)** è un insieme di principi guida per la progettazione di workload cloud affidabili, sicuri, efficienti e ottimizzati per i costi.
 
-Composto da **5 pilastri** con trade-off espliciti tra di loro.
+Composto da **5 pilastri** con trade-off espliciti tra di loro. Ogni pilastro ha *design principles*, checklist di raccomandazioni e **service guides** per i singoli servizi Azure (AKS, SQL, Front Door…) nella documentazione ufficiale.
+
+!!! note "Sustainability"
+    A differenza di AWS (6° pilastro), in Azure la sostenibilità non è un pilastro a sé: è trattata come principio trasversale nei 5 pilastri (es. right-sizing in Cost Optimization e Performance Efficiency).
+
+**Perché i pilastri:** nessun workload ottimizza tutto insieme. Il framework serve a rendere espliciti i compromessi (vedi [Trade-Off](#trade-off-tra-pilastri)) e a decidere in base ai requisiti di business, non per abitudine.
 
 ---
 
@@ -41,11 +47,11 @@ Composto da **5 pilastri** con trade-off espliciti tra di loro.
 
 **Principi di design:**
 - Progettare per il guasto — assumere che i componenti falliranno
-- Usare Availability Zones e Region Pairs per HA e DR
+- Usare Availability Zones per HA intra-region e una seconda region (spesso la region pair, che offre aggiornamenti sequenziali e priorità di ripristino) per DR
 - Implementare retry con backoff esponenziale
 - Circuit breaker pattern per fallimenti a cascata
-- Definire RTO (Recovery Time Objective) e RPO (Recovery Point Objective)
-- Testare i failover regolarmente (Chaos Engineering)
+- Definire RTO (Recovery Time Objective) e RPO (Recovery Point Objective) dai requisiti di business: determinano costo e architettura di DR
+- Testare i failover regolarmente (Chaos Engineering, es. **Azure Chaos Studio**)
 
 **Servizi chiave:**
 
@@ -67,6 +73,8 @@ Esempio: VM (99.9%) × SQL (99.99%) × App Gateway (99.95%) = 99.84%
 
 Con Availability Zones: 99.99%+ per servizi zone-redundant
 ```
+
+Il prodotto vale per dipendenze **in serie** (se una cade, cade il workload). Componenti ridondanti in parallelo alzano l'SLA: `1 − (1−SLA)ⁿ`. Gli SLA vanno letti per ogni servizio/tier sulla pagina ufficiale SLA: variano con configurazione (es. VM single-instance vs zone).
 
 ---
 
@@ -117,28 +125,36 @@ az consumption usage list \
     --query "[].{Service:instanceName, Cost:pretaxCost, Currency:currency}" \
     --output table
 
-# Creare Budget alert
-az consumption budget create \
-    --resource-group myapp-rg \
-    --budget-name monthly-budget \
-    --amount 1000 \
-    --time-grain Monthly \
-    --start-date 2026-02-01 \
-    --end-date 2026-12-31 \
-    --category Cost \
-    --notifications '[{
-        "enabled": true,
-        "operator": "GreaterThan",
-        "threshold": 80,
-        "contactEmails": ["team@company.com"],
-        "thresholdType": "Actual"
-    }]'
-
 # Azure Advisor — raccomandazioni costo
 az advisor recommendation list \
     --category Cost \
     --query "[].{Title:shortDescription.problem, Impact:impact, Savings:extendedProperties.annualSavingsAmount}" \
     --output table
+```
+
+I **Budget** con alert si dichiarano meglio come codice (la CLI `az consumption budget` non supporta le notifiche di soglia). Esempio Bicep, scope subscription (`startDate` deve essere il primo del mese):
+
+```bicep
+targetScope = 'subscription'
+
+resource budget 'Microsoft.Consumption/budgets@2023-05-01' = {
+  name: 'monthly-budget'
+  properties: {
+    category: 'Cost'
+    amount: 1000
+    timeGrain: 'Monthly'
+    timePeriod: { startDate: '2026-11-01' }
+    notifications: {
+      actual80: {
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 80
+        thresholdType: 'Actual'
+        contactEmails: [ 'team@company.com' ]
+      }
+    }
+  }
+}
 ```
 
 ---
@@ -156,7 +172,7 @@ az advisor recommendation list \
 - Runbook automatizzati per operazioni comuni
 - Tagging per gestione ciclo vita risorse
 
-**Maturità operativa:**
+**Maturità operativa** (scala didattica della KB, non un modello ufficiale Microsoft):
 
 | Livello | Caratteristiche |
 |---------|----------------|
@@ -178,7 +194,7 @@ az advisor recommendation list \
 - Caching a più livelli (CDN, Redis, in-memory)
 - Database sharding e partitioning per scalabilità
 - Async patterns: code, event streaming per decoupling
-- Performance testing prima del go-live
+- Performance testing prima del go-live (es. **Azure Load Testing**)
 - Profiling e load testing continuo
 
 **Pattern di scaling:**
@@ -215,6 +231,9 @@ Microsoft fornisce uno strumento di **assessment interattivo** per valutare un w
 - **Output:** punteggio per pilastro + raccomandazioni prioritizzate
 - **Integrazione:** Azure Advisor legge risorse reali e fornisce raccomandazioni specifiche
 
+!!! note "Advisor: categoria Reliability"
+    Nel portale la categoria si chiama ora **Reliability** (ex High Availability). La CLI accetta ancora il valore `HighAvailability` per `--category`; se in una versione recente fallisce, controllare `az advisor recommendation list --help`.
+
 ```bash
 # Azure Advisor — tutte le raccomandazioni
 az advisor recommendation list --output table
@@ -246,7 +265,7 @@ az advisor recommendation list \
 
 **Causa:** Il prodotto degli SLA dei singoli componenti abbassa l'SLA complessivo; un componente non zone-redundant rompe la catena.
 
-**Soluzione:** Identificare i componenti con SLA basso o non zone-redundant e aggiornarli. Usare Azure Advisor per evidenziare i single point of failure.
+**Soluzione:** Identificare i componenti con SLA basso o non zone-redundant e aggiornarli. Usare Azure Advisor per evidenziare i single point of failure. Se un componente è in serie ma non critico, valutare degradazione graduale (il workload funziona anche senza di esso) per escluderlo dal calcolo.
 
 ```bash
 # Verificare le raccomandazioni di alta disponibilità
@@ -306,7 +325,7 @@ az consumption usage list \
 # Vedere le policy non conformi nella subscription
 az policy state list \
     --filter "complianceState eq 'NonCompliant'" \
-    --query "[].{Policy:policyDefinitionName, Risorsa:resourceId, Causa:complianceReasonCode}" \
+    --query "[].{Policy:policyDefinitionName, Risorsa:resourceId}" \
     --output table
 
 # Dettagli su un'assegnazione di policy specifica
@@ -314,7 +333,8 @@ az policy assignment show \
     --name <assignment-name> \
     --query "{Nome:displayName, Scope:scope, Parametri:parameters}"
 
-# Verificare se un'operazione verrebbe bloccata (what-if policy)
+# Riepilogo conformità per resource group
+# (non è un what-if: per testare prima del deploy usare enforcementMode DoNotEnforce)
 az policy state summarize \
     --resource-group myapp-rg \
     --output table
@@ -345,11 +365,19 @@ az monitor activity-log list \
     --query "[?contains(operationName.value,'autoscale')].{Ora:eventTimestamp, Operazione:operationName.value, Status:status.value}" \
     --output table
 
-# Aggiornare cooldown a 2 minuti (default è 5)
-az monitor autoscale rule update \
+# Il cooldown è per-regola (default 5 min) e non c'è "rule update":
+# eliminare la regola (indice da `rule list`) e ricrearla con --cooldown
+az monitor autoscale rule delete \
     --resource-group myapp-rg \
     --autoscale-name cpu-autoscale \
-    --scale-cool-down 2
+    --index 0
+
+az monitor autoscale rule create \
+    --resource-group myapp-rg \
+    --autoscale-name cpu-autoscale \
+    --condition "Percentage CPU > 70 avg 5m" \
+    --scale out 2 \
+    --cooldown 2
 ```
 
 ---
