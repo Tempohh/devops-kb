@@ -7,10 +7,10 @@ search_keywords: [GPU per LLM, NVIDIA H100, A100 GPU, VRAM planning, CUDA, tenso
 parent: ai/mlops/_index
 related: [ai/mlops/_index, ai/mlops/model-serving, ai/fondamentali/deep-learning, ai/modelli/modelli-open-source]
 official_docs: https://docs.nvidia.com/cuda/
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_verified: 2026-10-04
 ---
 
 # Infrastruttura GPU per LLM
@@ -430,9 +430,8 @@ nvidia-smi -L
 | p5en.48xlarge | H200 | 8×141 GB | 8 | 192 vCPU | 2 TB | su richiesta / listino |
 | p6-b200.48xlarge | B200 | 8×192 GB | 8 | 192 vCPU | 2 TB | su richiesta / listino |
 
-<!-- REVIEW: verificare prezzi on-demand p4d/p4de/p5 (ridotti fino al ~45% da AWS a giugno 2025) e us-east-1 attuali sulla pricing page; i prezzi cambiano spesso -->
 !!! note "Prezzi indicativi"
-    Prezzi on-demand us-east-1 approssimativi; variano per regione e cambiano spesso (AWS ha tagliato P4/P5 a metà 2025). Per i p5/p6 la disponibilità passa spesso da Capacity Blocks / savings plan. Controllare sempre la pricing page.
+    Prezzi on-demand Linux us-east-1 approssimativi (verificati ottobre 2026: p4d $21.96, p4de $27.45, p5 $55.04/ora); variano per regione e cambiano spesso (AWS ha tagliato P4/P5 a metà 2025). Per i p5/p6 la disponibilità passa spesso da Capacity Blocks / savings plan. Controllare sempre la pricing page.
 
 ### Azure GPU VMs
 
