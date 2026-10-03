@@ -9,8 +9,8 @@ related: [ci-cd/testing/contract-testing, ci-cd/github-actions/workflow-avanzati
 official_docs: https://testcontainers.com/
 status: needs-review
 difficulty: intermediate
-last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Test Strategy per Microservizi
@@ -258,7 +258,7 @@ class PaymentServiceClientTest {
 
     @Container
     static WireMockContainer wireMock =
-        new WireMockContainer("wiremock/wiremock:3.3.1")
+        new WireMockContainer("wiremock/wiremock:3.13.2")
             .withMapping("payment-success", PaymentServiceClientTest.class,
                          "wiremock/payment-success.json");
 
@@ -446,13 +446,13 @@ Il mutation testing introduce **piccole mutazioni nel codice sorgente** (cambia 
 <plugin>
     <groupId>org.pitest</groupId>
     <artifactId>pitest-maven</artifactId>
-    <version>1.15.3</version>
+    <version>1.30.0</version>
     <dependencies>
         <!-- Supporto JUnit 5 -->
         <dependency>
             <groupId>org.pitest</groupId>
             <artifactId>pitest-junit5-plugin</artifactId>
-            <version>1.2.1</version>
+            <version>1.2.3</version>
         </dependency>
     </dependencies>
     <configuration>
@@ -573,8 +573,9 @@ mutation-testing:
     Per suite di integration test molto grandi, distribuisci i test su più runner in parallelo: `--shard=1/3` (Jest/Playwright), `pytest-split`/`pytest-xdist` (Python), o una `matrix` GitHub Actions in cui ogni job esegue un sottoinsieme di classi/tag (lo split per timing richiede un tool dedicato, es. `--split-by=timings` di CircleCI). Con N runner il tempo scende verso 1/N, limitato dal job più lento e dall'overhead di setup.
 
 !!! note "Testcontainers 1.x vs 2.x"
-    Gli esempi usano l'API 1.x (`PostgreSQLContainer<?>` generico, artifact `org.testcontainers:postgresql`). Testcontainers 2.x ha rinominato gli artifact (prefisso `testcontainers-`) e spostato/de-genericizzato alcune classi dei moduli (es. `PostgreSQLContainer`, `KafkaContainer`). Il pattern (container `static`, property dinamiche) resta identico.
-    <!-- REVIEW: verificare package/artifact esatti Testcontainers 2.x e versioni correnti di pitest-maven / pitest-junit5-plugin / WireMock -->
+    Gli esempi usano l'API 1.x (`PostgreSQLContainer<?>` generico, artifact `org.testcontainers:postgresql`). Testcontainers 2.x (ultima: 2.0.5) ha prefissato tutti gli artifact con `testcontainers-` (es. `org.testcontainers:postgresql` → `org.testcontainers:testcontainers-postgresql`), spostato le classi in package per modulo (es. `org.testcontainers.postgresql.PostgreSQLContainer`, `org.testcontainers.mysql.MySQLContainer`), rimosso il supporto JUnit 4 e i costruttori di default dei moduli. Con 2.x anche `testcontainers-junit-jupiter` sostituisce `junit-jupiter`. Il pattern (container `static`, property dinamiche) resta identico.
+    <!-- CURRENCY: non verificato (2026-10) — package esatto di KafkaContainer in 2.x (immagine confluentinc/cp-kafka vs apache/kafka) -->
+    Versioni correnti verificate (ottobre 2026): `pitest-maven` 1.30.0, `pitest-junit5-plugin` 1.2.3, WireMock 3.13.2.
 
 !!! info "Piramide, trophy, honeycomb"
     Per i microservizi la piramide classica è discussa: molta logica sta nell'**integrazione** tra servizi e DB, non nelle singole funzioni. Il *testing trophy* (Kent C. Dodds) e il *honeycomb* (Spotify) spostano il peso sugli integration/component test, con pochi unit test su logica pura. Il principio resta: più il test è in alto, più è lento e fragile, quindi meno scenari. Scegli la forma in base a dove vive la complessità del servizio.
