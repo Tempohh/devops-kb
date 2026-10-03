@@ -16736,10 +16736,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#permessi-rbac-del-provider-service-account-insufficienti" class="md-nav__link">
+  <a href="#permessi-iam-delle-credenziali-del-provider-insufficienti" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Permessi RBAC del provider service account insufficienti
+        Permessi IAM delle credenziali del provider insufficienti
       
     </span>
   </a>
@@ -24840,10 +24840,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#permessi-rbac-del-provider-service-account-insufficienti" class="md-nav__link">
+  <a href="#permessi-iam-delle-credenziali-del-provider-insufficienti" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Permessi RBAC del provider service account insufficienti
+        Permessi IAM delle credenziali del provider insufficienti
       
     </span>
   </a>
@@ -25035,6 +25035,11 @@
 
 
 <h1 id="crossplane-fondamentali">Crossplane — Fondamentali<a class="headerlink" href="#crossplane-fondamentali" title="Permanent link">&para;</a></h1>
+<div class="admonition warning">
+<p class="admonition-title">Versione: esempi in stile Crossplane v1 / Upbound provider v1</p>
+<p>Gli esempi di questa pagina usano la API v1 (Composition <code>mode: Resources</code> con <code>patches</code>, <code>connectionDetails</code>, Claim, <code>provider-aws-*</code> v1.x). Crossplane v2 (2025) ha cambiato il modello: XR namespaced come default (i Claim restano solo in modalità legacy), solo Composition <code>mode: Pipeline</code> (patch-and-transform nativo rimosso: si usa <code>function-patch-and-transform</code>), connection details nativi e <code>deletionPolicy</code> sostituiti da logica nelle funzioni e <code>managementPolicies</code>, provider con MR namespaced (<code>*.m.upbound.io</code>).
+<!-- REVIEW: riscrivere Composition/XRD/Claim/connection secret in stile v2 (Pipeline, XR namespaced, scope XRD) e verificare versioni provider/chart correnti; vedi prop-140 --></p>
+</div>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
 <p>Crossplane è un progetto CNCF che estende Kubernetes per gestire infrastruttura cloud (VM, database, reti, bucket, cluster) usando le stesse primitive con cui Kubernetes gestisce pod e deployment: <strong>CRD (Custom Resource Definition)</strong> e <strong>controller in control loop</strong>. Invece di eseguire un CLI esterno (<code>terraform apply</code>) che legge/scrive uno state file, Crossplane installa provider come operatori nel cluster: ogni risorsa cloud diventa un oggetto Kubernetes (<code>kubectl get</code>, <code>kubectl apply</code>, <code>kubectl describe</code> funzionano su un bucket S3 esattamente come su un pod).</p>
 <p>Il valore distintivo è il <strong>self-service infrastructure via Kubernetes API</strong>: un platform team definisce astrazioni (es. "Database", "Cluster") tramite Composition/XRD, e gli sviluppatori le richiedono con un semplice manifest YAML (<code>claim</code>) senza conoscere Terraform, HCL o i dettagli del cloud provider sottostante. L'integrazione è nativa con RBAC Kubernetes, namespace, quota, admission policy (Kyverno/OPA) e GitOps (ArgoCD/Flux) — non serve un layer di autenticazione/autorizzazione separato come un backend Terraform Cloud.</p>
@@ -25162,7 +25167,7 @@
 <tbody>
 <tr>
 <td>Stato</td>
-<td>State file (locale o remote backend: S3+DynamoDB)</td>
+<td>State file (locale o remote backend, es. S3 con locking)</td>
 <td>Oggetti Kubernetes in etcd (nessuno state file separato)</td>
 </tr>
 <tr>
@@ -25219,7 +25224,7 @@
 </span></code></pre></div>
 <p>Perché è "control loop e non on-demand": non serve che un umano lanci <code>pulumi up</code> o <code>terraform apply</code> — se qualcuno modifica manualmente il bucket S3 fuori da Crossplane, il reconciler lo rileva al ciclo successivo e lo riporta allo stato desiderato definito nel manifest.</p>
 <h3 id="layered-composition-e-funzioni-composition-functions">Layered Composition e Funzioni (Composition Functions)<a class="headerlink" href="#layered-composition-e-funzioni-composition-functions" title="Permanent link">&para;</a></h3>
-<p>Le versioni recenti di Crossplane (v1.14+) sostituiscono il patching dichiarativo delle Composition con <strong>Composition Functions</strong>: pipeline di funzioni (container OCI, tipicamente scritte in Go/Python) che ricevono l'XR in input e producono i Managed Resource in output, abilitando logica condizionale complessa (loop, if/else) impossibile con il solo patching YAML.</p>
+<p>Le versioni recenti di Crossplane (Functions GA dalla v1.17; unica modalità supportata in v2) sostituiscono il patching nativo delle Composition con <strong>Composition Functions</strong>: pipeline di funzioni (container OCI, tipicamente scritte in Go/Python) che ricevono l'XR in input e producono i Managed Resource in output, abilitando logica condizionale complessa (loop, if/else) impossibile con il solo patching YAML.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apiextensions.crossplane.io/v1</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Composition</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -25406,13 +25411,14 @@
 <h3 id="testing-di-compositionxrd-prima-del-merge">Testing di Composition/XRD prima del merge<a class="headerlink" href="#testing-di-compositionxrd-prima-del-merge" title="Permanent link">&para;</a></h3>
 <p>Il warning in <a href="#best-practices">Best Practices</a> dice di trattare una Composition come un'API pubblica con "test automatici prima del merge" — ecco come farlo concretamente, su due livelli.</p>
 <p><strong>Livello 1 — <code>crossplane render</code> (offline, nessun cluster)</strong></p>
-<p>Dalla v1.14, il comando <code>crossplane render</code> compila claim + composite + function-pipeline di una Composition e stampa i Managed Resource risultanti, senza toccare alcun cluster reale. Serve a validare che il patching/function pipeline produca l'output atteso, in locale o in CI, in pochi secondi:</p>
+<p>Il comando <code>crossplane render</code> (introdotto come <code>crossplane beta render</code> in v1.14, ora stabile) compila claim + composite + function-pipeline di una Composition e stampa i Managed Resource risultanti, senza toccare alcun cluster reale. Serve a validare che il patching/function pipeline produca l'output atteso, in locale o in CI, in pochi secondi:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># render.sh — xr.yaml è l'XR di esempio, composition.yaml la Composition sotto test,</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># functions.yaml dichiara le function usate dalla pipeline (se mode: Pipeline)</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>crossplane<span class="w"> </span>render<span class="w"> </span>xr.yaml<span class="w"> </span>composition.yaml<span class="w"> </span>functions.yaml<span class="w"> </span>&gt;<span class="w"> </span>rendered-output.yaml
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># Diff contro uno snapshot committato: se cambia senza che il PR lo documenti, fallisce</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>diff<span class="w"> </span>rendered-output.yaml<span class="w"> </span>tests/snapshots/xdatabase-aws.yaml
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># Le function della pipeline girano come container: serve Docker locale</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>crossplane<span class="w"> </span>render<span class="w"> </span>xr.yaml<span class="w"> </span>composition.yaml<span class="w"> </span>functions.yaml<span class="w"> </span>&gt;<span class="w"> </span>rendered-output.yaml
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1"># Diff contro uno snapshot committato: se cambia senza che il PR lo documenti, fallisce</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>diff<span class="w"> </span>rendered-output.yaml<span class="w"> </span>tests/snapshots/xdatabase-aws.yaml
 </span></code></pre></div>
 <p><code>crossplane render</code> non applica nulla al cluster: è equivalente concettuale di <code>terraform plan</code> con output renderizzato invece che un piano testuale, utile come gate rapido pre-merge.</p>
 <p><strong>Livello 2 — Chainsaw/kuttl (end-to-end, cluster ephemeral)</strong></p>
@@ -25450,20 +25456,26 @@
 </span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
 </span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
 </span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">crossplane/setup-crossplane-cli@v1</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Render e confronta con snapshot</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">          </span><span class="no">crossplane render compositions/xdatabase/xr.yaml \</span>
-</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="w">            </span><span class="no">compositions/xdatabase/composition.yaml \</span>
-</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="w">            </span><span class="no">compositions/xdatabase/functions.yaml &gt; /tmp/rendered.yaml</span>
-</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a><span class="w">          </span><span class="no">diff compositions/xdatabase/snapshot.yaml /tmp/rendered.yaml</span>
-</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="w">  </span><span class="nt">e2e-chainsaw</span><span class="p">:</span>
-</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
-</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
-</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
-</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">helm/kind-action@v1</span>
-</span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">curl -sSf https://kyverno.github.io/chainsaw/install.sh | sh</span>
-</span><span id="__span-15-23"><a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chainsaw test compositions/xdatabase/chainsaw-test.yaml</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Installare crossplane CLI</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">          </span><span class="no">curl -sL https://raw.githubusercontent.com/crossplane/crossplane/main/install.sh | sh</span>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">          </span><span class="no">sudo mv crossplane /usr/local/bin/</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Render e confronta con snapshot</span>
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a><span class="w">          </span><span class="no">crossplane render compositions/xdatabase/xr.yaml \</span>
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="w">            </span><span class="no">compositions/xdatabase/composition.yaml \</span>
+</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="w">            </span><span class="no">compositions/xdatabase/functions.yaml &gt; /tmp/rendered.yaml</span>
+</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="w">          </span><span class="no">diff compositions/xdatabase/snapshot.yaml /tmp/rendered.yaml</span>
+</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a><span class="w">  </span><span class="nt">e2e-chainsaw</span><span class="p">:</span>
+</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
+</span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
+</span><span id="__span-15-23"><a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
+</span><span id="__span-15-24"><a id="__codelineno-15-24" name="__codelineno-15-24" href="#__codelineno-15-24"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">helm/kind-action@v1</span>
+</span><span id="__span-15-25"><a id="__codelineno-15-25" name="__codelineno-15-25" href="#__codelineno-15-25"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/setup-go@v5</span>
+</span><span id="__span-15-26"><a id="__codelineno-15-26" name="__codelineno-15-26" href="#__codelineno-15-26"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
+</span><span id="__span-15-27"><a id="__codelineno-15-27" name="__codelineno-15-27" href="#__codelineno-15-27"></a><span class="w">          </span><span class="nt">go-version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">stable</span>
+</span><span id="__span-15-28"><a id="__codelineno-15-28" name="__codelineno-15-28" href="#__codelineno-15-28"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">go install github.com/kyverno/chainsaw@latest</span><span class="w">   </span><span class="c1"># pinnare una versione in produzione</span>
+</span><span id="__span-15-29"><a id="__codelineno-15-29" name="__codelineno-15-29" href="#__codelineno-15-29"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">chainsaw test compositions/xdatabase/chainsaw-test.yaml</span>
 </span></code></pre></div>
 <p>Il job <code>render-diff</code> fallisce se l'output della Composition cambia senza che lo snapshot committato nel PR sia stato aggiornato consapevolmente (forza a rivedere/documentare ogni cambiamento di comportamento). Il job <code>e2e-chainsaw</code> verifica che il provider reale (in un kind effimero) accetti i campi generati e che il reconciler converga a <code>Ready: True</code>.</p>
 <div class="admonition note">
@@ -25547,7 +25559,7 @@
 </span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>crossplane-system<span class="w"> </span>deploy/crossplane<span class="w"> </span>-f
 </span></code></pre></div>
 <strong>Soluzione:</strong> correggere il path del patch o il valore di default nello schema XRD, poi riapplicare la Composition (il reconciler la rilegge automaticamente al prossimo ciclo).</p>
-<h3 id="permessi-rbac-del-provider-service-account-insufficienti">Permessi RBAC del provider service account insufficienti<a class="headerlink" href="#permessi-rbac-del-provider-service-account-insufficienti" title="Permanent link">&para;</a></h3>
+<h3 id="permessi-iam-delle-credenziali-del-provider-insufficienti">Permessi IAM delle credenziali del provider insufficienti<a class="headerlink" href="#permessi-iam-delle-credenziali-del-provider-insufficienti" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> la Managed Resource resta in <code>Ready: False</code> con evento <code>AccessDenied</code> o <code>UnauthorizedOperation</code> nei log, pur avendo un <code>ProviderConfig</code> valido.
 <strong>Causa:</strong> le credenziali cloud referenziate nel <code>ProviderConfig</code> non hanno i permessi IAM necessari per l'azione richiesta (es. <code>rds:CreateDBInstance</code>).
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Verificare quale ProviderConfig usa la risorsa</span>
@@ -25576,7 +25588,7 @@
 </details>
 <details class="info">
 <summary>Terraform State Management — Confronto Gestione Stato</summary>
-<p>Il problema di stato condiviso, locking e drift che Terraform risolve con backend remoti (S3+DynamoDB) è risolto in Crossplane nativamente da etcd e dal control loop, senza bisogno di un layer separato di locking.</p>
+<p>Il problema di stato condiviso, locking e drift che Terraform risolve con backend remoti (es. S3 con locking) è risolto in Crossplane nativamente da etcd e dal control loop, senza bisogno di un layer separato di locking.</p>
 <p><strong>Approfondimento →</strong> <a href="../../terraform/state-management/">Terraform State Management</a></p>
 </details>
 <details class="info">
