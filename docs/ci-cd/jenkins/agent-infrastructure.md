@@ -9,8 +9,8 @@ related: [ci-cd/jenkins/pipeline-fundamentals, ci-cd/jenkins/enterprise-patterns
 official_docs: https://plugins.jenkins.io/kubernetes/
 status: needs-review
 difficulty: advanced
-last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Jenkins Agent Infrastructure
@@ -343,8 +343,39 @@ def call(Closure body) {
 ```
 
 !!! warning "Kaniko: progetto archiviato"
-    Il repository `GoogleContainerTools/kaniko` è stato **archiviato da Google** (giugno 2025): niente più release né fix di sicurezza dall'upstream, e le immagini `gcr.io/kaniko-project/executor` non ricevono nuovi tag. Per i build di immagini in pod senza Docker socket valutare **Buildah** (daemonless, rootless), **BuildKit** rootless (`moby/buildkit:rootless`) o un fork mantenuto (es. quello di Chainguard). Il pattern (container dedicato + `sleep` + `container('...')`) resta identico; cambia solo l'immagine e il comando di build.
-    <!-- REVIEW: verificare tag/registry del fork mantenuto di Kaniko e aggiungere un esempio Buildah/BuildKit rootless -->
+    Il repository `GoogleContainerTools/kaniko` è stato **archiviato da Google** (giugno 2025): niente più release né fix di sicurezza dall'upstream, e le immagini `gcr.io/kaniko-project/executor` non ricevono nuovi tag. Per i build di immagini in pod senza Docker socket valutare **Buildah** (daemonless, rootless), **BuildKit** rootless (`moby/buildkit:rootless`) o il fork mantenuto da Chainguard (`github.com/chainguard-forks/kaniko`). Il fork **non pubblica immagini dal repository**: le immagini (`kaniko`, `kaniko-warmer` e varianti FIPS) si ottengono dal catalogo Chainguard (`images.chainguard.dev`, registry `cgr.dev`); tag e disponibilità (free tier vs. a pagamento) vanno verificati lì. Il pattern (container dedicato + `sleep` + `container('...')`) resta identico; cambia solo l'immagine e il comando di build.
+    <!-- CURRENCY: non verificato (2026-10) — nome esatto immagine/tag Chainguard per l'executor Kaniko e relativa variante con shell (serve per `sleep`) -->
+
+### Alternativa: BuildKit rootless
+
+Esempio basato sul Job ufficiale `examples/kubernetes/job.rootless.yaml` di BuildKit, adattato a pod template Jenkins: container `moby/buildkit:rootless` (pinnare un tag/digest in produzione), nessun Docker socket e nessun `runAsUser: 0`.
+
+```yaml
+  - name: buildkit
+    image: moby/buildkit:rootless
+    command: ["sleep", "infinity"]
+    env:
+    - name: BUILDKITD_FLAGS
+      value: --oci-worker-no-process-sandbox
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      seccompProfile:
+        type: Unconfined       # Kubernetes >= 1.19
+      appArmorProfile:
+        type: Unconfined       # Kubernetes >= 1.30
+    volumeMounts:
+    - name: buildkitd
+      mountPath: /home/user/.local/share/buildkit   # emptyDir: il VOLUME di default non funziona su COS
+```
+
+```groovy
+container('buildkit') {
+    sh "buildctl-daemonless.sh build --frontend dockerfile.v0 --local context=${env.WORKSPACE} --local dockerfile=${env.WORKSPACE} --output type=image,name=registry.company.com/myapp:${env.GIT_COMMIT.take(8)},push=true"
+}
+```
+
+Per il push servono credenziali: montare un Secret con `config.json` e impostare `DOCKER_CONFIG` sulla directory. Caveat del rootless (user namespace, `--oci-worker-no-process-sandbox`): vedi `docs/rootless.md` nel repository BuildKit. Buildah rootless è l'altra opzione daemonless (`buildah bud`/`buildah push`), non verificata in questa revisione.
 
 ### Pod Template via YAML (più manutenibile)
 
