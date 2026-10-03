@@ -22188,7 +22188,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22213,7 +22213,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25037,7 +25037,8 @@
 
 <h1 id="cni-container-network-interface">CNI — Container Network Interface<a class="headerlink" href="#cni-container-network-interface" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>CNI (Container Network Interface) è la specifica che definisce come i plugin di rete devono configurare le interfacce di rete nei container. Quando Kubernetes crea un pod, chiama il plugin CNI per assegnare un IP al pod, configurare le route necessarie e garantire la connettività con il resto del cluster. Senza un CNI plugin installato, i pod restano in stato <code>Pending</code>.</p>
+<p>CNI (Container Network Interface) è la specifica che definisce come i plugin di rete devono configurare le interfacce di rete nei container. Quando Kubernetes crea un pod, chiama il plugin CNI per assegnare un IP al pod, configurare le route necessarie e garantire la connettività con il resto del cluster. Senza un CNI plugin installato i nodi restano <code>NotReady</code> (kubelet: <code>network plugin not ready</code>), i pod applicativi non vengono schedulati (taint <code>node.kubernetes.io/not-ready</code>) e quelli già assegnati restano in <code>ContainerCreating</code>; anche CoreDNS resta <code>Pending</code>.</p>
+<p><strong>Meccanismo:</strong> il container runtime (containerd/CRI-O) crea il network namespace del pod, poi esegue il binario CNI indicato in <code>/etc/cni/net.d/</code> (cercato in <code>/opt/cni/bin/</code>) con comando <code>ADD</code> e la configurazione JSON su stdin; il plugin crea la coppia <strong>veth</strong> (cavo virtuale tra namespace del pod e host), assegna l'IP (tramite il plugin <strong>IPAM</strong>) e imposta le route, restituendo il risultato in JSON. Alla cancellazione del pod viene invocato <code>DEL</code>. Per questo il CNI è un'interfaccia a eseguibili, non un demone che Kubernetes chiama via API.</p>
 <p>La scelta del CNI plugin è una delle decisioni architetturali più importanti in un cluster Kubernetes: impatta performance, funzionalità di sicurezza (Network Policy), osservabilità e compatibilità con il cloud provider. I tre CNI più diffusi sono <strong>Flannel</strong> (semplicità), <strong>Calico</strong> (BGP + NetworkPolicy avanzate) e <strong>Cilium</strong> (eBPF, massima performance e osservabilità).</p>
 <h2 id="prerequisiti">Prerequisiti<a class="headerlink" href="#prerequisiti" title="Permanent link">&para;</a></h2>
 <p>Questo argomento presuppone familiarità con:
@@ -25088,7 +25089,7 @@
 <td><strong>eBPF (kernel bypass)</strong></td>
 <td>Processa i pacchetti nel kernel con eBPF senza userspace</td>
 <td>Massima performance, ricca osservabilità</td>
-<td>Kernel Linux 5.8+ richiesto</td>
+<td>Richiede kernel Linux recente (minimo 4.19.57, consigliato 5.10+ per le feature complete)</td>
 </tr>
 </tbody>
 </table>
@@ -25111,7 +25112,7 @@
 </tr>
 <tr>
 <td>NetworkPolicy</td>
-<td>No (solo base)</td>
+<td>No (nessun enforcement)</td>
 <td>Sì (avanzate)</td>
 <td>Sì (L3/L4/L7)</td>
 </tr>
@@ -25197,12 +25198,13 @@
 <p>Cilium usa programmi eBPF caricati nel kernel Linux per processare i pacchetti senza passare per userspace. Può sostituire completamente kube-proxy.</p>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="installare-flannel">Installare Flannel<a class="headerlink" href="#installare-flannel" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Installazione base (dopo kubeadm init con --pod-network-cidr=10.244.0.0/16)</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Verifica</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>kube-flannel
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>nodes<span class="w">  </span><span class="c1"># Tutti devono essere Ready</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Installazione base (dopo kubeadm init con --pod-network-cidr=10.244.0.0/16,</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># il CIDR di default nel manifest Flannel)</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Verifica</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>kube-flannel
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>kubectl<span class="w"> </span>get<span class="w"> </span>nodes<span class="w">  </span><span class="c1"># Tutti devono essere Ready</span>
 </span></code></pre></div>
 <h3 id="installare-calico">Installare Calico<a class="headerlink" href="#installare-calico" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Installa con Helm (raccomandato)</span>
@@ -25214,18 +25216,22 @@
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># Attendi che i pod siano Ready</span>
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>calico-system<span class="w"> </span>-w
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Configura IP pool</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>cat<span class="w"> </span><span class="s">&lt;&lt;EOF | kubectl apply -f -</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="s">apiVersion: projectcalico.org/v3</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="s">kind: IPPool</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="s">metadata:</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="s">  name: default-ipv4-ippool</span>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="s">spec:</span>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="s">  cidr: 10.244.0.0/16</span>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="s">  ipipMode: Never         # BGP puro, no overlay</span>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="s">  natOutgoing: true</span>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="s">  disabled: false</span>
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="s">EOF</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Configura IP pool e modalità di rete tramite la risorsa Installation</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1"># (con il tigera-operator l'IPPool viene generato da qui)</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>cat<span class="w"> </span><span class="s">&lt;&lt;EOF | kubectl apply -f -</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="s">apiVersion: operator.tigera.io/v1</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="s">kind: Installation</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="s">metadata:</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="s">  name: default</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="s">spec:</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="s">  calicoNetwork:</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="s">    bgp: Enabled</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="s">    ipPools:</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="s">      - name: default-ipv4-ippool</span>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="s">        cidr: 10.244.0.0/16</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="s">        encapsulation: None     # BGP puro, no overlay</span>
+</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="s">        natOutgoing: Enabled</span>
+</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="s">EOF</span>
 </span></code></pre></div>
 <h3 id="installare-cilium">Installare Cilium<a class="headerlink" href="#installare-cilium" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Installa CLI cilium</span>
@@ -25233,15 +25239,16 @@
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>tar<span class="w"> </span>xzvf<span class="w"> </span>cilium-linux-amd64.tar.gz<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>mv<span class="w"> </span>cilium<span class="w"> </span>/usr/local/bin/
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Installa Cilium nel cluster</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>cilium<span class="w"> </span>install<span class="w"> </span>--version<span class="w"> </span><span class="m">1</span>.15.0
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># Verifica status e connettività</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>cilium<span class="w"> </span>status<span class="w"> </span>--wait
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>cilium<span class="w"> </span>connectivity<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="c1"># Abilita Hubble (osservabilità)</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>cilium<span class="w"> </span>hubble<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>--ui
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>cilium<span class="w"> </span>hubble<span class="w"> </span>ui<span class="w">  </span><span class="c1"># Apre la UI</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># (usare una release stabile corrente, vedi https://github.com/cilium/cilium/releases)</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>cilium<span class="w"> </span>install<span class="w"> </span>--version<span class="w"> </span>&lt;X.Y.Z&gt;
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># Verifica status e connettività</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>cilium<span class="w"> </span>status<span class="w"> </span>--wait
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>cilium<span class="w"> </span>connectivity<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Abilita Hubble (osservabilità)</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>cilium<span class="w"> </span>hubble<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>--ui
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>cilium<span class="w"> </span>hubble<span class="w"> </span>ui<span class="w">  </span><span class="c1"># Apre la UI</span>
 </span></code></pre></div>
 <h3 id="verifica-connettivita-pod">Verifica Connettività Pod<a class="headerlink" href="#verifica-connettivita-pod" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Test connettività base tra pod su nodi diversi</span>
@@ -25272,8 +25279,8 @@
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>mypod<span class="w"> </span>--<span class="w"> </span>ip<span class="w"> </span>link<span class="w"> </span>show<span class="w"> </span>eth0
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># 2: eth0@if123: mtu 1450</span>
 </span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Verifica in Calico</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>calico-config<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>mtu
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Verifica in Calico (installazione via operator)</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>installation<span class="w"> </span>default<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.spec.calicoNetwork.mtu}'</span>
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
@@ -25293,7 +25300,7 @@
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Cercare: "failed to set up pod network" o "network plugin not ready"</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Verifica che i pod CNI siano Running su TUTTI i nodi</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>-l<span class="w"> </span>k8s-app<span class="o">=</span>flannel<span class="w">    </span><span class="c1"># Flannel</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>kube-flannel<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>flannel<span class="w">         </span><span class="c1"># Flannel</span>
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>calico-system<span class="w">                       </span><span class="c1"># Calico</span>
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>-l<span class="w"> </span>k8s-app<span class="o">=</span>cilium<span class="w">      </span><span class="c1"># Cilium</span>
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
@@ -25338,21 +25345,18 @@
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>--<span class="w"> </span>ip<span class="w"> </span>link<span class="w"> </span>show<span class="w"> </span>eth0
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># "mtu 1500" con VXLAN è sbagliato — deve essere ~1450</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># Verifica MTU configurata in Calico</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>calico-config<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>mtu
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Imposta MTU in Calico (veth MTU)</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>configmap<span class="w"> </span>calico-config<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">  </span>--type<span class="w"> </span>merge<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"data":{"veth_mtu":"1440"}}'</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="c1"># Verifica MTU nodo</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>ip<span class="w"> </span>link<span class="w"> </span>show<span class="w"> </span>flannel.1<span class="w">   </span><span class="c1"># Flannel: deve essere ~1450</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>ip<span class="w"> </span>link<span class="w"> </span>show<span class="w"> </span>vxlan.calico<span class="w">  </span><span class="c1"># Calico VXLAN: deve essere ~1450</span>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="c1"># Simula frammentazione (test)</span>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>--<span class="w"> </span>ping<span class="w"> </span>-M<span class="w"> </span><span class="k">do</span><span class="w"> </span>-s<span class="w"> </span><span class="m">1450</span><span class="w"> </span>&lt;IP_altro_pod&gt;
-</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="c1"># Se fallisce con "Frag needed": problema MTU confermato</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># Imposta MTU in Calico (installazione via operator; valore = MTU del pod)</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>installation<span class="w"> </span>default<span class="w"> </span>--type<span class="w"> </span>merge<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"spec":{"calicoNetwork":{"mtu":1450}}}'</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Installazione da manifest: configmap calico-config (kube-system), chiave veth_mtu</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># Verifica MTU nodo</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>ip<span class="w"> </span>link<span class="w"> </span>show<span class="w"> </span>flannel.1<span class="w">   </span><span class="c1"># Flannel: deve essere ~1450</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>ip<span class="w"> </span>link<span class="w"> </span>show<span class="w"> </span>vxlan.calico<span class="w">  </span><span class="c1"># Calico VXLAN: deve essere ~1450</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="c1"># Simula frammentazione (test)</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>--<span class="w"> </span>ping<span class="w"> </span>-M<span class="w"> </span><span class="k">do</span><span class="w"> </span>-s<span class="w"> </span><span class="m">1450</span><span class="w"> </span>&lt;IP_altro_pod&gt;
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1"># Se fallisce con "Frag needed": problema MTU confermato</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-networkpolicy-non-viene-applicata">Scenario 4 — NetworkPolicy non viene applicata<a class="headerlink" href="#scenario-4-networkpolicy-non-viene-applicata" title="Permanent link">&para;</a></h3>
@@ -25379,13 +25383,17 @@
 </span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="c1"># Se risponde: policy non applicata → CNI non la supporta</span>
 </span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>
 </span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="c1"># Per Cilium: verifica policy enforcement</span>
-</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a>cilium<span class="w"> </span>policy<span class="w"> </span>get
-</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>cilium-&lt;hash&gt;<span class="w"> </span>--<span class="w"> </span>cilium<span class="w"> </span>policy<span class="w"> </span>trace<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a><span class="w">  </span>--src-k8s-pod<span class="w"> </span>default:test-a<span class="w"> </span>--dst-k8s-pod<span class="w"> </span>default:test-b<span class="w"> </span>--dport<span class="w"> </span><span class="m">80</span>
+</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a>cilium<span class="w"> </span>status
+</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a>hubble<span class="w"> </span>observe<span class="w"> </span>--verdict<span class="w"> </span>DROPPED<span class="w"> </span>--namespace<span class="w"> </span>default<span class="w">   </span><span class="c1"># pacchetti scartati dalle policy</span>
+</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>cilium-&lt;hash&gt;<span class="w"> </span>--<span class="w"> </span>cilium-dbg<span class="w"> </span>endpoint<span class="w"> </span>list<span class="w">   </span><span class="c1"># policy enforcement per endpoint</span>
 </span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a>
 </span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="c1"># Cleanup test</span>
 </span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>networkpolicy<span class="w"> </span>test-deny
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">CNI dei cloud provider</p>
+<p>Sui cluster gestiti il CNI è spesso scelto dal provider: <strong>AWS VPC CNI</strong> (EKS) assegna ai pod IP reali della VPC (niente overlay, ma consumo di IP della subnet), <strong>Azure CNI</strong> (AKS) fa lo stesso con la VNet, mentre GKE usa il proprio dataplane (Dataplane V2, basato su Cilium). Cilium e Calico sono comunque installabili in modalità chained/overlay su questi servizi.</p>
+</div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
 <summary>Network Policies — Firewall tra pod</summary>
