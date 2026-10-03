@@ -7,9 +7,10 @@ search_keywords: [IAM policy conditions, IAM StringEquals, IAM aws:RequestedRegi
 parent: cloud/aws/iam/_index
 related: [cloud/aws/iam/_index, cloud/aws/iam/organizations, cloud/aws/security/compliance-audit]
 official_docs: https://docs.aws.amazon.com/iam/latest/userguide/access_policies.html
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # IAM Policies Avanzate
@@ -33,26 +34,30 @@ Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestu
 ## Policy Evaluation Logic — Dettaglio
 
 ```
-Policy Evaluation Order (per ogni API call)
+Policy Evaluation Order (per ogni API call, stesso account)
 
-Step 1: Explicit DENY check
+Step 1: Explicit DENY check (in QUALSIASI policy applicabile)
         ↓ (nessun deny)
-Step 2: Organizations SCP
-        ↓ (SCP Allow OR nessun SCP)
+Step 2: Organizations SCP (e RCP)
+        ↓ devono consentire l'azione (SCP default: FullAWSAccess)
 Step 3: Resource-based policy
-        ↓ se Allow → ALLOW immediato
+        ↓ se concede l'Allow al principal (vedi nota) → ALLOW
 Step 4: Identity-based policy (User + Group + Role)
-        ↓ se nessun Allow → continua
+        ↓ serve almeno un Allow
 Step 5: IAM Permission Boundary
-        ↓ se Allow in boundary
-Step 6: Session Policy (se STS AssumeRole)
-        ↓ se Allow in session policy
+        ↓ serve un Allow nel boundary
+Step 6: Session Policy (se sessione STS con policy inline/managed passata)
+        ↓ serve un Allow nella session policy
 ALLOW
 
 Se nessun Allow trovato → DENY implicito
 ```
 
-**Regola fondamentale: Explicit DENY sempre vince** — anche se c'è un Allow altrove. Le **SCP** (Service Control Policy — policy AWS Organizations che definiscono il massimo dei permessi consentiti agli account figlio) agiscono come filtro a monte di tutte le policy identity-based.
+**Regola fondamentale: Explicit DENY sempre vince** — anche se c'è un Allow altrove. Le **SCP** (Service Control Policy — policy AWS Organizations che definiscono il massimo dei permessi consentiti agli account figlio) e le **RCP** (Resource Control Policy — analoghe, ma limitano i permessi sulle *risorse* dell'organizzazione) agiscono come filtro a monte: non concedono nulla, restringono soltanto.
+
+!!! note "Resource-based policy: same-account vs cross-account"
+    - **Stesso account:** una resource policy che nomina direttamente un *IAM user* o l'ARN di una *sessione* di role concede l'accesso anche senza Allow identity-based, e **non** è limitata da Permission Boundary né session policy. Se nomina invece il *role* (non la sessione) o l'account root, serve comunque anche l'Allow identity-based.
+    - **Cross-account:** servono **entrambi** gli Allow — resource policy nell'account di destinazione *e* identity policy nell'account del chiamante.
 
 ---
 
@@ -120,6 +125,8 @@ Le **Condition** permettono di applicare policy solo in determinati contesti, re
 }
 
 // Restrict to specific source IP
+// Nota: aws:SourceIp non vale per richieste via VPC endpoint (usa aws:SourceVpc/aws:SourceVpce)
+// né per chiamate fatte da servizi AWS per tuo conto (usa aws:ViaAWSService nei Deny)
 {
   "Effect": "Allow",
   "Action": "s3:*",
@@ -201,8 +208,7 @@ Il problema che risolve: con un approccio tradizionale (RBAC — Role-Based Acce
       "Effect": "Allow",
       "Action": [
         "ec2:StartInstances",
-        "ec2:StopInstances",
-        "ec2:DescribeInstances"
+        "ec2:StopInstances"
       ],
       "Resource": "*",
       "Condition": {
@@ -211,6 +217,13 @@ Il problema che risolve: con un approccio tradizionale (RBAC — Role-Based Acce
           "ec2:ResourceTag/Team": "${aws:PrincipalTag/Team}"
         }
       }
+    },
+    {
+      // Le azioni Describe* non supportano resource-level permissions:
+      // con la Condition sul tag sarebbero sempre negate
+      "Effect": "Allow",
+      "Action": "ec2:DescribeInstances",
+      "Resource": "*"
     },
     {
       "Effect": "Allow",
@@ -226,6 +239,9 @@ Il problema che risolve: con un approccio tradizionale (RBAC — Role-Based Acce
   ]
 }
 ```
+
+!!! warning "Attenzione"
+    Con ABAC chi può modificare i tag controlla gli accessi. Limita `ec2:CreateTags`/`ec2:DeleteTags` (e `iam:TagUser`/`iam:TagRole` per i tag dei principal) con Condition su `aws:TagKeys` e `aws:ResourceTag`, altrimenti un utente può riassegnarsi il tag `Team` di un altro team. Verifica inoltre che il servizio supporti le tag condition keys (tabella *Actions, resources, and condition keys* della Service Authorization Reference).
 
 **Vantaggio ABAC vs RBAC:**
 - RBAC (Role-Based Access Control): devi creare/aggiornare policy per ogni nuovo progetto/team
@@ -277,7 +293,7 @@ aws iam put-role-permissions-boundary \
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["iam:CreateRole", "iam:AttachRolePolicy"],
+      "Action": ["iam:CreateRole", "iam:PutRolePermissionsBoundary"],
       "Resource": "arn:aws:iam::123456789012:role/*",
       "Condition": {
         "StringEquals": {
@@ -285,10 +301,34 @@ aws iam put-role-permissions-boundary \
           "iam:PermissionsBoundary": "arn:aws:iam::123456789012:policy/DeveloperBoundary"
         }
       }
+    },
+    {
+      // AttachRolePolicy non supporta la key iam:PermissionsBoundary:
+      // va concesso in uno statement separato (senza quella Condition)
+      "Effect": "Allow",
+      "Action": ["iam:AttachRolePolicy", "iam:PutRolePolicy"],
+      "Resource": "arn:aws:iam::123456789012:role/*"
+    },
+    {
+      // Impedisce di rimuovere il boundary o di modificare la policy del boundary stesso
+      "Effect": "Deny",
+      "Action": [
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicy",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion"
+      ],
+      "Resource": [
+        "arn:aws:iam::123456789012:role/*",
+        "arn:aws:iam::123456789012:policy/DeveloperBoundary"
+      ]
     }
   ]
 }
 ```
+
+Senza lo statement di Deny il pattern è aggirabile: chi può rimuovere il boundary o riscrivere `DeveloperBoundary` annulla la delega controllata. In produzione restringi anche `Resource` a un prefisso di role (es. `role/app-*`) e a un `Path`, così gli sviluppatori non toccano role di altri team o di piattaforma.
 
 ---
 
@@ -316,7 +356,7 @@ Il vantaggio principale rispetto alle policy identity-based è l'accesso **cross
       ]
     },
     {
-      "Sid": "DenyPublicAccess",
+      "Sid": "DenyInsecureTransport",
       "Effect": "Deny",
       "Principal": "*",
       "Action": "s3:GetObject",
@@ -413,8 +453,8 @@ aws sts get-session-token \
 ```
 
 **Token STS temporanei — caratteristiche:**
-- Scadono dopo 15 minuti fino a 12 ore (AssumeRole) o 36 ore (GetSessionToken)
-- Non possono essere revocati prima della scadenza (solo IAM policy può rifiutarli)
+- Durata: da 15 minuti al *max session duration* del role (1–12 ore, default 1 ora) per AssumeRole; role chaining (role che assume un altro role) limitato a 1 ora; fino a 36 ore per GetSessionToken (IAM user; 1 ora per root)
+- Non esiste "delete" della singola credenziale: dalla console *Revoke active sessions* aggiunge al role una policy `Deny` con `aws:TokenIssueTime` precedente a ora, invalidando le sessioni già emesse; le nuove sessioni restano valide
 - Sono composti da: `AccessKeyId`, `SecretAccessKey`, `SessionToken`
 - Devono essere passati tutti e tre nelle AWS API calls
 
@@ -430,8 +470,9 @@ Con OIDC, GitHub emette un token firmato che certifica l'identità del workflow 
 # 1. Creare OIDC Identity Provider in IAM
 aws iam create-open-id-connect-provider \
     --url https://token.actions.githubusercontent.com \
-    --client-id-list sts.amazonaws.com \
-    --thumbprint-list "6938fd4d98bab03faadb97b34396831e3780aea1"
+    --client-id-list sts.amazonaws.com
+# Il thumbprint non è più richiesto: per GitHub AWS valida la catena TLS
+# con la propria libreria di CA radice attendibili (--thumbprint-list opzionale)
 ```
 
 ```json
@@ -457,6 +498,9 @@ aws iam create-open-id-connect-provider \
 }
 ```
 
+!!! warning "Attenzione"
+    `repo:company/myapp:*` accetta qualsiasi branch, tag, pull request ed environment del repo. Per role con permessi di deploy restringi il `sub` a un ref o environment preciso (es. `repo:company/myapp:ref:refs/heads/main` oppure `repo:company/myapp:environment:production`), altrimenti qualunque PR/branch può assumere il role. Senza Condition su `sub` il role è assumibile da *qualsiasi* repo GitHub.
+
 ```yaml
 # 3. GitHub Actions workflow
 jobs:
@@ -465,7 +509,7 @@ jobs:
       id-token: write    # OIDC token
       contents: read
     steps:
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: arn:aws:iam::123456789012:role/GitHubActionsRole
           aws-region: eu-central-1
@@ -511,9 +555,9 @@ Il **IAM Policy Simulator** nella Console permette di testare policy prima di ap
 
 **Sintomo:** L'utente riceve `AccessDenied` ma la policy identity-based contiene un Allow per l'azione richiesta.
 
-**Causa:** Uno degli strati superiori nella evaluation logic sta bloccando la chiamata: SCP, Permission Boundary, o Session Policy. Basta che uno strato non abbia un Allow corrispondente perché il risultato finale sia Deny.
+**Causa:** Un `Deny` esplicito in una qualsiasi policy (anche resource-based), oppure uno degli strati nella evaluation logic non ha un Allow corrispondente: SCP/RCP, Permission Boundary o Session Policy. Basta uno strato senza Allow perché il risultato finale sia Deny. In cross-account manca spesso l'Allow su uno dei due lati.
 
-**Soluzione:** Verificare ogni strato nell'ordine di evaluation. Controllare prima SCP tramite AWS Organizations, poi Permission Boundary, poi Session Policy.
+**Soluzione:** Cercare prima Deny espliciti, poi verificare ogni strato nell'ordine di evaluation: SCP/RCP tramite AWS Organizations, Permission Boundary, Session Policy. Il messaggio di errore indica spesso il tipo di policy che nega ("...with an explicit deny in a service control policy").
 
 ```bash
 # Simulare la policy dell'utente con contesto completo
@@ -545,11 +589,11 @@ aws organizations list-policies-for-target \
 # Test con contesto: verifica che la Condition s3:prefix funzioni
 aws iam simulate-principal-policy \
     --policy-source-arn arn:aws:iam::123456789012:role/DevRole \
-    --action-names s3:GetObject \
-    --resource-arns "arn:aws:s3:::my-bucket/dev/file.txt" \
+    --action-names s3:ListBucket \
+    --resource-arns "arn:aws:s3:::my-bucket" \
     --context-entries '[{
         "ContextKeyName": "s3:prefix",
-        "ContextKeyValues": ["dev/file.txt"],
+        "ContextKeyValues": ["dev/"],
         "ContextKeyType": "string"
     }]'
 ```
@@ -589,9 +633,9 @@ aws sts assume-role \
 
 **Causa possibile A:** La Trust Policy non ha la Condition corretta su `sub` (es. branch sbagliato, repo sbagliato, o pattern `StringLike` troppo restrittivo).
 **Causa possibile B:** Il workflow manca del permesso `id-token: write`.
-**Causa possibile C:** Il thumbprint dell'OIDC provider è scaduto o non corrisponde.
+**Causa possibile C:** L'OIDC provider non esiste nell'account, o la `aud` nella Trust Policy non coincide con quella del token (default `sts.amazonaws.com`). (Il thumbprint non è più causa tipica: per GitHub AWS non lo verifica più.)
 
-**Soluzione:** Verificare la Trust Policy e i log del workflow. Il claim `sub` ha il formato `repo:<owner>/<repo>:ref:refs/heads/<branch>`.
+**Soluzione:** Verificare la Trust Policy e i log del workflow. Il claim `sub` ha il formato `repo:<owner>/<repo>:ref:refs/heads/<branch>` (oppure `:environment:<name>`, `:pull_request`).
 
 ```bash
 # Verificare la Trust Policy del role GitHub Actions
@@ -601,10 +645,9 @@ aws iam get-role --role-name GitHubActionsRole \
 # Verificare che l'OIDC provider esista
 aws iam list-open-id-connect-providers
 
-# Aggiornare thumbprint OIDC provider se scaduto
-aws iam update-open-id-connect-provider-thumbprint \
-    --open-id-connect-provider-arn arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com \
-    --thumbprint-list "6938fd4d98bab03faadb97b34396831e3780aea1"
+# Verificare audience/thumbprint registrati sul provider
+aws iam get-open-id-connect-provider \
+    --open-id-connect-provider-arn arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com
 ```
 
 ---
