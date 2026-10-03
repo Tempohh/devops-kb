@@ -7,7 +7,7 @@ search_keywords: [Azure Event Hubs, Kafka Azure, streaming Azure, partition Even
 parent: cloud/azure/messaging/_index
 related: [cloud/azure/messaging/service-bus-event-grid, cloud/azure/storage/blob-storage, cloud/azure/monitoring/monitor-log-analytics]
 official_docs: https://learn.microsoft.com/azure/event-hubs/
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -330,7 +330,9 @@ auto.offset.reset=latest
 ```
 
 **Limitazioni API Kafka su Event Hubs:**
-- Kafka Transactions e Kafka Streams: supporto limitato agli SKU Premium/Dedicated <!-- REVIEW: verificare stato GA di Kafka Transactions e Kafka Streams per SKU su learn.microsoft.com/azure/event-hubs/apache-kafka-frequently-asked-questions -->
+- Kafka Transactions e Kafka Streams: **public preview** (non GA) e solo negli SKU Premium/Dedicated (verificato su learn.microsoft.com, doc aggiornata 2026-02)
+- Compressione client-side (`compression.type`): solo `gzip`, solo Premium/Dedicated
+- Idempotent producer/consumer supportati
 - Nessuna auto-creazione dei topic con le impostazioni di default: creare prima l'Event Hub (o via Kafka AdminClient dove supportato)
 - I *Kafka consumer group* (offset gestiti dal broker) sono distinti dai Consumer Group nativi di Event Hubs usati dagli SDK AMQP; i limiti per SKU della tabella riguardano questi ultimi
 - Retention e partition si configurano sull'Event Hub, non con le proprietà Kafka del topic
