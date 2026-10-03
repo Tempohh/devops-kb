@@ -7,9 +7,10 @@ search_keywords: [Azure VPN Gateway, Site-to-Site VPN, Point-to-Site VPN P2S, Ex
 parent: cloud/azure/networking/_index
 related: [cloud/azure/networking/vnet, cloud/azure/networking/load-balancing]
 official_docs: https://learn.microsoft.com/azure/vpn-gateway/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Connettività Ibrida Azure
@@ -19,30 +20,41 @@ last_updated: 2026-03-29
 | Soluzione | Throughput | Latenza | SLA | Crittografia | Use Case |
 |-----------|-----------|---------|-----|--------------|---------|
 | **VPN Gateway S2S** | fino a 10 Gbps | variabile (Internet) | 99.95% | IPSec/IKE | Uffici, branch office |
-| **ExpressRoute** | 50 Mbps - 100 Gbps | bassa, prevedibile | 99.95% | No (layer 3) | Enterprise, dati sensibili |
-| **ExpressRoute + VPN** | - | ExpressRoute + fallback | 99.99%+ | IPSec | Mission critical + DR |
+| **ExpressRoute** | 50 Mbps - 100 Gbps | bassa, prevedibile | 99.95% | Non di default (MACsec su ExpressRoute Direct, o IPsec sopra ER) | Enterprise, dati sensibili |
+| **ExpressRoute + VPN** | - | ExpressRoute + fallback | dipende dalla topologia <!-- REVIEW: verificare SLA 99.99% (richiede topologia Maximum Resiliency) --> | IPSec | Mission critical + DR |
 | **Virtual WAN** | fino a 20 Gbps/branch | ottimizzato | 99.95% | IPSec/SD-WAN | Multi-branch, SDWAN |
 
 ---
 
 ## VPN Gateway
 
+!!! note "Termini usati in questa sezione"
+    **GatewaySubnet**: subnet riservata (nome obbligatorio, consigliato almeno /27) dove Azure inietta le VM del gateway. **Local Network Gateway (LNG)**: oggetto Azure che descrive il router on-premises (IP pubblico + prefissi). **IKE/IPsec**: protocolli di negoziazione chiavi e cifratura del tunnel. **BGP/ASN**: protocollo di routing dinamico e numero di sistema autonomo; con BGP le route si propagano senza prefissi statici, abilitando failover automatico e multi-sito.
+
+!!! warning "SKU legacy in dismissione"
+    Lo SKU `Basic` e gli SKU non-AZ `VpnGw1-5` sono deprecati: per nuovi gateway usare `VpnGw1AZ-5AZ` (zone-redundant) con IP pubblici **Standard** statici. <!-- REVIEW: verificare date esatte di retirement SKU Basic/non-AZ e percorsi di migrazione -->
+
 ### Site-to-Site VPN
 
 Connette la rete on-premises ad Azure tramite tunnel IPSec/IKE su Internet:
 
 ```bash
+# Nota: commenti sopra i comandi; un commento dopo "\" rompe la continuazione di riga.
+
 # 1. Creare VPN Gateway (richiede GatewaySubnet nella VNet)
+#    --sku: usare VpnGw1AZ-VpnGw5AZ (SKU non-AZ e Basic sono legacy)
+#    --vpn-type: RouteBased (BGP, multi-site, IKEv2); PolicyBased solo su Basic (legacy)
+#    --public-ip-addresses: due IP Standard = active-active (HA, due tunnel per sito)
 az network vnet-gateway create \
     --resource-group myapp-rg \
     --name production-vpngw \
     --vnet production-vnet \
     --gateway-type Vpn \
-    --sku VpnGw2 \                     # Basic, VpnGw1-5, VpnGw1AZ-5AZ
+    --sku VpnGw2AZ \
     --vpn-gateway-generation Generation2 \
-    --vpn-type RouteBased \            # RouteBased (BGP, multi-site) o PolicyBased (legacy)
-    --public-ip-address vpngw-pip1 \
-    --public-ip-address-2 vpngw-pip2   # Active-Active per HA (due IP pubblici)
+    --vpn-type RouteBased \
+    --asn 65515 \
+    --public-ip-addresses vpngw-pip1 vpngw-pip2
 
 # 2. Creare Local Network Gateway (rappresenta la rete on-premises)
 az network local-gateway create \
@@ -75,9 +87,9 @@ az network vpn-connection show \
 
 | SKU | Max throughput | Max tunnel S2S | Zone-redundant |
 |-----|---------------|----------------|----------------|
-| VpnGw1 | 650 Mbps | 30 | No |
-| VpnGw2 | 1 Gbps | 30 | No |
-| VpnGw3 | 1.25 Gbps | 30 | No |
+| VpnGw1 (legacy) | 650 Mbps | 30 | No |
+| VpnGw2 (legacy) | 1 Gbps | 30 | No |
+| VpnGw3 (legacy) | 1.25 Gbps | 30 | No |
 | VpnGw1AZ | 650 Mbps | 30 | **Sì** |
 | VpnGw2AZ | 1 Gbps | 30 | **Sì** |
 | VpnGw5AZ | 10 Gbps | 100 | **Sì** |
@@ -94,14 +106,19 @@ az network vnet-gateway update \
     --address-prefixes 172.16.0.0/24 \    # pool IP per client VPN
     --client-protocol OpenVPN IkeV2        # OpenVPN (cross-platform), IkeV2 (Windows/Mac nativo)
 
-# Autenticazione con Azure AD (Entra ID) — più comoda per Azure AD joined devices
+# Autenticazione con Microsoft Entra ID (ex Azure AD): solo OpenVPN, nessun
+# certificato da distribuire, supporta Conditional Access/MFA.
+# --aad-audience = App ID dell'app "Azure VPN Client" (varia per cloud/versione app)
 az network vnet-gateway update \
     --resource-group myapp-rg \
     --name production-vpngw \
     --aad-tenant "https://login.microsoftonline.com/$TENANT_ID" \
-    --aad-audience "41b23e61-6c1e-4545-b367-cd054e0ed4b4" \    # Azure VPN App ID fisso
+    --aad-audience "41b23e61-6c1e-4545-b367-cd054e0ed4b4" \
     --aad-issuer "https://sts.windows.net/$TENANT_ID/"
 ```
+
+<!-- REVIEW: verificare App ID audience Entra ID corrente (esiste anche l'app "Microsoft-registered") e se serve --vpn-auth-type -->
+
 
 ---
 
@@ -123,12 +140,14 @@ Router ─── Cross-connect ──► ExpressRoute Location ──► Microso
 | **Dedicated** | 50 Mbps - 10 Gbps | Circuito dedicato tramite provider (AT&T, Equinix, ecc.) |
 | **ExpressRoute Direct** | 10 Gbps, 100 Gbps | Connessione diretta al backbone Microsoft |
 
-### Virtual Network Interface (VIF)
+### Peering ExpressRoute
 
-| VIF | Descrizione |
-|-----|-------------|
+Ogni circuito trasporta uno o più *peering* (sessioni BGP separate; l'equivalente AWS è la VIF):
+
+| Peering | Descrizione |
+|---------|-------------|
 | **Private Peering** | Accesso a risorse Azure (VM, VNet) — IP privati |
-| **Microsoft Peering** | Accesso a Microsoft 365, Azure Public Services (Storage, SQL) — IP pubblici |
+| **Microsoft Peering** | Accesso a Microsoft 365 e endpoint pubblici dei servizi PaaS Azure (Storage, SQL) — IP pubblici, richiede NAT con prefissi pubblici del cliente. L'ex *Azure Public Peering* è deprecato |
 
 ```bash
 # Creare circuito ExpressRoute
@@ -139,7 +158,7 @@ az network express-route create \
     --peering-location "Milan" \              # location del provider
     --provider "Equinix" \
     --sku-family MeteredData \                # MeteredData o UnlimitedData
-    --sku-tier Standard \                     # Standard o Premium (Global Reach, più prefissi)
+    --sku-tier Standard \                     # Standard o Premium (Premium: cross-geopolitical region, più route/VNet)
     --query serviceKey
 
 # Fornire il serviceKey al provider per provisioning fisico del circuito
@@ -216,7 +235,7 @@ az network vpn-gateway create \
 # Virtual WAN gestisce automaticamente:
 # - Routing tra spoke VNet
 # - Routing tra branch e VNet
-# - Routing tra branch e Internet (via Azure Firewall nell'hub)
+# - Routing tra branch e Internet solo se l'hub è "secured" (Azure Firewall Manager + routing intent)
 ```
 
 ---
@@ -236,15 +255,16 @@ az network vpn-gateway create \
 az network vpn-connection show \
     --resource-group myapp-rg \
     --name on-premises-connection \
-    --query "{status:connectionStatus, errorMessage:ingressBytesTransferred}"
+    --query "{status:connectionStatus, ingress:ingressBytesTransferred, egress:egressBytesTransferred}"
 
-# Ottenere log diagnostici della connessione
+# Generare lo script di configurazione del dispositivo on-premises
+# (confrontare parametri IKE/IPsec con quelli effettivi del device)
 az network vpn-connection show-device-config-script \
     --resource-group myapp-rg \
     --name on-premises-connection \
     --vendor Cisco --device-family ISR --firmware-version IOS-12.x
 
-# Avviare packet capture sul VPN Gateway per debug IKE
+# Avviare packet capture sul VPN Gateway per debug IKE (poi stop-packet-capture con SAS URL)
 az network vnet-gateway start-packet-capture \
     --resource-group myapp-rg \
     --name production-vpngw
@@ -294,7 +314,7 @@ az network express-route list-route-tables \
 
 **Sintomo:** Le VM nelle VNet spoke non raggiungono la rete on-premises nonostante il tunnel VPN o ExpressRoute sia attivo e il BGP mostri peers connessi.
 
-**Causa:** Route mancanti nella route table del gateway, policy BGP che filtrano i prefissi, oppure la VNet non ha la propagazione delle route del gateway abilitata.
+**Causa:** Route mancanti nella route table del gateway, policy BGP che filtrano i prefissi, propagazione delle route del gateway disabilitata, oppure (hub-spoke) peering VNet senza *Allow gateway transit* sull'hub e *Use remote gateways* sullo spoke: senza questi flag lo spoke non apprende le route del gateway dell'hub.
 
 **Soluzione:**
 
@@ -362,6 +382,10 @@ az network vnet-gateway show \
 ```
 
 ---
+
+## Lacune note
+
+<!-- REVIEW: manca spiegazione di ExpressRoute FastPath e ExpressRoute Direct/MACsec (citati in search_keywords ma non trattati); manca guida di scelta VPN vs ExpressRoute vs vWAN e coesistenza ER+VPN per failover -->
 
 ## Riferimenti
 
