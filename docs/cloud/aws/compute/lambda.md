@@ -2,14 +2,15 @@
 title: "AWS Lambda — Serverless"
 slug: lambda
 category: cloud
-tags: [aws, lambda, serverless, functions, triggers, concurrency, cold-start, layers, destinations, event-source-mapping, lambda-at-edge, extensions, power-tuning]
-search_keywords: [AWS Lambda, serverless, function, trigger, event source, SQS trigger, API Gateway Lambda, SNS Lambda, S3 Lambda, DynamoDB Streams, Kinesis Lambda, EventBridge, concurrency, reserved concurrency, provisioned concurrency, cold start, warm start, Lambda layers, Lambda extensions, Lambda destinations, Lambda@Edge, CloudFront Functions, Lambda power tuning, SnapStart, Lambda VPC, execution role, function URL]
+tags: [aws, lambda, serverless, functions, triggers, concurrency, cold-start, layers, destinations, event-source-mapping, power-tuning]
+search_keywords: [AWS Lambda, serverless, function, trigger, event source, SQS trigger, API Gateway Lambda, SNS Lambda, S3 Lambda, DynamoDB Streams, Kinesis Lambda, EventBridge, concurrency, reserved concurrency, provisioned concurrency, cold start, warm start, Lambda layers, Lambda destinations, Lambda power tuning, SnapStart, Lambda VPC, execution role, function URL, DLQ]
 parent: cloud/aws/compute/_index
 related: [cloud/aws/messaging/sqs-sns, cloud/aws/messaging/eventbridge-kinesis, cloud/aws/networking/cloudfront, cloud/aws/storage/s3]
 official_docs: https://docs.aws.amazon.com/lambda/latest/dg/
-status: complete
+status: needs-review
 difficulty: intermediate
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # AWS Lambda — Serverless
@@ -29,7 +30,8 @@ Il modello di esecuzione è **event-driven**: Lambda non gira continuamente in a
 - Processi che richiedono più di 15 minuti → valuta ECS/Fargate o EC2
 - Applicazioni con stato persistente in memoria → Lambda è stateless per definizione
 - Workload con traffico costante e alto volume → EC2 o container sono più economici
-- Applicazioni che richiedono accesso a filesystem POSIX → ECS con EFS
+- Applicazioni che richiedono filesystem locale persistente o molto grande → Lambda può montare EFS, ma `/tmp` è effimero e il mount EFS in VPC aggiunge latenza; per I/O intensivo valuta ECS/EC2
+- Workflow lunghi con stato → orchestra con Step Functions (o Lambda durable functions, vedi nota in Fondamentali) invece di una singola funzione
 
 ```
 Lambda Model
@@ -48,22 +50,31 @@ Lambda Model
 
 ## Fondamentali
 
-**Limiti (al 2025):**
+**Limiti (fine 2025 — verificare su [Lambda quotas](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html)):**
 
 | Parametro | Limite |
 |-----------|--------|
-| Timeout massimo | 15 minuti |
+| Timeout massimo | 15 minuti (default alla creazione: 3 s) |
 | Memoria | 128 MB - 10 GB |
 | vCPU | Proporzionale alla memoria (6 vCPU a 10 GB) |
 | Storage temporaneo (/tmp) | 512 MB - 10 GB |
-| Package size (zip) | 50 MB (zipped) / 250 MB (unzipped) |
-| Package size (container) | 10 GB |
-| Payload sincrono | 6 MB (request) / 6 MB (response) |
-| Payload asincrono | 256 KB |
-| Concurrency default | 1000 per account per Region |
-| Durata ambiente | 15 minuti (poi cold start alla prossima invocazione) |
+| Package size (zip) | 50 MB (zipped, upload diretto) / 250 MB (unzipped, **layer inclusi**) |
+| Package size (container) | 10 GB (immagine non compressa) |
+| Payload sincrono | 6 MB (request) / 6 MB (response); con response streaming fino a 200 MB (Function URL) |
+| Payload asincrono | 1 MB (era 256 KB fino al 2025) |
+| Concurrency default | 1000 per account per Region (account nuovi: spesso molto meno, verificare con `get-account-settings`) |
+| Scaling rate | +1000 ambienti ogni 10 s per funzione, finché non si raggiunge il limite account |
 
-**Runtime supportati:** Node.js 20/22, Python 3.11/3.12/3.13, Java 17/21, .NET 8, Ruby 3.2/3.3, Go (custom runtime), Custom Runtime (Amazon Linux 2023)
+!!! note "Vita dell'execution environment"
+    Un ambiente può restare caldo per minuti/ore ed essere riusato da più invocazioni, ma AWS **non garantisce** nessuna durata: può essere riciclato in qualsiasi momento (anche dopo ~poche ore al massimo). Non farci affidamento per cache o stato; il cold start si ripresenta ad ogni nuovo ambiente (scale-out, deploy, riciclo).
+
+**Runtime supportati (fine 2025):** Node.js 20/22/24, Python 3.11–3.14, Java 17/21/25, .NET 8, Ruby 3.2–3.4, Go e altri linguaggi compilati via OS-only runtime `provided.al2023`. I runtime vengono deprecati periodicamente (es. Node.js 18, Python 3.8-3.9): controlla la [lista aggiornata](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html) prima di scegliere.
+
+!!! info "Novità recenti (re:Invent 2025)"
+    **Lambda durable functions** (workflow con checkpoint/replay fino a lunga durata, in codice) e **Lambda Managed Instances** (funzioni su istanze EC2 gestite, per carichi costanti) ampliano i casi d'uso oltre il modello classico. Non sono trattate qui.
+    <!-- REVIEW: verificare disponibilità/regioni/pricing di durable functions e Managed Instances ed eventualmente aggiungere sezioni dedicate -->
+
+**Architetture:** `arm64` (Graviton) costa ~20% in meno per GB-secondo e offre in genere miglior price-performance (fino a ~34% secondo AWS); `x86_64` resta necessario se le dipendenze native non hanno build ARM.
 
 ---
 
@@ -82,7 +93,8 @@ aws iam create-role \
         }]
     }'
 
-# Policy base: CloudWatch Logs + VPC networking
+# Policy base: solo CloudWatch Logs
+# (per Lambda in VPC serve AWSLambdaVPCAccessExecutionRole, che include anche i permessi ENI)
 aws iam attach-role-policy \
     --role-name lambda-basic-role \
     --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
@@ -99,10 +111,12 @@ aws lambda create-function \
     --zip-file fileb://function.zip \
     --timeout 30 \
     --memory-size 256 \
-    --environment Variables='{DB_HOST=rds.company.com,ENV=prod}' \
-    --ephemeral-storage Size=1024 \        # /tmp storage in MB
-    --architectures arm64 \               # arm64 per Graviton (20% più economico)
+    --environment "Variables={DB_HOST=rds.company.com,ENV=prod}" \
+    --ephemeral-storage Size=1024 \
+    --architectures arm64 \
     --description "API handler"
+# --ephemeral-storage: dimensione di /tmp in MB
+# --architectures arm64: Graviton, ~20% più economico per GB-secondo
 
 # Aggiornare codice
 aws lambda update-function-code \
@@ -117,14 +131,10 @@ aws lambda invoke \
     response.json
 cat response.json
 
-# Invocare asincrono
-aws lambda invoke-async \       # DEPRECATED — usare --invocation-type Event
-    --function-name MyFunction \
-    --invoke-args payload.json
-
+# Invocare in modo asincrono (--invocation-type Event: risponde 202 subito, retry gestiti da Lambda)
 aws lambda invoke \
     --function-name MyFunction \
-    --invocation-type Event \   # Asincrono
+    --invocation-type Event \
     --payload '{"key":"value"}' \
     --cli-binary-format raw-in-base64-out \
     /dev/null
@@ -167,7 +177,7 @@ def lambda_handler(event, context):
         }
     except Exception as e:
         logger.error(f"Error: {e}", exc_info=True)
-        raise   # Lambda ritentar se configurato
+        raise   # rilancia: Lambda ritenta se configurato (invocazioni async / event source mapping)
 
 def process(event):
     # business logic
@@ -206,7 +216,7 @@ La **concurrency** di Lambda è il numero di invocazioni in esecuzione simultane
 
 Esistono due meccanismi per gestire la concurrency:
 - **Reserved Concurrency**: riserva un numero fisso di esecuzioni concorrenti per una funzione, garantendo che non venga "soffocata" dal traffico di altre funzioni — ma allo stesso tempo ponendo un tetto massimo (utile per proteggere sistemi a valle come un database).
-- **Provisioned Concurrency**: pre-inizializza un numero fisso di ambienti di esecuzione, eliminando completamente il cold start per quella funzione (a costo di pagare per il provisioning anche in assenza di traffico).
+- **Provisioned Concurrency**: pre-inizializza un numero fisso di ambienti di esecuzione, eliminando il cold start per le invocazioni che rientrano in quel numero (a costo di pagare per il provisioning anche in assenza di traffico). Oltre la soglia le invocazioni usano ambienti on-demand, quindi con cold start. Si applica a una versione o a un alias, mai a `$LATEST`.
 
 ```
 Lambda Concurrency
@@ -230,10 +240,13 @@ aws lambda put-function-concurrency \
 # Elimina cold start — paghi per le ore di provisioning anche se non usi
 aws lambda put-provisioned-concurrency-config \
     --function-name MyFunction \
-    --qualifier 1 \                    # versione o alias
+    --qualifier 1 \
     --provisioned-concurrent-executions 50
+# --qualifier: versione o alias
 
 # Application Auto Scaling per Provisioned Concurrency
+# (poi serve anche una scaling policy: put-scaling-policy con target tracking
+#  sulla metrica LambdaProvisionedConcurrencyUtilization)
 aws application-autoscaling register-scalable-target \
     --service-namespace lambda \
     --resource-id function:MyFunction:prod \
@@ -245,10 +258,10 @@ aws application-autoscaling register-scalable-target \
 **Cold Start:** il tempo di inizializzazione dell'ambiente Lambda (download codice, inizializzazione runtime, esecuzione codice fuori dall'handler).
 
 **Ridurre il Cold Start:**
-- Usare runtime veloci (Node.js, Python)
-- Minimizzare dimensione package
-- Usare arm64 (Graviton) — ~30% più veloce
-- **SnapStart** per Java: salva snapshot RAM dell'ambiente dopo init → resume <1s
+- Usare runtime con init leggero (Node.js, Python); evitare framework pesanti (es. Spring completo) o usare SnapStart
+- Minimizzare dimensione package e codice eseguito fuori dall'handler (lazy init di ciò che non serve sempre)
+- Più memoria = più CPU: spesso abbassa anche l'`Init Duration` (verificare con Power Tuning)
+- **SnapStart** (Java, Python, .NET): snapshot dell'ambiente dopo la fase init, ripristinato al posto di rieseguirla
 - Provisioned Concurrency per funzioni latency-sensitive
 
 ---
@@ -261,9 +274,25 @@ aws application-autoscaling register-scalable-target \
 # Function URL (endpoint HTTP pubblico diretto, senza API Gateway)
 aws lambda create-function-url-config \
     --function-name MyFunction \
-    --auth-type NONE \                  # NONE o AWS_IAM
+    --auth-type NONE \
     --cors '{"AllowOrigins": ["*"], "AllowMethods": ["GET","POST"]}'
+# --auth-type: NONE (pubblico) oppure AWS_IAM
 # Restituisce: https://xxxx.lambda-url.eu-central-1.on.aws/
+
+# Con auth NONE servono le resource-based policy che rendono la URL pubblica
+# (dal 2025 per le nuove URL servono entrambe le azioni, non solo InvokeFunctionUrl)
+aws lambda add-permission \
+    --function-name MyFunction \
+    --statement-id url-public-url \
+    --action lambda:InvokeFunctionUrl \
+    --principal "*" \
+    --function-url-auth-type NONE
+aws lambda add-permission \
+    --function-name MyFunction \
+    --statement-id url-public-invoke \
+    --action lambda:InvokeFunction \
+    --principal "*" \
+    --invoked-via-function-url
 
 # Con auth IAM (per chiamate inter-servizio sicure)
 aws lambda create-function-url-config \
@@ -278,10 +307,16 @@ aws lambda create-function-url-config \
 aws lambda create-event-source-mapping \
     --function-name MyFunction \
     --event-source-arn arn:aws:sqs:eu-central-1:123456789012:MyQueue \
-    --batch-size 10 \                   # fino a 10 messaggi per invocazione
-    --maximum-batching-window-in-seconds 30 \   # attendi fino a 30s per riempire batch
-    --function-response-types '["ReportBatchItemFailures"]'   # partial batch failure
+    --batch-size 10 \
+    --maximum-batching-window-in-seconds 30 \
+    --function-response-types '["ReportBatchItemFailures"]'
+# --batch-size: fino a 10 messaggi per invocazione (FIFO: max 10; standard: fino a 10.000 con batching window)
+# --maximum-batching-window-in-seconds: attendi fino a 30 s per riempire il batch (max 300)
+# ReportBatchItemFailures: abilita il partial batch failure (vedi handler sotto)
 ```
+
+!!! warning "SQS: visibility timeout e DLQ"
+    Imposta il **visibility timeout** della coda ad almeno 6× il timeout della funzione, altrimenti i messaggi riappaiono mentre sono ancora in elaborazione. La **DLQ va configurata sulla coda sorgente** (redrive policy con `maxReceiveCount`), non sulla Lambda: per le sorgenti SQS la DLQ/Destination della funzione non si applica.
 
 ```python
 # Gestione parziale del batch (non fallire l'intero batch se alcuni messaggi falliscono)
@@ -302,7 +337,17 @@ def lambda_handler(event, context):
 ### S3 Event Notification
 
 ```bash
-# Configurare S3 per notificare Lambda su PutObject
+# 1) PRIMA la permission: S3 verifica di poter invocare la funzione quando salvi la notifica,
+#    altrimenti put-bucket-notification-configuration fallisce
+aws lambda add-permission \
+    --function-name ProcessUpload \
+    --statement-id s3-invoke \
+    --action lambda:InvokeFunction \
+    --principal s3.amazonaws.com \
+    --source-arn arn:aws:s3:::my-bucket \
+    --source-account 123456789012
+
+# 2) Configurare S3 per notificare Lambda su PutObject
 aws s3api put-bucket-notification-configuration \
     --bucket my-bucket \
     --notification-configuration '{
@@ -317,16 +362,10 @@ aws s3api put-bucket-notification-configuration \
             }
         }]
     }'
-
-# Aggiungere permission Lambda per S3
-aws lambda add-permission \
-    --function-name ProcessUpload \
-    --statement-id s3-invoke \
-    --action lambda:InvokeFunction \
-    --principal s3.amazonaws.com \
-    --source-arn arn:aws:s3:::my-bucket \
-    --source-account 123456789012
 ```
+
+!!! warning "Loop ricorsivo"
+    Se la funzione scrive nello stesso bucket/prefisso che la innesca, crea un loop infinito (e costi). Usa prefissi distinti o un bucket di output separato.
 
 ### DynamoDB Streams / Kinesis
 
@@ -336,15 +375,16 @@ aws lambda create-event-source-mapping \
     --function-name ProcessDDBStream \
     --event-source-arn arn:aws:dynamodb:...:table/MyTable/stream/2026-01-01T00:00:00.000 \
     --batch-size 100 \
-    --starting-position LATEST \        # LATEST, TRIM_HORIZON, AT_TIMESTAMP
-    --bisect-batch-on-function-error true \   # divide batch su errore
+    --starting-position LATEST \
+    --bisect-batch-on-function-error \
     --maximum-retry-attempts 3 \
-    --destination-config '{
-        "OnFailure": {
-            "Destination": "arn:aws:sqs:...:DLQ"    # Dead Letter Queue
-        }
-    }'
+    --destination-config '{"OnFailure": {"Destination": "arn:aws:sqs:...:DLQ"}}'
+# --starting-position: LATEST, TRIM_HORIZON, AT_TIMESTAMP
+# --bisect-batch-on-function-error: su errore divide il batch a metà per isolare il record "poison"
+# OnFailure: coda SQS/topic SNS che riceve i metadati dei batch scartati dopo i retry (non i record)
 ```
+
+Senza `--maximum-retry-attempts` (default: infiniti, fino alla scadenza del record) un record malformato **blocca lo shard**: imposta sempre retry/età massima e una destination di failure.
 
 ---
 
@@ -352,7 +392,7 @@ aws lambda create-event-source-mapping \
 
 I **Lambda Layers** sono archivi ZIP contenenti librerie, dipendenze o codice condiviso che possono essere riutilizzati da più funzioni Lambda. Senza i Layers, ogni funzione dovrebbe includere le proprie dipendenze nel package — con il rischio di duplicare decine di MB di librerie comuni tra funzioni diverse.
 
-I Layers risolvono due problemi: riducono le dimensioni del deployment package (migliorando i cold start) e centralizzano la gestione delle versioni delle dipendenze (aggiornare una libreria in un Layer la aggiorna per tutte le funzioni che lo usano).
+I Layers risolvono due problemi: riducono la dimensione del deployment package della singola funzione (deploy più rapidi) e centralizzano le dipendenze comuni. Non riducono però il cold start: il contenuto dei layer viene comunque scaricato ed estratto e il totale (funzione + layer) resta entro il limite di 250 MB unzipped. Un layer è una versione **immutabile**: per aggiornare una libreria pubblichi una nuova versione e devi riconfigurare ogni funzione (non si propaga da sola).
 
 ```bash
 # Creare layer con dipendenze Python
@@ -381,19 +421,17 @@ aws lambda update-function-configuration \
 
 Di default, Lambda gira in una rete gestita da AWS e può accedere a Internet e ai servizi AWS pubblici, ma non alle risorse private del tuo VPC (RDS, ElastiCache, EC2 in subnet private). Configurando Lambda in VPC, la funzione viene connessa alle tue subnet private e può raggiungere queste risorse.
 
-Attenzione: mettere Lambda in VPC ha implicazioni importanti. La funzione perde l'accesso diretto a Internet (richiede un NAT Gateway per le chiamate verso l'esterno) e all'inizio aggiungeva latenza ai cold start. Le versioni più recenti del runtime hanno migliorato questo aspetto, ma è comunque qualcosa da considerare.
+Attenzione: mettere Lambda in VPC ha implicazioni importanti. La funzione perde l'accesso diretto a Internet (richiede un NAT Gateway per le chiamate verso l'esterno). Dal 2019 le ENI (Elastic Network Interface — interfaccia di rete virtuale) sono condivise e create alla configurazione della funzione (Hyperplane), quindi la penalità sul cold start è trascurabile; resta però da dimensionare le subnet (IP disponibili) e da curare le security group.
 
 ```bash
 aws lambda update-function-configuration \
     --function-name MyFunction \
-    --vpc-config SubnetIds=subnet-private-a,subnet-private-b,\
-        SecurityGroupIds=sg-lambda
+    --vpc-config "SubnetIds=subnet-private-a,subnet-private-b,SecurityGroupIds=sg-lambda"
 
-# IMPORTANTE: Lambda in VPC usa ENI (Elastic Network Interface)
-# - Aggiunge 100-200ms di cold start iniziale (creazione ENI, ora migliorata)
-# - Richiede NAT Gateway per accesso Internet
-# - Richiede VPC Endpoints per accesso a servizi AWS senza Internet
-# - IAM Policy DEVE includere: ec2:CreateNetworkInterface, ec2:DescribeNetworkInterfaces, ec2:DeleteNetworkInterface
+# - Richiede NAT Gateway per accesso Internet (Lambda in subnet pubblica NON ottiene IP pubblico)
+# - Richiede VPC Endpoints (gateway per S3/DynamoDB, interface per gli altri) per servizi AWS senza Internet
+# - L'execution role DEVE includere ec2:CreateNetworkInterface, ec2:DescribeNetworkInterfaces,
+#   ec2:DeleteNetworkInterface: più semplice allegare AWSLambdaVPCAccessExecutionRole
 ```
 
 ---
@@ -429,15 +467,17 @@ aws lambda update-function-configuration \
 # https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:451282441545:applications~aws-lambda-power-tuning
 
 # Esegui con payload di test per trovare il sweet spot memoria/costo
-# Tool testa automaticamente: 128, 256, 512, 1024, 2048, 3008 MB
-# e restituisce grafici costo vs performance
+# Input: lambdaARN, powerValues (default: 128, 256, 512, 1024, 1536, 3008 MB; accetta fino a 10240), num, payload
+# Output: grafico costo vs durata e la configurazione consigliata (strategy: cost, speed o balanced)
+# Perché serve: CPU e prezzo crescono con la memoria, ma la durata cala → più memoria può costare meno
+```
 ```
 
 ---
 
 ## SnapStart per Java
 
-**SnapStart** (Java 11+) elimina il cold start Java salvando snapshot dell'ambiente inizializzato.
+**SnapStart** riduce drasticamente il cold start (Java 11+ e, più di recente, Python 3.12+ e .NET 8+) eseguendo la fase init una sola volta alla pubblicazione di una versione: Lambda salva uno snapshot (memoria + disco) dell'ambiente inizializzato e lo ripristina per i nuovi ambienti invece di rieseguire l'init. Attenzione a ciò che l'init cattura: connessioni di rete, seed random e dati temporanei vanno rigenerati con i *runtime hooks*. Non è compatibile con Provisioned Concurrency, EFS e `/tmp` > 512 MB.
 
 ```bash
 aws lambda update-function-configuration \
@@ -454,21 +494,25 @@ aws lambda create-alias \
     --function-version 1
 ```
 
-**Risultato:** riduzione cold start Java da 10-15s a <1s.
+**Risultato:** AWS indica miglioramenti fino a ~10× sui cold start (tipicamente da multi-secondo a sub-secondo restore per Java); il guadagno dipende dal tempo di init. SnapStart non è gratuito: si pagano cache dello snapshot e restore.
+<!-- REVIEW: verificare prezzi SnapStart correnti per runtime -->
+
+Dalla fine del 2025 anche la fase **init** è fatturata per tutti i runtime gestiti: un init pesante costa, non solo rallenta.
 
 ---
 
 ## Pricing Lambda
 
+Prezzi indicativi us-east-1 (variano per Region; verificare su [Lambda Pricing](https://aws.amazon.com/lambda/pricing/)):
+
 - **$0.20 per 1 milione di invocazioni** (+ 1M gratuite/mese)
-- **$0.0000166667 per GB-secondo** (+ 400.000 GB-secondi/mese gratuiti)
-- arm64 (Graviton): ~20% meno costoso di x86_64
-- Provisioned Concurrency: $0.0000041 per GB-secondo provisionato
+- **$0.0000166667 per GB-secondo** x86_64 (+ 400.000 GB-secondi/mese gratuiti); arm64 $0.0000133334 (~20% in meno)
+- Provisioned Concurrency: ~$0.0000041667 per GB-secondo provisionato (più la durata d'uso a tariffa ridotta)
 
 **Esempio:** funzione 512 MB, 100ms durata, 10M invocazioni/mese:
 - `10M × $0.20/1M = $2 (invocazioni)`
 - `10M × 0.1s × 0.5GB × $0.0000166667 = $8.33 (duration)`
-- Totale: ~$10.33/mese
+- Totale: ~$10.33/mese (x86_64, free tier escluso)
 
 ---
 
@@ -495,7 +539,7 @@ aws lambda update-event-source-mapping --uuid <uuid> --scaling-config MaximumCon
 
 **Causa**: timeout default (3 s) troppo basso, memoria insufficiente (CPU proporzionale alla memoria), oppure chiamate di rete bloccate — tipico di Lambda in VPC senza NAT Gateway o VPC Endpoint.
 
-**Soluzione**: alzare timeout e memoria (verificare con Power Tuning), e per funzioni in VPC aggiungere NAT/VPC Endpoint. Il timeout di una funzione dietro API Gateway non deve superare il limite dell'integrazione (29 s di default).
+**Soluzione**: alzare timeout e memoria (verificare con Power Tuning), e per funzioni in VPC aggiungere NAT/VPC Endpoint. Il timeout di una funzione dietro API Gateway non deve superare il limite dell'integrazione (29 s di default; per le REST API regionali/private il limite è aumentabile, per le HTTP API resta 30 s).
 
 ```bash
 aws lambda update-function-configuration --function-name MyFunction --timeout 60 --memory-size 1024
@@ -532,6 +576,30 @@ aws logs start-query --log-group-name /aws/lambda/MyFunction \
     --query-string 'filter @type="REPORT" | stats max(@initDuration), max(@maxMemoryUsed/1024/1024) by bin(5m)'
 aws lambda get-function-configuration --function-name MyFunction --query '[Handler,Architectures,Layers]'
 ```
+
+---
+
+## Relazioni
+
+??? info "SQS e SNS — Approfondimento"
+    SQS è la sorgente più comune per carichi asincroni con retry e DLQ; SNS fa fan-out verso più Lambda.
+
+    **Approfondimento completo →** [SQS e SNS](../messaging/sqs-sns.md)
+
+??? info "EventBridge e Kinesis — Approfondimento"
+    EventBridge instrada eventi (anche schedulati) verso Lambda; Kinesis alimenta funzioni su stream ordinati per shard.
+
+    **Approfondimento completo →** [EventBridge e Kinesis](../messaging/eventbridge-kinesis.md)
+
+??? info "S3 — Approfondimento"
+    Le S3 Event Notification invocano Lambda alla creazione/rimozione di oggetti.
+
+    **Approfondimento completo →** [S3](../storage/s3.md)
+
+??? info "CloudFront — Approfondimento"
+    CloudFront può eseguire logica edge (Lambda@Edge, CloudFront Functions), non trattata in questa pagina.
+
+    **Approfondimento completo →** [CloudFront](../networking/cloudfront.md)
 
 ---
 
