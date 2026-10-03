@@ -7,9 +7,10 @@ search_keywords: [api gateway pattern, backend for frontend, bff, gateway aggreg
 parent: networking/api-gateway/_index
 related: [networking/api-gateway/kong, networking/api-gateway/rate-limiting, networking/load-balancing/layer4-vs-layer7, networking/service-mesh/concetti-base]
 official_docs: https://microservices.io/patterns/apigateway.html
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # API Gateway — Pattern e Concetti Base
@@ -18,7 +19,7 @@ last_updated: 2026-03-29
 
 L'API Gateway è il pattern architetturale che definisce un singolo punto di ingresso per i client di un sistema a microservizi. Risponde a un problema concreto: i client (app mobile, SPA, servizi terzi) devono comunicare con decine di microservizi ognuno con il proprio contratto, versione e localizzazione di rete. Il gateway centralizza la complessità, esponendo un'interfaccia coerente e nascondendo la topologia interna.
 
-I responsabilità tipiche di un API gateway includono: routing verso i servizi corretti, autenticazione e autorizzazione, rate limiting, trasformazione delle richieste/risposte, aggregazione di più chiamate in una, caching, logging e tracing. Queste funzionalità sono **cross-cutting concerns** che altrimenti andrebbero reimplementati in ogni servizio.
+Le responsabilità tipiche di un API gateway includono: routing verso i servizi corretti, autenticazione e autorizzazione, rate limiting, trasformazione delle richieste/risposte, aggregazione di più chiamate in una, caching, logging e tracing. Queste funzionalità sono **cross-cutting concerns** che altrimenti andrebbero reimplementati in ogni servizio.
 
 ## Concetti Chiave
 
@@ -102,14 +103,11 @@ Client: GET /api/dashboard
 **Vantaggi:** Riduce i round-trip del client (1 chiamata invece di 3).
 **Svantaggi:** Aumenta la latenza totale della risposta al max delle latenze dei servizi aggregati (usare chiamate parallele).
 
-```yaml
-# Esempio pseudo-config aggregation in Kong con plugin custom
-plugins:
-- name: request-transformer
-- name: response-transformer
-- name: correlation-id
+!!! note "L'aggregazione richiede codice"
+    I plugin dichiarativi (es. `request-transformer`, `response-transformer` in Kong) modificano una singola richiesta/risposta: **non** fanno fan-out verso più backend. L'aggregazione richiede un handler dedicato (plugin custom, funzione serverless, o un BFF/servizio di composizione, vedi Scenario 3). Alternativa: GraphQL gateway/federation.
 
-# Con AWS API Gateway + Lambda
+```yaml
+# Esempio: aggregazione con AWS API Gateway + Lambda (Serverless Framework)
 functions:
   aggregateHandler:
     handler: aggregator.handler
@@ -243,8 +241,13 @@ map $uri $backend {
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;                       # nginx >= 1.25.1 (il parametro "listen ... http2" è deprecato)
     server_name api.example.com;
+
+    # Con proxy_pass su variabile ($backend) nginx risolve i nomi a runtime:
+    # serve un resolver (es. kube-dns), altrimenti 502 "no resolver defined"
+    resolver 10.96.0.10 valid=30s;
 
     # Rate limiting (definito in http block)
     # limit_req_zone $http_authorization zone=by_token:10m rate=100r/m;
@@ -350,9 +353,12 @@ spec:
 date && timedatectl status
 
 # Decodificare il JWT e controllare exp/iat
-echo "eyJ..." | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool | grep -E 'exp|iat|nbf'
+#   (JWT usa base64url senza padding: tr + padding evitano errori di base64 -d)
+p=$(echo "eyJ..." | cut -d. -f2 | tr '_-' '/+'); while [ $(( ${#p} % 4 )) -ne 0 ]; do p="$p="; done
+echo "$p" | base64 -d | python3 -m json.tool | grep -E 'exp|iat|nbf'
 
 # Controllare i log del gateway per il motivo esatto del rifiuto
+# (esempio con ingress-nginx; il progetto è stato ritirato a marzo 2026, vedi nota in Relazioni)
 kubectl logs -n ingress-nginx deployment/ingress-nginx-controller | grep -i "401\|unauthorized\|jwt"
 
 # Traefik: verificare configurazione forwardAuth
@@ -439,24 +445,24 @@ curl -w "\nTime: %{time_total}s\n" -s http://order-service/orders?user=123 -o /d
 
 **Sintomo:** Il backend è tornato healthy, ma il gateway continua a rispondere `503 Service Unavailable` e non invia traffico al servizio.
 
-**Causa:** Il circuit breaker è in stato OPEN e il tempo di half-open non scatta per via di una configurazione `probe-interval` troppo alto, oppure le probe requests in HALF-OPEN continuano a fallire per un motivo diverso dal problema originale (es. timeout troppo basso per le probe).
+**Causa:** Il target è marcato unhealthy (Kong: health check passivi/attivi sull'upstream; nginx: `max_fails`/`fail_timeout`; Traefik: middleware `circuitBreaker`) e il tempo di recupero non è scaduto (`fallbackDuration`/`recoveryDuration` in Traefik, `fail_timeout` in nginx, `healthy.interval` degli active check in Kong), oppure le richieste di prova continuano a fallire per un motivo diverso dal problema originale (es. timeout troppo basso, health check su path sbagliato).
 
-**Soluzione:** Verificare lo stato del circuit breaker, aumentare il timeout delle probe, o forzare il reset manuale in emergenza.
+**Soluzione:** Verificare lo stato del target, correggere il path/timeout dell'health check, o forzare il reset manuale in emergenza.
 
 ```bash
-# Kong: verificare stato del circuit breaker via Admin API
+# Kong: verificare stato dei target via Admin API
 curl -s http://localhost:8001/upstreams/<upstream-name>/health \
-  | jq '.data[] | {address, health, unhealthy_count}'
+  | jq '.data[] | {target, health}'
 
-# Forzare il reset di un target a "healthy" manualmente
-curl -X PUT http://localhost:8001/upstreams/<upstream-name>/targets/<target>/healthy
+# Forzare un target a "healthy" manualmente (POST, non PUT)
+curl -X POST http://localhost:8001/upstreams/<upstream-name>/targets/<target>/healthy
 
-# Nginx: non ha circuit breaker nativo — usare ngx_http_upstream_module
-# Controllare numero di failed attempts accumulati
+# Nginx OSS: nessun circuit breaker vero, solo health check passivi
+# Controllare i parametri di failure accumulati
 nginx -T | grep -E 'max_fails|fail_timeout'
 
-# Traefik: verificare stato circuit breaker (se abilitato)
-curl -s http://localhost:8080/api/http/middlewares | jq '.[] | select(.type=="CircuitBreaker")'
+# Traefik: verificare se il middleware CircuitBreaker è configurato
+curl -s http://localhost:8080/api/http/middlewares | jq '.[] | select(.type=="circuitbreaker")'
 ```
 
 ## Relazioni
@@ -475,6 +481,9 @@ curl -s http://localhost:8080/api/http/middlewares | jq '.[] | select(.type=="Ci
     Il service mesh e l'API gateway si complementano.
 
     **Approfondimento →** [Concetti Base Service Mesh](../service-mesh/concetti-base.md)
+
+??? info "Kubernetes Gateway API — successore di Ingress"
+    Su Kubernetes l'API gateway si esprime oggi con la **Gateway API** (`Gateway`, `HTTPRoute`, GA dalla v1.0), implementata da Envoy Gateway, Kong, Traefik, Istio, NGINX Gateway Fabric. Separa i ruoli (infra: `Gateway`; team applicativi: `HTTPRoute`) e standardizza routing per header/path, traffic split e filtri. Il controller `ingress-nginx` è stato ritirato (marzo 2026): per nuove installazioni preferire Gateway API.
 
 ## Riferimenti
 
