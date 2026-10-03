@@ -7347,7 +7347,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7372,7 +7372,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25296,7 +25296,7 @@
 <h1 id="azure-virtual-machines">Azure Virtual Machines<a class="headerlink" href="#azure-virtual-machines" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
 <p>Le Azure Virtual Machines (VM) sono il servizio IaaS fondamentale di Azure: forniscono istanze di calcolo virtualizzate con pieno controllo su sistema operativo, software installato e configurazione di rete. A differenza dei servizi PaaS, con le VM si gestisce tutto ciò che sta sopra l'hypervisor (OS patch, runtime, middleware). Questo le rende ideali per lift &amp; shift di applicazioni legacy, workload che richiedono OS specifici, ambienti di sviluppo e scenari HPC.</p>
-<p>Non usare VM quando: l'applicazione è cloud-native, non richied controllo OS, o la gestione del patching è un overhead non voluto — in quei casi App Service, AKS o Azure Functions sono più appropriati.</p>
+<p>Non usare VM quando: l'applicazione è cloud-native, non richiede controllo OS, o la gestione del patching è un overhead non voluto — in quei casi App Service, AKS o Azure Functions sono più appropriati.</p>
 <h2 id="famiglie-di-vm">Famiglie di VM<a class="headerlink" href="#famiglie-di-vm" title="Permanent link">&para;</a></h2>
 <p>Azure offre decine di famiglie di VM ottimizzate per use case specifici. La scelta corretta evita overprovisioning e riduce i costi.</p>
 <table>
@@ -25312,7 +25312,7 @@
 <tbody>
 <tr>
 <td><strong>General Purpose</strong></td>
-<td>B, D, Dv5, Dsv5, Dads</td>
+<td>D (Dsv5, Dasv6, Dsv6, Dpsv6 Arm)</td>
 <td>2-96 vCPU</td>
 <td>Bilanciato CPU/memoria</td>
 <td>Web server, dev/test, database piccoli</td>
@@ -25368,6 +25368,10 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Generazioni</p>
+<p>Le serie <code>v6</code> (Intel/AMD/Arm Cobalt) sono la generazione corrente per D/E; gli esempi di questa pagina usano <code>v5</code> per brevità ma, dove disponibile nella region, per nuovi deployment conviene la <code>v6</code> (miglior rapporto prezzo/prestazioni). Verificare disponibilità con <code>az vm list-skus --location westeurope --size Standard_D --output table</code>.</p>
+</div>
 <h3 id="naming-convention-vm">Naming Convention VM<a class="headerlink" href="#naming-convention-vm" title="Permanent link">&para;</a></h3>
 <p>Il nome di uno SKU VM segue uno schema preciso:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Standard_D4s_v5
@@ -25379,7 +25383,8 @@
 </span></code></pre></div>
 <p>Altri suffissi comuni:
 - <code>a</code> = processore AMD (es. <code>Standard_D4as_v5</code>)
-- <code>d</code> = disco temporaneo NVMe locale (es. <code>Standard_D4ds_v5</code>)
+- <code>d</code> = disco temporaneo locale (es. <code>Standard_D4ds_v5</code>; NVMe nelle serie v6)
+- <code>p</code> = processore Arm (Azure Cobalt 100, es. <code>Standard_D4ps_v6</code>)
 - <code>l</code> = bassa memoria (less memory)
 - <code>b</code> = block storage ottimizzato
 - <code>i</code> = isolated (hardware dedicato single-tenant)</p>
@@ -25428,7 +25433,11 @@
 </div>
 <div class="admonition tip">
 <p class="admonition-title">No Public IP</p>
-<p>In produzione, considera di non assegnare Public IP (<code>--public-ip-address ""</code>) e di usare Azure Bastion per l'accesso SSH/RDP. Riduce drasticamente la superficie di attacco.</p>
+<p>In produzione, considera di non assegnare Public IP (<code>--public-ip-address ""</code>) e di usare Azure Bastion per l'accesso SSH/RDP. Riduce drasticamente la superficie di attacco. Senza IP pubblico la VM necessita di una rotta di uscita esplicita (NAT Gateway, Load Balancer con outbound rules o firewall/UDR): il <em>default outbound access</em> implicito è in dismissione e le nuove VNet create dopo il 31/03/2026 usano subnet private per default.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Immagine e chiave SSH</p>
+<p><code>Ubuntu2204</code> è un alias valido ma non l'ultima LTS: per nuovi deployment valutare <code>Ubuntu2404</code>. Preferire chiavi <code>ed25519</code> (<code>~/.ssh/id_ed25519.pub</code>) a RSA.</p>
 </div>
 <h3 id="cloud-init-configurazione-automatica-allavvio">Cloud-Init: Configurazione Automatica all'Avvio<a class="headerlink" href="#cloud-init-configurazione-automatica-allavvio" title="Permanent link">&para;</a></h3>
 <p>Il file <code>cloud-init.yaml</code> permette di personalizzare la VM al primo boot:</p>
@@ -25482,6 +25491,10 @@
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.0<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span>--enable-auto-upgrade<span class="w"> </span><span class="nb">true</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Data Collection Rule</p>
+<p>L'agente da solo non invia dati: serve una <strong>Data Collection Rule (DCR)</strong> associata alla VM (<code>az monitor data-collection rule association create</code>) che definisce cosa raccogliere e verso quale Log Analytics workspace. Per la VM con Managed Identity l'agente si autentica con essa.</p>
+</div>
 <h3 id="custom-script-extension">Custom Script Extension<a class="headerlink" href="#custom-script-extension" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Esegui uno script da storage account o URL pubblico</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>az<span class="w"> </span>vm<span class="w"> </span>extension<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="se">\</span>
@@ -25499,22 +25512,34 @@
 </span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="s1">    "storageAccountKey": "..."</span>
 </span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="s1">  }'</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Segreti nelle protected settings</p>
+<p>Evitare <code>storageAccountKey</code>: la Custom Script Extension supporta <code>managedIdentity</code> in <code>protectedSettings</code> per scaricare da Blob senza chiavi. Il contenuto di <code>commandToExecute</code> non deve contenere segreti in chiaro.</p>
+</div>
 <h3 id="altre-extension-utili">Altre Extension Utili<a class="headerlink" href="#altre-extension-utili" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Disk Encryption (Azure Disk Encryption con Key Vault)</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>az<span class="w"> </span>vm<span class="w"> </span>encryption<span class="w"> </span><span class="nb">enable</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--disk-encryption-keyvault<span class="w"> </span>/subscriptions/.../resourceGroups/.../providers/Microsoft.KeyVault/vaults/mykeyvault
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># AAD Login Extension (login con Entra ID invece di local user)</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>az<span class="w"> </span>vm<span class="w"> </span>extension<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span>--vm-name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>--name<span class="w"> </span>AADSSHLoginForLinux<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span>--publisher<span class="w"> </span>Microsoft.Azure.ActiveDirectory
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Nota: ADE è in via di ritiro; per nuovi deployment preferire Encryption at Host</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># (az vm create --encryption-at-host true), che cifra anche cache disco e temp disk</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># senza agent né Key Vault obbligatorio.</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>az<span class="w"> </span>vm<span class="w"> </span>encryption<span class="w"> </span><span class="nb">enable</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">  </span>--disk-encryption-keyvault<span class="w"> </span>/subscriptions/.../resourceGroups/.../providers/Microsoft.KeyVault/vaults/mykeyvault
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># AAD Login Extension (login con Entra ID invece di local user)</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>az<span class="w"> </span>vm<span class="w"> </span>extension<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">  </span>--vm-name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">  </span>--name<span class="w"> </span>AADSSHLoginForLinux<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span>--publisher<span class="w"> </span>Microsoft.Azure.ActiveDirectory
 </span></code></pre></div>
+<p>Il login Entra ID richiede una identity sulla VM e l'assegnazione del ruolo RBAC <strong>Virtual Machine Administrator Login</strong> (o <strong>User Login</strong>) sulla VM; poi <code>az ssh vm --resource-group $RG --name $VM_NAME</code>.</p>
 <h2 id="vm-scale-sets-vmss">VM Scale Sets (VMSS)<a class="headerlink" href="#vm-scale-sets-vmss" title="Permanent link">&para;</a></h2>
-<p>I VM Scale Sets permettono di creare e gestire un gruppo di VM identiche con autoscale automatico. Dal 2021, l'orchestration mode <strong>Flexible</strong> è preferito rispetto a Uniform perché supporta VM eterogenee e integrazioni più avanzate.</p>
+<p>I VM Scale Sets permettono di creare e gestire un gruppo di VM identiche con autoscale automatico. L'orchestration mode <strong>Flexible</strong> è quello raccomandato (e di default per nuovi VMSS) rispetto a Uniform: gestisce le istanze come normali VM Azure, supporta SKU/tipi eterogenei (anche Spot + on-demand mescolati) e distribuzione su fault domain/zone con <code>--platform-fault-domain-count</code>. Uniform resta per scenari legacy.</p>
+<div class="admonition note">
+<p class="admonition-title">Rolling upgrade</p>
+<p><code>--upgrade-policy-mode Rolling</code> richiede un segnale di salute (health probe del Load Balancer o Application Health extension): senza di esso l'upgrade non sa se un batch è sano e fallisce/non procede.</p>
+</div>
 <h3 id="creare-un-vmss">Creare un VMSS<a class="headerlink" href="#creare-un-vmss" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>az<span class="w"> </span>vmss<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
@@ -25590,7 +25615,7 @@
 </tr>
 <tr>
 <td><strong>Costo</strong></td>
-<td>Banda dati cross-zone a pagamento</td>
+<td>Nessun costo per la feature; verificare la tariffa del traffico inter-zona</td>
 <td>Gratuito (si paga solo VM)</td>
 </tr>
 <tr>
@@ -25672,38 +25697,41 @@
 </tr>
 <tr>
 <td><strong>Ultra Disk</strong></td>
-<td>160000</td>
-<td>2000 MB/s</td>
+<td>400000</td>
+<td>10000 MB/s</td>
 <td>sub-ms</td>
 <td>Database mission-critical, HPC</td>
 </tr>
 </tbody>
 </table>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Creare un disco managed Premium SSD</span>
+<div class="admonition note">
+<p class="admonition-title">Limiti indicativi</p>
+<p>I valori sono i massimi per singolo disco e dipendono dalla dimensione (Premium SSD v1/Standard) o dal provisioning (v2/Ultra), oltre che dai limiti della VM: il collo di bottiglia è spesso la VM, non il disco. <strong>Premium SSD v2</strong> e <strong>Ultra</strong> sono solo dati (no disco OS), richiedono una zona e uno SKU esplicito (<code>PremiumV2_LRS</code>, <code>UltraSSD_LRS</code>); IOPS e throughput si regolano indipendentemente dalla capacità.</p>
+</div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Creare un disco managed Premium SSD (stessa zona della VM)</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>az<span class="w"> </span>disk<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--name<span class="w"> </span>disk-data-01<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--size-gb<span class="w"> </span><span class="m">512</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span>--sku<span class="w"> </span>Premium_LRS<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span>--zone<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span>--os-type<span class="w"> </span>Linux
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Allegare disco a VM esistente</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>az<span class="w"> </span>vm<span class="w"> </span>disk<span class="w"> </span>attach<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">  </span>--vm-name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">  </span>--name<span class="w"> </span>disk-data-01<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">  </span>--new<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">  </span>--size-gb<span class="w"> </span><span class="m">512</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">  </span>--sku<span class="w"> </span>Premium_LRS
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="c1"># Snapshot disco</span>
-</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>az<span class="w"> </span>snapshot<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="w">  </span>--name<span class="w"> </span>snapshot-disk-data-01-<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="w">  </span>--source<span class="w"> </span>disk-data-01<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="w">  </span>--incremental<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="w">  </span>--sku<span class="w"> </span>Standard_ZRS
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span>--zone<span class="w"> </span><span class="m">1</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1"># Allegare un disco esistente a VM esistente</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>az<span class="w"> </span>vm<span class="w"> </span>disk<span class="w"> </span>attach<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">  </span>--vm-name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">  </span>--name<span class="w"> </span>disk-data-01
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="c1"># In alternativa, creare e allegare un disco nuovo in un colpo solo:</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="c1"># az vm disk attach -g $RG --vm-name $VM_NAME --name disk-data-02 --new --size-gb 512 --sku Premium_LRS</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="c1"># Snapshot disco</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a>az<span class="w"> </span>snapshot<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="w">  </span>--name<span class="w"> </span>snapshot-disk-data-01-<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="w">  </span>--source<span class="w"> </span>disk-data-01<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="w">  </span>--incremental<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="w">  </span>--sku<span class="w"> </span>Standard_ZRS
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Incremental Snapshots</p>
@@ -25719,6 +25747,7 @@
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span>--disk-mbps-read-write<span class="w"> </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span>--zone<span class="w"> </span><span class="m">1</span>
 </span></code></pre></div>
+<p>La VM deve essere nella stessa zona e avere Ultra Disk abilitato (<code>az vm create --zone 1 --ultra-ssd-enabled true ...</code>); non tutte le serie/region lo supportano.</p>
 <h2 id="azure-hybrid-benefit">Azure Hybrid Benefit<a class="headerlink" href="#azure-hybrid-benefit" title="Permanent link">&para;</a></h2>
 <p>Se si dispone di licenze Windows Server o SQL Server con Software Assurance, si può risparmiare fino al 40% sui costi VM.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Windows Server Hybrid Benefit</span>
@@ -25726,17 +25755,18 @@
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--license-type<span class="w"> </span>Windows_Server<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>...
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># SQL Server Hybrid Benefit</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>az<span class="w"> </span>vm<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span>--license-type<span class="w"> </span>Windows_Server<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span>--image<span class="w"> </span>MicrosoftSQLServer:sql2019-ws2022:sqldev:latest<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">  </span>...
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="c1"># Applicare a VM esistente</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>az<span class="w"> </span>vm<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">  </span>--license-type<span class="w"> </span>Windows_Server
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># SQL Server Hybrid Benefit: si imposta sulla risorsa SQL VM (non con az vm --license-type,</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># che riguarda solo la licenza del sistema operativo)</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>az<span class="w"> </span>sql<span class="w"> </span>vm<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">  </span>--license-type<span class="w"> </span>AHUB
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="c1"># Applicare a VM esistente</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>az<span class="w"> </span>vm<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">  </span>--license-type<span class="w"> </span>Windows_Server
 </span></code></pre></div>
 <h2 id="spot-vm">Spot VM<a class="headerlink" href="#spot-vm" title="Permanent link">&para;</a></h2>
 <p>Le Spot VM usano capacità inutilizzata Azure a prezzi ridotti (fino al 90% rispetto a PAYG). Possono essere terminate (evicted) con 30 secondi di preavviso quando Azure necessita della capacità.</p>
@@ -25822,7 +25852,7 @@
 <h2 id="operazioni-comuni">Operazioni Comuni<a class="headerlink" href="#operazioni-comuni" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Start / Stop / Deallocate VM</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>az<span class="w"> </span>vm<span class="w"> </span>start<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>az<span class="w"> </span>vm<span class="w"> </span>stop<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w">         </span><span class="c1"># OS shutdown, disco e IP preservati</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>az<span class="w"> </span>vm<span class="w"> </span>stop<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w">         </span><span class="c1"># OS shutdown, MA le risorse compute restano allocate: il billing CPU continua!</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>az<span class="w"> </span>vm<span class="w"> </span>deallocate<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w">   </span><span class="c1"># Rilascia risorse compute, no billing CPU</span>
 </span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>
 </span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="c1"># Resize VM</span>
@@ -25843,14 +25873,14 @@
 </span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a><span class="w">  </span>--output<span class="w"> </span>table
 </span><span id="__span-15-23"><a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a>
-</span><span id="__span-15-24"><a id="__codelineno-15-24" name="__codelineno-15-24" href="#__codelineno-15-24"></a><span class="c1"># Estendere disco OS</span>
+</span><span id="__span-15-24"><a id="__codelineno-15-24" name="__codelineno-15-24" href="#__codelineno-15-24"></a><span class="c1"># Estendere disco OS (solo ingrandimento; VM deallocata, vedi Scenario 4)</span>
 </span><span id="__span-15-25"><a id="__codelineno-15-25" name="__codelineno-15-25" href="#__codelineno-15-25"></a>az<span class="w"> </span>vm<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-15-26"><a id="__codelineno-15-26" name="__codelineno-15-26" href="#__codelineno-15-26"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-15-27"><a id="__codelineno-15-27" name="__codelineno-15-27" href="#__codelineno-15-27"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-15-28"><a id="__codelineno-15-28" name="__codelineno-15-28" href="#__codelineno-15-28"></a><span class="w">  </span>--os-disk-size-gb<span class="w"> </span><span class="m">256</span>
 </span></code></pre></div>
 <h2 id="proximity-placement-groups">Proximity Placement Groups<a class="headerlink" href="#proximity-placement-groups" title="Permanent link">&para;</a></h2>
-<p>I Proximity Placement Groups (PPG) garantiscono che le VM siano fisicamente vicine (stesso rack o edificio) per minimizzare la latency di rete tra di loro.</p>
+<p>I Proximity Placement Groups (PPG) vincolano le VM allo stesso datacenter, vicine fisicamente, per <strong>minimizzare la latency di rete</strong> tra di loro (es. app server e SAP HANA).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Creare PPG</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>az<span class="w"> </span>ppg<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
@@ -25867,7 +25897,7 @@
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Limitazione PPG</p>
-<p>I PPG aumentano la latency di rete tra VM ma riducono la resilienza: tutte le VM sono nello stesso dominio fisico. Non combinare PPG con Availability Zones su workload che richiedono alta disponibilità geografica.</p>
+<p>I PPG riducono la latency ma anche la resilienza e la flessibilità: tutte le VM sono nello stesso dominio fisico (un guasto le colpisce insieme) e mescolare SKU diversi o aggiungere VM in seguito aumenta il rischio di errori di allocazione (<code>AllocationFailed</code>). Un PPG è confinato a una sola zona: per alta disponibilità servono un PPG per zona.</p>
 </div>
 <h2 id="pricing-e-modelli-di-acquisto">Pricing e Modelli di Acquisto<a class="headerlink" href="#pricing-e-modelli-di-acquisto" title="Permanent link">&para;</a></h2>
 <table>
@@ -25890,13 +25920,13 @@
 <td><strong>Reserved Instances (RI) 1 anno</strong></td>
 <td>~40%</td>
 <td>1 anno</td>
-<td>Scope: subscription/resource group</td>
+<td>Scope: shared/subscription/resource group, instance size flexibility</td>
 </tr>
 <tr>
 <td><strong>Reserved Instances (RI) 3 anni</strong></td>
 <td>~60%</td>
 <td>3 anni</td>
-<td>Instance size flexibility</td>
+<td>Come sopra, maggiore sconto ma lock-in più lungo</td>
 </tr>
 <tr>
 <td><strong>Azure Savings Plan</strong></td>
@@ -25933,7 +25963,9 @@
 <li>Configura <strong>Azure Monitor Agent</strong> su tutte le VM per telemetria centralizzata</li>
 <li>Per VMSS, usa <strong>Flexible orchestration mode</strong> (più feature, più flessibile di Uniform)</li>
 <li>Imposta <code>--os-disk-delete-option Delete</code> per evitare dischi orfani quando si elimina una VM</li>
-<li>Abilita <strong>Accelerated Networking</strong> (<code>--accelerated-networking true</code>) su VM D-series e superiori per networking SR-IOV</li>
+<li>Abilita <strong>Accelerated Networking</strong> (<code>--accelerated-networking true</code>) sulle serie che lo supportano (la maggior parte con ≥2 vCPU) per networking SR-IOV: latenza minore e meno jitter bypassando il vSwitch dell'host</li>
+<li>Abilita <strong>Encryption at Host</strong> per cifrare anche cache e temp disk</li>
+<li>Gestisci il patching con <strong>Azure Update Manager</strong> (patch orchestration <code>AutomaticByPlatform</code>) e proteggi i dati con <strong>Azure Backup</strong></li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-vm-non-raggiungibile-via-sshrdp">Scenario 1 — VM non raggiungibile via SSH/RDP<a class="headerlink" href="#scenario-1-vm-non-raggiungibile-via-sshrdp" title="Permanent link">&para;</a></h3>
@@ -25950,16 +25982,19 @@
 </span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="c1"># 3. Visualizza regole NSG (verifica porta 22/3389 in entrata)</span>
 </span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>az<span class="w"> </span>network<span class="w"> </span>nsg<span class="w"> </span>rule<span class="w"> </span>list<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--nsg-name<span class="w"> </span><span class="nv">$NSG_NAME</span><span class="w"> </span>--output<span class="w"> </span>table
 </span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>
-</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="c1"># 4. Accesso di emergenza via console seriale (non richiede rete)</span>
-</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>az<span class="w"> </span>serial-console<span class="w"> </span>connect<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span>
+</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="c1"># 3b. Regole effettive (NSG a livello NIC + subnet combinati)</span>
+</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>az<span class="w"> </span>network<span class="w"> </span>nic<span class="w"> </span>list-effective-nsg<span class="w"> </span>--ids<span class="w"> </span><span class="nv">$NIC_ID</span>
 </span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>
-</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="c1"># 5. Boot diagnostics — log seriale per vedere errori OS</span>
-</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a>az<span class="w"> </span>vm<span class="w"> </span>boot-diagnostics<span class="w"> </span><span class="nb">enable</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a><span class="w">  </span>--storage<span class="w"> </span>mystorageaccount
-</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a>
-</span><span id="__span-18-20"><a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a>az<span class="w"> </span>vm<span class="w"> </span>boot-diagnostics<span class="w"> </span>get-boot-log<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span>
+</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="c1"># 4. Accesso di emergenza via console seriale (non richiede rete; richiede l'extension serial-console)</span>
+</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a>az<span class="w"> </span>serial-console<span class="w"> </span>connect<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span>
+</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a>
+</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="c1"># 5. Boot diagnostics — log seriale per vedere errori OS</span>
+</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a>az<span class="w"> </span>vm<span class="w"> </span>boot-diagnostics<span class="w"> </span><span class="nb">enable</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-20"><a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-21"><a id="__codelineno-18-21" name="__codelineno-18-21" href="#__codelineno-18-21"></a><span class="w">  </span>--storage<span class="w"> </span>mystorageaccount
+</span><span id="__span-18-22"><a id="__codelineno-18-22" name="__codelineno-18-22" href="#__codelineno-18-22"></a>
+</span><span id="__span-18-23"><a id="__codelineno-18-23" name="__codelineno-18-23" href="#__codelineno-18-23"></a>az<span class="w"> </span>vm<span class="w"> </span>boot-diagnostics<span class="w"> </span>get-boot-log<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-vm-extension-bloccata-in-stato-updating-o-failed">Scenario 2 — VM Extension bloccata in stato "Updating" o "Failed"<a class="headerlink" href="#scenario-2-vm-extension-bloccata-in-stato-updating-o-failed" title="Permanent link">&para;</a></h3>
@@ -25979,7 +26014,7 @@
 </span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="w">  </span>--name<span class="w"> </span>AzureMonitorLinuxAgent
 </span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>
 </span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="c1"># Riavvia il VM agent (da dentro la VM via SSH/console)</span>
-</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="c1"># Linux:</span>
+</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="c1"># Linux (Ubuntu/Debian: walinuxagent; RHEL/CentOS/SUSE: waagent):</span>
 </span><span id="__span-19-15"><a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a>sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>walinuxagent
 </span><span id="__span-19-16"><a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a>
 </span><span id="__span-19-17"><a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="c1"># Windows (da PowerShell dentro la VM):</span>
@@ -26065,22 +26100,23 @@
 <hr />
 <h3 id="strumenti-diagnostici-generali">Strumenti diagnostici generali<a class="headerlink" href="#strumenti-diagnostici-generali" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Repair VM: monta disco OS su VM di supporto per riparazione offline</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>az<span class="w"> </span>vm<span class="w"> </span>repair<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="w">  </span>--repair-username<span class="w"> </span>repairuser<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="w">  </span>--repair-password<span class="w"> </span><span class="s2">"SecurePassword123!"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="w">  </span>--verbose
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>
-</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="c1"># Restore VM da repair</span>
-</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>az<span class="w"> </span>vm<span class="w"> </span>repair<span class="w"> </span>restore<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span>
-</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>
-</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a><span class="c1"># Run Command: esegui script dentro la VM senza SSH (richiede VM agent)</span>
-</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a>az<span class="w"> </span>vm<span class="w"> </span>run-command<span class="w"> </span>invoke<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-14"><a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-15"><a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-16"><a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a><span class="w">  </span>--command-id<span class="w"> </span>RunShellScript<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-17"><a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a><span class="w">  </span>--scripts<span class="w"> </span><span class="s2">"df -h &amp;&amp; free -m &amp;&amp; top -bn1 | head -20"</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># (richiede l'extension: az extension add --name vm-repair)</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>az<span class="w"> </span>vm<span class="w"> </span>repair<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="w">  </span>--repair-username<span class="w"> </span>repairuser<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="w">  </span>--repair-password<span class="w"> </span><span class="s2">"SecurePassword123!"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="w">  </span>--verbose
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>
+</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="c1"># Restore VM da repair</span>
+</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>az<span class="w"> </span>vm<span class="w"> </span>repair<span class="w"> </span>restore<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span>
+</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>
+</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a><span class="c1"># Run Command: esegui script dentro la VM senza SSH (richiede VM agent)</span>
+</span><span id="__span-22-14"><a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a>az<span class="w"> </span>vm<span class="w"> </span>run-command<span class="w"> </span>invoke<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-15"><a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-16"><a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$VM_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-17"><a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a><span class="w">  </span>--command-id<span class="w"> </span>RunShellScript<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-18"><a id="__codelineno-22-18" name="__codelineno-22-18" href="#__codelineno-22-18"></a><span class="w">  </span>--scripts<span class="w"> </span><span class="s2">"df -h &amp;&amp; free -m &amp;&amp; top -bn1 | head -20"</span>
 </span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
