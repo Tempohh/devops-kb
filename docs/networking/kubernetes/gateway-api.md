@@ -7,21 +7,28 @@ search_keywords: [gateway api, kubernetes gateway api, httproute, grpcroute, tcp
 parent: networking/kubernetes/_index
 related: [networking/kubernetes/ingress, networking/kubernetes/network-policies, networking/kubernetes/cni, networking/service-mesh/linkerd]
 official_docs: https://gateway-api.sigs.k8s.io/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-04-04
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Kubernetes Gateway API
 
 ## Panoramica
 
-La **Kubernetes Gateway API** è il successore ufficiale di Ingress per la gestione del traffico in entrata nei cluster Kubernetes. Diventata GA (stable) per le funzionalità core con Kubernetes 1.28, risolve i limiti strutturali di Ingress: un singolo tipo di risorsa (`Ingress`) gestiva tutto, costringendo i vendor a proliferare annotations non portabili. Gateway API introduce un modello a tre livelli con tipi separati per ruoli diversi — infra team, platform team, app team — e supporta nativamente protocolli che Ingress non può gestire: gRPC, TCP/UDP, TLS passthrough.
+La **Kubernetes Gateway API** è il successore ufficiale di Ingress per la gestione del traffico in entrata nei cluster Kubernetes. Giunta a GA (v1.0, ottobre 2023) per le funzionalità core, risolve i limiti strutturali di Ingress: un singolo tipo di risorsa (`Ingress`) gestiva tutto, costringendo i vendor a proliferare annotations non portabili. Gateway API introduce un modello a tre livelli con tipi separati per ruoli diversi — infra team, platform team, app team — e supporta nativamente protocolli che Ingress non può gestire: gRPC, TCP/UDP, TLS passthrough.
 
-Quando usarla: cluster nuovi su Kubernetes 1.28+, ambienti multi-tenant con teams separati, casi d'uso che richiedono traffic splitting nativo, gRPC routing, o TLS passthrough senza annotations vendor-specific. Quando **non** usarla: cluster legacy con controller che non supportano ancora Gateway API, ambienti dove Ingress funziona e non porta valore aggiunto la migrazione.
+!!! note "Non è legata alla versione di Kubernetes"
+    Gateway API è un set di **CRD** con versionamento proprio (`gateway-api` v1.x), non una API built-in di Kubernetes: si installa sul cluster indipendentemente dalla versione del control plane (ogni release dichiara le versioni K8s minime supportate). Il motivo: poter evolvere le API più velocemente del ciclo di rilascio di K8s. Il numero di versione rilevante è quindi quello delle CRD e della conformance del controller, non "1.28".
+
+Quando usarla: cluster nuovi, ambienti multi-tenant con teams separati, casi d'uso che richiedono traffic splitting nativo, gRPC routing, o TLS passthrough senza annotations vendor-specific. Quando **non** usarla: cluster legacy con controller che non supportano ancora Gateway API, ambienti dove Ingress funziona e non porta valore aggiunto la migrazione.
 
 !!! warning "GA ≠ tutto stabile"
-    Il core (GatewayClass, Gateway, HTTPRoute) è GA. Funzionalità avanzate come `TCPRoute`, `UDPRoute`, `GRPCRoute` e le Policy Attachment sono ancora in canale `experimental` — verificare supporto nel controller specifico prima di usarle in produzione.
+    Nel canale `standard` sono GA `GatewayClass`, `Gateway`, `HTTPRoute` e `GRPCRoute` (GA dalla v1.1); altre feature recenti (es. `BackendTLSPolicy`) sono entrate nello standard nelle release successive. Restano in `experimental`: `TCPRoute`, `UDPRoute`, `TLSRoute` e diverse policy. Controllare release notes e conformance del controller scelto prima di usarle in produzione.
+
+!!! warning "ingress-nginx è in dismissione"
+    Il progetto Kubernetes `ingress-nginx` è stato annunciato in retirement (manutenzione best-effort fino a marzo 2026): chi lo usa ancora deve pianificare la migrazione, e Gateway API è la destinazione naturale. Nota: `ingress-nginx` **non** implementa Gateway API; serve un controller diverso (es. NGINX Gateway Fabric, Envoy Gateway, Traefik, Cilium, Istio).
 
 ## Concetti Chiave
 
@@ -52,14 +59,14 @@ GRPCRoute
 | Tipo | Canale | Usa case |
 |------|--------|----------|
 | `HTTPRoute` | Stable | Routing HTTP/1.1 e HTTP/2 |
-| `GRPCRoute` | Experimental | Routing gRPC nativo |
+| `GRPCRoute` | Stable (GA da v1.1) | Routing gRPC nativo |
 | `TLSRoute` | Experimental | TLS passthrough (senza terminazione) |
 | `TCPRoute` | Experimental | TCP generico |
 | `UDPRoute` | Experimental | UDP generico |
 
 ### Policy Attachment
 
-Gateway API introduce `PolicyAttachment` per applicare policy trasversali (timeout, retry, autenticazione, rate limiting) alle risorse senza annotations. Le policy si "attaccano" a Gateway, HTTPRoute o Service tramite `targetRef`.
+Gateway API introduce `PolicyAttachment` per applicare policy trasversali (timeout, retry, autenticazione, rate limiting) alle risorse senza annotations. Le policy si "attaccano" a Gateway, HTTPRoute o Service tramite `targetRefs`. Il perché: i parametri specifici di una feature o di un'implementazione non sporcano gli oggetti core e hanno ciclo di vita e RBAC propri.
 
 ```yaml
 # BackendLBPolicy (experimental) — esempio di policy attachment
@@ -68,8 +75,8 @@ kind: BackendLBPolicy
 metadata:
   name: orders-lb-policy
 spec:
-  targetRef:
-    group: ""
+  targetRefs:
+  - group: ""
     kind: Service
     name: orders-service
   sessionPersistence:
@@ -102,46 +109,56 @@ Gateway (pod del controller: nginx/istio/traefik/cilium)
 
 ### Cross-Namespace Routing e ReferenceGrant
 
-Una delle funzionalità chiave di Gateway API è il routing cross-namespace controllato. Un `HTTPRoute` nel namespace `orders` può referenziare un `Gateway` nel namespace `infra`, ma solo se esiste un `ReferenceGrant` che lo autorizza esplicitamente.
+Una delle funzionalità chiave di Gateway API è il routing cross-namespace controllato. Esistono **due meccanismi distinti**, spesso confusi:
+
+| Riferimento cross-namespace | Chi autorizza | Meccanismo |
+|---|---|---|
+| `HTTPRoute` (ns `orders`) → `Gateway` (ns `infra`) via `parentRefs` | Il proprietario del Gateway | `listeners[].allowedRoutes.namespaces` sul Gateway (`Same`, `All`, `Selector`) |
+| `HTTPRoute` → `Service` in altro namespace (`backendRefs`) | Il proprietario del Service | `ReferenceGrant` nel namespace del Service |
+| `Gateway` → `Secret` TLS in altro namespace (`certificateRefs`) | Il proprietario del Secret | `ReferenceGrant` nel namespace del Secret |
+
+Il motivo: un riferimento verso risorse altrui sarebbe un vettore di escalation (esporre il Service o leggere il Secret di un altro tenant). L'handshake bilaterale lo impedisce: chi riferisce dichiara, chi possiede consente.
 
 ```yaml
-# Nel namespace infra: autorizza orders a usare il gateway
+# Esempio: HTTPRoute in "orders" con backendRef verso un Service nel namespace "shared"
+# Il ReferenceGrant sta nel namespace della risorsa referenziata (shared)
 apiVersion: gateway.networking.k8s.io/v1beta1
 kind: ReferenceGrant
 metadata:
-  name: allow-orders-routes
-  namespace: infra          # namespace dove sta il Gateway
+  name: allow-orders-to-shared-svc
+  namespace: shared
 spec:
   from:
   - group: gateway.networking.k8s.io
     kind: HTTPRoute
-    namespace: orders       # namespace autorizzato a referenziare
+    namespace: orders
   to:
-  - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: prod-gateway
+  - group: ""
+    kind: Service
 ```
-
-Senza `ReferenceGrant`, un HTTPRoute in un namespace non può referenziare risorse in un altro — sicurezza by design.
 
 ## Configurazione & Pratica
 
 ### Installazione — NGINX Gateway Fabric
 
-NGINX Gateway Fabric è la scelta per chi già usa nginx-ingress e vuole una migrazione naturale.
+NGINX Gateway Fabric è l'implementazione Gateway API di F5/NGINX, valida per chi conosce già NGINX come data plane. Controllare nella documentazione del progetto i prerequisiti della versione scelta (alcune release richiedono una specifica release delle CRD).
 
 ```bash
+# Scegliere la release dalla pagina releases di kubernetes-sigs/gateway-api
+# (e verificare quale versione supporta il controller scelto)
+export GATEWAY_API_VERSION=<vX.Y.Z>
+
 # Installa le CRD di Gateway API (prerequisito per qualsiasi controller)
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml
 
-# Installa canale experimental (TCPRoute, GRPCRoute, ecc.)
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/experimental-install.yaml
+# In alternativa (NON in aggiunta): canale experimental, superset dello standard
+# (TCPRoute, UDPRoute, TLSRoute, ...). Non mescolare i due canali sullo stesso cluster.
+# kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/experimental-install.yaml
 
-# Installa NGINX Gateway Fabric tramite Helm
-helm install ngf oci://ghcr.io/nginxinc/charts/nginx-gateway-fabric \
+# Installa NGINX Gateway Fabric tramite Helm (chart OCI ufficiale; pinnare --version in produzione)
+helm install ngf oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
   --namespace nginx-gateway \
   --create-namespace \
-  --version 1.4.0 \
   --set service.type=LoadBalancer
 
 # Verifica installazione
@@ -166,7 +183,7 @@ Envoy Gateway è il progetto CNCF basato su Envoy proxy, raccomandato per ambien
 ```bash
 # Installa Envoy Gateway
 helm install eg oci://docker.io/envoyproxy/gateway-helm \
-  --version v1.2.1 \
+  --version <vX.Y.Z> \
   --namespace envoy-gateway-system \
   --create-namespace
 
@@ -263,6 +280,9 @@ kubectl describe httproute orders-route -n orders
 ### TLS con cert-manager
 
 ```yaml
+# Prerequisito: cert-manager con supporto Gateway API abilitato
+# (config `enableGatewayAPI: true`, oppure il feature gate ExperimentalGatewayAPISupport
+# sulle versioni più vecchie). Le CRD Gateway API vanno installate prima di cert-manager.
 # ClusterIssuer Let's Encrypt
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -296,9 +316,11 @@ spec:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
-  - "*.example.com"
-  - "example.com"
+  - "orders.example.com"       # HTTP-01 NON può emettere wildcard
 ```
+
+!!! warning "Wildcard = DNS-01"
+    Let's Encrypt emette certificati wildcard (`*.example.com`) solo con challenge **DNS-01**. Il solver `http01`/`gatewayHTTPRoute` sopra funziona solo per hostname espliciti; per un wildcard serve un solver `dns01` (Route53, Cloud DNS, Cloudflare...).
 
 ### Traffic Management Avanzato
 
@@ -422,10 +444,10 @@ spec:
       port: 8080
 ```
 
-#### GRPCRoute (experimental)
+#### GRPCRoute (GA dalla v1.1)
 
 ```yaml
-apiVersion: gateway.networking.k8s.io/v1alpha2
+apiVersion: gateway.networking.k8s.io/v1
 kind: GRPCRoute
 metadata:
   name: payment-grpc
@@ -452,20 +474,21 @@ spec:
       port: 9090
 ```
 
-### ReferenceGrant — Cross-Namespace completo
+### ReferenceGrant — Secret TLS cross-namespace
 
 ```yaml
-# Scenario: HTTPRoute nel namespace "orders" referenzia un Secret TLS nel namespace "infra"
+# Scenario: Gateway nel namespace "infra" usa un certificato in "certs"
+# (nel Gateway: certificateRefs: [{name: wildcard-cert, namespace: certs}])
 apiVersion: gateway.networking.k8s.io/v1beta1
 kind: ReferenceGrant
 metadata:
-  name: allow-orders-to-read-tls
-  namespace: infra               # namespace dove sta il Secret
+  name: allow-gateway-to-read-tls
+  namespace: certs               # namespace dove sta il Secret
 spec:
   from:
   - group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    namespace: orders            # chi può referenziare
+    kind: Gateway                # è il Gateway (non l'HTTPRoute) a leggere il Secret
+    namespace: infra
   to:
   - group: ""
     kind: Secret
@@ -477,7 +500,8 @@ spec:
 !!! tip "Organizzazione per ruolo"
     Mantenere GatewayClass e Gateway in un namespace dedicato (`infra`, `platform`, `gateway-system`). Gli app team non devono avere accesso a questi namespace. Ogni namespace applicativo espone solo HTTPRoute.
 
-- **ReferenceGrant espliciti**: non usare `allowedRoutes.namespaces.from: All` in produzione — preferire `Selector` con label che i platform team controllano
+- **`allowedRoutes` restrittivo**: non usare `namespaces.from: All` in produzione — preferire `Selector` con label che solo il platform team può applicare ai namespace
+- **ReferenceGrant minimi**: indicare sempre `name` della risorsa target quando possibile, per concedere solo ciò che serve
 - **Una GatewayClass per controller**: se si usano più controller (nginx per HTTP, istio per service mesh), creare GatewayClass distinte con nomi descrittivi
 - **`sectionName` nei parentRefs**: specificare sempre il listener esatto — evita ambiguità quando il Gateway ha listener multipli (80, 443, 9443...)
 - **Status conditions**: monitorare `status.parents[].conditions` nelle HTTPRoute — `Accepted: False` indica un problema di configurazione (spesso ReferenceGrant mancante)
@@ -501,34 +525,31 @@ spec:
 | gRPC routing | workaround annotation | `GRPCRoute` nativo (experimental) |
 | Cross-namespace routing | non supportato | supportato via `ReferenceGrant` |
 | Portabilità config | annotations vendor-lock | spec standard multi-controller |
-| Maturità | GA, ampio supporto | Core GA da K8s 1.28 |
+| Maturità | GA ma API congelata (nessuna nuova feature) | Core GA dalla v1.0 (2023), in evoluzione attiva |
 
 ## Migrazione da Ingress
 
 ### Strategia di Migrazione Graduale
 
-La migrazione non è big-bang: Gateway API e Ingress coesistono sullo stesso cluster. Ogni controller che supporta entrambi (nginx-ingress ≥ 1.9, Traefik v3, Istio, Cilium) può gestirli in parallelo.
+La migrazione non è big-bang: Gateway API e Ingress coesistono sullo stesso cluster. Molti controller supportano entrambe le API (es. Traefik, Istio, Cilium, Kong), mentre `ingress-nginx` supporta solo Ingress: in quel caso si affianca un controller Gateway API e si sposta il traffico per host/namespace.
 
 ```bash
 # Verifica se il controller già supporta Gateway API
 kubectl get gatewayclass
 # Se vuoto: installare il nuovo controller Gateway API-native
 
-# Verifica versione Kubernetes (deve essere >= 1.28 per core GA)
-kubectl version --short
+# Verifica versione Kubernetes e compatibilità con la release CRD scelta
+kubectl version
 ```
 
 ```bash
-# Tool di migrazione automatica (converte Ingress → HTTPRoute)
-# Installa il plugin kubectl
-kubectl krew install gateway-api
+# Tool ufficiale di migrazione: ingress2gateway (kubernetes-sigs/ingress2gateway)
+# Legge gli Ingress dal cluster (o da file) e stampa le risorse Gateway API equivalenti.
+# Le annotations dei vari provider sono tradotte solo in parte: rivedere sempre l'output.
+ingress2gateway print --providers ingress-nginx -n production > gateway-resources.yaml
 
-# Genera HTTPRoute equivalenti a tutti gli Ingress nel namespace
-kubectl get ingress -n production -o yaml | \
-  kubectl gateway-api convert --from ingress --namespace production
-
-# Preview: mostra le HTTPRoute che verrebbe generate senza applicarle
-kubectl gateway-api convert --from ingress -n production --dry-run=client
+# Rivedere, poi applicare
+kubectl apply --dry-run=server -f gateway-resources.yaml
 ```
 
 ```yaml
@@ -677,7 +698,7 @@ kubectl get httproute -A -o custom-columns=\
 
 **Sintomo:** Nonostante `weight: 10` su orders-v2, tutto il traffico va su orders-v1.
 
-**Causa:** Il controller non supporta il traffic splitting (non tutti i controller implementano la feature — verificare la conformance matrix). Oppure il `weight: 0` non viene interpretato come "rimuovi" ma come "uguale".
+**Causa:** Il controller non supporta il traffic splitting (non tutti i controller implementano la feature — verificare la conformance matrix). Oppure un `weight: 0` su un backend: significa "nessun traffico" (non "quota uguale"); se omesso il default è 1.
 
 **Soluzione:**
 
@@ -686,10 +707,10 @@ kubectl get httproute -A -o custom-columns=\
 # Documentazione: https://gateway-api.sigs.k8s.io/implementations/
 
 # Test rapido: invia 100 richieste e conta la distribuzione
+# (presuppone che l'app esponga la propria versione, es. un endpoint /version)
 for i in $(seq 1 100); do
-  curl -s -o /dev/null -w "%{http_code}\n" \
-    -H "Host: orders.example.com" \
-    https://<GATEWAY-IP>/api/v1/orders
+  curl -s -H "Host: orders.example.com" https://<GATEWAY-IP>/api/v1/version
+  echo
 done | sort | uniq -c
 
 # Verifica che entrambi i Service abbiano endpoint
@@ -707,19 +728,19 @@ kubectl logs -n nginx-gateway -l app=nginx-gateway | grep -i "weight\|split\|err
 
 **Sintomo:** `ReferenceGrant` creato ma la HTTPRoute continua a mostrare `RefNotPermitted`.
 
-**Causa:** Il `ReferenceGrant` deve essere nel namespace della risorsa referenziata (non nel namespace dell'HTTPRoute), e i campi `from`/`to` devono corrispondere esattamente.
+**Causa:** Il `ReferenceGrant` deve essere nel namespace della risorsa referenziata (non nel namespace dell'HTTPRoute), e i campi `from`/`to` devono corrispondere esattamente. Attenzione: il riferimento HTTPRoute → Gateway **non** usa ReferenceGrant (vedi `allowedRoutes`), quindi un grant di quel tipo non ha effetto. `RefNotPermitted` compare nella condition `ResolvedRefs` dei `backendRefs`.
 
 **Soluzione:**
 
 ```bash
 # Verifica posizione e configurazione del ReferenceGrant
 kubectl get referencegrant -A
-# Il ReferenceGrant DEVE essere nel namespace del Gateway/Secret, non dell'HTTPRoute
+# Il ReferenceGrant DEVE essere nel namespace del Service/Secret referenziato
 
-kubectl describe referencegrant allow-orders-routes -n infra
+kubectl describe referencegrant allow-orders-to-shared-svc -n shared
 # Verificare:
 #   From: [ {Group: gateway.networking.k8s.io, Kind: HTTPRoute, Namespace: orders} ]
-#   To:   [ {Group: gateway.networking.k8s.io, Kind: Gateway, Name: prod-gateway} ]
+#   To:   [ {Group: "", Kind: Service} ]
 
 # Verifica case-sensitive: "HTTPRoute" non "Httproute"
 kubectl get referencegrant -n infra -o yaml | grep -A5 "from:"
@@ -728,12 +749,12 @@ kubectl get referencegrant -n infra -o yaml | grep -A5 "from:"
 ## Relazioni
 
 ??? info "Ingress — Il predecessore"
-    Gateway API è il successore di Ingress. Durante la migrazione, entrambi coesistono. Ingress rimane la scelta per cluster pre-1.28 o controller legacy.
+    Gateway API è il successore di Ingress. Durante la migrazione, entrambi coesistono. Ingress resta utilizzabile (API stabile ma congelata) dove il controller non supporta ancora Gateway API.
 
     **Approfondimento →** [Ingress e Ingress Controller](ingress.md)
 
 ??? info "Service Mesh — Integrazione"
-    Istio e Linkerd supportano Gateway API come data plane. Con Istio, il Gateway API controlla anche il traffico est-ovest via `HTTPRoute` cross-mesh.
+    Istio supporta Gateway API sia per l'ingress sia per il traffico est-ovest; Linkerd usa `HTTPRoute` per il routing interno al mesh (iniziativa GAMMA) ma non fornisce un ingress Gateway API proprio.
 
     **Approfondimento →** [Linkerd Service Mesh](../../networking/service-mesh/linkerd.md)
 
