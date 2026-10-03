@@ -5846,7 +5846,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -5871,7 +5871,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -25458,7 +25458,7 @@
 - RDS/Aurora Login Activity
 - Lambda Network Activity Logs
 - ECS Runtime Monitoring
-- EC2 Runtime Monitoring (via SSM agent)
+- EC2 Runtime Monitoring (agent GuardDuty; il deploy automatico passa da SSM)
 - S3 Data Events
 - EBS Malware Protection (scansione EBS su istanze sospette)</p>
 <div class="admonition tip">
@@ -25534,44 +25534,44 @@
 </table>
 <p><strong>Severity:</strong> Low (1-3.9), Medium (4-6.9), High (7-8.9), Critical (9-10)</p>
 <h3 id="abilitare-guardduty">Abilitare GuardDuty<a class="headerlink" href="#abilitare-guardduty" title="Permanent link">&para;</a></h3>
+<div class="admonition note">
+<p class="admonition-title"><code>--features</code> al posto di <code>--data-sources</code></p>
+<p>Il parametro <code>--data-sources</code> è deprecato: non gestisce Runtime Monitoring e le feature più recenti. Il modello attuale è <code>--features</code> (lista di <code>Name</code>/<code>Status</code>), usato anche per l'auto-enable in Organizations. Le feature <code>RUNTIME_MONITORING</code> e <code>EKS_RUNTIME_MONITORING</code> sono mutuamente esclusive.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Abilitare GuardDuty nel proprio account</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>aws<span class="w"> </span>guardduty<span class="w"> </span>create-detector<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--enable<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--data-sources<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="s1">    "S3Logs": {"Enable": true},</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="s1">    "Kubernetes": {"AuditLogs": {"Enable": true}},</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="s1">    "MalwareProtection": {</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="s1">      "ScanEc2InstanceWithFindings": {</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="s1">        "EbsVolumes": {"Enable": true}</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="s1">      }</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="s1">    },</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="s1">    "RdsLoginEvents": {"Enable": true},</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="s1">    "RuntimeMonitoring": {</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="s1">      "RuntimeMonitoringConfiguration": {"Enable": true},</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="s1">      "EksAddonManagement": {"Enable": true},</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="s1">      "EcsFargateAgentManagement": {"Enable": true},</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="s1">      "Ec2AgentManagement": {"Enable": true}</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="s1">    },</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="s1">    "Lambda": {"LambdaNetworkLogs": {"Enable": true}}</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="s1">  }'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">  </span>--finding-publishing-frequency<span class="w"> </span>FIFTEEN_MINUTES
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="c1"># Ottenere il Detector ID</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="nv">DETECTOR_ID</span><span class="o">=</span><span class="k">$(</span>aws<span class="w"> </span>guardduty<span class="w"> </span>list-detectors<span class="w"> </span>--query<span class="w"> </span><span class="s1">'DetectorIds[0]'</span><span class="w"> </span>--output<span class="w"> </span>text<span class="k">)</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="c1"># Listare i finding</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>aws<span class="w"> </span>guardduty<span class="w"> </span>list-findings<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">  </span>--detector-id<span class="w"> </span><span class="nv">$DETECTOR_ID</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">  </span>--finding-criteria<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="s1">    "Criterion": {</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="s1">      "severity": {"Gte": 7}</span>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="s1">    }</span>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="s1">  }'</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="c1"># Dettagli di un finding</span>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>aws<span class="w"> </span>guardduty<span class="w"> </span>get-findings<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">  </span>--detector-id<span class="w"> </span><span class="nv">$DETECTOR_ID</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="w">  </span>--finding-ids<span class="w"> </span><span class="s2">"finding-id-here"</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--features<span class="w"> </span><span class="s1">'[</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="s1">    {"Name": "S3_DATA_EVENTS", "Status": "ENABLED"},</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="s1">    {"Name": "EKS_AUDIT_LOGS", "Status": "ENABLED"},</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="s1">    {"Name": "EBS_MALWARE_PROTECTION", "Status": "ENABLED"},</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="s1">    {"Name": "RDS_LOGIN_EVENTS", "Status": "ENABLED"},</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="s1">    {"Name": "LAMBDA_NETWORK_LOGS", "Status": "ENABLED"},</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="s1">    {"Name": "RUNTIME_MONITORING", "Status": "ENABLED",</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="s1">     "AdditionalConfiguration": [</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="s1">       {"Name": "EKS_ADDON_MANAGEMENT", "Status": "ENABLED"},</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="s1">       {"Name": "ECS_FARGATE_AGENT_MANAGEMENT", "Status": "ENABLED"},</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="s1">       {"Name": "EC2_AGENT_MANAGEMENT", "Status": "ENABLED"}</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="s1">     ]}</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="s1">  ]'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">  </span>--finding-publishing-frequency<span class="w"> </span>FIFTEEN_MINUTES
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="c1"># Ottenere il Detector ID</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="nv">DETECTOR_ID</span><span class="o">=</span><span class="k">$(</span>aws<span class="w"> </span>guardduty<span class="w"> </span>list-detectors<span class="w"> </span>--query<span class="w"> </span><span class="s1">'DetectorIds[0]'</span><span class="w"> </span>--output<span class="w"> </span>text<span class="k">)</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="c1"># Listare i finding</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>aws<span class="w"> </span>guardduty<span class="w"> </span>list-findings<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">  </span>--detector-id<span class="w"> </span><span class="nv">$DETECTOR_ID</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">  </span>--finding-criteria<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="s1">    "Criterion": {</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="s1">      "severity": {"Gte": 7}</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="s1">    }</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="s1">  }'</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="c1"># Dettagli di un finding</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>aws<span class="w"> </span>guardduty<span class="w"> </span>get-findings<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">  </span>--detector-id<span class="w"> </span><span class="nv">$DETECTOR_ID</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">  </span>--finding-ids<span class="w"> </span><span class="s2">"finding-id-here"</span>
 </span></code></pre></div>
 <h3 id="guardduty-multi-account-organizations">GuardDuty Multi-Account (Organizations)<a class="headerlink" href="#guardduty-multi-account-organizations" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Designare un account come GuardDuty Delegated Admin (dall'account Management)</span>
@@ -25582,10 +25582,10 @@
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>aws<span class="w"> </span>guardduty<span class="w"> </span>update-organization-configuration<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span>--detector-id<span class="w"> </span><span class="nv">$DETECTOR_ID</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span>--auto-enable-organization-members<span class="w"> </span>ALL<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span>--data-sources<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="s1">    "S3Logs": {"AutoEnable": true},</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="s1">    "Kubernetes": {"AuditLogs": {"AutoEnable": true}}</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="s1">  }'</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span>--features<span class="w"> </span><span class="s1">'[</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="s1">    {"Name": "S3_DATA_EVENTS", "AutoEnable": "ALL"},</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="s1">    {"Name": "EKS_AUDIT_LOGS", "AutoEnable": "ALL"}</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="s1">  ]'</span>
 </span></code></pre></div>
 <h3 id="automazione-con-eventbridge">Automazione con EventBridge<a class="headerlink" href="#automazione-con-eventbridge" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># EventBridge rule per auto-remediation su finding High/Critical</span>
@@ -25630,20 +25630,25 @@
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="c1"># Per finding di tipo malware su EC2</span>
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="k">if</span> <span class="s1">'Trojan'</span> <span class="ow">in</span> <span class="n">finding_type</span> <span class="ow">or</span> <span class="s1">'Backdoor'</span> <span class="ow">in</span> <span class="n">finding_type</span><span class="p">:</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>        <span class="n">instance_id</span> <span class="o">=</span> <span class="n">extract_instance_id</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>        <span class="k">if</span> <span class="n">instance_id</span><span class="p">:</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>            <span class="c1"># Isola l'istanza (rimuovi da SG normali, metti in quarantine SG)</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>            <span class="n">ec2</span><span class="o">.</span><span class="n">modify_instance_attribute</span><span class="p">(</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>                <span class="n">InstanceId</span><span class="o">=</span><span class="n">instance_id</span><span class="p">,</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>                <span class="n">Groups</span><span class="o">=</span><span class="p">[</span><span class="s1">'sg-quarantine-12345'</span><span class="p">]</span>  <span class="c1"># SG senza regole outbound</span>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>            <span class="p">)</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>            <span class="c1"># Notifica il team di sicurezza</span>
-</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>            <span class="n">sns</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span>
-</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>                <span class="n">TopicArn</span><span class="o">=</span><span class="s1">'arn:aws:sns:us-east-1:123456789012:security-alerts'</span><span class="p">,</span>
-</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>                <span class="n">Subject</span><span class="o">=</span><span class="sa">f</span><span class="s1">'[CRITICAL] Malware detected on </span><span class="si">{</span><span class="n">instance_id</span><span class="si">}</span><span class="s1">'</span><span class="p">,</span>
-</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>                <span class="n">Message</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>            <span class="p">)</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>        <span class="c1"># NB: l'InputTransformer sopra non passa l'instance ID; in produzione</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>        <span class="c1"># aggiungere "instanceId": "$.detail.resource.instanceDetails.instanceId"</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>        <span class="c1"># e leggerlo da event. extract_instance_id() è un helper da implementare.</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>        <span class="n">instance_id</span> <span class="o">=</span> <span class="n">extract_instance_id</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>        <span class="k">if</span> <span class="n">instance_id</span><span class="p">:</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>            <span class="c1"># Isola l'istanza (sostituisce i SG con uno di quarantena).</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>            <span class="c1"># Un SG nuovo ha di default egress 0.0.0.0/0: va revocato prima,</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>            <span class="c1"># altrimenti l'istanza resta libera di comunicare verso l'esterno.</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>            <span class="n">ec2</span><span class="o">.</span><span class="n">modify_instance_attribute</span><span class="p">(</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>                <span class="n">InstanceId</span><span class="o">=</span><span class="n">instance_id</span><span class="p">,</span>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>                <span class="n">Groups</span><span class="o">=</span><span class="p">[</span><span class="s1">'sg-quarantine-12345'</span><span class="p">]</span>  <span class="c1"># SG senza regole inbound né outbound</span>
+</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>            <span class="p">)</span>
+</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>
+</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>            <span class="c1"># Notifica il team di sicurezza</span>
+</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>            <span class="n">sns</span><span class="o">.</span><span class="n">publish</span><span class="p">(</span>
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>                <span class="n">TopicArn</span><span class="o">=</span><span class="s1">'arn:aws:sns:us-east-1:123456789012:security-alerts'</span><span class="p">,</span>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>                <span class="n">Subject</span><span class="o">=</span><span class="sa">f</span><span class="s1">'[CRITICAL] Malware detected on </span><span class="si">{</span><span class="n">instance_id</span><span class="si">}</span><span class="s1">'</span><span class="p">,</span>
+</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>                <span class="n">Message</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>            <span class="p">)</span>
 </span></code></pre></div></p>
 <hr />
 <h2 id="amazon-inspector">Amazon Inspector<a class="headerlink" href="#amazon-inspector" title="Permanent link">&para;</a></h2>
@@ -25652,7 +25657,7 @@
 <p><strong>Scope di scansione:</strong>
 - <strong>EC2:</strong> scansione OS e applicazioni installate (richiede SSM Agent)
 - <strong>Amazon ECR:</strong> scansione immagini Docker al push e continuamente
-- <strong>Lambda:</strong> scansione del codice Lambda e dipendenze</p>
+- <strong>Lambda:</strong> scansione delle dipendenze delle funzioni (<code>LAMBDA</code>) e, opzionalmente, del codice applicativo (<code>LAMBDA_CODE</code>)</p>
 <p><strong>Finding types:</strong>
 - CVE (Common Vulnerabilities and Exposures) dal NVD (National Vulnerability Database)
 - CIS (Center for Internet Security) benchmarks
@@ -25660,7 +25665,7 @@
 - Software composition analysis (SBOM — Software Bill of Materials)</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Abilitare Inspector v2</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>aws<span class="w"> </span>inspector2<span class="w"> </span><span class="nb">enable</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--resource-types<span class="w"> </span>EC2<span class="w"> </span>ECR<span class="w"> </span>LAMBDA
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--resource-types<span class="w"> </span>EC2<span class="w"> </span>ECR<span class="w"> </span>LAMBDA<span class="w"> </span>LAMBDA_CODE
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Con Organizations — abilitare su tutti gli account</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>aws<span class="w"> </span>inspector2<span class="w"> </span>enable-delegated-admin-account<span class="w"> </span><span class="se">\</span>
@@ -25733,31 +25738,29 @@
 </span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>aws<span class="w"> </span>macie2<span class="w"> </span>create-classification-job<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">  </span>--job-type<span class="w"> </span>SCHEDULED<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"Daily Scan"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">  </span>--schedule-frequency<span class="w"> </span>DAILY<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">  </span>--schedule-frequency<span class="w"> </span><span class="s1">'{"dailySchedule": {}}'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">  </span>--s3-job-definition<span class="w"> </span><span class="s1">'{</span>
 </span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="s1">    "bucketDefinitions": [{"accountId": "123456789012", "buckets": ["my-data-bucket"]}]</span>
 </span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="s1">  }'</span>
 </span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>
 </span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="c1"># Listare i finding</span>
 </span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>aws<span class="w"> </span>macie2<span class="w"> </span>list-findings<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="w">  </span>--filter-criteria<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="s1">    "findingCriteria": {</span>
-</span><span id="__span-6-31"><a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a><span class="s1">      "criterion": {</span>
-</span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="s1">        "severity.score": {"gte": 50}</span>
-</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a><span class="s1">      }</span>
-</span><span id="__span-6-34"><a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a><span class="s1">    }</span>
-</span><span id="__span-6-35"><a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a><span class="s1">  }'</span>
-</span><span id="__span-6-36"><a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>
-</span><span id="__span-6-37"><a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a><span class="c1"># Dettagli di un finding</span>
-</span><span id="__span-6-38"><a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a>aws<span class="w"> </span>macie2<span class="w"> </span>get-findings<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-39"><a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a><span class="w">  </span>--finding-ids<span class="w"> </span><span class="s2">"finding-id-here"</span>
-</span><span id="__span-6-40"><a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a>
-</span><span id="__span-6-41"><a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a><span class="c1"># Statistiche per bucket</span>
-</span><span id="__span-6-42"><a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a>aws<span class="w"> </span>macie2<span class="w"> </span>describe-buckets<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-43"><a id="__codelineno-6-43" name="__codelineno-6-43" href="#__codelineno-6-43"></a><span class="w">  </span>--criteria<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-6-44"><a id="__codelineno-6-44" name="__codelineno-6-44" href="#__codelineno-6-44"></a><span class="s1">    "sharedAccess": {"eq": ["INTERNAL"]},</span>
-</span><span id="__span-6-45"><a id="__codelineno-6-45" name="__codelineno-6-45" href="#__codelineno-6-45"></a><span class="s1">    "publicAccess.effectivePermission": {"eq": ["NOT_PUBLIC"]}</span>
-</span><span id="__span-6-46"><a id="__codelineno-6-46" name="__codelineno-6-46" href="#__codelineno-6-46"></a><span class="s1">  }'</span>
+</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="w">  </span>--finding-criteria<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="s1">    "criterion": {</span>
+</span><span id="__span-6-31"><a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a><span class="s1">      "severity.description": {"eq": ["High"]}</span>
+</span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a><span class="s1">    }</span>
+</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a><span class="s1">  }'</span>
+</span><span id="__span-6-34"><a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a>
+</span><span id="__span-6-35"><a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a><span class="c1"># Dettagli di un finding</span>
+</span><span id="__span-6-36"><a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>aws<span class="w"> </span>macie2<span class="w"> </span>get-findings<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-37"><a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a><span class="w">  </span>--finding-ids<span class="w"> </span><span class="s2">"finding-id-here"</span>
+</span><span id="__span-6-38"><a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a>
+</span><span id="__span-6-39"><a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a><span class="c1"># Statistiche per bucket</span>
+</span><span id="__span-6-40"><a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a>aws<span class="w"> </span>macie2<span class="w"> </span>describe-buckets<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-41"><a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a><span class="w">  </span>--criteria<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-6-42"><a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a><span class="s1">    "sharedAccess": {"eq": ["INTERNAL"]},</span>
+</span><span id="__span-6-43"><a id="__codelineno-6-43" name="__codelineno-6-43" href="#__codelineno-6-43"></a><span class="s1">    "publicAccess.effectivePermission": {"eq": ["NOT_PUBLIC"]}</span>
+</span><span id="__span-6-44"><a id="__codelineno-6-44" name="__codelineno-6-44" href="#__codelineno-6-44"></a><span class="s1">  }'</span>
 </span></code></pre></div>
 <h3 id="macie-con-organizations">Macie con Organizations<a class="headerlink" href="#macie-con-organizations" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Delegare Macie a un account admin</span>
@@ -25772,12 +25775,17 @@
 <h2 id="aws-security-hub">AWS Security Hub<a class="headerlink" href="#aws-security-hub" title="Permanent link">&para;</a></h2>
 <h3 id="panoramica_4">Panoramica<a class="headerlink" href="#panoramica_4" title="Permanent link">&para;</a></h3>
 <p>Security Hub è il pannello di controllo centrale per la sicurezza AWS. Aggrega, organizza e priorizza i finding di sicurezza da GuardDuty, Inspector, Macie, Config, Firewall Manager, IAM Access Analyzer, e altri.</p>
-<p><strong>Compliance Standards supportati:</strong>
+<div class="admonition note">
+<p class="admonition-title">Security Hub CSPM vs nuovo Security Hub</p>
+<p>Il servizio descritto qui (controlli di compliance + formato ASFF) è oggi chiamato <strong>Security Hub CSPM</strong> (Cloud Security Posture Management). AWS ha introdotto un nuovo Security Hub (fine 2025) che aggiunge correlazione e prioritizzazione del rischio e adotta il formato OCSF; CSPM resta disponibile come componente. I comandi <code>aws securityhub</code> sotto restano validi per CSPM.
+<!-- REVIEW: verificare nomenclatura/API del nuovo Security Hub (OCSF) e impatto sui comandi CLI --></p>
+</div>
+<p><strong>Compliance Standards supportati (CSPM):</strong>
 - AWS Foundational Security Best Practices (FSBP)
-- CIS AWS Foundations Benchmark (v1.2, v1.4, v3.0)
-- PCI DSS v3.2.1
+- CIS AWS Foundations Benchmark (v1.2, v1.4, v3.0, v5.0)
+- PCI DSS (v3.2.1 e v4.0.1; la v3.2.1 è ritirata dal PCI SSC, preferire la v4.0.1)
 - NIST SP 800-53 Rev. 5
-- SOC 2
+- NIST CSF
 - AWS Resource Tagging Standard</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Abilitare Security Hub</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>aws<span class="w"> </span>securityhub<span class="w"> </span>enable-security-hub<span class="w"> </span><span class="se">\</span>
@@ -25788,7 +25796,7 @@
 </span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>aws<span class="w"> </span>securityhub<span class="w"> </span>batch-enable-standards<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">  </span>--standards-subscription-requests<span class="w"> </span><span class="s1">'[</span>
 </span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="s1">    {"StandardsArn": "arn:aws:securityhub:us-east-1::standards/cis-aws-foundations-benchmark/v/1.4.0"},</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="s1">    {"StandardsArn": "arn:aws:securityhub:us-east-1::standards/pci-dss/v/3.2.1"}</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="s1">    {"StandardsArn": "arn:aws:securityhub:us-east-1::standards/pci-dss/v/4.0.1"}</span>
 </span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="s1">  ]'</span>
 </span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1"># Listare i finding</span>
@@ -25920,7 +25928,7 @@
 </span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="s1">    }</span>
 </span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a><span class="s1">  }'</span>
 </span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a>
-</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a><span class="c1"># Regola managed: istanze EC2 non devono avere public IP di default</span>
+</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a><span class="c1"># Regola managed: istanze EC2 non devono avere un public IP</span>
 </span><span id="__span-12-32"><a id="__codelineno-12-32" name="__codelineno-12-32" href="#__codelineno-12-32"></a>aws<span class="w"> </span>configservice<span class="w"> </span>put-config-rule<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-33"><a id="__codelineno-12-33" name="__codelineno-12-33" href="#__codelineno-12-33"></a><span class="w">  </span>--config-rule<span class="w"> </span><span class="s1">'{</span>
 </span><span id="__span-12-34"><a id="__codelineno-12-34" name="__codelineno-12-34" href="#__codelineno-12-34"></a><span class="s1">    "ConfigRuleName": "ec2-instance-no-public-ip",</span>
@@ -25957,18 +25965,19 @@
 </span></code></pre></div>
 <h3 id="config-remediations">Config Remediations<a class="headerlink" href="#config-remediations" title="Permanent link">&para;</a></h3>
 <p>Le Remediations eseguono automaticamente azioni correttive quando una risorsa non è conforme.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Aggiungere una remediation action (es. cifrare un volume EBS)</span>
+<p>Le remediation sono SSM Automation document eseguiti con un ruolo IAM (<code>AutomationAssumeRole</code>) che deve avere i permessi per la modifica.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Aggiungere una remediation action (es. chiudere l'accesso pubblico di un bucket S3)</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>aws<span class="w"> </span>configservice<span class="w"> </span>put-remediation-configurations<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>--remediation-configurations<span class="w"> </span><span class="s1">'[{</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="s1">    "ConfigRuleName": "encrypted-volumes",</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="s1">    "ConfigRuleName": "s3-bucket-public-read-prohibited",</span>
 </span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="s1">    "TargetType": "SSM_DOCUMENT",</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="s1">    "TargetId": "AWS-EncryptEBSVolume",</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="s1">    "TargetId": "AWS-DisableS3BucketPublicReadWrite",</span>
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="s1">    "Parameters": {</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="s1">      "VolumeId": {</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="s1">      "S3BucketName": {</span>
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="s1">        "ResourceValue": {"Value": "RESOURCE_ID"}</span>
 </span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="s1">      },</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="s1">      "KmsKeyId": {</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="s1">        "StaticValue": {"Values": ["alias/aws/ebs"]}</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="s1">      "AutomationAssumeRole": {</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="s1">        "StaticValue": {"Values": ["arn:aws:iam::123456789012:role/ConfigRemediationRole"]}</span>
 </span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="s1">      }</span>
 </span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="s1">    },</span>
 </span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="s1">    "Automatic": false,</span>
@@ -25978,12 +25987,16 @@
 </span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a>
 </span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="c1"># Eseguire la remediation manualmente su risorse specifiche</span>
 </span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a>aws<span class="w"> </span>configservice<span class="w"> </span>start-remediation-execution<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="w">  </span>--config-rule-name<span class="w"> </span><span class="s2">"encrypted-volumes"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="w">  </span>--config-rule-name<span class="w"> </span><span class="s2">"s3-bucket-public-read-prohibited"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a><span class="w">  </span>--resource-keys<span class="w"> </span><span class="s1">'[{</span>
-</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="s1">    "resourceType": "AWS::EC2::Volume",</span>
-</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a><span class="s1">    "resourceId": "vol-1234567890abcdef0"</span>
+</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="s1">    "resourceType": "AWS::S3::Bucket",</span>
+</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a><span class="s1">    "resourceId": "my-data-bucket"</span>
 </span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="s1">  }]'</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Volumi EBS non cifrati</p>
+<p>Un volume EBS esistente non può essere cifrato in place: serve snapshot → copia cifrata → nuovo volume. Per questo <code>encrypted-volumes</code> si remedia a livello di processo (default encryption EBS a livello account/Region), non con una remediation automatica.</p>
+</div>
 <h3 id="configuration-timeline">Configuration Timeline<a class="headerlink" href="#configuration-timeline" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Vedere la storia di configurazione di una risorsa</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>aws<span class="w"> </span>configservice<span class="w"> </span>get-resource-config-history<span class="w"> </span><span class="se">\</span>
@@ -26007,25 +26020,29 @@
 </span></code></pre></div>
 <h3 id="conformance-pack">Conformance Pack<a class="headerlink" href="#conformance-pack" title="Permanent link">&para;</a></h3>
 <p>I Conformance Pack sono una raccolta di Config Rules + Remediations pre-assemblate per uno standard di compliance specifico.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Deploy di un Conformance Pack AWS-managed (es. AWS Operational Best Practices for PCI DSS)</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>aws<span class="w"> </span>configservice<span class="w"> </span>put-conformance-pack<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>--conformance-pack-name<span class="w"> </span><span class="s2">"PCI-DSS-Pack"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span>--template-s3-uri<span class="w"> </span><span class="s2">"s3://aws-config-conformance-packs-us-east-1/Operational-Best-Practices-for-PCI-DSS.yaml"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">  </span>--delivery-s3-bucket<span class="w"> </span><span class="s2">"my-config-bucket"</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># Listare i Conformance Pack disponibili</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>aws<span class="w"> </span>configservice<span class="w"> </span>describe-conformance-packs
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="c1"># Verificare compliance di un Conformance Pack</span>
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>aws<span class="w"> </span>configservice<span class="w"> </span>describe-conformance-pack-compliance<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">  </span>--conformance-pack-names<span class="w"> </span><span class="s2">"PCI-DSS-Pack"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Deploy di un Conformance Pack da template di esempio AWS</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1"># (es. Operational Best Practices for PCI DSS, repo GitHub awslabs/aws-config-rules).</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># Il template va prima copiato in un proprio bucket S3 (stessa Region): non esiste</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># un bucket AWS pubblico da referenziare direttamente.</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>aws<span class="w"> </span>s3<span class="w"> </span>cp<span class="w"> </span>Operational-Best-Practices-for-PCI-DSS.yaml<span class="w"> </span>s3://my-config-bucket/conformance-packs/
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>aws<span class="w"> </span>configservice<span class="w"> </span>put-conformance-pack<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">  </span>--conformance-pack-name<span class="w"> </span><span class="s2">"PCI-DSS-Pack"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">  </span>--template-s3-uri<span class="w"> </span><span class="s2">"s3://my-config-bucket/conformance-packs/Operational-Best-Practices-for-PCI-DSS.yaml"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">  </span>--delivery-s3-bucket<span class="w"> </span><span class="s2">"my-config-bucket"</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="c1"># Listare i Conformance Pack disponibili</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>aws<span class="w"> </span>configservice<span class="w"> </span>describe-conformance-packs
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="c1"># Verificare compliance di un Conformance Pack</span>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a>aws<span class="w"> </span>configservice<span class="w"> </span>describe-conformance-pack-compliance<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="w">  </span>--conformance-pack-names<span class="w"> </span><span class="s2">"PCI-DSS-Pack"</span>
 </span></code></pre></div>
 <hr />
 <h2 id="aws-cloudtrail">AWS CloudTrail<a class="headerlink" href="#aws-cloudtrail" title="Permanent link">&para;</a></h2>
 <h3 id="panoramica_6">Panoramica<a class="headerlink" href="#panoramica_6" title="Permanent link">&para;</a></h3>
 <p>CloudTrail registra ogni <strong>API call</strong> effettuata sull'account AWS: chi (principal), cosa (azione), quando (timestamp), da dove (IP sorgente), su cosa (risorsa) e con quale risultato (successo/fallimento).</p>
 <p><strong>Tipi di eventi:</strong>
-- <strong>Management Events (default ON):</strong> operazioni di controllo (CreateBucket, RunInstances, DeleteUser)
+- <strong>Management Events:</strong> operazioni di controllo (CreateBucket, RunInstances, DeleteUser). Gli ultimi 90 giorni sono visibili gratis in <em>Event History</em> senza configurare nulla; per retention più lunga, audit e analisi serve un <strong>trail</strong> (o un Event Data Store)
 - <strong>Data Events (opzionale, costo aggiuntivo):</strong> operazioni sui dati (S3 GetObject/PutObject, Lambda Invoke, DynamoDB PutItem)
 - <strong>Insights Events:</strong> anomalie nel pattern di API calls (picchi di utilizzo insoliti)</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Creare un trail multi-Region</span>
@@ -26087,7 +26104,10 @@
 </span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="w">  </span>--lookup-attributes<span class="w"> </span><span class="nv">AttributeKey</span><span class="o">=</span>ResourceName,AttributeValue<span class="o">=</span>my-bucket
 </span></code></pre></div>
 <h3 id="cloudtrail-lake">CloudTrail Lake<a class="headerlink" href="#cloudtrail-lake" title="Permanent link">&para;</a></h3>
-<p>CloudTrail Lake permette di eseguire query SQL direttamente sui log CloudTrail senza doverli esportare. Retention fino a 7 anni.</p>
+<p>CloudTrail Lake permette di eseguire query SQL direttamente sui log CloudTrail senza doverli esportare. Retention fino a 3653 giorni (~10 anni) con pricing a retention estesa.</p>
+<!-- REVIEW: verificare se CloudTrail Lake è ancora disponibile ai nuovi clienti (possibile restrizione di disponibilità 2026) e, in caso, indicare alternativa trail → S3 + Athena -->
+
+<p>Lo <code>start-query</code> richiede nel <code>FROM</code> l'<strong>ID</strong> dell'Event Data Store (non il nome).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Creare un Event Data Store</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>aws<span class="w"> </span>cloudtrail<span class="w"> </span>create-event-data-store<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"MyAuditLake"</span><span class="w"> </span><span class="se">\</span>
@@ -26226,7 +26246,7 @@
 <h3 id="cloudtrail-log-non-consegnati-in-s3">CloudTrail: Log Non Consegnati in S3<a class="headerlink" href="#cloudtrail-log-non-consegnati-in-s3" title="Permanent link">&para;</a></h3>
 <ol>
 <li>Verificare la bucket policy (CloudTrail deve poter scrivere nel bucket)</li>
-<li>Verificare che il bucket esista e sia nella stessa Region del trail</li>
+<li>Verificare che il bucket esista (può stare in una Region diversa da quella del trail)</li>
 <li>Controllare i CloudTrail service events per errori di delivery</li>
 </ol>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Verificare la bucket policy per CloudTrail</span>
