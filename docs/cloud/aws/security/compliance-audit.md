@@ -7,9 +7,10 @@ search_keywords: [guardduty, threat detection, ml security, inspector, vulnerabi
 parent: cloud/aws/security/_index
 related: [cloud/aws/security/kms-secrets, cloud/aws/security/network-security, cloud/aws/monitoring/cloudwatch, cloud/aws/monitoring/observability]
 official_docs: https://docs.aws.amazon.com/guardduty/
-status: complete
+status: needs-review
+last_verified: 2026-10-03
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-10-03
 ---
 
 # GuardDuty, Inspector, Macie, Security Hub, Config e CloudTrail
@@ -34,7 +35,7 @@ GuardDuty è un servizio di threat detection continuativo basato su machine lear
 - RDS/Aurora Login Activity
 - Lambda Network Activity Logs
 - ECS Runtime Monitoring
-- EC2 Runtime Monitoring (via SSM agent)
+- EC2 Runtime Monitoring (agent GuardDuty; il deploy automatico passa da SSM)
 - S3 Data Events
 - EBS Malware Protection (scansione EBS su istanze sospette)
 
@@ -64,27 +65,26 @@ GuardDuty è un servizio di threat detection continuativo basato su machine lear
 
 ### Abilitare GuardDuty
 
+!!! note "`--features` al posto di `--data-sources`"
+    Il parametro `--data-sources` è deprecato: non gestisce Runtime Monitoring e le feature più recenti. Il modello attuale è `--features` (lista di `Name`/`Status`), usato anche per l'auto-enable in Organizations. Le feature `RUNTIME_MONITORING` e `EKS_RUNTIME_MONITORING` sono mutuamente esclusive.
+
 ```bash
 # Abilitare GuardDuty nel proprio account
 aws guardduty create-detector \
   --enable \
-  --data-sources '{
-    "S3Logs": {"Enable": true},
-    "Kubernetes": {"AuditLogs": {"Enable": true}},
-    "MalwareProtection": {
-      "ScanEc2InstanceWithFindings": {
-        "EbsVolumes": {"Enable": true}
-      }
-    },
-    "RdsLoginEvents": {"Enable": true},
-    "RuntimeMonitoring": {
-      "RuntimeMonitoringConfiguration": {"Enable": true},
-      "EksAddonManagement": {"Enable": true},
-      "EcsFargateAgentManagement": {"Enable": true},
-      "Ec2AgentManagement": {"Enable": true}
-    },
-    "Lambda": {"LambdaNetworkLogs": {"Enable": true}}
-  }' \
+  --features '[
+    {"Name": "S3_DATA_EVENTS", "Status": "ENABLED"},
+    {"Name": "EKS_AUDIT_LOGS", "Status": "ENABLED"},
+    {"Name": "EBS_MALWARE_PROTECTION", "Status": "ENABLED"},
+    {"Name": "RDS_LOGIN_EVENTS", "Status": "ENABLED"},
+    {"Name": "LAMBDA_NETWORK_LOGS", "Status": "ENABLED"},
+    {"Name": "RUNTIME_MONITORING", "Status": "ENABLED",
+     "AdditionalConfiguration": [
+       {"Name": "EKS_ADDON_MANAGEMENT", "Status": "ENABLED"},
+       {"Name": "ECS_FARGATE_AGENT_MANAGEMENT", "Status": "ENABLED"},
+       {"Name": "EC2_AGENT_MANAGEMENT", "Status": "ENABLED"}
+     ]}
+  ]' \
   --finding-publishing-frequency FIFTEEN_MINUTES
 
 # Ottenere il Detector ID
@@ -116,10 +116,10 @@ aws guardduty enable-organization-admin-account \
 aws guardduty update-organization-configuration \
   --detector-id $DETECTOR_ID \
   --auto-enable-organization-members ALL \
-  --data-sources '{
-    "S3Logs": {"AutoEnable": true},
-    "Kubernetes": {"AuditLogs": {"AutoEnable": true}}
-  }'
+  --features '[
+    {"Name": "S3_DATA_EVENTS", "AutoEnable": "ALL"},
+    {"Name": "EKS_AUDIT_LOGS", "AutoEnable": "ALL"}
+  ]'
 ```
 
 ### Automazione con EventBridge
@@ -169,12 +169,17 @@ def handler(event, context):
 
     # Per finding di tipo malware su EC2
     if 'Trojan' in finding_type or 'Backdoor' in finding_type:
+        # NB: l'InputTransformer sopra non passa l'instance ID; in produzione
+        # aggiungere "instanceId": "$.detail.resource.instanceDetails.instanceId"
+        # e leggerlo da event. extract_instance_id() è un helper da implementare.
         instance_id = extract_instance_id(event)
         if instance_id:
-            # Isola l'istanza (rimuovi da SG normali, metti in quarantine SG)
+            # Isola l'istanza (sostituisce i SG con uno di quarantena).
+            # Un SG nuovo ha di default egress 0.0.0.0/0: va revocato prima,
+            # altrimenti l'istanza resta libera di comunicare verso l'esterno.
             ec2.modify_instance_attribute(
                 InstanceId=instance_id,
-                Groups=['sg-quarantine-12345']  # SG senza regole outbound
+                Groups=['sg-quarantine-12345']  # SG senza regole inbound né outbound
             )
 
             # Notifica il team di sicurezza
@@ -196,7 +201,7 @@ Inspector v2 (2021+) è un servizio di vulnerability assessment continuo e autom
 **Scope di scansione:**
 - **EC2:** scansione OS e applicazioni installate (richiede SSM Agent)
 - **Amazon ECR:** scansione immagini Docker al push e continuamente
-- **Lambda:** scansione del codice Lambda e dipendenze
+- **Lambda:** scansione delle dipendenze delle funzioni (`LAMBDA`) e, opzionalmente, del codice applicativo (`LAMBDA_CODE`)
 
 **Finding types:**
 - CVE (Common Vulnerabilities and Exposures) dal NVD (National Vulnerability Database)
@@ -207,7 +212,7 @@ Inspector v2 (2021+) è un servizio di vulnerability assessment continuo e autom
 ```bash
 # Abilitare Inspector v2
 aws inspector2 enable \
-  --resource-types EC2 ECR LAMBDA
+  --resource-types EC2 ECR LAMBDA LAMBDA_CODE
 
 # Con Organizations — abilitare su tutti gli account
 aws inspector2 enable-delegated-admin-account \
@@ -290,18 +295,16 @@ aws macie2 create-classification-job \
 aws macie2 create-classification-job \
   --job-type SCHEDULED \
   --name "Daily Scan" \
-  --schedule-frequency DAILY \
+  --schedule-frequency '{"dailySchedule": {}}' \
   --s3-job-definition '{
     "bucketDefinitions": [{"accountId": "123456789012", "buckets": ["my-data-bucket"]}]
   }'
 
 # Listare i finding
 aws macie2 list-findings \
-  --filter-criteria '{
-    "findingCriteria": {
-      "criterion": {
-        "severity.score": {"gte": 50}
-      }
+  --finding-criteria '{
+    "criterion": {
+      "severity.description": {"eq": ["High"]}
     }
   }'
 
@@ -337,12 +340,16 @@ aws macie2 update-organization-configuration \
 
 Security Hub è il pannello di controllo centrale per la sicurezza AWS. Aggrega, organizza e priorizza i finding di sicurezza da GuardDuty, Inspector, Macie, Config, Firewall Manager, IAM Access Analyzer, e altri.
 
-**Compliance Standards supportati:**
+!!! note "Security Hub CSPM vs nuovo Security Hub"
+    Il servizio descritto qui (controlli di compliance + formato ASFF) è oggi chiamato **Security Hub CSPM** (Cloud Security Posture Management). AWS ha introdotto un nuovo Security Hub (fine 2025) che aggiunge correlazione e prioritizzazione del rischio e adotta il formato OCSF; CSPM resta disponibile come componente. I comandi `aws securityhub` sotto restano validi per CSPM.
+    <!-- REVIEW: verificare nomenclatura/API del nuovo Security Hub (OCSF) e impatto sui comandi CLI -->
+
+**Compliance Standards supportati (CSPM):**
 - AWS Foundational Security Best Practices (FSBP)
-- CIS AWS Foundations Benchmark (v1.2, v1.4, v3.0)
-- PCI DSS v3.2.1
+- CIS AWS Foundations Benchmark (v1.2, v1.4, v3.0, v5.0)
+- PCI DSS (v3.2.1 e v4.0.1; la v3.2.1 è ritirata dal PCI SSC, preferire la v4.0.1)
 - NIST SP 800-53 Rev. 5
-- SOC 2
+- NIST CSF
 - AWS Resource Tagging Standard
 
 ```bash
@@ -355,7 +362,7 @@ aws securityhub enable-security-hub \
 aws securityhub batch-enable-standards \
   --standards-subscription-requests '[
     {"StandardsArn": "arn:aws:securityhub:us-east-1::standards/cis-aws-foundations-benchmark/v/1.4.0"},
-    {"StandardsArn": "arn:aws:securityhub:us-east-1::standards/pci-dss/v/3.2.1"}
+    {"StandardsArn": "arn:aws:securityhub:us-east-1::standards/pci-dss/v/4.0.1"}
   ]'
 
 # Listare i finding
@@ -504,7 +511,7 @@ aws configservice put-config-rule \
     }
   }'
 
-# Regola managed: istanze EC2 non devono avere public IP di default
+# Regola managed: istanze EC2 non devono avere un public IP
 aws configservice put-config-rule \
   --config-rule '{
     "ConfigRuleName": "ec2-instance-no-public-ip",
@@ -544,19 +551,21 @@ aws configservice get-compliance-details-by-config-rule \
 
 Le Remediations eseguono automaticamente azioni correttive quando una risorsa non è conforme.
 
+Le remediation sono SSM Automation document eseguiti con un ruolo IAM (`AutomationAssumeRole`) che deve avere i permessi per la modifica.
+
 ```bash
-# Aggiungere una remediation action (es. cifrare un volume EBS)
+# Aggiungere una remediation action (es. chiudere l'accesso pubblico di un bucket S3)
 aws configservice put-remediation-configurations \
   --remediation-configurations '[{
-    "ConfigRuleName": "encrypted-volumes",
+    "ConfigRuleName": "s3-bucket-public-read-prohibited",
     "TargetType": "SSM_DOCUMENT",
-    "TargetId": "AWS-EncryptEBSVolume",
+    "TargetId": "AWS-DisableS3BucketPublicReadWrite",
     "Parameters": {
-      "VolumeId": {
+      "S3BucketName": {
         "ResourceValue": {"Value": "RESOURCE_ID"}
       },
-      "KmsKeyId": {
-        "StaticValue": {"Values": ["alias/aws/ebs"]}
+      "AutomationAssumeRole": {
+        "StaticValue": {"Values": ["arn:aws:iam::123456789012:role/ConfigRemediationRole"]}
       }
     },
     "Automatic": false,
@@ -566,12 +575,15 @@ aws configservice put-remediation-configurations \
 
 # Eseguire la remediation manualmente su risorse specifiche
 aws configservice start-remediation-execution \
-  --config-rule-name "encrypted-volumes" \
+  --config-rule-name "s3-bucket-public-read-prohibited" \
   --resource-keys '[{
-    "resourceType": "AWS::EC2::Volume",
-    "resourceId": "vol-1234567890abcdef0"
+    "resourceType": "AWS::S3::Bucket",
+    "resourceId": "my-data-bucket"
   }]'
 ```
+
+!!! warning "Volumi EBS non cifrati"
+    Un volume EBS esistente non può essere cifrato in place: serve snapshot → copia cifrata → nuovo volume. Per questo `encrypted-volumes` si remedia a livello di processo (default encryption EBS a livello account/Region), non con una remediation automatica.
 
 ### Configuration Timeline
 
@@ -605,10 +617,14 @@ aws configservice put-configuration-aggregator \
 I Conformance Pack sono una raccolta di Config Rules + Remediations pre-assemblate per uno standard di compliance specifico.
 
 ```bash
-# Deploy di un Conformance Pack AWS-managed (es. AWS Operational Best Practices for PCI DSS)
+# Deploy di un Conformance Pack da template di esempio AWS
+# (es. Operational Best Practices for PCI DSS, repo GitHub awslabs/aws-config-rules).
+# Il template va prima copiato in un proprio bucket S3 (stessa Region): non esiste
+# un bucket AWS pubblico da referenziare direttamente.
+aws s3 cp Operational-Best-Practices-for-PCI-DSS.yaml s3://my-config-bucket/conformance-packs/
 aws configservice put-conformance-pack \
   --conformance-pack-name "PCI-DSS-Pack" \
-  --template-s3-uri "s3://aws-config-conformance-packs-us-east-1/Operational-Best-Practices-for-PCI-DSS.yaml" \
+  --template-s3-uri "s3://my-config-bucket/conformance-packs/Operational-Best-Practices-for-PCI-DSS.yaml" \
   --delivery-s3-bucket "my-config-bucket"
 
 # Listare i Conformance Pack disponibili
@@ -628,7 +644,7 @@ aws configservice describe-conformance-pack-compliance \
 CloudTrail registra ogni **API call** effettuata sull'account AWS: chi (principal), cosa (azione), quando (timestamp), da dove (IP sorgente), su cosa (risorsa) e con quale risultato (successo/fallimento).
 
 **Tipi di eventi:**
-- **Management Events (default ON):** operazioni di controllo (CreateBucket, RunInstances, DeleteUser)
+- **Management Events:** operazioni di controllo (CreateBucket, RunInstances, DeleteUser). Gli ultimi 90 giorni sono visibili gratis in *Event History* senza configurare nulla; per retention più lunga, audit e analisi serve un **trail** (o un Event Data Store)
 - **Data Events (opzionale, costo aggiuntivo):** operazioni sui dati (S3 GetObject/PutObject, Lambda Invoke, DynamoDB PutItem)
 - **Insights Events:** anomalie nel pattern di API calls (picchi di utilizzo insoliti)
 
@@ -697,7 +713,10 @@ aws cloudtrail lookup-events \
 
 ### CloudTrail Lake
 
-CloudTrail Lake permette di eseguire query SQL direttamente sui log CloudTrail senza doverli esportare. Retention fino a 7 anni.
+CloudTrail Lake permette di eseguire query SQL direttamente sui log CloudTrail senza doverli esportare. Retention fino a 3653 giorni (~10 anni) con pricing a retention estesa.
+<!-- REVIEW: verificare se CloudTrail Lake è ancora disponibile ai nuovi clienti (possibile restrizione di disponibilità 2026) e, in caso, indicare alternativa trail → S3 + Athena -->
+
+Lo `start-query` richiede nel `FROM` l'**ID** dell'Event Data Store (non il nome).
 
 ```bash
 # Creare un Event Data Store
@@ -858,7 +877,7 @@ Alcune regole managed Config si applicano solo a specifici tipi di risorsa. "Not
 ### CloudTrail: Log Non Consegnati in S3
 
 1. Verificare la bucket policy (CloudTrail deve poter scrivere nel bucket)
-2. Verificare che il bucket esista e sia nella stessa Region del trail
+2. Verificare che il bucket esista (può stare in una Region diversa da quella del trail)
 3. Controllare i CloudTrail service events per errori di delivery
 
 ```bash
