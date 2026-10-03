@@ -9,7 +9,7 @@ related: [ci-cd/testing/test-strategy, ci-cd/testing/contract-testing, monitorin
 official_docs: https://k6.io/docs/
 status: complete
 difficulty: intermediate
-last_updated: 2026-04-04
+last_updated: 2026-10-03
 ---
 
 # Performance Testing in CI/CD
@@ -579,23 +579,103 @@ services:
 
 ## Troubleshooting
 
-**k6 esce con codice 99 ma non capisco quale threshold ha fallito**
-: Il summary a fine test elenca esplicitamente i threshold falliti con i valori attuali vs richiesti. Se il summary è tagliato nel log CI, aggiungere `--summary-trend-stats` per includere tutti i percentili, o leggere il file JSON di output con `jq '.metrics | to_entries[] | select(.value.thresholds != null)'`.
+### Scenario 1 — k6 esce con codice 99 ma non è chiaro quale threshold ha fallito
 
-**I risultati variano molto tra run diverse**
-: Cause comuni: (1) staging non isolato — altri job o test girano in parallelo. (2) Ramp-up troppo breve — il sistema non ha raggiunto lo steady state. (3) Dimensione del test troppo piccola — con poche centinaia di richieste, un outlier sposta significativamente i percentili. Aumentare la durata dello steady state a minimo 5 minuti.
+**Sintomo**: il job CI fallisce con exit code 99 e il log è lungo o troncato.
 
-**La latenza è alta solo all'inizio poi si stabilizza**
-: È il comportamento atteso durante il warm-up: JVM/Node.js JIT, riempimento del connection pool, cache warming. Soluzione: aggiungere uno stage di ramp-up di 2+ minuti e ignorare i primi dati nell'analisi. Se la latenza alta persiste oltre il warm-up, il problema è strutturale.
+**Causa**: exit code 99 significa "threshold crossed". Il summary a fine test elenca i threshold falliti, ma può perdersi nel rumore del log CI.
 
-**k6 su GitHub Actions fallisce con "too many open files"**
-: Con molti VU (500+), k6 apre molte connessioni simultanee. Aggiungere al job: `run: ulimit -n 65536 && k6 run ...`. Su runner self-hosted, configurare `/etc/security/limits.conf`.
+**Soluzione**: leggere i threshold direttamente dall'export JSON (`--summary-export`) e includere tutti i percentili nel summary.
 
-**Gatling non genera il report HTML**
-: Il report viene generato solo al termine dello script, non durante l'esecuzione. Se il job CI viene interrotto (timeout), il report è incompleto. Aggiungere `if: always()` all'upload dell'artifact per recuperare i risultati parziali.
+```bash
+k6 run --summary-export=results/summary.json \
+  --summary-trend-stats="min,avg,med,p(90),p(95),p(99),max" tests/performance/load-test.js
+echo "exit code: $?"   # 99 = threshold fallito, 107 = errore di script
 
-**Error rate sale durante il load test ma non si vede nei log del servizio**
-: L'errore può essere a livello di rete o load balancer prima di raggiungere l'applicazione. Verificare: (1) health check del load balancer — se il servizio supera il connection limit, le richieste vengono rifiutate dal LB. (2) `ulimit` del processo applicativo. (3) metriche del database — connection pool esaurito causa timeout upstream.
+# Metriche con almeno un threshold, con esito ok true/false
+jq '.metrics | to_entries[] | select(.value.thresholds != null) | {metric: .key, thresholds: .value.thresholds}' results/summary.json
+```
+
+### Scenario 2 — I risultati variano molto tra run diverse
+
+**Sintomo**: p95 oscilla di ±30% tra run consecutive sullo stesso commit; il gate di regressione dà falsi positivi.
+
+**Causa**: (1) staging non isolato, altri job girano in parallelo. (2) Ramp-up troppo breve: il sistema non raggiunge lo steady state. (3) Campione troppo piccolo: con poche centinaia di richieste un outlier sposta i percentili.
+
+**Soluzione**: isolare lo staging, portare lo steady state ad almeno 5 minuti e verificare che il numero di richieste sia sufficiente (`http_reqs`).
+
+```bash
+# Quante richieste ha raccolto la run? Sotto poche migliaia i percentili sono instabili
+jq '.metrics.http_reqs.count' results/summary.json
+
+# Sono in esecuzione altri job sullo staging durante il test?
+kubectl top pods -n staging --sort-by=cpu | head
+```
+
+### Scenario 3 — Latenza alta solo all'inizio, poi si stabilizza
+
+**Sintomo**: i primi 1-2 minuti mostrano p95 molto alto, poi i valori rientrano nei threshold.
+
+**Causa**: warm-up del servizio: JIT compilation (JVM/Node.js), riempimento del connection pool, cache fredde, DNS lookup.
+
+**Soluzione**: aggiungere uno stage di ramp-up di 2+ minuti ed escludere il warm-up dai threshold con un tag di stage. Se la latenza resta alta dopo il warm-up, il problema è strutturale.
+
+```javascript
+export const options = {
+  stages: [
+    { duration: '2m', target: 50 },  // warm-up
+    { duration: '5m', target: 50 },  // misura
+  ],
+  thresholds: {
+    // il threshold conta solo le richieste taggate come "measure"
+    'http_req_duration{phase:measure}': ['p(95)<500'],
+  },
+};
+// nel default function: http.get(url, { tags: { phase: 'measure' } })
+```
+
+### Scenario 4 — k6 su GitHub Actions fallisce con "too many open files"
+
+**Sintomo**: errori `dial tcp: socket: too many open files` con 500+ VU.
+
+**Causa**: ogni VU apre connessioni TCP, ognuna consuma un file descriptor; il limite di default (spesso 1024) viene superato.
+
+**Soluzione**: alzare `ulimit -n` nello stesso step che lancia k6 (il limite vale per la shell corrente). Su runner self-hosted configurare `/etc/security/limits.conf`.
+
+```bash
+ulimit -n 65536 && k6 run tests/performance/stress-test.js
+```
+
+### Scenario 5 — Gatling non genera il report HTML
+
+**Sintomo**: la cartella `target/gatling-results/` manca o il report è incompleto.
+
+**Causa**: il report viene generato solo a fine simulazione; se il job viene interrotto (timeout CI) o fallisce, resta parziale.
+
+**Soluzione**: usare `if: always()` sull'upload dell'artifact e rigenerare il report dal `simulation.log` raccolto.
+
+```bash
+# Rigenera il report da un log esistente (modalità reports-only)
+mvn gatling:test -Dgatling.reportsOnly=<nome-cartella-run>
+ls target/gatling-results/*/simulation.log
+```
+
+### Scenario 6 — Error rate alta durante il test ma assente nei log del servizio
+
+**Sintomo**: k6 riporta `http_req_failed` > 5%, ma l'applicazione non logga errori.
+
+**Causa**: gli errori nascono prima dell'app: load balancer che rifiuta connessioni sopra il limite, `ulimit` del processo applicativo, connection pool del database esaurito che causa timeout upstream.
+
+**Soluzione**: ispezionare gli status code restituiti e le metriche di LB e database.
+
+```bash
+# Distribuzione degli status code (k6 --out json)
+jq -r 'select(.type=="Point" and .metric=="http_reqs") | .data.tags.status' results/k6-results.json | sort | uniq -c
+
+# Limiti del processo applicativo e connessioni DB
+cat /proc/$(pgrep -f myapp | head -1)/limits | grep "open files"
+psql -c "SELECT count(*), state FROM pg_stat_activity GROUP BY state;"
+```
 
 ---
 
