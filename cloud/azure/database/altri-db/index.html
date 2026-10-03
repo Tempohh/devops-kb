@@ -3736,7 +3736,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -8854,7 +8854,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25256,8 +25256,8 @@
 <p>MySQL Flexible Server è equivalente a PostgreSQL Flexible ma per MySQL 8.0. Funzionalità simili: HA zone-redundant, read replica, VNet integration. Non c'è un connection pooler integrato (PgBouncer è solo PostgreSQL): per MySQL si usa ProxySQL self-managed o pooling lato applicazione.</p>
 <div class="admonition warning">
 <p class="admonition-title">MySQL 8.0 verso fine supporto</p>
-<p>Il supporto community di MySQL 8.0 è terminato ad aprile 2026; su Azure le versioni a fine vita passano in Extended Support (a pagamento). Per nuovi deployment valuta MySQL 8.4 LTS.
-<!-- REVIEW: verificare date Extended Support Azure MySQL 8.0 e valore --version per 8.4 --></p>
+<p>Il supporto community di MySQL 8.0 è terminato il 30 aprile 2026. Su Azure lo Standard Support di 8.0 dura fino al 31 gennaio 2027; dal 1 febbraio 2027 i server 8.0 entrano automaticamente in Extended Support (a pagamento, per vCore/ora) fino al 31 maggio 2029. Per nuovi deployment valuta MySQL 8.4 LTS (GA su Azure); l'upgrade in-place si fa con <code>az mysql flexible-server upgrade</code> (<code>--version</code> accetta <code>8</code> e <code>8.4</code>).
+<!-- CURRENCY: non verificato (2026-10) — valore esatto di <code>--version</code> per 8.4 in <code>az mysql flexible-server create</code> --></p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Versione negli esempi</p>
@@ -25363,8 +25363,29 @@
 <p>Azure Cache for Redis è il servizio Redis managed di Azure, fondamentale per: session cache, database query caching, real-time analytics, pub/sub, leaderboard.</p>
 <div class="admonition warning">
 <p class="admonition-title">Servizio in dismissione — migrare ad Azure Managed Redis</p>
-<p>Microsoft ha annunciato il ritiro di Azure Cache for Redis a favore di <strong>Azure Managed Redis</strong> (basato su Redis Enterprise): i tier Enterprise/Enterprise Flash sono in ritiro per primi (2027), Basic/Standard/Premium dopo (2028). Per nuovi progetti parti da Azure Managed Redis (<code>az redisenterprise</code> / <code>az redis</code> non coprono gli stessi SKU); gli esempi sotto restano utili per le istanze esistenti.
-<!-- REVIEW: verificare date di retirement ufficiali e SKU/CLI di Azure Managed Redis --></p>
+<p>Microsoft ha annunciato il ritiro di Azure Cache for Redis a favore di <strong>Azure Managed Redis</strong> (basato su Redis Enterprise): i tier Enterprise/Enterprise Flash sono in ritiro per primi, Basic/Standard/Premium dopo. Per nuovi progetti parti da Azure Managed Redis (<code>az redisenterprise</code> / <code>az redis</code> non coprono gli stessi SKU); gli esempi sotto restano utili per le istanze esistenti.</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Creazione bloccata</th>
+<th>Ritiro</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Basic / Standard / Premium</td>
+<td>1 aprile 2026 nuovi clienti; 1 ottobre 2026 clienti esistenti</td>
+<td>30 settembre 2028 (istanze disabilitate dal 1 ottobre 2028)</td>
+</tr>
+<tr>
+<td>Enterprise / Enterprise Flash</td>
+<td>1 aprile 2026 (tutti)</td>
+<td>31 marzo 2027 (migrazione dal 1 aprile 2027)</td>
+</tr>
+</tbody>
+</table>
+<p>I tier di Azure Managed Redis sono Memory Optimized, Balanced, Compute Optimized e Flash Optimized.</p>
 </div>
 <h3 id="sku-e-tier">SKU e Tier<a class="headerlink" href="#sku-e-tier" title="Permanent link">&para;</a></h3>
 <table>
@@ -25561,8 +25582,7 @@
 <p>Azure Synapse Analytics è la piattaforma unificata per data warehouse, big data e analytics in tempo reale. Combina SQL (T-SQL), Spark e integrazione Data Lake in un unico workspace.</p>
 <div class="admonition warning">
 <p class="admonition-title">Synapse è in maintenance mode</p>
-<p>Microsoft concentra gli investimenti su <strong>Microsoft Fabric</strong> (Warehouse, Lakehouse, Mirroring per Cosmos DB/Azure SQL). Synapse resta supportato ma non riceve nuove funzionalità: per nuovi progetti valuta Fabric; per quelli esistenti pianifica la migrazione. Synapse Link va considerato legacy rispetto al Mirroring di Fabric.
-<!-- REVIEW: verificare stato/date di Synapse Link e roadmap di migrazione a Fabric --></p>
+<p>Microsoft concentra gli investimenti su <strong>Microsoft Fabric</strong> (Warehouse, Lakehouse, Mirroring per Cosmos DB/Azure SQL). Synapse resta supportato ma non riceve nuove funzionalità: per nuovi progetti valuta Fabric; per quelli esistenti pianifica la migrazione. Microsoft indica esplicitamente di usare il Mirroring di Fabric al posto di Azure Synapse Link (per SQL): il Mirroring offre le stesse capacità con migliori prestazioni analitiche e dati in OneLake (Delta Parquet).</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Sigle</p>
