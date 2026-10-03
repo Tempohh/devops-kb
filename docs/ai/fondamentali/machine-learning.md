@@ -7,9 +7,10 @@ search_keywords: [ML, apprendimento automatico, supervised learning, unsupervise
 parent: ai/fondamentali/_index
 related: [ai/fondamentali/deep-learning, ai/training/fine-tuning, ai/training/valutazione]
 official_docs: https://scikit-learn.org/stable/user_guide.html
-status: complete
+status: reviewed
 difficulty: beginner
-last_updated: 2026-03-27
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Machine Learning — Fondamentali
@@ -75,11 +76,14 @@ model = xgb.XGBClassifier(
     max_depth=6,
     subsample=0.8,
     colsample_bytree=0.8,
-    use_label_encoder=False,
-    eval_metric='logloss'
+    eval_metric='logloss',
+    early_stopping_rounds=50   # XGBoost >= 2.0: parametro del costruttore, non di fit()
 )
-model.fit(X_train, y_train, eval_set=[(X_val, y_val)], early_stopping_rounds=50)
+model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
 ```
+
+!!! note "XGBoost 2.x"
+    `use_label_encoder` è stato rimosso e `early_stopping_rounds` non è più accettato da `fit()`: il codice di vecchi tutorial genera errore. LightGBM e `HistGradientBoostingClassifier` di scikit-learn (nessuna dipendenza extra) sono alternative equivalenti per dati tabellari.
 
 **Support Vector Machines (SVM)**
 Trova l'iperpiano che massimizza il margine tra le classi. Efficace in spazi ad alta dimensione. Meno scalabile con dataset grandi (O(n²) o O(n³)).
@@ -94,7 +98,7 @@ Trova l'iperpiano che massimizza il margine tra le classi. Efficace in spazi ad 
 | **Precision** | TP / (TP+FP) | Minimizzare falsi positivi (es. alert spam) |
 | **Recall** | TP / (TP+FN) | Minimizzare falsi negativi (es. anomaly detection) |
 | **F1 Score** | 2×(P×R)/(P+R) | Bilanciamento precision/recall |
-| **AUC-ROC** | Area sotto la curva ROC (Receiver Operating Characteristic — curva che mostra il tradeoff tra tasso di veri positivi e falsi positivi al variare della soglia) | Valutazione robusta con classi sbilanciate |
+| **AUC-ROC** | Area sotto la curva ROC (Receiver Operating Characteristic — curva che mostra il tradeoff tra tasso di veri positivi e falsi positivi al variare della soglia) | Confronto indipendente dalla soglia; con sbilanciamento estremo (<1%) preferire PR-AUC (area sotto la curva precision-recall, `average_precision_score`), che non è gonfiata dai molti veri negativi |
 
 !!! tip "Classi sbilanciate"
     In anomaly detection i casi anomali sono rari (es. 0.1% del dataset). L'accuracy del 99.9% si ottiene predicendo sempre "normale". Usare F1, AUC-ROC, o class_weight='balanced' nel modello.
@@ -195,6 +199,9 @@ Il Reinforcement Learning from Human Feedback (RLHF) è il meccanismo che ha tra
    → PPO aggiorna il modello per massimizzare il reward
    KL divergence penalty: penalità basata sulla KL divergence (Kullback-Leibler divergence — misura quanto due distribuzioni di probabilità differiscono tra loro) che evita che il modello si allontani troppo dalla SFT policy
 ```
+
+!!! note "Oltre PPO"
+    Il PPO richiede reward model e value model addizionali: costoso e instabile. Varianti diffuse: **DPO** (Direct Preference Optimization) ottimizza direttamente sulle coppie di preferenza, senza reward model né loop RL; **GRPO** (Group Relative Policy Optimization) elimina il value model stimando il vantaggio rispetto a un gruppo di risposte campionate; **RLVR** (RL with Verifiable Rewards) usa reward verificabili automaticamente (test di codice, risposte matematiche) ed è alla base dei modelli "reasoning".
 
 ## 4. Training Loop e Ottimizzazione
 
@@ -299,11 +306,15 @@ import pandas as pd
 # Attenzione al curse of dimensionality con alta cardinalità
 ohe = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
 
-# Target Encoding: sostituisce la categoria con la media della target
-# Rischio: data leakage — usare con cross-validation
-df['categoria_encoded'] = df.groupby('categoria')['target'].transform('mean')
+# Target Encoding: sostituisce la categoria con la media della target.
+# Il groupby().transform('mean') sull'intero dataset causa data leakage (la riga
+# vede la propria label). TargetEncoder (scikit-learn >= 1.3) usa cross-fitting
+# interno in fit_transform ed è sicuro da mettere in Pipeline.
+from sklearn.preprocessing import TargetEncoder
+te = TargetEncoder(smooth="auto", cv=5)
 
-# Label Encoding: per target e variabili ordinali
+# OrdinalEncoder: variabili con ordine naturale (low < medium < high);
+# per la sola colonna target esiste LabelEncoder
 enc = OrdinalEncoder()
 ```
 
@@ -497,8 +508,8 @@ for epoch in range(num_epochs):
 
 # Learning rate scheduling: riduci LR quando la loss stagna
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    optimizer, mode='min', factor=0.5, patience=5, verbose=True
-)
+    optimizer, mode='min', factor=0.5, patience=5
+)  # il parametro verbose è deprecato nelle versioni recenti di PyTorch
 scheduler.step(val_loss)  # chiamare dopo ogni epoch di validazione
 ```
 
