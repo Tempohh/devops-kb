@@ -416,47 +416,47 @@ kubectl get pods -n prod -l cnpg.io/cluster=app-pg15 -w
 
 ## Troubleshooting
 
-**1. `pg_upgrade --check`: "Your installation contains tables declared WITH OIDS" / "contains the data type reg*"**
+### Scenario 1 — `pg_upgrade --check`: "Your installation contains tables declared WITH OIDS" / "contains the data type reg*"
 
-- Sintomo: `pg_upgrade` si ferma con `Checking for incompatible "...": fatal` e crea un file `tables_using_*.txt`.
-- Causa: oggetti non supportati dalla nuova major (`WITH OIDS` rimosso in PG 12, colonne `regproc`/`regclass` non migrabili).
-- Soluzione: leggere il file indicato e correggere nel vecchio cluster: `ALTER TABLE t SET WITHOUT OIDS;` oppure `ALTER TABLE t ALTER COLUMN c TYPE oid;`.
+**Sintomo**: `pg_upgrade` si ferma con `Checking for incompatible "...": fatal` e crea un file `tables_using_*.txt`.
+**Causa**: oggetti non supportati dalla nuova major (`WITH OIDS` rimosso in PG 12, colonne `regproc`/`regclass` non migrabili).
+**Soluzione**: leggere il file indicato e correggere nel vecchio cluster: `ALTER TABLE t SET WITHOUT OIDS;` oppure `ALTER TABLE t ALTER COLUMN c TYPE oid;`.
 
-**2. `pg_upgrade`: "could not load library ... $libdir/xxx"**
+### Scenario 2 — `pg_upgrade`: "could not load library ... $libdir/xxx"
 
-- Sintomo: errore nella fase di restore dello schema, `ERROR: could not access file "$libdir/postgis-3"`.
-- Causa: il pacchetto dell'estensione per la **nuova** major non è installato.
-- Soluzione: installare il pacchetto (`apt install postgresql-17-postgis-3 postgresql-17-pgvector`), pulire il nuovo cluster (`rm -rf` della data dir e nuovo `initdb`) e rilanciare.
+**Sintomo**: errore nella fase di restore dello schema, `ERROR: could not access file "$libdir/postgis-3"`.
+**Causa**: il pacchetto dell'estensione per la **nuova** major non è installato.
+**Soluzione**: installare il pacchetto (`apt install postgresql-17-postgis-3 postgresql-17-pgvector`), pulire il nuovo cluster (`rm -rf` della data dir e nuovo `initdb`) e rilanciare.
 
-**3. "Your installation contains prepared transactions"**
+### Scenario 3 — "Your installation contains prepared transactions"
 
-- Sintomo: `--check` fallisce.
-- Causa: transazioni two-phase non committate (`pg_prepared_xacts`).
-- Soluzione: `COMMIT PREPARED 'gid';` o `ROLLBACK PREPARED 'gid';` per ogni riga, poi ripetere il check.
+**Sintomo**: `--check` fallisce.
+**Causa**: transazioni two-phase non committate (`pg_prepared_xacts`).
+**Soluzione**: `COMMIT PREPARED 'gid';` o `ROLLBACK PREPARED 'gid';` per ogni riga, poi ripetere il check.
 
-**4. Query lentissime subito dopo l'upgrade**
+### Scenario 4 — Query lentissime subito dopo l'upgrade
 
-- Sintomo: CPU al 100%, seq scan al posto di index scan, query che passano da ms a secondi.
-- Causa: statistiche del planner assenti (non migrate da `pg_upgrade` fino a PG 17).
-- Soluzione: `vacuumdb --all --analyze-in-stages --jobs=8` (anche con l'app online); verifica con `SELECT relname, last_analyze, last_autoanalyze FROM pg_stat_user_tables ORDER BY 2 NULLS FIRST LIMIT 20;`.
+**Sintomo**: CPU al 100%, seq scan al posto di index scan, query che passano da ms a secondi.
+**Causa**: statistiche del planner assenti (non migrate da `pg_upgrade` fino a PG 17).
+**Soluzione**: `vacuumdb --all --analyze-in-stages --jobs=8` (anche con l'app online); verifica con `SELECT relname, last_analyze, last_autoanalyze FROM pg_stat_user_tables ORDER BY 2 NULLS FIRST LIMIT 20;`.
 
-**5. Logical replication: subscription ferma con "duplicate key value violates unique constraint" o "logical replication target relation ... is missing"**
+### Scenario 5 — Logical replication: subscription ferma con "duplicate key value violates unique constraint" o "logical replication target relation ... is missing"
 
-- Sintomo: `pg_stat_subscription` mostra `latest_end_lsn` fermo; nei log del subscriber compare l'errore ripetuto.
-- Causa: una tabella è stata creata/modificata su blue dopo la creazione dello schema su green (DDL non replicato), oppure dati preesistenti su green.
-- Soluzione: applicare il DDL mancante su green, poi `ALTER SUBSCRIPTION upgrade_sub REFRESH PUBLICATION;`. Per saltare una transazione problematica (ultima risorsa): `ALTER SUBSCRIPTION upgrade_sub SKIP (lsn = '0/1234567');`.
+**Sintomo**: `pg_stat_subscription` mostra `latest_end_lsn` fermo; nei log del subscriber compare l'errore ripetuto.
+**Causa**: una tabella è stata creata/modificata su blue dopo la creazione dello schema su green (DDL non replicato), oppure dati preesistenti su green.
+**Soluzione**: applicare il DDL mancante su green, poi `ALTER SUBSCRIPTION upgrade_sub REFRESH PUBLICATION;`. Per saltare una transazione problematica (ultima risorsa): `ALTER SUBSCRIPTION upgrade_sub SKIP (lsn = '0/1234567');`.
 
-**6. Dopo il cutover: "duplicate key value violates unique constraint ..._pkey" sugli INSERT**
+### Scenario 6 — Dopo il cutover: "duplicate key value violates unique constraint ..._pkey" sugli INSERT
 
-- Sintomo: errori applicativi subito dopo lo spostamento del traffico.
-- Causa: le sequenze su green non sono state allineate (non replicate).
-- Soluzione: rieseguire il passo 4 dello script di cutover (`setval` per ogni sequenza, con margine) leggendo i valori dal vecchio cluster o da `MAX(id)` delle tabelle.
+**Sintomo**: errori applicativi subito dopo lo spostamento del traffico.
+**Causa**: le sequenze su green non sono state allineate (non replicate).
+**Soluzione**: rieseguire il passo 4 dello script di cutover (`setval` per ogni sequenza, con margine) leggendo i valori dal vecchio cluster o da `MAX(id)` delle tabelle.
 
-**7. Slot su blue che accumula WAL e riempie il disco**
+### Scenario 7 — Slot su blue che accumula WAL e riempie il disco
 
-- Sintomo: `pg_wal` cresce senza controllo durante la migrazione; `pg_replication_slots.active = f`.
-- Causa: la subscription è ferma o lenta; lo slot trattiene il WAL.
-- Soluzione: sistemare la subscription; se la migrazione è abbandonata, `SELECT pg_drop_replication_slot('upgrade_sub');`. Prevenzione: impostare `max_slot_wal_keep_size` e monitorare il lag.
+**Sintomo**: `pg_wal` cresce senza controllo durante la migrazione; `pg_replication_slots.active = f`.
+**Causa**: la subscription è ferma o lenta; lo slot trattiene il WAL.
+**Soluzione**: sistemare la subscription; se la migrazione è abbandonata, `SELECT pg_drop_replication_slot('upgrade_sub');`. Prevenzione: impostare `max_slot_wal_keep_size` e monitorare il lag.
 
 ## Relazioni
 
