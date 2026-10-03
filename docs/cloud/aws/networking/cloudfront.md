@@ -6,15 +6,16 @@ tags: [aws, cloudfront, cdn, distribution, caching, lambda-at-edge, cloudfront-f
 search_keywords: [AWS CloudFront, CDN, Content Delivery Network, CloudFront distribution, origin, edge location, cache behavior, TTL, invalidation, Lambda@Edge, CloudFront Functions, WAF, geo restriction, signed URL, signed cookies, OAC, Origin Access Control, custom headers, real-time logs, CloudFront reports, price class, HTTPS, TLS, ACM]
 parent: cloud/aws/networking/_index
 related: [cloud/aws/storage/s3, cloud/aws/security/network-security, cloud/aws/networking/route53]
-official_docs: https://docs.aws.amazon.com/cloudfront/latest/APIReference/
-status: complete
+official_docs: https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # CloudFront — CDN Global
 
-**CloudFront** è il CDN (Content Delivery Network) globale di AWS con oltre **600 Edge Locations** in 100+ paesi. Riduce la latenza servendo contenuti dalla cache più vicina all'utente.
+**CloudFront** è il CDN (Content Delivery Network) globale di AWS con centinaia di **Edge Locations** (oltre 600 Point of Presence, numero in costante crescita) in decine di paesi. Riduce la latenza servendo contenuti dalla cache più vicina all'utente.
 
 ```
 User (Roma)
@@ -74,6 +75,7 @@ aws cloudfront create-distribution \
                 "TargetOriginId": "ALB-api",
                 "ViewerProtocolPolicy": "https-only",
                 "CachePolicyId": "4135ea2d-6df8-44a3-9df3-4b5a84be39ad",
+                "OriginRequestPolicyId": "b689b0a8-53d0-40ab-baf2-68738e2966ac",
                 "AllowedMethods": {"Quantity": 7, "Items": ["GET","HEAD","OPTIONS","PUT","POST","PATCH","DELETE"]},
                 "Compress": true
             }]
@@ -87,6 +89,9 @@ aws cloudfront create-distribution \
         "Aliases": {"Quantity": 1, "Items": ["www.company.com"]}
     }'
 ```
+
+!!! note "Perché `OriginRequestPolicyId` sul behavior `/api/*`"
+    Con `CachingDisabled` la cache key è vuota e, senza una Origin Request Policy, CloudFront **non inoltra** cookie, query string né header (es. `Authorization`) all'origin. `AllViewerExceptHostHeader` inoltra tutto il resto senza sovrascrivere l'`Host` dell'origin. `S3OriginConfig` con `OriginAccessIdentity` vuoto è la forma richiesta per usare OAC su un origin S3.
 
 !!! warning "ACM Certificate per CloudFront"
     Il certificato ACM per CloudFront **deve essere creato nella Region us-east-1** (CloudFront è un servizio globale che legge i certificati da us-east-1).
@@ -108,11 +113,11 @@ Distribution
 **Cache Policies** (managed da AWS — preferire queste):
 
 | Policy | ID | TTL default | Uso |
-|--------|----|-----------|----|
+|--------|----|-------------|-----|
 | `CachingOptimized` | 658327ea... | 24h | Contenuti statici |
 | `CachingDisabled` | 4135ea2d... | 0 | API dinamiche |
 | `CachingOptimizedForUncompressed` | b2884449... | 24h | File non comprimibili |
-| `Elemental-MediaPackage` | 08627262... | Media streaming |
+| `Elemental-MediaPackage` | 08627262... | Variabile | Origin AWS Elemental MediaPackage (streaming) |
 
 **Origin Request Policies** (cosa passare all'origin):
 
@@ -126,7 +131,7 @@ Distribution
 
 ## Origin Access Control (OAC)
 
-**OAC** permette a CloudFront di accedere a un S3 bucket privato senza URL pubblici.
+**OAC** permette a CloudFront di accedere a un S3 bucket privato senza URL pubblici. Sostituisce il vecchio **OAI** (Origin Access Identity, legacy): OAC firma le richieste con SigV4 (meccanismo), quindi supporta SSE-KMS, tutte le Region e i metodi `PUT`/`DELETE`, e usa il service principal `cloudfront.amazonaws.com` con condizione sull'ARN della distribution (più restrittivo di un utente OAI condiviso).
 
 ```bash
 # 1. Creare OAC
@@ -171,7 +176,7 @@ aws s3api put-bucket-policy \
 
 ```bash
 # TTL configurabili nel Cache Policy:
-# - Minimum TTL: 0 secondi
+# - Minimum TTL: 1 secondo per CachingOptimized (0 per CachingDisabled)
 # - Default TTL: 86400 (24h) per CachingOptimized
 # - Maximum TTL: 31536000 (1 anno)
 
@@ -183,14 +188,15 @@ aws s3api put-bucket-policy \
 # Invalidare cache (dopo deploy nuova versione)
 aws cloudfront create-invalidation \
     --distribution-id EDFDVBD6EXAMPLE \
-    --paths "/*"                  # invalida tutto
+    --paths "/*"                  # invalida tutto (conta come 1 path)
 
-# Invalidazione selettiva (molto più economica)
+# Invalidazione selettiva (evita di svuotare cache che non è cambiata → meno cache miss/origin load)
 aws cloudfront create-invalidation \
     --distribution-id EDFDVBD6EXAMPLE \
     --paths "/index.html" "/app.*.js" "/style.*.css"
 
-# Costo: prime 1000 invalidazioni/mese gratis → $0.005/path dopo
+# Costo: primi 1000 path/mese gratis → $0.005/path dopo
+# (un wildcard come /* conta come un solo path; il costo reale di /* è il re-popolamento della cache)
 ```
 
 **Best practice per evitare invalidazioni:**
@@ -203,8 +209,10 @@ Usare **content hashing nel filename** (es. `app.abc123.js`) — quando il conte
 | Price Class | Edge Locations | Costo |
 |-------------|---------------|-------|
 | `PriceClass_All` | Tutte (incluso Sud America, Australia, India) | Massimo |
-| `PriceClass_200` | Europa, USA, Canada, Asia (senza India/Sud America) | Medio |
-| `PriceClass_100` | Solo USA + Europa | Minimo |
+| `PriceClass_200` | Nord America, Europa, Asia, Medio Oriente, Africa (esclusi Sud America, Australia/Nuova Zelanda) | Medio |
+| `PriceClass_100` | Solo Nord America + Europa | Minimo |
+
+Una price class più bassa non esclude gli utenti dei Paesi non coperti: vengono serviti dall'edge incluso più vicino, con latenza maggiore.
 
 ```bash
 # Modificare price class su distribuzione esistente
@@ -220,6 +228,8 @@ aws cloudfront update-distribution \
 Permette di eseguire codice all'Edge, modificando request/response.
 
 ### CloudFront Functions (preferite per operazioni semplici)
+
+Girano direttamente sugli edge (non sui Regional Edge Cache), da cui latenza sub-ms e costo ~6× inferiore. Per leggere dati di configurazione (es. mappe di redirect) senza ridistribuire la funzione esiste il **CloudFront KeyValueStore**. Gli esempi sotto usano template literal: richiedono il runtime `cloudfront-js-2.0`.
 
 ```javascript
 // Esempio: redirect www → non-www
@@ -260,14 +270,19 @@ function handler(event) {
 | Caratteristica | CloudFront Functions | Lambda@Edge |
 |---------------|---------------------|-------------|
 | Trigger | Viewer Request/Response | Viewer + Origin Request/Response |
-| Runtime | JavaScript (ES5.1) | Node.js, Python |
-| Timeout | 1ms | 5s (viewer) / 30s (origin) |
-| Memoria | 2MB | 128MB - 10GB |
+| Runtime | JavaScript (`cloudfront-js-2.0`; il 1.0 è solo ES5.1) | Node.js, Python |
+| Timeout | < 1ms (sub-millisecondo) | 5s (viewer) / 30s (origin) |
+| Memoria | 2MB | 128MB (viewer) / fino a 10GB (origin) |
 | Accesso a rete | No | Sì |
 | Costo | $0.0000001/invocazione | $0.0000006/invocazione |
 | Use case | Header manipulation, URL rewrite, auth semplice | Auth JWT, A/B test, ISR (Incremental Static Regeneration) |
 
 ### Lambda@Edge
+
+La funzione va creata in **us-east-1** e CloudFront la replica agli edge; i log CloudWatch finiscono nella Region più vicina all'edge che ha eseguito la funzione.
+
+!!! tip "Security headers: preferire le Response Headers Policies"
+    Per i soli header statici (HSTS, `X-Content-Type-Options`, CSP, CORS) usare una **Response Headers Policy** (managed, es. `SecurityHeadersPolicy`) associata al behavior: nessun codice, nessun costo per invocazione. L'esempio sotto serve solo se gli header devono essere calcolati dinamicamente.
 
 ```python
 # Aggiungere Security Headers (Lambda@Edge - Origin Response)
@@ -320,7 +335,7 @@ aws cloudfront update-distribution \
 
 ## Signed URLs e Signed Cookies
 
-Per proteggere contenuti premium o privati:
+Per proteggere contenuti premium o privati. Il behavior deve avere **Restrict viewer access** attivo con un **Key Group** (trusted key group) che contiene la chiave pubblica; il `key_id` è l'ID della *public key* registrata in CloudFront (non una key pair dell'account root, metodo legacy). Per proteggere molti file usare **Signed Cookies** invece di un URL per file.
 
 ```python
 # Generare Signed URL (Python)
@@ -346,7 +361,7 @@ def create_signed_url(url, key_id, private_key_pem, expiry_minutes=60):
 # Uso
 url = create_signed_url(
     'https://cdn.company.com/premium/video.mp4',
-    key_id='APKA...',        # CloudFront Key Pair ID
+    key_id='K2JCJMDEHXQW5F', # ID della public key nel Key Group
     private_key_pem=open('private_key.pem', 'rb').read()
 )
 ```
@@ -372,10 +387,11 @@ aws cloudfront create-realtime-log-config \
     --name "my-realtime-config" \
     --sampling-rate 100
 
-# Metriche CloudWatch disponibili:
+# Metriche CloudWatch (namespace AWS/CloudFront, SEMPRE in us-east-1):
 # Requests, BytesDownloaded, BytesUploaded
 # 4xxErrorRate, 5xxErrorRate, TotalErrorRate
-# CacheHitRate → obiettivo: >80%
+# CacheHitRate, OriginLatency → richiedono "additional metrics" (a pagamento) sulla distribution
+# CacheHitRate → obiettivo: >80% per contenuti statici
 ```
 
 ---
@@ -400,14 +416,17 @@ aws cloudfront get-cache-policy --id 658327ea-f89d-4fab-a63d-7e88639e58f6
 
 # Verificare CacheHitRate con CloudWatch
 aws cloudwatch get-metric-statistics \
+    --region us-east-1 \
     --namespace AWS/CloudFront \
     --metric-name CacheHitRate \
-    --dimensions Name=DistributionId,Value=EDFDVBD6EXAMPLE \
+    --dimensions Name=DistributionId,Value=EDFDVBD6EXAMPLE Name=Region,Value=Global \
     --start-time 2026-03-27T00:00:00Z \
     --end-time 2026-03-28T00:00:00Z \
     --period 3600 \
     --statistics Average
 ```
+
+Se `CacheHitRate` non restituisce datapoint, le *additional metrics* non sono attivate sulla distribution.
 
 ---
 
@@ -415,7 +434,7 @@ aws cloudwatch get-metric-statistics \
 
 **Sintomo:** CloudFront restituisce `403 Forbidden` per risorse statiche servite da S3; l'oggetto esiste nel bucket.
 
-**Causa:** La Bucket Policy non include la Distribution corretta come `SourceArn`, oppure l'OAC non è configurato nella distribution, oppure il bucket ha ancora un OAI (Origin Access Identity) deprecato.
+**Causa:** La Bucket Policy non include la Distribution corretta come `SourceArn`, oppure l'OAC non è configurato nella distribution, oppure il bucket ha ancora un OAI (Origin Access Identity) deprecato. Attenzione: se la policy non concede anche `s3:ListBucket`, S3 risponde `403` (non `404`) per una chiave **inesistente** — verificare quindi anche il path/key richiesto e il `DefaultRootObject`. Con bucket cifrato SSE-KMS la key policy KMS deve consentire al principal `cloudfront.amazonaws.com`.
 
 **Soluzione:** Verificare che OAC sia configurato correttamente e che la Bucket Policy faccia riferimento all'ARN della distribution.
 
@@ -469,7 +488,7 @@ aws cloudfront get-distribution --id EDFDVBD6EXAMPLE \
 
 **Sintomo:** Dopo `create-invalidation`, gli utenti ricevono ancora la versione precedente del file. Il sito mostra contenuto stale anche a distanza di minuti.
 
-**Causa:** L'invalidazione può richiedere fino a 15 minuti per propagarsi a tutti gli Edge. Oppure il browser sta cachando localmente il file (Cache-Control lato client), o l'invalidazione ha usato un path errato (case sensitive, mancanza di `/`).
+**Causa:** L'invalidazione richiede tipicamente da pochi secondi a qualche minuto per propagarsi a tutti gli Edge (stato `InProgress` → `Completed`). Oppure il browser sta cachando localmente il file (Cache-Control lato client), o l'invalidazione ha usato un path errato (case sensitive, mancanza di `/`).
 
 **Soluzione:** Verificare lo stato dell'invalidazione, testare bypassando la cache del browser, e controllare gli header di risposta.
 
@@ -483,10 +502,12 @@ aws cloudfront wait invalidation-completed \
     --distribution-id EDFDVBD6EXAMPLE \
     --id INVALIDATION_ID
 
-# Testare response headers direttamente dall'edge (bypass browser cache)
-curl -I -H "Cache-Control: no-cache" https://www.company.com/index.html
-# Cercare: X-Cache: Miss from cloudfront (cache miss = contenuto aggiornato)
-# X-Cache: Hit from cloudfront (ancora in cache)
+# Testare response headers con curl (nessuna cache del browser; CloudFront ignora
+# il Cache-Control della request, quindi non serve a forzare un miss)
+curl -I https://www.company.com/index.html
+# Cercare: X-Cache: Miss from cloudfront (appena recuperato dall'origin)
+# X-Cache: Hit from cloudfront (servito dalla cache; vedere anche l'header Age)
+# X-Cache: RefreshHit from cloudfront (revalidato con l'origin)
 
 # Forzare cache miss aggiungendo query string temporanea
 curl -I "https://www.company.com/index.html?v=$(date +%s)"
@@ -494,9 +515,19 @@ curl -I "https://www.company.com/index.html?v=$(date +%s)"
 
 ---
 
+## Integrazioni e novità
+
+- **AWS WAF**: si associa una Web ACL alla distribution (scope `CLOUDFRONT`, creata in us-east-1) per filtrare SQLi/XSS, rate limiting e bot control già all'edge, prima che il traffico raggiunga l'origin.
+- **VPC Origins**: permettono a CloudFront di raggiungere ALB/NLB/EC2 in subnet **private**, senza esporli su Internet (alternativa al pattern "ALB pubblico + header segreto custom").
+- **Origin Shield**: layer di cache centralizzato aggiuntivo davanti all'origin; riduce le richieste duplicate da edge diversi (utile con origin lenti o costosi).
+- **Origin Failover (origin group)**: failover automatico su un secondo origin per status code 5xx/4xx configurati.
+
+---
+
 ## Riferimenti
 
-- [CloudFront Developer Guide](https://docs.aws.amazon.com/cloudfront/latest/APIReference/)
+- [CloudFront Developer Guide](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/)
+- [CloudFront API Reference](https://docs.aws.amazon.com/cloudfront/latest/APIReference/)
 - [Cache Policies](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html)
 - [CloudFront Functions](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cloudfront-functions.html)
 - [Lambda@Edge](https://docs.aws.amazon.com/lambda/latest/dg/lambda-edge.html)
