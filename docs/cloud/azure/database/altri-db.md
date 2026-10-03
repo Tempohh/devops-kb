@@ -205,8 +205,8 @@ az monitor diagnostic-settings create \
 MySQL Flexible Server è equivalente a PostgreSQL Flexible ma per MySQL 8.0. Funzionalità simili: HA zone-redundant, read replica, VNet integration. Non c'è un connection pooler integrato (PgBouncer è solo PostgreSQL): per MySQL si usa ProxySQL self-managed o pooling lato applicazione.
 
 !!! warning "MySQL 8.0 verso fine supporto"
-    Il supporto community di MySQL 8.0 è terminato ad aprile 2026; su Azure le versioni a fine vita passano in Extended Support (a pagamento). Per nuovi deployment valuta MySQL 8.4 LTS.
-    <!-- REVIEW: verificare date Extended Support Azure MySQL 8.0 e valore --version per 8.4 -->
+    Il supporto community di MySQL 8.0 è terminato il 30 aprile 2026. Su Azure lo Standard Support di 8.0 dura fino al 31 gennaio 2027; dal 1 febbraio 2027 i server 8.0 entrano automaticamente in Extended Support (a pagamento, per vCore/ora) fino al 31 maggio 2029. Per nuovi deployment valuta MySQL 8.4 LTS (GA su Azure); l'upgrade in-place si fa con `az mysql flexible-server upgrade` (`--version` accetta `8` e `8.4`).
+    <!-- CURRENCY: non verificato (2026-10) — valore esatto di `--version` per 8.4 in `az mysql flexible-server create` -->
 
 !!! note "Versione negli esempi"
     `--version 8.0.21` è il valore storico accettato dalla CLI per MySQL 8.0.
@@ -266,8 +266,14 @@ az mysql flexible-server replica create \
 Azure Cache for Redis è il servizio Redis managed di Azure, fondamentale per: session cache, database query caching, real-time analytics, pub/sub, leaderboard.
 
 !!! warning "Servizio in dismissione — migrare ad Azure Managed Redis"
-    Microsoft ha annunciato il ritiro di Azure Cache for Redis a favore di **Azure Managed Redis** (basato su Redis Enterprise): i tier Enterprise/Enterprise Flash sono in ritiro per primi (2027), Basic/Standard/Premium dopo (2028). Per nuovi progetti parti da Azure Managed Redis (`az redisenterprise` / `az redis` non coprono gli stessi SKU); gli esempi sotto restano utili per le istanze esistenti.
-    <!-- REVIEW: verificare date di retirement ufficiali e SKU/CLI di Azure Managed Redis -->
+    Microsoft ha annunciato il ritiro di Azure Cache for Redis a favore di **Azure Managed Redis** (basato su Redis Enterprise): i tier Enterprise/Enterprise Flash sono in ritiro per primi, Basic/Standard/Premium dopo. Per nuovi progetti parti da Azure Managed Redis (`az redisenterprise` / `az redis` non coprono gli stessi SKU); gli esempi sotto restano utili per le istanze esistenti.
+
+    | Tier | Creazione bloccata | Ritiro |
+    |---|---|---|
+    | Basic / Standard / Premium | 1 aprile 2026 nuovi clienti; 1 ottobre 2026 clienti esistenti | 30 settembre 2028 (istanze disabilitate dal 1 ottobre 2028) |
+    | Enterprise / Enterprise Flash | 1 aprile 2026 (tutti) | 31 marzo 2027 (migrazione dal 1 aprile 2027) |
+
+    I tier di Azure Managed Redis sono Memory Optimized, Balanced, Compute Optimized e Flash Optimized.
 
 ### SKU e Tier
 
@@ -400,8 +406,7 @@ for message in pubsub.listen():
 Azure Synapse Analytics è la piattaforma unificata per data warehouse, big data e analytics in tempo reale. Combina SQL (T-SQL), Spark e integrazione Data Lake in un unico workspace.
 
 !!! warning "Synapse è in maintenance mode"
-    Microsoft concentra gli investimenti su **Microsoft Fabric** (Warehouse, Lakehouse, Mirroring per Cosmos DB/Azure SQL). Synapse resta supportato ma non riceve nuove funzionalità: per nuovi progetti valuta Fabric; per quelli esistenti pianifica la migrazione. Synapse Link va considerato legacy rispetto al Mirroring di Fabric.
-    <!-- REVIEW: verificare stato/date di Synapse Link e roadmap di migrazione a Fabric -->
+    Microsoft concentra gli investimenti su **Microsoft Fabric** (Warehouse, Lakehouse, Mirroring per Cosmos DB/Azure SQL). Synapse resta supportato ma non riceve nuove funzionalità: per nuovi progetti valuta Fabric; per quelli esistenti pianifica la migrazione. Microsoft indica esplicitamente di usare il Mirroring di Fabric al posto di Azure Synapse Link (per SQL): il Mirroring offre le stesse capacità con migliori prestazioni analitiche e dati in OneLake (Delta Parquet).
 
 !!! note "Sigle"
     **MPP** = Massively Parallel Processing (query distribuita su più nodi); **DWU** = Data Warehouse Unit (unità di compute del Dedicated Pool); **HTAP** = Hybrid Transactional/Analytical Processing.
