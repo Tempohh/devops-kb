@@ -23943,6 +23943,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-semgrep-troppi-falsi-positivi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Semgrep: troppi falsi positivi
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-zap-scan-troppo-lento-o-in-timeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — ZAP: scan troppo lento o in timeout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-sonarqube-quality-gate-rosso-su-codice-legacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — SonarQube: Quality Gate rosso su codice legacy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-nuclei-falsi-positivi-o-scan-vuoto-su-endpoint-autenticati" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Nuclei: falsi positivi o scan vuoto su endpoint autenticati
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-upload-sarif-fallisce-su-github-code-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Upload SARIF fallisce su GitHub Code Scanning
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24695,6 +24756,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-semgrep-troppi-falsi-positivi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Semgrep: troppi falsi positivi
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-zap-scan-troppo-lento-o-in-timeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — ZAP: scan troppo lento o in timeout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-sonarqube-quality-gate-rosso-su-codice-legacy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — SonarQube: Quality Gate rosso su codice legacy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-nuclei-falsi-positivi-o-scan-vuoto-su-endpoint-autenticati" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Nuclei: falsi positivi o scan vuoto su endpoint autenticati
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-upload-sarif-fallisce-su-github-code-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Upload SARIF fallisce su GitHub Code Scanning
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -25275,40 +25397,66 @@
 <p>Secrets hardcoded sono il finding più critico e quello con <strong>zero falsi positivi</strong> se configurato correttamente. Aggiungere Gitleaks o <code>truffleHog</code> è il primo passo da fare, prima ancora di SAST completo.</p>
 </div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<p><strong>Semgrep — troppi falsi positivi:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Identifica le regole con più falsi positivi</span>
+<h3 id="scenario-1-semgrep-troppi-falsi-positivi">Scenario 1 — Semgrep: troppi falsi positivi<a class="headerlink" href="#scenario-1-semgrep-troppi-falsi-positivi" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: la PR si riempie di finding irrilevanti, il team inizia a ignorare i commenti del bot.</p>
+<p><strong>Causa</strong>: <code>--config auto</code> carica regole generiche (anche <code>audit</code>, a bassa precisione) che non conoscono le sanitizzazioni custom del progetto.</p>
+<p><strong>Soluzione</strong>: individuare le regole più rumorose, escluderle con <code>--exclude-rule</code> o <code>.semgrepignore</code> (per path) e restringere la severity.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Regole con più finding</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>semgrep<span class="w"> </span>--config<span class="w"> </span>auto<span class="w"> </span>--json<span class="w"> </span>.<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>jq<span class="w"> </span><span class="s1">'[.results[] | {rule: .check_id}] | group_by(.rule) | map({rule: .[0].rule, count: length}) | sort_by(-.count)'</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>jq<span class="w"> </span><span class="s1">'[.results[].check_id] | group_by(.) | map({rule: .[0], count: length}) | sort_by(-.count)'</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1"># Disabilita una regola specifica nel file di config</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># .semgrep.yml</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>rules:
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">  </span>-<span class="w"> </span>id:<span class="w"> </span>exclude-rules
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">    </span>options:
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">      </span>exclude:
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">        </span>-<span class="w"> </span>javascript.express.security.audit.xss.mustache.missing-escaping
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1"># Escludi una regola rumorosa e tieni solo severity ERROR</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>semgrep<span class="w"> </span>--config<span class="w"> </span>p/owasp-top-ten<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">  </span>--exclude-rule<span class="w"> </span>javascript.express.security.audit.xss.mustache.missing-escaping<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">  </span>--severity<span class="w"> </span>ERROR<span class="w"> </span>.
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="c1"># Escludi path non rilevanti (test, vendor)</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="nb">printf</span><span class="w"> </span><span class="s1">'tests/\nvendor/\nnode_modules/\n'</span><span class="w"> </span>&gt;<span class="w"> </span>.semgrepignore
 </span></code></pre></div>
-<p><strong>ZAP — scan troppo lento / timeout:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Aumentare il timeout e ridurre il numero di thread</span>
+<h3 id="scenario-2-zap-scan-troppo-lento-o-in-timeout">Scenario 2 — ZAP: scan troppo lento o in timeout<a class="headerlink" href="#scenario-2-zap-scan-troppo-lento-o-in-timeout" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: il job DAST supera il timeout della CI o l'applicazione staging risponde 5xx durante lo scan.</p>
+<p><strong>Causa</strong>: spider e active scan generano migliaia di richieste con troppi thread paralleli per host, saturando un ambiente di test piccolo.</p>
+<p><strong>Soluzione</strong>: limitare la durata dello spider (<code>-m</code>) e dello scan (<code>-T</code>), ridurre i thread per host; usare <code>zap-baseline.py</code> (passivo) sulle PR e il full scan solo in schedule notturno. I commenti non possono stare dopo il <code>\</code> di continuazione riga (rompono il comando).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># -m: minuti max spider | -T: minuti max totali | -z: opzioni ZAP interne</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>zap-full-scan.py<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span>-t<span class="w"> </span>https://staging.myapp.example.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span>-m<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\ </span><span class="w">       </span><span class="c1"># max 10 minuti</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span>-T<span class="w"> </span><span class="m">60</span><span class="w"> </span><span class="se">\ </span><span class="w">       </span><span class="c1"># timeout per request 60s</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span>-m<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span>-T<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span>-z<span class="w"> </span><span class="s2">"-config scanner.threadPerHost=2"</span>
 </span></code></pre></div>
-<p><strong>SonarQube — Quality Gate bloccato su codice legacy:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Configurare New Code Period (analizza solo il codice nuovo)</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># In sonar-project.properties</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>sonar.newCode.referenceBranch<span class="o">=</span>main
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Oppure: analizza solo le ultime N commits</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="c1"># Settings &gt; General &gt; New Code &gt; Previous version</span>
+<h3 id="scenario-3-sonarqube-quality-gate-rosso-su-codice-legacy">Scenario 3 — SonarQube: Quality Gate rosso su codice legacy<a class="headerlink" href="#scenario-3-sonarqube-quality-gate-rosso-su-codice-legacy" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: ogni PR fallisce il Quality Gate per problemi che non ha introdotto.</p>
+<p><strong>Causa</strong>: il "New Code Period" copre tutta la storia, quindi il debito pregresso viene contato come codice nuovo.</p>
+<p><strong>Soluzione</strong>: definire il New Code relativo a un branch di riferimento (o alla versione precedente), così il gate valuta solo le modifiche della PR.</p>
+<div class="language-properties highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># sonar-project.properties</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="na">sonar.newCode.referenceBranch</span><span class="o">=</span><span class="s">main</span>
 </span></code></pre></div>
-<p><strong>Nuclei — falsi positivi su endpoint autenticati:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Usare header di autenticazione negli scan</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>nuclei<span class="w"> </span>-u<span class="w"> </span>https://staging.myapp.example.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">       </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">       </span>-tags<span class="w"> </span>api<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">       </span>-severity<span class="w"> </span>high,critical
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Verifica lo stato del gate via API</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>-u<span class="w"> </span><span class="s2">"</span><span class="nv">$SONAR_TOKEN</span><span class="s2">:"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="s2">"https://sonar.example.com/api/qualitygates/project_status?projectKey=my-org_my-project"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.projectStatus'</span>
+</span></code></pre></div>
+<h3 id="scenario-4-nuclei-falsi-positivi-o-scan-vuoto-su-endpoint-autenticati">Scenario 4 — Nuclei: falsi positivi o scan vuoto su endpoint autenticati<a class="headerlink" href="#scenario-4-nuclei-falsi-positivi-o-scan-vuoto-su-endpoint-autenticati" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: Nuclei segnala "exposure" su pagine di login/redirect (HTTP 302/401) oppure non trova nulla sulle API protette.</p>
+<p><strong>Causa</strong>: senza credenziali il template vede solo redirect o errori, che alcuni matcher interpretano male; le API protette non vengono mai raggiunte.</p>
+<p><strong>Soluzione</strong>: passare l'header di autenticazione, limitare ai tag pertinenti e fare debug sul singolo template con <code>-debug</code>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>nuclei<span class="w"> </span>-u<span class="w"> </span>https://staging.myapp.example.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">       </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">       </span>-tags<span class="w"> </span>api<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">       </span>-severity<span class="w"> </span>high,critical
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="c1"># Debug di un singolo template</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>nuclei<span class="w"> </span>-u<span class="w"> </span>https://staging.myapp.example.com<span class="w"> </span>-t<span class="w"> </span>templates/security-headers.yaml<span class="w"> </span>-debug
+</span></code></pre></div>
+<h3 id="scenario-5-upload-sarif-fallisce-su-github-code-scanning">Scenario 5 — Upload SARIF fallisce su GitHub Code Scanning<a class="headerlink" href="#scenario-5-upload-sarif-fallisce-su-github-code-scanning" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: lo step <code>upload-sarif</code> termina con <code>Resource not accessible by integration</code> oppure il file non viene trovato.</p>
+<p><strong>Causa</strong>: mancano i permessi <code>security-events: write</code> (es. PR da fork, dove il token è read-only) oppure il nome del file SARIF non coincide con quello prodotto dal tool.</p>
+<p><strong>Soluzione</strong>: dichiarare i permessi nel job, saltare l'upload per le PR da fork e verificare il path del SARIF prima dell'upload.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Verifica che il SARIF esista e sia JSON valido</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>ls<span class="w"> </span>-l<span class="w"> </span>semgrep.sarif<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.runs[0].results | length'</span><span class="w"> </span>semgrep.sarif
+</span></code></pre></div>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nt">permissions</span><span class="p">:</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span><span class="nt">security-events</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">write</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">  </span><span class="nt">contents</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">read</span>
 </span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
