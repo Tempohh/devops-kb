@@ -7,14 +7,18 @@ search_keywords: [Azure Event Hubs, Kafka Azure, streaming Azure, partition Even
 parent: cloud/azure/messaging/_index
 related: [cloud/azure/messaging/service-bus-event-grid, cloud/azure/storage/blob-storage, cloud/azure/monitoring/monitor-log-analytics]
 official_docs: https://learn.microsoft.com/azure/event-hubs/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Azure Event Hubs
 
 **Azure Event Hubs** è il servizio di **streaming ad alto volume** di Azure — gestisce milioni di eventi al secondo con latenza sub-secondo. È l'equivalente di Apache Kafka (e ha un'API Kafka nativa compatibile).
+
+**Perché esiste:** un log distribuito append-only e partizionato disaccoppia chi produce eventi da chi li consuma: ogni consumer legge al proprio ritmo (tramite offset) e può rileggere eventi già consumati entro la retention. Questo lo distingue da una coda (Service Bus), dove il messaggio sparisce dopo il consumo.
+**Quando NON usarlo:** messaggi di comando con ordering/dead-letter/transazioni → Service Bus; notifiche reattive su eventi di risorse Azure → Event Grid; volumi bassi e semplici → Storage Queue.
 
 ## Architettura Event Hubs
 
@@ -33,10 +37,11 @@ Kafka clients ───────────────►   Partition 2
 **Concetti chiave:**
 - **Namespace:** contenitore di Event Hub, URL di connessione
 - **Event Hub:** equivalente a un topic Kafka
-- **Partition:** unità di parallelismo e ordinamento (1-2048); `partition_key → hash → partition`
-- **Consumer Group:** reader indipendenti sullo stesso stream (equivalente a Kafka consumer group)
-- **Retention:** 1 giorno (Basic), fino a 90 giorni (Standard/Premium), 7 giorni default
-- **Throughput Unit (TU):** unità capacità per Standard — 1 TU = 1 MB/s ingress, 2 MB/s egress
+- **Partition:** unità di parallelismo e ordinamento; `partition_key → hash → partition`. L'ordine è garantito solo *dentro* una partition. Limiti per Event Hub: Basic/Standard 32 (Standard fino a 1024 su richiesta), Premium 100, Dedicated 1024. Su Basic/Standard il numero è fisso dopo la creazione; su Premium/Dedicated si può aumentare
+- **Consumer Group:** vista indipendente sullo stream: ogni gruppo ha i propri offset (simile al Kafka consumer group, ma vedi limitazioni Kafka sotto)
+- **Retention:** 1 giorno (Basic), fino a 7 giorni (Standard), fino a 90 giorni (Premium/Dedicated)
+- **Throughput Unit (TU):** unità di capacità per Standard — 1 TU = 1 MB/s (o 1000 eventi/s) ingress, 2 MB/s (o 4096 eventi/s) egress. Premium usa **Processing Unit (PU)**, Dedicated usa **Capacity Unit (CU)**
+- **Checkpoint:** offset salvato dal consumer; dopo un restart riparte da lì (a differenza di Kafka, lo store è gestito dal client, tipicamente su Blob Storage)
 
 ---
 
@@ -44,15 +49,15 @@ Kafka clients ───────────────►   Partition 2
 
 | | Basic | Standard | Premium | Dedicated |
 |---|-------|----------|---------|-----------|
-| Consumer Groups | 1 | 20 | 100 | illimitati |
+| Consumer Groups (per Event Hub) | 1 | 20 | 100 | 1000 |
 | Retention max | 1 giorno | 7 giorni | 90 giorni | 90 giorni |
 | Message size | 256 KB | 1 MB | 1 MB | 1 MB |
-| Throughput | TU (manual) | TU (manual) | PU (auto) | CU (dedicated) |
+| Throughput | TU (fisse) | TU (auto-inflate opzionale) | PU (scelte manualmente) | CU (dedicate) |
 | Kafka API | No | Sì | Sì | Sì |
 | Capture | No | Sì | Sì | Sì |
-| Schema Registry | No | No | Sì | Sì |
+| Schema Registry | No | Sì | Sì | Sì |
 | Private Endpoint | No | Sì | Sì | Sì |
-| Prezzo | ~$0.015/M events | ~$0.10/M events + TU | ~$750/mese | ~$65000/mese (10 CU) |
+| Prezzo (indicativo, verificare sul pricing calculator) | per milione di eventi, il più basso | per milione di eventi + TU/ora | per PU/ora, ingress/egress inclusi | per CU/ora, ordine di migliaia di $/mese per CU |
 
 ---
 
@@ -65,19 +70,29 @@ az eventhubs namespace create \
     --name myapp-eventhubs \
     --sku Standard \
     --location italynorth \
-    --capacity 2 \                          # Throughput Units: 1-20 (auto-inflate opzionale)
+#   --capacity 2: Throughput Units iniziali
+#   auto-inflate: scala SOLO verso l'alto fino a 10 TU, mai verso il basso (scendere è manuale)
+az eventhubs namespace create \
+    --resource-group myapp-rg \
+    --name myapp-eventhubs \
+    --sku Standard \
+    --location italynorth \
+    --capacity 2 \
     --enable-auto-inflate true \
-    --maximum-throughput-units 10 \         # auto-scale fino a 10 TU
+    --maximum-throughput-units 10 \
     --minimum-tls-version 1.2
 
 # Creare Event Hub
+#   --partition-count: fisso su Standard — scegliere con cura (parallelismo massimo dei consumer = n. partition)
+#   --retention-time-in-hours: 168 = 7 giorni (max Standard)
+#   --cleanup-policy: Delete (default) o Compact (solo ultima versione per key; solo Premium/Dedicated)
 az eventhubs eventhub create \
     --resource-group myapp-rg \
     --namespace-name myapp-eventhubs \
     --name app-events \
-    --partition-count 8 \                   # fisso — scegliere con cura (max throughput = partitions × 1MB/s)
-    --message-retention 7 \                 # giorni
-    --cleanup-policy Delete                 # Delete (standard) o Compact (solo ultima versione per key)
+    --partition-count 8 \
+    --retention-time-in-hours 168 \
+    --cleanup-policy Delete
 
 # Creare Consumer Group
 az eventhubs eventhub consumer-group create \
@@ -92,11 +107,12 @@ az eventhubs eventhub consumer-group create \
     --eventhub-name app-events \
     --name archival-consumer
 
-# RBAC: concedere accesso a Managed Identity
+# RBAC: concedere accesso a Managed Identity (ruoli: Data Sender, Data Receiver, Data Owner)
+# Preferire RBAC alle chiavi SAS: nessun segreto da ruotare, audit per identità
 az role assignment create \
     --assignee-object-id $MANAGED_IDENTITY_PRINCIPAL_ID \
     --assignee-principal-type ServicePrincipal \
-    --role "Azure Event Hubs Data Sender" \           # Data Sender o Data Receiver o Data Owner
+    --role "Azure Event Hubs Data Sender" \
     --scope /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.EventHub/namespaces/myapp-eventhubs/eventhubs/app-events
 ```
 
@@ -121,34 +137,31 @@ EVENTHUB = "app-events"
 async def send_events(events: list[dict]):
     credential = DefaultAzureCredential()
     async with EventHubProducerClient(NAMESPACE, EVENTHUB, credential) as producer:
-        # Batch per efficienza (auto-size rispetta il limite 1MB)
-        async with producer.create_batch() as batch:
-            for event in events:
-                event_data = EventData(
-                    body=json.dumps(event).encode('utf-8')
-                )
-                # partition_key: eventi con stesso key vanno nella stessa partition (ordinamento)
-                # Se omesso: distribuzione round-robin tra partitions
-                try:
-                    batch.add(event_data)
-                except ValueError:
-                    # Batch pieno: invia e ricrea
-                    await producer.send_batch(batch)
-                    async with producer.create_batch() as batch:
-                        batch.add(event_data)
-
+        # Batch per efficienza: create_batch() è una coroutine (await), non un context manager.
+        # Se partition_key e partition_id sono omessi, il servizio distribuisce tra le partition.
+        batch = await producer.create_batch()
+        for event in events:
+            event_data = EventData(json.dumps(event).encode('utf-8'))
+            try:
+                batch.add(event_data)
+            except ValueError:
+                # Batch pieno (limite di dimensione): invia e ricrea
+                await producer.send_batch(batch)
+                batch = await producer.create_batch()
+                batch.add(event_data)
+        if len(batch) > 0:
             await producer.send_batch(batch)
 
 # Usare con partition key
-async def send_with_partition_key(user_events: list[dict]):
+async def send_with_partition_key(user_id: str, user_events: list[dict]):
     credential = DefaultAzureCredential()
     async with EventHubProducerClient(NAMESPACE, EVENTHUB, credential) as producer:
-        # Tutti gli eventi dello stesso user_id vanno nella stessa partition
+        # La partition_key è del batch: tutti gli eventi dello stesso utente
+        # finiscono nella stessa partition, quindi mantengono l'ordine
+        batch = await producer.create_batch(partition_key=f"user-{user_id}")
         for event in user_events:
-            partition_key = f"user-{event['userId']}"
-            async with producer.create_batch(partition_key=partition_key) as batch:
-                batch.add(EventData(json.dumps(event).encode('utf-8')))
-            await producer.send_batch(batch)
+            batch.add(EventData(json.dumps(event).encode('utf-8')))
+        await producer.send_batch(batch)
 
 asyncio.run(send_events([
     {"type": "page.view", "userId": "u1", "url": "/products"},
@@ -167,13 +180,15 @@ import json
 from azure.eventhub.aio import EventHubConsumerClient
 from azure.eventhub.extensions.checkpointstoreblobaio import BlobCheckpointStore
 from azure.identity.aio import DefaultAzureCredential
-from azure.storage.blob.aio import ContainerClient
 
 NAMESPACE = "myapp-eventhubs.servicebus.windows.net"
 EVENTHUB = "app-events"
 CONSUMER_GROUP = "analytics-consumer"
 STORAGE_ACCOUNT = "https://mystorageaccount.blob.core.windows.net"
 CONTAINER = "event-checkpoints"
+
+async def handle_event(data: dict):
+    ...  # logica applicativa (idempotente: la consegna è at-least-once)
 
 async def process_event(partition_context, event):
     """Callback per ogni evento ricevuto."""
@@ -192,7 +207,9 @@ async def process_event(partition_context, event):
 
     except Exception as e:
         print(f"Error processing event: {e}")
-        # Non aggiornare checkpoint → l'evento sarà riprocessato
+        # Non aggiornare il checkpoint qui. Attenzione: il prossimo evento che ha successo
+        # checkpointerà un offset successivo e questo evento andrebbe perso →
+        # in produzione usare retry o una dead-letter (es. un secondo Event Hub / Blob)
 
 async def main():
     credential = DefaultAzureCredential()
@@ -208,14 +225,13 @@ async def main():
         NAMESPACE, EVENTHUB, CONSUMER_GROUP,
         credential=credential,
         checkpoint_store=checkpoint_store,
-        # Iniziare dall'inizio o dall'ultimo checkpoint
-        # initial_event_position: "@latest" (default) o "@earliest" o specifico offset
     ) as consumer:
         print(f"Listening on {EVENTHUB}...")
+        # starting_position vale solo per le partition SENZA checkpoint;
+        # con un checkpoint esistente si riparte da lì. "@latest" (default) o "-1" (dall'inizio)
         await consumer.receive(
             on_event=process_event,
-            max_wait_time=5,        # secondi prima di callback con event=None
-            starting_position="@latest"   # solo nuovi eventi
+            starting_position="-1"
         )
 
 asyncio.run(main())
@@ -225,24 +241,30 @@ asyncio.run(main())
 
 ## Event Hubs Capture
 
-**Capture** archivia automaticamente gli eventi su **Blob Storage** o **Data Lake Gen2** in formato **Avro** — utile per data lake, auditing, replay:
+**Capture** archivia automaticamente gli eventi su **Blob Storage** o **Data Lake Gen2** in formato **Avro** (formato binario compatto con schema incorporato) — utile per data lake, auditing, replay. Scatta al primo tra intervallo di tempo e soglia di dimensione, per ogni partition.
 
 ```bash
 # Abilitare Capture su Event Hub esistente
+#   --capture-interval: secondi (60-900), flush ogni 5 minuti
+#   --capture-size-limit: bytes (10 MB-500 MB), flush al raggiungimento di ~300 MB
+#   --archive-name-format: deve contenere tutti i token {Namespace} {EventHub} {PartitionId} {Year} {Month} {Day} {Hour} {Minute} {Second}
+#   esempio di path risultante: myapp-eventhubs/app-events/0/2026/02/26/14/30/00.avro
 az eventhubs eventhub update \
     --resource-group myapp-rg \
     --namespace-name myapp-eventhubs \
     --name app-events \
     --enable-capture true \
-    --capture-interval 300 \                    # secondi (60-900): flush ogni 5 minuti
-    --capture-size-limit 314572800 \            # bytes (10MB-524MB): flush quando raggiunge 300MB
+    --capture-interval 300 \
+    --capture-size-limit 314572800 \
     --destination-name EventHubArchive \
     --storage-account /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.Storage/storageAccounts/mystorageaccount \
     --blob-container eventhubs-capture \
     --archive-name-format "{Namespace}/{EventHub}/{PartitionId}/{Year}/{Month}/{Day}/{Hour}/{Minute}/{Second}"
-    # Formato path: myapp-eventhubs/app-events/0/2026/02/26/14/30/00.avro
+```
 
-# Leggere file Avro catturati
+Lettura dei file Avro catturati (Python):
+
+```python
 # pip install fastavro
 import fastavro
 import json
@@ -259,15 +281,19 @@ def read_capture_file(avro_file_path: str):
                   f"Body: {body}")
 ```
 
-**Path pattern utili:**
-- `{Namespace}/{EventHub}/{PartitionId}/{Year}/{Month}/{Day}/{Hour}/{Minute}/{Second}` — partizionamento temporale
-- `{Namespace}/{EventHub}/{Year}/{Month}/{Day}` — raggruppamento giornaliero (tutti i partition nella stessa cartella)
+**Path pattern:** i token sono obbligatori, ma l'ordine è libero. Mettere `{Year}/{Month}/{Day}/{Hour}` prima di `{PartitionId}` raggruppa i file per data (utile per query con partition pruning in Spark/Synapse/Fabric); l'ordine predefinito raggruppa per partition.
+
+!!! note "Autenticazione di Capture"
+    Per scrivere sullo storage, il namespace deve avere una Managed Identity (system o user-assigned) con ruolo `Storage Blob Data Contributor` sulla destinazione; senza, Capture fallisce silenziosamente (vedi Troubleshooting).
 
 ---
 
 ## API Kafka — Compatibilità Nativa
 
-Event Hubs Standard/Premium espone un'endpoint **Kafka-compatible** — il codice Kafka esistente funziona senza modifiche applicative:
+Event Hubs Standard/Premium/Dedicated espone un endpoint **Kafka-compatible** (protocollo Kafka 1.0+, porta 9093) — il codice Kafka esistente funziona cambiando solo la configurazione di connessione. Mapping: cluster Kafka = namespace, topic = Event Hub, partition = partition.
+
+!!! warning "Autenticazione"
+    L'esempio usa la connection string SAS per brevità. La `RootManageSharedAccessKey` ha permessi totali sul namespace: in produzione usare una SAS policy dedicata con solo `Send`/`Listen`, oppure **Entra ID via OAUTHBEARER** (`sasl.mechanism=OAUTHBEARER` con il callback handler della propria libreria) e i ruoli RBAC Data Sender/Receiver.
 
 ```python
 # Producer Kafka che scrive su Event Hubs
@@ -304,18 +330,19 @@ auto.offset.reset=latest
 ```
 
 **Limitazioni API Kafka su Event Hubs:**
-- No Kafka Transactions
-- No Kafka Streams (usa Azure Stream Analytics)
-- No topic auto-creation (crea Event Hub prima)
-- Consumer group = Event Hubs Consumer Group (limite per SKU)
+- Kafka Transactions e Kafka Streams: supporto limitato agli SKU Premium/Dedicated <!-- REVIEW: verificare stato GA di Kafka Transactions e Kafka Streams per SKU su learn.microsoft.com/azure/event-hubs/apache-kafka-frequently-asked-questions -->
+- Nessuna auto-creazione dei topic con le impostazioni di default: creare prima l'Event Hub (o via Kafka AdminClient dove supportato)
+- I *Kafka consumer group* (offset gestiti dal broker) sono distinti dai Consumer Group nativi di Event Hubs usati dagli SDK AMQP; i limiti per SKU della tabella riguardano questi ultimi
+- Retention e partition si configurano sull'Event Hub, non con le proprietà Kafka del topic
 
 ---
 
 ## Azure Stream Analytics
 
-**Azure Stream Analytics** è il servizio di stream processing managed per event in tempo reale — usa SQL-like query su dati in streaming:
+**Azure Stream Analytics** (ASA) è il servizio di stream processing managed per eventi in tempo reale — usa query SQL-like (SAQL) su dati in streaming. Alternative: Eventstream/Real-Time Intelligence in Microsoft Fabric, Spark Structured Streaming (Databricks/Synapse), Azure Functions per logica per-evento.
 
 ```bash
+# Richiede l'estensione CLI: az extension add --name stream-analytics
 # Creare Stream Analytics Job
 az stream-analytics job create \
     --resource-group myapp-rg \
@@ -380,6 +407,7 @@ az stream-analytics transformation create \
         HAVING COUNT(*) > 1
 
         -- Seconda query: alert su errori
+        -- ([alerting-output] va definito con un secondo `az stream-analytics output create`)
         SELECT *
         INTO [alerting-output]
         FROM [eventhubs-input]
@@ -421,32 +449,33 @@ JOIN productcatalog b TIMESTAMP BY updateTime
 
 ## Event Hubs Schema Registry
 
-Lo **Schema Registry** (Premium/Dedicated) valida e versiona schema Avro o JSON Schema:
+Lo **Schema Registry** (Standard/Premium/Dedicated, non Basic) è un repository centralizzato di schema versionati: producer e consumer si accordano sul formato (es. Avro) senza includere lo schema in ogni messaggio, e le regole di compatibilità impediscono modifiche che romperebbero i consumer esistenti.
 
 ```bash
 # Creare Schema Group
+# (--schema-compatibility: None, Backward, Forward)
 az eventhubs namespace schema-registry create \
     --resource-group myapp-rg \
     --namespace-name myapp-eventhubs \
     --name orders-schemas \
-    --schema-compatibility Forward \    # None, Backward, Forward
+    --schema-compatibility Forward \
     --schema-type Avro
+```
 
-# Registrare schema
-az eventhubs namespace schema-registry schema create \
-    --resource-group myapp-rg \
-    --namespace-name myapp-eventhubs \
-    --schema-registry-name orders-schemas \
-    --schema-name order-event \
-    --schema-definition '{
-        "type": "record",
-        "name": "OrderEvent",
-        "fields": [
-            {"name": "orderId", "type": "string"},
-            {"name": "amount", "type": "double"},
-            {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"}
-        ]
-    }'
+I singoli schema si registrano dal data plane tramite SDK (`azure-schemaregistry` + `azure-schemaregistry-avroencoder` per Python), non da `az`:
+
+```python
+# pip install azure-schemaregistry azure-schemaregistry-avroencoder azure-identity
+from azure.identity import DefaultAzureCredential
+from azure.schemaregistry import SchemaRegistryClient
+
+client = SchemaRegistryClient("myapp-eventhubs.servicebus.windows.net", DefaultAzureCredential())
+schema = """{"type":"record","name":"OrderEvent","namespace":"com.myapp","fields":[
+  {"name":"orderId","type":"string"},
+  {"name":"amount","type":"double"},
+  {"name":"timestamp","type":"long","logicalType":"timestamp-millis"}]}"""
+props = client.register_schema("orders-schemas", "order-event", schema, "Avro")
+print(props.id)
 ```
 
 ---
@@ -491,7 +520,7 @@ Simple background queue low-cost?
 
 **Causa:** Il namespace Standard ha raggiunto il limite di TU configurati (1 TU = 1 MB/s ingress). Se auto-inflate non è abilitato, il traffico in eccesso viene throttled.
 
-**Soluzione:** Abilitare auto-inflate o aumentare manualmente i TU; monitorare la metrica `ThrottledRequests`.
+**Soluzione:** Abilitare auto-inflate o aumentare manualmente i TU; monitorare la metrica `ThrottledRequests`. Nota: auto-inflate non scala mai verso il basso, quindi dopo un picco si continua a pagare il massimo raggiunto finché non si riducono i TU a mano. Se il collo di bottiglia è una singola partition (hot key), aumentare i TU non aiuta: rivedere la partition key.
 
 ```bash
 # Verificare TU attuali e abilitare auto-inflate
@@ -525,25 +554,28 @@ az monitor metrics list \
 
 ### Scenario 2 — Consumer non avanza (offset bloccato)
 
-**Sintomo:** Il consumer group non processa nuovi eventi; la metrica `IncomingMessages` cresce ma `OutgoingMessages` è piatta. Il lag aumenta continuamente.
+**Sintomo:** Il consumer group non processa nuovi eventi; la metrica `IncomingMessages` cresce ma `OutgoingMessages` è piatta. Il lag (eventi in coda non ancora letti) aumenta continuamente.
 
 **Causa:** Il checkpoint store (Blob Storage) non viene aggiornato (eccezione silenziata nel callback `on_event`), oppure un singolo consumer detiene una partition ma non la processa (crash senza rilascio).
 
 **Soluzione:** Verificare i checkpoint nel Blob container, forzare il rilascio delle partition resettando il consumer group, o eliminare e ricreare il checkpoint.
 
 ```bash
-# Vedere checkpoint nel Blob container (ogni partition ha un file)
+# Vedere checkpoint e ownership nel Blob container (un blob per partition).
+# Layout dello store: <fqdn>/<eventhub>/<consumer-group>/{checkpoint,ownership}/<partition-id>
 az storage blob list \
     --account-name mystorageaccount \
     --container-name event-checkpoints \
-    --prefix "myapp-eventhubs/app-events/analytics-consumer/" \
+    --prefix "myapp-eventhubs.servicebus.windows.net/app-events/analytics-consumer/" \
+    --auth-mode login \
     --output table
 
-# Eliminare checkpoint per ripartire dall'inizio (ATTENZIONE: replay tutti gli eventi in retention)
+# Eliminare checkpoint per ripartire da starting_position (ATTENZIONE: replay di tutti gli eventi in retention)
 az storage blob delete-batch \
     --account-name mystorageaccount \
     --source event-checkpoints \
-    --pattern "myapp-eventhubs/app-events/analytics-consumer/*"
+    --pattern "myapp-eventhubs.servicebus.windows.net/app-events/analytics-consumer/checkpoint/*" \
+    --auth-mode login
 
 # Verificare lag per consumer group tramite metrica IncomingMessages vs OutgoingMessages
 az monitor metrics list \
@@ -558,9 +590,9 @@ az monitor metrics list \
 
 **Sintomo:** Il Kafka producer/consumer riceve `SASL authentication failed` o `Connection refused` quando usa l'endpoint Kafka di Event Hubs.
 
-**Causa:** Le cause più comuni sono: (1) SKU Basic (non supporta Kafka), (2) connection string errata o scaduta nella password SASL, (3) porta 9093 bloccata dal firewall, (4) `group.id` non corrisponde a un Consumer Group esistente.
+**Causa:** Le cause più comuni sono: (1) SKU Basic (non supporta Kafka), (2) connection string errata o scaduta nella password SASL, (3) porta 9093 bloccata dal firewall o IP/VNet non autorizzato nelle regole di rete del namespace, (4) username diverso da `$ConnectionString` letterale.
 
-**Soluzione:** Verificare lo SKU, rigenerare le chiavi SAS se necessario, e creare esplicitamente il Consumer Group prima di avviare il consumer.
+**Soluzione:** Verificare lo SKU, rigenerare le chiavi SAS se necessario, controllare le regole di rete del namespace e che l'Event Hub (= topic) esista.
 
 ```bash
 # Verificare SKU (deve essere Standard, Premium o Dedicated per Kafka)
@@ -630,6 +662,25 @@ az monitor diagnostic-settings create \
     --logs '[{"category":"ArchiveLogs","enabled":true}]' \
     --workspace $LOG_ANALYTICS_WORKSPACE_ID
 ```
+
+---
+
+## Relazioni
+
+??? info "Service Bus ed Event Grid — Approfondimento"
+    Event Hubs è per stream ad alto volume riletti dai consumer; Service Bus per messaggi di comando con code, sessioni e dead-letter; Event Grid per routing reattivo di eventi discreti.
+
+    **Approfondimento completo →** [Service Bus ed Event Grid](service-bus-event-grid.md)
+
+??? info "Blob Storage — Approfondimento"
+    Destinazione di Capture e sede del checkpoint store dei consumer.
+
+    **Approfondimento completo →** [Blob Storage](../storage/blob-storage.md)
+
+??? info "Monitor e Log Analytics — Approfondimento"
+    Metriche (`ThrottledRequests`, `IncomingMessages`) e diagnostic settings (`ArchiveLogs`) usati nel Troubleshooting.
+
+    **Approfondimento completo →** [Monitor e Log Analytics](../monitoring/monitor-log-analytics.md)
 
 ---
 
