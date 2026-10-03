@@ -5634,7 +5634,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -5659,7 +5659,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -5937,10 +5937,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#amazon-memorydb-for-redis" class="md-nav__link">
+  <a href="#amazon-memorydb-valkey-redis-oss" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Amazon MemoryDB for Redis
+        Amazon MemoryDB (Valkey / Redis OSS)
       
     </span>
   </a>
@@ -24996,10 +24996,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#amazon-memorydb-for-redis" class="md-nav__link">
+  <a href="#amazon-memorydb-valkey-redis-oss" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Amazon MemoryDB for Redis
+        Amazon MemoryDB (Valkey / Redis OSS)
       
     </span>
   </a>
@@ -25449,7 +25449,7 @@
 </tr>
 <tr>
 <td>Multi-thread</td>
-<td>No (single-thread per operazione)</td>
+<td>Esecuzione comandi single-thread; I/O di rete multi-thread (da Redis 7.0 / ElastiCache 7.1)</td>
 <td>Sì</td>
 </tr>
 <tr>
@@ -25468,15 +25468,19 @@
 <p class="admonition-title">Scegliere quasi sempre Redis</p>
 <p>A meno che non si abbia uno specifico bisogno di multi-threading puro per CPU-bound cache operations, Redis è la scelta corretta per la sua ricchezza di funzionalità.</p>
 </div>
+<div class="admonition warning">
+<p class="admonition-title">Redis OSS → Valkey</p>
+<p>Dopo il cambio di licenza di Redis (2024) la community ha creato <strong>Valkey</strong> (fork open source sotto Linux Foundation, API-compatibile con Redis OSS 7.2). ElastiCache e MemoryDB supportano Valkey come engine (<code>--engine valkey</code>), con prezzi più bassi di Redis OSS (circa -20% node-based, -33% serverless). Redis OSS su ElastiCache resta fermo alla 7.1: per nuovi deployment preferire <strong>Valkey</strong>. Gli esempi <code>--engine redis</code> di questa pagina funzionano identici con <code>valkey</code> (cambiano engine-version e parameter group, es. <code>default.valkey7.cluster.on</code>). Verificare le versioni Valkey correnti nella documentazione ElastiCache.</p>
+</div>
 <h3 id="redis-cluster-mode-disabled-vs-enabled">Redis — Cluster Mode Disabled vs Enabled<a class="headerlink" href="#redis-cluster-mode-disabled-vs-enabled" title="Permanent link">&para;</a></h3>
 <p><strong>Cluster Mode Disabled:</strong>
 - 1 shard: 1 Primary + fino a 5 Replicas
-- Massimo ~500 GB per nodo (dipende dal tipo di istanza)
+- Capacità limitata dalla memoria del singolo nodo (dataset intero in RAM su ogni nodo; dipende dal tipo di istanza)
 - Singola partition key space
 - Multi-AZ con failover automatico</p>
 <p><strong>Cluster Mode Enabled:</strong>
-- Fino a 500 shard (sharding automatico)
-- Fino a 6.7 TB di storage aggregato (esempio: 500 shard × ~13 GB r6g.large)
+- Fino a 500 nodi per cluster (shard × (1 + repliche): es. 500 shard senza repliche, o 250 shard con 1 replica); sharding automatico su 16384 hash slot
+- Storage aggregato = somma della memoria dei primary (dipende da tipo di nodo e numero di shard)
 - Scaling orizzontale: aggiungere/rimuovere shard online
 - Richiede supporto nel client per il routing (Cluster-aware client)</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Creare un cluster Redis con Cluster Mode Enabled</span>
@@ -25492,7 +25496,7 @@
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>--multi-az-enabled<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>--at-rest-encryption-enabled<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span>--transit-encryption-enabled<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>--auth-token<span class="w"> </span><span class="s2">"MySecureRedisPassword123!"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>--auth-token<span class="w"> </span><span class="s2">"</span><span class="nv">$REDIS_AUTH_TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>--cache-parameter-group-name<span class="w"> </span>default.redis7.cluster.on<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span>--security-group-ids<span class="w"> </span>sg-1234567890<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">  </span>--cache-subnet-group-name<span class="w"> </span>my-cache-subnet-group
@@ -25507,10 +25511,14 @@
 </span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">  </span>--automatic-failover-enabled<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">  </span>--at-rest-encryption-enabled<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">  </span>--transit-encryption-enabled<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">  </span>--auth-token<span class="w"> </span><span class="s2">"MySecureRedisPassword123!"</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">  </span>--auth-token<span class="w"> </span><span class="s2">"</span><span class="nv">$REDIS_AUTH_TOKEN</span><span class="s2">"</span>
 </span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Credenziali</p>
+<p>L'AUTH token (16-128 caratteri, richiede <code>--transit-encryption-enabled</code>) non va scritto in chiaro negli script: leggerlo da Secrets Manager. In alternativa usare <strong>RBAC</strong> (utenti + ACL, Redis 6+) o <strong>IAM authentication</strong>, che evitano password statiche. Stesso criterio per le password <code>master-user-password</code> degli altri esempi della pagina (in produzione: <code>--manage-master-user-password</code> dove supportato, es. RDS/Redshift/DocumentDB).</p>
+</div>
 <h3 id="elasticache-serverless">ElastiCache Serverless<a class="headerlink" href="#elasticache-serverless" title="Permanent link">&para;</a></h3>
-<p>ElastiCache Serverless scala automaticamente in base al traffico per Redis e Memcached. Nessun provisioning di nodi o shard.</p>
+<p>ElastiCache Serverless scala automaticamente in base al traffico per Redis, Valkey e Memcached. Nessun provisioning di nodi o shard; si paga per GB-ora di dati e per ECPU consumate (ElastiCache Processing Unit).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Creare cache serverless Redis</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>aws<span class="w"> </span>elasticache<span class="w"> </span>create-serverless-cache<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--serverless-cache-name<span class="w"> </span>my-serverless-redis<span class="w"> </span><span class="se">\</span>
@@ -25571,26 +25579,27 @@
 3. Rischio: dati persi se la cache va giù prima della scrittura nel DB
 4. Complessità: richiede gestione della coda di scrittura</p>
 <p><strong>Session Store con Redis:</strong>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">create_session</span><span class="p">(</span><span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">session_id</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">session_data</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>        <span class="s1">'userId'</span><span class="p">:</span> <span class="n">user_id</span><span class="p">,</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        <span class="s1">'createdAt'</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">(),</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>        <span class="s1">'permissions'</span><span class="p">:</span> <span class="p">[</span><span class="s1">'read'</span><span class="p">,</span> <span class="s1">'write'</span><span class="p">]</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="p">}</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="c1"># Sessione scade dopo 24 ore</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="n">r</span><span class="o">.</span><span class="n">setex</span><span class="p">(</span><span class="sa">f</span><span class="s2">"session:</span><span class="si">{</span><span class="n">session_id</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="mi">86400</span><span class="p">,</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">session_data</span><span class="p">))</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    <span class="k">return</span> <span class="n">session_id</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_session</span><span class="p">(</span><span class="n">session_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="n">data</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">"session:</span><span class="si">{</span><span class="n">session_id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>        <span class="c1"># Rinnovare TTL ad ogni accesso (sliding window)</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>        <span class="n">r</span><span class="o">.</span><span class="n">expire</span><span class="p">(</span><span class="sa">f</span><span class="s2">"session:</span><span class="si">{</span><span class="n">session_id</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="mi">86400</span><span class="p">)</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="k">return</span> <span class="kc">None</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">create_session</span><span class="p">(</span><span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">session_id</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">session_data</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        <span class="s1">'userId'</span><span class="p">:</span> <span class="n">user_id</span><span class="p">,</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>        <span class="s1">'createdAt'</span><span class="p">:</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">(),</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>        <span class="s1">'permissions'</span><span class="p">:</span> <span class="p">[</span><span class="s1">'read'</span><span class="p">,</span> <span class="s1">'write'</span><span class="p">]</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="p">}</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="c1"># Sessione scade dopo 24 ore</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>    <span class="n">r</span><span class="o">.</span><span class="n">setex</span><span class="p">(</span><span class="sa">f</span><span class="s2">"session:</span><span class="si">{</span><span class="n">session_id</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="mi">86400</span><span class="p">,</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">session_data</span><span class="p">))</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="k">return</span> <span class="n">session_id</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_session</span><span class="p">(</span><span class="n">session_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="n">data</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">"session:</span><span class="si">{</span><span class="n">session_id</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>    <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>        <span class="c1"># Rinnovare TTL ad ogni accesso (sliding window)</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>        <span class="n">r</span><span class="o">.</span><span class="n">expire</span><span class="p">(</span><span class="sa">f</span><span class="s2">"session:</span><span class="si">{</span><span class="n">session_id</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="mi">86400</span><span class="p">)</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    <span class="k">return</span> <span class="kc">None</span>
 </span></code></pre></div></p>
 <h3 id="redis-use-case-avanzati">Redis — Use Case Avanzati<a class="headerlink" href="#redis-use-case-avanzati" title="Permanent link">&para;</a></h3>
 <p><strong>Leaderboard con Sorted Sets:</strong>
@@ -25609,7 +25618,7 @@
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"rate_limit:</span><span class="si">{</span><span class="n">user_id</span><span class="si">}</span><span class="s2">"</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="n">pipe</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">pipeline</span><span class="p">()</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="n">pipe</span><span class="o">.</span><span class="n">incr</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">pipe</span><span class="o">.</span><span class="n">expire</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">window</span><span class="p">)</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">pipe</span><span class="o">.</span><span class="n">expire</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">window</span><span class="p">,</span> <span class="n">nx</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># TTL impostato solo al primo hit: finestra fissa (richiede Redis/Valkey &gt;= 7)</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="n">count</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">pipe</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="k">return</span> <span class="n">count</span> <span class="o">&gt;</span> <span class="n">limit</span>
 </span></code></pre></div></p>
@@ -25620,7 +25629,7 @@
 <ul>
 <li><strong>Leader Node:</strong> riceve le query, pianifica l'esecuzione, aggrega i risultati</li>
 <li><strong>Compute Nodes:</strong> eseguono le operazioni effettive (query execution, storage)</li>
-<li><strong>DC2</strong> (Dense Compute): SSD locale, fino a 2.56 TB per nodo, storage locale</li>
+<li><strong>DC2</strong> (Dense Compute): SSD locale, fino a 2.56 TB per nodo, compute/storage accoppiati. Generazione legacy: per nuovi cluster usare RA3</li>
 <li><strong>RA3</strong> (Redshift Managed Storage): storage su S3 (Redshift Managed Storage), compute/storage separati</li>
 </ul>
 <p><strong>Nodi RA3 — Separazione Compute/Storage:</strong>
@@ -25644,7 +25653,7 @@
 </span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">  </span>--logging-properties<span class="w"> </span><span class="nv">BucketName</span><span class="o">=</span>my-redshift-logs,S3KeyPrefix<span class="o">=</span>audit/
 </span></code></pre></div>
 <h3 id="redshift-serverless">Redshift Serverless<a class="headerlink" href="#redshift-serverless" title="Permanent link">&para;</a></h3>
-<p>Redshift Serverless scala automaticamente la capacità di compute in base alle query. Nessun cluster da gestire.</p>
+<p>Redshift Serverless scala automaticamente la capacità di compute in base alle query. Nessun cluster da gestire. La capacità si misura in <strong>RPU</strong> (Redshift Processing Unit, 1 RPU = 16 GB RAM): <code>base-capacity</code> è il punto di partenza, <code>max-capacity</code> il tetto di costo. Si paga per RPU-secondo di utilizzo effettivo (idle = 0).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Creare Redshift Serverless namespace e workgroup</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>aws<span class="w"> </span>redshift-serverless<span class="w"> </span>create-namespace<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--namespace-name<span class="w"> </span>my-namespace<span class="w"> </span><span class="se">\</span>
@@ -25707,28 +25716,34 @@
 </span></code></pre></div>
 <h3 id="concurrency-scaling-e-materialized-views">Concurrency Scaling e Materialized Views<a class="headerlink" href="#concurrency-scaling-e-materialized-views" title="Permanent link">&para;</a></h3>
 <p><strong>Concurrency Scaling:</strong> aggiunge automaticamente capacità di compute burst per gestire picchi di query concorrenti.</p>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">-- Abilitare Concurrency Scaling per workgroup specifici</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">ALTER</span><span class="w"> </span><span class="n">WORKLOAD</span><span class="w"> </span><span class="s1">'analytics_team'</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="k">SET</span><span class="w"> </span><span class="n">concurrency_scaling</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">auto</span><span class="p">;</span>
+<p>Non esiste un comando SQL per attivarlo: si abilita per <strong>coda WLM</strong> (campo <code>concurrency_scaling</code> nel parameter group del cluster provisioned). Le query idonee eccedenti la capacità vengono instradate su cluster aggiuntivi; un certo numero di ore al giorno è gratuito, il resto è a consumo (limite regolabile con <code>max_concurrency_scaling_clusters</code>). In Redshift Serverless non serve: la scalatura è intrinseca.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>aws<span class="w"> </span>redshift<span class="w"> </span>modify-cluster-parameter-group<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span>--parameter-group-name<span class="w"> </span>my-wlm-pg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--parameters<span class="w"> </span><span class="s1">'ParameterName=wlm_json_configuration,ParameterValue=[{"name":"analytics_team","user_group":["analytics"],"query_concurrency":5,"concurrency_scaling":"auto"}]'</span>
 </span></code></pre></div>
 <p><strong>Materialized Views:</strong> pre-calcola e materializza il risultato di query complesse per accesso rapido.</p>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1">-- Creare Materialized View</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">MATERIALIZED</span><span class="w"> </span><span class="k">VIEW</span><span class="w"> </span><span class="n">daily_sales_summary</span><span class="w"> </span><span class="k">AS</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="k">SELECT</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span><span class="n">DATE_TRUNC</span><span class="p">(</span><span class="s1">'day'</span><span class="p">,</span><span class="w"> </span><span class="n">order_date</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="k">day</span><span class="p">,</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span><span class="n">product_id</span><span class="p">,</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span><span class="k">SUM</span><span class="p">(</span><span class="n">quantity</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">total_qty</span><span class="p">,</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">  </span><span class="k">SUM</span><span class="p">(</span><span class="n">revenue</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">total_revenue</span><span class="p">,</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">  </span><span class="k">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span><span class="w"> </span><span class="n">customer_id</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">unique_customers</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="k">FROM</span><span class="w"> </span><span class="n">orders</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="c1">-- Refresh della Materialized View</span>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="n">REFRESH</span><span class="w"> </span><span class="n">MATERIALIZED</span><span class="w"> </span><span class="k">VIEW</span><span class="w"> </span><span class="n">daily_sales_summary</span><span class="p">;</span>
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>
-</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="c1">-- Query sulla Materialized View (molto più veloce)</span>
-</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">daily_sales_summary</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="k">day</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">CURRENT_DATE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1">-- Creare Materialized View (AUTO REFRESH YES: refresh incrementale automatico quando possibile)</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">MATERIALIZED</span><span class="w"> </span><span class="k">VIEW</span><span class="w"> </span><span class="n">daily_sales_summary</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">AUTO</span><span class="w"> </span><span class="n">REFRESH</span><span class="w"> </span><span class="n">YES</span><span class="w"> </span><span class="k">AS</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="k">SELECT</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span><span class="n">DATE_TRUNC</span><span class="p">(</span><span class="s1">'day'</span><span class="p">,</span><span class="w"> </span><span class="n">order_date</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="k">day</span><span class="p">,</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span><span class="n">product_id</span><span class="p">,</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">  </span><span class="k">SUM</span><span class="p">(</span><span class="n">quantity</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">total_qty</span><span class="p">,</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">  </span><span class="k">SUM</span><span class="p">(</span><span class="n">revenue</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">total_revenue</span><span class="p">,</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">  </span><span class="k">COUNT</span><span class="p">(</span><span class="k">DISTINCT</span><span class="w"> </span><span class="n">customer_id</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">unique_customers</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="k">FROM</span><span class="w"> </span><span class="n">orders</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="c1">-- Refresh manuale (opzionale con AUTO REFRESH)</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="n">REFRESH</span><span class="w"> </span><span class="n">MATERIALIZED</span><span class="w"> </span><span class="k">VIEW</span><span class="w"> </span><span class="n">daily_sales_summary</span><span class="p">;</span>
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="c1">-- Query sulla Materialized View (molto più veloce)</span>
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">daily_sales_summary</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="k">day</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">CURRENT_DATE</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
 </span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Zero-ETL</p>
+<p>Per portare dati OLTP in Redshift senza pipeline, esistono le <strong>zero-ETL integrations</strong> (Aurora, RDS, DynamoDB → Redshift, replica quasi real-time): alternativa a COPY/DMS per analytics sui dati operazionali.</p>
+</div>
 <h3 id="redshift-ml">Redshift ML<a class="headerlink" href="#redshift-ml" title="Permanent link">&para;</a></h3>
 <p>Permette di creare e fare inference di modelli ML direttamente con SQL, usando SageMaker Autopilot in background.</p>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1">-- Creare un modello ML con SQL</span>
@@ -25782,7 +25797,7 @@
 <p><strong>RDF (SPARQL):</strong> soggetto-predicato-oggetto, standard W3C, per linked data e knowledge graphs governativi.</p>
 <h3 id="architettura">Architettura<a class="headerlink" href="#architettura" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Storage condiviso simile ad Aurora: 6 copie su 3 AZ, crescita automatica fino a 64 TB</li>
+<li>Storage condiviso simile ad Aurora: 6 copie su 3 AZ, crescita automatica fino a 128 TiB (engine recenti; 64 TiB sulle versioni più vecchie)</li>
 <li>Primary + fino a 15 Read Replicas</li>
 <li>Failover automatico &lt; 30s</li>
 </ul>
@@ -25816,20 +25831,20 @@
 </span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="k">RETURN</span><span class="w"> </span><span class="n">a1</span><span class="p">.</span><span class="n">accountId</span><span class="p">,</span><span class="w"> </span><span class="n">a2</span><span class="p">.</span><span class="n">accountId</span><span class="p">,</span><span class="w"> </span><span class="n">addr</span><span class="p">.</span><span class="n">address</span><span class="p">,</span><span class="w"> </span><span class="n">merchant</span><span class="p">.</span><span class="n">name</span>
 </span></code></pre></div>
 <h3 id="neptune-analytics">Neptune Analytics<a class="headerlink" href="#neptune-analytics" title="Permanent link">&para;</a></h3>
-<p>Neptune Analytics è un motore in-memory per analytics su grafi (fino a 30 milioni di nodi), con algoritmi graph built-in (PageRank, shortest path, community detection).</p>
+<p>Neptune Analytics è un motore in-memory per analytics su grafi (dimensionato in memoria provisioned, in m-NCU, fino a miliardi di relazioni), con algoritmi graph built-in (PageRank, shortest path, community detection) e <strong>vector search</strong> per GraphRAG (retrieval su knowledge graph per applicazioni LLM). Query via openCypher. Complementare a Neptune Database (OLTP su grafo), non sostitutivo.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Creare un Neptune Analytics graph</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>aws<span class="w"> </span>neptune-graph<span class="w"> </span>create-graph<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>--graph-name<span class="w"> </span>fraud-analysis<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span>--provisioned-memory<span class="w"> </span><span class="m">16</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">  </span>--vector-search-configuration<span class="w"> </span><span class="nv">dimension</span><span class="o">=</span><span class="m">128</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span>--public-connectivity<span class="w"> </span><span class="nb">false</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span>--no-public-connectivity
 </span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1"># Caricare dati da S3</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1"># Creare il grafo caricando i dati da S3 (alternativa a create-graph: crea e importa in un colpo)</span>
 </span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>aws<span class="w"> </span>neptune-graph<span class="w"> </span>create-graph-using-import-task<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">  </span>--graph-id<span class="w"> </span>graph-id<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">  </span>--graph-name<span class="w"> </span>fraud-analysis-imported<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">  </span>--source<span class="w"> </span><span class="s2">"s3://my-bucket/graph-data/"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">  </span>--role-arn<span class="w"> </span>arn:aws:iam::123456789012:role/NeptuneRole<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="w">  </span>--import-options<span class="w"> </span><span class="s1">'{"neptune": {"preserveDefaultVertexLabels": true}}'</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">  </span>--format<span class="w"> </span>CSV<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="w">  </span>--role-arn<span class="w"> </span>arn:aws:iam::123456789012:role/NeptuneRole
 </span></code></pre></div>
 <h3 id="use-case-neptune">Use Case Neptune<a class="headerlink" href="#use-case-neptune" title="Permanent link">&para;</a></h3>
 <ul>
@@ -25845,11 +25860,12 @@
 <p>DocumentDB è un database di documenti JSON managed, compatibile con l'API MongoDB. Non è MongoDB: è una reimplementazione parziale dell'API MongoDB da zero da parte di AWS.</p>
 <div class="admonition warning">
 <p class="admonition-title">DocumentDB NON è MongoDB</p>
-<p>DocumentDB emula il driver wire protocol di MongoDB 4.0/5.0 ma non è 100% compatibile. Alcune feature di MongoDB non sono supportate. Verificare la compatibility matrix prima della migrazione.</p>
+<p>DocumentDB emula il wire protocol di MongoDB (engine 3.6/4.0/5.0, più recenti versioni successive) ma non è 100% compatibile: alcune feature e operatori MongoDB non sono supportati. Verificare la compatibility matrix prima della migrazione.</p>
 </div>
 <h3 id="architettura_1">Architettura<a class="headerlink" href="#architettura_1" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Simile ad Aurora: cluster volume condiviso, 6 copie su 3 AZ, crescita automatica fino a 64 TB</li>
+<li>Simile ad Aurora: cluster volume condiviso, 6 copie su 3 AZ, crescita automatica fino a 128 TiB</li>
+<li>Opzioni: storage <strong>I/O-optimized</strong> (niente costo per I/O, conviene con I/O &gt; ~25% della spesa) ed <strong>Elastic Clusters</strong> (sharding orizzontale per scaling di write e storage oltre il singolo writer)</li>
 <li>1 Primary + fino a 15 Read Replicas</li>
 <li>Failover automatico</li>
 </ul>
@@ -25899,13 +25915,13 @@
 </span><span id="__span-18-26"><a id="__codelineno-18-26" name="__codelineno-18-26" href="#__codelineno-18-26"></a><span class="n">results</span> <span class="o">=</span> <span class="n">collection</span><span class="o">.</span><span class="n">aggregate</span><span class="p">(</span><span class="n">pipeline</span><span class="p">)</span>
 </span></code></pre></div>
 <hr />
-<h2 id="amazon-memorydb-for-redis">Amazon MemoryDB for Redis<a class="headerlink" href="#amazon-memorydb-for-redis" title="Permanent link">&para;</a></h2>
-<p>MemoryDB è un database Redis fully managed con <strong>durabilità</strong> (a differenza di ElastiCache che è cache). Usa un transaction log Multi-AZ per garantire che i dati non vengano mai persi.</p>
+<h2 id="amazon-memorydb-valkey-redis-oss">Amazon MemoryDB (Valkey / Redis OSS)<a class="headerlink" href="#amazon-memorydb-valkey-redis-oss" title="Permanent link">&para;</a></h2>
+<p>MemoryDB è un database Valkey/Redis OSS fully managed con <strong>durabilità</strong> (a differenza di ElastiCache che è cache). Usa un transaction log Multi-AZ per garantire che i dati non vengano mai persi: ogni write è replicata sul log prima dell'ack al client, quindi un failover non perde dati confermati (costo: latenza di write di singole cifre ms, contro sub-ms di ElastiCache). Supporta anche vector search.</p>
 <p><strong>Differenza fondamentale con ElastiCache Redis:</strong>
 - ElastiCache Redis: cache, può perdere dati in caso di failover (a seconda della config)
 - MemoryDB: database primary, durabilità garantita via transaction log, RPO quasi zero</p>
 <p><strong>Caratteristiche:</strong>
-- Compatibile con Redis API (stessi comandi, stessi client)
+- Compatibile con Redis/Valkey API (stessi comandi, stessi client)
 - Multi-AZ con transaction log su ogni write
 - Snapshot su S3 per backup
 - Cluster Mode per sharding</p>
@@ -25920,8 +25936,9 @@
 </span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="w">  </span>--num-shards<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">  </span>--num-replicas-per-shard<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">  </span>--tls-enabled<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="w">  </span>--snapshot-retention-limit<span class="w"> </span><span class="m">7</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="w">  </span>--kms-key-id<span class="w"> </span>alias/my-memorydb-key
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="w">  </span>--engine<span class="w"> </span>valkey<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="w">  </span>--snapshot-retention-limit<span class="w"> </span><span class="m">7</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="w">  </span>--kms-key-id<span class="w"> </span>alias/my-memorydb-key
 </span></code></pre></div>
 <hr />
 <h2 id="amazon-keyspaces-for-apache-cassandra">Amazon Keyspaces (for Apache Cassandra)<a class="headerlink" href="#amazon-keyspaces-for-apache-cassandra" title="Permanent link">&para;</a></h2>
@@ -25932,42 +25949,44 @@
 - Replica multi-AZ automatica (3 AZ)
 - Encryption, IAM auth, VPC support</p>
 <p><strong>Use case:</strong> migrazione di workload Cassandra esistenti, wide-column NoSQL per time-series e IoT.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cassandra.cluster</span><span class="w"> </span><span class="kn">import</span> <span class="n">Cluster</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cassandra.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">PlainTextAuthProvider</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ssl</span><span class="w"> </span><span class="kn">import</span> <span class="n">SSLContext</span><span class="p">,</span> <span class="n">PROTOCOL_TLSv1_2</span><span class="p">,</span> <span class="n">CERT_REQUIRED</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="n">ssl_context</span> <span class="o">=</span> <span class="n">SSLContext</span><span class="p">(</span><span class="n">PROTOCOL_TLSv1_2</span><span class="p">)</span>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="n">ssl_context</span><span class="o">.</span><span class="n">verify_mode</span> <span class="o">=</span> <span class="n">CERT_REQUIRED</span>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="n">ssl_context</span><span class="o">.</span><span class="n">load_verify_locations</span><span class="p">(</span><span class="s1">'AmazonRootCA1.pem'</span><span class="p">)</span>
-</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="n">auth_provider</span> <span class="o">=</span> <span class="n">PlainTextAuthProvider</span><span class="p">(</span>
-</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>    <span class="n">username</span><span class="o">=</span><span class="s1">'my-iam-user-at-12345678901'</span><span class="p">,</span>  <span class="c1"># formato speciale per Keyspaces</span>
-</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>    <span class="n">password</span><span class="o">=</span><span class="s1">'service_specific_password'</span>
-</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="p">)</span>
-</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a>
-</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="n">cluster</span> <span class="o">=</span> <span class="n">Cluster</span><span class="p">(</span>
-</span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a>    <span class="p">[</span><span class="s1">'cassandra.us-east-1.amazonaws.com'</span><span class="p">],</span>
-</span><span id="__span-20-16"><a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a>    <span class="n">ssl_context</span><span class="o">=</span><span class="n">ssl_context</span><span class="p">,</span>
-</span><span id="__span-20-17"><a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a>    <span class="n">auth_provider</span><span class="o">=</span><span class="n">auth_provider</span><span class="p">,</span>
-</span><span id="__span-20-18"><a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a>    <span class="n">port</span><span class="o">=</span><span class="mi">9142</span>
-</span><span id="__span-20-19"><a id="__codelineno-20-19" name="__codelineno-20-19" href="#__codelineno-20-19"></a><span class="p">)</span>
-</span><span id="__span-20-20"><a id="__codelineno-20-20" name="__codelineno-20-20" href="#__codelineno-20-20"></a><span class="n">session</span> <span class="o">=</span> <span class="n">cluster</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
-</span><span id="__span-20-21"><a id="__codelineno-20-21" name="__codelineno-20-21" href="#__codelineno-20-21"></a>
-</span><span id="__span-20-22"><a id="__codelineno-20-22" name="__codelineno-20-22" href="#__codelineno-20-22"></a><span class="c1"># CQL</span>
-</span><span id="__span-20-23"><a id="__codelineno-20-23" name="__codelineno-20-23" href="#__codelineno-20-23"></a><span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"""</span>
-</span><span id="__span-20-24"><a id="__codelineno-20-24" name="__codelineno-20-24" href="#__codelineno-20-24"></a><span class="s2">    CREATE TABLE IF NOT EXISTS my_keyspace.sensors (</span>
-</span><span id="__span-20-25"><a id="__codelineno-20-25" name="__codelineno-20-25" href="#__codelineno-20-25"></a><span class="s2">        device_id text,</span>
-</span><span id="__span-20-26"><a id="__codelineno-20-26" name="__codelineno-20-26" href="#__codelineno-20-26"></a><span class="s2">        timestamp timestamp,</span>
-</span><span id="__span-20-27"><a id="__codelineno-20-27" name="__codelineno-20-27" href="#__codelineno-20-27"></a><span class="s2">        temperature decimal,</span>
-</span><span id="__span-20-28"><a id="__codelineno-20-28" name="__codelineno-20-28" href="#__codelineno-20-28"></a><span class="s2">        humidity decimal,</span>
-</span><span id="__span-20-29"><a id="__codelineno-20-29" name="__codelineno-20-29" href="#__codelineno-20-29"></a><span class="s2">        PRIMARY KEY (device_id, timestamp)</span>
-</span><span id="__span-20-30"><a id="__codelineno-20-30" name="__codelineno-20-30" href="#__codelineno-20-30"></a><span class="s2">    ) WITH CLUSTERING ORDER BY (timestamp DESC)</span>
-</span><span id="__span-20-31"><a id="__codelineno-20-31" name="__codelineno-20-31" href="#__codelineno-20-31"></a><span class="s2">"""</span><span class="p">)</span>
-</span><span id="__span-20-32"><a id="__codelineno-20-32" name="__codelineno-20-32" href="#__codelineno-20-32"></a>
-</span><span id="__span-20-33"><a id="__codelineno-20-33" name="__codelineno-20-33" href="#__codelineno-20-33"></a><span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"""</span>
-</span><span id="__span-20-34"><a id="__codelineno-20-34" name="__codelineno-20-34" href="#__codelineno-20-34"></a><span class="s2">    INSERT INTO my_keyspace.sensors (device_id, timestamp, temperature, humidity)</span>
-</span><span id="__span-20-35"><a id="__codelineno-20-35" name="__codelineno-20-35" href="#__codelineno-20-35"></a><span class="s2">    VALUES (</span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">)</span>
-</span><span id="__span-20-36"><a id="__codelineno-20-36" name="__codelineno-20-36" href="#__codelineno-20-36"></a><span class="s2">"""</span><span class="p">,</span> <span class="p">(</span><span class="s1">'sensor-001'</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(),</span> <span class="mf">23.5</span><span class="p">,</span> <span class="mf">65.0</span><span class="p">))</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cassandra.cluster</span><span class="w"> </span><span class="kn">import</span> <span class="n">Cluster</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cassandra.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">PlainTextAuthProvider</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ssl</span><span class="w"> </span><span class="kn">import</span> <span class="n">SSLContext</span><span class="p">,</span> <span class="n">PROTOCOL_TLSv1_2</span><span class="p">,</span> <span class="n">CERT_REQUIRED</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="n">ssl_context</span> <span class="o">=</span> <span class="n">SSLContext</span><span class="p">(</span><span class="n">PROTOCOL_TLSv1_2</span><span class="p">)</span>
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="n">ssl_context</span><span class="o">.</span><span class="n">verify_mode</span> <span class="o">=</span> <span class="n">CERT_REQUIRED</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="n">ssl_context</span><span class="o">.</span><span class="n">load_verify_locations</span><span class="p">(</span><span class="s1">'AmazonRootCA1.pem'</span><span class="p">)</span>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="n">auth_provider</span> <span class="o">=</span> <span class="n">PlainTextAuthProvider</span><span class="p">(</span>
+</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>    <span class="n">username</span><span class="o">=</span><span class="s1">'my-iam-user-at-12345678901'</span><span class="p">,</span>  <span class="c1"># formato speciale per Keyspaces</span>
+</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a>    <span class="n">password</span><span class="o">=</span><span class="s1">'service_specific_password'</span>
+</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="p">)</span>
+</span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a>
+</span><span id="__span-20-16"><a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a><span class="n">cluster</span> <span class="o">=</span> <span class="n">Cluster</span><span class="p">(</span>
+</span><span id="__span-20-17"><a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a>    <span class="p">[</span><span class="s1">'cassandra.us-east-1.amazonaws.com'</span><span class="p">],</span>
+</span><span id="__span-20-18"><a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a>    <span class="n">ssl_context</span><span class="o">=</span><span class="n">ssl_context</span><span class="p">,</span>
+</span><span id="__span-20-19"><a id="__codelineno-20-19" name="__codelineno-20-19" href="#__codelineno-20-19"></a>    <span class="n">auth_provider</span><span class="o">=</span><span class="n">auth_provider</span><span class="p">,</span>
+</span><span id="__span-20-20"><a id="__codelineno-20-20" name="__codelineno-20-20" href="#__codelineno-20-20"></a>    <span class="n">port</span><span class="o">=</span><span class="mi">9142</span>
+</span><span id="__span-20-21"><a id="__codelineno-20-21" name="__codelineno-20-21" href="#__codelineno-20-21"></a><span class="p">)</span>
+</span><span id="__span-20-22"><a id="__codelineno-20-22" name="__codelineno-20-22" href="#__codelineno-20-22"></a><span class="n">session</span> <span class="o">=</span> <span class="n">cluster</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+</span><span id="__span-20-23"><a id="__codelineno-20-23" name="__codelineno-20-23" href="#__codelineno-20-23"></a>
+</span><span id="__span-20-24"><a id="__codelineno-20-24" name="__codelineno-20-24" href="#__codelineno-20-24"></a><span class="c1"># CQL</span>
+</span><span id="__span-20-25"><a id="__codelineno-20-25" name="__codelineno-20-25" href="#__codelineno-20-25"></a><span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"""</span>
+</span><span id="__span-20-26"><a id="__codelineno-20-26" name="__codelineno-20-26" href="#__codelineno-20-26"></a><span class="s2">    CREATE TABLE IF NOT EXISTS my_keyspace.sensors (</span>
+</span><span id="__span-20-27"><a id="__codelineno-20-27" name="__codelineno-20-27" href="#__codelineno-20-27"></a><span class="s2">        device_id text,</span>
+</span><span id="__span-20-28"><a id="__codelineno-20-28" name="__codelineno-20-28" href="#__codelineno-20-28"></a><span class="s2">        timestamp timestamp,</span>
+</span><span id="__span-20-29"><a id="__codelineno-20-29" name="__codelineno-20-29" href="#__codelineno-20-29"></a><span class="s2">        temperature decimal,</span>
+</span><span id="__span-20-30"><a id="__codelineno-20-30" name="__codelineno-20-30" href="#__codelineno-20-30"></a><span class="s2">        humidity decimal,</span>
+</span><span id="__span-20-31"><a id="__codelineno-20-31" name="__codelineno-20-31" href="#__codelineno-20-31"></a><span class="s2">        PRIMARY KEY (device_id, timestamp)</span>
+</span><span id="__span-20-32"><a id="__codelineno-20-32" name="__codelineno-20-32" href="#__codelineno-20-32"></a><span class="s2">    ) WITH CLUSTERING ORDER BY (timestamp DESC)</span>
+</span><span id="__span-20-33"><a id="__codelineno-20-33" name="__codelineno-20-33" href="#__codelineno-20-33"></a><span class="s2">"""</span><span class="p">)</span>
+</span><span id="__span-20-34"><a id="__codelineno-20-34" name="__codelineno-20-34" href="#__codelineno-20-34"></a>
+</span><span id="__span-20-35"><a id="__codelineno-20-35" name="__codelineno-20-35" href="#__codelineno-20-35"></a><span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"""</span>
+</span><span id="__span-20-36"><a id="__codelineno-20-36" name="__codelineno-20-36" href="#__codelineno-20-36"></a><span class="s2">    INSERT INTO my_keyspace.sensors (device_id, timestamp, temperature, humidity)</span>
+</span><span id="__span-20-37"><a id="__codelineno-20-37" name="__codelineno-20-37" href="#__codelineno-20-37"></a><span class="s2">    VALUES (</span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">)</span>
+</span><span id="__span-20-38"><a id="__codelineno-20-38" name="__codelineno-20-38" href="#__codelineno-20-38"></a><span class="s2">"""</span><span class="p">,</span> <span class="p">(</span><span class="s1">'sensor-001'</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(),</span> <span class="mf">23.5</span><span class="p">,</span> <span class="mf">65.0</span><span class="p">))</span>
 </span></code></pre></div>
 <hr />
 <h2 id="database-selection-matrix-completa">Database Selection Matrix (Completa)<a class="headerlink" href="#database-selection-matrix-completa" title="Permanent link">&para;</a></h2>
@@ -25993,7 +26012,7 @@
 <tr>
 <td><strong>OLTP serverless variabile</strong></td>
 <td>Aurora Serverless v2</td>
-<td>Auto-scale 0.5-256 ACU</td>
+<td>Auto-scale 0-256 ACU (0 = auto-pause)</td>
 </tr>
 <tr>
 <td><strong>NoSQL chiave-valore/documento</strong></td>
@@ -26011,9 +26030,9 @@
 <td>Multi-thread, semplice</td>
 </tr>
 <tr>
-<td><strong>Redis come database primario</strong></td>
-<td>MemoryDB for Redis</td>
-<td>Durabilità + Redis API</td>
+<td><strong>Valkey/Redis come database primario</strong></td>
+<td>MemoryDB</td>
+<td>Durabilità + API Valkey/Redis</td>
 </tr>
 <tr>
 <td><strong>Data Warehouse / OLAP</strong></td>
@@ -26047,13 +26066,13 @@
 </tr>
 <tr>
 <td><strong>Time series (IoT, metriche)</strong></td>
-<td>Amazon Timestream</td>
-<td>Time series ottimizzato</td>
+<td>Timestream for InfluxDB</td>
+<td>Time series, API InfluxDB (Timestream for LiveAnalytics chiuso ai nuovi clienti)</td>
 </tr>
 <tr>
 <td><strong>Ledger immutabile</strong></td>
-<td>Amazon QLDB</td>
-<td>Cryptographically verifiable</td>
+<td>Aurora PostgreSQL + audit/hash chain</td>
+<td>QLDB dismesso il 31/07/2025</td>
 </tr>
 <tr>
 <td><strong>Search full-text</strong></td>
@@ -26065,7 +26084,11 @@
 <hr />
 <h2 id="amazon-timestream">Amazon Timestream<a class="headerlink" href="#amazon-timestream" title="Permanent link">&para;</a></h2>
 <p>Database specializzato per dati time-series (IoT, metriche, telemetria). Ordini di grandezza più veloce e meno costoso di un database relazionale per time-series.</p>
-<p><strong>Caratteristiche:</strong>
+<div class="admonition warning">
+<p class="admonition-title">Due prodotti, uno chiuso ai nuovi clienti</p>
+<p><strong>Timestream for LiveAnalytics</strong> (engine descritto sotto, API <code>timestream-write</code>/<code>timestream-query</code>) non accetta più nuovi clienti dal giugno 2025: i clienti esistenti continuano a usarlo e AWS indica come strada di migrazione <strong>Timestream for InfluxDB</strong> (InfluxDB &#8532; managed, API e Telegraf nativi) o l'export verso altri store. Per nuovi progetti usare Timestream for InfluxDB, oppure Managed Service for Prometheus / CloudWatch per metriche infrastrutturali. Verificare lo stato corrente su AWS prima di decidere.</p>
+</div>
+<p><strong>Caratteristiche (LiveAnalytics):</strong>
 - Scritture: scala automaticamente a miliardi di eventi/giorno
 - Query: SQL-like con funzioni time-series built-in
 - Storage tiering: memoria (query veloci) → magnetico (archivio economico)
@@ -26110,8 +26133,12 @@
 </span></code></pre></div>
 <hr />
 <h2 id="amazon-qldb">Amazon QLDB<a class="headerlink" href="#amazon-qldb" title="Permanent link">&para;</a></h2>
-<p>QLDB (Quantum Ledger Database) è un database ledger completamente managed, immutabile e crittograficamente verificabile. Ogni modifica è registrata in un journal append-only con digest SHA-256.</p>
-<p><strong>Caratteristiche:</strong>
+<div class="admonition danger">
+<p class="admonition-title">QLDB è dismesso</p>
+<p>AWS ha chiuso Amazon QLDB: <strong>end of support 31 luglio 2025</strong>. Non è più utilizzabile per nuovi workload e i dati esistenti dovevano essere migrati prima di quella data. AWS raccomanda <strong>Aurora PostgreSQL</strong> (con tabelle append-only, trigger di audit e hash chain applicativa) per il caso d'uso ledger; la sezione sotto resta come riferimento per capire sistemi legacy e il pattern.</p>
+</div>
+<p>QLDB (Quantum Ledger Database) era un database ledger managed, immutabile e crittograficamente verificabile. Ogni modifica era registrata in un journal append-only con digest SHA-256.</p>
+<p><strong>Caratteristiche (storiche):</strong>
 - Tutte le modifiche sono verificabili crittograficamente (impossibile alterare la storia)
 - SQL-like query language (PartiQL)
 - Serverless
@@ -26129,11 +26156,12 @@
 <li><strong>TTL sempre</strong> — evitare cache stale a lunga vita</li>
 <li><strong>Eviction policy appropriata:</strong> <code>allkeys-lru</code> per cache generale, <code>volatile-lru</code> se si mixano dati con e senza TTL</li>
 <li><strong>Cluster Mode</strong> per carichi elevati che superano la capacità di un singolo nodo</li>
-<li><strong>Redis AUTH + TLS</strong> sempre in produzione</li>
+<li><strong>TLS + autenticazione</strong> (RBAC/IAM, in alternativa AUTH token) sempre in produzione</li>
+<li><strong>Valkey</strong> per nuovi deployment (più economico, API compatibile)</li>
 </ol>
 <h3 id="redshift">Redshift<a class="headerlink" href="#redshift" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong>RA3</strong> per nuovi cluster (compute/storage separati, più flessibile)</li>
+<li><strong>Serverless</strong> per carichi variabili, <strong>RA3</strong> per carichi stabili e prevedibili (compute/storage separati)</li>
 <li><strong>Distribution key e sort key</strong> corrette per le query più frequenti</li>
 <li><strong>WLM (Workload Management)</strong> per separare query heavy da quelle leggere</li>
 <li><strong>VACUUM e ANALYZE</strong> regolari per performance ottimali</li>
@@ -26164,23 +26192,22 @@
 - Connessioni esaurite — aumentare <code>maxclients</code> o usare connection pooling
 - Memory piena + eviction → aumentare dimensione nodo o aggiungere shard</p>
 <h3 id="scenario-2-redshift-query-lente">Scenario 2 — Redshift: Query Lente<a class="headerlink" href="#scenario-2-redshift-query-lente" title="Permanent link">&para;</a></h3>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1">-- Identificare query lente</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">query</span><span class="p">,</span><span class="w"> </span><span class="n">duration</span><span class="p">,</span><span class="w"> </span><span class="n">userid</span><span class="p">,</span><span class="w"> </span><span class="n">starttime</span>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="k">FROM</span><span class="w"> </span><span class="n">stl_query</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">duration</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">60000000</span><span class="w">  </span><span class="c1">-- &gt; 60 secondi</span>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">duration</span><span class="w"> </span><span class="k">DESC</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1">-- Identificare query lente (provisioned e serverless: vista SYS, durata in microsecondi)</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">query_id</span><span class="p">,</span><span class="w"> </span><span class="n">elapsed_time</span><span class="p">,</span><span class="w"> </span><span class="n">user_id</span><span class="p">,</span><span class="w"> </span><span class="n">start_time</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="k">FROM</span><span class="w"> </span><span class="n">sys_query_history</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">elapsed_time</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">60000000</span><span class="w">  </span><span class="c1">-- &gt; 60 secondi</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">elapsed_time</span><span class="w"> </span><span class="k">DESC</span>
 </span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="k">LIMIT</span><span class="w"> </span><span class="mi">20</span><span class="p">;</span>
 </span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>
 </span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a><span class="c1">-- Analizzare un piano di esecuzione</span>
 </span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">large_table</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">category</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'A'</span><span class="p">;</span>
 </span><span id="__span-23-10"><a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>
-</span><span id="__span-23-11"><a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a><span class="c1">-- Verificare la distribuzione dei dati (skew)</span>
-</span><span id="__span-23-12"><a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">slice</span><span class="p">,</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span>
-</span><span id="__span-23-13"><a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a><span class="k">FROM</span><span class="w"> </span><span class="n">stv_blocklist</span>
-</span><span id="__span-23-14"><a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">tbl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">stv_tbl_perm</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'my_table'</span><span class="p">)</span>
-</span><span id="__span-23-15"><a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">slice</span>
-</span><span id="__span-23-16"><a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">slice</span><span class="p">;</span>
+</span><span id="__span-23-11"><a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a><span class="c1">-- Verificare skew di distribuzione e statistiche stale (skew_rows vicino a 1 = bilanciato)</span>
+</span><span id="__span-23-12"><a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a><span class="k">SELECT</span><span class="w"> </span><span class="ss">"table"</span><span class="p">,</span><span class="w"> </span><span class="n">diststyle</span><span class="p">,</span><span class="w"> </span><span class="n">skew_rows</span><span class="p">,</span><span class="w"> </span><span class="n">stats_off</span><span class="p">,</span><span class="w"> </span><span class="n">unsorted</span>
+</span><span id="__span-23-13"><a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a><span class="k">FROM</span><span class="w"> </span><span class="n">svv_table_info</span>
+</span><span id="__span-23-14"><a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">skew_rows</span><span class="w"> </span><span class="k">DESC</span><span class="w"> </span><span class="n">NULLS</span><span class="w"> </span><span class="k">LAST</span><span class="p">;</span>
 </span></code></pre></div>
+<p>Le vecchie tabelle <code>STL_*</code>/<code>STV_*</code> (es. <code>stl_query</code>) esistono solo su cluster provisioned e sono in via di sostituzione dalle viste <code>SYS_*</code>, uniche disponibili in Serverless.</p>
 <h3 id="scenario-3-documentdb-errori-di-connessione-tls">Scenario 3 — DocumentDB: Errori di Connessione TLS<a class="headerlink" href="#scenario-3-documentdb-errori-di-connessione-tls" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> L'applicazione riceve <code>SSL handshake failed</code> o <code>SSL certificate verify failed</code> durante la connessione a DocumentDB.</p>
 <p><strong>Causa:</strong> DocumentDB richiede TLS e il bundle CA di Amazon. Le librerie che si connettono senza il certificato corretto o con <code>retryWrites=True</code> falliscono perché DocumentDB non supporta retryWrites.</p>
@@ -26203,29 +26230,27 @@
 <p><strong>Causa:</strong> Problemi comuni: formato dati non corrispondente allo schema, delimitatori errati, encoding non corretto, permessi IAM mancanti su S3.</p>
 <p><strong>Soluzione:</strong>
 1. Interrogare <code>stl_load_errors</code> per il dettaglio riga/colonna dell'errore
-2. Verificare che il ruolo IAM abbia <code>s3:GetObject</code> e <code>s3:ListBucket</code> sul bucket sorgente
+2. Verificare che il ruolo IAM sia associato al cluster/namespace (<code>aws redshift describe-clusters --query 'Clusters[].IamRoles'</code>) e abbia <code>s3:GetObject</code> e <code>s3:ListBucket</code> sul bucket sorgente
 3. Aggiungere <code>MAXERROR N</code> per tollerare un numero limitato di righe errate in sviluppo</p>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1">-- Identificare gli errori di caricamento</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="k">SELECT</span>
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">  </span><span class="n">filename</span><span class="p">,</span>
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">  </span><span class="n">line_number</span><span class="p">,</span>
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">  </span><span class="n">colname</span><span class="p">,</span>
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="w">  </span><span class="n">raw_field_value</span><span class="p">,</span>
-</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">  </span><span class="n">err_reason</span>
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="k">FROM</span><span class="w"> </span><span class="n">stl_load_errors</span>
-</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">query</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pg_last_copy_id</span><span class="p">()</span>
-</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">line_number</span>
-</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="k">LIMIT</span><span class="w"> </span><span class="mi">50</span><span class="p">;</span>
-</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>
-</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a><span class="c1">-- Verificare i diritti IAM associati al cluster</span>
-</span><span id="__span-25-14"><a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">iam_roles</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">svv_attached_masking_policy</span><span class="p">;</span>
-</span><span id="__span-25-15"><a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a>
-</span><span id="__span-25-16"><a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a><span class="c1">-- Rieseguire il COPY con MAXERROR per isolare il problema</span>
-</span><span id="__span-25-17"><a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a><span class="k">COPY</span><span class="w"> </span><span class="n">my_table</span>
-</span><span id="__span-25-18"><a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a><span class="k">FROM</span><span class="w"> </span><span class="s1">'s3://my-bucket/data/'</span>
-</span><span id="__span-25-19"><a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a><span class="n">IAM_ROLE</span><span class="w"> </span><span class="s1">'arn:aws:iam::123456789012:role/RedshiftS3Role'</span>
-</span><span id="__span-25-20"><a id="__codelineno-25-20" name="__codelineno-25-20" href="#__codelineno-25-20"></a><span class="n">FORMAT</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">PARQUET</span>
-</span><span id="__span-25-21"><a id="__codelineno-25-21" name="__codelineno-25-21" href="#__codelineno-25-21"></a><span class="n">MAXERROR</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1">-- Identificare gli errori di caricamento dell'ultimo COPY</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="c1">-- (provisioned: stl_load_errors; Serverless: sys_load_error_detail con colonne analoghe)</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="k">SELECT</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">  </span><span class="n">filename</span><span class="p">,</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">  </span><span class="n">line_number</span><span class="p">,</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="w">  </span><span class="n">colname</span><span class="p">,</span>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">  </span><span class="n">raw_field_value</span><span class="p">,</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">  </span><span class="n">err_reason</span>
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="k">FROM</span><span class="w"> </span><span class="n">stl_load_errors</span>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">query</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pg_last_copy_id</span><span class="p">()</span>
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">line_number</span>
+</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a><span class="k">LIMIT</span><span class="w"> </span><span class="mi">50</span><span class="p">;</span>
+</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a>
+</span><span id="__span-25-14"><a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a><span class="c1">-- Rieseguire il COPY con MAXERROR per isolare il problema</span>
+</span><span id="__span-25-15"><a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a><span class="k">COPY</span><span class="w"> </span><span class="n">my_table</span>
+</span><span id="__span-25-16"><a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a><span class="k">FROM</span><span class="w"> </span><span class="s1">'s3://my-bucket/data/'</span>
+</span><span id="__span-25-17"><a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a><span class="n">IAM_ROLE</span><span class="w"> </span><span class="s1">'arn:aws:iam::123456789012:role/RedshiftS3Role'</span>
+</span><span id="__span-25-18"><a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a><span class="n">FORMAT</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">PARQUET</span>
+</span><span id="__span-25-19"><a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a><span class="n">MAXERROR</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
 </span></code></pre></div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
