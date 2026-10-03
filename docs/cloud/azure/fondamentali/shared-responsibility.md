@@ -7,9 +7,10 @@ search_keywords: [Azure shared responsibility model, responsabilità condivisa A
 parent: cloud/azure/fondamentali/_index
 related: [cloud/azure/security/_index, cloud/azure/identita/_index]
 official_docs: https://learn.microsoft.com/azure/security/fundamentals/shared-responsibility
-status: complete
+status: reviewed
 difficulty: beginner
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Modello di Responsabilità Condivisa Azure
@@ -26,14 +27,20 @@ Il **Modello di Responsabilità Condivisa** definisce la ripartizione delle resp
 | Responsabilità | On-Premises | IaaS | PaaS | SaaS |
 |---------------|-------------|------|------|------|
 | Dati e contenuti | Cliente | Cliente | Cliente | Cliente |
-| Endpoint / dispositivi | Cliente | Cliente | Cliente | Condivisa |
-| Account e identità | Cliente | Cliente | Condivisa | Condivisa |
+| Endpoint / dispositivi | Cliente | Cliente | Cliente | Cliente |
+| Account e identità | Cliente | Cliente | Cliente | Cliente |
+| Infrastruttura di identità e directory | Cliente | Condivisa | Condivisa | Condivisa |
 | Applicazioni | Cliente | Cliente | Condivisa | Microsoft |
-| Controlli di rete | Cliente | Condivisa | Microsoft | Microsoft |
+| Controlli di rete | Cliente | Cliente | Condivisa | Microsoft |
 | Sistema operativo | Cliente | Cliente | Microsoft | Microsoft |
 | Host fisico | Cliente | Microsoft | Microsoft | Microsoft |
 | Rete fisica | Cliente | Microsoft | Microsoft | Microsoft |
 | Datacenter fisico | Cliente | Microsoft | Microsoft | Microsoft |
+
+!!! note "Perché le prime tre righe non cambiano mai"
+    Dati, dispositivi e account sono le uniche cose che Microsoft non può controllare per costruzione: decidi tu chi
+    accede, da dove e con quali dati. Le altre righe "scorrono" verso Microsoft man mano che il servizio astrae più
+    livelli dello stack. Matrice allineata alla versione ufficiale Microsoft Learn.
 
 ---
 
@@ -109,8 +116,8 @@ Microsoft Azure è certificato per i principali standard di compliance:
 | **ISO 27018** | Privacy dati cloud (PII) | Globale |
 | **SOC 1, 2, 3** | Controlli servizi | Globale |
 | **PCI DSS Level 1** | Carte di pagamento | Globale |
-| **GDPR** | Protezione dati EU | Europa |
-| **HIPAA/HITECH** | Dati sanitari USA | USA |
+| **GDPR** | Protezione dati EU (Azure fornisce DPA e strumenti; non esiste una "certificazione GDPR") | Europa |
+| **HIPAA/HITECH** | Dati sanitari USA (attestazioni + BAA) | USA |
 | **FedRAMP High** | Governo federale USA | Azure Government |
 | **C5** | Sicurezza cloud (BSI Germania) | Europa |
 | **ENS High** | Sicurezza nazionale spagnola | Spagna |
@@ -135,15 +142,17 @@ az policy state list \
 | **Microsoft Defender for Cloud** | Postura sicurezza, raccomandazioni, compliance dashboard |
 | **Azure Policy** | Policy enforcement automatico su risorse |
 | **Microsoft Purview** | Governance dati, classificazione, compliance |
-| **Azure Blueprints** (legacy) | Template ambiente conforme (sostituito da Template Specs + Policy) |
+| **Azure Blueprints** (ritirato, EOL 11 luglio 2026) | Non più utilizzabile: migrare a Template Specs + Deployment Stacks + Azure Policy |
 | **Microsoft Compliance Manager** | Assessment compliance, action items, punteggio |
 
 ```bash
 # Verificare il Secure Score corrente con Defender for Cloud
 az security secure-score list --output table
 
-# Elencare raccomandazioni attive di sicurezza
-az security task list --output table
+# Elencare raccomandazioni (assessment) non conformi
+az security assessment list \
+    --query "[?status.code=='Unhealthy'].{Raccomandazione:displayName, Risorsa:resourceDetails.id}" \
+    --output table
 
 # Verificare le assegnazioni di Azure Policy su una subscription
 az policy assignment list --query "[].{Name:name, Scope:scope, Policy:policyDefinitionId}" --output table
@@ -163,9 +172,9 @@ az policy state list \
 
 **Sintomo:** Dopo aver assegnato una Azure Policy, le risorse esistenti risultano `NonCompliant` nel dashboard.
 
-**Causa:** Le policy Azure hanno un ritardo di valutazione (fino a 30 minuti) e non si applicano retroattivamente in modo automatico alle risorse già esistenti senza un trigger di remediation.
+**Causa:** Le policy Azure valutano anche le risorse esistenti (ritardo tipico di ~30 minuti dopo l'assegnazione, poi scansione ogni 24 h), quindi `NonCompliant` è il comportamento atteso. Gli effetti `deny`/`audit` non correggono nulla; solo `deployIfNotExists` e `modify` possono essere applicati alle risorse esistenti, e solo tramite un task di remediation esplicito (usa una managed identity con i permessi necessari).
 
-**Soluzione:** Avviare un task di remediation esplicito per applicare la policy alle risorse esistenti.
+**Soluzione:** Per policy con effetto `deployIfNotExists`/`modify`, avviare un task di remediation; per `audit`/`deny` correggere la risorsa a mano o con IaC.
 
 ```bash
 # Creare un task di remediation per risorse non conformi
@@ -193,8 +202,8 @@ az policy remediation show \
 
 ```bash
 # Filtrare raccomandazioni per risorsa PaaS specifica (es. App Service)
-az security task list \
-    --query "[?contains(resourceId,'Microsoft.Web/sites')].{Task:name, Severity:severity, State:state}" \
+az security assessment list \
+    --query "[?status.code=='Unhealthy' && contains(resourceDetails.id,'Microsoft.Web/sites')].{Raccomandazione:displayName, Risorsa:resourceDetails.id}" \
     --output table
 
 # Abilitare HTTPS-only su App Service (remediation tipica)
@@ -262,4 +271,4 @@ az role assignment list \
 - [Shared Responsibility in the Cloud](https://learn.microsoft.com/azure/security/fundamentals/shared-responsibility)
 - [Azure Compliance Documentation](https://learn.microsoft.com/azure/compliance/)
 - [Azure Trust Center](https://www.microsoft.com/trust-center)
-- [Azure Security Benchmark](https://learn.microsoft.com/security/benchmark/azure/)
+- [Microsoft Cloud Security Benchmark](https://learn.microsoft.com/security/benchmark/azure/) (ex Azure Security Benchmark)
