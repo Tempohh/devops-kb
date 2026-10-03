@@ -7,9 +7,10 @@ search_keywords: [Microsoft Entra ID, Azure Active Directory, AAD, tenant, utent
 parent: cloud/azure/identita/_index
 related: [cloud/azure/identita/rbac-managed-identity, cloud/azure/identita/governance, cloud/azure/security/key-vault]
 official_docs: https://learn.microsoft.com/azure/active-directory/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Microsoft Entra ID (Azure AD)
@@ -52,11 +53,10 @@ az ad user list --query "[].{Name:displayName, UPN:userPrincipalName}" --output 
 # Ottenere utente specifico
 az ad user show --id mario.rossi@company.onmicrosoft.com
 
-# Aggiornare utente
-az ad user update \
-    --id mario.rossi@company.onmicrosoft.com \
-    --job-title "Platform Engineer" \
-    --department "IT"
+# Aggiornare attributi (jobTitle/department non sono flag di `az ad user update`: usare Graph)
+az rest --method PATCH \
+    --url "https://graph.microsoft.com/v1.0/users/mario.rossi@company.onmicrosoft.com" \
+    --body '{"jobTitle":"Platform Engineer","department":"IT"}'
 
 # Eliminare utente
 az ad user delete --id mario.rossi@company.onmicrosoft.com
@@ -80,12 +80,18 @@ az ad group create \
     --description "Platform Engineering team"
 
 # Creare gruppo Dynamic (membership automatica basata su attributi)
-az ad group create \
-    --display-name "All-Developers" \
-    --mail-nickname "all-developers" \
-    --group-types "DynamicMembership" \
-    --membership-rule "(user.jobTitle -eq \"Developer\")" \
-    --membership-rule-processing-state "On"
+# `az ad group create` non supporta i gruppi dinamici: usare Graph (richiede licenza P1)
+az rest --method POST \
+    --url "https://graph.microsoft.com/v1.0/groups" \
+    --body '{
+      "displayName": "All-Developers",
+      "mailEnabled": false,
+      "mailNickname": "all-developers",
+      "securityEnabled": true,
+      "groupTypes": ["DynamicMembership"],
+      "membershipRule": "(user.jobTitle -eq \"Developer\")",
+      "membershipRuleProcessingState": "On"
+    }'
 
 # Aggiungere membro a gruppo
 az ad group member add \
@@ -109,9 +115,10 @@ Ogni applicazione che deve autenticarsi con Entra ID necessita di una **App Regi
 
 ```bash
 # Creare App Registration
+# sign-in-audience: AzureADMyOrg / AzureADMultipleOrgs / AzureADandPersonalMicrosoftAccount
 APP=$(az ad app create \
     --display-name "myapp-backend" \
-    --sign-in-audience AzureADMyOrg \        # AzureADMyOrg / AzureADMultipleOrgs / AzureADandPersonalMicrosoftAccount
+    --sign-in-audience AzureADMyOrg \
     --query "{AppId:appId, ObjectId:id}" \
     --output json)
 
@@ -136,10 +143,12 @@ az ad app credential reset \
     --cert myapp-cert
 
 # Aggiungere API permission
+# --api 00000003-0000-0000-c000-000000000000 = Microsoft Graph
+# e1fe6dd8-ba31-4d61-89e7-88639da4683d=Scope = User.Read (delegated)
 az ad app permission add \
     --id $APP_ID \
-    --api 00000003-0000-0000-c000-000000000000 \   # Microsoft Graph
-    --api-permissions e1fe6dd8-ba31-4d61-89e7-88639da4683d=Scope  # User.Read (delegated)
+    --api 00000003-0000-0000-c000-000000000000 \
+    --api-permissions e1fe6dd8-ba31-4d61-89e7-88639da4683d=Scope
 
 # Grant admin consent (per application permissions)
 az ad app permission admin-consent --id $APP_ID
@@ -161,8 +170,24 @@ az login \
     --username $APP_ID \
     --tenant $TENANT_ID \
     --allow-no-subscriptions \
-    -- certificate /path/to/cert.pem
+    --password /path/to/cert.pem   # per i certificati --password è il path del PEM (chiave privata + cert)
 ```
+
+### Workload Identity Federation (senza segreti)
+
+Un client secret è un segreto a lunga durata che scade e può trapelare. Con le **federated credentials** l'app si fida di un token OIDC emesso da un IdP esterno (GitHub Actions, Kubernetes, GitLab): Entra ID scambia quel token per un access token, **senza alcun secret da conservare**. È l'opzione preferita per le pipeline CI/CD.
+
+```bash
+# Federated credential per un workflow GitHub Actions sul branch main
+az ad app federated-credential create --id $APP_ID --parameters '{
+  "name": "github-main",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:myorg/myrepo:ref:refs/heads/main",
+  "audiences": ["api://AzureADTokenExchange"]
+}'
+```
+
+Il `subject` deve corrispondere **esattamente** al claim `sub` del token (repo, branch/environment/tag): un mismatch dà `AADSTS70025`/`AADSTS700213`. Nel workflow si usa `azure/login` con `client-id`, `tenant-id`, `subscription-id` e permesso `id-token: write`.
 
 ```python
 # Python — autenticazione service principal con MSAL
@@ -190,10 +215,13 @@ else:
 
 ## Autenticazione Multi-Fattore (MFA)
 
-L'MFA in Entra ID si configura tramite **Conditional Access** (metodo moderno) o **Per-User MFA** (legacy):
+L'MFA in Entra ID si configura tramite **Conditional Access** (richiede licenza P1) o, per tenant piccoli/senza P1, tramite **Security defaults**. **Per-User MFA** è legacy: evitarlo. I metodi si gestiscono nella **Authentication methods policy** (le vecchie policy MFA/SSPR separate sono state dismesse a favore di questa).
+
+!!! warning "MFA obbligatoria per accessi di gestione Azure"
+    Microsoft impone l'MFA per portal Azure, Entra admin center e Intune (fase 1) e, dalla fase 2 (da ottobre 2025, rollout progressivo), anche per Azure CLI, PowerShell, SDK/API e IaC con **utenti**. Le automazioni devono usare **service principal / managed identity / workload identity federation**, non account utente.
 
 ```bash
-# Verificare stato MFA per utente (tramite MS Graph)
+# Elencare i metodi di autenticazione di un utente (MS Graph; serve UserAuthenticationMethod.Read.All)
 az rest \
     --method GET \
     --url "https://graph.microsoft.com/v1.0/users/mario.rossi@company.onmicrosoft.com/authentication/methods" \
@@ -230,12 +258,15 @@ Entra ID supporta SSO per applicazioni Enterprise tramite:
 **B2B** permette di invitare utenti esterni (guest) da altri tenant o con account personali:
 
 ```bash
-# Invitare utente esterno (B2B)
-az ad invitation create \
-    --invited-user-email-address "partner@external.com" \
-    --invite-redirect-url "https://myapp.company.com" \
-    --send-invitation-message true \
-    --invited-user-display-name "Partner User"
+# Invitare utente esterno (B2B) — via Graph, non esiste `az ad invitation`
+az rest --method POST \
+    --url "https://graph.microsoft.com/v1.0/invitations" \
+    --body '{
+      "invitedUserEmailAddress": "partner@external.com",
+      "invitedUserDisplayName": "Partner User",
+      "inviteRedirectUrl": "https://myapp.company.com",
+      "sendInvitationMessage": true
+    }'
 
 # Listare guest users
 az ad user list \
@@ -246,26 +277,29 @@ az ad user list \
 
 ---
 
-## Azure AD B2C (Customer Identity)
+## Customer Identity: Entra External ID (successore di Azure AD B2C)
 
-**Azure AD B2C** è un servizio separato per gestire identità clienti (Consumer Identity and Access Management — CIAM):
+Per le identità dei clienti (Customer IAM, **CIAM**) Microsoft offre **Microsoft Entra External ID**. **Azure AD B2C** non è più disponibile ai nuovi clienti dal 1 maggio 2025 (i tenant esistenti restano supportati almeno fino a maggio 2030): per nuovi progetti usare External ID.
 
-- Supporta login social (Google, Facebook, Apple, GitHub)
-- Flussi utente personalizzabili (sign-up, sign-in, password reset)
-- Custom policies (Identity Experience Framework) per scenari complessi
-- Scalabilità: miliardi di utenti
-- Pricing: primi 50.000 MAU gratuiti, poi $0.0016/MAU
+- Tenant *external* separato dal tenant workforce
+- Login social (Google, Facebook, Apple…), email + password / OTP
+- User flow configurabili (sign-up, sign-in, password reset) e personalizzazione del branding
+- Pricing a **MAU** (Monthly Active Users, utenti attivi nel mese): primi 50.000 MAU gratuiti; verificare le tariffe correnti nella pagina pricing ufficiale
+- B2C legacy: custom policies (Identity Experience Framework) per scenari complessi — External ID non le replica 1:1, valutare la migrazione caso per caso
 
 ```bash
-# B2C è un tenant separato — creare tramite portal
-# Non è gestibile completamente via CLI standard
+# Il tenant external si crea dal portal / Entra admin center:
+# non è gestibile completamente via CLI standard
 ```
+
+!!! note "Quando serve cosa"
+    **B2B** = partner/collaboratori che accedono a risorse del *tuo* tenant con la loro identità. **External ID (CIAM)** = clienti finali di una tua applicazione pubblica.
 
 ---
 
 ## Identity Protection
 
-**Entra ID Identity Protection** rileva rischi di accesso con ML:
+**Entra ID Identity Protection** (licenza P2) rileva rischi di accesso con ML:
 
 | Rilevamento | Descrizione |
 |-------------|-------------|
@@ -381,19 +415,20 @@ az rest \
 **Soluzione:** Verificare la configurazione dell'app e i permessi del guest.
 
 ```bash
-# Verificare sign-in audience dell'app (deve includere account guest)
+# Verificare sign-in audience dell'app
 az ad app show --id $APP_ID --query "signInAudience" -o tsv
-# AzureADMyOrg = solo utenti interni; AzureADMultipleOrgs = include guest B2B
+# I guest B2B sono oggetti del TUO tenant: funzionano anche con AzureADMyOrg.
+# AzureADMultipleOrgs serve solo se utenti di altri tenant accedono con la propria identità (non come guest).
 
 # Verificare che il guest esista nel tenant
 az ad user show --id "partner@external.com" --query "{UPN:userPrincipalName, Type:userType}" -o json
 
-# Assegnare ruolo applicativo al guest
+# Assegnare ruolo applicativo al guest (Graph; `az ad app role assignment` non esiste)
 GUEST_ID=$(az ad user show --id "partner@external.com" --query id -o tsv)
-az ad app role assignment create \
-    --assignee $GUEST_ID \
-    --role-assignment-id "<app-role-id>" \
-    --resource-id "$(az ad sp show --id $APP_ID --query id -o tsv)"
+SP_ID=$(az ad sp show --id $APP_ID --query id -o tsv)
+az rest --method POST \
+    --url "https://graph.microsoft.com/v1.0/users/$GUEST_ID/appRoleAssignments" \
+    --body "{\"principalId\":\"$GUEST_ID\",\"resourceId\":\"$SP_ID\",\"appRoleId\":\"<app-role-id>\"}"
 
 # Listare External Collaboration Settings (accettabilità domini)
 az rest \
@@ -403,6 +438,13 @@ az rest \
 ```
 
 ---
+
+## Relazioni
+
+??? info "RBAC e Managed Identity — Approfondimento"
+    Entra ID autentica (chi sei); Azure RBAC autorizza sulle risorse (cosa puoi fare). Le managed identity eliminano i secret per le risorse Azure.
+
+    **Approfondimento completo →** `cloud/azure/identita/rbac-managed-identity`
 
 ## Riferimenti
 
