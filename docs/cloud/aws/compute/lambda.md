@@ -3,11 +3,11 @@ title: "AWS Lambda — Serverless"
 slug: lambda
 category: cloud
 tags: [aws, lambda, serverless, functions, triggers, concurrency, cold-start, layers, destinations, event-source-mapping, power-tuning]
-search_keywords: [AWS Lambda, serverless, function, trigger, event source, SQS trigger, API Gateway Lambda, SNS Lambda, S3 Lambda, DynamoDB Streams, Kinesis Lambda, EventBridge, concurrency, reserved concurrency, provisioned concurrency, cold start, warm start, Lambda layers, Lambda destinations, Lambda power tuning, SnapStart, Lambda VPC, execution role, function URL, DLQ]
+search_keywords: [AWS Lambda, serverless, function, trigger, event source, SQS trigger, API Gateway Lambda, SNS Lambda, S3 Lambda, DynamoDB Streams, Kinesis Lambda, EventBridge, concurrency, reserved concurrency, provisioned concurrency, cold start, warm start, Lambda layers, Lambda destinations, Lambda power tuning, SnapStart, Lambda VPC, execution role, function URL, DLQ, durable functions, durable execution, Lambda Managed Instances, capacity provider, checkpoint replay]
 parent: cloud/aws/compute/_index
 related: [cloud/aws/messaging/sqs-sns, cloud/aws/messaging/eventbridge-kinesis, cloud/aws/networking/cloudfront, cloud/aws/storage/s3]
 official_docs: https://docs.aws.amazon.com/lambda/latest/dg/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-03
 last_verified: 2026-10-03
@@ -50,31 +50,48 @@ Lambda Model
 
 ## Fondamentali
 
-**Limiti (fine 2025 — verificare su [Lambda quotas](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html)):**
+**Limiti (ottobre 2026 — verificare su [Lambda quotas](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html)):**
 
 | Parametro | Limite |
 |-----------|--------|
-| Timeout massimo | 15 minuti (default alla creazione: 3 s) |
+| Timeout massimo | 15 minuti (default alla creazione: 3 s); fino a 90 minuti per funzioni Managed Instances invocate in async o via event source mapping |
 | Memoria | 128 MB - 10 GB |
-| vCPU | Proporzionale alla memoria (6 vCPU a 10 GB) |
+| vCPU | Proporzionale alla memoria (1 vCPU a 1.769 MB, 6 vCPU a 10 GB) |
 | Storage temporaneo (/tmp) | 512 MB - 10 GB |
 | Package size (zip) | 50 MB (zipped, upload diretto) / 250 MB (unzipped, **layer inclusi**) |
 | Package size (container) | 10 GB (immagine non compressa) |
 | Payload sincrono | 6 MB (request) / 6 MB (response); con response streaming fino a 200 MB (Function URL) |
 | Payload asincrono | 1 MB (era 256 KB fino al 2025) |
-| Concurrency default | 1000 per account per Region (account nuovi: spesso molto meno, verificare con `get-account-settings`) |
+| Concurrency default | 1000 per account per Region (gli account nuovi hanno quote ridotte di concurrency e memoria, alzate automaticamente in base all'uso; verificare con `get-account-settings`) |
 | Scaling rate | +1000 ambienti ogni 10 s per funzione, finché non si raggiunge il limite account |
 
 !!! note "Vita dell'execution environment"
     Un ambiente può restare caldo per minuti/ore ed essere riusato da più invocazioni, ma AWS **non garantisce** nessuna durata: può essere riciclato in qualsiasi momento (anche dopo ~poche ore al massimo). Non farci affidamento per cache o stato; il cold start si ripresenta ad ogni nuovo ambiente (scale-out, deploy, riciclo).
 
-**Runtime supportati (fine 2025):** Node.js 20/22/24, Python 3.11–3.14, Java 17/21/25, .NET 8, Ruby 3.2–3.4, Go e altri linguaggi compilati via OS-only runtime `provided.al2023`. I runtime vengono deprecati periodicamente (es. Node.js 18, Python 3.8-3.9): controlla la [lista aggiornata](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html) prima di scegliere.
+**Runtime supportati (ottobre 2026):** Node.js 22/24, Python 3.10–3.14, Java 8/11/17 (varianti `.al2023` o AL2), Java 21/25, .NET 8/10, Ruby 3.3/3.4/4.0, Go e altri linguaggi compilati via OS-only runtime `provided.al2023`. Node.js 26 e Python 3.15 sono in **public preview** (no SLA, non per produzione; GA prevista novembre 2026). Node.js 20, Python 3.9, Ruby 3.2 e `provided.al2` sono già deprecati; in scadenza `python3.10` (31 ott 2026), `dotnet8` e `dotnet9` (10 nov 2026). Amazon Linux 2 è a fine vita il 30 giugno 2026: preferisci runtime basati su AL2023. Lambda rilascia un runtime solo quando la versione del linguaggio raggiunge la fase LTS. Controlla la [lista aggiornata](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html) prima di scegliere.
 
-!!! info "Novità recenti (re:Invent 2025)"
-    **Lambda durable functions** (workflow con checkpoint/replay fino a lunga durata, in codice) e **Lambda Managed Instances** (funzioni su istanze EC2 gestite, per carichi costanti) ampliano i casi d'uso oltre il modello classico. Non sono trattate qui.
-    <!-- REVIEW: verificare disponibilità/regioni/pricing di durable functions e Managed Instances ed eventualmente aggiungere sezioni dedicate -->
+**Architetture:** `arm64` (Graviton) costa ~20% in meno per GB-secondo e offre in genere miglior price-performance (fino a ~34% secondo AWS); `x86_64` resta necessario se le dipendenze native non hanno build ARM. Tutti i runtime gestiti supportano entrambe.
 
-**Architetture:** `arm64` (Graviton) costa ~20% in meno per GB-secondo e offre in genere miglior price-performance (fino a ~34% secondo AWS); `x86_64` resta necessario se le dipendenze native non hanno build ARM.
+### Lambda durable functions
+
+Le **durable functions** sono normali funzioni Lambda con un meccanismo di **checkpoint/replay**: il codice può restare in esecuzione (con attese e pause) fino a **un anno**, sopravvivendo a interruzioni. Ad ogni ripresa il codice riparte dall'inizio, ma le operazioni già completate vengono saltate usando i risultati salvati. Si usa il *Durable Execution SDK* (JavaScript/TypeScript, Python, Java, .NET) che fornisce un `DurableContext` con operazioni durevoli: **step** (logica con retry e checkpoint automatici), **wait** (sospende senza costi di compute), callback per eventi esterni.
+
+- Runtime gestiti: `nodejs22.x`/`nodejs24.x`, `python3.13`/`python3.14`, `java17`/`java21`/`java25`, `dotnet8`/`dotnet10`; altri via container image.
+- Si abilita alla creazione: `--durable-config '{"ExecutionTimeout": 3600, "RetentionPeriodInDays": 7}'`.
+- Quote chiave: 3.000 operazioni durevoli per esecuzione, 100 MB di dati persistiti per esecuzione (non aumentabili).
+- Pricing: compute Lambda standard + **$8,00 per milione di operazioni durevoli**, $0,25/GB di dati scritti, $0,15/GB-mese di retention.
+- Includi l'SDK nel package (non affidarti a quello del runtime) e usa versioni/alias, non `$LATEST`, per le esecuzioni in corso.
+- Rispetto a Step Functions: durable functions = workflow nel codice, accoppiati alla business logic; Step Functions = DSL/visual designer, integrazioni native con 220+ servizi, zero manutenzione.
+
+### Lambda Managed Instances
+
+Eseguono funzioni Lambda su **istanze EC2 current-generation nel tuo account** (anche Graviton4), gestite da Lambda (patching, routing, scaling). Adatte a carichi **alti e prevedibili**; non scalano a zero per istanza e non hanno cold start (scaling asincrono basato su CPU, regge il raddoppio del traffico in ~5 minuti).
+
+- Si crea un **capacity provider** (VPC, requisiti istanza, scaling), poi si collega la funzione e si pubblica una versione; Lambda avvia 3 istanze di default per resilienza AZ.
+- **Multi-concurrency**: un execution environment gestisce più invocazioni contemporanee → thread safety e stato condiviso vanno gestiti per runtime.
+- Isolamento: container su EC2 Nitro (non Firecracker); il capacity provider è il confine di sicurezza.
+- Runtime: Java 21+, Python 3.13+, Node.js 22+, .NET 8+, Rust (`provided.al2023`).
+- Pricing: $0,20 per milione di richieste + prezzo EC2 + **15% di management fee** sul prezzo on-demand dell'istanza; Savings Plans/RI si applicano solo al compute EC2, non alla fee.
 
 ---
 
@@ -471,13 +488,12 @@ aws lambda update-function-configuration \
 # Output: grafico costo vs durata e la configurazione consigliata (strategy: cost, speed o balanced)
 # Perché serve: CPU e prezzo crescono con la memoria, ma la durata cala → più memoria può costare meno
 ```
-```
 
 ---
 
 ## SnapStart per Java
 
-**SnapStart** riduce drasticamente il cold start (Java 11+ e, più di recente, Python 3.12+ e .NET 8+) eseguendo la fase init una sola volta alla pubblicazione di una versione: Lambda salva uno snapshot (memoria + disco) dell'ambiente inizializzato e lo ripristina per i nuovi ambienti invece di rieseguire l'init. Attenzione a ciò che l'init cattura: connessioni di rete, seed random e dati temporanei vanno rigenerati con i *runtime hooks*. Non è compatibile con Provisioned Concurrency, EFS e `/tmp` > 512 MB.
+**SnapStart** riduce drasticamente il cold start (Java 11+, Python 3.12+ e .NET 8+; non Node.js, Ruby né OS-only runtime) eseguendo la fase init una sola volta alla pubblicazione di una versione: Lambda salva uno snapshot (memoria + disco) dell'ambiente inizializzato e lo ripristina per i nuovi ambienti invece di rieseguire l'init. Attenzione a ciò che l'init cattura: connessioni di rete, seed random e dati temporanei vanno rigenerati con i *runtime hooks*. Non è compatibile con Provisioned Concurrency, EFS, S3 Files e `/tmp` > 512 MB. Funziona solo su versioni pubblicate (o alias che puntano a versioni), non su `$LATEST`.
 
 ```bash
 aws lambda update-function-configuration \
@@ -494,8 +510,7 @@ aws lambda create-alias \
     --function-version 1
 ```
 
-**Risultato:** AWS indica miglioramenti fino a ~10× sui cold start (tipicamente da multi-secondo a sub-secondo restore per Java); il guadagno dipende dal tempo di init. SnapStart non è gratuito: si pagano cache dello snapshot e restore.
-<!-- REVIEW: verificare prezzi SnapStart correnti per runtime -->
+**Risultato:** AWS indica miglioramenti fino a ~10× sui cold start (tipicamente da multi-secondo a sub-secondo restore per Java); il guadagno dipende dal tempo di init. Costi: per i runtime **Java gestiti SnapStart non ha costi aggiuntivi**; per **Python e .NET** si pagano cache dello snapshot (minimo 3 ore per versione pubblicata, finché la versione resta attiva: elimina le versioni inutilizzate) e restore, in funzione della memoria configurata. La durata fatturata include init, caricamento runtime e runtime hooks.
 
 Dalla fine del 2025 anche la fase **init** è fatturata per tutti i runtime gestiti: un init pesante costa, non solo rallenta.
 
@@ -507,7 +522,8 @@ Prezzi indicativi us-east-1 (variano per Region; verificare su [Lambda Pricing](
 
 - **$0.20 per 1 milione di invocazioni** (+ 1M gratuite/mese)
 - **$0.0000166667 per GB-secondo** x86_64 (+ 400.000 GB-secondi/mese gratuiti); arm64 $0.0000133334 (~20% in meno)
-- Provisioned Concurrency: ~$0.0000041667 per GB-secondo provisionato (più la durata d'uso a tariffa ridotta)
+- Provisioned Concurrency: ~$0.0000041667 per GB-secondo provisionato (fatturato dall'attivazione alla disattivazione, arrotondato a 5 minuti) + durata d'uso a tariffa ridotta ($0.0000097222 per GB-secondo)
+- Durable functions e Managed Instances hanno componenti di costo aggiuntivi (vedi sezioni dedicate in Fondamentali)
 
 **Esempio:** funzione 512 MB, 100ms durata, 10M invocazioni/mese:
 - `10M × $0.20/1M = $2 (invocazioni)`
