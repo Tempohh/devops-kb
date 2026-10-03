@@ -7769,7 +7769,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7794,7 +7794,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7888,6 +7888,17 @@
     <span class="md-ellipsis">
       
         Regole per una Buona Partition Key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#limiti-e-hierarchical-partition-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limiti e Hierarchical Partition Keys
       
     </span>
   </a>
@@ -24629,6 +24640,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#limiti-e-hierarchical-partition-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limiti e Hierarchical Partition Keys
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -24957,14 +24979,14 @@
 
 <h1 id="azure-cosmos-db">Azure Cosmos DB<a class="headerlink" href="#azure-cosmos-db" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>Azure Cosmos DB è il database NoSQL multi-model, distribuito globalmente di Azure. Progettato per workload che richiedono latency inferiore ai 10ms al P99, scala elastica globale e alta disponibilità 99.999%. È completamente managed (no infrastructure da gestire) e supporta più modelli di dati tramite API compatibili.</p>
+<p>Azure Cosmos DB è il database NoSQL multi-model, distribuito globalmente di Azure. Progettato per workload che richiedono letture puntuali &lt;10ms al P99 (nella stessa regione), scala elastica orizzontale e disponibilità fino al 99.999% (SLA raggiunto con account multi-regione; single-region è 99.99%). È completamente managed (no infrastructure da gestire) e supporta più modelli di dati tramite API compatibili. Include anche vector search (indice DiskANN) per workload AI/RAG.</p>
 <p>Usare Cosmos DB quando:
 - Latency estrema (&lt;10ms read P99)
 - Distribuzione globale multi-regione
 - Workload con throughput variabile e imprevedibile
 - Modello di dati document, graph, key-value o column-family
 - IoT, gaming, e-commerce, real-time personalization</p>
-<p>Non usare Cosmos DB quando: hai dati altamente relazionali, necessiti di JOIN complessi, o la consistency Strong è critica ma la latency non è priorità (scegli Azure SQL).</p>
+<p>Non usare Cosmos DB quando: hai dati altamente relazionali, necessiti di JOIN complessi tra entità o transazioni multi-tabella (le transazioni sono limitate a una singola logical partition) → scegli Azure SQL / PostgreSQL. Cosmos DB inoltre non è conveniente per scan analitici ampi: costa RU proporzionali ai dati letti.</p>
 <h2 id="api-supportate">API Supportate<a class="headerlink" href="#api-supportate" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -24985,13 +25007,13 @@
 <tr>
 <td><strong>MongoDB</strong></td>
 <td>Document BSON</td>
-<td>MongoDB 4.0+ wire protocol</td>
+<td>MongoDB wire protocol (modello RU-based; esiste anche il modello <strong>vCore</strong>, a nodi dedicati e con pricing diverso)</td>
 <td>Migrazione MongoDB, team MongoDB</td>
 </tr>
 <tr>
 <td><strong>Cassandra</strong></td>
 <td>Wide-column (CQL)</td>
-<td>Cassandra 3.11</td>
+<td>Cassandra CQL v4</td>
 <td>Migrazione Cassandra, time-series</td>
 </tr>
 <tr>
@@ -25007,13 +25029,17 @@
 <td>Migrazione Table Storage, dati strutturati semplici</td>
 </tr>
 <tr>
-<td><strong>PostgreSQL</strong></td>
+<td><strong>PostgreSQL</strong> <em>(in dismissione)</em></td>
 <td>Relazionale</td>
-<td>PostgreSQL</td>
-<td>Distributed PostgreSQL (powered by Citus)</td>
+<td>PostgreSQL + Citus</td>
+<td>Non più disponibile per nuovi progetti</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition warning">
+<p class="admonition-title">Cosmos DB for PostgreSQL: in retirement</p>
+<p>Il nuovo deployment è bloccato; i cluster esistenti restano supportati. Per Postgres distribuito (Citus) usare <strong>Azure Database for PostgreSQL – Elastic Clusters</strong>, con tool di migrazione dedicato. Le API Gremlin/Table/Cassandra sono mantenute per compatibilità: per nuovi progetti document la scelta di default è l'API <strong>NoSQL</strong>.</p>
+</div>
 <h2 id="creare-account-cosmos-db">Creare Account Cosmos DB<a class="headerlink" href="#creare-account-cosmos-db" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">RG</span><span class="o">=</span><span class="s2">"rg-database-prod"</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">LOCATION</span><span class="o">=</span><span class="s2">"westeurope"</span>
@@ -25030,7 +25056,7 @@
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span>--enable-multiple-write-locations<span class="w"> </span><span class="nb">false</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>--enable-automatic-failover<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>--backup-policy-type<span class="w"> </span>Continuous<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span>--continuous-backup-retention-in-hours<span class="w"> </span><span class="m">720</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span>--continuous-tier<span class="w"> </span>Continuous30Days
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="c1"># Account con multi-region write (ogni regione può ricevere write)</span>
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
@@ -25089,20 +25115,24 @@
 </tr>
 <tr>
 <td><strong>Consistent Prefix</strong></td>
-<td>Letture rispettano l'ordine di scrittura, mai caos</td>
+<td>Le letture vedono sempre un prefisso ordinato delle scritture (mai "buchi" o ordine invertito), ma possono essere in ritardo</td>
 <td>Bassa</td>
 <td>Alta</td>
 <td>1x</td>
 </tr>
 <tr>
 <td><strong>Eventual</strong></td>
-<td>Nessuna garanzia di ordine temporaneo</td>
+<td>Nessuna garanzia di ordine né di freschezza; convergenza solo a lungo termine</td>
 <td>Minima</td>
 <td>Massima</td>
 <td>1x</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Vincoli</p>
+<p><strong>Strong</strong> non è utilizzabile con multi-region write. Il livello si può solo <em>allentare</em> per singola richiesta (override a livello SDK), non rafforzare oltre il default dell'account. <strong>Session</strong> vale per un session token: due istanze di client (o due pod dietro un load balancer) che non si scambiano il token non godono di read-your-writes.</p>
+</div>
 <div class="admonition tip">
 <p class="admonition-title">Session Consistency: Il Giusto Compromesso</p>
 <p><strong>Session</strong> è il livello default e il più usato in produzione. Garantisce che un utente veda sempre le sue scritture (read-your-writes) e quelle della sua sessione in ordine, senza l'overhead di Strong. Perfetto per applicazioni web e mobile.</p>
@@ -25196,6 +25226,8 @@
 </span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>  <span class="o">...</span>
 </span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="p">}</span>
 </span></code></pre></div>
+<h3 id="limiti-e-hierarchical-partition-keys">Limiti e Hierarchical Partition Keys<a class="headerlink" href="#limiti-e-hierarchical-partition-keys" title="Permanent link">&para;</a></h3>
+<p>Ogni <em>logical partition</em> (tutti i documenti con lo stesso valore di partition key) può contenere al massimo <strong>20 GB</strong> e le transazioni (stored procedure, transactional batch) operano solo al suo interno. Le logical partition sono mappate su <em>physical partition</em> (max ~10.000 RU/s e 50 GB ciascuna) che Cosmos DB crea e splitta in automatico. Se una singola key rischia di superare i limiti (es. tenant molto grandi), usare le <strong>hierarchical partition keys</strong> (fino a 3 livelli, es. <code>/tenantId</code>, <code>/userId</code>, <code>/sessionId</code>): permettono di far scalare un tenant oltre 20 GB mantenendo query single-partition sul prefisso.</p>
 <h2 id="request-units-ru">Request Units (RU)<a class="headerlink" href="#request-units-ru" title="Permanent link">&para;</a></h2>
 <p>Le Request Unit (RU) sono l'unità di misura del throughput in Cosmos DB. 1 RU = lettura di un documento da 1 KB. Le operazioni di scrittura, query complesse e documenti grandi costano più RU.</p>
 <table>
@@ -25246,7 +25278,7 @@
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="n">item</span><span class="o">=</span><span class="s2">"order-001"</span><span class="p">,</span>
 </span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>    <span class="n">partition_key</span><span class="o">=</span><span class="s2">"cust-abc123"</span>
 </span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="p">)</span>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"RU consumed: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">get_response_headers</span><span class="p">()[</span><span class="s1">'x-ms-request-charge'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"RU consumed: </span><span class="si">{</span><span class="n">response</span><span class="o">.</span><span class="n">get_response_headers</span><span class="p">()[</span><span class="s1">'x-ms-request-charge'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>  <span class="c1"># azure-cosmos &gt;= 4.7</span>
 </span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>
 </span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="c1"># Upsert</span>
 </span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="n">item</span> <span class="o">=</span> <span class="p">{</span>
@@ -25265,6 +25297,15 @@
 </span><span id="__span-5-35"><a id="__codelineno-5-35" name="__codelineno-5-35" href="#__codelineno-5-35"></a>    <span class="n">partition_key</span><span class="o">=</span><span class="s2">"cust-abc123"</span>  <span class="c1"># partition key elimina cross-partition = più efficiente</span>
 </span><span id="__span-5-36"><a id="__codelineno-5-36" name="__codelineno-5-36" href="#__codelineno-5-36"></a><span class="p">)</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Entra ID richiede RBAC del data plane</p>
+<p><code>DefaultAzureCredential</code> funziona solo se l'identità ha un ruolo <strong>Cosmos DB native RBAC</strong> (non basta il ruolo Azure RBAC "Contributor", che copre solo il control plane). In produzione assegnare il ruolo e disabilitare le chiavi di account (<code>disableLocalAuth</code>) per eliminare secret condivisi:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>role<span class="w"> </span>assignment<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--role-definition-name<span class="w"> </span><span class="s2">"Cosmos DB Built-in Data Contributor"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--principal-id<span class="w"> </span>&lt;object-id-managed-identity&gt;<span class="w"> </span>--scope<span class="w"> </span><span class="s2">"/"</span>
+</span></code></pre></div>
+</div>
 <h2 id="modelli-di-throughput">Modelli di Throughput<a class="headerlink" href="#modelli-di-throughput" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -25290,153 +25331,177 @@
 </tr>
 <tr>
 <td><strong>Serverless</strong></td>
-<td>Auto, nessun max fisso</td>
+<td>Auto, burst fino a 5.000 RU/s per container</td>
 <td>Per RU effettivamente consumate</td>
 <td>Dev/test, workload sporadici, spike brevi</td>
 </tr>
 </tbody>
 </table>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Creare account serverless</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--name<span class="w"> </span>cosmos-serverless-dev<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>--kind<span class="w"> </span>GlobalDocumentDB<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>--locations<span class="w"> </span><span class="nv">regionName</span><span class="o">=</span>westeurope<span class="w"> </span><span class="nv">failoverPriority</span><span class="o">=</span><span class="m">0</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span>--capabilities<span class="w"> </span>EnableServerless
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># Verificare throughput corrente di un container</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>throughput<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">  </span>--name<span class="w"> </span>orders
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="c1"># Aumentare throughput manualmente (provisioned)</span>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>throughput<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">  </span>--name<span class="w"> </span>orders<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">  </span>--throughput<span class="w"> </span><span class="m">5000</span>
-</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>
-</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="c1"># Migrare da provisioned a autoscale</span>
-</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>throughput<span class="w"> </span>migrate<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="w">  </span>--name<span class="w"> </span>orders<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a><span class="w">  </span>--throughput-type<span class="w"> </span>autoscale
+<div class="admonition note">
+<p class="admonition-title">Limiti Serverless</p>
+<p>Solo <strong>una regione</strong>, storage max 1 TB per container, nessun Free Tier sullo stesso account e la modalità non è modificabile dopo la creazione dell'account (serve migrazione dati).</p>
+</div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Creare account serverless</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--name<span class="w"> </span>cosmos-serverless-dev<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span>--kind<span class="w"> </span>GlobalDocumentDB<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span>--locations<span class="w"> </span><span class="nv">regionName</span><span class="o">=</span>westeurope<span class="w"> </span><span class="nv">failoverPriority</span><span class="o">=</span><span class="m">0</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span>--capabilities<span class="w"> </span>EnableServerless
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># Verificare throughput corrente di un container</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>throughput<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">  </span>--name<span class="w"> </span>orders
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="c1"># Aumentare throughput manualmente (provisioned)</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>throughput<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">  </span>--name<span class="w"> </span>orders<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">  </span>--throughput<span class="w"> </span><span class="m">5000</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="c1"># Migrare da provisioned a autoscale</span>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>throughput<span class="w"> </span>migrate<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a><span class="w">  </span>--name<span class="w"> </span>orders<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="w">  </span>--throughput-type<span class="w"> </span>autoscale
 </span></code></pre></div>
 <h2 id="change-feed">Change Feed<a class="headerlink" href="#change-feed" title="Permanent link">&para;</a></h2>
-<p>Il Change Feed è un log ordinato di tutte le modifiche (insert/update) ai documenti in un container Cosmos DB. Alimenta pattern event-driven e di sync tra sistemi.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Leggere Change Feed con Azure Functions (CosmosDB Trigger)</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">azure.functions</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">func</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="nd">@app</span><span class="o">.</span><span class="n">cosmos_db_trigger</span><span class="p">(</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    <span class="n">arg_name</span><span class="o">=</span><span class="s2">"documents"</span><span class="p">,</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">database_name</span><span class="o">=</span><span class="s2">"myapp-db"</span><span class="p">,</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">container_name</span><span class="o">=</span><span class="s2">"orders"</span><span class="p">,</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">connection</span><span class="o">=</span><span class="s2">"CosmosDBConnection"</span><span class="p">,</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">create_lease_container_if_not_exists</span><span class="o">=</span><span class="kc">True</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="p">)</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">cosmosdb_trigger</span><span class="p">(</span><span class="n">documents</span><span class="p">:</span> <span class="n">func</span><span class="o">.</span><span class="n">DocumentList</span><span class="p">):</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>    <span class="k">if</span> <span class="n">documents</span><span class="p">:</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>        <span class="k">for</span> <span class="n">doc</span> <span class="ow">in</span> <span class="n">documents</span><span class="p">:</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Processing changed document: </span><span class="si">{</span><span class="n">doc</span><span class="p">[</span><span class="s1">'id'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>            <span class="c1"># Sincronizzare con altro sistema, inviare evento, aggiornare cache</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>            <span class="n">process_order_change</span><span class="p">(</span><span class="n">doc</span><span class="p">)</span>
-</span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Leggere Change Feed con SDK (modalità pull)</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">azure.cosmos</span><span class="w"> </span><span class="kn">import</span> <span class="n">CosmosClient</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">azure.identity</span><span class="w"> </span><span class="kn">import</span> <span class="n">DefaultAzureCredential</span>
+<p>Il Change Feed è un log persistente delle modifiche (insert/update) ai documenti in un container Cosmos DB, <strong>ordinato per modifica all'interno di ciascuna partition key</strong> (non globalmente). Alimenta pattern event-driven e di sync tra sistemi.</p>
+<div class="admonition warning">
+<p class="admonition-title">Delete non visibili</p>
+<p>In modalità <em>latest version</em> (default) le cancellazioni e le versioni intermedie non compaiono. Per propagare i delete usare un soft-delete (flag <code>deleted: true</code> + TTL sul container) oppure la modalità <em>all versions and deletes</em> (richiede continuous backup).</p>
+</div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Leggere Change Feed con Azure Functions (CosmosDB Trigger)</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">azure.functions</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">func</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">client</span> <span class="o">=</span> <span class="n">CosmosClient</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">COSMOS_URL</span><span class="p">,</span> <span class="n">credential</span><span class="o">=</span><span class="n">DefaultAzureCredential</span><span class="p">())</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="n">container</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_database_client</span><span class="p">(</span><span class="s2">"myapp-db"</span><span class="p">)</span><span class="o">.</span><span class="n">get_container_client</span><span class="p">(</span><span class="s2">"orders"</span><span class="p">)</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Iterare change feed dall'inizio</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="n">feed_iterator</span> <span class="o">=</span> <span class="n">container</span><span class="o">.</span><span class="n">query_items_change_feed</span><span class="p">(</span><span class="n">start_time</span><span class="o">=</span><span class="s2">"Beginning"</span><span class="p">)</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="k">for</span> <span class="n">change</span> <span class="ow">in</span> <span class="n">feed_iterator</span><span class="p">:</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Changed: </span><span class="si">{</span><span class="n">change</span><span class="p">[</span><span class="s1">'id'</span><span class="p">]</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">change</span><span class="p">[</span><span class="s1">'status'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="c1"># Salvare continuation token per resume</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="nd">@app</span><span class="o">.</span><span class="n">cosmos_db_trigger</span><span class="p">(</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">arg_name</span><span class="o">=</span><span class="s2">"documents"</span><span class="p">,</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="n">database_name</span><span class="o">=</span><span class="s2">"myapp-db"</span><span class="p">,</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">container_name</span><span class="o">=</span><span class="s2">"orders"</span><span class="p">,</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="n">connection</span><span class="o">=</span><span class="s2">"CosmosDBConnection"</span><span class="p">,</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>    <span class="n">create_lease_container_if_not_exists</span><span class="o">=</span><span class="kc">True</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="p">)</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">cosmosdb_trigger</span><span class="p">(</span><span class="n">documents</span><span class="p">:</span> <span class="n">func</span><span class="o">.</span><span class="n">DocumentList</span><span class="p">):</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="k">if</span> <span class="n">documents</span><span class="p">:</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>        <span class="k">for</span> <span class="n">doc</span> <span class="ow">in</span> <span class="n">documents</span><span class="p">:</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>            <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Processing changed document: </span><span class="si">{</span><span class="n">doc</span><span class="p">[</span><span class="s1">'id'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>            <span class="c1"># Sincronizzare con altro sistema, inviare evento, aggiornare cache</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>            <span class="n">process_order_change</span><span class="p">(</span><span class="n">doc</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Leggere Change Feed con SDK (modalità pull)</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">azure.cosmos</span><span class="w"> </span><span class="kn">import</span> <span class="n">CosmosClient</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">azure.identity</span><span class="w"> </span><span class="kn">import</span> <span class="n">DefaultAzureCredential</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">client</span> <span class="o">=</span> <span class="n">CosmosClient</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="n">COSMOS_URL</span><span class="p">,</span> <span class="n">credential</span><span class="o">=</span><span class="n">DefaultAzureCredential</span><span class="p">())</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">container</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_database_client</span><span class="p">(</span><span class="s2">"myapp-db"</span><span class="p">)</span><span class="o">.</span><span class="n">get_container_client</span><span class="p">(</span><span class="s2">"orders"</span><span class="p">)</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># Iterare change feed dall'inizio</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="n">feed_iterator</span> <span class="o">=</span> <span class="n">container</span><span class="o">.</span><span class="n">query_items_change_feed</span><span class="p">(</span><span class="n">start_time</span><span class="o">=</span><span class="s2">"Beginning"</span><span class="p">)</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="k">for</span> <span class="n">change</span> <span class="ow">in</span> <span class="n">feed_iterator</span><span class="p">:</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Changed: </span><span class="si">{</span><span class="n">change</span><span class="p">[</span><span class="s1">'id'</span><span class="p">]</span><span class="si">}</span><span class="s2"> - </span><span class="si">{</span><span class="n">change</span><span class="p">[</span><span class="s1">'status'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>    <span class="c1"># Salvare continuation token per resume</span>
 </span></code></pre></div>
 <h2 id="cosmos-db-free-tier">Cosmos DB Free Tier<a class="headerlink" href="#cosmos-db-free-tier" title="Permanent link">&para;</a></h2>
 <p>Ogni subscription Azure ha diritto a <strong>1 account Cosmos DB Free Tier</strong>:
 - 1000 RU/s guaranteed throughput gratuiti (permanente, non trial)
 - 25 GB storage gratuito (permanente)
-- Utile per piccoli progetti in produzione, dev/test, portfolio projects</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--name<span class="w"> </span>cosmos-free-tier<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--kind<span class="w"> </span>GlobalDocumentDB<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--locations<span class="w"> </span><span class="nv">regionName</span><span class="o">=</span>westeurope<span class="w"> </span><span class="nv">failoverPriority</span><span class="o">=</span><span class="m">0</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span>--enable-free-tier<span class="w"> </span><span class="nb">true</span>
+- Utile per piccoli progetti in produzione, dev/test, portfolio projects
+- Non combinabile con account serverless; l'eccedenza oltre 1000 RU/s / 25 GB è fatturata normalmente</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--name<span class="w"> </span>cosmos-free-tier<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>--kind<span class="w"> </span>GlobalDocumentDB<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span>--locations<span class="w"> </span><span class="nv">regionName</span><span class="o">=</span>westeurope<span class="w"> </span><span class="nv">failoverPriority</span><span class="o">=</span><span class="m">0</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>--enable-free-tier<span class="w"> </span><span class="nb">true</span>
 </span></code></pre></div>
 <h2 id="backup-continuo-pitr">Backup Continuo (PITR)<a class="headerlink" href="#backup-continuo-pitr" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Backup continuo con retention 30 giorni (abilitato con --backup-policy-type Continuous)</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>restore<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>--target-database-account-name<span class="w"> </span>cosmos-restored<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>--restore-timestamp<span class="w"> </span><span class="s2">"2026-02-25T10:00:00Z"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span>--location<span class="w"> </span>westeurope<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span>--databases-to-restore<span class="w"> </span><span class="nv">name</span><span class="o">=</span>myapp-db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span>--tables-to-restore<span class="w"> </span><span class="nv">name</span><span class="o">=</span>orders
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Backup continuo con retention 30 giorni (--backup-policy-type Continuous --continuous-tier Continuous30Days)</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Il restore crea SEMPRE un nuovo account; i dati vanno poi riallineati/rimappati dall'applicazione</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>restore<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--target-database-account-name<span class="w"> </span>cosmos-restored<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span>--restore-timestamp<span class="w"> </span><span class="s2">"2026-02-25T10:00:00Z"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span>--location<span class="w"> </span>westeurope<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span>--databases-to-restore<span class="w"> </span><span class="nv">name</span><span class="o">=</span>myapp-db<span class="w"> </span><span class="nv">collections</span><span class="o">=</span>orders
 </span></code></pre></div>
+<p>Il PITR (point-in-time restore) è il default consigliato rispetto al backup <em>periodic</em>: permette di tornare a un istante preciso (es. subito prima di un <code>DELETE</code> errato). Il tier 7 giorni è gratuito, quello 30 giorni è a pagamento.</p>
 <h2 id="integrated-cache-dedicated-gateway">Integrated Cache (Dedicated Gateway)<a class="headerlink" href="#integrated-cache-dedicated-gateway" title="Permanent link">&para;</a></h2>
-<p>Il Dedicated Gateway fornisce un'in-process cache per ridurre RU e latency per letture ripetute. Disponibile per account NoSQL API.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Aggiungere Dedicated Gateway (cache)</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>service<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--name<span class="w"> </span>SqlDedicatedGateway<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span>--kind<span class="w"> </span>SqlDedicatedGateway<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span>--count<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span>--size<span class="w"> </span>Cosmos.D4s
+<p>Il Dedicated Gateway è un cluster di nodi di calcolo dedicati (non una cache in-process nell'app) che si pone davanti al backend e mantiene una cache di point read e query: un <em>cache hit</em> costa <strong>0 RU</strong> e riduce la latency. Disponibile per account NoSQL API; la cache funziona solo con consistency Session o Eventual e le richieste devono passare dall'endpoint dedicato (<code>&lt;account&gt;.sqlx.cosmos.azure.com</code>), in modalità Gateway.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Aggiungere Dedicated Gateway (cache)</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>service<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span>--name<span class="w"> </span>SqlDedicatedGateway<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span>--kind<span class="w"> </span>SqlDedicatedGateway<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">  </span>--count<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">  </span>--size<span class="w"> </span>Cosmos.D4s
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Connessione tramite dedicated gateway con caching</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">client</span> <span class="o">=</span> <span class="n">CosmosClient</span><span class="p">(</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="n">url</span><span class="o">=</span><span class="s2">"https://cosmos-myapp-prod.documents.azure.com"</span><span class="p">,</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    <span class="n">credential</span><span class="o">=</span><span class="n">DefaultAzureCredential</span><span class="p">(),</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="n">connection_mode</span><span class="o">=</span><span class="s2">"Gateway"</span>  <span class="c1"># usa dedicated gateway se configurato</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Connessione tramite dedicated gateway: cambia l'endpoint (sqlx), non il codice di accesso</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">client</span> <span class="o">=</span> <span class="n">CosmosClient</span><span class="p">(</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">url</span><span class="o">=</span><span class="s2">"https://cosmos-myapp-prod.sqlx.cosmos.azure.com"</span><span class="p">,</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="n">credential</span><span class="o">=</span><span class="n">DefaultAzureCredential</span><span class="p">()</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="p">)</span>
 </span></code></pre></div>
+<p>In .NET/Java impostare inoltre <code>ConnectionMode.Gateway</code> e, se serve, <code>MaxIntegratedCacheStaleness</code> per tollerare dati più vecchi in cache.</p>
 <h2 id="private-endpoint-per-cosmos-db">Private Endpoint per Cosmos DB<a class="headerlink" href="#private-endpoint-per-cosmos-db" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>az<span class="w"> </span>network<span class="w"> </span>private-endpoint<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>--name<span class="w"> </span>pep-cosmos-prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span>--vnet-name<span class="w"> </span>vnet-prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span>--subnet<span class="w"> </span>snet-private-endpoints<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span>--private-connection-resource-id<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>cosmosdb<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">  </span>--group-ids<span class="w"> </span>Sql<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span>--connection-name<span class="w"> </span>conn-cosmos-prod
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="c1"># DNS zona privata per Cosmos DB</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>az<span class="w"> </span>network<span class="w"> </span>private-dns<span class="w"> </span>zone<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"privatelink.documents.azure.com"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>az<span class="w"> </span>network<span class="w"> </span>private-endpoint<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span>--name<span class="w"> </span>pep-cosmos-prod<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span>--vnet-name<span class="w"> </span>vnet-prod<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span>--subnet<span class="w"> </span>snet-private-endpoints<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span>--private-connection-resource-id<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>cosmosdb<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">  </span>--group-ids<span class="w"> </span>Sql<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">  </span>--connection-name<span class="w"> </span>conn-cosmos-prod
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># DNS zona privata per Cosmos DB</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>az<span class="w"> </span>network<span class="w"> </span>private-dns<span class="w"> </span>zone<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"privatelink.documents.azure.com"</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># Collegare la zona alla VNet e registrare il record A del private endpoint (senza questi due passi</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># il nome risolve ancora l'IP pubblico)</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>az<span class="w"> </span>network<span class="w"> </span>private-dns<span class="w"> </span>link<span class="w"> </span>vnet<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--zone-name<span class="w"> </span><span class="s2">"privatelink.documents.azure.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">  </span>--name<span class="w"> </span>link-vnet-prod<span class="w"> </span>--virtual-network<span class="w"> </span>vnet-prod<span class="w"> </span>--registration-enabled<span class="w"> </span><span class="nb">false</span>
+</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a>az<span class="w"> </span>network<span class="w"> </span>private-endpoint<span class="w"> </span>dns-zone-group<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--endpoint-name<span class="w"> </span>pep-cosmos-prod<span class="w"> </span>--name<span class="w"> </span>default<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="w">  </span>--private-dns-zone<span class="w"> </span><span class="s2">"privatelink.documents.azure.com"</span><span class="w"> </span>--zone-name<span class="w"> </span>cosmos
 </span></code></pre></div>
 <h2 id="synapse-link-htap-analytical-store">Synapse Link (HTAP — Analytical Store)<a class="headerlink" href="#synapse-link-htap-analytical-store" title="Permanent link">&para;</a></h2>
+<div class="admonition warning">
+<p class="admonition-title">Synapse Link: non per nuovi progetti</p>
+<p>Microsoft raccomanda <strong>Cosmos DB Mirroring per Microsoft Fabric</strong> (GA): replica quasi real-time in OneLake in formato Delta Parquet, senza consumare RU né usare l'analytical store. Quanto segue vale per carichi Synapse esistenti.</p>
+</div>
 <p>Synapse Link abilita analytics in real-time su dati operativi senza impatto sulle performance del database, copiando automaticamente i dati in un analytical store columnar (formato Parquet).</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Abilitare analytical store sull'account</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span>--enable-analytical-storage<span class="w"> </span><span class="nb">true</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Abilitare analytical store su un container specifico</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">  </span>--name<span class="w"> </span>orders<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">  </span>--analytical-storage-ttl<span class="w"> </span>-1<span class="w">   </span><span class="c1"># -1 = illimitato, &gt;0 = TTL in secondi</span>
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># Collegare a Synapse Analytics</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>az<span class="w"> </span>synapse<span class="w"> </span>linked-service<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">  </span>--workspace-name<span class="w"> </span>mysynapseworkspace<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">  </span>--name<span class="w"> </span>CosmosDBLinkedService<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">  </span>--file<span class="w"> </span>@cosmosdb-linked-service.json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Abilitare analytical store sull'account</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span>--enable-analytical-storage<span class="w"> </span><span class="nb">true</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="c1"># Abilitare analytical store su un container specifico</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">  </span>--name<span class="w"> </span>orders<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">  </span>--analytical-storage-ttl<span class="w"> </span>-1<span class="w">   </span><span class="c1"># -1 = illimitato, &gt;0 = TTL in secondi</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="c1"># Collegare a Synapse Analytics</span>
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>az<span class="w"> </span>synapse<span class="w"> </span>linked-service<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="w">  </span>--workspace-name<span class="w"> </span>mysynapseworkspace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="w">  </span>--name<span class="w"> </span>CosmosDBLinkedService<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="w">  </span>--file<span class="w"> </span>@cosmosdb-linked-service.json
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
@@ -25447,6 +25512,10 @@
 <li>Abilita <strong>Change Feed</strong> per sincronizzazione con altri sistemi anziché polling</li>
 <li>Usa <strong>letture puntuali</strong> (GET by id + partition key) invece di query quando possibile: costano 1 RU invece di 10-100</li>
 <li>Non usare <code>SELECT *</code> nelle query: specifica solo i campi necessari</li>
+<li>Usare un <strong>singleton <code>CosmosClient</code></strong> per applicazione (non uno per richiesta) e impostare le <code>preferred regions</code>: il client gestisce retry su 429 e failover regionale</li>
+<li>Usare Entra ID + RBAC del data plane e disabilitare le chiavi; i private endpoint chiudono l'accesso pubblico</li>
+<li>Preferire il backup <strong>Continuous</strong> (PITR) al periodic per account di produzione</li>
+<li>Per vector search (RAG): definire <em>vector embedding policy</em> e <em>vector index</em> (DiskANN/quantizedFlat) sul container in fase di creazione; escludere il path del vettore dall'indice generale</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-request-rate-too-large-http-429">Scenario 1 — Request Rate Too Large (HTTP 429)<a class="headerlink" href="#scenario-1-request-rate-too-large-http-429" title="Permanent link">&para;</a></h3>
@@ -25456,29 +25525,30 @@
 1. Verificare la partition key — se una singola key riceve la maggior parte del traffico, riprogettare con synthetic key
 2. Aumentare temporaneamente il throughput
 3. Abilitare Autoscale per assorbire i picchi automaticamente</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Controllare throughput corrente e RU consumate (metriche Azure Monitor)</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>az<span class="w"> </span>monitor<span class="w"> </span>metrics<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span>--resource<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>cosmosdb<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span>--metric<span class="w"> </span><span class="s2">"TotalRequestUnits"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span>--interval<span class="w"> </span>PT1M<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">  </span>--aggregation<span class="w"> </span>Total
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="c1"># Aumentare throughput del container</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>throughput<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">  </span>--name<span class="w"> </span>orders<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="w">  </span>--throughput<span class="w"> </span><span class="m">5000</span>
-</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a>
-</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a><span class="c1"># Migrare a autoscale per gestire picchi</span>
-</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>throughput<span class="w"> </span>migrate<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a><span class="w">  </span>--name<span class="w"> </span>orders<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a><span class="w">  </span>--throughput-type<span class="w"> </span>autoscale
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Controllare throughput corrente e RU consumate (metriche Azure Monitor)</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>az<span class="w"> </span>monitor<span class="w"> </span>metrics<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>--resource<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>cosmosdb<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span>--metric<span class="w"> </span><span class="s2">"TotalRequestUnits"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">  </span>--interval<span class="w"> </span>PT1M<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span>--aggregation<span class="w"> </span>Total
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1"># Aumentare throughput del container</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>throughput<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="w">  </span>--name<span class="w"> </span>orders<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="w">  </span>--throughput<span class="w"> </span><span class="m">5000</span>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="c1"># Migrare a autoscale per gestire picchi</span>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>throughput<span class="w"> </span>migrate<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="w">  </span>--name<span class="w"> </span>orders<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-22"><a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a><span class="w">  </span>--throughput-type<span class="w"> </span>autoscale
 </span></code></pre></div>
+<p>Per distinguere hot partition da throughput insufficiente guardare la metrica <code>NormalizedRUConsumption</code> per partition key range: ~100% su un solo range = hot partition (aumentare le RU non risolve, serve cambiare la key); ~100% su tutti = throughput sottodimensionato. Gli SDK ritentano in automatico i 429 (rispettando <code>x-ms-retry-after-ms</code>): l'errore emerge all'app solo a retry esauriti.</p>
 <hr />
 <h3 id="scenario-2-query-lenta-costo-ru-elevato">Scenario 2 — Query Lenta / Costo RU Elevato<a class="headerlink" href="#scenario-2-query-lenta-costo-ru-elevato" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Query restituisce risultati ma impiega centinaia di ms e consuma 100+ RU. L'header <code>x-ms-request-charge</code> ha valori molto alti.</p>
@@ -25487,72 +25557,73 @@
 1. Aggiungere la partition key al WHERE della query
 2. Aggiungere indici compositi per query con ORDER BY o filtri multipli
 3. Selezionare solo i campi necessari invece di <code>SELECT *</code></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Aggiungere indice composito per query ORDER BY</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span>--name<span class="w"> </span>orders<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">  </span>--idx<span class="w"> </span><span class="s1">'[{"indexingMode":"consistent","automatic":true,"includedPaths":[{"path":"/*"}],"excludedPaths":[{"path":"/\"_etag\"/?"}],"compositeIndexes":[[{"path":"/customerId","order":"ascending"},{"path":"/createdAt","order":"descending"}]]}]'</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Aggiungere indice composito per query ORDER BY</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>sql<span class="w"> </span>container<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span>--database-name<span class="w"> </span>myapp-db<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span>--name<span class="w"> </span>orders<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">  </span>--idx<span class="w"> </span><span class="s1">'[{"indexingMode":"consistent","automatic":true,"includedPaths":[{"path":"/*"}],"excludedPaths":[{"path":"/\"_etag\"/?"}],"compositeIndexes":[[{"path":"/customerId","order":"ascending"},{"path":"/createdAt","order":"descending"}]]}]'</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Query ottimizzata: partition key nel filtro + campi specifici</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">items</span> <span class="o">=</span> <span class="n">container</span><span class="o">.</span><span class="n">query_items</span><span class="p">(</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="n">query</span><span class="o">=</span><span class="s2">"SELECT c.id, c.total, c.status FROM c WHERE c.customerId = @customerId AND c.status = 'completed' ORDER BY c.createdAt DESC"</span><span class="p">,</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="n">parameters</span><span class="o">=</span><span class="p">[{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"@customerId"</span><span class="p">,</span> <span class="s2">"value"</span><span class="p">:</span> <span class="s2">"cust-abc123"</span><span class="p">}],</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="n">partition_key</span><span class="o">=</span><span class="s2">"cust-abc123"</span>  <span class="c1"># evita cross-partition scan</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Query ottimizzata: partition key nel filtro + campi specifici</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">items</span> <span class="o">=</span> <span class="n">container</span><span class="o">.</span><span class="n">query_items</span><span class="p">(</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>    <span class="n">query</span><span class="o">=</span><span class="s2">"SELECT c.id, c.total, c.status FROM c WHERE c.customerId = @customerId AND c.status = 'completed' ORDER BY c.createdAt DESC"</span><span class="p">,</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>    <span class="n">parameters</span><span class="o">=</span><span class="p">[{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"@customerId"</span><span class="p">,</span> <span class="s2">"value"</span><span class="p">:</span> <span class="s2">"cust-abc123"</span><span class="p">}],</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>    <span class="n">partition_key</span><span class="o">=</span><span class="s2">"cust-abc123"</span>  <span class="c1"># evita cross-partition scan</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="p">)</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-failover-automatico-non-avviene-regione-non-disponibile">Scenario 3 — Failover Automatico Non Avviene / Regione Non Disponibile<a class="headerlink" href="#scenario-3-failover-automatico-non-avviene-regione-non-disponibile" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> La regione primaria è down ma l'applicazione continua a ricevere errori invece di fare failover alla regione secondaria.</p>
-<p><strong>Causa:</strong> Il failover automatico non è abilitato, oppure l'account ha una sola regione configurata, oppure il cliente usa endpoint regione-specifici invece dell'endpoint globale.</p>
+<p><strong>Causa:</strong> Il failover automatico non è abilitato, oppure l'account ha una sola regione configurata, oppure il cliente usa endpoint regione-specifici invece dell'endpoint globale. Nota: <code>enableAutomaticFailover</code> riguarda gli account single-write; con multi-region write il client SDK reindirizza le scritture alle altre regioni secondo le <code>preferred regions</code>.</p>
 <p><strong>Soluzione:</strong>
 1. Verificare che <code>--enable-automatic-failover true</code> sia impostato
 2. Verificare che l'applicazione usi l'endpoint globale (<code>.documents.azure.com</code>) non quello regionale
 3. Se necessario, eseguire failover manuale</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Verificare configurazione failover</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"{regions:locations, automaticFailover:enableAutomaticFailover}"</span>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>
-</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="c1"># Abilitare failover automatico</span>
-</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="w">  </span>--enable-automatic-failover<span class="w"> </span><span class="nb">true</span>
-</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>
-</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="c1"># Failover manuale (promuove la regione secondaria a primaria)</span>
-</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>failover-priority-change<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="w">  </span>--failover-policies<span class="w"> </span><span class="s2">"northeurope=0"</span><span class="w"> </span><span class="s2">"westeurope=1"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Verificare configurazione failover</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"{regions:locations, automaticFailover:enableAutomaticFailover}"</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># Abilitare failover automatico</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="w">  </span>--enable-automatic-failover<span class="w"> </span><span class="nb">true</span>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="c1"># Failover manuale (promuove la regione secondaria a primaria)</span>
+</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>failover-priority-change<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-15"><a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-16"><a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-17"><a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="w">  </span>--failover-policies<span class="w"> </span><span class="s2">"northeurope=0"</span><span class="w"> </span><span class="s2">"westeurope=1"</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-documenti-non-compaiono-nelle-letture-consistency-issues">Scenario 4 — Documenti Non Compaiono Nelle Letture (Consistency Issues)<a class="headerlink" href="#scenario-4-documenti-non-compaiono-nelle-letture-consistency-issues" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Un documento è stato scritto con successo (HTTP 201/200) ma una lettura immediata non lo trova, oppure due client leggono versioni diverse dello stesso documento.</p>
-<p><strong>Causa:</strong> Il consistency level è impostato a <code>Eventual</code> o <code>Consistent Prefix</code> — letture da repliche diverse possono restituire dati non aggiornati. In multi-region write, possono esistere conflitti di scrittura.</p>
+<p><strong>Causa:</strong> Il consistency level è <code>Eventual</code> o <code>Consistent Prefix</code> — letture da repliche diverse possono restituire dati non aggiornati. Con <code>Session</code> il caso tipico è un'app con più istanze/pod che non propagano il <em>session token</em> dalla scrittura alla lettura successiva. In multi-region write, possono esistere conflitti di scrittura.</p>
 <p><strong>Soluzione:</strong>
-1. Alzare il consistency level a <code>Session</code> (default consigliato) o <code>Strong</code> se necessario
+1. Alzare il consistency level a <code>Session</code> (default consigliato) o <code>Strong</code> se necessario (non compatibile con multi-write); con <code>Session</code> e più istanze, propagare il session token (header <code>x-ms-session-token</code>) o usare sticky routing
 2. Per multi-region write, implementare una conflict resolution policy
 3. Usare sempre la partition key nelle letture puntuali per leggere dalla partizione corretta</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Verificare consistency level corrente</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"consistencyPolicy"</span>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># Impostare Session consistency (read-your-writes garantito)</span>
-</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="w">  </span>--default-consistency-level<span class="w"> </span>Session
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Verificare consistency level corrente</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"consistencyPolicy"</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="c1"># Impostare Session consistency (read-your-writes garantito)</span>
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>az<span class="w"> </span>cosmosdb<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$COSMOS_ACCOUNT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="w">  </span>--default-consistency-level<span class="w"> </span>Session
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Lettura puntuale (get by id + partition key) — sempre consistente con la replica locale</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">response</span> <span class="o">=</span> <span class="n">container</span><span class="o">.</span><span class="n">read_item</span><span class="p">(</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="n">item</span><span class="o">=</span><span class="s2">"order-001"</span><span class="p">,</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="n">partition_key</span><span class="o">=</span><span class="s2">"cust-abc123"</span>  <span class="c1"># garantisce lettura dalla partizione corretta</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Lettura puntuale (get by id + partition key): instradata alla partizione corretta, il</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1"># livello di consistency effettivo resta quello dell'account/sessione</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="n">response</span> <span class="o">=</span> <span class="n">container</span><span class="o">.</span><span class="n">read_item</span><span class="p">(</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="n">item</span><span class="o">=</span><span class="s2">"order-001"</span><span class="p">,</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>    <span class="n">partition_key</span><span class="o">=</span><span class="s2">"cust-abc123"</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
