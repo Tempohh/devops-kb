@@ -7,9 +7,10 @@ search_keywords: [s3 security, block public access, bucket policy, sse-s3, sse-k
 parent: cloud/aws/storage/_index
 related: [cloud/aws/storage/s3, cloud/aws/security/kms-secrets, cloud/aws/security/compliance-audit, cloud/aws/messaging/eventbridge-kinesis]
 official_docs: https://docs.aws.amazon.com/s3/latest/userguide/security.html
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Amazon S3 — Sicurezza e Funzionalità Avanzate
@@ -24,7 +25,7 @@ Queste funzionalità sono frequentemente oggetto di domande nell'esame AWS SAA-C
 
 ## Concetti Chiave: Block Public Access
 
-Block Public Access è la prima linea di difesa contro l'esposizione accidentale di dati pubblici. Può essere configurato a livello di **account** (sovrascrive tutto) o a livello di **singolo bucket**.
+Block Public Access è la prima linea di difesa contro l'esposizione accidentale di dati pubblici. Può essere configurato a livello di **account** o di **singolo bucket**: se entrambi sono impostati, per ogni setting vince la configurazione più restrittiva.
 
 ### Le 4 Impostazioni
 
@@ -143,6 +144,9 @@ La Bucket Policy è una resource-based IAM policy JSON allegata al bucket. Perme
 }
 ```
 
+!!! warning "Deny su header SSE e default encryption"
+    La condition `StringNotEquals` sull'header `x-amz-server-side-encryption` valuta la **richiesta**, non la default encryption del bucket: un `PutObject` senza header viene negato anche se il bucket cifra già di default con KMS. Va bene solo se tutti i client inviano l'header esplicitamente; altrimenti usare la default encryption SSE-KMS del bucket (sezione sotto) e riservare la Deny a bloccare cifrature *diverse* da quella attesa.
+
 **4. Restrict accesso a VPC specifico (VPC Endpoint):**
 ```json
 {
@@ -165,6 +169,12 @@ La Bucket Policy è una resource-based IAM policy JSON allegata al bucket. Perme
 }
 ```
 
+!!! warning "Lockout con `aws:SourceVpce`"
+    Una Deny basata su `aws:SourceVpce` blocca **tutto** il traffico che non passa dall'endpoint: console, CI/CD, amministratori e utenti esterni al VPC, inclusi quelli che dovrebbero poter correggere la policy. Prevedere una eccezione (es. `ArnNotLike` su un ruolo admin) prima di applicarla.
+
+!!! tip "TLS minimo"
+    Oltre a `aws:SecureTransport`, la condition `NumericLessThan: {"s3:TlsVersion": 1.2}` con `Deny` impone TLS ≥ 1.2.
+
 ```bash
 # Applicare una bucket policy
 aws s3api put-bucket-policy \
@@ -177,7 +187,7 @@ aws s3api get-bucket-policy --bucket my-bucket --query Policy --output text | py
 
 ### ACL (Access Control Lists)
 
-Le ACL sono un meccanismo legacy, AWS raccomanda di usare le bucket policy. L'impostazione "Object Ownership" a **Bucket owner enforced** disabilita le ACL (raccomandato).
+Le ACL sono un meccanismo legacy, AWS raccomanda di usare le bucket policy. L'impostazione "Object Ownership" a **Bucket owner enforced** disabilita le ACL (raccomandato) ed è il default per i bucket creati da aprile 2023; i bucket più vecchi vanno migrati esplicitamente.
 
 ```bash
 # Disabilitare ACL (Object Ownership → Bucket owner enforced)
@@ -257,23 +267,29 @@ Senza Bucket Key, ogni operazione S3 (`GetObject`, `PutObject`) genera una chiam
 Il cliente gestisce e trasmette la chiave in ogni richiesta. AWS non memorizza mai la chiave. Se si perde la chiave, i dati sono irrecuperabili.
 
 ```bash
-# Caricare con SSE-C (la chiave deve essere passata come header)
-# Generare una chiave AES-256 (32 bytes)
-KEY=$(openssl rand -base64 32)
-KEY_MD5=$(echo -n "$KEY" | base64 -d | openssl md5 -binary | base64)
+# Generare una chiave AES-256 (32 byte raw) e tenerla in un file
+openssl rand 32 > sse-c.key
 
+# La AWS CLI codifica in base64 la chiave e calcola da sola l'MD5
 aws s3api put-object \
   --bucket my-bucket \
   --key file.txt \
   --body file.txt \
   --sse-customer-algorithm AES256 \
-  --sse-customer-key "$KEY" \
-  --sse-customer-key-md5 "$KEY_MD5"
+  --sse-customer-key fileb://sse-c.key
+
+# Lo stesso parametro va fornito anche per GetObject/HeadObject
+aws s3api get-object --bucket my-bucket --key file.txt \
+  --sse-customer-algorithm AES256 \
+  --sse-customer-key fileb://sse-c.key out.txt
 ```
 
 !!! warning "SSE-C e HTTPS"
     SSE-C richiede HTTPS obbligatoriamente. Il trasferimento della chiave via HTTP non è permesso.
 
+!!! warning "SSE-C disabilitato di default sui nuovi bucket"
+    AWS ha annunciato che, a partire da aprile 2026, SSE-C è disabilitato di default sui nuovi bucket e va riabilitato esplicitamente via `PutBucketEncryption` (blocco dei tipi di cifratura). Preferire SSE-KMS salvo requisiti specifici di custodia esterna della chiave.
+    <!-- REVIEW: verificare data e dettagli esatti del cambio di default SSE-C su docs.aws.amazon.com -->
 ### DSSE-KMS (Dual-Layer Server-Side Encryption)
 
 Doppio layer di cifratura KMS (due data key separate). Richiesto da alcuni framework di compliance governativi. Non è necessario per la maggior parte dei workload.
@@ -358,7 +374,10 @@ aws s3api get-object-legal-hold \
 
 ## S3 Select
 
-S3 Select permette di eseguire query SQL direttamente su oggetti S3 (CSV, JSON, Parquet, Parquet compresso con GZIP/BZIP2) **senza scaricare l'intero oggetto**. S3 filtra i dati lato server e restituisce solo il subset richiesto.
+!!! warning "Non disponibile per nuovi clienti"
+    Da luglio 2024 AWS ha chiuso S3 Select ai nuovi clienti (i clienti esistenti possono continuare a usarlo). Per nuovi workload usare **Amazon Athena** (query SQL su dataset S3), oppure filtrare lato applicazione con byte-range fetch. La sezione resta come riferimento per sistemi esistenti e per l'esame.
+
+S3 Select permette di eseguire query SQL direttamente su oggetti S3 (CSV, JSON, Parquet; CSV e JSON anche compressi GZIP/BZIP2 — per Parquet è supportata solo la compressione columnar interna GZIP/Snappy) **senza scaricare l'intero oggetto**. S3 filtra i dati lato server e restituisce solo il subset richiesto.
 
 **Vantaggi:**
 - Riduzione trasferimento dati fino all'80%
@@ -398,7 +417,7 @@ aws s3api select-object-content \
   --output-serialization '{"JSON": {"RecordDelimiter": "\n"}}' \
   /dev/stdout
 
-# Query su Parquet (senza specificare tipo file, S3 lo rileva)
+# Query su Parquet (output JSON; l'input Parquet non ha opzioni di delimitatore)
 aws s3api select-object-content \
   --bucket my-bucket \
   --key data/users.parquet \
@@ -416,7 +435,11 @@ aws s3api select-object-content \
 
 ## S3 Object Lambda
 
-S3 Object Lambda permette di trasformare l'output di `GetObject` con una funzione Lambda prima che venga restituito al richiedente. Non modifica l'oggetto originale.
+!!! warning "Non disponibile per nuovi clienti"
+    Dal 7 novembre 2025 S3 Object Lambda è in modalità manutenzione: non è più disponibile per nuovi clienti (gli esistenti continuano a usarlo). Alternative: trasformare in una Lambda/API dietro CloudFront o API Gateway, oppure produrre copie derivate (es. dataset senza PII) con una pipeline event-driven e servirle da un bucket/Access Point dedicato.
+    <!-- REVIEW: verificare lo stato attuale dell'annuncio AWS di availability change per Object Lambda -->
+
+S3 Object Lambda permette di trasformare l'output di `GetObject` (e `HeadObject`/`ListObjects`) con una funzione Lambda prima che venga restituito al richiedente. Non modifica l'oggetto originale.
 
 **Use case:**
 - Rimuovere PII (Personally Identifiable Information) prima di consegnare dati a team analytics
@@ -564,6 +587,9 @@ aws s3api put-bucket-notification-configuration \
   --notification-configuration file://notification-config.json
 
 # Notifiche verso EventBridge (abilitare la funzione)
+# ATTENZIONE: put-bucket-notification-configuration SOSTITUISCE l'intera
+# configurazione. Questo comando cancella le Lambda/SQS configurate sopra:
+# per combinarle, includere "EventBridgeConfiguration": {} nello stesso JSON.
 aws s3api put-bucket-notification-configuration \
   --bucket my-bucket \
   --notification-configuration '{"EventBridgeConfiguration": {}}'
@@ -615,6 +641,10 @@ aws s3api put-bucket-inventory-configuration \
 - Analizzare distribuzione storage class per ottimizzare costi
 - Generare report di compliance (quali oggetti hanno Object Lock)
 - Input per S3 Batch Operations
+
+!!! tip "S3 Metadata"
+    Per inventari quasi in tempo reale, AWS offre anche **S3 Metadata**, che mantiene i metadati degli oggetti in tabelle Apache Iceberg interrogabili con Athena. Inventory resta la scelta più semplice ed economica per report periodici.
+    <!-- REVIEW: verificare stato GA e tipi di tabella (journal / live inventory) di S3 Metadata -->
 
 ---
 
@@ -765,7 +795,12 @@ aws s3api get-object \
   --key large-file.bin \
   --range "bytes=0-1023" \
   part1.bin
+```
 
+!!! note "Già automatico in CLI e SDK"
+    `aws s3 cp` e `boto3.s3.transfer` (`download_file`) eseguono già download multipart paralleli con byte-range. L'implementazione manuale sotto serve solo a capire il meccanismo o per casi custom (es. leggere solo il footer di un Parquet).
+
+```python
 # Implementazione Python: download parallelo
 import boto3
 import concurrent.futures
@@ -871,9 +906,9 @@ aws accessanalyzer list-findings \
 3. Verificare condizioni nella policy (es. `aws:SourceVpc`)
 4. Usare IAM Policy Simulator
 
-### Upload Fallisce con "SignatureDoesNotMatch"
+### GET/HEAD Fallisce su Oggetto SSE-C
 
-Con SSE-C: verificare che la chiave passata corrisponda a quella usata per il primo upload.
+Con SSE-C ogni richiesta (anche `GetObject` e `HeadObject`) deve ripresentare algoritmo e chiave usati in upload; una chiave diversa o mancante produce `400 Bad Request` / `403 Forbidden`. Se la chiave è persa, l'oggetto è irrecuperabile.
 
 ### Event Notifications Non Arrivano
 
