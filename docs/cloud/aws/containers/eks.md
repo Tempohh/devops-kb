@@ -7,10 +7,10 @@ search_keywords: [Amazon EKS, Elastic Kubernetes Service, EKS managed node group
 parent: cloud/aws/containers/_index
 related: [cloud/aws/compute/containers-ecs-eks, cloud/aws/iam/policies-avanzate, cloud/aws/networking/vpc, cloud/aws/networking/vpc-avanzato, cloud/aws/security/kms-secrets, cloud/aws/monitoring/cloudwatch, cloud/aws/monitoring/observability, containers/kubernetes/architettura, containers/kubernetes/networking, containers/kubernetes/sicurezza]
 official_docs: https://docs.aws.amazon.com/eks/latest/userguide/
-status: needs-review
+status: reviewed
 difficulty: advanced
-last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Amazon EKS — Elastic Kubernetes Service
@@ -78,7 +78,7 @@ kind: ClusterConfig
 metadata:
   name: production
   region: eu-central-1
-  version: "1.34"   # <!-- REVIEW: verificare versioni K8s attualmente in standard support su EKS -->
+  version: "1.34"   # esempio: a ott 2026 in standard support su EKS sono 1.34–1.37 (1.34 fino al 2 dic 2026); preferire una versione recente
   tags:
     Environment: production
     Team: platform
@@ -797,7 +797,7 @@ aws eks describe-insight --cluster-name production --id <INSIGHT_ID>
 # Solo 1 minor version per volta (1.33 → 1.34, poi 1.34 → 1.35)
 aws eks update-cluster-version \
     --name production \
-    --kubernetes-version 1.35   # <!-- REVIEW: verificare che 1.35 sia disponibile su EKS -->
+    --kubernetes-version 1.35   # 1.35 disponibile su EKS dal 27 gen 2026 (standard support fino al 27 mar 2027)
 
 # Nota: dopo l'upgrade del control plane i nodi possono restare max 3 minor indietro
 # (version skew kubelet), ma è buona pratica allinearli subito
