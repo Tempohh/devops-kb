@@ -4967,7 +4967,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -4992,7 +4992,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -5063,6 +5063,17 @@
     <span class="md-ellipsis">
       
         Instance Metadata Service (IMDS)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modelli-di-acquisto" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modelli di Acquisto
       
     </span>
   </a>
@@ -24546,6 +24557,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#modelli-di-acquisto" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modelli di Acquisto
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#placement-groups" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -24934,32 +24956,32 @@
 <tr>
 <td><strong>General Purpose</strong></td>
 <td>Bilanciato CPU/Mem</td>
-<td>t3, t4g, m5, m6g, m7g</td>
+<td>t3, t4g, m6i, m7g, m8g</td>
 <td>Web server, dev, app generiche</td>
 </tr>
 <tr>
 <td><strong>Compute Optimized</strong></td>
 <td>CPU alta</td>
-<td>c5, c6g, c7g</td>
+<td>c6i, c7g, c8g</td>
 <td>Batch, ML inference, gaming</td>
 </tr>
 <tr>
 <td><strong>Memory Optimized</strong></td>
 <td>Molta RAM</td>
-<td>r5, r6g, x2gd, z1d</td>
+<td>r6i, r7g, r8g, x2gd</td>
 <td>Database in-memory, SAP, Redis</td>
 </tr>
 <tr>
 <td><strong>Storage Optimized</strong></td>
 <td>I/O locale alto</td>
-<td>i3, i4i, d3, h1</td>
+<td>i3en, i4i, d3</td>
 <td>Database NoSQL, data warehouse</td>
 </tr>
 <tr>
 <td><strong>Accelerated</strong></td>
-<td>GPU/FPGA</td>
-<td>p3, p4, g4dn, g5, f1</td>
-<td>ML training, rendering, HPC</td>
+<td>GPU / acceleratori ML</td>
+<td>g5, g6, p4d, p5, trn1, inf2</td>
+<td>ML training/inference, rendering, HPC</td>
 </tr>
 <tr>
 <td><strong>HPC</strong> (High Performance Computing)</td>
@@ -24969,77 +24991,87 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Graviton (ARM):</strong> istanze <code>g</code> (m6g, c7g, r7g) — 20-40% prezzo/performance migliore vs x86 equivalente. Raccomandato per nuovi workloads.</p>
+<p>Le generazioni nuove escono di continuo: verifica quelle disponibili nella tua Region con <code>aws ec2 describe-instance-type-offerings</code> prima di standardizzare un tipo.</p>
+<p><strong>Graviton (ARM):</strong> istanze con suffisso <code>g</code> (m7g, c8g, r8g) — AWS dichiara fino al 40% di miglior rapporto prezzo/performance rispetto a x86 equivalente. Raccomandato per nuovi workload; richiede binari/immagini container compilati per <code>arm64</code> (multi-arch build), quindi verificare le dipendenze native prima della migrazione.</p>
 <p><strong>Burstable (T instances):</strong> le istanze t3, t3a e t4g usano un sistema di <strong>CPU Credits</strong>. L'idea è che l'istanza ha una "baseline" di utilizzo CPU garantita (es. 20% per t3.small). Quando la CPU è sotto questa baseline, si accumulano crediti; quando si supera, si consumano. Questo le rende economiche per workload con utilizzo medio basso ma con spike occasionali (es. un server di sviluppo, un sito con traffico variabile). Con la modalità <code>unlimited</code>, l'istanza può fare burst illimitato anche a crediti esauriti, ma si paga il surplus — da monitorare per evitare sorprese in fattura.</p>
 <hr />
 <h2 id="ami-amazon-machine-image">AMI — Amazon Machine Image<a class="headerlink" href="#ami-amazon-machine-image" title="Permanent link">&para;</a></h2>
 <p>Un'<strong>AMI</strong> è il template da cui vengono lanciate le istanze EC2 (OS + software + configurazione).</p>
 <p><strong>Tipi:</strong>
-- <strong>AWS Managed</strong>: Amazon Linux 2023, Ubuntu, Windows Server — mantenute da AWS
-- <strong>AWS Marketplace</strong>: immagini di vendor terzi (Palo Alto, CentOS, Kali...)
-- <strong>Community AMI</strong>: condivise dalla community (non supportate)
+- <strong>AMI ufficiali del provider</strong>: Amazon Linux 2023 e Windows Server (AWS); Ubuntu (Canonical), RHEL, Rocky/Alma Linux (vendor/community ufficiali, pubblicate su AWS)
+- <strong>AWS Marketplace</strong>: immagini di vendor terzi (Palo Alto, Fortinet, Kali...)
+- <strong>Community AMI</strong>: condivise dalla community (non supportate, verificare l'owner)
 - <strong>Custom</strong>: create da te (dorate, con software preinstallato)</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Cercare AMI Amazon Linux 2023</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-images<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span>--owners<span class="w"> </span>amazon<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span>--filters<span class="w"> </span><span class="s1">'Name=name,Values=al2023-ami-2023.*-x86_64'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">              </span><span class="s1">'Name=state,Values=available'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'sort_by(Images, &amp;CreationDate)[-1].{Name:Name,ImageId:ImageId}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span>--output<span class="w"> </span>table
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Creare AMI da istanza esistente</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-image<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span>--instance-id<span class="w"> </span>i-1234567890abcdef0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"MyApp-AMI-</span><span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span>--description<span class="w"> </span><span class="s2">"Golden AMI con myapp configurata"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span>--no-reboot<span class="w">    </span><span class="c1"># crea AMI senza spegnere l'istanza (potenzialmente inconsistente)</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># Copiare AMI in un'altra Region (per DR o deployment multi-region)</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>aws<span class="w"> </span>ec2<span class="w"> </span>copy-image<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">    </span>--source-region<span class="w"> </span>eu-central-1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">    </span>--source-image-id<span class="w"> </span>ami-xxxx<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"MyApp-AMI-EU-WEST-1"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">    </span>--region<span class="w"> </span>eu-west-1
-</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>
-</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="c1"># Condividere AMI con un altro account</span>
-</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>aws<span class="w"> </span>ec2<span class="w"> </span>modify-image-attribute<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">    </span>--image-id<span class="w"> </span>ami-xxxx<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="w">    </span>--launch-permission<span class="w"> </span><span class="s2">"Add=[{UserId=999999999999}]"</span>
+<div class="admonition warning">
+<p class="admonition-title">Amazon Linux 2 è fuori supporto</p>
+<p>Amazon Linux 2 ha raggiunto la fine del supporto il 30/06/2026. Per nuove istanze usare <strong>Amazon Linux 2023</strong> (dnf, IMDSv2 di default) e pianificare la migrazione delle AMI esistenti.</p>
+</div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Ultima AMI Amazon Linux 2023 via SSM Parameter (metodo consigliato: nessun filtro da mantenere)</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>aws<span class="w"> </span>ssm<span class="w"> </span>get-parameter<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span>--name<span class="w"> </span>/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'Parameter.Value'</span><span class="w"> </span>--output<span class="w"> </span>text
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># In alternativa, cercarla con describe-images</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-images<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span>--owners<span class="w"> </span>amazon<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span>--filters<span class="w"> </span><span class="s1">'Name=name,Values=al2023-ami-2023.*-x86_64'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">              </span><span class="s1">'Name=state,Values=available'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'sort_by(Images, &amp;CreationDate)[-1].{Name:Name,ImageId:ImageId}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span>--output<span class="w"> </span>table
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># Creare AMI da istanza esistente</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-image<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span>--instance-id<span class="w"> </span>i-1234567890abcdef0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"MyApp-AMI-</span><span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">    </span>--description<span class="w"> </span><span class="s2">"Golden AMI con myapp configurata"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">    </span>--no-reboot<span class="w">    </span><span class="c1"># crea AMI senza spegnere l'istanza (potenzialmente inconsistente)</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="c1"># Copiare AMI in un'altra Region (per DR o deployment multi-region)</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>aws<span class="w"> </span>ec2<span class="w"> </span>copy-image<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">    </span>--source-region<span class="w"> </span>eu-central-1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="w">    </span>--source-image-id<span class="w"> </span>ami-xxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"MyApp-AMI-EU-WEST-1"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="w">    </span>--region<span class="w"> </span>eu-west-1
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="c1"># Condividere AMI con un altro account</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>aws<span class="w"> </span>ec2<span class="w"> </span>modify-image-attribute<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="w">    </span>--image-id<span class="w"> </span>ami-xxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="w">    </span>--launch-permission<span class="w"> </span><span class="s2">"Add=[{UserId=999999999999}]"</span>
 </span></code></pre></div>
 <hr />
 <h2 id="lanciare-unistanza-ec2">Lanciare un'Istanza EC2<a class="headerlink" href="#lanciare-unistanza-ec2" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Lanciare istanza con configurazione completa</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>aws<span class="w"> </span>ec2<span class="w"> </span>run-instances<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span>--image-id<span class="w"> </span>ami-0a1b2c3d4e5f67890<span class="w"> </span><span class="se">\ </span><span class="w">          </span><span class="c1"># AMI ID</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span>--instance-type<span class="w"> </span>t3.medium<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span>--key-name<span class="w"> </span>my-key-pair<span class="w"> </span><span class="se">\ </span><span class="w">                     </span><span class="c1"># SSH key</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span>--security-group-ids<span class="w"> </span>sg-xxxx<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span>--subnet-id<span class="w"> </span>subnet-xxxx<span class="w"> </span><span class="se">\ </span><span class="w">                    </span><span class="c1"># subnet (AZ)</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span>--iam-instance-profile<span class="w"> </span><span class="nv">Name</span><span class="o">=</span>MyEC2Profile<span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># IAM Role</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span>--ebs-optimized<span class="w"> </span><span class="se">\ </span><span class="w">                            </span><span class="c1"># EBS ottimizzato</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span>--block-device-mappings<span class="w"> </span><span class="s1">'[{</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="s1">        "DeviceName": "/dev/xvda",</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="s1">        "Ebs": {</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="s1">            "VolumeSize": 30,</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="s1">            "VolumeType": "gp3",</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="s1">            "Iops": 3000,</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="s1">            "Throughput": 125,</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="s1">            "Encrypted": true,</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="s1">            "DeleteOnTermination": true</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="s1">        }</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="s1">    }]'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span>--user-data<span class="w"> </span>file://userdata.sh<span class="w"> </span><span class="se">\ </span><span class="w">             </span><span class="c1"># script eseguito al boot</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">    </span>--metadata-options<span class="w"> </span><span class="nv">HttpTokens</span><span class="o">=</span>required<span class="w"> </span><span class="se">\ </span><span class="w">     </span><span class="c1"># IMDSv2 obbligatorio</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">    </span>--tag-specifications<span class="w"> </span><span class="s1">'ResourceType=instance,Tags=[</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="s1">        {Key=Name,Value=my-ec2},</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="s1">        {Key=Environment,Value=prod},</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="s1">        {Key=Team,Value=platform}</span>
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="s1">    ]'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">    </span>--count<span class="w"> </span><span class="m">1</span>
+<p>Note sui parametri: <code>--subnet-id</code> determina la AZ; <code>--iam-instance-profile</code> associa il ruolo IAM (evita credenziali statiche sull'istanza); <code>--user-data</code> è lo script di bootstrap; <code>HttpTokens=required</code> forza IMDSv2. I commenti non possono stare dopo il <code>\</code> di continuazione riga, quindi sono qui sopra.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>aws<span class="w"> </span>ec2<span class="w"> </span>run-instances<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span>--image-id<span class="w"> </span>ami-0a1b2c3d4e5f67890<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span>--instance-type<span class="w"> </span>t3.medium<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span>--key-name<span class="w"> </span>my-key-pair<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span>--security-group-ids<span class="w"> </span>sg-xxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span>--subnet-id<span class="w"> </span>subnet-xxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span>--iam-instance-profile<span class="w"> </span><span class="nv">Name</span><span class="o">=</span>MyEC2Profile<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span>--ebs-optimized<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span>--block-device-mappings<span class="w"> </span><span class="s1">'[{</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="s1">        "DeviceName": "/dev/xvda",</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="s1">        "Ebs": {</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="s1">            "VolumeSize": 30,</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="s1">            "VolumeType": "gp3",</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="s1">            "Iops": 3000,</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="s1">            "Throughput": 125,</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="s1">            "Encrypted": true,</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="s1">            "DeleteOnTermination": true</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="s1">        }</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="s1">    }]'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span>--user-data<span class="w"> </span>file://userdata.sh<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span>--metadata-options<span class="w"> </span><span class="nv">HttpTokens</span><span class="o">=</span>required,HttpPutResponseHopLimit<span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">    </span>--tag-specifications<span class="w"> </span><span class="s1">'ResourceType=instance,Tags=[{Key=Name,Value=my-ec2},{Key=Environment,Value=prod},{Key=Team,Value=platform}]'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">    </span>--count<span class="w"> </span><span class="m">1</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Hop limit e container</p>
+<p><code>HttpPutResponseHopLimit=1</code> impedisce che il token IMDSv2 attraversi un hop di rete in più, quindi i container in bridge network non raggiungono l'IMDS. Se i container sull'host devono usare il ruolo dell'istanza, alza il valore a <code>2</code> (consapevole che amplia la superficie SSRF); su EKS preferisci IRSA / Pod Identity.</p>
+</div>
 <hr />
 <h2 id="user-data">User Data<a class="headerlink" href="#user-data" title="Permanent link">&para;</a></h2>
-<p>Lo <strong>User Data</strong> è uno script eseguito <strong>una sola volta</strong> al primo avvio dell'istanza, prima che diventi disponibile. È il meccanismo per automatizzare la configurazione iniziale: installare pacchetti, avviare servizi, scaricare il codice applicativo. Lo script gira come root, quindi ha pieno controllo sul sistema.</p>
+<p>Lo <strong>User Data</strong> è uno script eseguito da <strong>cloud-init</strong> <strong>una sola volta</strong>, al primo boot dell'istanza (l'istanza risulta <code>running</code> mentre lo script è ancora in corso: non coincide con "pronta"). È il meccanismo per automatizzare la configurazione iniziale: installare pacchetti, avviare servizi, scaricare il codice applicativo. Lo script gira come root. Dimensione massima: <strong>16 KB</strong> (prima della codifica base64); per payload più grandi scarica lo script da S3.</p>
 <p>Un'alternativa moderna e più scalabile allo User Data è <strong>AWS Systems Manager (SSM)</strong>: permette di gestire la configurazione delle istanze in modo centralizzato e di eseguire comandi su flotte di istanze senza SSH. Lo User Data rimane utile per bootstrap semplici; per configurazioni complesse si preferisce SSM oppure strumenti di configuration management come Ansible o Chef.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="ch">#!/bin/bash</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># userdata.sh — eseguito come root al primo boot</span>
@@ -25072,8 +25104,10 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Verificare output User Data (dal cloud-init log)</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>cat<span class="w"> </span>/var/log/cloud-init-output.log
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Recuperare User Data dall'istanza via IMDS</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>curl<span class="w"> </span>http://169.254.169.254/latest/user-data
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Recuperare User Data dall'istanza via IMDS (con IMDSv2 serve il token, vedi sezione IMDS)</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nv">TOKEN</span><span class="o">=</span><span class="k">$(</span>curl<span class="w"> </span>-sX<span class="w"> </span>PUT<span class="w"> </span><span class="s2">"http://169.254.169.254/latest/api/token"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span>-H<span class="w"> </span><span class="s2">"X-aws-ec2-metadata-token-ttl-seconds: 60"</span><span class="k">)</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">"X-aws-ec2-metadata-token: </span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span>http://169.254.169.254/latest/user-data
 </span></code></pre></div>
 <hr />
 <h2 id="instance-metadata-service-imds">Instance Metadata Service (IMDS)<a class="headerlink" href="#instance-metadata-service-imds" title="Permanent link">&para;</a></h2>
@@ -25105,6 +25139,58 @@
 </span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="nv">IDENTITY</span><span class="o">=</span><span class="k">$(</span>curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">"X-aws-ec2-metadata-token: </span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="w">    </span>http://169.254.169.254/latest/dynamic/instance-identity/document<span class="k">)</span>
 </span></code></pre></div>
+<hr />
+<h2 id="modelli-di-acquisto">Modelli di Acquisto<a class="headerlink" href="#modelli-di-acquisto" title="Permanent link">&para;</a></h2>
+<p>Lo stesso tipo di istanza costa molto diversamente a seconda dell'impegno preso. Scegliere il modello giusto è di solito la leva di risparmio più grande su EC2.</p>
+<table>
+<thead>
+<tr>
+<th>Modello</th>
+<th>Impegno</th>
+<th>Sconto indicativo vs On-Demand</th>
+<th>Quando usarlo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>On-Demand</strong></td>
+<td>Nessuno, pay-per-second</td>
+<td>—</td>
+<td>Workload imprevedibili, test, baseline iniziale</td>
+</tr>
+<tr>
+<td><strong>Savings Plans</strong></td>
+<td>1 o 3 anni su $/ora di spesa</td>
+<td>fino a ~66% (Compute SP), fino a ~72% (EC2 Instance SP)</td>
+<td>Carico stabile; Compute SP si applica anche a Fargate/Lambda e cambia famiglia/Region</td>
+</tr>
+<tr>
+<td><strong>Reserved Instances</strong></td>
+<td>1 o 3 anni su tipo/Region</td>
+<td>fino a ~72% (Standard)</td>
+<td>Legacy; oggi i Savings Plans sono più flessibili</td>
+</tr>
+<tr>
+<td><strong>Spot</strong></td>
+<td>Nessuno, ma interrompibile con 2 minuti di preavviso</td>
+<td>fino a ~90%</td>
+<td>Batch, CI runner, big data, nodi stateless fault-tolerant</td>
+</tr>
+<tr>
+<td><strong>Dedicated Hosts / Instances</strong></td>
+<td>Server fisico dedicato</td>
+<td>Costo maggiore</td>
+<td>Licenze per-socket/per-core BYOL, compliance</td>
+</tr>
+<tr>
+<td><strong>Capacity Reservations</strong></td>
+<td>Nessuno sul tempo, paghi la capacità riservata</td>
+<td>—</td>
+<td>Garantire capacità in una AZ (DR, eventi di picco)</td>
+</tr>
+</tbody>
+</table>
+<p>Gli sconti sono valori massimi dichiarati da AWS e variano per tipo, Region e termini: verifica sulla <a href="https://aws.amazon.com/ec2/pricing/">pagina prezzi</a>. <strong>Perché Spot funziona:</strong> AWS vende la capacità inutilizzata e la riprende quando serve; l'applicazione deve quindi gestire l'interruzione (evento IMDS <code>spot/instance-action</code>, EventBridge) e diversificare su più tipi/AZ (es. tramite Auto Scaling Group con mixed instances policy).</p>
 <hr />
 <h2 id="placement-groups">Placement Groups<a class="headerlink" href="#placement-groups" title="Permanent link">&para;</a></h2>
 <p>I <strong>Placement Groups</strong> controllano dove vengono fisicamente collocate le istanze all'interno dell'infrastruttura AWS. Di default, AWS distribuisce le istanze per minimizzare il rischio di guasti correlati. Con i Placement Groups puoi sovrascrivere questo comportamento per ottimizzare in base alle esigenze del tuo workload — massima bandwidth (cluster), massima disponibilità (spread), o un compromesso per sistemi distribuiti come Kafka (partition).</p>
@@ -25141,26 +25227,25 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Creare Cluster Placement Group</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-placement-group<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span>--group-name<span class="w"> </span>hpc-cluster<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span>--strategy<span class="w"> </span>cluster<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span>--partition-count<span class="w"> </span><span class="m">0</span><span class="w">    </span><span class="c1"># non applicabile per cluster</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Creare Partition Placement Group</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-placement-group<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span>--group-name<span class="w"> </span>kafka-partitions<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span>--strategy<span class="w"> </span>partition<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span>--partition-count<span class="w"> </span><span class="m">3</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Lanciare istanza in Placement Group</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>aws<span class="w"> </span>ec2<span class="w"> </span>run-instances<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">    </span>--placement<span class="w"> </span><span class="nv">GroupName</span><span class="o">=</span>hpc-cluster<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">    </span>...
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span>--strategy<span class="w"> </span>cluster
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Creare Partition Placement Group</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-placement-group<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span>--group-name<span class="w"> </span>kafka-partitions<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span>--strategy<span class="w"> </span>partition<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span>--partition-count<span class="w"> </span><span class="m">3</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="c1"># Lanciare istanza in Placement Group</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>aws<span class="w"> </span>ec2<span class="w"> </span>run-instances<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span>--placement<span class="w"> </span><span class="nv">GroupName</span><span class="o">=</span>hpc-cluster<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">    </span>...
 </span></code></pre></div>
 <hr />
 <h2 id="ec2-nitro-system">EC2 Nitro System<a class="headerlink" href="#ec2-nitro-system" title="Permanent link">&para;</a></h2>
-<p>Il <strong>Nitro System</strong> è l'hypervisor di nuova generazione AWS — dedicato hardware NVMe SSD e SR-IOV (Single Root I/O Virtualization — tecnica che permette a una scheda di rete di presentarsi come più interfacce virtuali indipendenti) networking.</p>
+<p>Il <strong>Nitro System</strong> è la piattaforma di virtualizzazione di nuova generazione AWS: un hypervisor leggero (basato su KVM) più schede dedicate (Nitro Cards) che spostano networking, storage EBS/NVMe e sicurezza su hardware dedicato, liberando quasi tutta la CPU dell'host per le istanze. Il networking usa SR-IOV (Single Root I/O Virtualization — tecnica che permette a una scheda di rete di presentarsi come più interfacce virtuali indipendenti).</p>
 <ul>
-<li>Quasi-bare-metal performance (overhead hypervisor &lt;1%)</li>
-<li>ENA (Elastic Network Adapter): fino a <strong>100 Gbps</strong> per <code>u-6tb1.112xlarge</code></li>
+<li>Performance prossime al bare-metal (overhead di virtualizzazione minimo)</li>
+<li>ENA (Elastic Network Adapter): decine di Gbps, fino a 200 Gbps su tipi network-optimized (es. <code>c6in</code>)</li>
 <li>EFA (Elastic Fabric Adapter): per HPC/MPI (Message Passing Interface — standard di comunicazione tra processi paralleli in cluster HPC), latency simil-bare-metal</li>
 <li>NVMe SSD locale: I/O diretto senza hypervisor (istanze <code>i4i</code>, <code>c5d</code>, ecc.)</li>
 <li><strong>EBS-optimized</strong> nativo: bandwidth dedicata per EBS (no condivisione con rete)</li>
@@ -25178,33 +25263,35 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Creare key pair</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-key-pair<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>--key-name<span class="w"> </span>my-key<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>--key-type<span class="w"> </span>ed25519<span class="w"> </span><span class="se">\ </span><span class="w">            </span><span class="c1"># ED25519 più sicuro di RSA</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>--key-type<span class="w"> </span>ed25519<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span>--key-format<span class="w"> </span>pem<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'KeyMaterial'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span>--output<span class="w"> </span>text<span class="w"> </span>&gt;<span class="w"> </span>my-key.pem
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>chmod<span class="w"> </span><span class="m">400</span><span class="w"> </span>my-key.pem
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="c1"># SSH con key pair</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>ssh<span class="w"> </span>-i<span class="w"> </span>my-key.pem<span class="w"> </span>ec2-user@&lt;PUBLIC_IP&gt;
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1"># Alternative SICURE senza SSH key aperta su Internet:</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># 1. Systems Manager Session Manager (no porta 22, no public IP necessario)</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>aws<span class="w"> </span>ssm<span class="w"> </span>start-session<span class="w"> </span>--target<span class="w"> </span>i-1234567890abcdef0
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="c1"># 2. EC2 Instance Connect (push temporanea di public key via API)</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>aws<span class="w"> </span>ec2-instance-connect<span class="w"> </span>send-ssh-public-key<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">    </span>--instance-id<span class="w"> </span>i-1234567890abcdef0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">    </span>--instance-os-user<span class="w"> </span>ec2-user<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">    </span>--ssh-public-key<span class="w"> </span>file://~/.ssh/id_ed25519.pub
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>ssh<span class="w"> </span>ec2-user@&lt;PUBLIC_IP&gt;<span class="w">    </span><span class="c1"># Valido per 60 secondi</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># ED25519: più compatto e moderno di RSA, ma NON supportato per le istanze Windows (usa RSA)</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># SSH con key pair</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>ssh<span class="w"> </span>-i<span class="w"> </span>my-key.pem<span class="w"> </span>ec2-user@&lt;PUBLIC_IP&gt;
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># Alternative SICURE senza SSH key aperta su Internet:</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1"># 1. Systems Manager Session Manager (no porta 22, no public IP necessario)</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>aws<span class="w"> </span>ssm<span class="w"> </span>start-session<span class="w"> </span>--target<span class="w"> </span>i-1234567890abcdef0
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="c1"># 2. EC2 Instance Connect (push temporanea di public key via API)</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>aws<span class="w"> </span>ec2-instance-connect<span class="w"> </span>send-ssh-public-key<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">    </span>--instance-id<span class="w"> </span>i-1234567890abcdef0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">    </span>--instance-os-user<span class="w"> </span>ec2-user<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">    </span>--ssh-public-key<span class="w"> </span>file://~/.ssh/id_ed25519.pub
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>ssh<span class="w"> </span>ec2-user@&lt;PUBLIC_IP&gt;<span class="w">    </span><span class="c1"># Valido per 60 secondi</span>
 </span></code></pre></div>
+<p>Per istanze solo in subnet privata, <strong>EC2 Instance Connect Endpoint</strong> permette SSH/RDP senza IP pubblico né bastion (<code>aws ec2-instance-connect ssh --instance-id i-xxxx</code>). Session Manager richiede SSM Agent e un instance profile con <code>AmazonSSMManagedInstanceCore</code>.</p>
 <hr />
 <h2 id="storage-ec2">Storage EC2<a class="headerlink" href="#storage-ec2" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># EC2 Instance Store (ephemeral)</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># - NVMe SSD fisicamente sul server</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># - Dati persi se istanza viene stoppata/terminata</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># - Solo alcune famiglie: i3, i4i, c5d, m5d...</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># - Altissimi IOPS (fino a 3.3M IOPS su i4i.32xlarge)</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># - Altissimi IOPS (milioni sulle taglie più grandi di i4i)</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># - Usare per tmp, cache, buffer — mai per dati persistenti</span>
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># EBS (Elastic Block Store) — persistente</span>
@@ -25228,19 +25315,20 @@
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span>--block-device-mappings<span class="w"> </span><span class="s1">'[{</span>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="s1">        "DeviceName": "/dev/xvda",</span>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="s1">        "Ebs": {</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="s1">            "Encrypted": true,       # OBBLIGATORIO per hibernate</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="s1">            "VolumeSize": 50         # &gt;= RAM size</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="s1">            "Encrypted": true,</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="s1">            "VolumeSize": 50</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="s1">        }</span>
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="s1">    }]'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">    </span>...
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="c1"># Hibernare istanza</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>aws<span class="w"> </span>ec2<span class="w"> </span>stop-instances<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">    </span>--instance-ids<span class="w"> </span>i-xxxx<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">    </span>--hibernate
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="c1"># Riprendere (start normale)</span>
-</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a>aws<span class="w"> </span>ec2<span class="w"> </span>start-instances<span class="w"> </span>--instance-ids<span class="w"> </span>i-xxxx
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># Encrypted=true è obbligatorio per hibernate; VolumeSize deve poter contenere OS + RAM</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="c1"># Hibernare istanza</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>aws<span class="w"> </span>ec2<span class="w"> </span>stop-instances<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">    </span>--instance-ids<span class="w"> </span>i-xxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">    </span>--hibernate
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>
+</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="c1"># Riprendere (start normale)</span>
+</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a>aws<span class="w"> </span>ec2<span class="w"> </span>start-instances<span class="w"> </span>--instance-ids<span class="w"> </span>i-xxxx
 </span></code></pre></div>
 <p><strong>Limiti:</strong> RAM max 150 GB, max 60 giorni di hibernation, non tutti i tipi supportati.</p>
 <hr />
@@ -25302,8 +25390,7 @@
 </span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">    </span>http://169.254.169.254/latest/user-data
 </span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>
 </span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="c1"># Se si vuole ri-eseguire User Data su un'istanza esistente (dev/test)</span>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>sudo<span class="w"> </span>cloud-init<span class="w"> </span>clean<span class="w"> </span>--logs
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>sudo<span class="w"> </span>cloud-init<span class="w"> </span>init
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>sudo<span class="w"> </span>cloud-init<span class="w"> </span>clean<span class="w"> </span>--logs<span class="w"> </span>--reboot<span class="w">   </span><span class="c1"># azzera lo stato e riesegue cloud-init al reboot</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="scenario-3-istanza-in-stato-pending-per-lungo-tempo-o-terminated-subito-dopo-il-lancio">Scenario 3 — Istanza in stato <code>pending</code> per lungo tempo o <code>terminated</code> subito dopo il lancio<a class="headerlink" href="#scenario-3-istanza-in-stato-pending-per-lungo-tempo-o-terminated-subito-dopo-il-lancio" title="Permanent link">&para;</a></h3>
@@ -25322,14 +25409,15 @@
 </span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>
 </span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="c1"># Provare una AZ diversa (se problema di capacità)</span>
 </span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>aws<span class="w"> </span>ec2<span class="w"> </span>run-instances<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">    </span>--subnet-id<span class="w"> </span>subnet-yyyy<span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># subnet in AZ diversa</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">    </span>--subnet-id<span class="w"> </span>subnet-yyyy<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">    </span>...
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># Verificare disponibilità del tipo di istanza per AZ</span>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-instance-type-offerings<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">    </span>--location-type<span class="w"> </span>availability-zone<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">    </span>--filters<span class="w"> </span><span class="nv">Name</span><span class="o">=</span>instance-type,Values<span class="o">=</span>m6g.xlarge<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'InstanceTypeOfferings[].Location'</span>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># subnet-yyyy deve trovarsi in una AZ diversa</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="c1"># Verificare disponibilità del tipo di istanza per AZ</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-instance-type-offerings<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">    </span>--location-type<span class="w"> </span>availability-zone<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="w">    </span>--filters<span class="w"> </span><span class="nv">Name</span><span class="o">=</span>instance-type,Values<span class="o">=</span>m6g.xlarge<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'InstanceTypeOfferings[].Location'</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="scenario-4-cpu-credits-esauriti-su-istanze-t-burstable">Scenario 4 — CPU Credits esauriti su istanze T (burstable)<a class="headerlink" href="#scenario-4-cpu-credits-esauriti-su-istanze-t-burstable" title="Permanent link">&para;</a></h3>
