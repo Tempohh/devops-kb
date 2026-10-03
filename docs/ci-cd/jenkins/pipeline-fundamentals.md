@@ -7,9 +7,10 @@ search_keywords: [Jenkins Declarative Pipeline, Jenkins Scripted Pipeline, Jenki
 parent: ci-cd/jenkins/_index
 related: [ci-cd/jenkins/shared-libraries, ci-cd/jenkins/agent-infrastructure, ci-cd/jenkins/enterprise-patterns]
 official_docs: https://www.jenkins.io/doc/book/pipeline/
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-03-28
+last_verified: 2026-10-03
 ---
 
 # Jenkins Pipeline — Fondamentali
@@ -70,7 +71,7 @@ spec:
     // ── Options ────────────────────────────────────────────────────────────
     options {
         timeout(time: 60, unit: 'MINUTES')        // timeout globale build
-        retry(2)                                   // retry in caso di failure infrastrutturale
+        retry(2)                                   // rilancia l'INTERA pipeline su qualsiasi failure (anche test rotti): usare con cautela
         buildDiscarder(logRotator(
             numToKeepStr: '20',                    // mantieni ultimi 20 build
             artifactNumToKeepStr: '5'              // ma solo 5 con artifact
@@ -87,7 +88,9 @@ spec:
         // Variabili statiche
         APP_NAME     = 'myapp'
         DOCKER_REPO  = 'registry.company.com/myteam'
-        IMAGE_TAG    = "${env.GIT_COMMIT[0..7]}"  // prime 8 char del commit SHA
+        // IMAGE_TAG: NON calcolabile qui. Con skipDefaultCheckout(true) GIT_COMMIT è null
+        // finché non gira lo stage Checkout (l'environment è valutato prima degli stage) → NPE.
+        // Viene impostato nello stage Checkout: env.IMAGE_TAG = env.GIT_COMMIT.take(8)
         REGISTRY_URL = 'registry.company.com'
 
         // Secret da Jenkins Credential Store
@@ -132,6 +135,10 @@ spec:
                         credentialsId: 'git-credentials'
                     ]]
                 ])
+                script {
+                    // checkout imposta GIT_COMMIT: da qui in poi IMAGE_TAG è disponibile in tutti gli stage
+                    env.IMAGE_TAG = env.GIT_COMMIT.take(8)
+                }
             }
         }
 
@@ -179,15 +186,17 @@ spec:
             steps {
                 withSonarQubeEnv('company-sonarqube') {
                     container('maven') {
-                        sh """
+                        // Stringa single-quoted: il secret lo espande la shell, non Groovy
+                        // (l'interpolazione Groovy di un secret lo espone nei log/process list)
+                        sh '''
                             mvn sonar:sonar \
-                              -Dsonar.projectKey=${APP_NAME} \
-                              -Dsonar.branch.name=${env.BRANCH_NAME} \
-                              -Dsonar.token=${SONAR_TOKEN}
-                        """
+                              -Dsonar.projectKey="$APP_NAME" \
+                              -Dsonar.token="$SONAR_TOKEN"
+                        '''
                     }
                 }
-                // Quality Gate: attende risultato da SonarQube (timeout 10 minuti)
+                // Quality Gate: attende il risultato da SonarQube (timeout 10 minuti).
+                // Richiede un webhook SonarQube → Jenkins (/sonarqube-webhook/), altrimenti resta appeso.
                 timeout(time: 10, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
@@ -196,6 +205,9 @@ spec:
 
         stage('Build Container Image') {
             steps {
+                // Il container 'kaniko' va dichiarato nel Pod YAML (non mostrato sopra).
+                // Nota 2026: il repo GoogleContainerTools/kaniko è archiviato; per nuove pipeline
+                // valutare BuildKit rootless o Buildah (stesso schema: build senza Docker daemon).
                 container('kaniko') {
                     sh """
                         /kaniko/executor \
@@ -290,8 +302,7 @@ spec:
                     sh """
                         kubectl set image deployment/${APP_NAME} \
                           app=${DOCKER_REPO}/${APP_NAME}:${IMAGE_TAG} \
-                          -n staging \
-                          --record
+                          -n staging
                         kubectl rollout status deployment/${APP_NAME} -n staging --timeout=5m
                     """
                 }
@@ -304,7 +315,10 @@ spec:
                 environment name: 'DEPLOY_ENV', value: 'prod'
             }
             steps {
-                // Gate manuale con timeout e abort
+                // Gate manuale con timeout e abort.
+                // Attenzione: con un agent a livello pipeline il Pod/executor resta occupato per
+                // tutta l'attesa. In produzione: `agent none` globale + `agent` per stage, e
+                // l'input in uno stage senza agent.
                 timeout(time: 4, unit: 'HOURS') {
                     input(
                         message: "Deploy ${APP_NAME}:${IMAGE_TAG} in PRODUCTION?",
@@ -345,8 +359,7 @@ spec:
     post {
         always {
             // Eseguito SEMPRE (anche in caso di abort)
-            cleanWs()                    // pulizia workspace
-            publishHTML([
+            publishHTML([                // prima pubblicare i report...
                 allowMissing: true,
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
@@ -354,6 +367,7 @@ spec:
                 reportFiles: 'index.html',
                 reportName: 'Test Report'
             ])
+            cleanWs()                    // ...poi pulire il workspace (l'ordine inverso cancella i report)
         }
         success {
             slackSend(
@@ -459,9 +473,10 @@ items.each { item ->
 ```groovy
 import groovy.transform.Field
 
-// Variabile a livello di script (non locale) — deve essere serializzabile
-// o annotata @Field
-@Field String globalConfig = loadConfig()
+// @Field trasforma la variabile in campo dello script: visibile dentro i metodi
+// (una semplice `def x` a livello script NON lo è). Il valore resta comunque nello stato
+// CPS, quindi deve essere serializzabile.
+@Field Map globalConfig = [env: 'dev', retries: 3]
 
 // Oggetti non serializzabili: usare come variabili locali in blocchi @NonCPS
 // oppure ricrearli ogni volta che servono
@@ -519,7 +534,11 @@ stage('Cross-Platform Build') {
         stages {
             stage('Build') {
                 steps {
-                    sh "nvm use ${NODE_VERSION} && npm ci && npm run build"
+                    // `nvm` è una shell function: non funziona in uno step sh non interattivo.
+                    // Usare il plugin NodeJS (tool "node-18" ecc. configurato in Global Tool Configuration)
+                    nodejs("node-${NODE_VERSION}") {
+                        sh 'npm ci && npm run build'
+                    }
                 }
             }
             stage('Test') {
@@ -665,7 +684,7 @@ stage('Deploy') {
 
 ```groovy
 // Scripted Pipeline per logica veramente complessa
-node('master') {
+node('linux') {      // mai 'master'/built-in: i build non vanno eseguiti sul controller
     // catchError: continua pipeline ma marca come FAILURE/UNSTABLE
     catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
         stage('Risky Step') {
@@ -715,10 +734,11 @@ def slurper = new groovy.json.JsonSlurper()
 def data = slurper.parseText(readFile('config.json'))
 input 'Proceed?'    // sospensione — slurper non è serializzabile
 
-// ✅ usa @NonCPS per isolare la logica
+// ✅ usa @NonCPS per isolare la logica; JsonSlurperClassic restituisce Map/List standard
+// (JsonSlurper restituisce LazyMap, non garantito serializzabile). In alternativa: readJSON.
 @NonCPS
 def parseConfig(String text) {
-    return new groovy.json.JsonSlurper().parseText(text)
+    return new groovy.json.JsonSlurperClassic().parseText(text)
 }
 def data = parseConfig(readFile('config.json'))
 input 'Proceed?'    // OK — data è una Map serializzabile
@@ -728,9 +748,9 @@ input 'Proceed?'    // OK — data è una Map serializzabile
 
 ### Scenario 2 — Stage `when` non valutato, stage eseguito inaspettatamente
 
-**Sintomo:** Uno stage viene eseguito anche quando la condizione `when { branch 'main' }` non dovrebbe essere soddisfatta, oppure l'agent viene allocato prima che la condizione sia valutata (spreco di risorse).
+**Sintomo:** Uno stage con `when { branch 'main' }` risulta saltato, ma nei log compaiono l'allocazione dell'agent (Pod Kubernetes avviato, attesa in coda per il label) e il checkout: spreco di risorse e code lunghe per stage che non girano mai. Se `branch` non matcha affatto, il job non è multibranch (`BRANCH_NAME` non impostato).
 
-**Causa:** Per default Jenkins alloca l'agent prima di valutare `when`. Senza `beforeAgent true`, l'agent viene acquisito e poi la condizione viene verificata, ma il comportamento sembra eseguire lo stage perché i log dell'allocazione appaiono comunque.
+**Causa:** Per default Jenkins alloca l'agent dello stage *prima* di valutare `when`; solo dopo scopre che lo stage va saltato.
 
 **Soluzione:** Aggiungere `beforeAgent true` dentro il blocco `when` per valutare la condizione prima dell'allocazione dell'agent. Per debug, verificare `env.BRANCH_NAME` vs `env.GIT_BRANCH` (il primo è impostato dal plugin multibranch).
 
@@ -768,12 +788,9 @@ stage('Debug Branch') {
 ```bash
 # Verifica pattern stash — esegui nell'agent per testare il glob
 find . -path './target/*.jar' -o -path './target/surefire-reports/**/*.xml'
-
-# Alternativa stash su S3 (plugin S3 Publisher)
-# In Jenkinsfile:
 ```
 ```groovy
-// Alternativa: upload su S3 invece di stash
+// Alternativa: upload su S3 invece di stash (step del plugin "Pipeline: AWS Steps")
 withAWS(credentials: 'aws-creds', region: 'eu-west-1') {
     s3Upload(
         bucket: 'ci-artifacts',
@@ -797,7 +814,7 @@ withAWS(credentials: 'aws-creds', region: 'eu-west-1') {
 
 **Sintomo:** Con `failFast true` (o `parallelsAlwaysFailFast()`), un singolo stage parallelo fallisce e causa l'abort degli altri stage in corso, perdendo i loro report (es. test results non pubblicati).
 
-**Causa:** `failFast` interrompe immediatamente tutti i branch paralleli al primo fallimento, prima che i `post { always { } }` dei branch abortiti vengano eseguiti.
+**Causa:** `failFast` interrompe immediatamente tutti i branch paralleli al primo fallimento: i test in corso negli altri branch vengono abortiti a metà e i loro report risultano mancanti o parziali (anche se `post { always }` esegue, non c'è nulla di completo da pubblicare).
 
 **Soluzione:** Usare `catchError` nei branch paralleli per catturare il fallimento senza propagarlo, raccogliere tutti i risultati, e poi fallire esplicitamente alla fine. Oppure spostare la pubblicazione dei report fuori dal blocco `parallel`.
 
