@@ -7,9 +7,10 @@ search_keywords: [AWS Well-Architected Framework, WAF, 6 pillars, Operational Ex
 parent: cloud/aws/fondamentali/_index
 related: [cloud/aws/fondamentali/shared-responsibility, cloud/aws/monitoring/cloudwatch, cloud/aws/security/_index]
 official_docs: https://aws.amazon.com/architecture/well-architected/
-status: complete
+status: reviewed
 difficulty: beginner
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # AWS Well-Architected Framework
@@ -51,11 +52,17 @@ Well-Architected Framework — 6 Pillars
 > *"Run and monitor systems to deliver business value and continually improve supporting processes and procedures."*
 
 **Principi di design:**
-- **Operations as code** — infrastruttura e procedure come codice (IaC — Infrastructure as Code)
-- **Small, frequent, reversible changes** — deploy incrementali, rollback facile
+- **Organize teams around business outcomes** — i team sono allineati agli obiettivi di business, non alle sole funzioni tecniche
+- **Implement observability for actionable insights** — metriche, log e trace che guidano decisioni (non solo monitoring)
+- **Safely automate where possible** — operazioni e procedure come codice (IaC — Infrastructure as Code)
+- **Make frequent, small, reversible changes** — deploy incrementali, rollback facile
 - **Refine operations procedures frequently** — runbook aggiornati e testati
 - **Anticipate failure** — chaos engineering, test di failure
-- **Learn from all operational failures** — post-mortem blameless
+- **Learn from all operational events and metrics** — post-mortem blameless
+- **Use managed services** — riduce il carico operativo del team
+
+!!! note "Versione del framework"
+    I principi sopra seguono la revisione del WAF successiva al 2023 (che ha aggiornato soprattutto Operational Excellence, Security e Reliability). I principi esatti possono cambiare a ogni revisione: la fonte autorevole è il whitepaper ufficiale.
 
 **Best practices chiave:**
 - Usa **CloudFormation/CDK** per infrastruttura come codice
@@ -193,10 +200,10 @@ Well-Architected Framework — 6 Pillars
 - **Use managed services** — economie di scala energetica AWS
 - **Reduce the downstream impact** — ottimizza client-side
 
-**Obiettivo AWS:** raggiungere **100% energia rinnovabile** e **net-zero carbon** entro 2040.
+**Obiettivo Amazon:** **net-zero carbon entro il 2040** (Climate Pledge). Amazon dichiara di aver abbinato il 100% dell'energia elettrica consumata a fonti rinnovabili già dal 2023 (obiettivo originale: 2025).
 
 **Pratiche concrete:**
-- Usa istanze **Graviton3** (60% meno energia di x86 equivalente)
+- Usa istanze **Graviton** (ARM; AWS dichiara fino al 60% di energia in meno rispetto a istanze EC2 comparabili a parità di performance — dato dichiarato dal vendor, non garantito)
 - Usa **Lambda/Fargate** invece di EC2 sempre accese
 - Implementa **auto scaling** per evitare over-provisioning
 - Spegni risorse non in uso (dev/test environments off-hours)
@@ -219,22 +226,26 @@ Il **Well-Architected Tool** è un servizio gratuito in AWS Console per condurre
 6. Tiene traccia del progresso nel tempo
 
 ```bash
-# Well-Architected Tool disponibile nella Console AWS
-# AWS Console → Architecture → Well-Architected Tool
-# Non ha CLI commands significativi — si usa dalla Console
+# Console: AWS Console → Architecture → Well-Architected Tool
+# Disponibile anche via CLI/API (aws wellarchitected ...), utile per automatizzare le review
+aws wellarchitected list-lenses --query "LensSummaries[*].[LensAlias,LensName]" --output table
 ```
 
-**AWS Well-Architected Lenses** (framework specializzati per domini specifici):
+**AWS Well-Architected Lenses** (framework specializzati per domini specifici; l'elenco cresce nel tempo, usa `list-lenses` per quello aggiornato):
 - **Foundational** (standard WAF)
 - **Serverless**
 - **SaaS**
 - **Machine Learning**
+- **Generative AI**
 - **Data Analytics**
 - **Financial Services**
 - **Healthcare**
 - **Government**
 - **IoT**
 - **SAP**
+
+!!! tip "Trade-off tra pilastri"
+    I pilastri non si ottimizzano indipendentemente: più AZ/Region (Reliability) aumentano il costo (Cost Optimization); più controlli di sicurezza possono aggiungere latenza (Performance). Il WAF non impone un ordine: il team decide consapevolmente i compromessi in base al business e li documenta (es. con ADR — Architecture Decision Record).
 
 ---
 
@@ -290,12 +301,12 @@ aws ce get-cost-and-usage \
   --granularity MONTHLY \
   --metrics "UnblendedCost" \
   --group-by Type=DIMENSION,Key=SERVICE \
-  --query "ResultsByTime[0].Groups[?Metrics.UnblendedCost.Amount > '10']" \
+  --query "ResultsByTime[0].Groups[?to_number(Metrics.UnblendedCost.Amount) > \`10\`].[Keys[0],Metrics.UnblendedCost.Amount]" \
   --output table
 
-# Verificare snapshot EBS non associati a volumi attivi
+# Elencare snapshot EBS propri (da confrontare con i volumi esistenti per trovare gli orfani)
 aws ec2 describe-snapshots --owner-ids self \
-  --query "Snapshots[?State=='completed'].[SnapshotId,VolumeSize,StartTime]" \
+  --query "Snapshots[?State=='completed'].[SnapshotId,VolumeId,VolumeSize,StartTime]" \
   --output table
 ```
 
@@ -336,6 +347,9 @@ aws rds modify-db-instance \
 **Causa:** Nessun processo di triage, findings non assegnati a owner, mancanza di integrazione con ticket system.
 
 **Soluzione:** Filtrare per severity CRITICAL/HIGH, sopprimere finding non applicabili con giustificazione, integrare con EventBridge → Lambda → Jira/ServiceNow per auto-ticketing.
+
+!!! note "Security Hub CSPM"
+    Dal 2025 il servizio storico di posture management è stato rinominato **Security Hub CSPM** (Cloud Security Posture Management), affiancato dalla nuova esperienza Security Hub con correlazione dei finding. Le API `securityhub` usate sotto restano valide per i finding CSPM; verifica la documentazione AWS corrente per le differenze.
 
 ```bash
 # Elencare finding critici attivi in Security Hub
