@@ -7,9 +7,10 @@ search_keywords: [AWS regions, AWS availability zones, AZ, edge locations, local
 parent: cloud/aws/fondamentali/_index
 related: [cloud/aws/networking/vpc, cloud/aws/networking/route53, cloud/aws/networking/cloudfront]
 official_docs: https://aws.amazon.com/about-aws/global-infrastructure/
-status: complete
+status: reviewed
 difficulty: beginner
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # AWS Global Infrastructure
@@ -19,9 +20,9 @@ last_updated: 2026-03-28
 ```
 AWS Global Network (backbone privato fibra ottica mondiale)
 │
-├── Region (34+ geografiche)
+├── Region (35+ geografiche — il numero cresce, verificare sul sito ufficiale)
 │   ├── Availability Zone A  (datacenter cluster fisicamente separato)
-│   ├── Availability Zone B  (min 3 AZ per Region)
+│   ├── Availability Zone B  (tipicamente ≥3 AZ per Region)
 │   └── Availability Zone C
 │
 ├── Local Zone (estensione Region in città — latenza <10ms)
@@ -45,7 +46,8 @@ Una **Region** è un'area geografica con infrastruttura AWS indipendente.
 - Ogni Region ha un **nome** (es. `eu-central-1`) e un **nome geografico** (Francoforte)
 - Le Region sono **completamente isolate** tra loro — fault isolation geografica
 - I dati **non abbandonano mai** una Region senza configurazione esplicita (data residency/sovranità)
-- Ogni Region ha ≥3 AZ (la maggior parte ne ha 3-6)
+- Quasi tutte le Region hanno ≥3 AZ (3-6); qualche Region storica ne espone solo 2 ai nuovi account (es. `us-west-1`)
+- Le Region più recenti (es. Milano `eu-south-1`, Spagna `eu-south-2`) sono **opt-in**: vanno abilitate per account (Console → Account → AWS Regions, o `aws account enable-region`) prima dell'uso; le Region storiche sono sempre attive
 - Non tutte le Region hanno tutti i servizi — verificare sempre la disponibilità
 
 **Regions principali (Italia/Europa):**
@@ -62,7 +64,7 @@ Una **Region** è un'area geografica con infrastruttura AWS indipendente.
 | US East (N. Virginia) | Virginia | `us-east-1` | 6 |
 
 !!! note "Scegliere una Region"
-    Criteri in ordine: **1) Compliance/Data Sovereignty** → **2) Latency** → **3) Servizi disponibili** → **4) Pricing** (varia fino al 20% tra Region)
+    Criteri in ordine: **1) Compliance/Data Sovereignty** → **2) Latency** → **3) Servizi disponibili** → **4) Pricing** (varia sensibilmente tra Region: `us-east-1` è tipicamente tra le più economiche)
 
 ---
 
@@ -73,14 +75,14 @@ Un'**Availability Zone** è uno o più datacenter fisicamente separati all'inter
 **Caratteristiche:**
 - Separazione fisica: power, cooling, networking **indipendenti**
 - Connesse tra loro con fibra ridondante a **<10ms** di latenza
-- Il nome AZ (es. `eu-central-1a`) non corrisponde necessariamente allo stesso datacenter fisico tra account diversi (AWS randomizza il mapping per distribuire il carico)
+- Il nome AZ (es. `eu-central-1a`) non corrisponde necessariamente allo stesso datacenter fisico tra account diversi: AWS randomizza il mapping per evitare che tutti gli account si concentrino sulla `a`. L'identificatore stabile è l'**AZ ID** (es. `euc1-az1`), uguale per tutti gli account: usarlo quando si coordina il placement tra account (es. VPC sharing, PrivateLink)
 - I servizi **Multi-AZ** replicano su ≥2 AZ per alta disponibilità
 
 ```bash
 # Listare le AZ disponibili in una Region
 aws ec2 describe-availability-zones \
     --region eu-central-1 \
-    --query 'AvailabilityZones[*].{Name:ZoneName,State:State}' \
+    --query 'AvailabilityZones[*].{Name:ZoneName,Id:ZoneId,State:State}' \
     --output table
 ```
 
@@ -99,8 +101,8 @@ Le **Edge Locations** (Punti di Presenza) sono la rete di caching e routing dist
 
 | Componente | Numero | Utilizzo |
 |-----------|--------|---------|
-| Edge Locations | 600+ | CloudFront CDN, Lambda@Edge, Route 53 |
-| Regional Edge Caches | 13 | Cache intermedia tra origin e edge |
+| Edge Locations | 600+ (PoP) | CloudFront CDN, CloudFront Functions, Route 53 DNS |
+| Regional Edge Caches | 13 | Cache intermedia tra origin e edge; qui girano le Lambda@Edge |
 
 **Come funziona CloudFront con Edge Locations:**
 ```
@@ -139,7 +141,7 @@ aws ec2 describe-availability-zones \
 
 Le **Wavelength Zones** integrano l'infrastruttura AWS direttamente nelle reti **5G** degli operatori di telecomunicazione.
 
-- Latenza ultra-bassa (<10ms) per applicazioni mobili 5G
+- Latenza ultra-bassa (target a singola cifra di ms) per applicazioni mobili 5G, perché il traffico resta nella rete dell'operatore
 - I device mobili si connettono direttamente al compute AWS senza passare per Internet
 - Use case: video streaming live, AR/VR, veicoli autonomi, IoT industriale
 
@@ -157,7 +159,7 @@ Le **Wavelength Zones** integrano l'infrastruttura AWS direttamente nelle reti *
 **Caratteristiche:**
 - Stesso hardware, APIs e tools del cloud AWS
 - Latenza molto bassa per workload on-premises
-- Connessione obbligatoria alla Region "parent" (Outpost Region)
+- Connessione obbligatoria alla Region "parent" tramite **Service Link** (VPN gestita su Direct Connect o Internet): serve per control plane, monitoring e aggiornamenti
 - Gestione tramite AWS Console/CLI come servizi cloud normali
 
 **Use case:** Compliance con data residency, latenza ultra-bassa per sistemi industriali, modernizzazione graduale legacy
@@ -180,7 +182,7 @@ Request ──────────→ POP ────→ Fiber ────
 **Vantaggi del backbone privato:**
 - Throughput e latenza prevedibili (non soggetti a congestione Internet)
 - Sicurezza (traffico non esposto a Internet)
-- Riduzione dei costi di trasferimento dati inter-Region rispetto a Internet
+- Il traffico inter-Region resta comunque **a pagamento** (data transfer out inter-Region): il backbone migliora qualità e sicurezza, non azzera i costi
 
 ---
 
@@ -188,12 +190,12 @@ Request ──────────→ POP ────→ Fiber ────
 
 | Scope | Servizi |
 |-------|---------|
-| **Global** | IAM, Route 53, CloudFront, WAF (Web Application Firewall — global), AWS Organizations |
-| **Regional** | VPC, EC2, S3, RDS, Lambda, SQS, SNS, DynamoDB, ECS, EKS |
+| **Global** | IAM, Route 53, CloudFront, AWS Organizations (control plane in `us-east-1`) |
+| **Regional** | VPC, EC2, S3, RDS, Lambda, SQS, SNS, DynamoDB, ECS, EKS, ACM, AWS WAF |
 | **AZ-scoped** | Subnet, EC2 instance, EBS volume, RDS Primary/Standby |
 
 !!! warning "Esame CLF-C02"
-    Ricordare: IAM è **globale** (non ha Region). Route 53 e CloudFront sono **globali**. S3 bucket ha nome globale univoco ma i dati risiedono in una specifica Region. EC2 è **regionale** (si sceglie AZ/Subnet al lancio).
+    Ricordare: IAM è **globale** (non ha Region). Route 53 e CloudFront sono **globali**. AWS WAF è regionale (per CloudFront si crea con scope `CLOUDFRONT` in `us-east-1`; i certificati ACM per CloudFront vanno anch'essi in `us-east-1`). S3 bucket ha nome globale univoco ma i dati risiedono in una specifica Region. EC2 è **regionale** (si sceglie AZ/Subnet al lancio).
 
 ---
 
@@ -201,9 +203,9 @@ Request ──────────→ POP ────→ Fiber ────
 
 ### Scenario 1 — Servizio non disponibile nella Region scelta
 
-**Sintomo:** `InvalidClientTokenId` o errore "service not available in this region" quando si tenta di creare una risorsa.
+**Sintomo:** `Could not connect to the endpoint URL`, errore "not available in this region", oppure `InvalidClientTokenId` se la Region è opt-in e non ancora abilitata.
 
-**Causa:** Non tutti i servizi AWS sono disponibili in tutte le Region. Le Region più recenti (es. `eu-south-1` Milano) hanno copertura parziale.
+**Causa:** Non tutti i servizi AWS sono disponibili in tutte le Region. Le Region più recenti (es. `eu-south-1` Milano) hanno copertura parziale e sono opt-in.
 
 **Soluzione:** Verificare la disponibilità del servizio nella Region target prima del deploy.
 
@@ -213,10 +215,13 @@ aws ssm get-parameters-by-path \
     --path /aws/service/global-infrastructure/regions/eu-south-1/services \
     --query 'Parameters[*].Name' --output text
 
-# In alternativa, controllare via CLI quale Region supporta un servizio
-aws ec2 describe-regions \
-    --filters "Name=opt-in-status,Values=opted-in,opt-in-not-required" \
-    --query 'Regions[*].RegionName' --output table
+# Al contrario: in quali Region è disponibile un servizio (es. Lambda)
+aws ssm get-parameters-by-path \
+    --path /aws/service/global-infrastructure/services/lambda/regions \
+    --query 'Parameters[*].Value' --output text
+
+# Region dell'account e stato opt-in
+aws account list-regions --query 'Regions[*].[RegionName,RegionOptStatus]' --output table
 ```
 
 ---
@@ -225,7 +230,7 @@ aws ec2 describe-regions \
 
 **Sintomo:** Latenza inattesa tra istanze EC2 o tra un'EC2 e un RDS, nonostante entrambi siano nella stessa Region.
 
-**Causa:** I servizi sono in AZ diverse. La latenza inter-AZ è <10ms ma non è zero — per workload I/O intensivi può diventare rilevante. Oppure il mapping AZ (es. `eu-central-1a`) differisce tra account diversi.
+**Causa:** I servizi sono in AZ diverse. La latenza inter-AZ è a singola cifra di ms ma non è zero — per workload I/O intensivi può diventare rilevante. Il traffico inter-AZ è inoltre **a pagamento** (circa 0,01 $/GB per direzione): servizi molto "chiacchieroni" in AZ diverse costano. Oppure il mapping AZ (es. `eu-central-1a`) differisce tra account: confrontare gli AZ ID, non i nomi.
 
 **Soluzione:** Verificare il placement effettivo delle risorse e consolidarle nella stessa AZ se necessario (attenzione: riduce la fault tolerance).
 
@@ -247,9 +252,22 @@ aws rds describe-db-instances \
 
 **Sintomo:** Audit di compliance segnala dati in Region non autorizzate. Tipicamente S3 Cross-Region Replication o backup automatici configurati verso Region diverse.
 
-**Causa:** Feature di replication o backup cross-Region abilitate esplicitamente o per default in alcuni servizi (es. AWS Backup con vault policy, S3 CRR, RDS automated backups cross-region).
+**Causa:** Feature di replication o backup cross-Region configurate esplicitamente da qualcuno nell'account (S3 CRR, AWS Backup con copy rule, RDS cross-region automated backups, copia di snapshot/AMI). Nessuna è attiva di default: va cercato chi l'ha creata.
 
-**Soluzione:** Applicare SCP (Service Control Policy) a livello di AWS Organizations per bloccare azioni cross-Region non autorizzate.
+**Soluzione:** Applicare SCP (Service Control Policy) a livello di AWS Organizations che neghi ogni azione fuori dalle Region approvate tramite la condition `aws:RequestedRegion`. I servizi globali (IAM, Organizations, Route 53, CloudFront, Support…) vanno esclusi con `NotAction`, altrimenti si bloccano.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "DenyOutsideEU",
+    "Effect": "Deny",
+    "NotAction": ["iam:*", "organizations:*", "route53:*", "cloudfront:*", "support:*", "sts:*"],
+    "Resource": "*",
+    "Condition": {"StringNotEquals": {"aws:RequestedRegion": ["eu-central-1", "eu-south-1"]}}
+  }]
+}
+```
 
 ```bash
 # Verificare le regole di replication su un bucket S3
