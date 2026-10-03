@@ -7,18 +7,19 @@ search_keywords: [VPC Lattice, application networking, service network, service 
 parent: cloud/aws/networking/_index
 related: [cloud/aws/networking/vpc-avanzato, cloud/aws/networking/elastic-load-balancing, cloud/aws/iam/policies-avanzate]
 official_docs: https://docs.aws.amazon.com/vpc-lattice/latest/ug/
-status: complete
+status: reviewed
+last_verified: 2026-10-03
 difficulty: advanced
-last_updated: 2026-09-27
+last_updated: 2026-10-03
 ---
 
 # AWS VPC Lattice
 
 ## Panoramica
 
-**VPC Lattice** è un servizio di *application networking* gestito da AWS (GA novembre 2023) che connette, monitora e mette in sicurezza le comunicazioni service-to-service a livello **L7 (HTTP/HTTPS/gRPC)**, senza richiedere sidecar, agent o modifiche al codice applicativo. Al posto di instradare pacchetti tra subnet (come Transit Gateway) o esporre singoli endpoint (come PrivateLink), Lattice ragiona in termini di **servizi**: un servizio consumer si connette a un servizio logico esposto tramite un **service network**, indipendentemente da dove girano i target reali (EC2, container ECS/EKS, pod Kubernetes, funzioni Lambda), anche across VPC e across account.
+**VPC Lattice** è un servizio di *application networking* gestito da AWS (GA marzo 2023) che connette, monitora e mette in sicurezza le comunicazioni service-to-service a livello **L7 (HTTP/HTTPS/gRPC)**, senza richiedere sidecar, agent o modifiche al codice applicativo. Al posto di instradare pacchetti tra subnet (come Transit Gateway) o esporre singoli endpoint (come PrivateLink), Lattice ragiona in termini di **servizi**: un servizio consumer si connette a un servizio logico esposto tramite un **service network**, indipendentemente da dove girano i target reali (EC2, container ECS/EKS, pod Kubernetes, funzioni Lambda), anche across VPC e across account.
 
-Si usa quando serve connettività service-to-service governata da policy IAM a livello applicativo — architetture a microservizi multi-team, multi-account, dove ogni servizio deve autenticare ed autorizzare le chiamate in ingresso senza gestire certificati mTLS o un control plane di service mesh. **Non** si usa per instradamento di rete generico L3/L4 (resta compito di VPC Peering/Transit Gateway), né per traffico non-HTTP (Lattice non supporta UDP, e il supporto TCP è limitato rispetto a un NLB diretto).
+Si usa quando serve connettività service-to-service governata da policy IAM a livello applicativo — architetture a microservizi multi-team, multi-account, dove ogni servizio deve autenticare ed autorizzare le chiamate in ingresso senza gestire certificati mTLS o un control plane di service mesh. **Non** si usa per instradamento di rete generico L3/L4 (resta compito di VPC Peering/Transit Gateway), né per traffico non-HTTP (Lattice non supporta UDP; il TCP è supportato ma senza le funzioni L7 e con meno flessibilità di un NLB diretto).
 
 ## Concetti Chiave
 
@@ -44,7 +45,7 @@ EC2/Lambda/ECS  ──DNS lookup──→  Lattice Service (HTTPS)  ──auth p
                                   tra N account
 ```
 
-Il traffico non attraversa mai route table o Internet Gateway del consumer: Lattice inietta un endpoint di rete gestito nella VPC associata (simile concettualmente a un Interface Endpoint PrivateLink, ma condiviso per l'intero service network invece che per singolo servizio). Il **data plane è gestito da AWS** — non ci sono sidecar da patchare, nessun control plane da operare (a differenza di un service mesh come Istio o App Mesh).
+Il traffico non passa da Internet Gateway né richiede modifiche alle route table del consumer: il DNS della VPC associata risolve i nomi dei servizi in indirizzi **link-local** (range `169.254.171.0/24`) gestiti da Lattice, e il traffico verso di essi è inoltrato al data plane AWS. Non c'è un ENI da gestire come in un Interface Endpoint PrivateLink: l'associazione è per l'intero service network invece che per singolo servizio. I Security Group dei target devono quindi autorizzare l'ingresso dalla **managed prefix list** `com.amazonaws.<region>.vpc-lattice`, non da SG dei consumer (vedi Troubleshooting). Il **data plane è gestito da AWS** — non ci sono sidecar da patchare, nessun control plane da operare (a differenza di un service mesh come Istio o App Mesh).
 
 **Confronto pratico con le alternative già coperte in [VPC Avanzato](vpc-avanzato.md):**
 
@@ -52,7 +53,7 @@ Il traffico non attraversa mai route table o Internet Gateway del consumer: Latt
 |---|---|
 | **Transit Gateway** | TGW instrada a L3 tra intere VPC (hub-and-spoke); non conosce il concetto di "servizio" né applica policy per singola chiamata HTTP. Usa Lattice quando il controllo deve essere a livello di API/servizio, non di subnet. |
 | **AWS PrivateLink** | PrivateLink espone **un** servizio per Interface Endpoint, con setup 1:1 per ogni consumer VPC. Lattice condivide un intero service network tra molte VPC/account con un'unica associazione, e aggiunge routing L7 (path/header) che PrivateLink non ha. |
-| **Service Mesh (Istio, App Mesh)** | Un mesh richiede sidecar proxy su ogni pod/istanza e un control plane da mantenere. Lattice è completamente gestito da AWS, senza sidecar: minore complessità operativa ma minore flessibilità (no traffic mirroring avanzato, no circuit breaking custom). |
+| **Service Mesh (Istio, App Mesh)** | Un mesh richiede sidecar proxy su ogni pod/istanza e un control plane da mantenere. Lattice è completamente gestito da AWS, senza sidecar: minore complessità operativa ma minore flessibilità (no traffic mirroring avanzato, no circuit breaking custom). **AWS App Mesh** ha raggiunto la fine del supporto il 30/09/2026: per workload ECS le alternative AWS sono Lattice o ECS Service Connect. |
 
 ## Configurazione & Pratica
 
@@ -99,7 +100,7 @@ TG_ID=$(aws vpc-lattice create-target-group \
             "path": "/healthz",
             "healthyThresholdCount": 3,
             "unhealthyThresholdCount": 3,
-            "intervalSeconds": 15
+            "healthCheckIntervalSeconds": 15
         }
     }' \
     --query 'id' --output text)
@@ -118,14 +119,16 @@ LISTENER_ID=$(aws vpc-lattice create-listener \
     --default-action '{"forward":{"targetGroups":[{"targetGroupIdentifier":"'$TG_ID'","weight":100}]}}' \
     --query 'id' --output text)
 
-# Regola: instradare /v2/* verso un target group canary con peso 10%
+# Regola: su /v2/* inviare il 10% del traffico a un target group canary
+# (TG_CANARY_ID = secondo target group, creato come sopra)
 aws vpc-lattice create-rule \
     --service-identifier $SVC_ID \
     --listener-identifier $LISTENER_ID \
     --name "canary-v2" \
     --priority 10 \
     --match '{"httpMatch":{"pathMatch":{"match":{"prefix":"/v2/"}}}}' \
-    --action '{"forward":{"targetGroups":[{"targetGroupIdentifier":"'$TG_ID'","weight":90},{"targetGroupIdentifier":"'$TG_ID'_CANARY","weight":10}]}}'
+    --action '{"forward":{"targetGroups":[{"targetGroupIdentifier":"'$TG_ID'","weight":90},{"targetGroupIdentifier":"'$TG_CANARY_ID'","weight":10}]}}'
+# NB: i placeholder sono variabili shell; '"$TG_CANARY_ID"' chiude/riapre il quoting singolo
 ```
 
 Per **EKS**, la registrazione dei target group avviene tipicamente tramite il [Gateway API Controller per VPC Lattice](https://github.com/aws/aws-application-networking-k8s), che mappa risorse Kubernetes `HTTPRoute`/`Gateway` direttamente su servizi e target group Lattice — evitando chiamate CLI manuali per ogni deploy.
@@ -187,13 +190,15 @@ Una volta accettata la resource share, qualunque VPC associata al service networ
 !!! tip "Un service network per dominio/ambiente, non uno globale"
     Creare service network separati per `prod`/`staging`/`dev` (o per bounded context) invece di un unico service network aziendale: limita il blast radius di una auth policy errata e semplifica l'auditing con AWS RAM.
 
-- Abilitare **access logging** (`vpc-lattice:AccessLogSubscription` verso CloudWatch Logs, S3 o Kinesis Firehose) su ogni servizio in produzione: è l'unico modo per avere visibilità sulle richieste L7 senza sidecar.
+- Abilitare **access logging** (`aws vpc-lattice create-access-log-subscription` verso CloudWatch Logs, S3 o Kinesis Data Firehose) su ogni servizio in produzione: è l'unico modo per avere visibilità sulle richieste L7 senza sidecar.
 - Preferire **IP target type** per task ECS in modalità `awsvpc` e per pod EKS — evita di dover gestire target group per singola istanza EC2 sottostante.
 - Usare **weighted routing** per canary release invece di deployment blue/green completi: riduce il rischio senza duplicare l'infrastruttura compute.
 - Applicare auth policy con `Condition` su `vpc-lattice-svcs:RequestMethod` o header custom per un controllo più granulare del semplice allow/deny per principal.
 
 !!! warning "Limiti noti da verificare prima di adottare Lattice in produzione"
-    - **Nessun supporto UDP** — solo TCP-based (HTTP/HTTPS/gRPC, e TCP generico in preview/GA parziale a seconda della region). Per DNS, syslog o altri protocolli UDP serve un'alternativa (NLB diretto, TGW).
+    - **Nessun supporto UDP** — solo HTTP/HTTPS/gRPC e TCP. Per DNS, syslog o altri protocolli UDP serve un'alternativa (NLB diretto, TGW).
+    - **Risorse non-servizio**: per esporre database o altre risorse TCP/IP/DNS (non servizi HTTP) Lattice offre *resource gateway* + *resource configuration* (condivisibili via RAM) e i *service network endpoint* (VPC endpoint verso un service network): verificare nella User Guide se coprono il caso d'uso prima di ricorrere a PrivateLink.
+    - **Ambito regionale**: service network e servizi sono regionali; il cross-region richiede soluzioni aggiuntive.
     - **Latenza aggiuntiva** rispetto a un NLB diretto o a PrivateLink puro — il data plane Lattice introduce un hop L7 in più; misurare con test di carico prima di usarlo su path critici a bassissima latenza.
     - **Quote da controllare**: numero massimo di service-network-service-association per service network, numero di VPC associabili, numero di target per target group — verificare i valori correnti in [AWS Service Quotas](https://docs.aws.amazon.com/vpc-lattice/latest/ug/quotas.html) prima del design, perché cambiano nel tempo.
     - Il DNS name generato è pensato per risoluzione interna al service network: per esporlo con un nome custom serve comunque un CNAME/alias Route 53 verso il DNS name di Lattice.
@@ -222,15 +227,16 @@ aws ec2 describe-vpc-attribute --vpc-id vpc-CONSUMER --attribute enableDnsHostna
 
 **Sintomo:** Il client riceve `403` con corpo `AccessDeniedException` nonostante il servizio sia raggiungibile a livello di rete.
 
-**Causa:** L'auth policy IAM del servizio non include il principal chiamante, oppure le credenziali della richiesta non sono firmate con SigV4 (richiesto quando `auth-type` del servizio è `AWS_IAM`).
+**Causa:** L'auth policy IAM del servizio (o quella del service network, se ne ha una) non include il principal chiamante, oppure le credenziali della richiesta non sono firmate con SigV4 (richiesto quando `auth-type` è `AWS_IAM`; il servizio `vpc-lattice-svcs` va firmato).
 
 **Soluzione:**
 ```bash
 # Ispezionare l'auth policy corrente
 aws vpc-lattice get-auth-policy --resource-identifier $SVC_ID
 
-# Verificare che il ruolo chiamante abbia anche il permesso IAM lato client
-# (serve ENTRAMBI: permesso IAM del caller + Resource Policy del servizio)
+# Verificare il permesso IAM lato client (identity-based policy del caller).
+# Cross-account servono ENTRAMBI: identity policy del caller + auth policy del servizio;
+# nello stesso account basta che uno dei due consenta (nessun Deny esplicito)
 aws iam simulate-principal-policy \
     --policy-source-arn arn:aws:iam::111111111111:role/checkout-service-role \
     --action-names vpc-lattice-svcs:Invoke \
@@ -241,7 +247,7 @@ aws iam simulate-principal-policy \
 
 **Sintomo:** Tutti i target registrati risultano `Unhealthy` in `list-targets`, il servizio risponde `503`.
 
-**Causa:** Il Security Group associato ai target (task ECS/pod EKS) non permette traffico in ingresso dal Security Group associato al service network sulla porta di health check, oppure il path di health check configurato non esiste nell'applicazione.
+**Causa:** Il Security Group dei target (task ECS/pod EKS) non permette l'ingresso dalla managed prefix list `com.amazonaws.<region>.vpc-lattice` (da cui originano sia il traffico sia gli health check) sulla porta del target group, oppure il path di health check non esiste nell'applicazione. Un SG dei consumer non è sorgente valida: il traffico arriva dal data plane Lattice.
 
 **Soluzione:**
 ```bash
@@ -249,7 +255,9 @@ aws iam simulate-principal-policy \
 aws vpc-lattice list-targets --target-group-identifier $TG_ID \
     --query 'items[*].[id,status,reasonCode]' --output table
 
-# Verificare che il SG dei target permetta ingresso dal SG lattice-consumer sulla porta configurata
+# Verificare che il SG dei target permetta l'ingresso dalla prefix list vpc-lattice sulla porta configurata
+aws ec2 describe-managed-prefix-lists \
+    --filters Name=prefix-list-name,Values=com.amazonaws.eu-central-1.vpc-lattice
 aws ec2 describe-security-groups --group-ids sg-TARGET \
     --query 'SecurityGroups[0].IpPermissions'
 ```
@@ -258,7 +266,7 @@ aws ec2 describe-security-groups --group-ids sg-TARGET \
 
 **Sintomo:** Dopo `create-resource-share`, l'account consumer non vede alcun invito e non può associare la propria VPC.
 
-**Causa:** Il principal specificato in `--principals` è errato (Account ID sbagliato, o si è usato un OU ARN quando serve un Account ID diretto), oppure la resource share è stata creata senza `--principals` (share "privata" senza destinatari).
+**Causa:** Il principal specificato in `--principals` è errato (Account ID sbagliato; un OU/Organization ARN funziona solo se la condivisione con AWS Organizations è abilitata in RAM), oppure la resource share è stata creata senza `--principals` (share "privata" senza destinatari).
 
 **Soluzione:**
 ```bash
@@ -279,8 +287,8 @@ aws ram get-resource-share-associations \
 
     **Approfondimento completo →** [VPC Avanzato](vpc-avanzato.md)
 
-??? info "Elastic Load Balancing — NLB/ALB come target"
-    I target group Lattice possono puntare a un Network Load Balancer esistente davanti a un servizio, utile per migrare gradualmente un'architettura già basata su ALB/NLB verso Lattice senza riscrivere il load balancing applicativo.
+??? info "Elastic Load Balancing — ALB come target"
+    I target group Lattice supportano il tipo `ALB`: un Application Load Balancer esistente può essere registrato come target (un NLB no: per quello si usano target `IP`). Utile per migrare gradualmente un'architettura già basata su ALB verso Lattice senza riscrivere il load balancing applicativo.
 
     **Approfondimento completo →** [Elastic Load Balancing](elastic-load-balancing.md)
 
