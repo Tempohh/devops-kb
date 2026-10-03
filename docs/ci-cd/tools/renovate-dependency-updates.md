@@ -7,9 +7,10 @@ search_keywords: [renovate, renovatebot, renovate bot, mend renovate, renovate a
 parent: ci-cd/tools/_index
 related: [ci-cd/github-actions/enterprise, security/supply-chain/_index, ci-cd/gitops/argocd, ci-cd/gitops/flux, iac/terraform/fondamentali, ci-cd/strategie/pipeline-security]
 official_docs: https://docs.renovatebot.com/
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Renovate — Aggiornamento Automatico delle Dipendenze
@@ -73,7 +74,7 @@ Scheduler/Webhook → Renovate run
 | **CronJob Kubernetes** | Scalabile, vicino a registry interni, accesso a rete privata | Va gestito e monitorato | Piattaforme interne, GitLab self-managed, registry privati |
 | **Job CI** (GitLab CI schedule, Jenkins) | Riusa la CI esistente | Config manuale delle variabili | Ambienti senza Kubernetes |
 
-La differenza chiave: la **config di repository** (`renovate.json`) definisce *cosa* aggiornare; la **config globale self-hosted** (variabili `RENOVATE_*` o `config.js`) definisce *dove* girare (piattaforma, token, autodiscover, `allowedPostUpgradeCommands`, ecc.). Alcune opzioni (es. `allowedPostUpgradeCommands`, `hostRules` con credenziali) sono accettate solo nella config globale per ragioni di sicurezza.
+La differenza chiave: la **config di repository** (`renovate.json`) definisce *cosa* aggiornare; la **config globale self-hosted** (variabili `RENOVATE_*` o `config.js`) definisce *dove* girare (piattaforma, token, autodiscover, `allowedPostUpgradeCommands`, ecc.). Alcune opzioni (es. `allowedPostUpgradeCommands`, `autodiscover`, `token`) sono accettate solo nella config globale per ragioni di sicurezza; le credenziali (`hostRules`) vanno fornite lì o come secret cifrati, mai in chiaro in `renovate.json`.
 
 !!! warning "Renovate esegue codice del repository"
     Con certi manager (`postUpgradeTasks`, `gradle`, `npm` con script di postinstall nei lockfile maintenance) Renovate lancia comandi sul contenuto dei repository. In self-hosted usa un token con il minimo privilegio, limita `allowedPostUpgradeCommands` e non eseguirlo su repository non attendibili con credenziali ampie.
@@ -101,6 +102,9 @@ La differenza chiave: la **config di repository** (`renovate.json`) definisce *c
 
 `config:recommended` (nome attuale; in versioni precedenti `config:base`) abilita il set di preset consigliati: dependency dashboard, raggruppamento dei monorepo noti, regole sensate per le immagini Docker, ecc. Parti da qui e aggiungi regole solo quando serve.
 
+!!! tip "`config:best-practices`"
+    Esiste anche `config:best-practices`: estende `config:recommended` aggiungendo, tra l'altro, il pinning dei digest Docker e delle GitHub Actions e la migrazione automatica della config. Per un nuovo repository è spesso il punto di partenza migliore; in tal caso `docker:pinDigests` e `helpers:pinGitHubActionDigests` (sotto) sono già inclusi.
+
 !!! tip "Preset condivisi per l'organizzazione"
     Metti la config comune in un repo `renovate-config` (file `default.json`) e usala con `"extends": ["github>mia-org/renovate-config"]`. Ogni repository diventa un `renovate.json` di poche righe e le policy si cambiano in un punto solo.
 
@@ -127,18 +131,19 @@ La differenza chiave: la **config di repository** (`renovate.json`) definisce *c
       "dependencyDashboardApproval": true
     },
     {
-      "description": "Aggiornamenti di sicurezza non seguono lo schedule",
-      "matchCategories": ["security"],
-      "schedule": ["at any time"]
-    },
-    {
       "description": "Bloccare un package noto problematico",
       "matchPackageNames": ["node"],
       "allowedVersions": "<23"
     }
-  ]
+  ],
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "schedule": ["at any time"]
+  }
 }
 ```
+
+- `vulnerabilityAlerts` governa le PR di sicurezza (alimentate dai GitHub Security Advisories / Dependabot alerts del repository): per default ignorano lo `schedule`, qui sono anche etichettate. Non esiste un `matchCategories: ["security"]`: `matchCategories` filtra per linguaggio/ecosistema (`js`, `docker`, ...).
 
 - `dependencyDashboardApproval: true` fa sì che la PR major venga creata **solo** dopo che qualcuno spunta la checkbox nella dashboard.
 - `platformAutomerge: true` delega il merge alla piattaforma (GitHub auto-merge): richiede che nel repository sia abilitato l'auto-merge e che la branch protection definisca i check obbligatori.
@@ -347,7 +352,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: renovatebot/github-action@v41.0.0   # pinnare a SHA in produzione
+      - uses: renovatebot/github-action@v41.0.0   # esempio: usa l'ultima release e pinna a SHA in produzione
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}     # PAT fine-grained o GitHub App token
         env:
@@ -380,7 +385,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: renovate
-              image: ghcr.io/renovatebot/renovate:39   # pinnare a digest
+              image: ghcr.io/renovatebot/renovate:39   # esempio: usa l'ultima major e pinna a digest
               env:
                 - name: RENOVATE_PLATFORM
                   value: github
