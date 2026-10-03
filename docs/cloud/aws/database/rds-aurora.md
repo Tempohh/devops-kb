@@ -7,10 +7,10 @@ search_keywords: [rds, relational database service, aurora, multi-az, read repli
 parent: cloud/aws/database/_index
 related: [cloud/aws/database/dynamodb, cloud/aws/database/altri-db, cloud/aws/security/kms-secrets, cloud/aws/monitoring/cloudwatch]
 official_docs: https://docs.aws.amazon.com/rds/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_verified: 2026-10-04
 ---
 
 # RDS e Aurora — Database Relazionali Managed
@@ -325,9 +325,8 @@ mysql --host=my-prod-db.xxxxx.rds.amazonaws.com \
 
 **Performance Insights:** strumento di analisi delle query. Identifica quali query consumano più risorse, breakdown per wait event, top SQL, top host.
 
-<!-- REVIEW: verificare stato/date di EOL di Performance Insights a favore di CloudWatch Database Insights (modalità Standard/Advanced) e retention 731 giorni -->
 !!! note "Database Insights"
-    AWS sta sostituendo Performance Insights con **CloudWatch Database Insights**, che aggiunge vista di flotta e correlazione con le metriche CloudWatch. Per i cluster nuovi preferire Database Insights; i flag `--enable-performance-insights` restano utili per istanze esistenti.
+    **Performance Insights** ha raggiunto l'EOL il **30 giugno 2026**: la console dedicata, i periodi di retention flessibili (1–24 mesi) e il relativo pricing sono sostituiti da **CloudWatch Database Insights**. L'API Performance Insights resta disponibile senza modifiche di prezzo. Database Insights ha due modalità: **Standard** (7 giorni di storico inclusi) e **Advanced** (lock diagnostics, execution plan, monitoraggio di flotta; abilitata di default da RDS). Retention estesa: 1–24 mesi, a pagamento. Le istanze che non hanno migrato passano a Standard, con perdita dello storico oltre 7 giorni. I flag `--enable-performance-insights` / `--performance-insights-retention-period` (7, multipli di 31 o 731 giorni = 24 mesi) restano validi nella CLI.
 
 Il bundle CA `global-bundle.pem` si scarica da `https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem`; i vecchi certificati `rds-ca-2019` sono scaduti.
 
