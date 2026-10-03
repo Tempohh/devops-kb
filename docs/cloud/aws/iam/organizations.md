@@ -7,9 +7,10 @@ search_keywords: [AWS Organizations, Service Control Policy, SCP, AWS Control To
 parent: cloud/aws/iam/_index
 related: [cloud/aws/iam/_index, cloud/aws/iam/policies-avanzate, cloud/aws/fondamentali/billing-pricing]
 official_docs: https://docs.aws.amazon.com/organizations/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # AWS Organizations & Multi-Account
@@ -66,8 +67,8 @@ aws organizations create-organization --feature-set ALL
 
 # Creare OU
 aws organizations create-organizational-unit \
-    --parent-id r-xxxx \            # Root ID
-    --name "Production"
+    --parent-id r-xxxx \
+    --name "Production"   # r-xxxx = Root ID
 
 # Creare account membro
 aws organizations create-account \
@@ -102,15 +103,31 @@ Le **SCP** sono policy applicate a OU o account — definiscono il **massimo** d
 - Un Allow in SCP NON basta: serve anche Allow nelle policy IAM dell'identity
 - Un Deny in SCP blocca tutto, anche gli admin dell'account
 - Ereditarietà: OU figlio eredita SCP del padre (intersezione)
+- Non si applicano ai **service-linked role** né agli utenti/ruoli del Management Account
+
+!!! note "Deny-list vs Allow-list"
+    Alla creazione, AWS allega a ogni livello la SCP managed `FullAWSAccess` (Allow `*`). Strategia **deny-list** (consigliata): si mantiene `FullAWSAccess` e si aggiungono SCP con `Deny` mirati — semplice da evolvere. Strategia **allow-list**: si rimuove `FullAWSAccess` e si elencano esplicitamente i servizi permessi, a ogni livello della gerarchia — più restrittiva ma molto onerosa da mantenere, perché un Allow mancante a un solo livello blocca l'azione.
+
+!!! tip "Resource Control Policies (RCP)"
+    Dal 2024 esistono anche le **RCP**: come le SCP non concedono permessi, ma limitano quelli ottenibili sulle **risorse** dell'organizzazione (es. S3, STS, KMS, SQS, Secrets Manager), indipendentemente da chi le accede. Utili per imporre un *data perimeter* (es. nessun accesso da principal esterni all'Organization). Le SCP controllano cosa possono fare i *principal*; le RCP cosa si può fare *alle risorse*.
 
 ```json
 // SCP: Nega operazioni fuori dalla Region EU
+// NotAction esclude i servizi globali (endpoint in us-east-1), altrimenti verrebbero bloccati
 {
   "Version": "2012-10-17",
   "Statement": [{
     "Sid": "DenyNonEURegions",
     "Effect": "Deny",
-    "Action": "*",
+    "NotAction": [
+      "iam:*",
+      "organizations:*",
+      "route53:*",
+      "cloudfront:*",
+      "support:*",
+      "budgets:*",
+      "sts:*"
+    ],
     "Resource": "*",
     "Condition": {
       "StringNotEquals": {
@@ -124,7 +141,7 @@ Le **SCP** sono policy applicate a OU o account — definiscono il **massimo** d
         ]
       },
       "ArnNotLike": {
-        // Escludi servizi globali che non hanno Region
+        // Eccezione per il ruolo di bootstrap degli account
         "aws:PrincipalArn": [
           "arn:aws:iam::*:role/OrganizationAccountAccessRole"
         ]
@@ -217,6 +234,8 @@ aws organizations list-policies-for-target \
 
 Organizations permette di delegare la gestione di specifici servizi a account non-Management:
 
+Prerequisito: abilitare l'accesso del servizio all'Organization (`aws organizations enable-aws-service-access --service-principal ...`). Molti servizi di sicurezza (GuardDuty, Security Hub, Macie, Inspector) offrono una propria API di designazione (es. `aws securityhub enable-organization-admin-account`) che registra il delegated admin e configura l'auto-enable: preferirla alla chiamata generica di Organizations.
+
 ```bash
 # Delegare SecurityHub all'account Security Tooling
 aws organizations register-delegated-administrator \
@@ -297,8 +316,8 @@ Control Tower Components
 ```
 IAM Identity Center Flow
 
-  Corporate IdP (Okta/Azure AD/AD)
-         ↓ SAML 2.0 / OIDC
+  Corporate IdP (Okta/Microsoft Entra ID/AD)
+         ↓ SAML 2.0 (auth) + SCIM (provisioning utenti/gruppi)
   IAM Identity Center
          ↓
   Permission Sets (= role templates)
@@ -310,7 +329,7 @@ IAM Identity Center Flow
 
 **Componenti:**
 - **Identity Source** — dove risiedono le identità: Identity Center directory, Active Directory (AWS Managed AD / AD Connector), External IdP (Identity Provider — SAML 2.0 — Security Assertion Markup Language)
-- **Permission Sets** — template di policy che diventano IAM Roles negli account
+- **Permission Sets** — template di policy che diventano IAM Roles negli account (`AWSReservedSSO_<nome>_<id>`). Ogni modifica va seguita da un *provision* per propagarla agli account. Perché: credenziali temporanee via SSO al posto di IAM user con access key a lunga durata
 - **Account Assignment** — mappatura User/Group → PermissionSet → Account
 
 ```bash
@@ -372,7 +391,7 @@ aws s3 ls --profile my-sso-profile
 
 ## Pattern Cross-Account Role
 
-Pattern per accedere a risorse in account diversi senza IAM Identity Center:
+Pattern per accedere a risorse in account diversi senza IAM Identity Center. `ExternalId` serve a mitigare il *confused deputy* quando si concede accesso a terze parti (SaaS); per ruoli interni alla propria Organization non è necessario (meglio usare `aws:PrincipalOrgID` nella trust policy).
 
 ```
 Account A (developer)                  Account B (produzione)
@@ -412,10 +431,10 @@ aws sts assume-role \
 
 ## Tag Policy
 
-Le **Tag Policy** controllano l'utilizzo dei tag in modo centralizzato nell'Organization.
+Le **Tag Policy** standardizzano chiavi e valori dei tag (case, valori ammessi) in modo centralizzato nell'Organization. Non rendono un tag *obbligatorio* alla creazione: per quello serve una SCP con `aws:RequestTag` (vedi sopra); `enforced_for` impedisce solo di applicare valori non conformi ai tipi di risorsa elencati.
 
 ```json
-// Tag Policy: obbliga tag "Environment" con valori specifici
+// Tag Policy: valori ammessi per il tag "Environment"
 {
   "tags": {
     "Environment": {
@@ -462,7 +481,7 @@ aws organizations describe-policy \
     --query 'Policy.Content' \
     --output text | python -m json.tool
 
-# Verificare l'intera catena di OU (padre eredita SCP figlio)
+# Risalire la catena di OU (le SCP di ogni antenato si intersecano con quelle del figlio)
 aws organizations list-parents --child-id 123456789012
 aws organizations list-parents --child-id ou-xxxx-yyyyyyy  # OU padre
 ```
@@ -473,7 +492,7 @@ aws organizations list-parents --child-id ou-xxxx-yyyyyyy  # OU padre
 
 **Sintomo:** L'utente vede il portale SSO ma l'account target non compare nella lista, oppure compare ma il login fallisce con "You do not have access to this application".
 
-**Causa:** Manca l'Account Assignment: il gruppo/utente non è stato assegnato al PermissionSet su quell'account. Oppure il PermissionSet non è stato eseguito il provisioning nell'account (provisioning pending).
+**Causa:** Manca l'Account Assignment: il gruppo/utente non è stato assegnato al PermissionSet su quell'account. Oppure il provisioning del PermissionSet nell'account non è stato eseguito/completato (provisioning pending).
 
 **Soluzione:**
 ```bash
