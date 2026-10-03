@@ -5599,7 +5599,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -5624,7 +5624,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25311,7 +25311,7 @@
 - <strong>Serverless:</strong> nessun server da gestire, nessun patching, scaling automatico
 - <strong>Performance:</strong> latenza di lettura/scrittura in singola cifra di ms, sempre (anche a milioni di req/s)
 - <strong>Scalabilità:</strong> da zero a trilioni di item, fino a decine di milioni di richieste al secondo
-- <strong>Disponibilità:</strong> 99.999% SLA (Service Level Agreement — accordo sulla disponibilità garantita del servizio), dati replicati su 3 AZ automaticamente
+- <strong>Disponibilità:</strong> SLA (Service Level Agreement — accordo sulla disponibilità garantita del servizio) 99.99% per tabelle single-Region e 99.999% per Global Tables; dati replicati su 3 AZ automaticamente
 - <strong>Nessuna join:</strong> il modello di dati è denormalized-by-design
 - <strong>Schema flessibile:</strong> ogni item può avere attributi diversi (fatta eccezione per la primary key)</p>
 <p><strong>Quando NON usare DynamoDB:</strong>
@@ -25333,7 +25333,8 @@
 <p><strong>Partition Key (HASH Key) — Simple Primary Key:</strong>
 - Un singolo attributo che identifica univocamente l'item
 - DynamoDB usa questo valore per distribuire i dati su partizioni fisiche tramite hashing
-- Esempio: <code>userId</code> per una tabella di utenti</p>
+- Esempio: <code>userId</code> per una tabella di utenti
+- Limite fisico: una singola partizione serve al massimo ~3.000 RCU e ~1.000 WCU al secondo, quindi una chiave "calda" va in throttling anche se la capacità totale della tabella è abbondante</p>
 <p><strong>Partition Key + Sort Key (HASH + RANGE Key) — Composite Primary Key:</strong>
 - Due attributi: la partition key per la distribuzione, la sort key per l'ordinamento all'interno della partizione
 - Gli item con la stessa partition key vengono archiviati insieme, ordinati per sort key
@@ -25422,15 +25423,16 @@
 <h3 id="on-demand">On-Demand<a class="headerlink" href="#on-demand" title="Permanent link">&para;</a></h3>
 <p>DynamoDB gestisce automaticamente la capacità in base al traffico. Si paga per le richieste effettive (RRU/WRU).</p>
 <ul>
-<li><strong>RRU — Request Read Unit:</strong> $0.25 per milione di RRU (strongly consistent), $0.125 per milione (eventually consistent)</li>
-<li><strong>WRU — Write Request Unit:</strong> $1.25 per milione di WRU</li>
+<li><strong>RRU — Request Read Unit:</strong> ~$0.125 per milione (strongly consistent), ~$0.0625 per milione (eventually consistent)</li>
+<li><strong>WRU — Write Request Unit:</strong> ~$0.625 per milione</li>
 </ul>
+<p>Prezzi indicativi us-east-1 dopo il taglio del 50% sull'on-demand di novembre 2024 (verificare sempre <a href="https://aws.amazon.com/dynamodb/pricing/">DynamoDB Pricing</a>). Le unità sono le stesse di RCU/WCU: 1 RRU = lettura strongly consistent fino a 4 KB, 1 WRU = scrittura fino a 1 KB.</p>
 <div class="admonition tip">
 <p class="admonition-title">Provisioned vs On-Demand</p>
 <ul>
 <li><strong>On-Demand:</strong> per traffic variabile, unpredictable, o applicazioni nuove. Non richiede capacity planning.</li>
 <li><strong>Provisioned con Autoscaling:</strong> per traffic prevedibile. Più economico di On-Demand per carichi costanti.</li>
-<li>Regola pratica: se paghi &gt; $1.25/milione WRU on-demand per un carico stabile → valuta provisioned.</li>
+<li>Perché: on-demand ha un prezzo per richiesta più alto perché AWS tiene capacità disponibile per i picchi; con carico costante e utilizzo medio alto, provisioned (eventualmente con Reserved Capacity) costa meno. Regola pratica: se il traffico on-demand è stabile da mesi, confronta il costo con provisioned + autoscaling.</li>
 </ul>
 </div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Cambiare una tabella da provisioned a on-demand</span>
@@ -25572,7 +25574,7 @@
 </span></code></pre></div>
 <hr />
 <h2 id="ttl-time-to-live">TTL — Time To Live<a class="headerlink" href="#ttl-time-to-live" title="Permanent link">&para;</a></h2>
-<p>TTL permette di configurare la scadenza automatica degli item, evitando di dover eliminare manualmente i dati obsoleti. DynamoDB elimina gli item scaduti entro 48 ore dalla scadenza (best effort, non istantaneo).</p>
+<p>TTL permette di configurare la scadenza automatica degli item, evitando di dover eliminare manualmente i dati obsoleti. DynamoDB elimina gli item scaduti in background, tipicamente entro pochi giorni dalla scadenza (best effort, non istantaneo; la cancellazione non consuma WCU). Gli item scaduti ma non ancora eliminati compaiono ancora in Query/Scan: filtrarli lato applicazione con <code>FilterExpression</code> su <code>expiresAt</code>.</p>
 <p><strong>Use case:</strong> sessioni utente, token di autenticazione, dati temporanei, cache entries.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Abilitare TTL su un attributo della tabella</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>aws<span class="w"> </span>dynamodb<span class="w"> </span>update-time-to-live<span class="w"> </span><span class="se">\</span>
@@ -25632,8 +25634,9 @@
 <p>Le Global Tables replicano automaticamente una tabella DynamoDB in <strong>più Region</strong>, con un modello <strong>active-active</strong> (si può scrivere da qualsiasi Region). Ideale per applicazioni globali che richiedono bassa latenza locale.</p>
 <p><strong>Caratteristiche:</strong>
 - Replication quasi in real-time (&lt; 1s tipicamente)
-- Conflitti di write: "last writer wins" basato su timestamp
-- Global Tables v2 (2019): versioning abilitato automaticamente</p>
+- Conflitti di write: "last writer wins" basato su timestamp (modalità MREC — Multi-Region Eventual Consistency, il default)
+- Versione corrente: Global Tables 2019.11.21 (la versione 2017 è legacy). Richiede gli Streams attivi sulla tabella (abilitati automaticamente aggiungendo una replica)
+- Modalità <strong>MRSC</strong> (Multi-Region Strong Consistency, disponibile dal 2025): scritture replicate in modo sincrono, le strongly consistent read vedono sempre l'ultimo write confermato, senza conflitti LWW; costo: latenza di scrittura più alta. Richiede esattamente 3 Region (repliche o witness)</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Creare tabella con Global Tables (aggiungere Region)</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>aws<span class="w"> </span>dynamodb<span class="w"> </span>create-table<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span>--table-name<span class="w"> </span>GlobalUsers<span class="w"> </span><span class="se">\</span>
@@ -25770,8 +25773,8 @@
 </span></code></pre></div>
 <hr />
 <h2 id="export-to-s3">Export to S3<a class="headerlink" href="#export-to-s3" title="Permanent link">&para;</a></h2>
-<p>DynamoDB può esportare l'intera tabella su S3 in formato JSON o Parquet, senza impatto sulle performance della tabella. Utile per analytics con Athena, data lake, migrazione.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Esportare tabella su S3 (Parquet)</span>
+<p>DynamoDB può esportare l'intera tabella su S3 in formato DynamoDB JSON o Amazon Ion, senza impatto sulle performance della tabella. Utile per analytics con Athena, data lake, migrazione.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Esportare tabella su S3 (richiede PITR abilitato sulla tabella)</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>aws<span class="w"> </span>dynamodb<span class="w"> </span>export-table-to-point-in-time<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span>--table-arn<span class="w"> </span>arn:aws:dynamodb:us-east-1:123456789012:table/Orders<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span>--s3-bucket<span class="w"> </span>my-data-lake<span class="w"> </span><span class="se">\</span>
@@ -25779,13 +25782,17 @@
 </span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">  </span>--export-format<span class="w"> </span>DYNAMODB_JSON<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">  </span>--export-time<span class="w"> </span><span class="s2">"2024-01-15T00:00:00Z"</span>
 </span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># Con Parquet per Athena</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># Formato Amazon Ion (alternativa a DYNAMODB_JSON)</span>
 </span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>aws<span class="w"> </span>dynamodb<span class="w"> </span>export-table-to-point-in-time<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="w">  </span>--table-arn<span class="w"> </span>arn:aws:dynamodb:us-east-1:123456789012:table/Orders<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="w">  </span>--s3-bucket<span class="w"> </span>my-data-lake<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="w">  </span>--s3-prefix<span class="w"> </span>dynamodb-exports/orders-parquet/<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="w">  </span>--export-format<span class="w"> </span>PARQUET
+</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="w">  </span>--s3-prefix<span class="w"> </span>dynamodb-exports/orders-ion/<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="w">  </span>--export-format<span class="w"> </span>ION
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Formati e requisiti</p>
+<p>L'export supporta <code>DYNAMODB_JSON</code> e <code>ION</code>, non Parquet: per Athena si converte con Glue/CTAS. Richiede PITR (Point-In-Time Recovery) attivo; <code>--export-time</code> deve cadere nella finestra di 35 giorni. Esiste anche l'export incrementale, che esporta solo le modifiche tra due istanti.</p>
+</div>
 <hr />
 <h2 id="kinesis-data-streams-integration">Kinesis Data Streams Integration<a class="headerlink" href="#kinesis-data-streams-integration" title="Permanent link">&para;</a></h2>
 <p>DynamoDB può inviare le modifiche degli item direttamente a Kinesis Data Streams (alternativa a DynamoDB Streams con retention più lunga e integrazione con Kinesis ecosystem).</p>
@@ -25813,14 +25820,14 @@
 <td>Dati acceduti frequentemente</td>
 </tr>
 <tr>
-<td><strong>Standard-IA</strong></td>
-<td>$0.10/GB/mese (+75% throughput cost)</td>
-<td>+25% più costoso</td>
+<td><strong>Standard-IA</strong> (Infrequent Access)</td>
+<td>$0.10/GB/mese</td>
+<td>~+25% più costoso</td>
 <td>Dati acceduti raramente</td>
 </tr>
 </tbody>
 </table>
-<p>Standard-IA conviene per tabelle grandi dove l'accesso è infrequente (tabelle di log, archivio storico, audit trail).</p>
+<p>Standard-IA conviene per tabelle grandi dove l'accesso è infrequente (tabelle di log, archivio storico, audit trail). Perché: abbatte il costo di storage ma aumenta quello di throughput, quindi vale la pena quando lo storage pesa più del ~50% della spesa totale della tabella. Il cambio di classe è reversibile (con un limite di cambi per finestra di 30 giorni).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Cambiare la table class</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>aws<span class="w"> </span>dynamodb<span class="w"> </span>update-table<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">  </span>--table-name<span class="w"> </span>ArchivedOrders<span class="w"> </span><span class="se">\</span>
@@ -25885,64 +25892,72 @@
 </span><span id="__span-23-55"><a id="__codelineno-23-55" name="__codelineno-23-55" href="#__codelineno-23-55"></a><span class="p">)</span>
 </span><span id="__span-23-56"><a id="__codelineno-23-56" name="__codelineno-23-56" href="#__codelineno-23-56"></a><span class="n">items</span> <span class="o">=</span> <span class="n">response</span><span class="p">[</span><span class="s1">'Items'</span><span class="p">]</span>
 </span><span id="__span-23-57"><a id="__codelineno-23-57" name="__codelineno-23-57" href="#__codelineno-23-57"></a>
-</span><span id="__span-23-58"><a id="__codelineno-23-58" name="__codelineno-23-58" href="#__codelineno-23-58"></a><span class="c1"># Paginazione (DynamoDB restituisce max 1 MB per chiamata)</span>
-</span><span id="__span-23-59"><a id="__codelineno-23-59" name="__codelineno-23-59" href="#__codelineno-23-59"></a><span class="k">while</span> <span class="s1">'LastEvaluatedKey'</span> <span class="ow">in</span> <span class="n">response</span><span class="p">:</span>
-</span><span id="__span-23-60"><a id="__codelineno-23-60" name="__codelineno-23-60" href="#__codelineno-23-60"></a>    <span class="n">response</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">query</span><span class="p">(</span>
-</span><span id="__span-23-61"><a id="__codelineno-23-61" name="__codelineno-23-61" href="#__codelineno-23-61"></a>        <span class="n">KeyConditionExpression</span><span class="o">=</span><span class="n">Key</span><span class="p">(</span><span class="s1">'category'</span><span class="p">)</span><span class="o">.</span><span class="n">eq</span><span class="p">(</span><span class="s1">'electronics'</span><span class="p">),</span>
-</span><span id="__span-23-62"><a id="__codelineno-23-62" name="__codelineno-23-62" href="#__codelineno-23-62"></a>        <span class="n">ExclusiveStartKey</span><span class="o">=</span><span class="n">response</span><span class="p">[</span><span class="s1">'LastEvaluatedKey'</span><span class="p">],</span>
-</span><span id="__span-23-63"><a id="__codelineno-23-63" name="__codelineno-23-63" href="#__codelineno-23-63"></a>        <span class="n">Limit</span><span class="o">=</span><span class="mi">20</span>
-</span><span id="__span-23-64"><a id="__codelineno-23-64" name="__codelineno-23-64" href="#__codelineno-23-64"></a>    <span class="p">)</span>
-</span><span id="__span-23-65"><a id="__codelineno-23-65" name="__codelineno-23-65" href="#__codelineno-23-65"></a>    <span class="n">items</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">response</span><span class="p">[</span><span class="s1">'Items'</span><span class="p">])</span>
-</span><span id="__span-23-66"><a id="__codelineno-23-66" name="__codelineno-23-66" href="#__codelineno-23-66"></a>
-</span><span id="__span-23-67"><a id="__codelineno-23-67" name="__codelineno-23-67" href="#__codelineno-23-67"></a><span class="c1"># SCAN — scansione intera tabella (costoso, evitare in prod)</span>
-</span><span id="__span-23-68"><a id="__codelineno-23-68" name="__codelineno-23-68" href="#__codelineno-23-68"></a><span class="n">response</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span>
-</span><span id="__span-23-69"><a id="__codelineno-23-69" name="__codelineno-23-69" href="#__codelineno-23-69"></a>    <span class="n">FilterExpression</span><span class="o">=</span><span class="n">Attr</span><span class="p">(</span><span class="s1">'category'</span><span class="p">)</span><span class="o">.</span><span class="n">eq</span><span class="p">(</span><span class="s1">'electronics'</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">Attr</span><span class="p">(</span><span class="s1">'price'</span><span class="p">)</span><span class="o">.</span><span class="n">lt</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
-</span><span id="__span-23-70"><a id="__codelineno-23-70" name="__codelineno-23-70" href="#__codelineno-23-70"></a>    <span class="n">Limit</span><span class="o">=</span><span class="mi">100</span>
-</span><span id="__span-23-71"><a id="__codelineno-23-71" name="__codelineno-23-71" href="#__codelineno-23-71"></a><span class="p">)</span>
-</span><span id="__span-23-72"><a id="__codelineno-23-72" name="__codelineno-23-72" href="#__codelineno-23-72"></a>
-</span><span id="__span-23-73"><a id="__codelineno-23-73" name="__codelineno-23-73" href="#__codelineno-23-73"></a><span class="c1"># PARALLEL SCAN — divide la tabella in N segmenti paralleli</span>
-</span><span id="__span-23-74"><a id="__codelineno-23-74" name="__codelineno-23-74" href="#__codelineno-23-74"></a><span class="kn">import</span><span class="w"> </span><span class="nn">concurrent.futures</span>
-</span><span id="__span-23-75"><a id="__codelineno-23-75" name="__codelineno-23-75" href="#__codelineno-23-75"></a>
-</span><span id="__span-23-76"><a id="__codelineno-23-76" name="__codelineno-23-76" href="#__codelineno-23-76"></a><span class="k">def</span><span class="w"> </span><span class="nf">scan_segment</span><span class="p">(</span><span class="n">segment_id</span><span class="p">,</span> <span class="n">total_segments</span><span class="p">):</span>
-</span><span id="__span-23-77"><a id="__codelineno-23-77" name="__codelineno-23-77" href="#__codelineno-23-77"></a>    <span class="n">resp</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span>
-</span><span id="__span-23-78"><a id="__codelineno-23-78" name="__codelineno-23-78" href="#__codelineno-23-78"></a>        <span class="n">Segment</span><span class="o">=</span><span class="n">segment_id</span><span class="p">,</span>
-</span><span id="__span-23-79"><a id="__codelineno-23-79" name="__codelineno-23-79" href="#__codelineno-23-79"></a>        <span class="n">TotalSegments</span><span class="o">=</span><span class="n">total_segments</span>
-</span><span id="__span-23-80"><a id="__codelineno-23-80" name="__codelineno-23-80" href="#__codelineno-23-80"></a>    <span class="p">)</span>
-</span><span id="__span-23-81"><a id="__codelineno-23-81" name="__codelineno-23-81" href="#__codelineno-23-81"></a>    <span class="k">return</span> <span class="n">resp</span><span class="p">[</span><span class="s1">'Items'</span><span class="p">]</span>
-</span><span id="__span-23-82"><a id="__codelineno-23-82" name="__codelineno-23-82" href="#__codelineno-23-82"></a>
-</span><span id="__span-23-83"><a id="__codelineno-23-83" name="__codelineno-23-83" href="#__codelineno-23-83"></a><span class="k">with</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">futures</span><span class="o">.</span><span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span> <span class="k">as</span> <span class="n">executor</span><span class="p">:</span>
-</span><span id="__span-23-84"><a id="__codelineno-23-84" name="__codelineno-23-84" href="#__codelineno-23-84"></a>    <span class="n">futures</span> <span class="o">=</span> <span class="p">[</span><span class="n">executor</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">scan_segment</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">)]</span>
-</span><span id="__span-23-85"><a id="__codelineno-23-85" name="__codelineno-23-85" href="#__codelineno-23-85"></a>    <span class="n">all_items</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">futures</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">()]</span>
-</span><span id="__span-23-86"><a id="__codelineno-23-86" name="__codelineno-23-86" href="#__codelineno-23-86"></a>
-</span><span id="__span-23-87"><a id="__codelineno-23-87" name="__codelineno-23-87" href="#__codelineno-23-87"></a><span class="c1"># BATCH OPERATIONS</span>
-</span><span id="__span-23-88"><a id="__codelineno-23-88" name="__codelineno-23-88" href="#__codelineno-23-88"></a><span class="c1"># BatchWriteItem — fino a 25 item per chiamata</span>
-</span><span id="__span-23-89"><a id="__codelineno-23-89" name="__codelineno-23-89" href="#__codelineno-23-89"></a><span class="k">with</span> <span class="n">table</span><span class="o">.</span><span class="n">batch_writer</span><span class="p">()</span> <span class="k">as</span> <span class="n">batch</span><span class="p">:</span>
-</span><span id="__span-23-90"><a id="__codelineno-23-90" name="__codelineno-23-90" href="#__codelineno-23-90"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
-</span><span id="__span-23-91"><a id="__codelineno-23-91" name="__codelineno-23-91" href="#__codelineno-23-91"></a>        <span class="n">batch</span><span class="o">.</span><span class="n">put_item</span><span class="p">(</span><span class="n">Item</span><span class="o">=</span><span class="p">{</span>
-</span><span id="__span-23-92"><a id="__codelineno-23-92" name="__codelineno-23-92" href="#__codelineno-23-92"></a>            <span class="s1">'productId'</span><span class="p">:</span> <span class="sa">f</span><span class="s1">'prod-</span><span class="si">{</span><span class="n">i</span><span class="si">:</span><span class="s1">03d</span><span class="si">}</span><span class="s1">'</span><span class="p">,</span>
-</span><span id="__span-23-93"><a id="__codelineno-23-93" name="__codelineno-23-93" href="#__codelineno-23-93"></a>            <span class="s1">'name'</span><span class="p">:</span> <span class="sa">f</span><span class="s1">'Product </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s1">'</span><span class="p">,</span>
-</span><span id="__span-23-94"><a id="__codelineno-23-94" name="__codelineno-23-94" href="#__codelineno-23-94"></a>            <span class="s1">'price'</span><span class="p">:</span> <span class="n">i</span> <span class="o">*</span> <span class="mf">1.99</span>
-</span><span id="__span-23-95"><a id="__codelineno-23-95" name="__codelineno-23-95" href="#__codelineno-23-95"></a>        <span class="p">})</span>
-</span><span id="__span-23-96"><a id="__codelineno-23-96" name="__codelineno-23-96" href="#__codelineno-23-96"></a>
-</span><span id="__span-23-97"><a id="__codelineno-23-97" name="__codelineno-23-97" href="#__codelineno-23-97"></a><span class="c1"># BatchGetItem — fino a 100 item per chiamata</span>
-</span><span id="__span-23-98"><a id="__codelineno-23-98" name="__codelineno-23-98" href="#__codelineno-23-98"></a><span class="n">response</span> <span class="o">=</span> <span class="n">dynamodb</span><span class="o">.</span><span class="n">batch_get_item</span><span class="p">(</span>
-</span><span id="__span-23-99"><a id="__codelineno-23-99" name="__codelineno-23-99" href="#__codelineno-23-99"></a>    <span class="n">RequestItems</span><span class="o">=</span><span class="p">{</span>
-</span><span id="__span-23-100"><a id="__codelineno-23-100" name="__codelineno-23-100" href="#__codelineno-23-100"></a>        <span class="s1">'Products'</span><span class="p">:</span> <span class="p">{</span>
-</span><span id="__span-23-101"><a id="__codelineno-23-101" name="__codelineno-23-101" href="#__codelineno-23-101"></a>            <span class="s1">'Keys'</span><span class="p">:</span> <span class="p">[</span>
-</span><span id="__span-23-102"><a id="__codelineno-23-102" name="__codelineno-23-102" href="#__codelineno-23-102"></a>                <span class="p">{</span><span class="s1">'productId'</span><span class="p">:</span> <span class="s1">'prod-001'</span><span class="p">},</span>
-</span><span id="__span-23-103"><a id="__codelineno-23-103" name="__codelineno-23-103" href="#__codelineno-23-103"></a>                <span class="p">{</span><span class="s1">'productId'</span><span class="p">:</span> <span class="s1">'prod-002'</span><span class="p">},</span>
-</span><span id="__span-23-104"><a id="__codelineno-23-104" name="__codelineno-23-104" href="#__codelineno-23-104"></a>                <span class="p">{</span><span class="s1">'productId'</span><span class="p">:</span> <span class="s1">'prod-003'</span><span class="p">}</span>
-</span><span id="__span-23-105"><a id="__codelineno-23-105" name="__codelineno-23-105" href="#__codelineno-23-105"></a>            <span class="p">],</span>
-</span><span id="__span-23-106"><a id="__codelineno-23-106" name="__codelineno-23-106" href="#__codelineno-23-106"></a>            <span class="s1">'ConsistentRead'</span><span class="p">:</span> <span class="kc">False</span>
-</span><span id="__span-23-107"><a id="__codelineno-23-107" name="__codelineno-23-107" href="#__codelineno-23-107"></a>        <span class="p">}</span>
-</span><span id="__span-23-108"><a id="__codelineno-23-108" name="__codelineno-23-108" href="#__codelineno-23-108"></a>    <span class="p">}</span>
-</span><span id="__span-23-109"><a id="__codelineno-23-109" name="__codelineno-23-109" href="#__codelineno-23-109"></a><span class="p">)</span>
+</span><span id="__span-23-58"><a id="__codelineno-23-58" name="__codelineno-23-58" href="#__codelineno-23-58"></a><span class="c1"># Paginazione (DynamoDB restituisce max 1 MB per chiamata): ripetere gli</span>
+</span><span id="__span-23-59"><a id="__codelineno-23-59" name="__codelineno-23-59" href="#__codelineno-23-59"></a><span class="c1"># stessi parametri (incluso IndexName) aggiungendo ExclusiveStartKey</span>
+</span><span id="__span-23-60"><a id="__codelineno-23-60" name="__codelineno-23-60" href="#__codelineno-23-60"></a><span class="k">while</span> <span class="s1">'LastEvaluatedKey'</span> <span class="ow">in</span> <span class="n">response</span><span class="p">:</span>
+</span><span id="__span-23-61"><a id="__codelineno-23-61" name="__codelineno-23-61" href="#__codelineno-23-61"></a>    <span class="n">response</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">query</span><span class="p">(</span>
+</span><span id="__span-23-62"><a id="__codelineno-23-62" name="__codelineno-23-62" href="#__codelineno-23-62"></a>        <span class="n">KeyConditionExpression</span><span class="o">=</span><span class="n">Key</span><span class="p">(</span><span class="s1">'category'</span><span class="p">)</span><span class="o">.</span><span class="n">eq</span><span class="p">(</span><span class="s1">'electronics'</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">Key</span><span class="p">(</span><span class="s1">'price'</span><span class="p">)</span><span class="o">.</span><span class="n">lt</span><span class="p">(</span><span class="mi">50</span><span class="p">),</span>
+</span><span id="__span-23-63"><a id="__codelineno-23-63" name="__codelineno-23-63" href="#__codelineno-23-63"></a>        <span class="n">IndexName</span><span class="o">=</span><span class="s1">'category-price-index'</span><span class="p">,</span>
+</span><span id="__span-23-64"><a id="__codelineno-23-64" name="__codelineno-23-64" href="#__codelineno-23-64"></a>        <span class="n">FilterExpression</span><span class="o">=</span><span class="n">Attr</span><span class="p">(</span><span class="s1">'stock'</span><span class="p">)</span><span class="o">.</span><span class="n">gt</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+</span><span id="__span-23-65"><a id="__codelineno-23-65" name="__codelineno-23-65" href="#__codelineno-23-65"></a>        <span class="n">Limit</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+</span><span id="__span-23-66"><a id="__codelineno-23-66" name="__codelineno-23-66" href="#__codelineno-23-66"></a>        <span class="n">ScanIndexForward</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-23-67"><a id="__codelineno-23-67" name="__codelineno-23-67" href="#__codelineno-23-67"></a>        <span class="n">ExclusiveStartKey</span><span class="o">=</span><span class="n">response</span><span class="p">[</span><span class="s1">'LastEvaluatedKey'</span><span class="p">]</span>
+</span><span id="__span-23-68"><a id="__codelineno-23-68" name="__codelineno-23-68" href="#__codelineno-23-68"></a>    <span class="p">)</span>
+</span><span id="__span-23-69"><a id="__codelineno-23-69" name="__codelineno-23-69" href="#__codelineno-23-69"></a>    <span class="n">items</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">response</span><span class="p">[</span><span class="s1">'Items'</span><span class="p">])</span>
+</span><span id="__span-23-70"><a id="__codelineno-23-70" name="__codelineno-23-70" href="#__codelineno-23-70"></a>
+</span><span id="__span-23-71"><a id="__codelineno-23-71" name="__codelineno-23-71" href="#__codelineno-23-71"></a><span class="c1"># SCAN — scansione intera tabella (costoso, evitare in prod)</span>
+</span><span id="__span-23-72"><a id="__codelineno-23-72" name="__codelineno-23-72" href="#__codelineno-23-72"></a><span class="n">response</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span>
+</span><span id="__span-23-73"><a id="__codelineno-23-73" name="__codelineno-23-73" href="#__codelineno-23-73"></a>    <span class="n">FilterExpression</span><span class="o">=</span><span class="n">Attr</span><span class="p">(</span><span class="s1">'category'</span><span class="p">)</span><span class="o">.</span><span class="n">eq</span><span class="p">(</span><span class="s1">'electronics'</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">Attr</span><span class="p">(</span><span class="s1">'price'</span><span class="p">)</span><span class="o">.</span><span class="n">lt</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
+</span><span id="__span-23-74"><a id="__codelineno-23-74" name="__codelineno-23-74" href="#__codelineno-23-74"></a>    <span class="n">Limit</span><span class="o">=</span><span class="mi">100</span>
+</span><span id="__span-23-75"><a id="__codelineno-23-75" name="__codelineno-23-75" href="#__codelineno-23-75"></a><span class="p">)</span>
+</span><span id="__span-23-76"><a id="__codelineno-23-76" name="__codelineno-23-76" href="#__codelineno-23-76"></a>
+</span><span id="__span-23-77"><a id="__codelineno-23-77" name="__codelineno-23-77" href="#__codelineno-23-77"></a><span class="c1"># PARALLEL SCAN — divide la tabella in N segmenti paralleli</span>
+</span><span id="__span-23-78"><a id="__codelineno-23-78" name="__codelineno-23-78" href="#__codelineno-23-78"></a><span class="kn">import</span><span class="w"> </span><span class="nn">concurrent.futures</span>
+</span><span id="__span-23-79"><a id="__codelineno-23-79" name="__codelineno-23-79" href="#__codelineno-23-79"></a>
+</span><span id="__span-23-80"><a id="__codelineno-23-80" name="__codelineno-23-80" href="#__codelineno-23-80"></a><span class="k">def</span><span class="w"> </span><span class="nf">scan_segment</span><span class="p">(</span><span class="n">segment_id</span><span class="p">,</span> <span class="n">total_segments</span><span class="p">):</span>
+</span><span id="__span-23-81"><a id="__codelineno-23-81" name="__codelineno-23-81" href="#__codelineno-23-81"></a>    <span class="c1"># Ogni segmento va paginato con LastEvaluatedKey (max 1 MB per chiamata)</span>
+</span><span id="__span-23-82"><a id="__codelineno-23-82" name="__codelineno-23-82" href="#__codelineno-23-82"></a>    <span class="n">kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s1">'Segment'</span><span class="p">:</span> <span class="n">segment_id</span><span class="p">,</span> <span class="s1">'TotalSegments'</span><span class="p">:</span> <span class="n">total_segments</span><span class="p">}</span>
+</span><span id="__span-23-83"><a id="__codelineno-23-83" name="__codelineno-23-83" href="#__codelineno-23-83"></a>    <span class="n">items</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-23-84"><a id="__codelineno-23-84" name="__codelineno-23-84" href="#__codelineno-23-84"></a>    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+</span><span id="__span-23-85"><a id="__codelineno-23-85" name="__codelineno-23-85" href="#__codelineno-23-85"></a>        <span class="n">resp</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">scan</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</span><span id="__span-23-86"><a id="__codelineno-23-86" name="__codelineno-23-86" href="#__codelineno-23-86"></a>        <span class="n">items</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">resp</span><span class="p">[</span><span class="s1">'Items'</span><span class="p">])</span>
+</span><span id="__span-23-87"><a id="__codelineno-23-87" name="__codelineno-23-87" href="#__codelineno-23-87"></a>        <span class="k">if</span> <span class="s1">'LastEvaluatedKey'</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">resp</span><span class="p">:</span>
+</span><span id="__span-23-88"><a id="__codelineno-23-88" name="__codelineno-23-88" href="#__codelineno-23-88"></a>            <span class="k">return</span> <span class="n">items</span>
+</span><span id="__span-23-89"><a id="__codelineno-23-89" name="__codelineno-23-89" href="#__codelineno-23-89"></a>        <span class="n">kwargs</span><span class="p">[</span><span class="s1">'ExclusiveStartKey'</span><span class="p">]</span> <span class="o">=</span> <span class="n">resp</span><span class="p">[</span><span class="s1">'LastEvaluatedKey'</span><span class="p">]</span>
+</span><span id="__span-23-90"><a id="__codelineno-23-90" name="__codelineno-23-90" href="#__codelineno-23-90"></a>
+</span><span id="__span-23-91"><a id="__codelineno-23-91" name="__codelineno-23-91" href="#__codelineno-23-91"></a><span class="k">with</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">futures</span><span class="o">.</span><span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span> <span class="k">as</span> <span class="n">executor</span><span class="p">:</span>
+</span><span id="__span-23-92"><a id="__codelineno-23-92" name="__codelineno-23-92" href="#__codelineno-23-92"></a>    <span class="n">futures</span> <span class="o">=</span> <span class="p">[</span><span class="n">executor</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">scan_segment</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">)]</span>
+</span><span id="__span-23-93"><a id="__codelineno-23-93" name="__codelineno-23-93" href="#__codelineno-23-93"></a>    <span class="n">all_items</span> <span class="o">=</span> <span class="p">[</span><span class="n">item</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">futures</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">result</span><span class="p">()]</span>
+</span><span id="__span-23-94"><a id="__codelineno-23-94" name="__codelineno-23-94" href="#__codelineno-23-94"></a>
+</span><span id="__span-23-95"><a id="__codelineno-23-95" name="__codelineno-23-95" href="#__codelineno-23-95"></a><span class="c1"># BATCH OPERATIONS</span>
+</span><span id="__span-23-96"><a id="__codelineno-23-96" name="__codelineno-23-96" href="#__codelineno-23-96"></a><span class="c1"># BatchWriteItem — fino a 25 item per chiamata</span>
+</span><span id="__span-23-97"><a id="__codelineno-23-97" name="__codelineno-23-97" href="#__codelineno-23-97"></a><span class="k">with</span> <span class="n">table</span><span class="o">.</span><span class="n">batch_writer</span><span class="p">()</span> <span class="k">as</span> <span class="n">batch</span><span class="p">:</span>
+</span><span id="__span-23-98"><a id="__codelineno-23-98" name="__codelineno-23-98" href="#__codelineno-23-98"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+</span><span id="__span-23-99"><a id="__codelineno-23-99" name="__codelineno-23-99" href="#__codelineno-23-99"></a>        <span class="n">batch</span><span class="o">.</span><span class="n">put_item</span><span class="p">(</span><span class="n">Item</span><span class="o">=</span><span class="p">{</span>
+</span><span id="__span-23-100"><a id="__codelineno-23-100" name="__codelineno-23-100" href="#__codelineno-23-100"></a>            <span class="s1">'productId'</span><span class="p">:</span> <span class="sa">f</span><span class="s1">'prod-</span><span class="si">{</span><span class="n">i</span><span class="si">:</span><span class="s1">03d</span><span class="si">}</span><span class="s1">'</span><span class="p">,</span>
+</span><span id="__span-23-101"><a id="__codelineno-23-101" name="__codelineno-23-101" href="#__codelineno-23-101"></a>            <span class="s1">'name'</span><span class="p">:</span> <span class="sa">f</span><span class="s1">'Product </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s1">'</span><span class="p">,</span>
+</span><span id="__span-23-102"><a id="__codelineno-23-102" name="__codelineno-23-102" href="#__codelineno-23-102"></a>            <span class="s1">'price'</span><span class="p">:</span> <span class="n">i</span> <span class="o">*</span> <span class="mf">1.99</span>
+</span><span id="__span-23-103"><a id="__codelineno-23-103" name="__codelineno-23-103" href="#__codelineno-23-103"></a>        <span class="p">})</span>
+</span><span id="__span-23-104"><a id="__codelineno-23-104" name="__codelineno-23-104" href="#__codelineno-23-104"></a>
+</span><span id="__span-23-105"><a id="__codelineno-23-105" name="__codelineno-23-105" href="#__codelineno-23-105"></a><span class="c1"># BatchGetItem — fino a 100 item per chiamata</span>
+</span><span id="__span-23-106"><a id="__codelineno-23-106" name="__codelineno-23-106" href="#__codelineno-23-106"></a><span class="n">response</span> <span class="o">=</span> <span class="n">dynamodb</span><span class="o">.</span><span class="n">batch_get_item</span><span class="p">(</span>
+</span><span id="__span-23-107"><a id="__codelineno-23-107" name="__codelineno-23-107" href="#__codelineno-23-107"></a>    <span class="n">RequestItems</span><span class="o">=</span><span class="p">{</span>
+</span><span id="__span-23-108"><a id="__codelineno-23-108" name="__codelineno-23-108" href="#__codelineno-23-108"></a>        <span class="s1">'Products'</span><span class="p">:</span> <span class="p">{</span>
+</span><span id="__span-23-109"><a id="__codelineno-23-109" name="__codelineno-23-109" href="#__codelineno-23-109"></a>            <span class="s1">'Keys'</span><span class="p">:</span> <span class="p">[</span>
+</span><span id="__span-23-110"><a id="__codelineno-23-110" name="__codelineno-23-110" href="#__codelineno-23-110"></a>                <span class="p">{</span><span class="s1">'productId'</span><span class="p">:</span> <span class="s1">'prod-001'</span><span class="p">},</span>
+</span><span id="__span-23-111"><a id="__codelineno-23-111" name="__codelineno-23-111" href="#__codelineno-23-111"></a>                <span class="p">{</span><span class="s1">'productId'</span><span class="p">:</span> <span class="s1">'prod-002'</span><span class="p">},</span>
+</span><span id="__span-23-112"><a id="__codelineno-23-112" name="__codelineno-23-112" href="#__codelineno-23-112"></a>                <span class="p">{</span><span class="s1">'productId'</span><span class="p">:</span> <span class="s1">'prod-003'</span><span class="p">}</span>
+</span><span id="__span-23-113"><a id="__codelineno-23-113" name="__codelineno-23-113" href="#__codelineno-23-113"></a>            <span class="p">],</span>
+</span><span id="__span-23-114"><a id="__codelineno-23-114" name="__codelineno-23-114" href="#__codelineno-23-114"></a>            <span class="s1">'ConsistentRead'</span><span class="p">:</span> <span class="kc">False</span>
+</span><span id="__span-23-115"><a id="__codelineno-23-115" name="__codelineno-23-115" href="#__codelineno-23-115"></a>        <span class="p">}</span>
+</span><span id="__span-23-116"><a id="__codelineno-23-116" name="__codelineno-23-116" href="#__codelineno-23-116"></a>    <span class="p">}</span>
+</span><span id="__span-23-117"><a id="__codelineno-23-117" name="__codelineno-23-117" href="#__codelineno-23-117"></a><span class="p">)</span>
 </span></code></pre></div>
 <hr />
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <h3 id="modello-dati_1">Modello Dati<a class="headerlink" href="#modello-dati_1" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong>Single-Table Design:</strong> consolidare entità correlate in un'unica tabella con overloaded keys. Riduce le chiamate API e i costi.</li>
+<li><strong>Single-Table Design:</strong> consolidare entità correlate in un'unica tabella con overloaded keys, così una sola Query recupera entità collegate (niente join). Riduce le chiamate API ma rende il modello meno leggibile e più rigido da evolvere: con access pattern ancora instabili, più tabelle sono una scelta legittima.</li>
 <li><strong>Partition key ad alta cardinalità:</strong> UUID, userId, productId — non status, country, category</li>
 <li><strong>Evitare hot partitions:</strong> distribuire il carico su molte partition key</li>
 <li><strong>Sparse indexes:</strong> usare GSI con attributi presenti solo su alcuni item (GSI non indicizza item senza quell'attributo)</li>
@@ -25957,7 +25972,7 @@
 <h3 id="costi">Costi<a class="headerlink" href="#costi" title="Permanent link">&para;</a></h3>
 <ol>
 <li><strong>On-Demand per carichi variabili</strong>, Provisioned + Autoscaling per carichi stabili</li>
-<li><strong>Standard-IA</strong> per tabelle con &gt; 1 GB e accesso infrequente</li>
+<li><strong>Standard-IA</strong> quando lo storage supera ~50% del costo della tabella (accesso infrequente)</li>
 <li><strong>TTL</strong> per eliminare automaticamente i dati scaduti</li>
 <li><strong>Export to S3</strong> per analytics invece di query Scan frequenti</li>
 </ol>
@@ -26054,8 +26069,8 @@
 <p><strong>Approfondimento completo →</strong> <a href="../rds-aurora/">RDS e Aurora</a></p>
 </details>
 <details class="info">
-<summary>DAX — Caching</summary>
-<p>DAX è la cache nativa di DynamoDB. Per caching applicativo più generico considerare ElastiCache Redis.</p>
+<summary>ElastiCache — Alternativa a DAX</summary>
+<p>DAX è la cache nativa di DynamoDB (solo API DynamoDB). Per caching applicativo più generico, o per cachare risultati aggregati, considerare ElastiCache (Redis/Valkey).</p>
 <p><strong>Approfondimento completo →</strong> <a href="../altri-db/">Altri Database AWS</a></p>
 </details>
 <details class="info">
