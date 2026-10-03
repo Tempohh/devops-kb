@@ -5555,7 +5555,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6336,7 +6336,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6361,7 +6361,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25307,7 +25307,10 @@
 <hr />
 <h3 id="sqs-extended-client-library">SQS Extended Client Library<a class="headerlink" href="#sqs-extended-client-library" title="Permanent link">&para;</a></h3>
 <p>Per messaggi <strong>oltre 1 MiB</strong> (fino a 2 GB), il payload viene salvato su S3 e nella coda viaggia solo un puntatore. Soglia configurabile: con <code>always_through_s3=False</code> si usa S3 solo oltre la soglia.</p>
-<!-- REVIEW: verificare nome pacchetto/API della libreria Python (sqs-extended-client) sulla versione corrente -->
+<div class="admonition note">
+<p class="admonition-title">Soglia della libreria Python</p>
+<p>La libreria Python community <code>sqs-extended-client</code> (QuiNovas) accetta <code>message_size_threshold</code> tra 0 e 262144 byte (default 256 KiB, il vecchio limite SQS): non può essere alzata a 1 MiB. I messaggi tra 256 KiB e 1 MiB passano quindi comunque da S3, salvo <code>message_size_threshold</code> più basso/<code>always_through_s3</code>. Non è una libreria AWS ufficiale (AWS mantiene solo il client Java).</p>
+</div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Python — boto3 + sqs-extended-client</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># pip install sqs-extended-client</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
@@ -25318,7 +25321,7 @@
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">sqs</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">'sqs'</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="s1">'eu-central-1'</span><span class="p">)</span>
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">sqs</span><span class="o">.</span><span class="n">large_payload_support</span> <span class="o">=</span> <span class="s1">'my-large-messages-bucket'</span>  <span class="c1"># bucket S3</span>
 </span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">sqs</span><span class="o">.</span><span class="n">always_through_s3</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># True = sempre via S3, False = solo oltre la soglia</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">sqs</span><span class="o">.</span><span class="n">message_size_threshold</span> <span class="o">=</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">sqs</span><span class="o">.</span><span class="n">message_size_threshold</span> <span class="o">=</span> <span class="mi">262144</span>  <span class="c1"># max 256 KiB nella libreria Python (default)</span>
 </span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
 </span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Inviare messaggio grande (automaticamente su S3)</span>
 </span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">sqs</span><span class="o">.</span><span class="n">send_message</span><span class="p">(</span>
