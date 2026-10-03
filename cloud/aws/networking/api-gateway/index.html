@@ -24669,9 +24669,9 @@
 <td>No</td>
 </tr>
 <tr>
-<td>Mapping template (VTL)</td>
+<td>Mapping template (VTL, Velocity Template Language)</td>
 <td>Sì</td>
-<td>No (solo trasformazioni semplici)</td>
+<td>No (solo parameter mapping semplice)</td>
 <td>Sì</td>
 </tr>
 <tr>
@@ -24683,19 +24683,19 @@
 <tr>
 <td>Private API (VPC endpoint)</td>
 <td>Sì</td>
-<td>No</td>
+<td>No (solo integration private via VPC Link)</td>
 <td>No</td>
 </tr>
 <tr>
 <td>JWT authorizer nativo</td>
-<td>No (serve Lambda authorizer)</td>
+<td>No (serve Lambda authorizer o Cognito authorizer)</td>
 <td>Sì</td>
 <td>No</td>
 </tr>
 <tr>
 <td>Request validation</td>
 <td>Sì (schema JSON)</td>
-<td>Limitata</td>
+<td>No (validare nel backend)</td>
 <td>No</td>
 </tr>
 <tr>
@@ -24705,15 +24705,15 @@
 <td>No</td>
 </tr>
 <tr>
-<td>WAF integration</td>
+<td>WAF (Web Application Firewall) integration</td>
 <td>Sì</td>
-<td>Sì</td>
+<td>No (mettere CloudFront+WAF davanti)</td>
 <td>No</td>
 </tr>
 <tr>
 <td>Canary deployment</td>
 <td>Sì</td>
-<td>Sì</td>
+<td>No</td>
 <td>No</td>
 </tr>
 </tbody>
@@ -24729,8 +24729,8 @@
 <li><strong>Deployment</strong> — snapshot immutabile della configurazione API, associato a uno stage</li>
 </ul>
 <div class="admonition warning">
-<p class="admonition-title">Timeout hard limit</p>
-<p>Ogni integration ha un <strong>timeout massimo di 29 secondi</strong>, non configurabile e non aumentabile via support ticket. Backend che superano questo limite (elaborazioni lunghe, batch job) devono passare a pattern asincroni (API Gateway → SQS → worker, con polling o WebSocket per il risultato).</p>
+<p class="admonition-title">Timeout di integrazione</p>
+<p>Il default (e, per HTTP API, il massimo) è <strong>29-30 secondi</strong>. Dal 2024 sulle <strong>REST API Regional e private</strong> il limite può essere alzato oltre 29s tramite richiesta di quota (Service Quotas); il costo è una <strong>riduzione della quota di throttling a livello account</strong> per la regione. Le REST API edge-optimized e le HTTP API restano vincolate a ~30s. Per elaborazioni lunghe o batch il pattern robusto resta asincrono (API Gateway → SQS/Step Functions → worker, con polling o WebSocket per il risultato).</p>
 </div>
 <hr />
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
@@ -24823,7 +24823,7 @@
 <td><strong>IAM</strong></td>
 <td>Sì</td>
 <td>Sì</td>
-<td>Chiamate service-to-service con SigV4</td>
+<td>Chiamate service-to-service con SigV4 (Signature Version 4, firma delle richieste AWS)</td>
 </tr>
 <tr>
 <td><strong>Lambda authorizer (TOKEN)</strong></td>
@@ -24880,7 +24880,7 @@
 </span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>aws<span class="w"> </span>apigateway<span class="w"> </span>update-stage<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">    </span>--rest-api-id<span class="w"> </span>abc123<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">    </span>--stage-name<span class="w"> </span>prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">    </span>--patch-operations<span class="w"> </span><span class="nv">op</span><span class="o">=</span>replace,path<span class="o">=</span>/~1users~1GET/throttling/rateLimit,value<span class="o">=</span><span class="m">10</span>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">    </span>--patch-operations<span class="w"> </span><span class="nv">op</span><span class="o">=</span>replace,path<span class="o">=</span>/~1users/GET/throttling/rateLimit,value<span class="o">=</span><span class="m">10</span>
 </span></code></pre></div>
 <p>Il throttling è gerarchico: <strong>account</strong> (default 10.000 rps/regione, aumentabile via ticket) → <strong>stage</strong> (default dello stage) → <strong>method</strong> (override per singolo endpoint) → <strong>usage plan/API key</strong> (limite per singolo cliente).</p>
 <h3 id="esempio-sam-minimo-rest-api-lambda-authorizer">Esempio SAM minimo — REST API + Lambda + Authorizer<a class="headerlink" href="#esempio-sam-minimo-rest-api-lambda-authorizer" title="Permanent link">&para;</a></h3>
@@ -24911,7 +24911,7 @@
 </span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">    </span><span class="nt">Type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AWS::Serverless::Function</span>
 </span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="w">    </span><span class="nt">Properties</span><span class="p">:</span>
 </span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="w">      </span><span class="nt">Handler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">index.handler</span>
-</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="w">      </span><span class="nt">Runtime</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python3.12</span>
+</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="w">      </span><span class="nt">Runtime</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python3.13</span>
 </span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="w">      </span><span class="nt">Events</span><span class="p">:</span>
 </span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="w">        </span><span class="nt">GetUsers</span><span class="p">:</span>
 </span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="w">          </span><span class="nt">Type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Api</span>
@@ -24958,7 +24958,7 @@
 <li>Impostare <strong>throttling a livello di usage plan per tenant</strong>, non solo a livello account, per evitare che un client "rumoroso" saturi la quota di tutti</li>
 <li>Abilitare <strong>execution log</strong> solo in <code>INFO</code> o <code>ERROR</code> (mai <code>DEBUG</code> in produzione: costo CloudWatch e rischio di loggare dati sensibili nel body)</li>
 <li>Validare il payload con <strong>request validation</strong> (JSON Schema) lato API Gateway per respingere richieste malformate prima che raggiungano Lambda (risparmio di invocazioni)</li>
-<li>Per API private, combinare <strong>VPC endpoint + resource policy</strong> — il solo VPC endpoint non basta, senza resource policy l'API resta raggiungibile pubblicamente</li>
+<li>Per API private, combinare <strong>VPC endpoint + resource policy</strong>: una private API non è raggiungibile da Internet, ma serve una resource policy che consenta l'accesso (di solito con condizione <code>aws:SourceVpce</code>) — senza, ogni chiamata riceve 403. Restringere anche con una <em>endpoint policy</em> sul VPC endpoint, altrimenti qualunque API del VPC è invocabile tramite quell'endpoint</li>
 <li>Versionare l'API nel path (<code>/v1/users</code>) o via custom domain + base path mapping, mai solo nello stage name (lo stage è per l'ambiente, non per la versione semantica)</li>
 </ul>
 <div class="admonition warning">
@@ -24980,10 +24980,10 @@
 </span></code></pre></div></p>
 <h3 id="scenario-2-errore-403-da-resource-policy-vs-iam-vs-authorizer-distinguere-la-causa">Scenario 2 — Errore 403 da resource policy vs IAM vs authorizer (distinguere la causa)<a class="headerlink" href="#scenario-2-errore-403-da-resource-policy-vs-iam-vs-authorizer-distinguere-la-causa" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> HTTP 403 ma il path/method esistono e sono corretti.</p>
-<p><strong>Causa:</strong> Tre sorgenti possibili di 403, con messaggi diversi:
-- <code>{"Message":"User: arn:... is not authorized to perform: execute-api:Invoke"}</code> → policy IAM del chiamante non concede <code>execute-api:Invoke</code>
-- <code>{"message":"Forbidden"}</code> senza altro dettaglio → <strong>resource policy</strong> dell'API nega l'accesso (es. private API chiamata da fuori il VPC endpoint consentito)
-- <code>{"message":"User is not authorized"}</code> dal Lambda authorizer → la <code>policyDocument</code> restituita ha <code>Effect: Deny</code></p>
+<p><strong>Causa:</strong> Diverse sorgenti possibili di 403, con messaggi diversi (il testo esatto varia: leggere la parte finale):
+- <code>User: arn:... is not authorized to perform: execute-api:Invoke ...</code> → la policy IAM del chiamante non concede <code>execute-api:Invoke</code>; se termina con <code>with an explicit deny in a resource-based policy</code> è la <strong>resource policy</strong> dell'API a negare (es. private API chiamata da fuori il VPC endpoint consentito)
+- <code>{"Message":"User is not authorized to access this resource with an explicit deny"}</code> → la <code>policyDocument</code> restituita dal Lambda authorizer ha <code>Effect: Deny</code>
+- <code>{"message":"Forbidden"}</code> → tipicamente <strong>AWS WAF</strong> che blocca la richiesta, o API key mancante/non valida/non associata allo usage plan</p>
 <p><strong>Soluzione:</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Ispezionare la resource policy dell'API</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>aws<span class="w"> </span>apigateway<span class="w"> </span>get-rest-api<span class="w"> </span>--rest-api-id<span class="w"> </span>abc123<span class="w"> </span>--query<span class="w"> </span><span class="s1">'policy'</span><span class="w"> </span>--output<span class="w"> </span>text<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
@@ -25021,7 +25021,7 @@
 </span></code></pre></div></p>
 <h3 id="scenario-4-timeout-http-504-a-29-secondi-esatti">Scenario 4 — Timeout HTTP 504 a 29 secondi esatti<a class="headerlink" href="#scenario-4-timeout-http-504-a-29-secondi-esatti" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Richieste verso un'elaborazione lunga (report, export, batch) falliscono sistematicamente a ~29s con <code>{"message":"Endpoint request timed out"}</code>.</p>
-<p><strong>Causa:</strong> Il timeout massimo di integrazione API Gateway (29s) è raggiunto — non è configurabile, indipendentemente dal timeout impostato su Lambda (che può arrivare a 15 minuti) o sul backend HTTP.</p>
+<p><strong>Causa:</strong> Il timeout di integrazione di API Gateway (default 29s) è raggiunto, indipendentemente dal timeout impostato su Lambda (fino a 15 minuti) o sul backend HTTP. Su REST API Regional/private si può chiedere un aumento di quota (con riduzione del throttling account); altrove il limite è fisso.</p>
 <p><strong>Soluzione:</strong> Passare a pattern asincrono — API Gateway avvia il lavoro e ritorna subito un job ID, il client fa polling o riceve il risultato via WebSocket/webhook.
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Pattern: API Gateway -&gt; Lambda (avvia async) -&gt; Step Functions/SQS -&gt; worker</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># La Lambda sincrona ritorna immediatamente 202 Accepted con un job id</span>
