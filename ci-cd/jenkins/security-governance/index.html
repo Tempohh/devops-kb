@@ -4129,7 +4129,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25428,7 +25428,7 @@
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">      </span><span class="nt">maximumAuthenticationLifetime</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">86400</span><span class="w">  </span><span class="c1"># 24h</span>
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">      </span><span class="nt">usernameCaseConversion</span><span class="p">:</span><span class="w"> </span><span class="s">"none"</span>
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">      </span><span class="nt">binding</span><span class="p">:</span><span class="w"> </span><span class="s">"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">      </span><span class="c1"># &lt;!-- REVIEW: verificare nomi esatti delle chiavi keystore/firma (keyStoreAuthConfiguration / advancedConfiguration) nella versione corrente del saml plugin: la forma piatta keyStorePath/signRequests precedente non è confermata --&gt;</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">      </span><span class="c1"># &lt;!-- CURRENCY: non verificato (2026-10) — chiavi keystore/firma (keyStoreAuthConfiguration / advancedConfiguration) non confermate da README/CONFIGURE.md del saml plugin; usare Configuration as Code → Export per ottenerle --&gt;</span>
 </span></code></pre></div>
 <p>Il metadata del Service Provider (SP) è esposto da Jenkins su <code>https://&lt;jenkins&gt;/securityRealm/metadata</code>: è l'URL da dare all'IdP, non una chiave CasC. Mantenere l'<code>Entity ID</code> dell'SP identico su Jenkins e IdP (vedi Troubleshooting, scenario 3). Con <code>JENKINS_URL</code> errata gli assertion vengono rifiutati.</p>
 <h3 id="github-oauth-per-ambienti-cloud-native">GitHub OAuth (per ambienti cloud-native)<a class="headerlink" href="#github-oauth-per-ambienti-cloud-native" title="Permanent link">&para;</a></h3>
@@ -25556,7 +25556,7 @@
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Nota</p>
-<p><code>AuthorizationMatrixProperty.add(Permission, String)</code> è deprecato nelle versioni recenti del Matrix Authorization plugin a favore di <code>add(Permission, PermissionEntry)</code>. <!-- REVIEW: verificare firma corrente di AuthorizationMatrixProperty.add --></p>
+<p>Il contratto <code>AuthorizationContainer</code> del Matrix Authorization plugin espone sia <code>add(Permission, String)</code> sia <code>add(Permission, PermissionEntry)</code> (e <code>add(String)</code>); il javadoc non marca la forma <code>String</code> come deprecata. La <code>PermissionEntry</code> permette di distinguere esplicitamente utente/gruppo, mentre la <code>String</code> è ambigua se esistono un utente e un gruppo con lo stesso nome. Deprecati sono invece <code>setBlocksInheritance</code>/<code>isBlocksInheritance</code>, sostituiti da <code>InheritanceStrategy</code>.</p>
 </div>
 <h2 id="gestione-credenziali">Gestione Credenziali<a class="headerlink" href="#gestione-credenziali" title="Permanent link">&para;</a></h2>
 <h3 id="credentials-api-binding-types">Credentials API — Binding Types<a class="headerlink" href="#credentials-api-binding-types" title="Permanent link">&para;</a></h3>
@@ -25850,7 +25850,8 @@
 </span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">    </span><span class="c1"># Regex sugli URL loggati. Il default copre solo azioni mutanti (build, config, delete...).</span>
 </span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">    </span><span class="c1"># ".*" logga ANCHE ogni GET/polling: volume enorme e rumore. Estendere solo se serve.</span>
 </span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">    </span><span class="nt">pattern</span><span class="p">:</span><span class="w"> </span><span class="s">".*/(?:configSubmit|doDelete|postBuildResult|enable|disable|cancelQueue|stop|toggleLogKeep|doWipeOutWorkspace|createItem|createView|build|buildWithParameters|script|scriptText)/?.*"</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">    </span><span class="c1"># &lt;!-- REVIEW: verificare nomi chiave CasC (logFileAuditLogger/pattern) e disponibilità output JSON del plugin Audit Trail nella versione in uso --&gt;</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">    </span><span class="c1"># &lt;!-- CURRENCY: non verificato (2026-10) — chiavi CasC (logFileAuditLogger/pattern) non confermate; il README conferma logger File, Syslog, Console ed Elasticsearch, nessun output JSON nativo documentato --&gt;</span>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">    </span><span class="c1"># Verificare le chiavi con Configuration as Code → Export</span>
 </span></code></pre></div>
 <p>L'Audit Trail registra <strong>richieste HTTP</strong> (chi, cosa, da quale IP): è la fonte per rispondere a "chi ha lanciato/cancellato questo job". Il formato nativo è testo; per ELK/Splunk normalizzarlo in JSON con l'agente di log (Filebeat/Fluent Bit) oppure usare il logger <code>syslog</code>/<code>console</code> del plugin. Record illustrativo dopo normalizzazione:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="p">{</span>
@@ -25869,7 +25870,7 @@
 </span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span><span class="nt">saveSystemConfiguration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">    </span><span class="nt">saveItemConfiguration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">    </span><span class="nt">showChangeReasonCommentWindow</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">  </span><span class="c1"># richiede commento al cambio config</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">    </span><span class="c1"># &lt;!-- REVIEW: verificare chiavi CasC (es. excludePattern) nella versione corrente --&gt;</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">    </span><span class="c1"># excludePattern: regex sui path dei config da escludere dalla storia (opzionale)</span>
 </span></code></pre></div>
 <p>Complementa l'Audit Trail: questo risponde a "<em>cosa</em> è cambiato" (diff del <code>config.xml</code>), l'altro a "<em>chi</em> e <em>quando</em>". Con pipeline da SCM la storia vera sta in Git: Job Config History serve per job UI-defined e configurazione di sistema.</p>
 <h3 id="siem-integration-forwarding-a-splunkelk">SIEM Integration — Forwarding a Splunk/ELK<a class="headerlink" href="#siem-integration-forwarding-a-splunkelk" title="Permanent link">&para;</a></h3>
