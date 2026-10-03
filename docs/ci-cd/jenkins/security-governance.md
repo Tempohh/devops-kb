@@ -10,7 +10,7 @@ official_docs: https://www.jenkins.io/doc/book/security/
 status: needs-review
 difficulty: expert
 last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_verified: 2026-10-04
 ---
 
 # Jenkins Security & Governance
@@ -71,7 +71,7 @@ jenkins:
       maximumAuthenticationLifetime: 86400  # 24h
       usernameCaseConversion: "none"
       binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
-      # <!-- REVIEW: verificare nomi esatti delle chiavi keystore/firma (keyStoreAuthConfiguration / advancedConfiguration) nella versione corrente del saml plugin: la forma piatta keyStorePath/signRequests precedente non è confermata -->
+      # <!-- CURRENCY: non verificato (2026-10) — chiavi keystore/firma (keyStoreAuthConfiguration / advancedConfiguration) non confermate da README/CONFIGURE.md del saml plugin; usare Configuration as Code → Export per ottenerle -->
 ```
 
 Il metadata del Service Provider (SP) è esposto da Jenkins su `https://<jenkins>/securityRealm/metadata`: è l'URL da dare all'IdP, non una chiave CasC. Mantenere l'`Entity ID` dell'SP identico su Jenkins e IdP (vedi Troubleshooting, scenario 3). Con `JENKINS_URL` errata gli assertion vengono rifiutati.
@@ -212,7 +212,7 @@ def leadPerms = [Item.READ, Item.BUILD, Item.CONFIGURE]
 ```
 
 !!! note "Nota"
-    `AuthorizationMatrixProperty.add(Permission, String)` è deprecato nelle versioni recenti del Matrix Authorization plugin a favore di `add(Permission, PermissionEntry)`. <!-- REVIEW: verificare firma corrente di AuthorizationMatrixProperty.add -->
+    Il contratto `AuthorizationContainer` del Matrix Authorization plugin espone sia `add(Permission, String)` sia `add(Permission, PermissionEntry)` (e `add(String)`); il javadoc non marca la forma `String` come deprecata. La `PermissionEntry` permette di distinguere esplicitamente utente/gruppo, mentre la `String` è ambigua se esistono un utente e un gruppo con lo stesso nome. Deprecati sono invece `setBlocksInheritance`/`isBlocksInheritance`, sostituiti da `InheritanceStrategy`.
 
 ## Gestione Credenziali
 
@@ -535,7 +535,8 @@ unclassified:
     # Regex sugli URL loggati. Il default copre solo azioni mutanti (build, config, delete...).
     # ".*" logga ANCHE ogni GET/polling: volume enorme e rumore. Estendere solo se serve.
     pattern: ".*/(?:configSubmit|doDelete|postBuildResult|enable|disable|cancelQueue|stop|toggleLogKeep|doWipeOutWorkspace|createItem|createView|build|buildWithParameters|script|scriptText)/?.*"
-    # <!-- REVIEW: verificare nomi chiave CasC (logFileAuditLogger/pattern) e disponibilità output JSON del plugin Audit Trail nella versione in uso -->
+    # <!-- CURRENCY: non verificato (2026-10) — chiavi CasC (logFileAuditLogger/pattern) non confermate; il README conferma logger File, Syslog, Console ed Elasticsearch, nessun output JSON nativo documentato -->
+    # Verificare le chiavi con Configuration as Code → Export
 ```
 
 L'Audit Trail registra **richieste HTTP** (chi, cosa, da quale IP): è la fonte per rispondere a "chi ha lanciato/cancellato questo job". Il formato nativo è testo; per ELK/Splunk normalizzarlo in JSON con l'agente di log (Filebeat/Fluent Bit) oppure usare il logger `syslog`/`console` del plugin. Record illustrativo dopo normalizzazione:
@@ -560,7 +561,7 @@ unclassified:
     saveSystemConfiguration: true
     saveItemConfiguration: true
     showChangeReasonCommentWindow: true  # richiede commento al cambio config
-    # <!-- REVIEW: verificare chiavi CasC (es. excludePattern) nella versione corrente -->
+    # excludePattern: regex sui path dei config da escludere dalla storia (opzionale)
 ```
 
 Complementa l'Audit Trail: questo risponde a "*cosa* è cambiato" (diff del `config.xml`), l'altro a "*chi* e *quando*". Con pipeline da SCM la storia vera sta in Git: Job Config History serve per job UI-defined e configurazione di sistema.
