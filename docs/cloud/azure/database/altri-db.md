@@ -1,15 +1,16 @@
 ---
 title: "Azure Database — PostgreSQL, MySQL, Redis, Synapse"
-slug: altri-db-azure
+slug: altri-db
 category: cloud
 tags: [azure, postgresql, mysql, redis, synapse, mariadb, managed-database]
 search_keywords: [Azure Database PostgreSQL Flexible Server, Azure Database MySQL Flexible Server, Azure Cache for Redis clustering, Azure Synapse Analytics data warehouse, PgBouncer connection pooling, pgvector vector database AI, zone-redundant HA PostgreSQL, Redis enterprise, Synapse Serverless SQL Pool, Synapse Link HTAP]
 parent: cloud/azure/database/_index
 related: [cloud/azure/security/key-vault, cloud/azure/networking/vnet, cloud/azure/compute/aks-containers]
 official_docs: https://learn.microsoft.com/azure/postgresql/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Azure Database — PostgreSQL, MySQL, Redis, Synapse
@@ -26,7 +27,7 @@ Azure Database for PostgreSQL Flexible Server è il servizio PaaS per PostgreSQL
 
 | Tier | vCPU Range | RAM | Use Case |
 |---|---|---|---|
-| **Burstable** | 1-2 vCPU (creditario) | 2-8 GB | Dev/test, workload intermittenti |
+| **Burstable** | 1-20 vCPU (serie B, a crediti CPU) | 2-80 GB | Dev/test, workload intermittenti |
 | **General Purpose** | 2-96 vCPU | 8-384 GB | La maggior parte dei workload produzione |
 | **Memory Optimized** | 2-96 vCPU | 16-768 GB | Database in-memory, workload analytics pesanti |
 
@@ -41,11 +42,10 @@ az postgres flexible-server create \
   --name $PG_SERVER \
   --location $LOCATION \
   --tier GeneralPurpose \
-  --sku-name Standard_D4s_v3 \
+  --sku-name Standard_D4ds_v5 \
   --version 16 \
   --storage-size 256 \
   --storage-auto-grow Enabled \
-  --storage-auto-grow-iops-per-gb 3 \
   --backup-retention 35 \
   --geo-redundant-backup Enabled \
   --high-availability ZoneRedundant \
@@ -71,22 +71,29 @@ az postgres flexible-server replica create \
   --source-server $PG_SERVER \
   --location northeurope
 
-# Promuovere replica a standalone (durante failover manuale)
-az postgres flexible-server replica stop-replication \
+# Promuovere replica a server standalone (DR / failover manuale cross-region).
+# Irreversibile: la replica diventa indipendente e non si ri-aggancia al primario.
+az postgres flexible-server replica promote \
   --resource-group $RG \
-  --name pg-replica-northeurope
+  --name pg-replica-northeurope \
+  --promote-mode standalone \
+  --promote-option forced
 ```
+
+!!! note "Password admin"
+    `$(openssl rand ...)` genera una password che nell'esempio non viene salvata: in pratica salvala subito in Key Vault, oppure usa l'autenticazione Microsoft Entra (`--microsoft-entra-auth Enabled`) ed evita password locali.
 
 ### Configurazione PgBouncer (Connection Pooling)
 
-PgBouncer è integrato in Azure Database for PostgreSQL Flexible Server, riducendo l'overhead di connessioni per applicazioni con molte connessioni brevi.
+PgBouncer è integrato in Azure Database for PostgreSQL Flexible Server (tier General Purpose e Memory Optimized, non Burstable). Ogni connessione PostgreSQL è un processo dedicato e costoso: il pooler multiplexa molte connessioni client brevi su poche connessioni reali al backend, riducendo RAM e overhead di handshake.
 
 ```bash
-# Abilitare PgBouncer
-az postgres flexible-server update \
+# Abilitare PgBouncer (è un server parameter, non un flag di update)
+az postgres flexible-server parameter set \
   --resource-group $RG \
-  --name $PG_SERVER \
-  --pgbouncer-enabled true
+  --server-name $PG_SERVER \
+  --name pgbouncer.enabled \
+  --value true
 
 # Connettersi tramite PgBouncer (porta 6432 invece di 5432)
 # connection string: postgresql://pgadmin@pg-prod-westeurope-2026:6432/myapp-production?sslmode=require
@@ -95,19 +102,22 @@ az postgres flexible-server update \
 ### Extensions Importanti
 
 ```bash
-# Listare extensions disponibili
-az postgres flexible-server list-capabilities \
-  --location $LOCATION \
-  --query "supportedFlexibleServerVersions[].supportedVersionsToUpgrade[]" -o tsv
+# 1. Allow-list: Azure permette solo le extension elencate in azure.extensions
+az postgres flexible-server parameter set \
+  --resource-group $RG \
+  --server-name $PG_SERVER \
+  --name azure.extensions \
+  --value "VECTOR,PG_STAT_STATEMENTS,PGAUDIT,PG_CRON"
 
-# Abilitare extensions (aggiungere a shared_preload_libraries)
+# 2. Le extension che agganciano hook del server vanno in shared_preload_libraries
+#    (parametro statico: richiede restart). vector NON ne ha bisogno.
 az postgres flexible-server parameter set \
   --resource-group $RG \
   --server-name $PG_SERVER \
   --name shared_preload_libraries \
-  --value "pg_stat_statements,pgaudit,pg_cron,vector"
+  --value "pg_stat_statements,pgaudit,pg_cron"
 
-# Connettersi e creare extension
+# 3. Dopo il restart, connettersi e creare le extension
 # CREATE EXTENSION IF NOT EXISTS vector;       -- per AI/embeddings
 # CREATE EXTENSION IF NOT EXISTS pg_stat_statements; -- per query analytics
 # CREATE EXTENSION IF NOT EXISTS pgaudit;      -- per auditing
@@ -122,7 +132,8 @@ pgvector trasforma PostgreSQL in un database vettoriale, permettendo similarity 
 -- Abilitare extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Creare tabella con colonna vettoriale (embedding 1536 dim per OpenAI ada-002)
+-- Creare tabella con colonna vettoriale (1536 dim = text-embedding-3-small / ada-002;
+-- la dimensione deve coincidere con quella del modello di embedding usato)
 CREATE TABLE documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     content TEXT NOT NULL,
@@ -148,10 +159,15 @@ from openai import AzureOpenAI
 import psycopg2
 from psycopg2.extras import execute_values
 
-client = AzureOpenAI(azure_endpoint=AZURE_OPENAI_ENDPOINT, api_key=API_KEY)
+client = AzureOpenAI(
+    azure_endpoint=AZURE_OPENAI_ENDPOINT,
+    api_key=API_KEY,
+    api_version="2024-10-21",
+)
 
 def get_embedding(text: str) -> list[float]:
-    response = client.embeddings.create(model="text-embedding-ada-002", input=text)
+    # "model" = nome del *deployment* Azure OpenAI (es. text-embedding-3-small)
+    response = client.embeddings.create(model="text-embedding-3-small", input=text)
     return response.data[0].embedding
 
 # Inserimento
@@ -186,7 +202,14 @@ az monitor diagnostic-settings create \
 
 ## Azure Database for MySQL Flexible Server
 
-MySQL Flexible Server è equivalente a PostgreSQL Flexible ma per MySQL 8.0. Funzionalità simili: HA zone-redundant, read replica, VNet integration, PgBouncer (ProxySQL), extensions.
+MySQL Flexible Server è equivalente a PostgreSQL Flexible ma per MySQL 8.0. Funzionalità simili: HA zone-redundant, read replica, VNet integration. Non c'è un connection pooler integrato (PgBouncer è solo PostgreSQL): per MySQL si usa ProxySQL self-managed o pooling lato applicazione.
+
+!!! warning "MySQL 8.0 verso fine supporto"
+    Il supporto community di MySQL 8.0 è terminato ad aprile 2026; su Azure le versioni a fine vita passano in Extended Support (a pagamento). Per nuovi deployment valuta MySQL 8.4 LTS.
+    <!-- REVIEW: verificare date Extended Support Azure MySQL 8.0 e valore --version per 8.4 -->
+
+!!! note "Versione negli esempi"
+    `--version 8.0.21` è il valore storico accettato dalla CLI per MySQL 8.0.
 
 ```bash
 # Creare MySQL Flexible Server
@@ -195,7 +218,7 @@ az mysql flexible-server create \
   --name mysql-prod-2026 \
   --location $LOCATION \
   --tier GeneralPurpose \
-  --sku-name Standard_D4s_v3 \
+  --sku-name Standard_D4ds_v4 \
   --version 8.0.21 \
   --storage-size 256 \
   --storage-auto-grow Enabled \
@@ -235,12 +258,16 @@ az mysql flexible-server replica create \
 | **Performance read** | Alta | Alta | <10ms latency globale |
 | **Scale-out read** | Read replicas | Read replicas | Multi-region nativo |
 | **Geolocalizzazione** | PostGIS | No | Nativo (geo-distribution) |
-| **AI/ML** | pgvector | No | N/A |
+| **AI/ML** | pgvector, `azure_ai` | No | Vector search integrata (DiskANN) |
 | **Use case ideale** | App moderne, analytics, AI | Web app tradizionali, CMS | IoT, gaming, global app |
 
 ## Azure Cache for Redis
 
 Azure Cache for Redis è il servizio Redis managed di Azure, fondamentale per: session cache, database query caching, real-time analytics, pub/sub, leaderboard.
+
+!!! warning "Servizio in dismissione — migrare ad Azure Managed Redis"
+    Microsoft ha annunciato il ritiro di Azure Cache for Redis a favore di **Azure Managed Redis** (basato su Redis Enterprise): i tier Enterprise/Enterprise Flash sono in ritiro per primi (2027), Basic/Standard/Premium dopo (2028). Per nuovi progetti parti da Azure Managed Redis (`az redisenterprise` / `az redis` non coprono gli stessi SKU); gli esempi sotto restano utili per le istanze esistenti.
+    <!-- REVIEW: verificare date di retirement ufficiali e SKU/CLI di Azure Managed Redis -->
 
 ### SKU e Tier
 
@@ -248,7 +275,7 @@ Azure Cache for Redis è il servizio Redis managed di Azure, fondamentale per: s
 |---|---|---|---|---|---|
 | **Basic** | 53 GB | No | No | No | Dev/test |
 | **Standard** | 53 GB | No | No | No | Produzione senza clustering |
-| **Premium** | 530 GB | Sì (fino a 10 shard) | RDB + AOF | Sì (passive) | Alta disponibilità, persistence |
+| **Premium** | 1,2 TB (10 shard) | Sì (fino a 10 shard) | RDB + AOF | Sì (passive) | Alta disponibilità, persistence |
 | **Enterprise** | 2 TB | Sì (Redis Cluster) | AOF | Sì (active) | Massime performance, 99.999% SLA |
 | **Enterprise Flash** | 2 TB + NVMe | Sì | AOF | Sì (active) | Dataset molto grandi, costo ridotto |
 
@@ -261,8 +288,8 @@ az redis create \
   --sku Standard \
   --vm-size C3 \
   --enable-non-ssl-port false \
-  --minimum-tls-version 1.2 \
-  --redis-version 7
+  --minimum-tls-version 1.2
+# (la porta non-TLS 6379 è disabilitata di default: non serve abilitarla)
 
 # Creare Redis Premium con clustering (4 shard)
 az redis create \
@@ -272,7 +299,6 @@ az redis create \
   --sku Premium \
   --vm-size P3 \
   --shard-count 4 \
-  --enable-non-ssl-port false \
   --minimum-tls-version 1.2 \
   --subnet-id $(az network vnet subnet show --resource-group $RG --vnet-name vnet-prod --name snet-redis --query id -o tsv)
 
@@ -284,13 +310,15 @@ az redis update \
   --set redisConfiguration.rdb-backup-frequency=60 \
   --set redisConfiguration.rdb-storage-connection-string="$(az storage account show-connection-string --resource-group $RG --name mystorageaccount2026 -o tsv)"
 
-# Abilitare geo-replication (Premium)
-az redis force-reboot \
+# Abilitare geo-replication passiva (Premium): linkare una cache secondaria
+# (stesso SKU/shard del primario) con server-link
+az redis server-link create \
   --resource-group $RG \
   --name redis-premium-prod \
-  --reboot-type AllNodes
+  --server-to-link $(az redis show --resource-group $RG --name redis-premium-dr --query id -o tsv) \
+  --replication-role Secondary
 
-# Ottenere connection string
+# Ottenere le access key (preferire Microsoft Entra ID, vedi sotto)
 az redis list-keys \
   --resource-group $RG \
   --name redis-prod-2026 \
@@ -318,11 +346,14 @@ az redis update \
 ### Uso da Python
 
 ```python
-import redis
-from azure.identity import DefaultAzureCredential
+import json
 import ssl
 
+import redis
+
 # Connessione con TLS e autenticazione con access key
+# (in produzione: Microsoft Entra ID con token di DefaultAzureCredential come password,
+#  così si evitano chiavi statiche da ruotare)
 r = redis.Redis(
     host="redis-prod-2026.redis.cache.windows.net",
     port=6380,
@@ -344,7 +375,7 @@ def get_user(user_id: str) -> dict:
         return json.loads(cached)
 
     # Cache miss: carica da DB
-    user = db.query(f"SELECT * FROM users WHERE id = '{user_id}'")
+    user = db.query("SELECT * FROM users WHERE id = %s", (user_id,))  # query parametrizzata
     r.setex(cache_key, 300, json.dumps(user))  # Cache 5 minuti
     return user
 
@@ -368,6 +399,13 @@ for message in pubsub.listen():
 
 Azure Synapse Analytics è la piattaforma unificata per data warehouse, big data e analytics in tempo reale. Combina SQL (T-SQL), Spark e integrazione Data Lake in un unico workspace.
 
+!!! warning "Synapse è in maintenance mode"
+    Microsoft concentra gli investimenti su **Microsoft Fabric** (Warehouse, Lakehouse, Mirroring per Cosmos DB/Azure SQL). Synapse resta supportato ma non riceve nuove funzionalità: per nuovi progetti valuta Fabric; per quelli esistenti pianifica la migrazione. Synapse Link va considerato legacy rispetto al Mirroring di Fabric.
+    <!-- REVIEW: verificare stato/date di Synapse Link e roadmap di migrazione a Fabric -->
+
+!!! note "Sigle"
+    **MPP** = Massively Parallel Processing (query distribuita su più nodi); **DWU** = Data Warehouse Unit (unità di compute del Dedicated Pool); **HTAP** = Hybrid Transactional/Analytical Processing.
+
 ### Componenti Principali
 
 | Componente | Tipo | Use Case |
@@ -375,7 +413,7 @@ Azure Synapse Analytics è la piattaforma unificata per data warehouse, big data
 | **Dedicated SQL Pool** | MPP data warehouse | Query analitiche su centinaia di TB, reporting |
 | **Serverless SQL Pool** | On-demand query | Query ad hoc su data lake, discovery, ELT |
 | **Apache Spark Pool** | Spark managed | ML, data transformation, Python/Scala/R |
-| **Data Integration (ADF)** | ETL/ELT pipeline | Orchestrazione dati, ingest da sorgenti diverse |
+| **Synapse Pipelines** (motore ADF) | ETL/ELT pipeline | Orchestrazione dati, ingest da sorgenti diverse |
 | **Synapse Link** | HTAP | Query analytics su dati operativi Cosmos DB/SQL |
 
 ```bash
@@ -526,25 +564,29 @@ mysql -h mysql-migrated-prod.mysql.database.azure.com \
 
 **Sintomo:** L'applicazione riceve errori `FATAL: remaining connection slots are reserved` oppure `too many clients already`.
 
-**Causa:** PostgreSQL ha un limite di connessioni (`max_connections`, default 100-200 su Flexible Server). Applicazioni senza connection pooling aprono connessioni per ogni richiesta.
+**Causa:** PostgreSQL ha un limite di connessioni (`max_connections`, il default dipende dallo SKU/RAM; ogni connessione è un processo). Applicazioni senza connection pooling aprono connessioni per ogni richiesta.
 
 **Soluzione:** Abilitare PgBouncer (già integrato) oppure ridurre le connessioni attive.
 
 ```bash
 # Verificare connessioni correnti
+# (richiede l'estensione CLI rdbms-connect: az extension add --name rdbms-connect;
+#  il server deve essere raggiungibile dalla macchina che lancia il comando)
 az postgres flexible-server execute \
-  --resource-group $RG \
   --name $PG_SERVER \
+  --admin-user pgadmin \
+  --admin-password "$PGPASSWORD" \
   --database-name postgres \
   --querytext "SELECT count(*), state FROM pg_stat_activity GROUP BY state;"
 
 # Abilitare PgBouncer (porta 6432, transaction pooling)
-az postgres flexible-server update \
+az postgres flexible-server parameter set \
   --resource-group $RG \
-  --name $PG_SERVER \
-  --pgbouncer-enabled true
+  --server-name $PG_SERVER \
+  --name pgbouncer.enabled \
+  --value true
 
-# Aumentare max_connections (richiede restart)
+# Aumentare max_connections (richiede restart; valore limitato dalla RAM dello SKU)
 az postgres flexible-server parameter set \
   --resource-group $RG \
   --server-name $PG_SERVER \
@@ -561,11 +603,11 @@ az postgres flexible-server parameter set \
 **Soluzione:** Verificare memory usage, scegliere la policy corretta, separare dati persistenti da cache.
 
 ```bash
-# Verificare utilizzo memoria Redis
-az redis show \
-  --resource-group $RG \
-  --name redis-prod-2026 \
-  --query "[usedMemory, usedMemoryRss, maxmemory]" -o json
+# Verificare utilizzo memoria Redis (metriche Azure Monitor)
+az monitor metrics list \
+  --resource $(az redis show --resource-group $RG --name redis-prod-2026 --query id -o tsv) \
+  --metric usedmemory usedmemorypercentage evictedkeys \
+  --interval PT5M -o table
 
 # Connettersi con redis-cli e ispezionare
 redis-cli -h redis-prod-2026.redis.cache.windows.net -p 6380 \
@@ -577,10 +619,9 @@ az redis update \
   --name redis-prod-2026 \
   --set redisConfiguration.maxmemory-policy=volatile-lru
 
-# Trovare chiavi senza TTL che consumano memoria
+# Trovare le chiavi più grandi (campionamento SCAN, non bloccante)
 redis-cli -h redis-prod-2026.redis.cache.windows.net -p 6380 \
-  --tls -a "$REDIS_KEY" --scan --pattern '*' | \
-  xargs -I{} redis-cli TTL {}
+  --tls -a "$REDIS_KEY" --bigkeys
 ```
 
 ### Scenario 3 — Synapse Dedicated SQL Pool: query lente o bloccate
@@ -635,8 +676,9 @@ az postgres flexible-server show \
 
 # Verificare replica lag (in secondi) dalla replica stessa
 az postgres flexible-server execute \
-  --resource-group $RG \
   --name pg-replica-northeurope \
+  --admin-user pgadmin \
+  --admin-password "$PGPASSWORD" \
   --database-name postgres \
   --querytext "SELECT EXTRACT(EPOCH FROM (now() - pg_last_xact_replay_timestamp())) AS replica_lag_seconds;"
 
@@ -651,10 +693,10 @@ az postgres flexible-server restart \
 
 - Per PostgreSQL in produzione, usa sempre `ZoneRedundant` HA e `Geo-redundant-backup`
 - Abilita PgBouncer su PostgreSQL per applicazioni con molte connessioni concorrenti brevi
-- Su Redis, imposta sempre `maxmemory-policy` appropriata — default `noeviction` è pericoloso in cache
+- Su Redis, imposta esplicitamente `maxmemory-policy` (il default di Azure è `volatile-lru`: chiavi senza TTL non vengono mai evict e, a memoria piena, i write falliscono con OOM)
 - Su Redis Premium, abilita persistenza RDB per recovery rapido dopo restart
 - Su Synapse, usa **Serverless SQL Pool** per esplorazione e ELT ad hoc; **Dedicated Pool** solo per workload DWH persistenti (sospendilo quando non serve)
-- Per pgvector, usa sempre un indice HNSW o IVFFlat per similarit search su scala
+- Per pgvector, usa sempre un indice HNSW o IVFFlat per similarity search su scala (HNSW: recall migliore, build più lento; IVFFlat: build rapido, richiede dati già presenti)
 
 ## Riferimenti
 
