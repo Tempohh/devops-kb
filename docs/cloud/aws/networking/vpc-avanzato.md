@@ -7,12 +7,16 @@ search_keywords: [VPC Peering, Transit Gateway, AWS PrivateLink, Site-to-Site VP
 parent: cloud/aws/networking/_index
 related: [cloud/aws/networking/vpc, cloud/aws/networking/route53, cloud/aws/security/network-security]
 official_docs: https://docs.aws.amazon.com/vpc/latest/peering/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # VPC Avanzato — Connectivity
+
+!!! note "Snippet CLI"
+    Negli esempi i commenti `# ...` dopo il `\` di continuazione riga sono solo didattici: in una shell reale **rompono** il comando (il `\` deve essere l'ultimo carattere della riga). Rimuoverli prima di eseguire.
 
 ## VPC Peering
 
@@ -62,6 +66,8 @@ aws ec2 create-route \
 - Non supporta Edge-to-Edge routing (on-premises VPN di VPC-A non raggiunge VPC-B via peering)
 - Per molti VPC → usare **Transit Gateway**
 
+**Costi:** nessun costo orario per il peering; si paga il trasferimento dati cross-AZ e cross-Region (stessa AZ nella stessa Region: gratis). Con N VPC servono N·(N−1)/2 peering e altrettante route: oltre poche unità la gestione diventa ingestibile, da qui il TGW.
+
 ---
 
 ## Transit Gateway (TGW)
@@ -104,7 +110,7 @@ TGW_ID=$(aws ec2 create-transit-gateway \
 aws ec2 create-transit-gateway-vpc-attachment \
     --transit-gateway-id $TGW_ID \
     --vpc-id vpc-AAAA \
-    --subnet-ids subnet-xxx subnet-yyy \    # subnet in AZ diverse
+    --subnet-ids subnet-xxx subnet-yyy \    # 1 subnet per AZ (max una per AZ)
     --options "ApplianceModeSupport=disable,DnsSupport=enable,Ipv6Support=disable"
 
 # Condividere TGW con altri account via Resource Access Manager
@@ -134,6 +140,10 @@ aws ec2 create-transit-gateway-route-table \
 - $0.05/hr per TGW attachment
 - $0.02/GB dati processati
 - Per 10 VPC: $0.05 × 10 × 24 × 30 = ~$360/mese (solo attachment)
+- Prezzi indicativi (us-east-1), variano per Region: verificare la pagina pricing ufficiale.
+
+??? info "Alternative gestite al TGW fai-da-te"
+    **AWS Cloud WAN** gestisce reti globali multi-Region con policy dichiarativa (segmenti) al posto di TGW + peering manuali. **VPC Lattice** risolve la connettività *service-to-service* a livello applicativo (L7) senza dover far combaciare CIDR o route. Scegliere TGW quando serve routing L3 classico e controllo sulle route table.
 
 ---
 
@@ -151,14 +161,17 @@ Interface Endpoint ←─ PrivateLink ─→ NLB → Servizio
 **Use case:**
 - Accedere a servizi AWS (Secrets Manager, ECR, SSM...) da subnet private
 - Acquistare servizi SaaS esposti su AWS Marketplace via PrivateLink
-- Esporre microservizi interni ad altri team/account senza VPC peering
+- Esporre microservizi interni ad altri team/account senza VPC peering (nessun requisito di CIDR non sovrapposti; il traffico è unidirezionale consumer → provider)
+
+!!! tip "Tipi di endpoint"
+    Oltre agli **Interface Endpoint** (ENI + costo orario + per GB) esistono i **Gateway Endpoint** (solo S3 e DynamoDB, gratuiti, basati su route in route table), i **Gateway Load Balancer Endpoint** (appliance di sicurezza in-line) e gli endpoint per risorse/service network (VPC Lattice). Per S3/DynamoDB da dentro il VPC preferire il Gateway Endpoint.
 
 ```bash
 # Lato Provider: creare Endpoint Service (dietro a NLB)
 aws ec2 create-vpc-endpoint-service-configuration \
     --network-load-balancer-arns arn:aws:elasticloadbalancing:... \
     --acceptance-required \       # accettazione manuale richiesta
-    --private-dns-name "api.company.internal"
+    --private-dns-name "api.example.com"     # dominio pubblico di tua proprietà
 
 # Lato Consumer: creare Interface Endpoint
 aws ec2 create-vpc-endpoint \
@@ -169,6 +182,9 @@ aws ec2 create-vpc-endpoint \
     --security-group-ids sg-endpoint \
     --private-dns-enabled
 ```
+
+!!! warning "Private DNS name"
+    Il `private-dns-name` deve essere un dominio **che possiedi** e va verificato con un record TXT pubblico (`describe-vpc-endpoint-services` / `start-vpc-endpoint-service-private-dns-verification`); un nome `.internal` non è verificabile. Senza verifica il consumer usa solo il DNS generato `vpce-xxx.vpce-svc-xxx...amazonaws.com`.
 
 ---
 
@@ -249,12 +265,12 @@ On-premises ── fibra dedicata ── DX Location ── AWS Network ── R
 | Tipo | Bandwidth | Descrizione |
 |------|-----------|-------------|
 | **Dedicated** | 1/10/100 Gbps | Connessione fisica dedicata, vai al DX Location |
-| **Hosted** | 50 Mbps - 10 Gbps | Partner gestisce la connessione fisica |
+| **Hosted** | 50 Mbps - 25 Gbps | Partner gestisce la connessione fisica (1 VIF per connessione) |
 
 **Virtual Interfaces (VIF):**
-- **Private VIF** → accesso a VPC specifico via VGW
+- **Private VIF** → accesso a VPC via VGW (direttamente o tramite DX Gateway)
 - **Public VIF** → accesso a tutti i servizi AWS pubblici (S3, DynamoDB...) bypassando Internet
-- **Transit VIF** → accesso a TGW (per molti VPC)
+- **Transit VIF** → accesso a uno o più TGW tramite DX Gateway (per molti VPC)
 
 ```bash
 # Direct Connect si gestisce prevalentemente via Console
@@ -286,8 +302,12 @@ Connette un singolo DX a molteplici VPC (anche in Region diverse).
 ```
 On-premises ── DX ── DX Gateway ── VGW ── VPC-A (eu-central-1)
                                  ── VGW ── VPC-B (eu-west-1)
-                                 ── TGW ── VPC-C, VPC-D...
+
+On-premises ── DX ── DX Gateway ── TGW ── VPC-C, VPC-D...   (Transit VIF)
 ```
+
+!!! warning "VGW e TGW non si mescolano"
+    Un DX Gateway si associa a VGW (con Private VIF) **oppure** a TGW (con Transit VIF), non a entrambi: per usare i due modelli servono DX Gateway distinti.
 
 **DX vs VPN:**
 
@@ -332,7 +352,9 @@ aws ec2 authorize-client-vpn-ingress \
     --authorize-all-groups
 ```
 
-**Costo:** $0.10/hr per endpoint + $0.05/hr per connessione attiva.
+**Costo:** $0.10/hr per ogni subnet associata all'endpoint + $0.05/hr per connessione client attiva (us-east-1). Associare più subnet per HA moltiplica il costo fisso.
+
+Oltre all'autenticazione con certificato (mutual TLS) sono supportati Active Directory e SAML (federazione IdP); in team numerosi sono preferibili perché permettono revoca e MFA centralizzati.
 
 ---
 
@@ -370,9 +392,9 @@ aws ec2 describe-security-groups \
 
 **Sintomo:** L'attachment TGW-VPC rimane in stato `pending` o passa a `failed` dopo alcuni minuti.
 
-**Causa:** Le subnet selezionate per l'attachment non hanno una route verso il TGW, oppure non esistono subnet in tutte le AZ richieste. Un'altra causa comune: il TGW appartiene a un altro account e l'accettazione RAM è in sospeso.
+**Causa:** Cause comuni: (1) il TGW è di un altro account e l'invito RAM non è stato accettato (l'attachment non può nemmeno essere creato); (2) `AutoAcceptSharedAttachments=disable` e il proprietario del TGW non ha accettato l'attachment (stato `pendingAcceptance`); (3) subnet non valide (più di una per AZ, o AZ non supportata). Una route mancante nelle route table del VPC **non** blocca l'attachment, ma fa fallire il traffico.
 
-**Soluzione:** Verificare che le subnet dell'attachment siano in AZ diverse e che l'account destinatario abbia accettato la resource share RAM.
+**Soluzione:** Accettare la resource share RAM, poi accettare l'attachment dal lato proprietario del TGW; verificare una sola subnet per AZ.
 
 ```bash
 # Controllare stato attachment
@@ -388,6 +410,10 @@ aws ram get-resource-share-invitations \
 # Accettare invitation RAM
 aws ram accept-resource-share-invitation \
     --resource-share-invitation-arn arn:aws:ram:...
+
+# Dal proprietario del TGW: accettare l'attachment in pendingAcceptance
+aws ec2 accept-transit-gateway-vpc-attachment \
+    --transit-gateway-attachment-id tgw-attach-xxxx
 ```
 
 ---
