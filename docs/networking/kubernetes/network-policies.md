@@ -7,9 +7,10 @@ search_keywords: [kubernetes network policy, pod firewall, default deny, ingress
 parent: networking/kubernetes/_index
 related: [networking/kubernetes/cni, networking/kubernetes/ingress, networking/sicurezza/zero-trust, networking/sicurezza/firewall-waf, containers/kubernetes/networking]
 official_docs: https://kubernetes.io/docs/concepts/services-networking/network-policies/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Network Policies
@@ -19,7 +20,7 @@ last_updated: 2026-03-29
 Le Kubernetes Network Policies sono regole di firewall a livello di pod che controllano quale traffico TCP/UDP può fluire tra pod, namespace e indirizzi IP esterni. Per default, Kubernetes non applica nessuna restrizione di rete: tutti i pod possono comunicare con tutti gli altri. Le Network Policies cambiano questo comportamento implementando un modello **default-deny** per i pod selezionati.
 
 !!! warning "Dipendenza dal CNI"
-    Le Network Policies sono **definite** tramite risorse Kubernetes, ma **implementate** dal CNI plugin. Calico, Cilium e Weave supportano NetworkPolicy. **Flannel non le supporta** — installare Calico o Cilium se si ha bisogno di Network Policy enforcement.
+    Le Network Policies sono **definite** tramite risorse Kubernetes, ma **implementate** dal CNI plugin. Calico e Cilium supportano NetworkPolicy (così come Antrea e OVN-Kubernetes). **Flannel da solo non le supporta** — installare Calico o Cilium se si ha bisogno di Network Policy enforcement. Weave Net la supportava ma il progetto è archiviato (Weaveworks ha chiuso nel 2024): non sceglierlo per nuovi cluster.
 
 ## Prerequisiti
 
@@ -41,7 +42,14 @@ Una NetworkPolicy seleziona pod tramite `podSelector` e definisce:
 !!! info "Default Behavior"
     - Pod **senza** NetworkPolicy che li seleziona: accettano tutto il traffico (nessuna restrizione)
     - Pod **con** NetworkPolicy: solo il traffico esplicitamente permesso è consentito
-    - Regola "allow all" implicita se si specificano solo ingress rules (egress è non-selezionato = permit all)
+    - `policyTypes` decide la direzione isolata: una policy con solo `Ingress` isola i pod selezionati in ingresso e lascia l'egress libero (e viceversa)
+
+!!! info "Semantica da conoscere"
+    - **Solo allow, mai deny**: non esistono regole di blocco esplicito. Le policy che selezionano lo stesso pod si **sommano** (unione delle regole permesse), quindi l'ordine non conta e una policy non può revocare ciò che un'altra concede.
+    - **Stateful**: se una connessione è permessa in un verso, il traffico di risposta è permesso automaticamente (non serve una regola inversa).
+    - **Eccezioni**: il traffico da/verso il **nodo locale** (es. probe kubelet) è sempre permesso. Il comportamento con `hostNetwork: true` e con `ipBlock` su IP di pod/Service dipende dal CNI: non usare `ipBlock` per selezionare pod.
+    - **Protocolli**: solo TCP, UDP e SCTP; per le porte contigue usare `endPort` (stabile da 1.25, se il CNI lo supporta).
+    - **Perché default-deny**: senza isolamento un pod compromesso raggiunge ogni altro pod del cluster (movimento laterale); una policy con `podSelector: {}`, `policyTypes` e nessuna regola inverte il default da "tutto permesso" a "solo il dichiarato".
 
 ### Selettori Disponibili
 
@@ -161,7 +169,8 @@ spec:
       port: 9090
 
 ---
-# Esempio con OR logic: da namespace monitoring O da pod admin
+# Frammento (stessa spec): OR logic — da namespace monitoring O da pod admin
+# (nota: podSelector senza namespaceSelector = pod admin-tool nel namespace della policy)
   ingress:
   - from:
     - namespaceSelector:            # Voce 1: OR
@@ -225,18 +234,20 @@ spec:
 ```
 
 !!! warning "Egress e DNS"
-    Se si applica una policy egress-deny, **blocca anche il DNS** (porta 53). Ricordarsi sempre di aggiungere una regola che permette il traffico UDP/TCP 53 verso kube-dns (`kube-system`).
+    Se si applica una policy egress-deny, **blocca anche il DNS** (porta 53). Ricordarsi sempre di aggiungere una regola che permette il traffico UDP/TCP 53 verso kube-dns (`kube-system`). La regola "solo porta 53" usata sopra è senza `to` e quindi permette la 53 verso qualsiasi destinazione; per restringerla usare `namespaceSelector` su `kube-system` + `podSelector` `k8s-app: kube-dns` (con NodeLocal DNSCache l'IP di destinazione è quello link-local del nodo: verificare).
 
 ### 5. Architettura Multi-Layer Completa
 
 ```yaml
 # Namespace: production
 #
-# Frontend ──80──> API ──8080──> Backend ──5432──> Database (namespace: database)
-#                   │                │
-#                  443             9090
-#                   │                │
-#                 Ingress       Prometheus (namespace: monitoring)
+# Ingress ctrl ──3000──> Frontend ──8080──> API ──8080──> Backend ──5432──> Database (ns: database)
+#
+# Prometheus (ns: monitoring) fa scraping sulla 9090 dei pod API
+#
+# Esempio parziale: mostrati solo default-deny, frontend e API.
+# Con default-deny-all servono anche le policy di Backend (ingress da API)
+# e Database (ingress da Backend), omesse per brevità.
 
 ---
 # 1. Default deny tutto nel namespace
@@ -272,6 +283,8 @@ spec:
   - ports:        # DNS
     - port: 53
       protocol: UDP
+    - port: 53
+      protocol: TCP
   - to:
     - podSelector:
         matchLabels:
@@ -280,7 +293,7 @@ spec:
     - port: 8080
 
 ---
-# 3. API: riceve da frontend, esce verso backend e Prometheus
+# 3. API: riceve da frontend e da Prometheus (scraping), esce verso backend
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -308,6 +321,8 @@ spec:
   - ports:
     - port: 53
       protocol: UDP
+    - port: 53
+      protocol: TCP
   - to:
     - podSelector:
         matchLabels:
@@ -342,8 +357,9 @@ spec:
   - action: Deny
 
 ---
-# Calico NetworkPolicy con Layer 7 (richiede Calico Enterprise)
-# o Cilium per policy L7 open source
+# Nota: GlobalNetworkPolicy va usata con cautela — selector all() colpisce
+# anche kube-system; il CIDR 10.0.0.0/8 è un esempio, sostituirlo con i CIDR reali di pod/Service.
+# Per policy L7 preferire Cilium (open source); in Calico l'L7 è limitato/commerciale.
 ```
 
 ### Cilium NetworkPolicy L7
@@ -391,8 +407,8 @@ kubectl exec -n production frontend-pod -- curl -s --connect-timeout 3 http://ba
 # Expected: Connection timed out (bloccato dalla policy)
 
 # Con Cilium — visualizza policy enforcement
-kubectl exec -n kube-system cilium-pod -- cilium endpoint list
-kubectl exec -n kube-system cilium-pod -- cilium policy get
+kubectl exec -n kube-system ds/cilium -- cilium endpoint list
+kubectl exec -n kube-system ds/cilium -- cilium policy get
 
 # Debug: flow log con Hubble
 hubble observe --namespace production --verdict DROPPED
@@ -419,7 +435,7 @@ calicoctl get networkpolicies -n production
 
 **Causa:** La policy egress blocca anche il traffico verso il kube-dns sulla porta 53 UDP/TCP. Senza DNS, i pod non riescono a raggiungere nessun servizio tramite hostname.
 
-**Soluzione:** Aggiungere sempre una regola egress che permette la porta 53 prima di applicare default-deny. Verificare anche che `kube-system` non abbia un `namespaceSelector` che lo escluda.
+**Soluzione:** Aggiungere sempre una regola egress che permette la porta 53 prima di applicare default-deny. Se la regola DNS è ristretta con `namespaceSelector`, verificare che il namespace di kube-dns (`kube-system`) abbia la label usata (`kubernetes.io/metadata.name`).
 
 ```bash
 # Verifica se il pod riesce a risolvere il DNS
@@ -452,11 +468,11 @@ kubectl get pods -n kube-system | grep -E "calico|cilium|flannel|weave"
 kubectl get daemonset -n kube-system
 
 # Verifica se Calico è attivo e operativo
-kubectl exec -n kube-system -l k8s-app=calico-node -- calico-node -version
+kubectl exec -n kube-system ds/calico-node -- calico-node -version
 
 # Con Cilium: verifica lo stato dell'enforcement
-kubectl exec -n kube-system -l k8s-app=cilium -- cilium status
-kubectl exec -n kube-system -l k8s-app=cilium -- cilium policy get
+kubectl exec -n kube-system ds/cilium -- cilium status
+kubectl exec -n kube-system ds/cilium -- cilium policy get
 ```
 
 ### Scenario 3 — AND vs OR errato nelle regole (label mismatch logico)
