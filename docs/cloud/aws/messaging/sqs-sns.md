@@ -7,10 +7,10 @@ search_keywords: [AWS SQS, Simple Queue Service, FIFO queue, Standard queue, SNS
 parent: cloud/aws/messaging/_index
 related: [cloud/aws/messaging/eventbridge-kinesis, cloud/aws/compute/lambda, cloud/aws/security/kms-secrets]
 official_docs: https://docs.aws.amazon.com/sqs/
-status: needs-review
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # SQS & SNS
@@ -251,7 +251,9 @@ def process_order(order):
 
 Per messaggi **oltre 1 MiB** (fino a 2 GB), il payload viene salvato su S3 e nella coda viaggia solo un puntatore. Soglia configurabile: con `always_through_s3=False` si usa S3 solo oltre la soglia.
 
-<!-- REVIEW: verificare nome pacchetto/API della libreria Python (sqs-extended-client) sulla versione corrente -->
+!!! note "Soglia della libreria Python"
+    La libreria Python community `sqs-extended-client` (QuiNovas) accetta `message_size_threshold` tra 0 e 262144 byte (default 256 KiB, il vecchio limite SQS): non può essere alzata a 1 MiB. I messaggi tra 256 KiB e 1 MiB passano quindi comunque da S3, salvo `message_size_threshold` più basso/`always_through_s3`. Non è una libreria AWS ufficiale (AWS mantiene solo il client Java).
+
 ```python
 # Python — boto3 + sqs-extended-client
 # pip install sqs-extended-client
@@ -263,7 +265,7 @@ import sqs_extended_client  # noqa: F401 — estende il client boto3 con gli att
 sqs = boto3.client('sqs', region_name='eu-central-1')
 sqs.large_payload_support = 'my-large-messages-bucket'  # bucket S3
 sqs.always_through_s3 = False  # True = sempre via S3, False = solo oltre la soglia
-sqs.message_size_threshold = 1024 * 1024
+sqs.message_size_threshold = 262144  # max 256 KiB nella libreria Python (default)
 
 # Inviare messaggio grande (automaticamente su S3)
 sqs.send_message(
