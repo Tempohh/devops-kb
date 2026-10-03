@@ -5352,7 +5352,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -5377,7 +5377,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25450,7 +25450,7 @@
 <p><strong>Caratteristiche principali:</strong></p>
 <ul>
 <li><strong>Durabilità:</strong> 99.999999999% (11 nove) — AWS distribuisce automaticamente gli oggetti su almeno 3 Availability Zone all'interno di una Region</li>
-<li><strong>Disponibilità:</strong> 99.99% SLA (Service Level Agreement) per S3 Standard</li>
+<li><strong>Disponibilità:</strong> 99.99% di availability di progetto per S3 Standard; lo SLA (Service Level Agreement) contrattuale con crediti di servizio è 99.9%</li>
 <li><strong>Scalabilità:</strong> illimitata — non esiste un limite alla quantità di dati o al numero di oggetti</li>
 <li><strong>Modello di accesso:</strong> API REST HTTP/S — non è un file system, non ha directory reali (solo prefissi)</li>
 <li><strong>Scope geografico:</strong> un bucket è legato a una singola AWS Region (ma accessibile globalmente via Internet)</li>
@@ -25458,7 +25458,7 @@
 </ul>
 <div class="admonition warning">
 <p class="admonition-title">S3 NON è un file system</p>
-<p>S3 è un object store: non supporta append a file esistenti, non ha directory reali (le barre <code>/</code> nei nomi sono solo convenzioni), non supporta locking nativo. Per queste necessità usare EFS (NFS) o FSx.</p>
+<p>S3 è un object store: gli oggetti sono immutabili (ogni modifica è una riscrittura completa; l'append esiste solo in S3 Express One Zone), non ha directory reali (le barre <code>/</code> nei nomi sono solo convenzioni), non ha file locking (esistono solo le conditional writes <code>If-None-Match</code>/<code>If-Match</code> per evitare sovrascritture concorrenti). Per semantica POSIX usare EFS (NFS) o FSx.</p>
 </div>
 <p><strong>Quando NON usare S3:</strong>
 - File system per applicazioni che richiedono POSIX semantics → EFS o FSx
@@ -25486,7 +25486,7 @@
 <p><div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>s3://my-bucket/2024/01/log1.gz  → prefisso: 2024/01/
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>s3://my-bucket/2024/02/log1.gz  → prefisso: 2024/02/
 </span></code></pre></div>
-Distriburire i dati su più prefissi aumenta il throughput aggregato.</p>
+Distribuire i dati su più prefissi aumenta il throughput aggregato.</p>
 <h3 id="consistenza-dei-dati">Consistenza dei Dati<a class="headerlink" href="#consistenza-dei-dati" title="Permanent link">&para;</a></h3>
 <p>Dal dicembre 2020, S3 fornisce <strong>strong read-after-write consistency</strong> per tutti gli oggetti in tutti i bucket. Questo significa che dopo una scrittura (PUT), una lettura successiva rifletterà sempre i dati aggiornati. Stesso vale per le operazioni di eliminazione.</p>
 <hr />
@@ -25560,9 +25560,9 @@ Distriburire i dati su più prefissi aumenta il throughput aggregato.</p>
 <tr>
 <td><strong>Glacier Flexible Retrieval</strong></td>
 <td>$0.0036</td>
-<td>$0.01/GB (Bulk)</td>
+<td>$0.01/GB (Standard); Bulk gratuito</td>
 <td>90 giorni</td>
-<td>40 KB</td>
+<td>40 KB (overhead di metadata)</td>
 <td>min–ore</td>
 <td>≥3</td>
 <td>Archivio standard, retrieve occasionale</td>
@@ -25570,9 +25570,9 @@ Distriburire i dati su più prefissi aumenta il throughput aggregato.</p>
 <tr>
 <td><strong>Glacier Deep Archive</strong></td>
 <td>$0.00099</td>
-<td>$0.02/GB (Bulk)</td>
+<td>$0.02/GB (Standard); $0.0025/GB (Bulk)</td>
 <td>180 giorni</td>
-<td>40 KB</td>
+<td>40 KB (overhead di metadata)</td>
 <td>12–48h</td>
 <td>≥3</td>
 <td>Archiviazione a lungo termine (7-10 anni)</td>
@@ -25580,6 +25580,10 @@ Distriburire i dati su più prefissi aumenta il throughput aggregato.</p>
 </tbody>
 </table>
 <p><em>Prezzi approssimativi per us-east-1. Verificare su aws.amazon.com/s3/pricing</em></p>
+<div class="admonition note">
+<p class="admonition-title">S3 Express One Zone</p>
+<p>Esiste anche <strong>S3 Express One Zone</strong>, classe single-AZ a bassa latenza (single-digit ms) con directory bucket, pensata per workload ad alta frequenza di richieste (ML training, analytics). Non fa parte del modello di bucket "general purpose" descritto in questa pagina.</p>
+</div>
 <h3 id="glacier-flexible-retrieval-opzioni-di-recupero">Glacier Flexible Retrieval — Opzioni di Recupero<a class="headerlink" href="#glacier-flexible-retrieval-opzioni-di-recupero" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -25606,7 +25610,7 @@ Distriburire i dati su più prefissi aumenta il throughput aggregato.</p>
 <tr>
 <td>Bulk</td>
 <td>5–12 ore</td>
-<td>$0.0025/GB</td>
+<td>Gratuito</td>
 <td>Gratuito</td>
 </tr>
 </tbody>
@@ -25804,7 +25808,6 @@ Distriburire i dati su più prefissi aumenta il throughput aggregato.</p>
 <ul>
 <li>Oggetti esistenti prima dell'abilitazione della regola (usare S3 Batch Replication per quelli)</li>
 <li>Oggetti in Glacier/Deep Archive (non replicati automaticamente)</li>
-<li>Oggetti cifrati con SSE-C</li>
 <li>Oggetti già replicati (non si fa chain replication automatica)</li>
 </ul>
 </div>
@@ -25814,16 +25817,16 @@ Garantisce la replica del 99.99% degli oggetti entro 15 minuti. Fornisce metrich
 <h2 id="lifecycle-rules">Lifecycle Rules<a class="headerlink" href="#lifecycle-rules" title="Permanent link">&para;</a></h2>
 <p>Le lifecycle rules automatizzano la transizione degli oggetti tra storage class e la loro eliminazione, ottimizzando i costi nel tempo.</p>
 <h3 id="transition-actions">Transition Actions<a class="headerlink" href="#transition-actions" title="Permanent link">&para;</a></h3>
-<p>Le transition actions spostano oggetti da una storage class a una meno costosa. Le transizioni seguono una gerarchia (non si può "salire" di classe):</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Standard → Standard-IA → Intelligent-Tiering →
+<p>Le transition actions spostano oggetti da una storage class a una meno costosa. Le transizioni seguono una gerarchia a cascata (waterfall): non si può "salire" di classe con una lifecycle rule (per tornare a Standard serve una copia/restore):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Standard → Standard-IA → Intelligent-Tiering → One Zone-IA →
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Glacier Instant → Glacier Flexible → Glacier Deep Archive
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Minimum days per le transizioni</p>
 <ul>
-<li>Standard → Standard-IA: minimo 30 giorni</li>
-<li>Standard → Glacier Instant Retrieval: minimo 90 giorni</li>
-<li>Standard-IA → Glacier: minimo 30 giorni dopo la transizione a IA</li>
+<li>Standard → Standard-IA / One Zone-IA: minimo 30 giorni dalla creazione</li>
+<li>Standard-IA → Glacier (qualsiasi tipo): le classi IA hanno 30 giorni di durata minima fatturata, quindi la transizione prima di 30 giorni comporta comunque il costo dei giorni mancanti</li>
+<li>Per default le regole non fanno transitare oggetti &lt; 128 KB verso le classi IA/Glacier Instant (il costo per richiesta di transizione supererebbe il risparmio); è modificabile con il filtro <code>ObjectSizeLessThan</code></li>
 </ul>
 </div>
 <h3 id="expiration-actions">Expiration Actions<a class="headerlink" href="#expiration-actions" title="Permanent link">&para;</a></h3>
@@ -25901,7 +25904,7 @@ Garantisce la replica del 99.99% degli oggetti entro 15 minuti. Fornisce metrich
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1">#   &amp;X-Amz-Expires=3600</span>
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1">#   &amp;X-Amz-Signature=...</span>
 </span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># Presigned URL per upload (PUT) via SDK Python</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># La CLI genera solo URL di download (GET): per upload usare l'SDK (esempio Python sotto)</span>
 </span></code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">boto3</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">botocore.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ClientError</span>
@@ -25922,28 +25925,29 @@ Garantisce la replica del 99.99% degli oggetti entro 15 minuti. Fornisce metrich
 </span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a>        <span class="k">return</span> <span class="kc">None</span>
 </span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>    <span class="k">return</span> <span class="n">url</span>
 </span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a>
-</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="c1"># Presigned URL per upload (il client fa il PUT direttamente su S3)</span>
-</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="k">def</span><span class="w"> </span><span class="nf">create_presigned_post</span><span class="p">(</span><span class="n">bucket_name</span><span class="p">,</span> <span class="n">object_key</span><span class="p">,</span> <span class="n">expiration</span><span class="o">=</span><span class="mi">3600</span><span class="p">):</span>
-</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="w">    </span><span class="sd">"""Genera una presigned POST per caricare un oggetto S3."""</span>
-</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a>    <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a>        <span class="n">response</span> <span class="o">=</span> <span class="n">s3_client</span><span class="o">.</span><span class="n">generate_presigned_post</span><span class="p">(</span>
-</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a>            <span class="n">Bucket</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">,</span>
-</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a>            <span class="n">Key</span><span class="o">=</span><span class="n">object_key</span><span class="p">,</span>
-</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a>            <span class="n">Fields</span><span class="o">=</span><span class="p">{</span><span class="s2">"Content-Type"</span><span class="p">:</span> <span class="s2">"image/jpeg"</span><span class="p">},</span>
-</span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a>            <span class="n">Conditions</span><span class="o">=</span><span class="p">[</span>
-</span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a>                <span class="p">{</span><span class="s2">"Content-Type"</span><span class="p">:</span> <span class="s2">"image/jpeg"</span><span class="p">},</span>
-</span><span id="__span-10-30"><a id="__codelineno-10-30" name="__codelineno-10-30" href="#__codelineno-10-30"></a>                <span class="p">[</span><span class="s2">"content-length-range"</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">10485760</span><span class="p">]</span>  <span class="c1"># max 10 MB</span>
-</span><span id="__span-10-31"><a id="__codelineno-10-31" name="__codelineno-10-31" href="#__codelineno-10-31"></a>            <span class="p">],</span>
-</span><span id="__span-10-32"><a id="__codelineno-10-32" name="__codelineno-10-32" href="#__codelineno-10-32"></a>            <span class="n">ExpiresIn</span><span class="o">=</span><span class="n">expiration</span>
-</span><span id="__span-10-33"><a id="__codelineno-10-33" name="__codelineno-10-33" href="#__codelineno-10-33"></a>        <span class="p">)</span>
-</span><span id="__span-10-34"><a id="__codelineno-10-34" name="__codelineno-10-34" href="#__codelineno-10-34"></a>    <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-</span><span id="__span-10-35"><a id="__codelineno-10-35" name="__codelineno-10-35" href="#__codelineno-10-35"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Errore: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-</span><span id="__span-10-36"><a id="__codelineno-10-36" name="__codelineno-10-36" href="#__codelineno-10-36"></a>        <span class="k">return</span> <span class="kc">None</span>
-</span><span id="__span-10-37"><a id="__codelineno-10-37" name="__codelineno-10-37" href="#__codelineno-10-37"></a>    <span class="k">return</span> <span class="n">response</span>
+</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="c1"># Presigned POST per upload (il client fa un POST multipart/form-data direttamente su S3;</span>
+</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="c1"># per un PUT semplice usare generate_presigned_url('put_object', ...))</span>
+</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="k">def</span><span class="w"> </span><span class="nf">create_presigned_post</span><span class="p">(</span><span class="n">bucket_name</span><span class="p">,</span> <span class="n">object_key</span><span class="p">,</span> <span class="n">expiration</span><span class="o">=</span><span class="mi">3600</span><span class="p">):</span>
+</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">    </span><span class="sd">"""Genera una presigned POST per caricare un oggetto S3."""</span>
+</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a>        <span class="n">response</span> <span class="o">=</span> <span class="n">s3_client</span><span class="o">.</span><span class="n">generate_presigned_post</span><span class="p">(</span>
+</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a>            <span class="n">Bucket</span><span class="o">=</span><span class="n">bucket_name</span><span class="p">,</span>
+</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a>            <span class="n">Key</span><span class="o">=</span><span class="n">object_key</span><span class="p">,</span>
+</span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a>            <span class="n">Fields</span><span class="o">=</span><span class="p">{</span><span class="s2">"Content-Type"</span><span class="p">:</span> <span class="s2">"image/jpeg"</span><span class="p">},</span>
+</span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a>            <span class="n">Conditions</span><span class="o">=</span><span class="p">[</span>
+</span><span id="__span-10-30"><a id="__codelineno-10-30" name="__codelineno-10-30" href="#__codelineno-10-30"></a>                <span class="p">{</span><span class="s2">"Content-Type"</span><span class="p">:</span> <span class="s2">"image/jpeg"</span><span class="p">},</span>
+</span><span id="__span-10-31"><a id="__codelineno-10-31" name="__codelineno-10-31" href="#__codelineno-10-31"></a>                <span class="p">[</span><span class="s2">"content-length-range"</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">10485760</span><span class="p">]</span>  <span class="c1"># max 10 MB</span>
+</span><span id="__span-10-32"><a id="__codelineno-10-32" name="__codelineno-10-32" href="#__codelineno-10-32"></a>            <span class="p">],</span>
+</span><span id="__span-10-33"><a id="__codelineno-10-33" name="__codelineno-10-33" href="#__codelineno-10-33"></a>            <span class="n">ExpiresIn</span><span class="o">=</span><span class="n">expiration</span>
+</span><span id="__span-10-34"><a id="__codelineno-10-34" name="__codelineno-10-34" href="#__codelineno-10-34"></a>        <span class="p">)</span>
+</span><span id="__span-10-35"><a id="__codelineno-10-35" name="__codelineno-10-35" href="#__codelineno-10-35"></a>    <span class="k">except</span> <span class="n">ClientError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-10-36"><a id="__codelineno-10-36" name="__codelineno-10-36" href="#__codelineno-10-36"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Errore: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-10-37"><a id="__codelineno-10-37" name="__codelineno-10-37" href="#__codelineno-10-37"></a>        <span class="k">return</span> <span class="kc">None</span>
+</span><span id="__span-10-38"><a id="__codelineno-10-38" name="__codelineno-10-38" href="#__codelineno-10-38"></a>    <span class="k">return</span> <span class="n">response</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Presigned URL e IAM</p>
-<p>Se le credenziali usate per generare la presigned URL vengono revocate (es. IAM user eliminato, role scaduta), la presigned URL smette di funzionare anche se non è ancora scaduta. Usare ruoli IAM con sessioni di lunga durata per URL a lunga scadenza.</p>
+<p>Se le credenziali usate per generare la presigned URL vengono revocate (es. IAM user eliminato, role scaduta), la presigned URL smette di funzionare anche se non è ancora scaduta. Con credenziali temporanee (ruolo IAM, SSO) l'URL scade comunque alla scadenza della sessione, anche se <code>ExpiresIn</code> è maggiore. Il massimo è 7 giorni (604800 s) e solo con credenziali di un IAM user a lungo termine; per URL di lunga durata valutare CloudFront signed URL.</p>
 </div>
 <hr />
 <h2 id="multipart-upload">Multipart Upload<a class="headerlink" href="#multipart-upload" title="Permanent link">&para;</a></h2>
@@ -25952,7 +25956,7 @@ Garantisce la replica del 99.99% degli oggetti entro 15 minuti. Fornisce metrich
 - Throughput più alto (upload parallelo)
 - Riprendere upload interrotti (ricarica solo la parte fallita)
 - Upload di oggetti fino a 5 TB
-- Ogni parte: da 5 MB a 5 GB (ultima parte può essere più piccola)</p>
+- Ogni parte: da 5 MB a 5 GB (ultima parte può essere più piccola), massimo 10.000 parti per oggetto</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Multipart upload manuale con AWS CLI</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Passo 1: iniziare l'upload</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nv">UPLOAD_ID</span><span class="o">=</span><span class="k">$(</span>aws<span class="w"> </span>s3api<span class="w"> </span>create-multipart-upload<span class="w"> </span><span class="se">\</span>
@@ -26035,10 +26039,12 @@ Garantisce la replica del 99.99% degli oggetti entro 15 minuti. Fornisce metrich
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="c1"># Usare l'endpoint accelerato</span>
 </span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>aws<span class="w"> </span>s3<span class="w"> </span>cp<span class="w"> </span>large-file.zip<span class="w"> </span>s3://my-bucket/<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">  </span>--endpoint-url<span class="w"> </span>https://my-bucket.s3-accelerate.amazonaws.com
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="c1"># Testare il beneficio prima di abilitarlo</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="c1"># https://s3-accelerate-speedtest.s3-accelerate.amazonaws.com/en/accelerate-speed-comparsion.html</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">  </span>--endpoint-url<span class="w"> </span>https://s3-accelerate.amazonaws.com
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="c1"># In alternativa, per tutti i comandi `aws s3`:</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>aws<span class="w"> </span>configure<span class="w"> </span><span class="nb">set</span><span class="w"> </span>default.s3.use_accelerate_endpoint<span class="w"> </span><span class="nb">true</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="c1"># Testare il beneficio prima di abilitarlo</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="c1"># https://s3-accelerate-speedtest.s3-accelerate.amazonaws.com/en/accelerate-speed-comparsion.html</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Speed test</p>
@@ -26083,8 +26089,8 @@ Garantisce la replica del 99.99% degli oggetti entro 15 minuti. Fornisce metrich
 </span><span id="__span-14-35"><a id="__codelineno-14-35" name="__codelineno-14-35" href="#__codelineno-14-35"></a>
 </span><span id="__span-14-36"><a id="__codelineno-14-36" name="__codelineno-14-36" href="#__codelineno-14-36"></a><span class="c1"># Cambiare storage class di un oggetto esistente (copia su se stesso)</span>
 </span><span id="__span-14-37"><a id="__codelineno-14-37" name="__codelineno-14-37" href="#__codelineno-14-37"></a>aws<span class="w"> </span>s3<span class="w"> </span>cp<span class="w"> </span>s3://my-bucket/file.txt<span class="w"> </span>s3://my-bucket/file.txt<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-38"><a id="__codelineno-14-38" name="__codelineno-14-38" href="#__codelineno-14-38"></a><span class="w">  </span>--storage-class<span class="w"> </span>STANDARD_IA<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-39"><a id="__codelineno-14-39" name="__codelineno-14-39" href="#__codelineno-14-39"></a><span class="w">  </span>--metadata-directive<span class="w"> </span>REPLACE
+</span><span id="__span-14-38"><a id="__codelineno-14-38" name="__codelineno-14-38" href="#__codelineno-14-38"></a><span class="w">  </span>--storage-class<span class="w"> </span>STANDARD_IA
+</span><span id="__span-14-39"><a id="__codelineno-14-39" name="__codelineno-14-39" href="#__codelineno-14-39"></a><span class="c1"># Non aggiungere --metadata-directive REPLACE: sovrascriverebbe i metadata utente esistenti</span>
 </span><span id="__span-14-40"><a id="__codelineno-14-40" name="__codelineno-14-40" href="#__codelineno-14-40"></a>
 </span><span id="__span-14-41"><a id="__codelineno-14-41" name="__codelineno-14-41" href="#__codelineno-14-41"></a><span class="c1"># === METADATA E TAG ===</span>
 </span><span id="__span-14-42"><a id="__codelineno-14-42" name="__codelineno-14-42" href="#__codelineno-14-42"></a>
@@ -26135,7 +26141,11 @@ Garantisce la replica del 99.99% degli oggetti entro 15 minuti. Fornisce metrich
 <h3 id="sicurezza">Sicurezza<a class="headerlink" href="#sicurezza" title="Permanent link">&para;</a></h3>
 <div class="admonition warning">
 <p class="admonition-title">Block Public Access</p>
-<p>Abilitare sempre "Block Public Access" a livello di account AWS per prevenire esposizioni accidentali. La configurazione a livello account sovrascrive le configurazioni dei singoli bucket.</p>
+<p>Abilitare sempre "Block Public Access" a livello di account AWS per prevenire esposizioni accidentali. Le impostazioni account e bucket si combinano: vale la più restrittiva, quindi il blocco account non può essere aggirato da un singolo bucket.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Default moderni (dal 2023)</p>
+<p>I nuovi bucket hanno Block Public Access attivo, ACL disabilitate (Object Ownership <code>BucketOwnerEnforced</code>: l'accesso si governa con IAM e bucket policy, non con ACL) e cifratura SSE-S3 applicata di default a ogni nuovo oggetto. Per requisiti di compliance scegliere SSE-KMS esplicitamente come default encryption del bucket.</p>
 </div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Bloccare accesso pubblico a livello account</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>aws<span class="w"> </span>s3control<span class="w"> </span>put-public-access-block<span class="w"> </span><span class="se">\</span>
@@ -26205,14 +26215,19 @@ Garantisce la replica del 99.99% degli oggetti entro 15 minuti. Fornisce metrich
 </span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="w">  </span>--statistics<span class="w"> </span>Maximum
 </span></code></pre></div>
 <h3 id="costi-inattesi">Costi Inattesi<a class="headerlink" href="#costi-inattesi" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Analizzare utilizzo con S3 Storage Lens</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>aws<span class="w"> </span>s3control<span class="w"> </span>get-storage-lens-dashboard<span class="w"> </span>--config-id<span class="w"> </span>default<span class="w"> </span>--account-id<span class="w"> </span><span class="m">123456789012</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Listare e cleanup upload multipart incompleti</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>aws<span class="w"> </span>s3api<span class="w"> </span>list-multipart-uploads<span class="w"> </span>--bucket<span class="w"> </span>my-bucket
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># Listare versioni vecchie</span>
-</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>aws<span class="w"> </span>s3api<span class="w"> </span>list-object-versions<span class="w"> </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span>--query<span class="w"> </span><span class="s1">'Versions[?IsLatest==`false`]'</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Dimensione del bucket per storage class (metrica CloudWatch giornaliera)</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>aws<span class="w"> </span>cloudwatch<span class="w"> </span>get-metric-statistics<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span>--namespace<span class="w"> </span>AWS/S3<span class="w"> </span>--metric-name<span class="w"> </span>BucketSizeBytes<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span>--dimensions<span class="w"> </span><span class="nv">Name</span><span class="o">=</span>BucketName,Value<span class="o">=</span>my-bucket<span class="w"> </span><span class="nv">Name</span><span class="o">=</span>StorageType,Value<span class="o">=</span>StandardStorage<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">  </span>--start-time<span class="w"> </span><span class="m">2026</span>-09-01T00:00:00Z<span class="w"> </span>--end-time<span class="w"> </span><span class="m">2026</span>-09-02T00:00:00Z<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">  </span>--period<span class="w"> </span><span class="m">86400</span><span class="w"> </span>--statistics<span class="w"> </span>Average
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># Analisi dettagliata per prefisso/bucket: dashboard S3 Storage Lens nella console</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="c1"># Listare e cleanup upload multipart incompleti</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>aws<span class="w"> </span>s3api<span class="w"> </span>list-multipart-uploads<span class="w"> </span>--bucket<span class="w"> </span>my-bucket
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="c1"># Listare versioni vecchie</span>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a>aws<span class="w"> </span>s3api<span class="w"> </span>list-object-versions<span class="w"> </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span>--query<span class="w"> </span><span class="s1">'Versions[?IsLatest==`false`]'</span>
 </span></code></pre></div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
