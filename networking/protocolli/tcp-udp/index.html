@@ -21110,7 +21110,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21135,7 +21135,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25227,7 +25227,7 @@
 <ul>
 <li><strong>Well-known ports</strong> (0–1023): HTTP (80), HTTPS (443), SSH (22), DNS (53)</li>
 <li><strong>Registered ports</strong> (1024–49151): applicazioni specifiche registrate con IANA (Internet Assigned Numbers Authority)</li>
-<li><strong>Ephemeral ports</strong> (49152–65535): porte temporanee assegnate ai client</li>
+<li><strong>Ephemeral ports</strong> (49152–65535 secondo IANA): porte temporanee assegnate ai client. Linux usa di default <code>32768–60999</code> (<code>net.ipv4.ip_local_port_range</code>): è questo range, non quello IANA, a limitare il numero di connessioni uscenti verso lo stesso <code>IP_dst:Port_dst</code></li>
 </ul>
 <hr />
 <h2 id="come-funziona">Come Funziona<a class="headerlink" href="#come-funziona" title="Permanent link">&para;</a></h2>
@@ -25266,6 +25266,10 @@
 <li>Server invia FIN quando ha finito di trasmettere → chiude la direzione server→client</li>
 <li>Client risponde ACK e entra in <strong>TIME_WAIT</strong></li>
 </ol>
+<div class="admonition note">
+<p class="admonition-title">TIME_WAIT spetta a chi chiude per primo</p>
+<p>Il client è mostrato come active closer solo per esempio: TIME_WAIT lo accumula il lato che invia il primo FIN, che sia client o server. Un server HTTP che chiude per primo le connessioni accumula TIME_WAIT. Se i due FIN si incrociano (<em>simultaneous close</em>) entrambi passano da CLOSING a TIME_WAIT. Con <code>ACK</code> e <code>FIN</code> del server nello stesso segmento (frequente) il teardown si riduce a 3 segmenti.</p>
+</div>
 <h3 id="tcp-state-machine">TCP State Machine<a class="headerlink" href="#tcp-state-machine" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>CLOSED
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  │  [passive open: listen()]
@@ -25283,7 +25287,7 @@
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>          /              \
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    FIN_WAIT_1        CLOSE_WAIT
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>         │                │ [snd FIN]
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    [rcv FIN-ACK]         ▼
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    [rcv ACK del FIN]     ▼
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    FIN_WAIT_2       LAST_ACK
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>         │                │ [rcv ACK]
 </span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    [rcv FIN, snd ACK]    ▼
@@ -25295,7 +25299,7 @@
 </span></code></pre></div>
 <p><strong>Stati critici:</strong></p>
 <ul>
-<li><strong>TIME_WAIT</strong>: dopo aver inviato l'ACK finale, il client attende <code>2 × MSL</code> (Maximum Segment Lifetime, tipicamente 60s) per garantire che l'ACK sia arrivato e che vecchi pacchetti duplicati siano scomparsi dalla rete. Alta concentrazione di socket in TIME_WAIT è normale su server molto trafficati.</li>
+<li><strong>TIME_WAIT</strong>: dopo aver inviato l'ACK finale, chi ha chiuso per primo attende <code>2 × MSL</code> (Maximum Segment Lifetime) per garantire che l'ACK sia arrivato (altrimenti il peer ritrasmette il FIN) e che vecchi segmenti duplicati scompaiano dalla rete, evitando che vengano scambiati per dati di una nuova connessione con la stessa quadrupla. Su Linux la durata è fissa a 60s (<code>TCP_TIMEWAIT_LEN</code>, non configurabile via sysctl). Alta concentrazione di socket in TIME_WAIT è normale su server molto trafficati.</li>
 <li><strong>CLOSE_WAIT</strong>: il lato che ha ricevuto il FIN ma non ha ancora chiuso la propria direzione. Un numero elevato indica un bug applicativo (l'applicazione non chiude i socket).</li>
 <li><strong>SYN_SENT / SYN_RCVD</strong>: stati transitori durante l'handshake.</li>
 </ul>
@@ -25308,14 +25312,14 @@
 <h3 id="tcp-congestion-control">TCP: Congestion Control<a class="headerlink" href="#tcp-congestion-control" title="Permanent link">&para;</a></h3>
 <p>TCP implementa 4 algoritmi per evitare di sovraccaricare la rete:</p>
 <ol>
-<li><strong>Slow Start</strong>: alla partenza, <code>cwnd</code> (congestion window) parte da 1 MSS (Maximum Segment Size) e raddoppia ogni RTT fino a <code>ssthresh</code></li>
+<li><strong>Slow Start</strong>: alla partenza, <code>cwnd</code> (congestion window) parte da un <em>initial window</em> (IW) di 10 MSS (Maximum Segment Size) nelle implementazioni moderne (RFC 6928; 1 MSS era il valore storico) e raddoppia ogni RTT fino a <code>ssthresh</code></li>
 <li><strong>Congestion Avoidance</strong>: superata <code>ssthresh</code>, <code>cwnd</code> cresce di 1 MSS per RTT (crescita lineare)</li>
 <li><strong>Fast Retransmit</strong>: alla ricezione di 3 ACK duplicati, il mittente ritrasmette il segmento perso senza attendere il timeout</li>
 <li><strong>Fast Recovery</strong>: dopo fast retransmit, <code>ssthresh = cwnd/2</code> e si riparte dalla congestion avoidance (non da slow start)</li>
 </ol>
 <div class="admonition note">
 <p class="admonition-title">TCP BBR</p>
-<p>Google ha sviluppato <strong>BBR</strong> (Bottleneck Bandwidth and RTT), un algoritmo di congestion control moderno che misura direttamente la bandwidth disponibile invece di dedurla dalle perdite. Significativamente più efficiente di CUBIC su reti con alto RTT o perdite non da congestione (es. reti wireless).</p>
+<p>Google ha sviluppato <strong>BBR</strong> (Bottleneck Bandwidth and RTT), un algoritmo di congestion control moderno che misura direttamente la bandwidth disponibile invece di dedurla dalle perdite. Più efficiente di CUBIC (default su Linux) su reti con alto RTT o perdite non da congestione (es. reti wireless). Si abilita con <code>sysctl -w net.ipv4.tcp_congestion_control=bbr</code> (modulo <code>tcp_bbr</code>; spesso abbinato a <code>net.core.default_qdisc=fq</code>). Il kernel Linux include BBRv1; BBRv2/v3 sono evoluzioni che riducono l'aggressività verso i flussi CUBIC. Va misurato sul proprio carico: su reti a bassa perdita il vantaggio può essere nullo.</p>
 </div>
 <h3 id="nagles-algorithm">Nagle's Algorithm<a class="headerlink" href="#nagles-algorithm" title="Permanent link">&para;</a></h3>
 <p>L'algoritmo di Nagle riduce il numero di piccoli segmenti TCP aggregando i dati in attesa di un ACK. Utile per applicazioni interattive a bassa bandwidth, ma aggiunge latenza. Si disabilita con <code>TCP_NODELAY</code> (es. per database client, gaming, SSH).</p>
@@ -25446,18 +25450,19 @@
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.core.somaxconn<span class="o">=</span><span class="m">65535</span>
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.tcp_max_syn_backlog<span class="o">=</span><span class="m">65535</span>
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="c1"># Mitigare TIME_WAIT su server con molte connessioni short-lived</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Permette riuso rapido dei socket in TIME_WAIT (sicuro con timestamp TCP)</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.tcp_tw_reuse<span class="o">=</span><span class="m">1</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="c1"># Abilitare TCP Fast Open (riduce latenza eliminando RTT per connessioni ripetute)</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.tcp_fastopen<span class="o">=</span><span class="m">3</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="c1"># Buffer socket (aumentare per reti ad alta velocità/alto RTT)</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.core.rmem_max<span class="o">=</span><span class="m">134217728</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.core.wmem_max<span class="o">=</span><span class="m">134217728</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.tcp_rmem<span class="o">=</span><span class="s2">"4096 87380 134217728"</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.tcp_wmem<span class="o">=</span><span class="s2">"4096 65536 134217728"</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="c1"># Mitigare TIME_WAIT su host che APRONO molte connessioni short-lived (client, reverse proxy -&gt; backend)</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Permette di riusare socket in TIME_WAIT solo per connessioni in USCITA (richiede timestamp TCP).</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># Non ha effetto sulle connessioni in ingresso. Dal kernel 4.19 il default è 2 (solo loopback): 1 = globale</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.tcp_tw_reuse<span class="o">=</span><span class="m">1</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># Abilitare TCP Fast Open (riduce latenza eliminando RTT per connessioni ripetute)</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.tcp_fastopen<span class="o">=</span><span class="m">3</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="c1"># Buffer socket (aumentare per reti ad alta velocità/alto RTT)</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.core.rmem_max<span class="o">=</span><span class="m">134217728</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.core.wmem_max<span class="o">=</span><span class="m">134217728</span>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.tcp_rmem<span class="o">=</span><span class="s2">"4096 87380 134217728"</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.tcp_wmem<span class="o">=</span><span class="s2">"4096 65536 134217728"</span>
 </span></code></pre></div>
 <div class="language-ini highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># /etc/sysctl.d/99-tcp-tuning.conf (persistente)</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="na">net.ipv4.tcp_keepalive_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">600</span>
@@ -25491,23 +25496,23 @@
 </div>
 <div class="admonition tip">
 <p class="admonition-title">TIME_WAIT: non è un problema, è una funzionalità</p>
-<p>Migliaia di socket in TIME_WAIT su un server HTTP è normale e atteso. Indicano che il server sta attivamente chiudendo connessioni. Usare <code>tcp_tw_reuse=1</code> (non <code>tcp_tw_recycle</code>, deprecato e pericoloso con NAT) se l'accumulo causa esaurimento delle porte.</p>
+<p>Migliaia di socket in TIME_WAIT su un server HTTP è normale e atteso. Indicano che il server sta attivamente chiudendo connessioni. Se l'accumulo causa esaurimento delle porte effimere, il caso tipico è un client/proxy che apre molte connessioni uscenti verso lo stesso backend: lì <code>tcp_tw_reuse=1</code> aiuta (non <code>tcp_tw_recycle</code>, rimosso e pericoloso con NAT). Su un server che riceve connessioni non serve: la quadrupla include la porta sorgente del client, quindi non c'è esaurimento lato server.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">tcp_tw_recycle è pericoloso</p>
 <p><code>net.ipv4.tcp_tw_recycle</code> è stato rimosso dal kernel Linux 4.12 perché causava drop silenzioso di connessioni legittime da client dietro NAT. Non usarlo mai.</p>
 </div>
 <h3 id="keepalive-quando-e-come">Keepalive: quando e come<a class="headerlink" href="#keepalive-quando-e-come" title="Permanent link">&para;</a></h3>
-<p>TCP keepalive permette di rilevare connessioni interrotte (es. crash del peer, link down) senza traffico applicativo. Configurare keepalive a livello applicativo (es. <code>SO_KEEPALIVE</code>) è preferibile al tuning di sistema perché consente valori diversi per diverse applicazioni.</p>
+<p>TCP keepalive permette di rilevare connessioni interrotte (es. crash del peer, link down) senza traffico applicativo. <code>SO_KEEPALIVE</code> abilita il meccanismo sul singolo socket (è disattivato di default); i tempi si possono sovrascrivere per socket con <code>TCP_KEEPIDLE</code>, <code>TCP_KEEPINTVL</code>, <code>TCP_KEEPCNT</code>. È preferibile al tuning di sistema perché consente valori diversi per diverse applicazioni. Utile anche per evitare che NAT e load balancer scartino per inattività le connessioni lunghe (idle timeout tipico 60–350s: keepalive_time di sistema, 7200s, è troppo alto per questo scopo).</p>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="molti-socket-in-time_wait">Molti socket in TIME_WAIT<a class="headerlink" href="#molti-socket-in-time_wait" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>ss -tan | grep TIME_WAIT | wc -l</code> restituisce valori elevati (decine di migliaia).</p>
-<p><strong>Causa:</strong> normale su server HTTP/HTTPS che chiudono le connessioni dopo ogni risposta (HTTP/1.0) o che usano connection: close.</p>
+<p><strong>Causa:</strong> normale su host che chiudono per primi le connessioni dopo ogni risposta (HTTP/1.0, <code>Connection: close</code>). Diventa un problema solo se un host che apre connessioni uscenti esaurisce le porte effimere (errori <code>Cannot assign requested address</code>).</p>
 <p><strong>Soluzione:</strong>
 1. Abilitare HTTP keep-alive nell'applicazione/proxy per riusare le connessioni
-2. Impostare <code>net.ipv4.tcp_tw_reuse=1</code>
-3. Se il server apre connessioni verso un backend (es. reverse proxy → app), considerare un connection pool</p>
+2. Se il server apre connessioni verso un backend (es. reverse proxy → app), usare un connection pool
+3. Sugli host con connessioni uscenti: <code>net.ipv4.tcp_tw_reuse=1</code> e/o ampliare <code>net.ipv4.ip_local_port_range</code></p>
 <h3 id="connection-refused-vs-connection-timeout">Connection Refused vs Connection Timeout<a class="headerlink" href="#connection-refused-vs-connection-timeout" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -25571,7 +25576,8 @@
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="https://www.rfc-editor.org/rfc/rfc793">RFC 793 — Transmission Control Protocol</a></li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9293">RFC 9293 — Transmission Control Protocol (TCP)</a> (2022, sostituisce RFC 793)</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc6928">RFC 6928 — Increasing TCP's Initial Window</a></li>
 <li><a href="https://www.rfc-editor.org/rfc/rfc768">RFC 768 — User Datagram Protocol</a></li>
 <li><a href="https://www.rfc-editor.org/rfc/rfc7323">RFC 7323 — TCP Extensions for High Performance</a></li>
 <li><a href="https://www.rfc-editor.org/rfc/rfc6298">RFC 6298 — Computing TCP's Retransmission Timer</a></li>
