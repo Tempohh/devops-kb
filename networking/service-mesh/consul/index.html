@@ -22302,6 +22302,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-servizio-non-risolve-via-dns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Servizio non risolve via DNS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-sidecar-envoy-non-iniettato" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Sidecar Envoy non iniettato
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-comunicazione-bloccata-tra-servizi-mtls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Comunicazione bloccata tra servizi mTLS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-cluster-server-senza-leader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Cluster server senza leader
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-catalog-sync-non-propaga-i-servizi-vm-verso-k8s" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Catalog sync non propaga i servizi VM verso k8s
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24758,6 +24819,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-servizio-non-risolve-via-dns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Servizio non risolve via DNS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-sidecar-envoy-non-iniettato" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Sidecar Envoy non iniettato
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-comunicazione-bloccata-tra-servizi-mtls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Comunicazione bloccata tra servizi mTLS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-cluster-server-senza-leader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Cluster server senza leader
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-catalog-sync-non-propaga-i-servizi-vm-verso-k8s" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Catalog sync non propaga i servizi VM verso k8s
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24941,11 +25063,11 @@
 <h3 id="agent-model-client-e-server">Agent model: client e server<a class="headerlink" href="#agent-model-client-e-server" title="Permanent link">&para;</a></h3>
 <p>Ogni nodo del cluster Consul esegue un <strong>agente</strong>, in due modalità:</p>
 <ul>
-<li><strong>Server</strong>: mantiene lo stato del cluster tramite <strong>Raft consensus</strong>, replica il catalogo servizi, risponde alle query DNS/HTTP. Tipicamente 3 o 5 server per datacenter (quorum dispari).</li>
+<li><strong>Server</strong>: mantiene lo stato del cluster tramite <strong>Raft consensus</strong> (algoritmo che elegge un leader e replica il log solo con maggioranza dei nodi, il <em>quorum</em>), replica il catalogo servizi, risponde alle query DNS/HTTP. Tipicamente 3 o 5 server per datacenter (quorum dispari).</li>
 <li><strong>Client</strong>: gira su ogni nodo applicativo (VM o come DaemonSet in k8s), inoltra le richieste ai server e esegue gli health check locali.</li>
 </ul>
 <h3 id="gossip-protocol-serf">Gossip protocol (Serf)<a class="headerlink" href="#gossip-protocol-serf" title="Permanent link">&para;</a></h3>
-<p>I nodi si scoprono e si tengono sincronizzati tramite <strong>Serf</strong>, un protocollo gossip epidemico basato su SWIM. Serve per: cluster membership, failure detection e propagazione di eventi, senza dipendere da un single point of failure per il discovery iniziale.</p>
+<p>I nodi si scoprono e si tengono sincronizzati tramite <strong>Serf</strong>, un protocollo gossip epidemico basato su SWIM (Scalable Weakly-consistent Infection-style Membership: ogni nodo sonda periodicamente peer casuali, così il costo per nodo resta costante al crescere del cluster). Serve per: cluster membership, failure detection e propagazione di eventi, senza dipendere da un single point of failure per il discovery iniziale.</p>
 <h3 id="catalogo-servizi-e-dns">Catalogo servizi e DNS<a class="headerlink" href="#catalogo-servizi-e-dns" title="Permanent link">&para;</a></h3>
 <p>Consul espone i servizi registrati via interfaccia DNS (<code>&lt;service&gt;.service.consul</code>) e HTTP API. Qualsiasi client — script bash, applicazione legacy, container — può risolvere un servizio senza SDK dedicato.</p>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
@@ -25134,58 +25256,51 @@
 <p>A differenza di Istio (che riusa il control plane Kubernetes), Consul richiede di mantenere un cluster server dedicato con il proprio quorum Raft e gossip pool. In ambienti puramente Kubernetes questo è complessità aggiuntiva non giustificata se non serve l'integrazione VM/ibrida.</p>
 </div>
 <ul>
-<li><strong>ACL abilitate in produzione</strong>: senza ACL chiunque può scrivere nel catalogo o nel KV store. Abilitare <code>acl.enabled = true</code> con default policy <code>deny</code>.</li>
+<li><strong>ACL (Access Control List) abilitate in produzione</strong>: senza ACL chiunque può scrivere nel catalogo o nel KV store. Abilitare <code>acl.enabled = true</code> con default policy <code>deny</code>.</li>
 <li><strong>Mesh Gateway per multi-datacenter</strong>: per comunicazione cross-datacenter senza esporre ogni singolo servizio, usare i Mesh Gateway invece di aprire rotte dirette.</li>
 <li><strong>Terminating Gateway per servizi esterni non mesh-aware</strong>: registrare database o API esterne dietro un Terminating Gateway per portarle sotto mTLS Connect senza modificarle.</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Sintomo</th>
-<th>Causa probabile</th>
-<th>Soluzione</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Servizio non risolve via DNS (<code>NXDOMAIN</code> su <code>*.service.consul</code>)</td>
-<td>Agent locale non registrato o DNS forwarding non configurato</td>
-<td><code>consul members</code> per verificare che l'agent sia nel cluster; controllare <code>dnsmasq</code>/<code>systemd-resolved</code> forwarding verso porta 8600</td>
-</tr>
-<tr>
-<td>Sidecar Envoy non iniettato su pod k8s</td>
-<td>Webhook <code>connect-inject</code> disabilitato o annotation mancante</td>
-<td>Verificare <code>connectInject.enabled: true</code> nei values Helm; controllare annotation <code>consul.hashicorp.com/connect-inject: "true"</code> sul pod</td>
-</tr>
-<tr>
-<td>Comunicazione bloccata tra due servizi mTLS-enabled</td>
-<td>Intention di deny implicito (default-deny attivo, nessuna intention allow creata)</td>
-<td><code>consul intention check &lt;source&gt; &lt;destination&gt;</code>; creare intention allow esplicita</td>
-</tr>
-<tr>
-<td>Cluster server perde il leader / quorum non raggiunto</td>
-<td>Numero pari di server o partizione di rete tra i nodi Raft</td>
-<td>Usare sempre un numero dispari di server (3 o 5); verificare <code>consul operator raft list-peers</code></td>
-</tr>
-<tr>
-<td>Catalog sync non propaga servizi VM verso k8s</td>
-<td><code>syncCatalog.toK8S</code> disabilitato o filtro tag non corrispondente</td>
-<td>Verificare i values Helm <code>syncCatalog</code>; controllare i tag di sync configurati (<code>-consul-k8s-tag</code> di default)</td>
-</tr>
-</tbody>
-</table>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Stato generale del cluster e dei membri</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>consul<span class="w"> </span>members
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>consul<span class="w"> </span>operator<span class="w"> </span>raft<span class="w"> </span>list-peers
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Log dell'agent per debug</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>journalctl<span class="w"> </span>-u<span class="w"> </span>consul<span class="w"> </span>-f<span class="w">          </span><span class="c1"># VM (systemd)</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>consul<span class="w"> </span>consul-server-0<span class="w">   </span><span class="c1"># Kubernetes</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># Verificare configurazione e certificati di un sidecar Envoy iniettato</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>default<span class="w"> </span>&lt;pod&gt;<span class="w"> </span>-c<span class="w"> </span>consul-connect-envoy-sidecar<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">  </span>wget<span class="w"> </span>-qO-<span class="w"> </span>http://localhost:19000/config_dump
+<h3 id="scenario-1-servizio-non-risolve-via-dns">Scenario 1 — Servizio non risolve via DNS<a class="headerlink" href="#scenario-1-servizio-non-risolve-via-dns" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>NXDOMAIN</code> su <code>&lt;service&gt;.service.consul</code>.</p>
+<p><strong>Causa</strong>: agent locale non nel cluster, oppure il resolver di sistema non inoltra il dominio <code>.consul</code> alla porta DNS di Consul (8600, non la 53 standard).</p>
+<p><strong>Soluzione</strong>: verificare membership, interrogare direttamente Consul per isolare il problema, poi configurare il forwarding (<code>dnsmasq</code>/<code>systemd-resolved</code>).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>consul<span class="w"> </span>members
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>dig<span class="w"> </span>@127.0.0.1<span class="w"> </span>-p<span class="w"> </span><span class="m">8600</span><span class="w"> </span>legacy-billing.service.consul
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># systemd-resolved: inoltra solo il dominio .consul</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># /etc/systemd/resolved.conf.d/consul.conf -&gt; [Resolve] DNS=127.0.0.1:8600  Domains=~consul</span>
+</span></code></pre></div>
+<h3 id="scenario-2-sidecar-envoy-non-iniettato">Scenario 2 — Sidecar Envoy non iniettato<a class="headerlink" href="#scenario-2-sidecar-envoy-non-iniettato" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: il pod parte con un solo container, nessun <code>consul-connect-envoy-sidecar</code>.</p>
+<p><strong>Causa</strong>: webhook <code>connect-inject</code> (mutating admission webhook che modifica il pod alla creazione) disabilitato, annotation mancante, o pod creato prima dell'abilitazione.</p>
+<p><strong>Soluzione</strong>: verificare i values Helm e l'annotation, poi ricreare il pod (l'injection avviene solo alla creazione).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>helm<span class="w"> </span>get<span class="w"> </span>values<span class="w"> </span>consul<span class="w"> </span>-n<span class="w"> </span>consul<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A2<span class="w"> </span>connectInject
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>checkout<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.spec.template.metadata.annotations}'</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deploy/checkout
+</span></code></pre></div>
+<h3 id="scenario-3-comunicazione-bloccata-tra-servizi-mtls">Scenario 3 — Comunicazione bloccata tra servizi mTLS<a class="headerlink" href="#scenario-3-comunicazione-bloccata-tra-servizi-mtls" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: connessioni rifiutate/reset tra due servizi Connect, nonostante entrambi siano sani.</p>
+<p><strong>Causa</strong>: intention di deny (esplicita o default-deny globale) senza una regola allow per la coppia source→destination.</p>
+<p><strong>Soluzione</strong>: controllare l'esito dell'intention e creare l'allow esplicita.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>consul<span class="w"> </span>intention<span class="w"> </span>check<span class="w"> </span>checkout<span class="w"> </span>legacy-billing
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>consul<span class="w"> </span>intention<span class="w"> </span>create<span class="w"> </span>-allow<span class="w"> </span>checkout<span class="w"> </span>legacy-billing
+</span></code></pre></div>
+<h3 id="scenario-4-cluster-server-senza-leader">Scenario 4 — Cluster server senza leader<a class="headerlink" href="#scenario-4-cluster-server-senza-leader" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: errori <code>No cluster leader</code>, scritture e registrazioni falliscono.</p>
+<p><strong>Causa</strong>: quorum Raft perso (la maggioranza dei server <code>N/2+1</code> non è raggiungibile) per partizione di rete o server down; un numero pari di server non aumenta la tolleranza ai guasti.</p>
+<p><strong>Soluzione</strong>: ripristinare i server mancanti; usare 3 o 5 server; ispezionare i peer e i log.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>consul<span class="w"> </span>operator<span class="w"> </span>raft<span class="w"> </span>list-peers
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>journalctl<span class="w"> </span>-u<span class="w"> </span>consul<span class="w"> </span>-f<span class="w">                  </span><span class="c1"># VM (systemd)</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>consul<span class="w"> </span>consul-server-0<span class="w">   </span><span class="c1"># Kubernetes</span>
+</span></code></pre></div>
+<h3 id="scenario-5-catalog-sync-non-propaga-i-servizi-vm-verso-k8s">Scenario 5 — Catalog sync non propaga i servizi VM verso k8s<a class="headerlink" href="#scenario-5-catalog-sync-non-propaga-i-servizi-vm-verso-k8s" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: servizi registrati dalla VM assenti come Service Kubernetes.</p>
+<p><strong>Causa</strong>: <code>syncCatalog.toK8S</code> disabilitato oppure filtri di sync (tag, namespace) non corrispondenti.</p>
+<p><strong>Soluzione</strong>: controllare i values Helm e i log del pod di sync.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>helm<span class="w"> </span>get<span class="w"> </span>values<span class="w"> </span>consul<span class="w"> </span>-n<span class="w"> </span>consul<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A4<span class="w"> </span>syncCatalog
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>consul<span class="w"> </span>deploy/consul-sync-catalog
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>default<span class="w"> </span>&lt;pod&gt;<span class="w"> </span>-c<span class="w"> </span>consul-connect-envoy-sidecar<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span>wget<span class="w"> </span>-qO-<span class="w"> </span>http://localhost:19000/config_dump<span class="w">   </span><span class="c1"># config Envoy effettiva</span>
 </span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">

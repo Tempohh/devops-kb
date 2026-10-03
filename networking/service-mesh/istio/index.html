@@ -22300,6 +22300,50 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#scenario-1-503-upstream-connect-error-or-disconnectreset-before-headers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — 503 upstream connect error or disconnect/reset before headers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-404-nr-no-route-dallingress-gateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — 404 / NR (no route) dall'Ingress Gateway
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-sidecar-non-iniettato-o-istiod-non-raggiungibile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Sidecar non iniettato o istiod non raggiungibile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-proxy-stale-in-proxy-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Proxy STALE in proxy-status
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -24967,6 +25011,50 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#scenario-1-503-upstream-connect-error-or-disconnectreset-before-headers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — 503 upstream connect error or disconnect/reset before headers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-404-nr-no-route-dallingress-gateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — 404 / NR (no route) dall'Ingress Gateway
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-sidecar-non-iniettato-o-istiod-non-raggiungibile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Sidecar non iniettato o istiod non raggiungibile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-proxy-stale-in-proxy-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Proxy STALE in proxy-status
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -25730,6 +25818,40 @@
 </span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
 </span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="c1"># Ripristinare il log level</span>
 </span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>istioctl<span class="w"> </span>proxy-config<span class="w"> </span>log<span class="w"> </span>&lt;pod-name&gt;.&lt;namespace&gt;<span class="w"> </span>--level<span class="w"> </span>warning
+</span></code></pre></div>
+<h3 id="scenario-1-503-upstream-connect-error-or-disconnectreset-before-headers">Scenario 1 — 503 <code>upstream connect error or disconnect/reset before headers</code><a class="headerlink" href="#scenario-1-503-upstream-connect-error-or-disconnectreset-before-headers" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: chiamate tra servizi falliscono con 503 e response flag <code>UF</code>/<code>UC</code> nei log del sidecar; nessun errore nell'applicazione.</p>
+<p><strong>Causa</strong>: mismatch mTLS. Il destinatario ha <code>PeerAuthentication</code> STRICT ma il client non ha sidecar (o una <code>DestinationRule</code> forza <code>tls.mode: DISABLE</code>), quindi Envoy riceve plaintext e chiude la connessione.</p>
+<p><strong>Soluzione</strong>: allineare le due policy, o passare temporaneamente a PERMISSIVE durante la migrazione.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>istioctl<span class="w"> </span>x<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>&lt;pod&gt;.&lt;namespace&gt;<span class="w">          </span><span class="c1"># mostra mTLS effettivo</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>peerauthentication,destinationrule<span class="w"> </span>-A
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>&lt;pod&gt;<span class="w"> </span>-c<span class="w"> </span>istio-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"UF|UC|URX"</span>
+</span></code></pre></div>
+<h3 id="scenario-2-404-nr-no-route-dallingress-gateway">Scenario 2 — 404 / <code>NR</code> (no route) dall'Ingress Gateway<a class="headerlink" href="#scenario-2-404-nr-no-route-dallingress-gateway" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: richiesta esterna restituisce 404; nei log del gateway compare response flag <code>NR</code>.</p>
+<p><strong>Causa</strong>: il <code>VirtualService</code> non referenzia il <code>Gateway</code> in <code>spec.gateways</code>, l'host non coincide, oppure Gateway e VS stanno in namespace diversi senza il prefisso <code>ns/name</code>. Senza route matching Envoy non sa dove inoltrare.</p>
+<p><strong>Soluzione</strong>: verificare host, <code>gateways</code> e selector del Gateway; poi controllare le route realmente caricate sul proxy.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>istioctl<span class="w"> </span>analyze<span class="w"> </span>-n<span class="w"> </span>production
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>istioctl<span class="w"> </span>proxy-config<span class="w"> </span>route<span class="w"> </span>deploy/istio-ingressgateway<span class="w"> </span>-n<span class="w"> </span>istio-system
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>deploy/istio-ingressgateway<span class="w"> </span>-n<span class="w"> </span>istio-system<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
+</span></code></pre></div>
+<h3 id="scenario-3-sidecar-non-iniettato-o-istiod-non-raggiungibile">Scenario 3 — Sidecar non iniettato o istiod non raggiungibile<a class="headerlink" href="#scenario-3-sidecar-non-iniettato-o-istiod-non-raggiungibile" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: Pod con <code>1/1</code> container invece di <code>2/2</code>; oppure Pod nuovi bloccati con errore <code>failed calling webhook "namespace.sidecar-injector.istio.io"</code>.</p>
+<p><strong>Causa</strong>: namespace senza label <code>istio-injection=enabled</code> (o <code>istio.io/rev</code> con revisioni), Pod creati prima della label (l'injection avviene solo alla creazione), oppure istiod down e <code>MutatingWebhookConfiguration</code> con <code>failurePolicy: Fail</code>.</p>
+<p><strong>Soluzione</strong>: etichettare il namespace, riavviare i workload, verificare istiod.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>ns<span class="w"> </span>production<span class="w"> </span>--show-labels
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>istio-system<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>istiod
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>mutatingwebhookconfiguration<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>istio
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deployment<span class="w"> </span>-n<span class="w"> </span>production
+</span></code></pre></div>
+<h3 id="scenario-4-proxy-stale-in-proxy-status">Scenario 4 — Proxy <code>STALE</code> in <code>proxy-status</code><a class="headerlink" href="#scenario-4-proxy-stale-in-proxy-status" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>istioctl proxy-status</code> mostra <code>STALE</code> o <code>NOT SENT</code> per CDS/LDS/EDS/RDS; le modifiche a VirtualService/DestinationRule non hanno effetto.</p>
+<p><strong>Causa</strong>: istiod sovraccarico o con pochi risorse, config rifiutata da Envoy (NACK) per YAML valido ma semanticamente errato, oppure connessione xDS persa.</p>
+<p><strong>Soluzione</strong>: leggere il motivo del NACK, correggere la risorsa, scalare istiod se saturo.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>istioctl<span class="w"> </span>proxy-status
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>deploy/istiod<span class="w"> </span>-n<span class="w"> </span>istio-system<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>-E<span class="w"> </span><span class="s2">"nack|reject|error"</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>istio-system
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>kubectl<span class="w"> </span>scale<span class="w"> </span>deploy/istiod<span class="w"> </span>-n<span class="w"> </span>istio-system<span class="w"> </span>--replicas<span class="o">=</span><span class="m">2</span>
 </span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">

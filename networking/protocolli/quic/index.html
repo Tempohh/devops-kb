@@ -21419,6 +21419,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-quic-non-negoziato-traffico-sempre-su-tcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — QUIC non negoziato, traffico sempre su TCP
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-il-client-non-passa-mai-a-http3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Il client non passa mai a HTTP/3
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-0-rtt-non-funziona" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — 0-RTT non funziona
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-prestazioni-peggiori-di-tcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Prestazioni peggiori di TCP
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24714,6 +24764,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-quic-non-negoziato-traffico-sempre-su-tcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — QUIC non negoziato, traffico sempre su TCP
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-il-client-non-passa-mai-a-http3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Il client non passa mai a HTTP/3
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-0-rtt-non-funziona" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — 0-RTT non funziona
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-prestazioni-peggiori-di-tcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Prestazioni peggiori di TCP
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24892,11 +24992,11 @@
 </thead>
 <tbody>
 <tr>
-<td>3-way handshake (1.5 RTT) + TLS handshake (1-2 RTT)</td>
+<td>3-way handshake (1.5 RTT, round-trip time = andata e ritorno) + TLS handshake (1-2 RTT)</td>
 <td>Connessione + TLS in 1-RTT (0-RTT per sessioni note)</td>
 </tr>
 <tr>
-<td>HOL blocking: un pacchetto perso blocca tutti gli stream</td>
+<td>HOL (head-of-line) blocking: un pacchetto perso blocca tutti gli stream</td>
 <td>Stream indipendenti: perdita su uno stream non blocca gli altri</td>
 </tr>
 <tr>
@@ -25040,37 +25140,43 @@
 <li><strong>Fallback a TCP</strong>: i client che non supportano QUIC tornano automaticamente a TCP — non è necessario configurarlo</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Sintomo</th>
-<th>Causa</th>
-<th>Soluzione</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>QUIC non negoziato</td>
-<td>Firewall blocca UDP 443</td>
-<td>Aprire porta 443/UDP</td>
-</tr>
-<tr>
-<td>0-RTT non funziona</td>
-<td>Server non supporta early data</td>
-<td>Abilitare <code>ssl_early_data on</code></td>
-</tr>
-<tr>
-<td>Prestazioni peggiori del previsto</td>
-<td>Rete con alto packet loss e no QUIC tuning</td>
-<td>Verificare configurazione BBR e buffer UDP</td>
-</tr>
-<tr>
-<td>Client non upgrada a HTTP/3</td>
-<td>Alt-Svc header mancante</td>
-<td>Aggiungere <code>Alt-Svc: h3=":443"; ma=86400</code></td>
-</tr>
-</tbody>
-</table>
+<h3 id="scenario-1-quic-non-negoziato-traffico-sempre-su-tcp">Scenario 1 — QUIC non negoziato, traffico sempre su TCP<a class="headerlink" href="#scenario-1-quic-non-negoziato-traffico-sempre-su-tcp" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: DevTools mostra <code>h2</code> invece di <code>h3</code>; <code>curl --http3</code> va in timeout.</p>
+<p><strong>Causa</strong>: firewall/security group blocca UDP 443. QUIC viaggia su UDP, ma molte regole aprono solo TCP 443.</p>
+<p><strong>Soluzione</strong>: aprire 443/UDP e verificare che arrivi al server.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Server: il listener UDP esiste?</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>ss<span class="w"> </span>-ulnp<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>:443
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Cattura pacchetti QUIC in ingresso</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>sudo<span class="w"> </span>tcpdump<span class="w"> </span>-ni<span class="w"> </span>any<span class="w"> </span>udp<span class="w"> </span>port<span class="w"> </span><span class="m">443</span><span class="w"> </span>-c<span class="w"> </span><span class="m">10</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Security group AWS: aggiungere regola UDP 443</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>aws<span class="w"> </span>ec2<span class="w"> </span>authorize-security-group-ingress<span class="w"> </span>--group-id<span class="w"> </span>sg-0123<span class="w"> </span>--protocol<span class="w"> </span>udp<span class="w"> </span>--port<span class="w"> </span><span class="m">443</span><span class="w"> </span>--cidr<span class="w"> </span><span class="m">0</span>.0.0.0/0
+</span></code></pre></div>
+<h3 id="scenario-2-il-client-non-passa-mai-a-http3">Scenario 2 — Il client non passa mai a HTTP/3<a class="headerlink" href="#scenario-2-il-client-non-passa-mai-a-http3" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: la prima richiesta e le successive restano su HTTP/2, pur con QUIC attivo.</p>
+<p><strong>Causa</strong>: il browser scopre HTTP/3 solo tramite header <code>Alt-Svc</code> ricevuto su HTTP/1.1 o HTTP/2; se manca (o un proxy lo rimuove) non tenta QUIC.</p>
+<p><strong>Soluzione</strong>: aggiungere l'header e verificare che arrivi al client.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>curl<span class="w"> </span>-sI<span class="w"> </span>https://example.com<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>alt-svc
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># atteso: alt-svc: h3=":443"; ma=86400</span>
+</span></code></pre></div>
+<h3 id="scenario-3-0-rtt-non-funziona">Scenario 3 — 0-RTT non funziona<a class="headerlink" href="#scenario-3-0-rtt-non-funziona" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: ogni riconnessione richiede 1-RTT completo, nessun early data.</p>
+<p><strong>Causa</strong>: il server non accetta early data, oppure il client non ha un session ticket valido (scaduto o mai ricevuto).</p>
+<p><strong>Soluzione</strong>: abilitare early data lato server e, se dietro proxy, inoltrare l'header <code>Early-Data</code> al backend.</p>
+<div class="language-nginx highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">ssl_early_data</span><span class="w"> </span><span class="no">on</span><span class="p">;</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="k">proxy_set_header</span><span class="w"> </span><span class="s">Early-Data</span><span class="w"> </span><span class="nv">$ssl_early_data</span><span class="p">;</span>
+</span></code></pre></div>
+<h3 id="scenario-4-prestazioni-peggiori-di-tcp">Scenario 4 — Prestazioni peggiori di TCP<a class="headerlink" href="#scenario-4-prestazioni-peggiori-di-tcp" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: throughput più basso o CPU alta rispetto a HTTP/2.</p>
+<p><strong>Causa</strong>: QUIC gira in user space (costo CPU per pacchetto più alto, niente offload del kernel) e i buffer UDP di default sono piccoli, causando drop.</p>
+<p><strong>Soluzione</strong>: aumentare i buffer socket UDP, valutare GSO/offload UDP e controllare i drop.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Buffer UDP (valori in byte)</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>sudo<span class="w"> </span>sysctl<span class="w"> </span>-w<span class="w"> </span>net.core.rmem_max<span class="o">=</span><span class="m">7500000</span><span class="w"> </span>net.core.wmem_max<span class="o">=</span><span class="m">7500000</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Drop UDP per buffer pieno</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>nstat<span class="w"> </span>-az<span class="w"> </span>UdpRcvbufErrors
+</span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
 <summary>HTTP/3 — Protocollo applicativo su QUIC</summary>
