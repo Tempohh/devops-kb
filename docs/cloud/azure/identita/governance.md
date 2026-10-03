@@ -3,18 +3,24 @@ title: "Azure Governance"
 slug: governance-azure
 category: cloud
 tags: [azure, governance, azure-policy, management-groups, pim, conditional-access, entra-governance, blueprints, tags]
-search_keywords: [Azure Governance, Azure Policy, Management Groups, PIM Privileged Identity Management, Conditional Access Azure, Entra ID Governance, Access Reviews, Entitlement Management, Azure Blueprints, policy initiative, policy assignment, compliance Azure, landing zone, Cloud Adoption Framework governance, tagging policy, resource locks]
+search_keywords: [Azure Governance, Azure Policy, Management Groups, PIM Privileged Identity Management, Conditional Access Azure, Entra ID Governance, Access Reviews, Entitlement Management, Azure Blueprints retired, Deployment Stacks, policy exemption, policy initiative, policy assignment, compliance Azure, landing zone, Cloud Adoption Framework governance, tagging policy, resource locks]
 parent: cloud/azure/identita/_index
 related: [cloud/azure/identita/entra-id, cloud/azure/identita/rbac-managed-identity, cloud/azure/fondamentali/well-architected]
 official_docs: https://learn.microsoft.com/azure/governance/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Azure Governance
 
 La **governance Azure** garantisce che le risorse siano usate in conformità con le policy aziendali, di sicurezza e di compliance.
+
+Strumenti e livello su cui agiscono: **Management Groups** (gerarchia di scope), **Azure Policy** (guardrail sulle risorse), **Resource Locks** (protezione da delete/modify), **PIM** e **Conditional Access** (controllo dell'accesso), **Entra ID Governance** (lifecycle degli accessi).
+
+!!! warning "Azure Blueprints ritirato"
+    **Azure Blueprints** è stato deprecato e ritirato (luglio 2026). Per i nuovi ambienti usare **Template Specs** + **Deployment Stacks** (deploy e lifecycle/deny-delete delle risorse) combinati con Policy initiative e Azure Landing Zones (Bicep/Terraform).
 
 ---
 
@@ -54,24 +60,31 @@ az account management-group subscription add \
 az account management-group list --output table
 ```
 
+!!! note "Root group e default"
+    Le nuove subscription finiscono di default sotto il **Tenant Root Group**. Per evitare che si accumulino lì senza policy, impostare un *default management group* (Hierarchy settings) e limitare con *require authorization* chi può creare Management Group. Policy e RBAC assegnati a un MG sono **ereditati** da tutti i figli: il perché della gerarchia è applicare una volta sola il guardrail al livello giusto.
+
 ---
 
 ## Azure Policy
 
 **Azure Policy** applica e audita regole sulle risorse Azure in modo automatico.
 
-**Tipi di effect (ordine di valutazione):**
+**Tipi di effect** (l'ordine reale di valutazione è: `Disabled` → `Append`/`Modify` → `Deny` → `Audit`; `AuditIfNotExists` e `DeployIfNotExists` vengono valutati dopo che il resource provider ha risposto con successo):
 
 | Effect | Comportamento |
 |--------|--------------|
 | `Disabled` | Policy ignorata |
-| `Audit` | Non blocca, registra non-compliance nell'Activity Log |
+| `Audit` | Non blocca, registra non-compliance come evento di warning nell'Activity Log |
 | `AuditIfNotExists` | Audit se una risorsa correlata non esiste |
-| `Append` | Aggiunge proprietà alla risorsa |
-| `Modify` | Modifica tag o proprietà |
-| `DeployIfNotExists` | Deploya risorsa se non esiste |
+| `Append` | Aggiunge proprietà alla risorsa (legacy: preferire `Modify`) |
+| `Modify` | Aggiunge/aggiorna/rimuove tag o proprietà; richiede managed identity |
+| `DeployIfNotExists` | Deploya risorsa correlata se non esiste; richiede managed identity |
 | `Deny` | Blocca operazione non conforme |
-| `DenyAction` | Blocca operazioni di delete/action |
+| `DenyAction` | Blocca specifiche azioni (oggi `DELETE`) su risorse |
+| `Manual` | Compliance attestata manualmente (es. controlli non automatizzabili) |
+
+!!! note "Managed identity per Modify / DeployIfNotExists"
+    Questi effect agiscono con una **managed identity dell'assignment** (`--mi-system-assigned --location <region>`) a cui vanno assegnati i ruoli indicati in `roleDefinitionIds` della policy. Senza, la remediation fallisce con errori di autorizzazione.
 
 ```bash
 # Listare policy built-in disponibili
@@ -88,32 +101,28 @@ az policy assignment create \
     --params '{"tagName": {"value": "Environment"}}'
 
 # Creare policy custom (esempio: blocco risorse in region non autorizzate)
-cat > allowed-regions-policy.json <<'EOF'
+# --rules vuole SOLO il blocco policyRule (if/then); parametri e mode sono flag separati
+cat > allowed-regions-rule.json <<'EOF'
 {
-  "properties": {
-    "displayName": "Allowed locations",
-    "description": "Restricts resource deployment to approved Azure regions",
-    "policyType": "Custom",
-    "mode": "Indexed",
-    "parameters": {
-      "allowedLocations": {
-        "type": "Array",
-        "metadata": {
-          "displayName": "Allowed locations",
-          "description": "The list of allowed locations"
-        }
-      }
-    },
-    "policyRule": {
-      "if": {
-        "not": {
-          "field": "location",
-          "in": "[parameters('allowedLocations')]"
-        }
-      },
-      "then": {
-        "effect": "Deny"
-      }
+  "if": {
+    "not": {
+      "field": "location",
+      "in": "[parameters('allowedLocations')]"
+    }
+  },
+  "then": {
+    "effect": "Deny"
+  }
+}
+EOF
+
+cat > allowed-regions-params.json <<'EOF'
+{
+  "allowedLocations": {
+    "type": "Array",
+    "metadata": {
+      "displayName": "Allowed locations",
+      "description": "The list of allowed locations"
     }
   }
 }
@@ -121,7 +130,10 @@ EOF
 
 az policy definition create \
     --name "allowed-regions" \
-    --rules @allowed-regions-policy.json
+    --display-name "Allowed locations" \
+    --mode Indexed \
+    --rules allowed-regions-rule.json \
+    --params allowed-regions-params.json
 
 # Assegnare con parametri
 az policy assignment create \
@@ -163,12 +175,18 @@ az policy state list \
     --query "[?complianceState=='NonCompliant'].{Policy:policyDefinitionName, Resource:resourceId}" \
     --output table
 
-# Remediation task per DeployIfNotExists/Modify
+# Remediation task: solo per assignment con effect DeployIfNotExists/Modify
+# (non ha senso su "require-environment-tag", che è Deny)
 az policy remediation create \
     --name "remediate-tags" \
-    --policy-assignment "require-environment-tag" \
+    --policy-assignment "<assignment-con-modify-o-dine>" \
     --resource-group myapp-rg
 ```
+
+### Exemption ed enforcement mode
+
+Per escludere risorse in modo tracciato e con scadenza usare le **exemption** (`az policy exemption create`, categoria `Waiver` o `Mitigated`, con `--expires-on`), meglio di `notScopes` che esclude senza audit trail. Un assignment con `enforcementMode: DoNotEnforce` valuta la compliance senza applicare `Deny`/remediation: utile per testare una policy prima di attivarla.
+
 
 ---
 
@@ -207,7 +225,9 @@ az lock delete --name "no-delete-prod" --resource-group production-rg
 
 !!! warning "CanNotDelete vs ReadOnly"
     - **CanNotDelete**: permette modifiche, blocca solo delete. Usare per risorse produzione.
-    - **ReadOnly**: blocca TUTTO, incluse operazioni che sembrano di lettura ma modificano state (es. `az vm list` può fallire perché richiede una write). Usare con cautela.
+    - **ReadOnly**: blocca ogni write e ogni operazione che il provider implementa come `POST` (es. `listKeys` su Storage Account, avvio/stop di una VM, scrittura di tag). Le semplici letture (`az vm list`) funzionano. Usare con cautela.
+- I lock agiscono solo sul **control plane** (ARM): non impediscono modifiche ai dati (es. scrivere blob o righe SQL).
+- I lock sono **ereditati** da risorse figlie; per eliminare una risorsa lockata va prima rimosso il lock (serve `Microsoft.Authorization/locks/*`, quindi Owner o User Access Administrator).
 
 ---
 
@@ -233,7 +253,9 @@ Con PIM:
 - **Alerts:** notifica quando si usa un ruolo privilegiato
 - **Access reviews:** revisione periodica degli assignment attivi/eligible
 
-PIM si configura tramite **Azure Portal** (Entra ID → Identity Governance → PIM) o **MS Graph API**.
+PIM copre due famiglie di ruoli: **ruoli Entra ID** (es. Global Administrator), **ruoli Azure RBAC** (Owner, Contributor su MG/subscription/RG) e **gruppi** (PIM for Groups). Si configura dal portale (Entra admin center → ID Governance → Privileged Identity Management) o via **MS Graph API** (ruoli Entra) / **ARM API** (ruoli Azure). Richiede licenze **Entra ID P2** o **Entra ID Governance**.
+
+**Perché:** riduce la finestra di esposizione di un account compromesso: un attaccante che ruba un token non trova privilegi permanenti, e ogni attivazione lascia audit trail.
 
 ---
 
@@ -257,17 +279,18 @@ Segnali analizzati:
 
 **Policy esempio: richiedi MFA per admin fuori dalla rete aziendale:**
 
-Configurazione (tramite Entra ID portal → Security → Conditional Access):
+Configurazione (Entra admin center → Entra ID → Conditional Access, o Graph `POST /identity/conditionalAccess/policies`). Il JSON sotto è il body Graph; `62e90394-...` è il role template ID di Global Administrator e `<named-location-id>` l'ID della named location aziendale:
 
 ```json
 {
   "displayName": "Require MFA for admins outside corporate network",
   "conditions": {
     "users": {
-      "includeRoles": ["62e90394-69f5-4237-9190-012177145e10"]  // Global Admin role ID
+      "includeRoles": ["62e90394-69f5-4237-9190-012177145e10"]
     },
     "locations": {
-      "excludeLocations": ["named-location-corporate-ip"]
+      "includeLocations": ["All"],
+      "excludeLocations": ["<named-location-id>"]
     },
     "applications": {
       "includeApplications": ["All"]
@@ -277,9 +300,15 @@ Configurazione (tramite Entra ID portal → Security → Conditional Access):
     "operator": "OR",
     "builtInControls": ["mfa"]
   },
-  "state": "enabled"
+  "state": "enabledForReportingButNotEnforced"
 }
 ```
+
+!!! tip "Report-only prima di enforce"
+    Creare la policy in **report-only** (`enabledForReportingButNotEnforced`), verificare l'impatto con *Sign-in logs* / Insights workbook, poi passare a `enabled`. Escludere sempre almeno un account **break-glass** per non bloccare l'intero tenant.
+
+!!! note "MFA obbligatoria per Azure"
+    Microsoft impone l'MFA per accesso ad Azure portal, Entra admin center e Intune (Phase 1) e, in rollout progressivo, per Azure CLI, PowerShell, SDK e IaC tool (Phase 2) con identità utente. Non sostituisce le Conditional Access policy, ma rende l'MFA un requisito di base; le workload identity usano managed identity/service principal.
 
 ---
 
@@ -297,6 +326,10 @@ Configurazione (tramite Entra ID portal → Security → Conditional Access):
 - Raggruppa risorse (gruppi, app, SharePoint) in "access packages"
 - Flusso di richiesta → approvazione → provisioning automatico
 - Gestione lifecycle: scadenza, rinnovo, rimozione automatica
+
+**Lifecycle Workflows** — automatizzano joiner/mover/leaver (onboarding, cambio ruolo, offboarding) con task come abilitare/disabilitare l'account o rimuovere l'appartenenza a gruppi.
+
+Queste funzioni richiedono la licenza **Microsoft Entra ID Governance** (add-on a P1/P2).
 
 ---
 
@@ -330,9 +363,9 @@ az policy state list \
 
 ### Scenario 2 — Resource Lock ReadOnly blocca operazioni di lettura o tag
 
-**Sintomo:** Operazioni come `az vm list`, `az tag update`, o deployment ARM falliscono con `AuthorizationFailed` o `ScopeLocked` su risorse con lock `ReadOnly`.
+**Sintomo:** Operazioni come `az storage account keys list`, `az tag update`, o deployment ARM falliscono con `AuthorizationFailed` o `ScopeLocked` su risorse con lock `ReadOnly`.
 
-**Causa:** Il lock `ReadOnly` blocca tutte le operazioni che richiedono una write sul resource provider, incluse alcune che appaiono come lettura ma aggiornano metadata interni (es. tag, etag, list keys).
+**Causa:** Il lock `ReadOnly` blocca tutte le operazioni che richiedono una write o una chiamata `POST` sul resource provider, incluse alcune che appaiono come lettura (es. `listKeys`) e la scrittura di tag.
 
 **Soluzione:** Rimuovere temporaneamente il lock, eseguire l'operazione, ripristinare il lock. Oppure usare `CanNotDelete` se il requisito è solo prevenire eliminazioni.
 
@@ -371,7 +404,8 @@ az lock create \
 **Soluzione:** Verificare la configurazione del ruolo in PIM e la presenza di approvatori attivi.
 
 ```bash
-# Verificare assigned roles eligible tramite MS Graph (richiede Graph API token)
+# Ruoli Entra ID (directory roles) via MS Graph; per ruoli Azure RBAC usare l'ARM API
+# Microsoft.Authorization/roleEligibilityScheduleRequests
 az rest --method GET \
     --url "https://graph.microsoft.com/v1.0/roleManagement/directory/roleEligibilityScheduleRequests?\$filter=principalId eq '$USER_OBJECT_ID'" \
     --headers "Content-Type=application/json"
@@ -391,10 +425,11 @@ az rest --method GET \
 **Sintomo:** Una policy assegnata a livello di Management Group non viene ereditata dalle subscription o resource group sottostanti; le risorse nelle subscription figlie risultano escluse dalla compliance.
 
 **Causa 1:** La subscription è stata aggiunta al Management Group dopo l'assegnazione della policy e il ciclo di propagazione non è ancora completato.
-**Causa 2:** Esiste un'assegnazione a livello inferiore con effetto `Disabled` che sovrascrive la policy padre.
+**Causa 2:** L'assignment padre ha `notScopes` che escludono la subscription, oppure `enforcementMode: DoNotEnforce`. (Un assignment figlio con `Disabled` NON annulla quello del padre: ogni assignment è valutato in modo indipendente.)
 **Causa 3:** La subscription ha un'exemption configurata.
+**Causa 4:** La policy ha `mode: Indexed` e il tipo di risorsa non supporta tag/location, quindi non viene valutato.
 
-**Soluzione:** Verificare la gerarchia, le exemption e i lock di policy.
+**Soluzione:** Verificare gerarchia, `notScopes`, `enforcementMode` ed exemption.
 
 ```bash
 # Verificare che la subscription sia nel Management Group corretto
@@ -414,11 +449,11 @@ az policy exemption list \
     --subscription $SUBSCRIPTION_ID \
     --output table
 
-# Controllare se esiste un override con Disabled a livello inferiore
+# Controllare notScopes ed enforcement mode degli assignment
 az policy assignment list \
     --subscription $SUBSCRIPTION_ID \
-    --query "[?parameters.effect.value=='Disabled'].{Name:name, Scope:scope}" \
-    --output table
+    --query "[].{Name:name, EnforcementMode:enforcementMode, NotScopes:notScopes}" \
+    --output json
 ```
 
 ---
@@ -427,8 +462,9 @@ az policy assignment list \
 
 - [Azure Policy Documentation](https://learn.microsoft.com/azure/governance/policy/)
 - [Management Groups](https://learn.microsoft.com/azure/governance/management-groups/)
-- [PIM Documentation](https://learn.microsoft.com/azure/active-directory/privileged-identity-management/)
-- [Conditional Access](https://learn.microsoft.com/azure/active-directory/conditional-access/)
+- [PIM Documentation](https://learn.microsoft.com/entra/id-governance/privileged-identity-management/)
+- [Conditional Access](https://learn.microsoft.com/entra/identity/conditional-access/)
 - [Resource Locks](https://learn.microsoft.com/azure/azure-resource-manager/management/lock-resources)
-- [Entra ID Governance](https://learn.microsoft.com/azure/active-directory/governance/)
+- [Entra ID Governance](https://learn.microsoft.com/entra/id-governance/)
+- [Deployment Stacks](https://learn.microsoft.com/azure/azure-resource-manager/bicep/deployment-stacks)
 - [Azure Landing Zones (CAF)](https://learn.microsoft.com/azure/cloud-adoption-framework/ready/landing-zone/)
