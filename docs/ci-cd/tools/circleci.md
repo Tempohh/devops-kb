@@ -7,9 +7,10 @@ search_keywords: [circleci, circle ci, circleci orbs, circleci executors, circle
 parent: ci-cd/tools/_index
 related: [ci-cd/github-actions/_index, ci-cd/gitlab-ci/_index, ci-cd/strategie/pipeline-security, ci-cd/pipeline]
 official_docs: https://circleci.com/docs/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-09-27
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # CircleCI
@@ -61,7 +62,7 @@ CircleCI si usa quando serve velocità di setup su progetti multi-repo/multi-clo
 | `xlarge` | 8 | 16 GB |
 | `2xlarge` | 16 | 32 GB |
 
-Valori equivalenti esistono per `machine`, `macos` (es. `macos.m1.medium.gen1`) e `windows`. Il costo in credit è proporzionale alla resource class scelta e alla durata del job — sovradimensionare spreca credit, sottodimensionare causa OOM/timeout su build pesanti.
+Valori equivalenti esistono per `machine`, `macos` (es. `m4pro.medium`; le vecchie classi M1 `macos.m1.*` sono dismesse) e `windows`. I valori esatti cambiano nel tempo: verificare nella reference ufficiale. Il costo in credit è proporzionale alla resource class scelta e alla durata del job — sovradimensionare spreca credit, sottodimensionare causa OOM/timeout su build pesanti.
 
 ### Workflows — Orchestrazione
 
@@ -117,6 +118,7 @@ Job deploy  ──attach_workspace──────► legge il binario/immagin
 # .circleci/config.yml
 version: 2.1
 
+# Le versioni degli orb sono esempi: verificare l'ultima nel Registry e pinnare sempre una versione esatta
 orbs:
   node: circleci/node@5.2.0          # Orb pubblico: setup Node.js, cache automatica
   aws-cli: circleci/aws-cli@4.1.3     # Orb pubblico: configurazione AWS CLI
@@ -130,7 +132,8 @@ executors:
 
   docker-build:
     machine:
-      image: ubuntu-2204:2024.01.1     # Machine executor con Docker daemon nativo
+      image: ubuntu-2404:current       # Machine executor con Docker daemon nativo (preferire tag `current`/datati recenti)
+      docker_layer_caching: true       # DLC su machine: si abilita qui, non con setup_remote_docker
     resource_class: medium
 
 jobs:
@@ -156,9 +159,7 @@ jobs:
     executor: docker-build
     steps:
       - checkout
-      - setup_remote_docker:            # Necessario con machine executor per isolare il daemon
-          docker_layer_caching: true    # DLC: riusa layer tra run (riduce tempo build ~40-60%)
-          version: 24.0.7
+      # Nessun setup_remote_docker: serve solo con executor `docker`. Su `machine` il daemon è già locale.
       - run:
           name: Build e push immagine
           command: |
@@ -233,7 +234,7 @@ workflows:
       - build:
           requires: [test-matrix]
 
-  nightly-security-scan:
+  nightly-tests:
     triggers:
       - schedule:
           cron: "0 2 * * *"            # Ogni notte alle 02:00 UTC
@@ -246,6 +247,9 @@ workflows:
             parameters:
               node-version: ["20.11"]
 ```
+
+!!! note "Scheduled workflow vs scheduled pipeline"
+    `triggers: schedule` nel `config.yml` è l'approccio legacy: CircleCI raccomanda i **scheduled pipelines** (Project Settings > Triggers, o API), che vivono fuori dal config, supportano parametri di pipeline e non richiedono un commit per cambiare l'orario.
 
 ### 3. Dynamic Config — Setup Workflows e Continuation Orb
 
@@ -300,14 +304,15 @@ workflows:
 ```
 
 ```bash
-# Alternativa manuale senza orb path-filtering: script + continuation API
-curl -X POST https://circleci.com/api/v2/pipeline/continue \
-  -H "Circle-Token: $CIRCLE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "continuation-key": "'"$CIRCLE_CONTINUATION_KEY"'",
-    "configuration": "'"$(cat generated-config.yml | sed 's/"/\\"/g')"'"
-  }'
+# Alternativa manuale senza orb path-filtering: script + continuation API.
+# L'autenticazione è la continuation-key (no Circle-Token); jq gestisce l'escaping del YAML.
+# Il continuation-key è disponibile nel job setup come $CIRCLE_CONTINUATION_KEY
+# (con `setup: true` l'orb continuation fa già tutto questo).
+jq -n --arg key "$CIRCLE_CONTINUATION_KEY" --rawfile cfg generated-config.yml \
+  '{"continuation-key": $key, "configuration": $cfg}' \
+| curl -X POST https://circleci.com/api/v2/pipeline/continue \
+    -H "Content-Type: application/json" \
+    -d @-
 ```
 
 ### 4. Caching — `save_cache`/`restore_cache` con Chiavi su Checksum
@@ -324,7 +329,7 @@ jobs:
           keys:
             # Chiave primaria: checksum esatto di package-lock.json
             - node-deps-v1-{{ checksum "package-lock.json" }}
-            # Fallback: ultima cache disponibile per lo stesso branch (prefix match)
+            # Fallback: prefix match, la cache più recente con quel prefisso (qualsiasi branch)
             - node-deps-v1-
       - run: npm ci
       - save_cache:
@@ -360,16 +365,16 @@ workflows:
 ```
 
 ```bash
-# Installazione runner self-hosted (Linux, container runner)
-docker run -d \
-  --name circleci-runner \
-  -e CIRCLECI_RUNNER_API_AUTH_TOKEN="$RUNNER_TOKEN" \
-  -e CIRCLECI_RUNNER_RESOURCE_CLASS="my-namespace/gpu-runner-pool" \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  circleci/runner:latest
+# 1. Crea la resource class e genera il token di autenticazione del runner (mostrato una volta sola)
+circleci runner resource-class create my-namespace/gpu-runner-pool "Runner GPU on-prem" --generate-token
 
-# Verifica registrazione runner
+# 2. Installa il runner sull'host (machine runner 3: pacchetto/servizio systemd) e inserisci il token
+#    nel suo file di config (runner.api.auth_token). Per Kubernetes esiste il container runner via Helm.
+#    Procedura aggiornata: https://circleci.com/docs/runner-installation-cli/
+
+# 3. Verifica registrazione
 circleci runner resource-class list my-namespace
+circleci runner instance list my-namespace/gpu-runner-pool
 ```
 
 ## Best Practices
@@ -439,6 +444,7 @@ jobs:
       - run: npm ci
       - run:
           command: |
+            # split-by=timings usa lo storico di store_test_results (JUnit): senza, ricade su split per nome
             TESTFILES=$(circleci tests glob "test/**/*.test.js" | circleci tests split --split-by=timings)
             npx jest $TESTFILES
 ```
@@ -452,9 +458,10 @@ jobs:
 **Causa 1:** Limite di concorrenza del piano raggiunto (numero massimo di job paralleli esauriti).
 
 ```bash
-# Verificare i job in esecuzione via API
+# Pipeline recenti del progetto via API (stato dei workflow: running/on_hold...)
 curl -H "Circle-Token: $CIRCLE_TOKEN" \
-  "https://circleci.com/api/v2/insights/gh/my-org/my-repo/workflows"
+  "https://circleci.com/api/v2/project/gh/my-org/my-repo/pipeline?branch=main"
+# La saturazione della concorrenza si vede in UI: Plan > Usage
 
 # Soluzione: aumentare il piano, oppure ridurre parallelism/matrix concorrenti,
 # oppure serializzare workflow non urgenti con "requires" artificiali
@@ -472,12 +479,13 @@ docker logs circleci-runner
 
 ### Problema: `setup_remote_docker` — build lenta o fallisce con timeout di rete
 
-**Sintomo:** `docker build`/`docker push` con machine remoto sono molto più lenti che in locale, o falliscono con `dial tcp: lookup ... timeout`.
+**Sintomo:** `docker build`/`docker push` con executor `docker` + `setup_remote_docker` sono molto più lenti che in locale, o falliscono con `dial tcp: lookup ... timeout`.
 
 **Causa:** Il Docker remoto (setup_remote_docker) gira su un host separato dal job container — il networking tra i due introduce latenza, e senza Docker Layer Caching ogni layer viene rebuildato da zero.
 
 ```yaml
 # Soluzione: abilitare DLC e minimizzare il context di build
+# (alternativa: passare a executor `machine`, daemon locale, senza hop di rete)
 steps:
   - setup_remote_docker:
       docker_layer_caching: true
