@@ -7,12 +7,19 @@ search_keywords: [AWS EventBridge, EventBridge event bus, EventBridge rules, Eve
 parent: cloud/aws/messaging/_index
 related: [cloud/aws/messaging/sqs-sns, cloud/aws/compute/lambda, cloud/aws/storage/s3, cloud/aws/monitoring/cloudwatch]
 official_docs: https://docs.aws.amazon.com/eventbridge/latest/userguide/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # EventBridge, Kinesis & MSK
+
+!!! note "Snippet didattici"
+    Nei blocchi `bash` i commenti inline dopo il `\` di continuazione riga (es. `--shard-count 4  # ...`) servono a spiegare i parametri: rimuoverli prima di copiare il comando, altrimenti la shell interrompe la continuazione.
+
+!!! note "Rinomine di servizio"
+    **Kinesis Data Firehose** si chiama oggi **Amazon Data Firehose** (namespace CLI `aws firehose` invariato). **Kinesis Data Analytics** è ora **Amazon Managed Service for Apache Flink**.
 
 ## Amazon EventBridge
 
@@ -141,7 +148,7 @@ aws events put-events \
 # Python — inviare eventi da applicazione
 import boto3
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 events_client = boto3.client('events', region_name='eu-central-1')
 
@@ -153,7 +160,7 @@ def publish_event(event_type: str, detail: dict, source: str = "myapp.orders"):
                 'Source': source,
                 'DetailType': event_type,
                 'Detail': json.dumps(detail),
-                'Time': datetime.utcnow()
+                'Time': datetime.now(timezone.utc)
             }
         ]
     )
@@ -202,6 +209,8 @@ publish_event(
 - `[{"numeric": [">=", 10, "<", 100]}]` — range numerico
 - `[{"exists": false}]` — campo assente
 - `[{"cidr": "10.0.0.0/8"}]` — IP in range CIDR
+- `[{"wildcard": "*.prod.example.com"}]` — match con `*` (utile per ARN/path)
+- `[{"equals-ignore-case": "pending"}]` — exact match case-insensitive
 
 ---
 
@@ -229,7 +238,7 @@ aws events put-events \
 
 ### EventBridge Pipes
 
-**EventBridge Pipes** connette source e target con filtraggio e trasformazione senza codice intermedio (Lambda opzionale solo per enrichment).
+**EventBridge Pipes** connette source e target con filtraggio e trasformazione senza codice intermedio. Lo step di **enrichment** è opzionale (Lambda, Step Functions, API Gateway o API Destination) e arricchisce l'evento prima del target.
 
 ```bash
 # Pipe: SQS → filtraggio → (Lambda enrichment opzionale) → Kinesis Firehose
@@ -250,11 +259,6 @@ aws pipes create-pipe \
     }' \
     --enrichment arn:aws:lambda:eu-central-1:123456789012:function:EnrichOrder \
     --target arn:aws:firehose:eu-central-1:123456789012:deliverystream/orders-stream \
-    --target-parameters '{
-        "KinesisStreamParameters": {
-            "PartitionKey": "$.body.customerId"
-        }
-    }' \
     --log-configuration '{
         "Level": "ERROR",
         "CloudwatchLogsLogDestination": {
@@ -263,7 +267,9 @@ aws pipes create-pipe \
     }'
 ```
 
-**Pipe source supportati:** SQS, Kinesis Streams, DynamoDB Streams, MSK, MQ
+Il target Firehose non richiede `--target-parameters`; per un target Kinesis Streams si usa `KinesisStreamParameters.PartitionKey` (es. `$.body.customerId`).
+
+**Pipe source supportati:** SQS, Kinesis Streams, DynamoDB Streams, MSK, self-managed Kafka, Amazon MQ
 **Pipe target:** Lambda, ECS, Step Functions, EventBridge Bus, Kinesis, Firehose, SQS, SNS, API Gateway, API Destination
 
 ---
@@ -273,16 +279,16 @@ aws pipes create-pipe \
 **Scheduler** gestisce task programmati (cron e rate) con delivery garantita, retry e timezone.
 
 ```bash
-# Task one-time (esempio: processo batch tra 1 ora)
+# Task one-time (esempio: report mensile a una data futura precisa)
 aws scheduler create-schedule \
     --name process-monthly-report \
-    --schedule-expression "at(2026-03-01T00:00:00)" \
+    --schedule-expression "at(2026-12-01T00:00:00)" \
     --schedule-expression-timezone "Europe/Rome" \
     --flexible-time-window '{"Mode": "OFF"}' \
     --target '{
         "Arn": "arn:aws:lambda:eu-central-1:123456789012:function:MonthlyReport",
         "RoleArn": "arn:aws:iam::123456789012:role/SchedulerRole",
-        "Input": "{\"reportType\": \"monthly\", \"month\": \"2026-02\"}"
+        "Input": "{\"reportType\": \"monthly\", \"month\": \"2026-11\"}"
     }' \
     --action-after-completion DELETE    # elimina lo schedule dopo l'esecuzione
 
@@ -295,15 +301,16 @@ aws scheduler create-schedule \
     --target '{
         "Arn": "arn:aws:sqs:eu-central-1:123456789012:sync-queue",
         "RoleArn": "arn:aws:iam::123456789012:role/SchedulerRole",
-        "Input": "{\"action\": \"sync\"}"
-    }' \
-    --retry-policy '{"MaximumRetryAttempts": 3, "MaximumEventAgeInSeconds": 3600}' \
-    --dead-letter-config '{"Arn": "arn:aws:sqs:...:scheduler-dlq"}'
+        "Input": "{\"action\": \"sync\"}",
+        "RetryPolicy": {"MaximumRetryAttempts": 3, "MaximumEventAgeInSeconds": 3600},
+        "DeadLetterConfig": {"Arn": "arn:aws:sqs:...:scheduler-dlq"}
+    }'
 
-# Task rate expression
+# Task rate expression (--flexible-time-window è obbligatorio)
 aws scheduler create-schedule \
     --name heartbeat \
     --schedule-expression "rate(5 minutes)" \
+    --flexible-time-window '{"Mode": "OFF"}' \
     --target '{
         "Arn": "arn:aws:lambda:...:function:HealthCheck",
         "RoleArn": "arn:aws:iam::123456789012:role/SchedulerRole"
@@ -379,8 +386,9 @@ aws kinesis list-shards --stream-name app-events
 aws kinesis split-shard \
     --stream-name app-events \
     --shard-to-split shardId-000000000000 \
-    --new-starting-hash-key "170141183460469231731687303715884105728"
-    # splitting un shard al centro del range di hash
+    --new-starting-hash-key "42535295865117307932921825928971026432"
+    # la hash key deve cadere DENTRO il range dello shard: con 4 shard uniformi lo shard 0
+    # copre 0..2^126-1, quindi il punto medio è 2^125. Leggere il range con list-shards
 
 aws kinesis merge-shards \
     --stream-name app-events \
@@ -401,6 +409,7 @@ aws lambda create-event-source-mapping \
     --batch-size 100 \
     --maximum-batching-window-in-seconds 5 \
     --parallelization-factor 2 \            # 2 concurrent Lambda per shard
+    --function-response-types ReportBatchItemFailures \  # abilita il ritorno di batchItemFailures dall'handler
     --bisect-batch-on-function-error true \  # divide batch su errore
     --maximum-retry-attempts 3 \
     --destination-config '{
@@ -485,7 +494,7 @@ aws firehose create-delivery-stream \
         "ErrorOutputPrefix": "errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/",
         "BufferingHints": {
             "SizeInMBs": 128,              # flush ogni 128 MB (max)
-            "IntervalInSeconds": 300        # flush ogni 5 minuti (max)
+            "IntervalInSeconds": 300        # flush ogni 5 minuti (default; max 900)
         },
         "CompressionFormat": "GZIP",       # UNCOMPRESSED, GZIP, ZIP, Snappy, HADOOP_SNAPPY
         "CloudWatchLoggingOptions": {
@@ -616,6 +625,12 @@ def lambda_handler(event, context):
 | Pricing | Ora broker + storage | Per GB throughput + storage |
 | Use case | Workload prevedibili, alta performance | Variable/unknown load |
 
+!!! note "MSK Express brokers"
+    Per cluster Provisioned esistono anche i broker **Express** (`express.m7g.*`): storage gestito e illimitato, scaling e recovery più rapidi rispetto ai broker Standard (`kafka.m5.*`). Valutarli per nuovi cluster.
+
+!!! warning "IAM auth e Kafka CLI"
+    Con autenticazione IAM (porta **9098**) i tool Kafka richiedono `--command-config client.properties` con `security.protocol=SASL_SSL`, `sasl.mechanism=AWS_MSK_IAM`, `sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;` e `sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler` (JAR `aws-msk-iam-auth` nel classpath). Negli esempi sotto è omesso per brevità.
+
 ### Creare Cluster MSK
 
 ```bash
@@ -717,19 +732,21 @@ from kafka import KafkaConsumer
 from aws_msk_iam_sasl_signer import MSKAuthTokenProvider
 import json
 
-def get_token(config):
-    token, expiry_ms = MSKAuthTokenProvider.generate_auth_token('eu-central-1')
-    return token, expiry_ms
+class MSKTokenProvider:
+    # kafka-python richiede un oggetto con metodo token()
+    def token(self):
+        token, _expiry_ms = MSKAuthTokenProvider.generate_auth_token('eu-central-1')
+        return token
 
 consumer = KafkaConsumer(
     'order-events',
     bootstrap_servers=['broker1:9098', 'broker2:9098', 'broker3:9098'],
     security_protocol='SASL_SSL',
     sasl_mechanism='OAUTHBEARER',
-    sasl_oauth_token_provider=get_token,
+    sasl_oauth_token_provider=MSKTokenProvider(),
     group_id='order-processor',
     auto_offset_reset='latest',
-    enable_auto_commit=False,        # commit manuale per exactly-once processing
+    enable_auto_commit=False,        # commit manuale dopo l'elaborazione → at-least-once (consumer idempotenti)
     value_deserializer=lambda m: json.loads(m.decode('utf-8'))
 )
 
@@ -774,12 +791,9 @@ aws kafkaconnect create-connector \
         "s3.part.size": "67108864",
         "flush.size": "10000",
         "storage.class": "io.confluent.connect.s3.storage.S3Storage",
-        "format.class": "io.confluent.connect.s3.format.json.JsonFormat",
-        "locale": "it_IT",
-        "timezone": "Europe/Rome",
-        "timestamp.extractor": "RecordField",
-        "timestamp.field": "timestamp"
+        "format.class": "io.confluent.connect.s3.format.json.JsonFormat"
     }' \
+    --kafka-connect-version "2.7.1" \
     --kafka-cluster '{
         "apacheKafkaCluster": {
             "bootstrapServers": "broker1:9098",
@@ -793,6 +807,7 @@ aws kafkaconnect create-connector \
     --kafka-cluster-encryption-in-transit '{"encryptionType": "TLS"}' \
     --capacity '{
         "autoScaling": {
+            "mcuCount": 1,
             "minWorkerCount": 1,
             "maxWorkerCount": 4,
             "scaleInPolicy": {"cpuUtilizationPercentage": 20},
@@ -903,7 +918,7 @@ aws cloudwatch get-metric-statistics \
 aws kinesis split-shard \
     --stream-name app-events \
     --shard-to-split shardId-000000000000 \
-    --new-starting-hash-key "170141183460469231731687303715884105728"
+    --new-starting-hash-key "42535295865117307932921825928971026432"   # punto medio dello shard 0 (stream a 4 shard)
 
 # Passare a modalità ON_DEMAND per auto-scaling
 aws kinesis update-stream-mode \
@@ -974,6 +989,7 @@ kafka-console-consumer.sh \
     --max-messages 1
 
 # Saltare il messaggio velenoso (spostare offset avanti di 1)
+# NB: il consumer group deve essere inattivo (consumer fermi), altrimenti il reset fallisce
 kafka-consumer-groups.sh \
     --bootstrap-server broker1:9098 \
     --group order-processor \
