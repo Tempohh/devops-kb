@@ -7,9 +7,10 @@ search_keywords: [virtual private network, ipsec vpn, ikev2, esp, ah, wireguard 
 parent: networking/sicurezza/_index
 related: [networking/sicurezza/firewall-waf, networking/sicurezza/zero-trust, networking/fondamentali/tls-ssl-basics]
 official_docs: https://www.wireguard.com/papers/wireguard.pdf
-status: complete
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # VPN e IPsec
@@ -110,6 +111,9 @@ Client                              Server
 **Phase 1 (IKE SA)**: negozia i parametri per proteggere la comunicazione IKE stessa (DH key exchange, algoritmi).
 **Phase 2 (Child SA / IPsec SA)**: negozia i parametri per il traffico dati (quale traffico, cifratura, integrità).
 
+!!! note "Phase 1/2 in IKEv2"
+    La terminologia Phase 1/2 viene da IKEv1 (Main/Aggressive Mode + Quick Mode) ed è rimasta nei menu di molti firewall. In IKEv2 `IKE_SA_INIT` + `IKE_AUTH` creano l'IKE SA **e** la prima Child SA in 4 messaggi totali; ulteriori Child SA si aggiungono con `CREATE_CHILD_SA`. Il rekeying avviene periodicamente (`ikelifetime`/`keylife`) per limitare la quantità di dati cifrati con la stessa chiave.
+
 ### WireGuard — Architettura Semplificata
 
 WireGuard è radicalmente più semplice:
@@ -133,19 +137,22 @@ WireGuard è radicalmente più semplice:
 # Installa WireGuard
 apt install wireguard
 
-# Genera chiavi su entrambi i server
-wg genkey | tee server-private.key | wg pubkey > server-public.key
-wg genkey | tee client-private.key | wg pubkey > client-public.key
+# Genera una coppia di chiavi su OGNI server (la chiave privata non lascia mai l'host;
+# si scambiano solo le chiavi pubbliche). umask evita file leggibili da altri utenti.
+umask 077
+wg genkey | tee private.key | wg pubkey > public.key
 
-cat server-private.key  # Es: 8GboYh...
-cat server-public.key   # Es: xYmDMH...
+cat public.key   # Es: xYmDMH... — da copiare nel [Peer] dell'altro server
 ```
+
+!!! note "Esempio con reti 10.0.0.0/8 e 172.16.0.0/12"
+    Le subnet dei due siti **non devono sovrapporsi** tra loro né con la subnet del tunnel: per questo il tunnel usa `192.168.255.0/30` (fuori da `10.0.0.0/8` e `172.16.0.0/12`). Con `MASQUERADE` il traffico arriva all'altro sito con l'IP del gateway, utile se gli host non hanno una route di ritorno verso il tunnel; in alternativa, rimuoverlo e aggiungere sugli host (o sul router del sito) la route verso la rete remota, così i log mantengono l'IP sorgente reale.
 
 ```ini
 # /etc/wireguard/wg0.conf — Server A (10.0.0.0/8)
 
 [Interface]
-Address = 10.100.0.1/30         # IP tunnel per questo peer
+Address = 192.168.255.1/30      # IP tunnel per questo peer
 PrivateKey = <SERVER-A-PRIVATE-KEY>
 ListenPort = 51820
 
@@ -155,7 +162,7 @@ PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -
 
 [Peer]
 PublicKey = <SERVER-B-PUBLIC-KEY>
-AllowedIPs = 10.100.0.2/32, 172.16.0.0/12   # IP tunnel B + rete B
+AllowedIPs = 192.168.255.2/32, 172.16.0.0/12   # IP tunnel B + rete B
 Endpoint = <SERVER-B-PUBLIC-IP>:51820
 PersistentKeepalive = 25    # Mantieni vivo attraverso NAT
 ```
@@ -164,7 +171,7 @@ PersistentKeepalive = 25    # Mantieni vivo attraverso NAT
 # /etc/wireguard/wg0.conf — Server B (172.16.0.0/12)
 
 [Interface]
-Address = 10.100.0.2/30
+Address = 192.168.255.2/30
 PrivateKey = <SERVER-B-PRIVATE-KEY>
 ListenPort = 51820
 
@@ -173,7 +180,7 @@ PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -
 
 [Peer]
 PublicKey = <SERVER-A-PUBLIC-KEY>
-AllowedIPs = 10.100.0.1/32, 10.0.0.0/8     # IP tunnel A + rete A
+AllowedIPs = 192.168.255.1/32, 10.0.0.0/8  # IP tunnel A + rete A
 Endpoint = <SERVER-A-PUBLIC-IP>:51820
 PersistentKeepalive = 25
 ```
@@ -191,12 +198,12 @@ wg show
 #
 # peer: <SERVER-B-PUBLIC-KEY>
 #   endpoint: x.x.x.x:51820
-#   allowed ips: 10.100.0.2/32, 172.16.0.0/12
+#   allowed ips: 192.168.255.2/32, 172.16.0.0/12
 #   latest handshake: 5 seconds ago
 #   transfer: 1.23 MiB received, 456 KiB sent
 
 # Test connettività
-ping 10.100.0.2          # Ping tunnel endpoint
+ping 192.168.255.2       # Ping tunnel endpoint
 ping 172.16.0.1          # Ping host in rete remota
 ```
 
@@ -261,16 +268,20 @@ conn ikev2-vpn
 ```
 # /etc/ipsec.secrets
 : RSA server-key.pem
-user1 : EAP "SecurePassword123!"
+user1 : EAP "<PASSWORD-FORTE-GENERATA>"
 ```
+
+!!! note "ipsec.conf vs swanctl.conf"
+    `ipsec.conf`/`ipsec.secrets` (plugin *stroke*, pacchetto `strongswan-starter`) è il formato legacy: strongSwan 5.x+ raccomanda `swanctl.conf` con il demone `charon-systemd` e il comando `swanctl --load-all`. L'esempio sopra resta valido su molte distribuzioni, ma per nuove installazioni preferire `swanctl`. Con `eap-mschapv2` le credenziali sono password: usare password robuste o, meglio, autenticazione a certificato anche per i client.
 
 ### AWS Site-to-Site VPN
 
 ```bash
 # Crea Customer Gateway (il tuo router on-premise)
+# --public-ip: IP pubblico del tuo router (203.0.113.10 = indirizzo di esempio)
 aws ec2 create-customer-gateway \
   --type ipsec.1 \
-  --public-ip 203.0.113.10 \   # IP pubblico del tuo router
+  --public-ip 203.0.113.10 \
   --bgp-asn 65000
 
 # Crea Virtual Private Gateway e attaccalo alla VPC
@@ -288,13 +299,18 @@ aws ec2 create-vpn-connection \
 aws ec2 describe-vpn-connections --vpn-connection-ids vpn-xxx
 ```
 
+!!! note "Due tunnel, Transit Gateway"
+    Ogni connessione AWS Site-to-Site VPN crea **due tunnel** su endpoint AWS diversi (alta disponibilità): configurali entrambi sul router on-premise, altrimenti durante le manutenzioni AWS perdi la connettività. Per collegare più VPC usa un **Transit Gateway** al posto di un Virtual Private Gateway per VPC. Con `StaticRoutesOnly: false` il routing è dinamico via BGP (Border Gateway Protocol).
+
 ## Best Practices
 
 - **WireGuard per nuove implementazioni**: più semplice, più performante, più sicuro per default — preferirlo a IPsec quando non c'è vincolo di interoperabilità hardware
-- **IKEv2 per IPsec**: usare sempre IKEv2 (mai IKEv1, mai L2TP/IPsec che usa IKEv1)
+- **IKEv2 per IPsec**: usare sempre IKEv2 (mai IKEv1, che ha problemi noti con PSK in Aggressive Mode); evitare L2TP/IPsec (doppio incapsulamento, tipicamente IKEv1, overhead alto) e PPTP (rotto crittograficamente)
+- **Crittografia post-quantum**: il rischio "harvest now, decrypt later" riguarda i key exchange DH/ECDH. IKEv2 supporta key exchange aggiuntivi (RFC 9370, es. ML-KEM in strongSwan 6.x) in modalità ibrida; WireGuard non negozia algoritmi, ma supporta una PSK opzionale simmetrica (`PresharedKey`) come strato di difesa extra. Valutare per dati con lunga vita di riservatezza
+- **Reti mesh (Tailscale, Headscale, NetBird)**: costruite su WireGuard, aggiungono identità (SSO), ACL e NAT traversal automatico; sono la via pratica per accesso remoto dei developer quando una VPN classica è troppo rigida e uno ZTNA completo è eccessivo
 - **Certificati invece di PSK**: Pre-Shared Key è scomodo da ruotare e più vulnerabile — usare certificati per produzione
 - **PFS (Perfect Forward Secrecy)**: configurare DH group 14+ (o ECDH) per IKEv2 — garantisce che le chiavi di sessione non siano compromesse anche se la chiave a lungo termine lo fosse
-- **Monitoring**: monitorare lo stato dei tunnel — i tunnel IPsec cadono silenziosamente; configurare alert su `ike.sa` count
+- **Monitoring**: monitorare lo stato dei tunnel — i tunnel IPsec cadono silenziosamente; configurare alert su numero di IKE/Child SA stabilite (es. `swanctl --list-sas`) e, per WireGuard, sull'età di `latest handshake` (>3 minuti con traffico attivo = problema)
 - **Split tunneling**: in remote access VPN, inviare solo il traffico interno attraverso il tunnel — non tutto Internet — per ridurre il carico e non degradare la navigazione dell'utente
 
 ## Troubleshooting
