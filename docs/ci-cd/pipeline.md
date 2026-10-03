@@ -7,9 +7,10 @@ search_keywords: [CI/CD pipeline, continuous integration, continuous delivery, c
 parent: ci-cd/_index
 related: [ci-cd/jenkins/pipeline-fundamentals, ci-cd/strategie/deployment-strategies, ci-cd/strategie/pipeline-security, ci-cd/testing/contract-testing, iac/terraform/testing]
 official_docs: https://docs.gitlab.com/ee/ci/pipelines/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-26
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # CI/CD Pipeline — Fondamentali e Architettura
@@ -103,12 +104,11 @@ on:
     branches: [main, 'release/**']
     paths-ignore: ['docs/**', '*.md']
 
-  # Push su main: pipeline completa con deploy staging
+  # Push su main (deploy staging) e tag semantico (release con deploy production).
+  # ATTENZIONE: la chiave `push` deve comparire UNA sola volta — un duplicato
+  # in YAML sovrascrive silenziosamente il primo (o fa fallire il parsing).
   push:
     branches: [main]
-
-  # Tag semantico: pipeline di release con deploy production
-  push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
   # Nightly: pipeline pesante con integration test e security scan
@@ -197,12 +197,22 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+# Least privilege: il GITHUB_TOKEN parte read-only, i job elevano solo ciò che serve
+permissions:
+  contents: read
+
 jobs:
   # ── Stage 1: Build ────────────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write      # push su ghcr.io
+      id-token: write      # firma keyless cosign (token OIDC)
     outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
+      # `version` = tag primario (singolo valore); `tags` è una lista multi-riga
+      # con prefisso registry, inutilizzabile in `--set image.tag=`
+      image-tag: ${{ steps.meta.outputs.version }}
       image-digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
@@ -235,7 +245,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'     # LTS attiva; Node 20 è EOL da aprile 2026
           cache: 'npm'
       - run: npm ci
       - run: npm test -- --coverage
@@ -246,22 +256,19 @@ jobs:
 
   sast:
     runs-on: ubuntu-latest
+    container: semgrep/semgrep   # semgrep-action è deprecata: si usa la CLI via immagine ufficiale
     steps:
       - uses: actions/checkout@v4
       - name: Run Semgrep
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: >-
-            p/default
-            p/owasp-top-ten
-            p/secrets
+        run: semgrep scan --config p/default --config p/owasp-top-ten --config p/secrets --error
 
   dependency-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@master
+        # Pinnare a tag di release o SHA di commit, MAI @master (vedi Best Practices)
+        uses: aquasecurity/trivy-action@<tag-o-sha-pinnato>
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -291,7 +298,7 @@ jobs:
           helm upgrade --install myapp ./helm/myapp \
             --namespace staging \
             --set image.tag=${{ needs.build.outputs.image-tag }} \
-            --atomic --timeout 5m
+            --atomic --timeout 5m   # --atomic implica --wait
 
   # ── Stage 5: Deploy Production (gate manuale) ─────────────────────
   deploy-production:
@@ -308,22 +315,26 @@ jobs:
           helm upgrade --install myapp ./helm/myapp \
             --namespace production \
             --set image.tag=${{ needs.build.outputs.image-tag }} \
-            --atomic --timeout 10m --wait
+            --atomic --timeout 10m
 ```
+
+!!! note "Helm 4"
+    Da Helm 4 (novembre 2025) `--atomic` è rinominato `--rollback-on-failure` (il vecchio flag funziona ancora ma è deprecato). Il job di deploy reale richiede anche autenticazione al cluster (OIDC verso il cloud provider o kubeconfig da secret), omessa qui per brevità.
 
 ### 2. Quality Gate con SonarQube
 
 ```yaml
 # Snippet: Quality Gate SonarQube in GitHub Actions
+# Pinnare le action a tag di release/SHA (qui `<versione>` è un segnaposto)
 - name: SonarQube Scan
-  uses: SonarSource/sonarqube-scan-action@master
+  uses: SonarSource/sonarqube-scan-action@<versione>
   env:
     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
 - name: SonarQube Quality Gate check
   id: sonarqube-quality-gate-check
-  uses: SonarSource/sonarqube-quality-gate-action@master
+  uses: SonarSource/sonarqube-quality-gate-action@<versione>
   timeout-minutes: 5
   env:
     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -364,8 +375,10 @@ La cache riduce drasticamente i tempi eliminando il re-download di dipendenze.
       node_modules
     # Cache key: OS + lockfile hash → invalida quando cambiano le dipendenze
     key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+    # fallback: ultima cache valida per questo OS
+    # (niente commenti inline nel block scalar: finirebbero nella chiave!)
     restore-keys: |
-      ${{ runner.os }}-node-      # fallback: ultima cache valida per questo OS
+      ${{ runner.os }}-node-
 
 # Docker layer cache (BuildKit)
 - name: Build con cache Docker
@@ -401,15 +414,15 @@ jobs:
     strategy:
       fail-fast: false           # continua anche se una cella fallisce
       matrix:
-        node: ['18', '20', '22']
+        node: ['22', '24', '25']
         os: [ubuntu-latest, windows-latest, macos-latest]
         exclude:
-          # Node 18 non testato su macOS per limiti di licenza
+          # I minuti macOS costano ~10x Linux: la versione più vecchia non si testa lì
           - os: macos-latest
-            node: '18'
+            node: '22'
         include:
-          # Aggiungi variabile extra solo per Node 22
-          - node: '22'
+          # Variabile extra: Node 25 (release "Current", non LTS) non blocca la pipeline
+          - node: '25'
             experimental: true
 
     runs-on: ${{ matrix.os }}
@@ -426,23 +439,25 @@ jobs:
 
 ### 5. Artifact Signing e SBOM (Supply Chain Security)
 
+```yaml
+# Installazione cosign: action ufficiale (evita curl|latest senza verifica checksum)
+- uses: sigstore/cosign-installer@<versione-pinnata>
+```
+
 ```bash
 # Firma container image con cosign (keyless via OIDC)
-# In GitHub Actions, usa il token OIDC di GitHub come identità
+# Richiede `permissions: id-token: write` nel job: il token OIDC di GitHub
+# è l'identità che Fulcio lega al certificato effimero.
 
-# Installazione cosign
-curl -O -L "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
-chmod +x cosign-linux-amd64
-mv cosign-linux-amd64 /usr/local/bin/cosign
-
-# Firma dell'immagine (keyless — identità dal token OIDC CI)
+# Firma sempre il DIGEST (immutabile), mai un tag (mutabile)
 cosign sign --yes $REGISTRY/$IMAGE@$DIGEST
 
-# Verifica firma
+# Verifica: l'identità va ancorata a workflow e ref, altrimenti qualunque
+# workflow del repo (o regex che matcha prefissi) passerebbe la verifica
 cosign verify \
-  --certificate-identity-regexp="https://github.com/myorg/myapp" \
+  --certificate-identity-regexp="^https://github.com/myorg/myapp/\.github/workflows/pipeline\.yml@refs/(heads/main|tags/v.+)$" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
-  $REGISTRY/$IMAGE:latest
+  $REGISTRY/$IMAGE@$DIGEST
 ```
 
 ```yaml
@@ -479,6 +494,8 @@ cosign verify \
 
 **5. Idempotenza**: ogni step della pipeline deve produrre lo stesso risultato se eseguito più volte. Evitare side-effect accumulativi.
 
+**6. Pin delle dipendenze della pipeline**: una `uses: org/action@master` (o tag mobile) esegue codice di terzi con accesso ai tuoi secret e al token OIDC; se l'upstream viene compromesso, lo è anche la tua pipeline (incidenti reali su action molto usate). Pinna a SHA di commit (con Dependabot/Renovate per gli aggiornamenti) e dichiara `permissions` minimi.
+
 ```yaml
 # Anti-pattern: secret nel codice pipeline
 env:
@@ -511,17 +528,20 @@ v*.*.*    ──► pipeline: release completa + sign + SBOM + changelog + GitHu
 |---------|-------------|---------------|
 | **Pipeline duration (CI)** | < 10 min | Durata media ultima settimana |
 | **Pipeline success rate** | > 95% | (build verdi / build totali) × 100 |
-| **Lead Time for Changes** | < 1 ora | Commit merge → deploy prod |
-| **Change Failure Rate** | < 5% | Deploy che causano rollback / deploy totali |
+| **Lead Time for Changes** | < 1 giorno (DORA 2024) | Commit merge → deploy prod |
+| **Change Failure Rate** | ~5% | Deploy che causano rollback / deploy totali |
 | **Flaky test rate** | < 2% | Test che cambiano risultato senza modifiche codice |
 
+!!! note "DORA oggi"
+    Dal report 2024 DORA misura cinque metriche: le quattro classiche (deployment frequency, lead time, change failure rate, failed deployment recovery time) più il **rework rate**. Le soglie "elite" sono ricalcolate ogni anno sui cluster di rispondenti: usale come ordine di grandezza, non come standard fisso.
+
 ```bash
-# GitHub CLI — statistiche pipeline (ultimi 30 giorni)
+# GitHub CLI — esiti delle ultime 100 run (esclude quelle ancora in corso)
 gh run list \
   --workflow=pipeline.yml \
   --limit=100 \
   --json status,conclusion,createdAt,updatedAt \
-  --jq 'group_by(.conclusion) | map({(.[0].conclusion): length}) | add'
+  --jq '[.[] | select(.conclusion != "")] | group_by(.conclusion) | map({(.[0].conclusion): length}) | add'
 ```
 
 ## Troubleshooting
@@ -586,8 +606,10 @@ jobs:
 
 ```bash
 # Identificare test flaky con reruns
-# Jest — riprova test falliti
-npx jest --testPathPattern="integration" --retries=2
+# Jest — non ha un flag CLI --retries: si imposta nel setup file
+#   jest.retryTimes(2)   // es. in jest.setup.js (setupFilesAfterEach)
+# (--testPathPattern è stato rinominato --testPathPatterns in Jest 30)
+npx jest --testPathPatterns="integration"
 
 # Pytest — riprova test falliti
 pytest --reruns=2 --reruns-delay=5
@@ -631,13 +653,13 @@ deploy:
 
 **Soluzione:**
 ```bash
-# Usare --atomic in helm: rollback automatico se il deploy fallisce
+# Usare --atomic in helm: rollback automatico se i pod non partono
+# (Helm 4: --rollback-on-failure). Niente commenti dopo il `\`: rompono la continuazione di riga
 helm upgrade --install myapp ./helm/myapp \
   --namespace production \
   --set image.tag=$IMAGE_TAG \
-  --atomic \          # ← rollback automatico se i pod non partono
-  --timeout 10m \
-  --wait
+  --atomic \
+  --timeout 10m
 
 # Verificare rollout con kubectl
 kubectl rollout status deployment/myapp -n production --timeout=5m
@@ -655,16 +677,22 @@ kubectl rollout undo deployment/myapp -n production
 
 **Soluzione:**
 ```yaml
-# GitHub Actions — mascherare secret dinamici
+# GitHub Actions — mascherare secret dinamici (passati via env, non interpolati nello script)
 - name: Mask dynamic secret
-  run: echo "::add-mask::${{ steps.get-token.outputs.token }}"
+  env:
+    TOKEN: ${{ steps.get-token.outputs.token }}
+  run: echo "::add-mask::$TOKEN"
 
 # Non usare mai `set -x` in script che usano secret:
-# set -x stampa ogni comando con i valori espansi
-run: |
-  # set -x  ← COMMENTATO se ci sono secret
-  helm upgrade --install myapp ./helm \
-    --set credentials.token=${{ secrets.API_TOKEN }}
+# set -x stampa ogni comando con i valori espansi.
+# Passare i secret via env: `${{ }}` dentro `run:` è sostituito PRIMA della shell
+# (rischio di script injection e di valori visibili nel comando).
+- name: Deploy
+  env:
+    API_TOKEN: ${{ secrets.API_TOKEN }}
+  run: |
+    helm upgrade --install myapp ./helm \
+      --set credentials.token="$API_TOKEN"
 ```
 
 ## Relazioni
