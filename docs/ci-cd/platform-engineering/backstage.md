@@ -7,16 +7,17 @@ search_keywords: [backstage, backstage.io, internal developer platform, IDP, dev
 parent: ci-cd/platform-engineering/_index
 related: [ci-cd/gitops/argocd, ci-cd/github-actions/workflow-avanzati, containers/kubernetes/_index]
 official_docs: https://backstage.io/docs
-status: complete
+status: needs-review
 difficulty: advanced
 last_updated: 2026-03-25
+last_verified: 2026-10-03
 ---
 
 # Backstage
 
 ## Panoramica
 
-Backstage è una piattaforma open-source per la costruzione di **Internal Developer Portals (IDP)** — portali centralizzati che unificano strumenti, documentazione, infrastruttura e catalogo dei servizi in un'unica interfaccia per i team di sviluppo. Creato da Spotify nel 2016 e donato alla CNCF nel 2020 (progetto Incubating dal 2022, Graduated dal 2024), Backstage risolve il problema della complessità che cresce linearmente con il numero di microservizi: in un ecosistema con 100+ servizi, i developer perdono tempo a cercare chi possiede cosa, dove si trova la documentazione, come si fa il deploy, quali API esistono.
+Backstage è una piattaforma open-source per la costruzione di **Internal Developer Portals (IDP)** — portali centralizzati che unificano strumenti, documentazione, infrastruttura e catalogo dei servizi in un'unica interfaccia per i team di sviluppo. Creato da Spotify nel 2016 e donato alla CNCF nel 2020 (Sandbox) e promosso a Incubating nel 2022 <!-- REVIEW: verificare maturity level CNCF attuale (graduation) -->, Backstage risolve il problema della complessità che cresce linearmente con il numero di microservizi: in un ecosistema con 100+ servizi, i developer perdono tempo a cercare chi possiede cosa, dove si trova la documentazione, come si fa il deploy, quali API esistono.
 
 Il cuore di Backstage è il **Software Catalog** — un registro centralizzato di tutti i componenti software, API, risorse infrastrutturali e team, navigabile via UI e interrogabile via API. Attorno al catalog si integrano: **TechDocs** (documentazione-as-code pubblicata automaticamente), **Scaffolder** (template per creare nuovi servizi seguendo le best practice aziendali), e un ecosistema di **Plugin** (1000+ nella community) che portano visibilità su Kubernetes, CI/CD, Alerting, Cloud costs e molto altro — tutto in un'unica finestra.
 
@@ -70,10 +71,10 @@ metadata:
 spec:
   type: service
   lifecycle: production
-  owner: group:platform-team/payments
+  owner: group:payments-team
   system: payments-platform
   dependsOn:
-    - component:postgres-payments
+    - resource:postgres-payments
     - resource:payments-queue
   providesApis:
     - payment-api-v2
@@ -91,7 +92,7 @@ metadata:
 spec:
   type: openapi
   lifecycle: production
-  owner: group:platform-team/payments
+  owner: group:payments-team
   definition:
     $text: ./openapi.yaml   # File OpenAPI locale
 ```
@@ -132,7 +133,7 @@ spec:
 │                                │                                     │
 │  ┌─────────────────────────────▼──────────────────────────────────┐  │
 │  │                   Backstage Backend                             │  │
-│  │  (Node.js / TypeScript — Express/Fastify)                       │  │
+│  │  (Node.js / TypeScript — Express)                       │  │
 │  └────────────────────────────┬───────────────────────────────────┘  │
 │                               │                                      │
 │  ┌────────────────────────────▼───────────────────────────────────┐  │
@@ -173,7 +174,7 @@ catalog:
 
 ## Configurazione & Pratica
 
-### Installazione con Docker Compose (sviluppo locale)
+### Installazione locale (sviluppo)
 
 ```bash
 # Crea un nuovo progetto Backstage
@@ -182,10 +183,7 @@ npx @backstage/create-app@latest --name my-backstage
 # Entra nella directory
 cd my-backstage
 
-# Configura le variabili d'ambiente
-cp .env.example .env
-# Modifica .env con i tuoi valori
-
+# Esporta i segreti usati da app-config.yaml (es. GITHUB_TOKEN)
 # Avvia in sviluppo locale
 yarn dev
 # → Frontend su http://localhost:3000
@@ -203,7 +201,7 @@ helm repo update
 helm install backstage backstage/backstage \
   --namespace backstage \
   --create-namespace \
-  --version 1.9.0 \
+  --version <chart-version> \
   -f backstage-values.yaml
 ```
 
@@ -232,7 +230,6 @@ backstage:
           port: 5432
           user: ${POSTGRES_USER}
           password: ${POSTGRES_PASSWORD}
-          database: backstage_plugin_catalog
 
     auth:
       environment: production
@@ -241,6 +238,9 @@ backstage:
           production:
             clientId: ${GITHUB_CLIENT_ID}
             clientSecret: ${GITHUB_CLIENT_SECRET}
+            signIn:
+              resolvers:
+                - resolver: usernameMatchingUserEntityName   # senza resolver il login fallisce
 
 postgresql:
   enabled: true
@@ -445,8 +445,14 @@ jobs:
         with:
           python-version: '3.11'
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Install TechDocs CLI
-        run: pip install mkdocs-techdocs-core
+        run: |
+          npm install -g @techdocs/cli        # il CLI è un pacchetto npm
+          pip install mkdocs-techdocs-core    # plugin MkDocs richiesto da generate --no-docker
 
       - name: Generate TechDocs
         run: techdocs-cli generate --no-docker
@@ -504,7 +510,7 @@ metadata:
     Evita di aggiungere entità al catalog tramite file statici gestiti a mano. La scalabilità viene dalla **autodiscovery automatica** dei `catalog-info.yaml` nei repository. Se aggiungi un servizio manualmente, crea un `catalog-info.yaml` nel suo repository e lascia che Backstage lo scopra.
 
 !!! warning "Database PostgreSQL obbligatorio in produzione"
-    Il database SQLite in-memory (default per sviluppo) perde tutto il catalog al restart. In produzione usare sempre **PostgreSQL**. Il catalog viene rigenerato dall'autodiscovery, ma la TechDocs metadata, lo stato dello Scaffolder e i settings utente sono persistiti solo in PostgreSQL.
+    Il database SQLite in-memory (default per sviluppo) perde tutto il catalog al restart. In produzione usare sempre **PostgreSQL**. Il catalog viene rigenerato dall'autodiscovery, ma lo stato dello Scaffolder (task), i settings utente e i dati dei plugin sono persistiti nel database: con SQLite in-memory vanno persi al restart.
 
 ### Struttura catalog-info.yaml consigliata per ogni repo
 
@@ -543,15 +549,15 @@ spec:
 
 ### Plugin Essenziali per Partire
 
-| Plugin | Package | Funzione |
+| Plugin | Package (verificare: molti sono migrati in `backstage-community/plugins`) | Funzione |
 |--------|---------|---------|
-| `@backstage/plugin-kubernetes` | `@backstage/plugin-kubernetes` | Pod status, logs, rollouts per Component |
-| `@roadiehq/backstage-plugin-argo-cd` | `@roadiehq/backstage-plugin-argo-cd` | Stato ArgoCD Application nel catalog |
-| `@backstage/plugin-github-actions` | `@backstage/plugin-github-actions` | Stato workflow GitHub Actions |
-| `@backstage/plugin-pagerduty` | `@pagerduty/backstage-plugin` | On-call, incidents attivi per Component |
-| `@backstage/plugin-cost-insights` | `@backstage/plugin-cost-insights` | Cloud cost per team/servizio |
-| `@roadiehq/backstage-plugin-datadog` | `@roadiehq/backstage-plugin-datadog` | Grafici Datadog embedded |
-| `@backstage/plugin-sonarqube` | `@backstage/plugin-sonarqube` | Code quality metrics |
+| Kubernetes | `@backstage/plugin-kubernetes` | Pod status, logs, rollouts per Component |
+| ArgoCD | `@roadiehq/backstage-plugin-argo-cd` | Stato ArgoCD Application nel catalog |
+| GitHub Actions | `@backstage-community/plugin-github-actions` | Stato workflow GitHub Actions |
+| PagerDuty | `@pagerduty/backstage-plugin` | On-call, incidents attivi per Component |
+| Cost Insights | `@backstage-community/plugin-cost-insights` | Cloud cost per team/servizio |
+| Datadog | `@roadiehq/backstage-plugin-datadog` | Grafici Datadog embedded |
+| SonarQube | `@backstage-community/plugin-sonarqube` | Code quality metrics |
 
 ## Troubleshooting
 
@@ -577,7 +583,7 @@ curl -X POST \
   -d '{"entityRef": "component:default/payment-service"}'
 
 # Valida il catalog-info.yaml localmente
-npx @backstage/cli catalog:validate catalog-info.yaml
+npx @roadiehq/roadie-backstage-entity-validator catalog-info.yaml   # validatore community
 ```
 
 ### TechDocs non si aggiorna
