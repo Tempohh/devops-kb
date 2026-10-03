@@ -9,8 +9,8 @@ related: [cloud/aws/fondamentali/well-architected, cloud/aws/iam/organizations]
 official_docs: https://aws.amazon.com/pricing/
 status: needs-review
 difficulty: beginner
-last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Billing & Pricing AWS
@@ -223,7 +223,7 @@ aws ec2 create-tags \
 | Piano Support | Check Disponibili |
 |---------------|-------------------|
 | Basic/Developer | Core check (security e service quotas) |
-| Business/Enterprise On-Ramp/Enterprise | Tutti i check (oltre 500) |
+| Business Support+/Enterprise Support/Unified Operations (e legacy Business/Enterprise On-Ramp) | Tutti i check (oltre 500) <!-- CURRENCY: non verificato (2026-10) per i nuovi piani --> |
 
 ```bash
 # Trusted Advisor disponibile via Console e CLI
@@ -254,17 +254,16 @@ aws compute-optimizer get-ec2-instance-recommendations \
 
 ## Support Plans
 
-| Piano | Prezzo | Technical Support | Response Time (Critical) |
+Piani correnti (annunciati a re:Invent 2025, con funzionalità AI; ogni livello include il precedente):
+
+| Piano | Prezzo (minimo o % spesa mensile, il maggiore) | Technical Support | Response Time (Critical) |
 |-------|--------|-------------------|-----------------------------|
 | **Basic** | Gratuito | Nessuno | N/A |
-| **Developer** | $29/mese o 3% | Business hours email | N/A (system impaired: 12h) |
-| **Business** | $100/mese o 10/7/5/3% | 24/7 phone/email/chat | 1h |
-| **Enterprise On-Ramp** | $5.500/mese o 10/7/3% | 24/7 + pool di TAM (Technical Account Manager) | 30 min |
-| **Enterprise** | $15.000/mese o 10/7/5/3% | 24/7 + TAM dedicato | 15 min |
+| **Business Support+** | $29/mese o 9% fino a 10K, 7% 10K-80K, 5% 80K-250K, 3% oltre | 24/7 | 30 min |
+| **Enterprise Support** | $5.000/mese o 10% fino a 150K, 7% 150K-500K, 5% 500K-1M, 3% oltre | 24/7 + TAM (Technical Account Manager) designato | 15 min |
+| **Unified Operations** | $50.000/mese o 10% fino a 1M, 6% 1M-5M, 5% oltre | 24/7 + team AWS dedicato (workload mission-critical) | 5 min |
 
-**Nota:** la percentuale è applicata sulla spesa mensile AWS (es. Business = max(100$, 10% fino a 10K, 7% da 10K a 80K, 5% da 80K a 250K, 3% oltre).
-
-<!-- REVIEW: verificare i nuovi piani annunciati a fine 2025 (Business Support+, Enterprise Support, Unified Operations: prezzi e response time) e se i piani legacy sopra sono ancora acquistabili -->
+**Piani legacy** (Developer, Business classic, Enterprise On-Ramp): il livello di supporto attuale è garantito fino al **1 gennaio 2027**; migrazione ai nuovi piani possibile in qualsiasi momento da console o account team. Prezzi legacy: Developer $29/mese, Business $100/mese, Enterprise On-Ramp $5.500/mese.
 
 **Incluso in tutti i piani:** AWS documentation, whitepapers, forum, Trusted Advisor (basic checks), AWS Health Dashboard (ex Personal Health Dashboard).
 
