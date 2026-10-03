@@ -4251,7 +4251,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -4276,7 +4276,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -4460,6 +4460,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#aws-cost-anomaly-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AWS Cost Anomaly Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#aws-cost-allocation-tags" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4576,10 +4587,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#scenario-3-saving-plans-o-ri-non-applicati-alle-istanze" class="md-nav__link">
+  <a href="#scenario-3-savings-plans-o-ri-non-applicati-alle-istanze" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scenario 3 — Saving Plans o RI non applicati alle istanze
+        Scenario 3 — Savings Plans o RI non applicati alle istanze
       
     </span>
   </a>
@@ -24774,6 +24785,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#aws-cost-anomaly-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AWS Cost Anomaly Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#aws-cost-allocation-tags" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -24890,10 +24912,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#scenario-3-saving-plans-o-ri-non-applicati-alle-istanze" class="md-nav__link">
+  <a href="#scenario-3-savings-plans-o-ri-non-applicati-alle-istanze" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scenario 3 — Saving Plans o RI non applicati alle istanze
+        Scenario 3 — Savings Plans o RI non applicati alle istanze
       
     </span>
   </a>
@@ -25133,7 +25155,7 @@
 </tr>
 <tr>
 <td><strong>Data Transfer</strong></td>
-<td><strong>Ingress: gratuito</strong>. Egress verso Internet: a pagamento. Inter-Region: a pagamento. Intra-Region tra AZ: a pagamento (ridotto). Stessa AZ: gratuito.</td>
+<td><strong>Ingress: gratuito</strong>. Egress verso Internet: a pagamento (primi 100 GB/mese aggregati gratuiti). Inter-Region: a pagamento. Intra-Region tra AZ: a pagamento (ridotto). Stessa AZ: gratuito (via IP privato).</td>
 </tr>
 </tbody>
 </table>
@@ -25141,11 +25163,18 @@
 <p class="admonition-title">Regola data transfer</p>
 <p>Dati che <strong>entrano</strong> in AWS (ingress) sono sempre gratuiti. Dati che <strong>escono</strong> (egress) costano. Questo incentiva ad architetture che processano i dati vicino alla source.</p>
 </div>
+<div class="admonition warning">
+<p class="admonition-title">Costi nascosti ricorrenti</p>
+<ul>
+<li><strong>NAT Gateway</strong>: oltre alla tariffa oraria, ~0,045 $/GB processato — il traffico verso S3/DynamoDB va instradato via <strong>Gateway VPC Endpoint</strong> (gratuito) per evitarlo.</li>
+<li><strong>IPv4 pubblici</strong>: dal 2024 ogni indirizzo IPv4 pubblico costa ~0,005 $/ora (≈3,6 $/mese), anche se associato a istanza in uso. Importi indicativi: verificare sulla pagina pricing della Region.</li>
+</ul>
+</div>
 <hr />
 <h2 id="modelli-di-pricing-ec2">Modelli di Pricing — EC2<a class="headerlink" href="#modelli-di-pricing-ec2" title="Permanent link">&para;</a></h2>
 <h3 id="on-demand">On-Demand<a class="headerlink" href="#on-demand" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Paga per <strong>secondo</strong> (Linux) o per <strong>ora</strong> (Windows)</li>
+<li>Paga per <strong>secondo</strong> (minimo 60 s) per Linux; alcuni OS commerciali (es. RHEL, SUSE) possono avere billing orario — verificare sulla pagina pricing dell'OS scelto</li>
 <li>Zero impegno, massima flessibilità</li>
 <li>Prezzo più alto per unità — adatto per carichi variabili o testing</li>
 </ul>
@@ -25155,8 +25184,8 @@
 <li>Tipi di pagamento: All Upfront (max sconto), Partial Upfront, No Upfront</li>
 <li><strong>Standard RI</strong>: fixed instance type/family/OS/Region</li>
 <li><strong>Convertible RI</strong>: può cambiare instance family/OS — sconto minore (~54%)</li>
-<li><strong>Scheduled RI</strong>: finestre orarie specifiche (deprecato, sostituito da Savings Plans)</li>
-<li>RI non usate possono essere <strong>vendute nel Reserved Instance Marketplace</strong></li>
+<li><strong>Scheduled RI</strong>: finestre orarie specifiche (non più acquistabili; usare Savings Plans)</li>
+<li>Le <strong>Standard RI</strong> non usate possono essere <strong>vendute nel Reserved Instance Marketplace</strong> (le Convertible no)</li>
 </ul>
 <h3 id="savings-plans">Savings Plans<a class="headerlink" href="#savings-plans" title="Permanent link">&para;</a></h3>
 <p>Più flessibili delle RI — impegno su <strong>spesa $/ora</strong> per 1 o 3 anni:</p>
@@ -25183,6 +25212,11 @@
 <td><strong>SageMaker Savings Plans</strong></td>
 <td>SageMaker instance types</td>
 <td>~64%</td>
+</tr>
+<tr>
+<td><strong>Database Savings Plans</strong></td>
+<td>RDS, Aurora, DynamoDB ecc. (introdotti a fine 2025; sconti inferiori)</td>
+<td>fino a ~35%</td>
 </tr>
 </tbody>
 </table>
@@ -25285,7 +25319,7 @@
 </tr>
 <tr>
 <td><strong>12 Months Free</strong></td>
-<td>12 mesi dal signup</td>
+<td>12 mesi dal signup (solo account creati prima del 15/07/2025)</td>
 <td>EC2 t2.micro 750h/mese, S3 5GB, RDS 750h/mese db.t2/t3.micro</td>
 </tr>
 <tr>
@@ -25295,6 +25329,10 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Nuovo modello Free Tier (account creati dal 15/07/2025)</p>
+<p>I nuovi account scelgono tra <strong>Free plan</strong> (fino a 6 mesi o esaurimento dei crediti, nessun addebito, alcuni servizi limitati) e <strong>Paid plan</strong> (crediti promozionali da consumare in 6 mesi, poi pay-as-you-go). Il modello a 12 mesi per servizio resta solo per gli account precedenti. Verificare importi e durata su <a href="https://aws.amazon.com/free/">aws.amazon.com/free</a>.</p>
+</div>
 <p><strong>Servizi sempre gratuiti (selezione):</strong>
 - Lambda: 1 milione richieste/mese + 400.000 GB-secondi
 - DynamoDB: 25 GB storage + 25 WCU + 25 RCU
@@ -25317,8 +25355,8 @@
 - Visualizza spesa <strong>storica</strong> e previsioni (forecasting a 12 mesi)
 - Filtri per: servizio, account, Region, tag, istanza type
 - <strong>Savings Plans recommendations</strong> — suggerisce quanto acquistare
-- <strong>RI recommendations</strong> — rightsizing RI
-- <strong>Granularità</strong>: giornaliera, mensile, oraria (solo ultimi 14 giorni)
+- <strong>RI recommendations</strong> — suggerisce quali RI acquistare
+- <strong>Granularità</strong>: giornaliera, mensile, oraria (solo ultimi 14 giorni, da abilitare nelle preferenze e a pagamento)
 - Report personalizzati salvabili</p>
 <h3 id="aws-budgets">AWS Budgets<a class="headerlink" href="#aws-budgets" title="Permanent link">&para;</a></h3>
 <ul>
@@ -25352,12 +25390,17 @@
 </span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="s1">        }]</span>
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="s1">    }]'</span>
 </span></code></pre></div>
+<h3 id="aws-cost-anomaly-detection">AWS Cost Anomaly Detection<a class="headerlink" href="#aws-cost-anomaly-detection" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Rileva con ML spese anomale per servizio/account/tag/cost category e invia alert (email/SNS) con <strong>root cause</strong> (servizio, Region, account)</li>
+<li>Gratuito; complementare a Budgets: Budgets segnala il superamento di una soglia fissa, Anomaly Detection il <em>cambio di pattern</em> anche sotto soglia</li>
+</ul>
 <h3 id="aws-cost-allocation-tags">AWS Cost Allocation Tags<a class="headerlink" href="#aws-cost-allocation-tags" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Aggiungere <strong>tag</strong> alle risorse → visualizzare costi per tag in Cost Explorer</li>
 <li>Tipi: <strong>AWS-generated tags</strong> (es. <code>aws:createdBy</code>) e <strong>user-defined tags</strong></li>
-<li>Tag devono essere <strong>attivati</strong> in Billing per apparire nei report (latenza ~24h)</li>
-<li>Best practice: tag obbligatori con Config Rules (es. <code>Project</code>, <code>Team</code>, <code>Environment</code>)</li>
+<li>Tag devono essere <strong>attivati</strong> in Billing per apparire nei report (latenza ~24h), anche gli AWS-generated; non sono retroattivi</li>
+<li>Best practice: tag obbligatori con Config Rules o <strong>Tag Policies</strong> di Organizations (es. <code>Project</code>, <code>Team</code>, <code>Environment</code>)</li>
 </ul>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Taggare una EC2 instance</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-tags<span class="w"> </span><span class="se">\</span>
@@ -25368,11 +25411,12 @@
 <ul>
 <li>Report <strong>granulare</strong> (per risorsa, per ora) esportato in S3</li>
 <li>Formato CSV/Parquet — analizzabile con Athena, QuickSight, Redshift</li>
+<li>Il CUR <em>legacy</em> è affiancato da <strong>Data Exports</strong> (Billing → Data Exports): <strong>CUR 2.0</strong> (schema fisso, query SQL prima dell'export) ed export <strong>FOCUS 1.0</strong> (standard FinOps multi-cloud) — preferirli per nuove configurazioni</li>
 <li>Standard de-facto per FinOps (Financial Operations — gestione finanziaria del cloud) avanzato e multi-account billing</li>
 </ul>
 <hr />
 <h2 id="aws-trusted-advisor">AWS Trusted Advisor<a class="headerlink" href="#aws-trusted-advisor" title="Permanent link">&para;</a></h2>
-<p><strong>Trusted Advisor</strong> analizza il tuo account e fornisce raccomandazioni in 5 categorie:</p>
+<p><strong>Trusted Advisor</strong> analizza il tuo account e fornisce raccomandazioni in 6 categorie:</p>
 <table>
 <thead>
 <tr>
@@ -25398,12 +25442,12 @@
 <td>EC2 con alta CPU, CloudFront ottimizzazioni</td>
 </tr>
 <tr>
-<td><strong>Service Limits</strong></td>
-<td>Avvisi quando ci si avvicina ai limiti AWS</td>
+<td><strong>Service Quotas</strong> (ex Service Limits)</td>
+<td>Avvisi quando ci si avvicina alle quote AWS</td>
 </tr>
 <tr>
-<td><strong>Service Quotas</strong> (aggiunto 2023)</td>
-<td>Monitoraggio quote servizi</td>
+<td><strong>Operational Excellence</strong></td>
+<td>Check su best practice operative</td>
 </tr>
 </tbody>
 </table>
@@ -25418,10 +25462,10 @@
 <tbody>
 <tr>
 <td>Basic/Developer</td>
-<td>7 security check fondamentali</td>
+<td>Core check (security e service quotas)</td>
 </tr>
 <tr>
-<td>Business/Enterprise</td>
+<td>Business/Enterprise On-Ramp/Enterprise</td>
 <td>Tutti i check (oltre 500)</td>
 </tr>
 </tbody>
@@ -25468,11 +25512,11 @@
 <td><strong>Developer</strong></td>
 <td>$29/mese o 3%</td>
 <td>Business hours email</td>
-<td>12h</td>
+<td>N/A (system impaired: 12h)</td>
 </tr>
 <tr>
 <td><strong>Business</strong></td>
-<td>$100/mese o 10/7/3%</td>
+<td>$100/mese o 10/7/5/3%</td>
 <td>24/7 phone/email/chat</td>
 <td>1h</td>
 </tr>
@@ -25484,17 +25528,19 @@
 </tr>
 <tr>
 <td><strong>Enterprise</strong></td>
-<td>$15.000/mese o 10/7/3/1%</td>
+<td>$15.000/mese o 10/7/5/3%</td>
 <td>24/7 + TAM dedicato</td>
 <td>15 min</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Nota:</strong> la percentuale è applicata sulla spesa mensile AWS (es. Business = max(100$, 10% di spesa fino a 10K, 7% da 10K a 80K, 3% oltre).</p>
-<p><strong>Incluso in tutti i piani:</strong> AWS documentation, whitepapers, forum, Trusted Advisor (basic checks), AWS Personal Health Dashboard.</p>
+<p><strong>Nota:</strong> la percentuale è applicata sulla spesa mensile AWS (es. Business = max(100$, 10% fino a 10K, 7% da 10K a 80K, 5% da 80K a 250K, 3% oltre).</p>
+<!-- REVIEW: verificare i nuovi piani annunciati a fine 2025 (Business Support+, Enterprise Support, Unified Operations: prezzi e response time) e se i piani legacy sopra sono ancora acquistabili -->
+
+<p><strong>Incluso in tutti i piani:</strong> AWS documentation, whitepapers, forum, Trusted Advisor (basic checks), AWS Health Dashboard (ex Personal Health Dashboard).</p>
 <hr />
 <h2 id="total-cost-of-ownership-tco">Total Cost of Ownership (TCO)<a class="headerlink" href="#total-cost-of-ownership-tco" title="Permanent link">&para;</a></h2>
-<p><strong>AWS TCO Calculator</strong> (ora integrato nel Pricing Calculator) confronta il costo di:
+<p>Il vecchio <strong>AWS TCO Calculator</strong> è stato dismesso: oggi si usano <strong>Migration Evaluator</strong> (analisi del parco on-premises reale) e il <strong>Pricing Calculator</strong> per confrontare il costo di:
 - <strong>On-premises</strong> (hardware, datacenter, personale, licenze)
 - <strong>AWS</strong> (servizi cloud equivalenti)</p>
 <p>Fattori considerati nel TCO:
@@ -25511,7 +25557,7 @@
 <li><strong>Consolidated Billing</strong> — un'unica fattura per tutti gli account</li>
 <li><strong>Volume discounts</strong> — aggregazione utilizzo → pricing tier più vantaggioso (es. S3)</li>
 <li><strong>Savings Plans e RI sharing</strong> — un account acquista, tutti ne beneficiano (configurabile)</li>
-<li><strong>Cost center tagging</strong> — tag obbligatori per ogni account tramite Service Control Policy</li>
+<li><strong>Cost center tagging</strong> — tag obbligatori sulle risorse via Tag Policies / SCP con condizione <code>aws:RequestTag</code></li>
 </ul>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -25522,7 +25568,7 @@
 1. Aprire Cost Explorer → filtro per servizio → ordinare per costo decrescente
 2. Identificare il servizio e la Region responsabile
 3. Drilldown sul giorno dello spike → verificare quali risorse sono attive</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Listar tutte le risorse costose con tag mancanti (possibile risorsa dimenticata)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Costo per servizio nel periodo (adattare le date)</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>aws<span class="w"> </span>ce<span class="w"> </span>get-cost-and-usage<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span>--time-period<span class="w"> </span><span class="nv">Start</span><span class="o">=</span><span class="m">2026</span>-03-01,End<span class="o">=</span><span class="m">2026</span>-03-28<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span>--granularity<span class="w"> </span>MONTHLY<span class="w"> </span><span class="se">\</span>
@@ -25531,7 +25577,7 @@
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'ResultsByTime[0].Groups[*].[Keys[0],Metrics.UnblendedCost.Amount]'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span>--output<span class="w"> </span>table
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Verificare NAT Gateway attivi in tutte le Region</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Verificare NAT Gateway attivi (solo Region corrente: ripetere con --region)</span>
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-nat-gateways<span class="w"> </span>--filter<span class="w"> </span><span class="nv">Name</span><span class="o">=</span>state,Values<span class="o">=</span>available<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'NatGateways[*].[NatGatewayId,VpcId,State]'</span><span class="w"> </span>--output<span class="w"> </span>table
 </span></code></pre></div>
@@ -25548,11 +25594,12 @@
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span>--status<span class="w"> </span>Active<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'CostAllocationTags[*].[TagKey,Status]'</span><span class="w"> </span>--output<span class="w"> </span>table
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Non esiste CLI diretta per attivare i tag: operazione da console</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Billing Console → Cost Allocation Tags → seleziona tag → "Activate"</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Attivare un tag (alternativa alla console: Billing → Cost Allocation Tags)</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>aws<span class="w"> </span>ce<span class="w"> </span>update-cost-allocation-tags-status<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span>--cost-allocation-tags-status<span class="w"> </span><span class="nv">TagKey</span><span class="o">=</span>Project,Status<span class="o">=</span>Active
 </span></code></pre></div>
 <hr />
-<h3 id="scenario-3-saving-plans-o-ri-non-applicati-alle-istanze">Scenario 3 — Saving Plans o RI non applicati alle istanze<a class="headerlink" href="#scenario-3-saving-plans-o-ri-non-applicati-alle-istanze" title="Permanent link">&para;</a></h3>
+<h3 id="scenario-3-savings-plans-o-ri-non-applicati-alle-istanze">Scenario 3 — Savings Plans o RI non applicati alle istanze<a class="headerlink" href="#scenario-3-savings-plans-o-ri-non-applicati-alle-istanze" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Le istanze continuano a essere fatturate a tariffa On-Demand nonostante l'acquisto di Reserved Instances o Savings Plans.</p>
 <p><strong>Causa:</strong> Mismatch su Region, instance family, OS, o tenancy. Per le RI Standard il match deve essere esatto; per i Savings Plans il commitment potrebbe essere esaurito da altri servizi.</p>
 <p><strong>Soluzione:</strong>
