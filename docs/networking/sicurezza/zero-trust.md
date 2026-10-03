@@ -9,7 +9,7 @@ related: [networking/sicurezza/vpn-ipsec, networking/sicurezza/firewall-waf, net
 official_docs: https://csrc.nist.gov/publications/detail/sp/800-207/final
 status: complete
 difficulty: advanced
-last_updated: 2026-09-28
+last_updated: 2026-10-03
 ---
 
 # Zero Trust Networking
@@ -231,9 +231,9 @@ Fase 3 — Rete (mesi 3-6):
 
 Fase 4 — Dati (mesi 6-12):
   ✓ Data classification
-  ✓ DLP (Data Loss Prevention)
+  ✓ DLP (Data Loss Prevention — impedisce l'uscita di dati sensibili)
   ✓ Encrypt-at-rest con key management (Vault, KMS)
-  ✓ Monitoraggio anomalie (UEBA)
+  ✓ Monitoraggio anomalie (UEBA, User and Entity Behavior Analytics — rileva comportamenti anomali rispetto alla baseline)
 ```
 
 ### SPIFFE/SPIRE — Identità per i Workload
@@ -315,6 +315,66 @@ kubectl exec mypod -- cat /var/run/secrets/... | openssl x509 -noout -text | gre
 
 # Log Cloudflare Access
 # Dashboard → Zero Trust → Logs → Access Requests
+```
+
+### Scenario 1 — Richieste 503/"upstream connect error" dopo `STRICT` mTLS
+
+**Sintomo**: dopo aver applicato `PeerAuthentication` in modalità `STRICT`, i client senza sidecar (job, pod fuori mesh, health check del load balancer) ricevono connection reset o 503.
+
+**Causa**: in `STRICT` il sidecar accetta solo traffico mTLS; i client che parlano in plaintext vengono rifiutati durante l'handshake.
+
+**Soluzione**: tornare a `PERMISSIVE`, individuare i client non-mesh, iniettare il sidecar (o escludere la porta) e solo poi riabilitare `STRICT`.
+
+```bash
+# Quali workload hanno il sidecar?
+kubectl get pods -n production -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].name}{"\n"}{end}'
+# Stato mTLS effettivo per pod
+istioctl x describe pod <pod> -n production
+# Rollback temporaneo
+kubectl patch peerauthentication default -n production --type merge -p '{"spec":{"mtls":{"mode":"PERMISSIVE"}}}'
+```
+
+### Scenario 2 — `RBAC: access denied` con mTLS funzionante
+
+**Sintomo**: la connessione TLS si stabilisce ma la richiesta riceve HTTP 403 `RBAC: access denied`.
+
+**Causa**: l'`AuthorizationPolicy` non contiene il principal SPIFFE del chiamante (service account o namespace errato), oppure `paths`/`methods` non combaciano. Con almeno una policy `ALLOW` presente, tutto ciò che non è elencato è negato.
+
+**Soluzione**: leggere il principal reale del chiamante nei log del proxy e correggere la policy.
+
+```bash
+kubectl logs <pod-api> -c istio-proxy -n production | grep "rbac_access_denied"
+istioctl x authz check <pod-api> -n production
+kubectl get authorizationpolicy -n production -o yaml
+```
+
+### Scenario 3 — Utenti bloccati da IAP per device posture
+
+**Sintomo**: utente autenticato con MFA ma `Access denied` sull'applicazione; da altri dispositivi funziona.
+
+**Causa**: il client (es. WARP) non riporta la postura — agente non connesso, OS sotto la versione minima della regola, o certificato aziendale mancante.
+
+**Soluzione**: verificare lo stato del client sul dispositivo, poi la regola di posture e il log Access per il motivo esatto del rifiuto.
+
+```bash
+warp-cli status
+warp-cli settings | grep -i organization
+# Dashboard → Zero Trust → Logs → Access → dettaglio richiesta (campo "Reason")
+```
+
+### Scenario 4 — Workload senza SVID (SPIRE)
+
+**Sintomo**: il workload non ottiene il certificato SPIFFE; i log dell'agent riportano `no identity issued` / `no registration entry`.
+
+**Causa**: nessuna registration entry combacia con i selector del pod (namespace o service account diversi), oppure l'agent non è attestato presso il server.
+
+**Soluzione**: elencare le entry, confrontare i selector con il pod reale e verificare la salute di agent e server.
+
+```bash
+spire-server entry show
+spire-server agent list
+spire-server healthcheck
+kubectl get pod <pod> -o jsonpath='{.metadata.namespace}{" "}{.spec.serviceAccountName}{"\n"}'
 ```
 
 ## Relazioni
