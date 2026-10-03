@@ -7,10 +7,10 @@ search_keywords: [s3 security, block public access, bucket policy, sse-s3, sse-k
 parent: cloud/aws/storage/_index
 related: [cloud/aws/storage/s3, cloud/aws/security/kms-secrets, cloud/aws/security/compliance-audit, cloud/aws/messaging/eventbridge-kinesis]
 official_docs: https://docs.aws.amazon.com/s3/latest/userguide/security.html
-status: needs-review
+status: reviewed
 difficulty: advanced
-last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Amazon S3 — Sicurezza e Funzionalità Avanzate
@@ -288,8 +288,7 @@ aws s3api get-object --bucket my-bucket --key file.txt \
     SSE-C richiede HTTPS obbligatoriamente. Il trasferimento della chiave via HTTP non è permesso.
 
 !!! warning "SSE-C disabilitato di default sui nuovi bucket"
-    AWS ha annunciato che, a partire da aprile 2026, SSE-C è disabilitato di default sui nuovi bucket e va riabilitato esplicitamente via `PutBucketEncryption` (blocco dei tipi di cifratura). Preferire SSE-KMS salvo requisiti specifici di custodia esterna della chiave.
-    <!-- REVIEW: verificare data e dettagli esatti del cambio di default SSE-C su docs.aws.amazon.com -->
+    Dal 6 aprile 2026 SSE-C è disabilitato di default su tutti i nuovi bucket general purpose (rollout progressivo nelle Region; esclusi Middle East Bahrain e UAE). È disabilitato anche sui bucket esistenti di account che non hanno alcun oggetto SSE-C; se anche un solo bucket dell'account contiene oggetti SSE-C, nessun bucket dell'account viene modificato. Per riabilitarlo, impostare `BlockedEncryptionTypes` a `NONE` nella configurazione di default encryption via `PutBucketEncryption`. Preferire SSE-KMS salvo requisiti specifici di custodia esterna della chiave.
 ### DSSE-KMS (Dual-Layer Server-Side Encryption)
 
 Doppio layer di cifratura KMS (due data key separate). Richiesto da alcuni framework di compliance governativi. Non è necessario per la maggior parte dei workload.
@@ -436,8 +435,7 @@ aws s3api select-object-content \
 ## S3 Object Lambda
 
 !!! warning "Non disponibile per nuovi clienti"
-    Dal 7 novembre 2025 S3 Object Lambda è in modalità manutenzione: non è più disponibile per nuovi clienti (gli esistenti continuano a usarlo). Alternative: trasformare in una Lambda/API dietro CloudFront o API Gateway, oppure produrre copie derivate (es. dataset senza PII) con una pipeline event-driven e servirle da un bucket/Access Point dedicato.
-    <!-- REVIEW: verificare lo stato attuale dell'annuncio AWS di availability change per Object Lambda -->
+    Dal 7 novembre 2025 S3 Object Lambda è disponibile solo per i clienti esistenti e per alcuni partner APN selezionati (gli esistenti continuano a usarlo; AWS garantisce solo miglioramenti di sicurezza e disponibilità, nessuna nuova funzionalità). Alternative: Dynamic Image Transformation for Amazon CloudFront, Lambda invocata via CloudFront (origin con Function URL) o API Gateway, elaborazione nel client, oppure copie derivate (es. dataset senza PII) prodotte con una pipeline event-driven e servite da un bucket/Access Point dedicato.
 
 S3 Object Lambda permette di trasformare l'output di `GetObject` (e `HeadObject`/`ListObjects`) con una funzione Lambda prima che venga restituito al richiedente. Non modifica l'oggetto originale.
 
@@ -643,8 +641,7 @@ aws s3api put-bucket-inventory-configuration \
 - Input per S3 Batch Operations
 
 !!! tip "S3 Metadata"
-    Per inventari quasi in tempo reale, AWS offre anche **S3 Metadata**, che mantiene i metadati degli oggetti in tabelle Apache Iceberg interrogabili con Athena. Inventory resta la scelta più semplice ed economica per report periodici.
-    <!-- REVIEW: verificare stato GA e tipi di tabella (journal / live inventory) di S3 Metadata -->
+    Per inventari quasi in tempo reale, AWS offre anche **S3 Metadata**, che mantiene i metadati degli oggetti in tabelle Apache Iceberg read-only gestite da S3 (in un table bucket `aws-s3`), interrogabili con Athena, EMR, Redshift e Spark. Per ogni bucket general purpose la configurazione può avere fino a tre tabelle: **journal** (obbligatoria; eventi di upload/update/delete quasi in tempo reale), **live inventory** (opzionale; stato corrente di oggetti e versioni, aggiornato in genere entro un'ora dopo il backfill iniziale a pagamento) e **annotation** (opzionale; annotazioni sugli oggetti). Inventory resta la scelta più semplice ed economica per report periodici.
 
 ---
 
