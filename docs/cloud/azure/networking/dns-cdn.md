@@ -1,15 +1,16 @@
 ---
 title: "Azure DNS & CDN"
-slug: dns-cdn-azure
+slug: dns-cdn
 category: cloud
 tags: [azure, dns, private-dns, cdn, front-door, ddos-protection]
 search_keywords: [Azure DNS, Azure Private DNS Zone, DNS forwarding Azure, Azure CDN, Azure Front Door CDN, DDoS Protection Standard Basic, Azure DNS resolver, custom domain Azure, DNS record types Azure, CNAME alias Azure, autoregistration DNS, split-horizon DNS Azure]
 parent: cloud/azure/networking/_index
 related: [cloud/azure/networking/vnet, cloud/azure/networking/load-balancing]
 official_docs: https://learn.microsoft.com/azure/dns/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Azure DNS & CDN
@@ -68,7 +69,9 @@ az network dns record-set a create \
     --zone-name company.com \
     --record-set-name "@" \
     --target-resource /subscriptions/.../publicIPAddresses/myapp-pip
-    # Alias record supporta: Public IP, Load Balancer, Front Door, Traffic Manager
+    # Alias record supporta: Public IP (anche quello del Load Balancer), Front Door, Traffic Manager, CDN endpoint
+    # Perché: sull'apex ("@") un CNAME è vietato dallo standard DNS; l'alias lo sostituisce
+    # e segue automaticamente i cambi di IP della risorsa target (nessun record "dangling")
 
 # Impostare TTL
 az network dns record-set a update \
@@ -121,20 +124,23 @@ az network private-dns link vnet create \
     --registration-enabled false          # false per zone Private Endpoint
 ```
 
+!!! note "Vincoli del VNet link"
+    Una VNet può avere **un solo** link con `registration-enabled true` (autoregistration), ma può essere collegata a molte zone in sola risoluzione. Una zona accetta più VNet in sola risoluzione, ma molte meno con registrazione attiva (verificare i limiti correnti nella documentazione). L'autoregistration crea record solo per le VM, non per altri servizi: per quelli servono record manuali o zone `privatelink`.
+
 ### Azure DNS Private Resolver
 
-**Azure DNS Private Resolver** permette di risolvere DNS on-premises → Azure Private DNS e viceversa, senza custom DNS server:
+**Azure DNS Private Resolver** permette di risolvere DNS on-premises → Azure Private DNS e viceversa, senza custom DNS server (VM con BIND/Windows DNS da gestire e patchare). Perché serve: l'IP `168.63.129.16` (resolver Azure) è raggiungibile solo dall'interno della VNet, quindi on-premises non può interrogarlo direttamente; l'inbound endpoint espone un IP privato raggiungibile via VPN/ExpressRoute, mentre l'outbound endpoint + forwarding ruleset inoltrano le query per domini specifici verso DNS esterni.
 
 ```bash
-# Creare DNS Private Resolver
+# Creare DNS Private Resolver (la VNet è passata come resource ID)
 az dns-resolver create \
     --resource-group myapp-rg \
     --dns-resolver-name company-resolver \
     --location italynorth \
-    --id "/subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.Network/virtualNetworks/hub-vnet"
+    --virtual-network id="/subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.Network/virtualNetworks/hub-vnet"
 
 # Creare Inbound Endpoint (on-premises → Azure)
-# Subnet dedicata /28 minimo
+# Subnet dedicata (delegata a Microsoft.Network/dnsResolvers), /28 minimo, senza altre risorse
 az dns-resolver inbound-endpoint create \
     --dns-resolver-name company-resolver \
     --resource-group myapp-rg \
@@ -146,13 +152,21 @@ az dns-resolver outbound-endpoint create \
     --dns-resolver-name company-resolver \
     --resource-group myapp-rg \
     --outbound-endpoint-name outbound \
-    --id "/subscriptions/.../subnets/DnsOutboundSubnet"
+    --location italynorth \
+    --subnet id="/subscriptions/.../subnets/DnsOutboundSubnet"
 
 # Creare Forwarding Ruleset per forwarding selettivo
 az dns-resolver forwarding-ruleset create \
     --resource-group myapp-rg \
-    --forwarding-ruleset-name company-ruleset \
+    --location italynorth \
     --outbound-endpoints '[{"id": "/subscriptions/.../outbound"}]'
+
+# Collegare il ruleset alle VNet che devono usarlo (senza link le rule NON si applicano)
+az dns-resolver vnet-link create \
+    --resource-group myapp-rg \
+    --forwarding-ruleset-name company-ruleset \
+    --name spoke-link \
+    --id "/subscriptions/.../virtualNetworks/spoke-vnet"
 
 # Forwarding rule: dominio interno → DNS on-premises
 az dns-resolver forwarding-rule create \
@@ -167,14 +181,19 @@ az dns-resolver forwarding-rule create \
 
 ## Azure CDN
 
-**Azure CDN** distribuisce contenuti statici tramite una rete di PoP globali per ridurre latenza:
+**Azure CDN** distribuisce contenuti statici tramite una rete di PoP (Point of Presence) globali per ridurre latenza: la prima richiesta va all'origin, le successive sono servite dalla cache del PoP più vicino finché il TTL non scade.
+
+!!! warning "Stato del prodotto: legacy"
+    Azure CDN from Akamai (ritirato nel 2023) e Azure CDN from Edgio/Verizon (ritirato a gennaio 2025) **non sono più disponibili**. Resta solo Azure CDN Standard from Microsoft (classic), a sua volta in dismissione a favore di **Azure Front Door Standard/Premium**, che unifica CDN, WAF e global load balancing. Per nuovi workload usare Front Door. <!-- REVIEW: verificare date esatte di retirement di Azure CDN Standard from Microsoft (classic) e fine creazione nuovi profili -->
+
+    Gli esempi seguenti servono per gestire profili CDN esistenti.
 
 ```bash
 # Creare CDN Profile
 az cdn profile create \
     --resource-group myapp-rg \
     --name myapp-cdn \
-    --sku Standard_Microsoft    # Standard_Microsoft, Standard_Akamai, Standard_Verizon, Premium_Verizon
+    --sku Standard_Microsoft    # unico SKU ancora valido (Akamai e Verizon/Edgio ritirati)
 
 # Creare CDN Endpoint
 az cdn endpoint create \
@@ -214,14 +233,20 @@ az cdn endpoint purge \
 
 ## Azure DDoS Protection
 
-| Tier | Descrizione | Costo |
+Un attacco DDoS (Distributed Denial of Service) satura banda o risorse del target; la mitigazione avviene nella rete Azure, prima che il traffico arrivi alla VNet.
+
+| Tier | Descrizione | Costo (indicativo) |
 |------|-------------|-------|
-| **DDoS Network Protection Basic** | Sempre attivo, automatico per tutte le risorse Azure | Gratuito |
-| **DDoS Network Protection Standard** | Policy tuning, telemetria, alert, SLA 99.99%, rapid response team | ~$2950/mese per VNet protetta |
-| **DDoS IP Protection** | Standard applicato a singolo IP pubblico | ~$199/mese per IP |
+| **Infrastructure protection** (ex "Basic") | Sempre attivo, automatico per tutte le risorse Azure; nessun tuning né telemetria dedicata | Gratuito |
+| **DDoS Network Protection** (ex "Standard") | Tuning adattivo per risorsa, telemetria/alert, DDoS Rapid Response, cost protection, sconto WAF | ~$2944/mese per piano, include fino a 100 IP pubblici; un piano si associa a più VNet (anche di altre subscription dello stesso tenant) |
+| **DDoS IP Protection** | Stessa mitigazione su singolo IP pubblico, senza rapid response né cost protection | ~$199/mese per IP |
+
+<!-- REVIEW: verificare prezzi correnti su azure.microsoft.com/pricing/details/ddos-protection -->
+
+Per i workload HTTP(S) abbinare Front Door/Application Gateway con WAF (protezione L7); DDoS Protection copre L3/L4.
 
 ```bash
-# Abilitare DDoS Protection Standard su VNet
+# Abilitare DDoS Network Protection su VNet (crea il piano e lo associa)
 az network ddos-protection create \
     --resource-group myapp-rg \
     --name company-ddos-plan \
@@ -234,12 +259,12 @@ az network vnet update \
     --ddos-protection-plan company-ddos-plan
 
 # Creare alert su metrica DDoS
-az monitor alert create \
+az monitor metrics alert create \
     --name ddos-attack-alert \
     --resource-group myapp-rg \
-    --target /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.Network/publicIPAddresses/myapp-pip \
-    --condition "avg Under DDoS attack > 0" \
-    --action-group arn:operations-action-group
+    --scopes /subscriptions/$SUB_ID/resourceGroups/myapp-rg/providers/Microsoft.Network/publicIPAddresses/myapp-pip \
+    --condition "max IfUnderDDoSAttack > 0" \
+    --action operations-action-group
 ```
 
 ---
@@ -252,7 +277,7 @@ az monitor alert create \
 
 **Causa:** Manca il VNet Link tra la Private DNS Zone e la VNet, oppure la VNet non usa i DNS resolver di Azure (168.63.129.16).
 
-**Soluzione:** Verificare che esista il link e che la VNet sia configurata con DNS di default (168.63.129.16).
+**Soluzione:** Verificare che esista il link e che la VNet sia configurata con DNS di default (168.63.129.16). Se la VNet usa un custom DNS server, quest'ultimo deve inoltrare le query a 168.63.129.16 (o a un inbound endpoint del Private Resolver), altrimenti le zone private non vengono mai interrogate.
 
 ```bash
 # Verificare i VNet link esistenti
