@@ -5,11 +5,11 @@ category: dev
 tags: [sdlc, agile, scrum, tech-lead, adr, feature-flags, release-management, definition-of-done, technical-debt]
 search_keywords: [enterprise sdlc, software development lifecycle, ciclo sviluppo software, agile enterprise, scrum microservizi, sprint planning, backlog tecnico, debito tecnico, technical debt, quadrante fowler, tech debt quadrant, definition of done, DoD, quality gate, coverage soglia, SAST, static analysis, feature flags, feature toggle, LaunchDarkly, Unleash, Flagsmith, trunk based, release management, semantic versioning, semver, changelog automatico, hotfix process, hotfix, ADR, architectural decision record, decision record, Tech Lead, responsabilità tech lead, RFC, request for comments, coupling budget, accoppiamento, team topology, SDLC enterprise, process engineering, ingegneria del processo, ingegneria software enterprise, software engineering process, agile at scale, SAFe, team of teams]
 parent: dev/processi/_index
-related: [dev/processi/developer-workflow]
+related: [dev/processi/developer-workflow, dev/processi/pm-sviluppo, ci-cd/strategie/feature-flags, ci-cd/strategie/trunk-based-development]
 official_docs: https://martinfowler.com/articles/is-quality-worth-cost.html
 status: complete
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-03
 ---
 
 # Enterprise SDLC per Microservizi
