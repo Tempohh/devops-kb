@@ -8119,7 +8119,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -8144,7 +8144,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -8434,6 +8434,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relazioni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relazioni
+      
+    </span>
+  </a>
   
 </li>
       
@@ -24851,6 +24862,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#relazioni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relazioni
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#riferimenti" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -25098,7 +25120,11 @@
 </span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">  </span>--end-time<span class="w"> </span><span class="k">$(</span>date<span class="w"> </span>-u<span class="w"> </span>+%Y-%m-%dT%H:%M:%SZ<span class="k">)</span>
 </span></code></pre></div>
 <h2 id="diagnostic-settings">Diagnostic Settings<a class="headerlink" href="#diagnostic-settings" title="Permanent link">&para;</a></h2>
-<p>I Diagnostic Settings abilitano l'invio di logs e metriche delle risorse Azure a Log Analytics, Storage Account e/o Event Hubs.</p>
+<p>I Diagnostic Settings abilitano l'invio di logs e metriche delle risorse Azure a Log Analytics, Storage Account e/o Event Hubs. Servono perché i <strong>resource logs</strong> non sono raccolti di default: senza un Diagnostic Setting la risorsa li scarta (solo metriche piattaforma e Activity Log sono automatici).</p>
+<div class="admonition warning">
+<p class="admonition-title">retentionPolicy deprecato</p>
+<p>Il campo <code>retentionPolicy</code> dei Diagnostic Settings è deprecato: la retention si gestisce sul workspace/tabella (o con lifecycle management sullo Storage Account), non per singolo setting. Per questo gli esempi seguenti non lo usano.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Diagnostic Settings per una VM (Azure Monitor Agent — vedi sotto per AMA)</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Per risorse come App Service, SQL, Key Vault:</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>az<span class="w"> </span>monitor<span class="w"> </span>diagnostic-settings<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
@@ -25106,11 +25132,11 @@
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>--name<span class="w"> </span>diag-appservice-prod<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>--workspace<span class="w"> </span><span class="nv">$LAW_ID</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span>--logs<span class="w"> </span><span class="s1">'[</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="s1">    {"category": "AppServiceHTTPLogs", "enabled": true, "retentionPolicy": {"enabled": false}},</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="s1">    {"category": "AppServiceAppLogs", "enabled": true, "retentionPolicy": {"enabled": false}},</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="s1">    {"category": "AppServiceAuditLogs", "enabled": true, "retentionPolicy": {"enabled": false}},</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="s1">    {"category": "AppServiceIPSecAuditLogs", "enabled": true, "retentionPolicy": {"enabled": false}},</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="s1">    {"category": "AppServicePlatformLogs", "enabled": true, "retentionPolicy": {"enabled": false}}</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="s1">    {"category": "AppServiceHTTPLogs", "enabled": true},</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="s1">    {"category": "AppServiceAppLogs", "enabled": true},</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="s1">    {"category": "AppServiceAuditLogs", "enabled": true},</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="s1">    {"category": "AppServiceIPSecAuditLogs", "enabled": true},</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="s1">    {"category": "AppServicePlatformLogs", "enabled": true}</span>
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="s1">  ]'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span>--metrics<span class="w"> </span><span class="s1">'[{"category": "AllMetrics", "enabled": true}]'</span>
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
@@ -25144,7 +25170,7 @@
 </span><span id="__span-2-43"><a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="w">  </span>--metrics<span class="w"> </span><span class="s1">'[{"category": "AllMetrics", "enabled": true}]'</span>
 </span></code></pre></div>
 <h2 id="azure-monitor-agent-ama">Azure Monitor Agent (AMA)<a class="headerlink" href="#azure-monitor-agent-ama" title="Permanent link">&para;</a></h2>
-<p>AMA è l'agente unificato per raccogliere log e metriche dalle VM, sostituendo i deprecati MMA (Microsoft Monitoring Agent) e OMS Agent.</p>
+<p>AMA è l'agente unificato per raccogliere log e metriche dalle VM, sostituendo MMA (Microsoft Monitoring Agent, alias Log Analytics agent) e OMS Agent, <strong>ritirati il 31 agosto 2024</strong>: non ricevono più supporto e vanno migrati ad AMA. A differenza degli agent legacy, AMA non ha configurazione locale: <em>cosa</em> raccogliere è definito centralmente nelle Data Collection Rules (DCR), associabili a molte VM, e l'autenticazione usa la managed identity della VM.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Installare AMA su VM Linux</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>az<span class="w"> </span>vm<span class="w"> </span>extension<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
@@ -25244,7 +25270,7 @@
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c">// 2. Top 10 errori nelle ultime 24 ore per applicazione</span>
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="n">AppExceptions</span>
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="w"> </span><span class="p">&gt;</span><span class="w"> </span><span class="n">ago</span><span class="p">(</span><span class="mi">24</span><span class="n">h</span><span class="p">)</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="p">|</span><span class="w"> </span><span class="k">summarize</span><span class="w"> </span><span class="n">ErrorCount</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">count</span><span class="p">()</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">AppRoleName</span><span class="p">,</span><span class="w"> </span><span class="n">ExceptionType</span><span class="p">,</span><span class="w"> </span><span class="n">outerMessage</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="p">|</span><span class="w"> </span><span class="k">summarize</span><span class="w"> </span><span class="n">ErrorCount</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">count</span><span class="p">()</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">AppRoleName</span><span class="p">,</span><span class="w"> </span><span class="n">ExceptionType</span><span class="p">,</span><span class="w"> </span><span class="n">OuterMessage</span>
 </span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="p">|</span><span class="w"> </span><span class="k">order</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">ErrorCount</span><span class="w"> </span><span class="n">desc</span>
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="p">|</span><span class="w"> </span><span class="k">take</span><span class="w"> </span><span class="mi">10</span>
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>
@@ -25290,7 +25316,7 @@
 </span><span id="__span-5-56"><a id="__codelineno-5-56" name="__codelineno-5-56" href="#__codelineno-5-56"></a><span class="c">// 8. Conta richieste per status code nell'ultima ora (webapp)</span>
 </span><span id="__span-5-57"><a id="__codelineno-5-57" name="__codelineno-5-57" href="#__codelineno-5-57"></a><span class="n">AppRequests</span>
 </span><span id="__span-5-58"><a id="__codelineno-5-58" name="__codelineno-5-58" href="#__codelineno-5-58"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="w"> </span><span class="p">&gt;</span><span class="w"> </span><span class="n">ago</span><span class="p">(</span><span class="mi">1</span><span class="n">h</span><span class="p">)</span>
-</span><span id="__span-5-59"><a id="__codelineno-5-59" name="__codelineno-5-59" href="#__codelineno-5-59"></a><span class="p">|</span><span class="w"> </span><span class="k">summarize</span><span class="w"> </span><span class="n">Count</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">count</span><span class="p">()</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">ResultCode</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">tostring</span><span class="p">(</span><span class="n">toint</span><span class="p">(</span><span class="n">Success</span><span class="p">)</span><span class="w"> </span><span class="p">*</span><span class="w"> </span><span class="mi">200</span><span class="w"> </span><span class="p">+</span><span class="w"> </span><span class="n">toint</span><span class="p">(!</span><span class="n">Success</span><span class="p">)</span><span class="w"> </span><span class="p">*</span><span class="w"> </span><span class="mi">500</span><span class="p">)</span>
+</span><span id="__span-5-59"><a id="__codelineno-5-59" name="__codelineno-5-59" href="#__codelineno-5-59"></a><span class="p">|</span><span class="w"> </span><span class="k">summarize</span><span class="w"> </span><span class="n">Count</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">count</span><span class="p">()</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">ResultCode</span>
 </span><span id="__span-5-60"><a id="__codelineno-5-60" name="__codelineno-5-60" href="#__codelineno-5-60"></a><span class="p">|</span><span class="w"> </span><span class="k">render</span><span class="w"> </span><span class="n">piechart</span>
 </span><span id="__span-5-61"><a id="__codelineno-5-61" name="__codelineno-5-61" href="#__codelineno-5-61"></a>
 </span><span id="__span-5-62"><a id="__codelineno-5-62" name="__codelineno-5-62" href="#__codelineno-5-62"></a><span class="c">// 9. Memory usage trend</span>
@@ -25321,31 +25347,35 @@
 </span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">  </span>--description<span class="w"> </span><span class="s2">"CPU media sopra 85% per 5 minuti"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span>--action<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>monitor<span class="w"> </span>action-group<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span>ag-ops-team<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
 </span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Alert su più VM (dimension)</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>az<span class="w"> </span>monitor<span class="w"> </span>metrics<span class="w"> </span>alert<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">  </span>--name<span class="w"> </span>alert-cpu-vmss<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">  </span>--scopes<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>vmss<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span>vmss-web-frontend<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">  </span>--condition<span class="w"> </span><span class="s2">"avg Percentage CPU &gt; 90"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">  </span>--window-size<span class="w"> </span>5m<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">  </span>--evaluation-frequency<span class="w"> </span>1m<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">  </span>--severity<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">  </span>--target-resource-type<span class="w"> </span>Microsoft.Compute/virtualMachineScaleSets
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Alert multi-risorsa: una sola regola su più VM (stessa subscription e region).</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1"># Con scope = resource group/subscription servono tipo e region; ogni VM è valutata separatamente.</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>az<span class="w"> </span>monitor<span class="w"> </span>metrics<span class="w"> </span>alert<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">  </span>--name<span class="w"> </span>alert-cpu-all-vms<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">  </span>--scopes<span class="w"> </span>/subscriptions/SUB_ID/resourceGroups/<span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">  </span>--target-resource-type<span class="w"> </span>Microsoft.Compute/virtualMachines<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">  </span>--target-resource-region<span class="w"> </span><span class="nv">$LOCATION</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">  </span>--condition<span class="w"> </span><span class="s2">"avg Percentage CPU &gt; 90"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">  </span>--window-size<span class="w"> </span>5m<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">  </span>--evaluation-frequency<span class="w"> </span>1m<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="w">  </span>--severity<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="w">  </span>--action<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>monitor<span class="w"> </span>action-group<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span>ag-ops-team<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
 </span></code></pre></div>
 <h3 id="log-alert-kql-based">Log Alert (KQL-based)<a class="headerlink" href="#log-alert-kql-based" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Alert quando ci sono errori 500 nella webapp</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>az<span class="w"> </span>monitor<span class="w"> </span>scheduled-query<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--resource-group<span class="w"> </span>rg-webapp-prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--name<span class="w"> </span>alert-http500-myapp<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span>--scopes<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>webapp<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span>rg-webapp-prod<span class="w"> </span>--name<span class="w"> </span>myapp-prod<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span>--condition-query<span class="w"> </span><span class="s2">"AppServiceHTTPLogs | where ScStatus &gt;= 500 | summarize Count = count()"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span>--condition-threshold<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span>--condition-operator<span class="w"> </span>GreaterThan<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span>--evaluation-frequency<span class="w"> </span>5m<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span>--window-duration<span class="w"> </span>5m<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">  </span>--severity<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span>--description<span class="w"> </span><span class="s2">"Più di 5 errori HTTP 500 in 5 minuti"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span>--action<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>monitor<span class="w"> </span>action-group<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span>ag-ops-team<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Alert quando ci sono errori 5xx nella webapp</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># (estensione scheduled-query: az extension add --name scheduled-query)</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># La condizione referenzia la query per nome (q1) e ne valuta il numero di righe.</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>az<span class="w"> </span>monitor<span class="w"> </span>scheduled-query<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span>--name<span class="w"> </span>alert-http500-myapp<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span>--scopes<span class="w"> </span><span class="nv">$LAW_ID</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span>--condition<span class="w"> </span><span class="s2">"count 'q1' &gt; 5"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span>--condition-query<span class="w"> </span><span class="nv">q1</span><span class="o">=</span><span class="s2">"AppServiceHTTPLogs | where ScStatus &gt;= 500"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span>--evaluation-frequency<span class="w"> </span>5m<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">  </span>--window-duration<span class="w"> </span>5m<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span>--severity<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span>--description<span class="w"> </span><span class="s2">"Più di 5 errori HTTP 5xx in 5 minuti"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">  </span>--action-groups<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>monitor<span class="w"> </span>action-group<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span>ag-ops-team<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
 </span></code></pre></div>
 <h3 id="activity-log-alert">Activity Log Alert<a class="headerlink" href="#activity-log-alert" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Alert quando viene eliminato un resource group</span>
@@ -25354,7 +25384,7 @@
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--name<span class="w"> </span>alert-rg-deletion<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span>--scopes<span class="w"> </span>/subscriptions/SUB_ID<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">  </span>--condition<span class="w"> </span><span class="nv">category</span><span class="o">=</span>Administrative<span class="w"> </span>and<span class="w"> </span><span class="nv">operationName</span><span class="o">=</span>Microsoft.Resources/subscriptions/resourceGroups/delete<span class="w"> </span>and<span class="w"> </span><span class="nv">status</span><span class="o">=</span>Succeeded<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span>--action<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>monitor<span class="w"> </span>action-group<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span>ag-ops-team<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span>--action-group<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>monitor<span class="w"> </span>action-group<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span>ag-ops-team<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
 </span></code></pre></div>
 <h2 id="action-groups">Action Groups<a class="headerlink" href="#action-groups" title="Permanent link">&para;</a></h2>
 <p>Gli Action Groups definiscono cosa fare quando scatta un alert: notificare persone, chiamare webhook, eseguire runbook, ecc.</p>
@@ -25364,45 +25394,46 @@
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--name<span class="w"> </span>ag-ops-team<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--short-name<span class="w"> </span>OpsTeam<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span>--action<span class="w"> </span>email<span class="w"> </span>ops-lead<span class="w"> </span>john.doe@example.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span>--action<span class="w"> </span>sms<span class="w"> </span>sms-oncall<span class="w"> </span>+39555123456<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span>--action<span class="w"> </span>sms<span class="w"> </span>sms-oncall<span class="w"> </span><span class="m">39</span><span class="w"> </span><span class="m">555123456</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span>--action<span class="w"> </span>webhook<span class="w"> </span>webhook-slack<span class="w"> </span><span class="s2">"https://hooks.slack.com/services/..."</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">  </span>--action<span class="w"> </span>logic-app<span class="w"> </span>logic-app-itsm<span class="w"> </span>/subscriptions/SUB_ID/resourceGroups/rg-security/providers/Microsoft.Logic/workflows/create-ticket<span class="w"> </span><span class="nb">true</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># Aggiornare Action Group aggiungendo Azure Function</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>az<span class="w"> </span>monitor<span class="w"> </span>action-group<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">  </span>--name<span class="w"> </span>ag-ops-team<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">  </span>--add-action<span class="w"> </span>azureFunctionReceiver<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span>function-auto-remediate<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">    </span>/subscriptions/SUB_ID/resourceGroups/rg-functions/providers/Microsoft.Web/sites/func-remediation<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">    </span>auto_scale_out<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">    </span><span class="s2">"https://func-remediation.azurewebsites.net/api/auto_scale_out?code=..."</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">  </span>--action<span class="w"> </span>logic-app<span class="w"> </span>logic-app-itsm<span class="w"> </span>/subscriptions/SUB_ID/resourceGroups/rg-security/providers/Microsoft.Logic/workflows/create-ticket<span class="w"> </span><span class="s2">"https://&lt;logic-app-callback-url&gt;"</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># sms: NOME PREFISSO_PAESE NUMERO (senza + e spazi); logic-app: NOME RESOURCE_ID CALLBACK_URL</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># Aggiornare Action Group aggiungendo Azure Function</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>az<span class="w"> </span>monitor<span class="w"> </span>action-group<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">  </span>--name<span class="w"> </span>ag-ops-team<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">  </span>--add-action<span class="w"> </span>azure-function<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">    </span>function-auto-remediate<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">    </span>/subscriptions/SUB_ID/resourceGroups/rg-functions/providers/Microsoft.Web/sites/func-remediation<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">    </span>auto_scale_out<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">    </span><span class="s2">"https://func-remediation.azurewebsites.net/api/auto_scale_out?code=..."</span>
 </span></code></pre></div>
 <h2 id="workbooks">Workbooks<a class="headerlink" href="#workbooks" title="Permanent link">&para;</a></h2>
 <p>I Workbooks Azure Monitor sono dashboard interattivi parametrizzati che combinano query KQL con visualizzazioni.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Listare workbook templates predefiniti (gallery)</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>az<span class="w"> </span>monitor<span class="w"> </span>workbook<span class="w"> </span>template<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>--output<span class="w"> </span>table
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Creare workbook personalizzato (richiede JSON di definizione)</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>az<span class="w"> </span>monitor<span class="w"> </span>workbook<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"workbook-webapp-dashboard"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">  </span>--display-name<span class="w"> </span><span class="s2">"Web App Performance Dashboard"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">  </span>--kind<span class="w"> </span>shared<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">  </span>--serialized-data<span class="w"> </span>@workbook-definition.json<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">  </span>--source-id<span class="w"> </span><span class="nv">$LAW_ID</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Creare workbook personalizzato (richiede JSON di definizione; estensione application-insights)</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># &lt;!-- REVIEW: verificare sintassi/parametri di `az monitor app-insights workbook create` nella versione corrente dell'estensione --&gt;</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>az<span class="w"> </span>monitor<span class="w"> </span>app-insights<span class="w"> </span>workbook<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"</span><span class="k">$(</span>uuidgen<span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>--display-name<span class="w"> </span><span class="s2">"Web App Performance Dashboard"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span>--kind<span class="w"> </span>shared<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span>--category<span class="w"> </span>workbook<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span>--serialized-data<span class="w"> </span>@workbook-definition.json<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">  </span>--location<span class="w"> </span><span class="nv">$LOCATION</span>
 </span></code></pre></div>
+<p>In pratica i workbook si costruiscono dal portale (galleria template) e si versionano esportando il JSON per ripubblicarlo via IaC (ARM/Bicep/Terraform <code>azurerm_application_insights_workbook</code>).</p>
 <p>Workbook predefiniti utili:
 - <strong>Performance</strong> (VM): CPU, memoria, disco, rete per flotta VM
 - <strong>Failures</strong> (Application Insights): eccezioni, request failure, dependency failure
 - <strong>Traffic</strong> (App Service): throughput, latency, errori per endpoint
-- <strong>Azure AD Sign-ins</strong>: analisi pattern di accesso
+- <strong>Microsoft Entra ID Sign-ins</strong> (ex Azure AD): analisi pattern di accesso
 - <strong>AKS</strong>: node health, pod metrics, cluster overview</p>
 <h2 id="azure-monitor-for-vms-vm-insights">Azure Monitor for VMs (VM Insights)<a class="headerlink" href="#azure-monitor-for-vms-vm-insights" title="Permanent link">&para;</a></h2>
-<p>VM Insights abilita monitoring avanzato per VM: performance chart, dependency map, health model.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Abilitare VM Insights (richiede AMA + Dependency Agent)</span>
+<p>VM Insights abilita monitoring avanzato per VM: performance chart e dependency map. Oggi si basa su AMA + una DCR dedicata (creata dal portale con "Enable" in VM Insights); il <strong>Dependency Agent</strong> è opzionale e serve solo alla funzione <em>Map</em> (tabella <code>VMConnection</code>), non alle performance.</p>
+<!-- REVIEW: verificare lo stato di ritiro del Dependency Agent e la raccomandazione Microsoft attuale per la dependency map -->
+
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Dependency Agent (solo per la Map; richiede AMA già installato)</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>az<span class="w"> </span>vm<span class="w"> </span>extension<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--vm-name<span class="w"> </span>my-vm<span class="w"> </span><span class="se">\</span>
@@ -25421,7 +25452,7 @@
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="p">|</span><span class="w"> </span><span class="k">order</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">ConnectionCount</span><span class="w"> </span><span class="n">desc</span>
 </span></code></pre></div>
 <h2 id="container-insights-aks-monitoring">Container Insights (AKS Monitoring)<a class="headerlink" href="#container-insights-aks-monitoring" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Abilitare Container Insights su AKS</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Abilitare Container Insights su AKS (usa AMA con managed identity sul cluster)</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>az<span class="w"> </span>aks<span class="w"> </span>enable-addons<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>--resource-group<span class="w"> </span>rg-aks-prod<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span>--name<span class="w"> </span>aks-prod-westeurope<span class="w"> </span><span class="se">\</span>
@@ -25435,31 +25466,33 @@
 </span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="w">  </span>--interval<span class="w"> </span>PT5M<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">  </span>--aggregation<span class="w"> </span>Average
 </span></code></pre></div>
-<div class="language-kql highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c">// Pod CPU usage per namespace</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">KubePodInventory</span>
+<div class="language-kql highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c">// CPU per container (InstanceName è il path del container nel cluster; l'ultimo segmento è il nome)</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">Perf</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="w"> </span><span class="p">&gt;</span><span class="w"> </span><span class="n">ago</span><span class="p">(</span><span class="mi">1</span><span class="n">h</span><span class="p">)</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="p">|</span><span class="w"> </span><span class="k">join</span><span class="w"> </span><span class="n">kind</span><span class="p">=</span><span class="n">leftouter</span><span class="w"> </span><span class="p">(</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="n">Perf</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">ObjectName</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"K8SContainer"</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="n">CounterName</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"cpuUsageNanoCores"</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="p">|</span><span class="w"> </span><span class="k">summarize</span><span class="w"> </span><span class="n">AvgCPU</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">avg</span><span class="p">(</span><span class="n">CounterValue</span><span class="p">)</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">InstanceName</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="p">)</span><span class="w"> </span><span class="k">on</span><span class="w"> </span><span class="err">$</span><span class="n">left</span><span class="p">.</span><span class="n">ContainerID</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="err">$</span><span class="n">right</span><span class="p">.</span><span class="n">InstanceName</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="p">|</span><span class="w"> </span><span class="k">summarize</span><span class="w"> </span><span class="n">AvgCPU</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">avg</span><span class="p">(</span><span class="n">AvgCPU</span><span class="p">)</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">Namespace</span><span class="p">,</span><span class="w"> </span><span class="n">PodName</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="p">|</span><span class="w"> </span><span class="k">order</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">AvgCPU</span><span class="w"> </span><span class="n">desc</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="c">// Pod in CrashLoopBackOff</span>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="n">KubePodInventory</span>
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="w"> </span><span class="p">&gt;</span><span class="w"> </span><span class="n">ago</span><span class="p">(</span><span class="mi">1</span><span class="n">h</span><span class="p">)</span>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">ContainerStatus</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"Waiting"</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="n">ContainerStatusReason</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"CrashLoopBackOff"</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="p">|</span><span class="w"> </span><span class="k">project</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="p">,</span><span class="w"> </span><span class="n">Namespace</span><span class="p">,</span><span class="w"> </span><span class="n">PodName</span><span class="p">,</span><span class="w"> </span><span class="n">ContainerName</span><span class="p">,</span><span class="w"> </span><span class="n">ContainerStatusReason</span>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="c">// Log di container specifico</span>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="n">ContainerLog</span>
-</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="w"> </span><span class="p">&gt;</span><span class="w"> </span><span class="n">ago</span><span class="p">(</span><span class="mi">1</span><span class="n">h</span><span class="p">)</span>
-</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">Namespace</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"production"</span>
-</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">PodName</span><span class="w"> </span><span class="k">contains</span><span class="w"> </span><span class="s">"myapp"</span>
-</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="p">|</span><span class="w"> </span><span class="k">project</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="p">,</span><span class="w"> </span><span class="n">PodName</span><span class="p">,</span><span class="w"> </span><span class="n">ContainerName</span><span class="p">,</span><span class="w"> </span><span class="n">LogMessage</span>
-</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="p">|</span><span class="w"> </span><span class="k">order</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="w"> </span><span class="n">desc</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">ObjectName</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"K8SContainer"</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="n">CounterName</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"cpuUsageNanoCores"</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="p">|</span><span class="w"> </span><span class="k">summarize</span><span class="w"> </span><span class="n">AvgCPUnc</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">avg</span><span class="p">(</span><span class="n">CounterValue</span><span class="p">)</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">InstanceName</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="p">|</span><span class="w"> </span><span class="k">order</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">AvgCPUnc</span><span class="w"> </span><span class="n">desc</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="p">|</span><span class="w"> </span><span class="k">take</span><span class="w"> </span><span class="mi">20</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="c">// Pod in CrashLoopBackOff</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="n">KubePodInventory</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="w"> </span><span class="p">&gt;</span><span class="w"> </span><span class="n">ago</span><span class="p">(</span><span class="mi">1</span><span class="n">h</span><span class="p">)</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">ContainerStatus</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"Waiting"</span><span class="w"> </span><span class="k">and</span><span class="w"> </span><span class="n">ContainerStatusReason</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"CrashLoopBackOff"</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="p">|</span><span class="w"> </span><span class="k">project</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="p">,</span><span class="w"> </span><span class="n">Namespace</span><span class="p">,</span><span class="w"> </span><span class="n">PodName</span><span class="p">,</span><span class="w"> </span><span class="n">ContainerName</span><span class="p">,</span><span class="w"> </span><span class="n">ContainerStatusReason</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c">// Log di container specifico (ContainerLogV2: schema attuale, default per i nuovi cluster;</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c">// la tabella legacy ContainerLog è deprecata)</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="n">ContainerLogV2</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="w"> </span><span class="p">&gt;</span><span class="w"> </span><span class="n">ago</span><span class="p">(</span><span class="mi">1</span><span class="n">h</span><span class="p">)</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">PodNamespace</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"production"</span>
+</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">PodName</span><span class="w"> </span><span class="k">contains</span><span class="w"> </span><span class="s">"myapp"</span>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="p">|</span><span class="w"> </span><span class="k">project</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="p">,</span><span class="w"> </span><span class="n">PodName</span><span class="p">,</span><span class="w"> </span><span class="n">ContainerName</span><span class="p">,</span><span class="w"> </span><span class="n">LogMessage</span>
+</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="p">|</span><span class="w"> </span><span class="k">order</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="w"> </span><span class="n">desc</span>
 </span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Metriche con Managed Prometheus</p>
+<p>Per le metriche di cluster/pod la scelta attuale è <strong>Azure Monitor managed service for Prometheus</strong> + Azure Managed Grafana (query PromQL, costo per sample ingerito), lasciando a Container Insights i log (<code>ContainerLogV2</code>) e l'inventario. Evita di ingerire in <code>Perf</code>/<code>InsightsMetrics</code> metriche che Prometheus già copre.</p>
+</div>
 <h2 id="data-retention-e-costi">Data Retention e Costi<a class="headerlink" href="#data-retention-e-costi" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Configurare retention workspace (default 30 giorni)</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>az<span class="w"> </span>monitor<span class="w"> </span>log-analytics<span class="w"> </span>workspace<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
@@ -25474,17 +25507,23 @@
 </span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">  </span>--name<span class="w"> </span>AuditLogs<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">  </span>--total-retention-time<span class="w"> </span><span class="m">2557</span><span class="w">  </span><span class="c1"># 7 anni total: 90 gg interactive + resto archive</span>
 </span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>
-</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="c1"># Stimare costo ingestione dati</span>
-</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="c1"># Log Analytics: ~$2.30/GB ingested (PerGB2018 tier, West Europe)</span>
-</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a><span class="c1"># Retention: prime 31 giorni gratuiti, poi ~$0.10/GB/mese</span>
-</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="c1"># Archive: ~$0.02/GB/mese</span>
-</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a>
-</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="c1"># Configurare data cap (protezione da spike ingestione dati)</span>
-</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a>az<span class="w"> </span>monitor<span class="w"> </span>log-analytics<span class="w"> </span>workspace<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a><span class="w">  </span>--workspace-name<span class="w"> </span><span class="nv">$LAW_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-23"><a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a><span class="w">  </span>--daily-quota-gb<span class="w"> </span><span class="m">10</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="c1"># Stimare costo ingestione dati (ordini di grandezza, i prezzi variano per region/valuta:</span>
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="c1"># verificare sulla pricing page)</span>
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a><span class="c1"># Log Analytics: ~$2.3-2.8/GB ingerito (Pay-as-you-go, piano tabella Analytics)</span>
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="c1"># Retention: prime 31 giorni inclusi, poi ~$0.10/GB/mese</span>
+</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="c1"># Archive: ~$0.02/GB/mese</span>
+</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a>
+</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a><span class="c1"># Configurare data cap (protezione da spike ingestione dati)</span>
+</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a>az<span class="w"> </span>monitor<span class="w"> </span>log-analytics<span class="w"> </span>workspace<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-23"><a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a><span class="w">  </span>--workspace-name<span class="w"> </span><span class="nv">$LAW_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-24"><a id="__codelineno-15-24" name="__codelineno-15-24" href="#__codelineno-15-24"></a><span class="w">  </span>--quota<span class="w"> </span><span class="m">10</span>
 </span></code></pre></div>
+<p>Il costo dipende soprattutto dall'ingestione, quindi le leve sono: <strong>piano tabella</strong> (<em>Analytics</em> per query e alert completi; <em>Basic</em>/<em>Auxiliary</em> per log ad alto volume e basso valore, ingestione molto più economica ma query limitate e senza alert classici), <strong>commitment tier</strong> (sconto da ~100 GB/giorno) e <strong>DCR transformation</strong> per filtrare/ridurre le colonne prima dell'ingestione.</p>
+<div class="admonition warning">
+<p class="admonition-title">Daily cap</p>
+<p>Raggiunto il cap, il workspace <strong>smette di ingerire</strong> i dati fatturabili fino al reset giornaliero: si perdono log (e alert basati su di essi). Usalo come protezione di costo su ambienti non-prod; in produzione preferisci alert sull'ingestione.</p>
+</div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Usa <strong>Data Collection Rules (DCR)</strong> invece degli agent legacy (MMA/OMS) — più flessibili e meno overhead</li>
@@ -25492,7 +25531,8 @@
 <li>Separa workspace per ambienti di produzione e non-produzione per isolamento RBAC e costi</li>
 <li>Imposta <strong>daily quota</strong> sul workspace per protezione da spike di ingestione</li>
 <li>Usa <strong>Archive tier</strong> per log di compliance long-term invece di mantenere tutto nello interactive tier</li>
-<li>Per alert, privilegia <strong>Metric Alert</strong> (valutazione ogni minuto) su <strong>Log Alert</strong> (minimum 5 minuti) quando possibile</li>
+<li>Per alert, privilegia <strong>Metric Alert</strong> (valutazione ogni minuto, bassa latenza, costo minore) su <strong>Log Alert</strong> (query KQL, più flessibile ma con latenza di ingestione e costo per regola) quando la metrica esiste già</li>
+<li>Gestisci Workspace, DCR, Diagnostic Settings e alert come codice (Bicep/Terraform) e assegna i Diagnostic Settings con <strong>Azure Policy</strong> (<code>DeployIfNotExists</code>) così le nuove risorse nascono già monitorate</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-i-log-non-arrivano-nel-log-analytics-workspace">Scenario 1 — I log non arrivano nel Log Analytics Workspace<a class="headerlink" href="#scenario-1-i-log-non-arrivano-nel-log-analytics-workspace" title="Permanent link">&para;</a></h3>
@@ -25559,13 +25599,14 @@
 </span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"{enabled: enabled, severity: severity, fired: criteria}"</span>
 </span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>
 </span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="c1"># Testare l'Action Group inviando una notifica di test</span>
-</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>az<span class="w"> </span>monitor<span class="w"> </span>action-group<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>az<span class="w"> </span>monitor<span class="w"> </span>action-group<span class="w"> </span>test-notifications<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="w">  </span>--name<span class="w"> </span>ag-ops-team<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="w">  </span>--alert-type<span class="w"> </span><span class="s2">"Metric"</span>
-</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a>
-</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a><span class="c1"># Per log alert: verificare che la query restituisca dati</span>
-</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="c1"># Eseguire manualmente la query KQL nel workspace nel periodo di valutazione</span>
+</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="w">  </span>--action-group<span class="w"> </span>ag-ops-team<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="w">  </span>--alert-type<span class="w"> </span>metricstaticthreshold<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="w">  </span>--add-action<span class="w"> </span>email<span class="w"> </span>ops-lead<span class="w"> </span>john.doe@example.com
+</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a>
+</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="c1"># Per log alert: verificare che la query restituisca dati</span>
+</span><span id="__span-18-20"><a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a><span class="c1"># Eseguire manualmente la query KQL nel workspace nel periodo di valutazione</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-query-kql-lente-o-senza-risultati-attesi">Scenario 4 — Query KQL lente o senza risultati attesi<a class="headerlink" href="#scenario-4-query-kql-lente-o-senza-risultati-attesi" title="Permanent link">&para;</a></h3>
@@ -25595,7 +25636,7 @@
 </span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">  </span>--output<span class="w"> </span>table
 </span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>
 </span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="c1"># Ripristinare dati da archive per query (restore job, costo aggiuntivo)</span>
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>az<span class="w"> </span>monitor<span class="w"> </span>log-analytics<span class="w"> </span>workspace<span class="w"> </span>table<span class="w"> </span>restore<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>az<span class="w"> </span>monitor<span class="w"> </span>log-analytics<span class="w"> </span>workspace<span class="w"> </span>table<span class="w"> </span>restore<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="w">  </span>--workspace-name<span class="w"> </span><span class="nv">$LAW_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="w">  </span>--name<span class="w"> </span>AuditLogs_RST<span class="w"> </span><span class="se">\</span>
@@ -25603,6 +25644,23 @@
 </span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="w">  </span>--start-restore-time<span class="w"> </span><span class="s2">"2025-01-01T00:00:00Z"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="w">  </span>--end-restore-time<span class="w"> </span><span class="s2">"2025-01-31T23:59:59Z"</span>
 </span></code></pre></div>
+<p>Alternativa al restore: una <strong>search job</strong> esegue una ricerca asincrona sui dati archiviati e ne scrive i risultati in una tabella <code>_SRCH</code> interrogabile.</p>
+<h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
+<details class="info">
+<summary>Defender for Cloud &amp; Sentinel</summary>
+<p>Sentinel è un SIEM costruito <em>sopra</em> un Log Analytics Workspace: usa le stesse tabelle e KQL, e il costo di ingestione si somma. Per questo la scelta di workspace (uno centrale vs uno per ambiente) è anche una decisione di sicurezza.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../../security/defender-sentinel/">Defender &amp; Sentinel</a></p>
+</details>
+<details class="info">
+<summary>AKS e Container Insights</summary>
+<p>Container Insights è l'integrazione di questo workspace con AKS (log container, inventario pod); le metriche applicative si affiancano con Managed Prometheus.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../../compute/aks-containers/">AKS &amp; Containers</a></p>
+</details>
+<details class="info">
+<summary>Application Insights</summary>
+<p>Application Insights (APM, tracing distribuito) in modalità workspace-based scrive nelle stesse tabelle (<code>AppRequests</code>, <code>AppExceptions</code>, …) usate nelle query sopra.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../application-insights/">Application Insights</a></p>
+</details>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://learn.microsoft.com/azure/azure-monitor/">Documentazione Azure Monitor</a></li>
