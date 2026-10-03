@@ -3,20 +3,24 @@ title: "Flux CD"
 slug: flux
 category: ci-cd
 tags: [flux, gitops, kubernetes, helmrelease, kustomization, flagger, progressive-delivery]
-search_keywords: [flux cd, flux v2, gitrepository, ocirepository, helmrelease, kustomization flux, flagger, progressive delivery flux, flux image automation, flux notification, flux multi tenancy, weave gitops, flux bootstrap]
+search_keywords: [flux cd, flux v2, gitrepository, ocirepository, helmrelease, kustomization flux, flagger, progressive delivery flux, flux image automation, flux notification, flux multi tenancy, flux operator, flux bootstrap]
 parent: ci-cd/gitops/_index
 related: [ci-cd/gitops/_index, ci-cd/gitops/argocd, containers/helm/_index, containers/kustomize/_index]
 official_docs: https://fluxcd.io/flux/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Flux CD
 
 ## Panoramica
 
-Flux CD (v2) è un set di controller Kubernetes che implementano GitOps secondo il GitOps Toolkit. A differenza di ArgoCD (architettura monolitica), Flux è composto da controller indipendenti e specializzati: il Source Controller gestisce le sorgenti (Git, Helm, OCI — Open Container Initiative, lo standard per i formati di immagini e artefatti container), il Kustomize Controller applica i manifesti, il Helm Controller gestisce i release Helm, il Notification Controller gestisce gli alert, e l'Image Automation Controller aggiorna automaticamente i tag delle immagini nel repository Git. Ogni componente espone CRD (Custom Resource Definition — estensioni dell'API Kubernetes) e può essere usato in modo indipendente. Flux è un progetto CNCF (Cloud Native Computing Foundation) Graduated.
+Flux CD (v2) è un set di controller Kubernetes che implementano GitOps secondo il GitOps Toolkit. A differenza di ArgoCD (un'unica applicazione con UI e API server integrati), Flux è composto da controller indipendenti e specializzati, da installare solo se servono: il Source Controller gestisce le sorgenti (Git, Helm, OCI — Open Container Initiative, lo standard per i formati di immagini e artefatti container), il Kustomize Controller applica i manifesti, il Helm Controller gestisce i release Helm, il Notification Controller gestisce gli alert, e l'Image Automation Controller aggiorna automaticamente i tag delle immagini nel repository Git. Ogni componente espone CRD (Custom Resource Definition — estensioni dell'API Kubernetes) e può essere usato in modo indipendente. Flux è un progetto CNCF (Cloud Native Computing Foundation) Graduated.
+
+!!! note "Versioni API"
+    Le API `source` (GitRepository, OCIRepository, HelmRepository), `kustomize`, `helm` (v2) e `image` sono `v1` GA; `notification` (Provider, Alert) è ancora `v1beta3`. Le vecchie `v1beta2` sono deprecate e vengono rimosse nelle release future: dopo ogni upgrade eseguire `flux migrate` per aggiornare i manifest. Weave GitOps (UI di Weaveworks) non è più mantenuto dopo la chiusura dell'azienda.
 
 ## Architettura — GitOps Toolkit
 
@@ -65,8 +69,11 @@ flux bootstrap github \
   --repository=gitops-manifests \
   --branch=main \
   --path=clusters/production \
-  --personal=false \               # Usa GitHub App o PAT org
-  --token-auth                     # Usa GITHUB_TOKEN per autenticazione
+  --personal=false \
+  --token-auth
+# --personal=false: il repo appartiene a un'organizzazione, non a un utente
+# --token-auth: Flux usa il token (GITHUB_TOKEN) anche dentro il cluster
+#   invece di generare una deploy key SSH
 
 # Bootstrap su GitLab
 flux bootstrap gitlab \
@@ -145,7 +152,7 @@ stringData:
 ```yaml
 # Source OCI: consuma manifesti distribuiti come OCI artifact
 # (es. pushati con flux push artifact o ko)
-apiVersion: source.toolkit.fluxcd.io/v1beta2
+apiVersion: source.toolkit.fluxcd.io/v1
 kind: OCIRepository
 metadata:
   name: myapp-manifests
@@ -188,9 +195,10 @@ spec:
   path: ./apps/myapp/overlays/staging    # Path nel repo
 
   prune: true                             # Rimuove risorse K8s cancellate dal Git
-  wait: true                              # Aspetta che tutte le risorse siano ready
 
-  # Health check: aspetta che Deployment sia Available
+  # Health check: aspetta che Deployment sia Available.
+  # Alternativa: `wait: true` controlla TUTTE le risorse applicate,
+  # ma in tal caso `healthChecks` viene ignorato.
   healthChecks:
     - apiVersion: apps/v1
       kind: Deployment
@@ -265,7 +273,7 @@ gitops-manifests/
 
 ```yaml
 # HelmRepository: sorgente del chart
-apiVersion: source.toolkit.fluxcd.io/v1beta2
+apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
   name: ingress-nginx
@@ -330,7 +338,7 @@ spec:
       retries: 3
       strategy: rollback             # rollback | uninstall
     cleanupOnFail: true
-    force: false                     # Force recreate se CRD cambia
+    force: false                     # true = ricrea (delete/create) le risorse non aggiornabili
 
   # Install configuration
   install:
@@ -355,7 +363,6 @@ spec:
     timeout: 5m
     disableWait: false
     disableHooks: false
-    recreate: false
     force: false
     cleanupOnFail: false
 
@@ -389,6 +396,9 @@ sops --encrypt \
 sops --decrypt secret.enc.yaml > secret.yaml
 sops secret.enc.yaml    # Apre l'editor con decifrazione automatica
 
+```
+
+```yaml
 # .sops.yaml — configurazione nel repository
 creation_rules:
   - path_regex: .*/production/.*
@@ -397,13 +407,15 @@ creation_rules:
     age: age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-```yaml
+```bash
 # Configurare Flux per decifrare con SOPS
 # Step 1: creare il secret con la chiave privata age nel cluster
 kubectl create secret generic sops-age-key \
   --namespace=flux-system \
   --from-file=age.agekey=/path/to/age.agekey
+```
 
+```yaml
 # Step 2: nella Kustomization, aggiungere la decryption config
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -424,7 +436,7 @@ L'Image Automation Controller monitora i registri container e aggiorna automatic
 
 ```yaml
 # Step 1: ImageRepository — monitora un registry
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository
 metadata:
   name: myapp
@@ -442,7 +454,7 @@ spec:
 
 ---
 # Step 2: ImagePolicy — definisce quale tag selezionare
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImagePolicy
 metadata:
   name: myapp
@@ -477,7 +489,7 @@ spec:
 
 ---
 # Step 4: ImageUpdateAutomation — commit nel repo Git
-apiVersion: image.toolkit.fluxcd.io/v1beta2
+apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageUpdateAutomation
 metadata:
   name: myapp-image-updater
@@ -612,17 +624,19 @@ spec:
   targetNamespace: team-a            # Forza tutto nel namespace del tenant
 ```
 
+!!! tip "Enforcement multi-tenancy"
+    L'impersonation da sola non basta: se `serviceAccountName` è omesso, il kustomize-controller applica con i propri permessi `cluster-admin`. Per forzarla a livello cluster, avviare i controller con `--default-service-account=flux-reconciler` e `--no-cross-namespace-refs=true` (patch in `flux-system/kustomization.yaml`): i tenant non potranno referenziare source di altri namespace né bypassare il ServiceAccount.
+
 ## Flagger — Progressive Delivery
 
 Flagger è un operatore Kubernetes che automatizza il deployment progressivo (Canary, Blue-Green, A/B Testing) usando metriche da Prometheus, Datadog, ecc.
 
-```bash
-# Installazione Flagger con Helm
-helm repo add flagger https://flagger.app
-helm repo update
+!!! warning "ingress-nginx è dismesso"
+    Il progetto community `kubernetes/ingress-nginx` ha terminato la manutenzione a marzo 2026 (nessuna ulteriore patch di sicurezza). Gli esempi di questa pagina lo usano perché è il caso più documentato, ma per nuovi cluster preferire un controller supportato o il **Gateway API** (Flagger supporta `meshProvider=gatewayapi:v1`, oltre a Istio, Linkerd, Contour).
 
-# Installare con integrazione NGINX Ingress
-helm install flagger flagger/flagger \
+```bash
+# Installazione Flagger con Helm (chart OCI ufficiale)
+helm install flagger oci://ghcr.io/fluxcd/charts/flagger \
   --namespace flagger-system \
   --create-namespace \
   --set meshProvider=nginx \
@@ -751,11 +765,11 @@ spec:
 
 ```bash
 # Dettaglio dell'errore
-flux describe kustomization myapp-staging -n flux-system
+kubectl describe kustomization myapp-staging -n flux-system
 
-# Verificare che il source sia aggiornato e il path esista
+# Verificare che il source sia aggiornato (revision dell'artifact)
 flux get sources git -n flux-system
-kubectl -n flux-system get gitrepository gitops-manifests -o jsonpath='{.status.artifact.path}'
+kubectl -n flux-system get gitrepository gitops-manifests -o jsonpath='{.status.artifact.revision}'
 
 # Forzare riconciliazione dopo la correzione
 flux reconcile kustomization myapp-staging --with-source -n flux-system
@@ -773,7 +787,7 @@ flux reconcile kustomization myapp-staging --with-source -n flux-system
 
 ```bash
 # Vedere i dettagli del fallimento
-flux describe helmrelease ingress-nginx -n flux-system
+kubectl describe helmrelease ingress-nginx -n flux-system
 
 # Controllare lo stato Helm nativo
 helm history ingress-nginx -n flux-system
@@ -800,7 +814,7 @@ flux reconcile helmrelease ingress-nginx -n flux-system
 
 ```bash
 # Verificare lo stato del source
-flux describe source git gitops-manifests -n flux-system
+kubectl describe gitrepository gitops-manifests -n flux-system
 
 # Ricreare il secret con nuove credenziali HTTPS
 kubectl -n flux-system create secret generic github-credentials \
@@ -875,4 +889,4 @@ flux reconcile kustomization myapp -n flux-system --with-source
 - [SOPS integration](https://fluxcd.io/flux/guides/mozilla-sops/)
 - [Multi-tenancy](https://fluxcd.io/flux/installation/configuration/multitenancy/)
 - [Flagger documentation](https://docs.flagger.app/)
-- [Weave GitOps (UI per Flux)](https://docs.gitops.weave.works/)
+- [Flux Operator](https://fluxoperator.dev/) — installazione dichiarativa di Flux (`FluxInstance`) e Web UI, alternativa al bootstrap CLI
