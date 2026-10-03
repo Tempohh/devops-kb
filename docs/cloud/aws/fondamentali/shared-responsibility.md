@@ -7,9 +7,10 @@ search_keywords: [AWS shared responsibility model, security of the cloud, securi
 parent: cloud/aws/fondamentali/_index
 related: [cloud/aws/iam/_index, cloud/aws/security/_index, cloud/aws/fondamentali/well-architected]
 official_docs: https://aws.amazon.com/compliance/shared-responsibility-model/
-status: complete
+status: reviewed
 difficulty: beginner
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Shared Responsibility Model
@@ -115,18 +116,33 @@ La responsabilità del cliente **cambia in base al tipo di servizio**:
 
     **AWS gestisce OS e middleware — cliente gestisce configurazione e dati**
 
-=== "SaaS — S3 / DynamoDB"
+=== "Servizi astratti — S3 / DynamoDB"
+
+    AWS li chiama *abstracted services*: non sono SaaS in senso stretto (il cliente non usa un'applicazione finita), ma un'API su uno storage/database completamente gestito.
 
     | Responsabilità | AWS | Cliente |
     |----------------|-----|---------|
     | Infrastruttura completa | ✓ | |
-    | Durabilità (11 9s S3) | ✓ | |
-    | Disponibilità (SLA 99.99%) | ✓ | |
+    | Durabilità (11 9s S3, progettata) | ✓ | |
+    | Disponibilità (SLA — Service Level Agreement — contrattuale, varia per servizio e classe) | ✓ | |
     | Bucket Policy / ACL | | ✓ |
-    | Cifratura oggetti | | ✓ (attivare SSE) |
+    | Cifratura oggetti | | ✓ (SSE-S3 è applicata di default dal 2023; scegliere SSE-KMS se servono controllo chiavi e audit) |
     | Versioning e lifecycle | | ✓ (configurare) |
-    | Blocco accesso pubblico | | ✓ (attivare) |
+    | Blocco accesso pubblico | | ✓ (attivo di default sui nuovi bucket dal 2023; non disattivarlo) |
     | Dati e classificazione | | ✓ |
+
+!!! note "Il confine dipende dal servizio, anche dentro la stessa categoria"
+    Su **Lambda** AWS gestisce OS e runtime, ma il cliente deve migrare il codice quando un runtime (es. versione vecchia di Node.js/Python) viene deprecato. Su **RDS** AWS rende disponibili le patch, ma il cliente decide la finestra di manutenzione, abilita `AutoMinorVersionUpgrade` e pianifica gli upgrade major.
+
+### Controlli condivisi
+
+AWS distingue tre tipi di controlli. I **controlli ereditati** (es. sicurezza fisica) sono solo AWS; quelli **specifici del cliente** (es. classificazione dati) solo del cliente; i **controlli condivisi** si applicano a entrambi i livelli, con responsabilità diverse:
+
+| Controllo | AWS | Cliente |
+|-----------|-----|---------|
+| Patch management | Patch di infrastruttura e servizi gestiti | Patch di guest OS e applicazioni |
+| Configuration management | Config dei dispositivi/servizi AWS | Config di OS, DB, applicazioni |
+| Awareness & training | Dipendenti AWS | Dipendenti del cliente |
 
 ---
 
@@ -149,11 +165,11 @@ Anche la **compliance** segue il modello condiviso:
 | Framework | Descrizione |
 |-----------|-------------|
 | **GDPR** | Protezione dati EU — AWS è Data Processor, cliente è Data Controller |
-| **PCI DSS** | Standard pagamenti — AWS ha QSA certificato |
-| **HIPAA** | Sanità USA — BAA disponibile con AWS |
+| **PCI DSS** | Standard pagamenti — AWS è validato Level 1 Service Provider da un QSA (Qualified Security Assessor); la conformità della *tua* applicazione resta tua |
+| **HIPAA** | Sanità USA — BAA (Business Associate Agreement) accettabile in Artifact; usare solo i servizi HIPAA-eligible |
 | **SOC 1/2/3** | Report controlli interni — scaricabili da Artifact |
 | **ISO 27001** | Security management — AWS certificato |
-| **FedRAMP** | US Government — AWS GovCloud |
+| **FedRAMP** | US Government — autorizzazione per Region commerciali e per AWS GovCloud (US) |
 
 ---
 
@@ -165,7 +181,7 @@ Anche la **compliance** segue il modello condiviso:
     **Il cliente è responsabile** di tutto ciò che configura: IAM, cifratura, Security Groups, dati, OS (se EC2), applicazione.
 
     **Domanda tipo esame:** "Chi è responsabile del patching del database engine in RDS?"
-    **Risposta:** AWS (perché RDS è un servizio gestito — il cliente non ha accesso all'OS)
+    **Risposta:** AWS (perché RDS è un servizio gestito — il cliente non ha accesso all'OS). Il cliente però configura finestra di manutenzione e minor upgrade automatici.
 
     **Domanda tipo:** "Chi è responsabile del patching del sistema operativo su EC2?"
     **Risposta:** Il cliente (EC2 è IaaS — il cliente ha accesso root all'OS)
@@ -178,7 +194,7 @@ Anche la **compliance** segue il modello condiviso:
 
 **Sintomo:** Dati esposti pubblicamente; alert da AWS Security Hub o Trusted Advisor: "S3 bucket is publicly accessible".
 
-**Causa:** Il cliente ha configurato erroneamente la bucket policy o non ha attivato il "Block Public Access" — responsabilità del cliente secondo il modello condiviso.
+**Causa:** Il cliente ha configurato erroneamente la bucket policy, riabilitato le ACL o disattivato il "Block Public Access" (attivo di default sui bucket creati dal 2023, ma non sui bucket più vecchi né a livello account se non impostato) — responsabilità del cliente secondo il modello condiviso.
 
 **Soluzione:** Attivare immediatamente il blocco accesso pubblico e rivedere la policy.
 
@@ -192,8 +208,14 @@ aws s3api put-public-access-block \
 # Verifica lo stato
 aws s3api get-public-access-block --bucket my-bucket
 
-# Audit: trova tutti i bucket pubblici nell'account
-aws s3api list-buckets --query 'Buckets[].Name' --output text | \
+# Preferibile: blocco a livello account (copre tutti i bucket)
+aws s3control put-public-access-block \
+  --account-id 123456789012 \
+  --public-access-block-configuration \
+    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+
+# Audit: stato per ogni bucket (errore NoSuchPublicAccessBlockConfiguration = nessun blocco configurato su quel bucket)
+aws s3api list-buckets --query 'Buckets[].Name' --output text | tr '\t' '\n' | \
   xargs -I {} aws s3api get-public-access-block --bucket {}
 ```
 
@@ -201,7 +223,7 @@ aws s3api list-buckets --query 'Buckets[].Name' --output text | \
 
 ### Scenario 2 — EC2 compromessa: OS non aggiornato
 
-**Sintomo:** Notifica da Amazon Inspector o GuardDuty di vulnerabilità critica su istanza EC2; exploit noto sull'OS.
+**Sintomo:** Finding di Amazon Inspector (scansione vulnerabilità/CVE) su istanza EC2, o finding di GuardDuty (rilevamento minacce) su attività sospetta; exploit noto sull'OS.
 
 **Causa:** Il patching del sistema operativo su EC2 è responsabilità del cliente (IaaS). Il cliente non aveva attivato patch management automatico.
 
@@ -219,12 +241,17 @@ aws ssm send-command \
 aws ssm describe-instance-patch-states \
   --instance-ids "i-0123456789abcdef0"
 
-# Configura patching automatico (baseline di default)
+# Crea una patch baseline custom (Amazon Linux 2023; AL2 è a fine supporto)
 aws ssm create-patch-baseline \
   --name "AutoPatchBaseline" \
-  --operating-system "AMAZON_LINUX_2" \
+  --operating-system "AMAZON_LINUX_2023" \
   --approval-rules '{"PatchRules":[{"PatchFilterGroup":{"PatchFilters":[{"Key":"SEVERITY","Values":["Critical","Important"]}]},"ApproveAfterDays":7}]}'
+
+# Crearla non basta: va resa default per il suo OS (o associata a un patch group)
+aws ssm register-default-patch-baseline --baseline-id pb-0123456789abcdef0
 ```
+
+Per patching ricorrente senza intervento manuale usare **Patch Manager Quick Setup** o una Maintenance Window che esegue `AWS-RunPatchBaseline`.
 
 ---
 
@@ -234,7 +261,7 @@ aws ssm create-patch-baseline \
 
 **Causa:** La gestione delle credenziali IAM è responsabilità esclusiva del cliente. AWS non può impedire che il cliente esponga le proprie chiavi.
 
-**Soluzione:** Revocare immediatamente la chiave compromessa, analizzare l'accesso, e ruotare le credenziali.
+**Soluzione:** Revocare immediatamente la chiave compromessa, analizzare l'accesso, e ruotare le credenziali. Su chiavi rilevate pubblicamente AWS spesso allega in automatico la policy `AWSCompromisedKeyQuarantine` all'utente: è mitigazione, non sostituisce la rotazione. A monte: preferire ruoli IAM con credenziali temporanee (STS) alle access key a lungo termine, e secret scanning nei repository.
 
 ```bash
 # 1. Disabilita immediatamente la chiave compromessa
@@ -243,7 +270,7 @@ aws iam update-access-key \
   --status Inactive \
   --user-name my-user
 
-# 2. Verifica le azioni eseguite con la chiave (ultimi 90 giorni)
+# 2. Verifica le azioni eseguite con la chiave (lookup-events: solo management events, ultimi 90 giorni, per Region)
 aws cloudtrail lookup-events \
   --lookup-attributes AttributeKey=AccessKeyId,AttributeValue=AKIAIOSFODNN7EXAMPLE \
   --max-results 50
@@ -262,9 +289,9 @@ aws iam create-access-key --user-name my-user
 
 **Sintomo:** Il team di sicurezza segnala che il database engine RDS non è aggiornato all'ultima versione; si chiede chi deve agire.
 
-**Causa:** Fraintendimento del modello condiviso: per RDS (PaaS), AWS gestisce il patching del database engine e dell'OS sottostante. Il cliente non ha accesso diretto all'OS.
+**Causa:** Fraintendimento del modello condiviso: per RDS AWS gestisce l'OS sottostante e rende disponibili le patch dell'engine, ma sono applicate nella finestra di manutenzione e (per le minor) solo se `AutoMinorVersionUpgrade` è attivo. Il cliente non ha accesso diretto all'OS.
 
-**Soluzione:** Verificare la versione e la policy di manutenzione automatica; per aggiornamenti di versione major, il cliente deve pianificare la migrazione.
+**Soluzione:** Verificare la versione e la policy di manutenzione automatica; per aggiornamenti di versione major, il cliente deve pianificare la migrazione. Restare su una versione engine a fine supporto comporta costi di Extended Support.
 
 ```bash
 # Verifica versione engine e prossimo maintenance window
