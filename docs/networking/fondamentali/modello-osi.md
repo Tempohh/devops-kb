@@ -6,10 +6,11 @@ tags: [osi, networking, protocolli, layer, stack]
 search_keywords: [modello osi, 7 livelli osi, osi layers, layer fisico, data link layer, network layer, transport layer, session layer, presentation layer, application layer, osi vs tcp ip, encapsulation osi]
 parent: networking/fondamentali
 related: [networking/fondamentali/tcpip, networking/fondamentali/indirizzi-ip-subnetting, networking/fondamentali/http-https, networking/protocolli/websocket]
-official_docs: https://www.osi-model.com/
-status: complete
+official_docs: https://www.iso.org/standard/20269.html
+status: reviewed
 difficulty: beginner
-last_updated: 2026-03-29
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Modello OSI
@@ -31,6 +32,11 @@ Il modello OSI (Open Systems Interconnection) è uno standard ISO (ISO/IEC 7498-
 | **3** | **Rete** | Instradamento dei pacchetti tra reti diverse; indirizzamento logico | IP (IPv4/IPv6), ICMP, OSPF, BGP, ARP |
 | **2** | **Collegamento dati** | Trasferimento affidabile dei frame tra due nodi adiacenti; indirizzamento fisico (MAC) | Ethernet, Wi-Fi (802.11), PPP, VLAN (802.1Q), STP |
 | **1** | **Fisico** | Trasmissione dei bit grezzi sul mezzo fisico; definisce tensioni, frequenze, connettori | Ethernet (cablaggio), Fiber, DSL, USB, Bluetooth (PHY) |
+
+Sigle usate nel documento: **MAC** (Media Access Control, indirizzo hardware della NIC), **VLAN** (Virtual LAN, segmentazione L2), **STP** (Spanning Tree Protocol, evita loop L2), **ARP** (Address Resolution Protocol, traduce IP in MAC), **FCS** (Frame Check Sequence, checksum del frame).
+
+!!! note "Layer 5-7 nella pratica"
+    Nei protocolli reali i layer 5, 6 e 7 non sono separabili: una singola libreria (es. un client HTTP con TLS) implementa sessione, cifratura e applicazione insieme. Per questo TCP/IP li fonde in un solo layer. Il valore di OSI qui è diagnostico, non architetturale.
 
 ### PDU per Livello
 
@@ -55,27 +61,26 @@ Quando un'applicazione invia dati, questi vengono "avvolti" in header successivi
 ```mermaid
 flowchart TD
     subgraph SENDER["Mittente (Encapsulation)"]
-        A7["L7 – Applicazione\nDati applicativi (HTTP request)"]
-        A6["L6 – Presentazione\nDati + Cifratura TLS"]
-        A5["L5 – Sessione\nDati + Gestione sessione"]
-        A4["L4 – Trasporto\nSegmento TCP\n(Header: porta src/dst, seq, ack)"]
-        A3["L3 – Rete\nPacchetto IP\n(Header: IP src/dst, TTL)"]
-        A2["L2 – Data Link\nFrame Ethernet\n(Header: MAC src/dst, FCS)"]
-        A1["L1 – Fisico\nBit sul cavo / segnale RF"]
+        A7["L7 – Applicazione<br/>Dati applicativi (HTTP request)"]
+        A6["L6 – Presentazione<br/>Dati + Cifratura TLS"]
+        A5["L5 – Sessione<br/>Dati + Gestione sessione"]
+        A4["L4 – Trasporto<br/>Segmento TCP<br/>(Header: porta src/dst, seq, ack)"]
+        A3["L3 – Rete<br/>Pacchetto IP<br/>(Header: IP src/dst, TTL)"]
+        A2["L2 – Data Link<br/>Frame Ethernet<br/>(Header: MAC src/dst, FCS)"]
+        A1["L1 – Fisico<br/>Bit sul cavo / segnale RF"]
         A7 --> A6 --> A5 --> A4 --> A3 --> A2 --> A1
     end
 
     subgraph RECEIVER["Ricevitore (Decapsulation)"]
-        B1["L1 – Fisico\nRicezione bit"]
-        B2["L2 – Data Link\nVerifica Frame, rimuove header MAC"]
-        B3["L3 – Rete\nVerifica Pacchetto, rimuove header IP"]
-        B4["L4 – Trasporto\nVerifica Segmento, rimuove header TCP"]
-        B5["L5 – Sessione\nGestione sessione"]
-        B6["L6 – Presentazione\nDecifratura TLS"]
-        B7["L7 – Applicazione\nDati ricevuti dall'applicazione"]
+        B1["L1 – Fisico<br/>Ricezione bit"]
+        B2["L2 – Data Link<br/>Verifica Frame, rimuove header MAC"]
+        B3["L3 – Rete<br/>Verifica Pacchetto, rimuove header IP"]
+        B4["L4 – Trasporto<br/>Verifica Segmento, rimuove header TCP"]
+        B5["L5 – Sessione<br/>Gestione sessione"]
+        B6["L6 – Presentazione<br/>Decifratura TLS"]
+        B7["L7 – Applicazione<br/>Dati ricevuti dall'applicazione"]
         B1 --> B2 --> B3 --> B4 --> B5 --> B6 --> B7
     end
-
     A1 -->|"Mezzo trasmissivo"| B1
 ```
 
@@ -126,7 +131,7 @@ L7 → Il servizio risponde? Autenticazione? Certificato valido?
     Quando un collega descrive un problema di rete, chiediti sempre: "A quale layer si trova il problema?". Questo orienta immediatamente gli strumenti di diagnosi da usare (`ping` per L3, `telnet`/`nc` per L4, `curl` per L7).
 
 !!! warning "Attenzione"
-    Nei moderni stack TLS, la cifratura avviene nel Layer 6 (Presentazione) del modello OSI, ma nel Layer 4 (Trasporto) del TCP/IP. Questa asimmetria causa spesso confusione. Ricorda che OSI è un modello astratto.
+    TLS non ha una collocazione univoca. Per convenzione didattica è associato al Layer 6 (Presentazione) di OSI, ma nello stack reale gira sopra TCP ed è parte del layer Applicazione di TCP/IP (spesso detto "L4.5"). In HTTP/3 il handshake TLS 1.3 è integrato in QUIC, che gira su UDP. Anche ARP è ambiguo: sta tra L2 e L3. OSI è un modello di ragionamento, non una mappa esatta dei protocolli reali.
 
 ## Best Practices
 
@@ -191,7 +196,7 @@ traceroute -T -p 80 8.8.8.8
 
 **Sintomo:** `ping <host>` risponde correttamente (L3 ok), ma `curl`, `telnet`, o la propria applicazione non riesce a connettersi alla porta target. Il three-way handshake TCP non completa.
 
-**Causa:** Firewall (iptables, security group, ACL) che blocca la porta specifica; servizio non in ascolto sulla porta attesa; conntrack table piena; porta in TIME_WAIT che impedisce il riutilizzo.
+**Causa:** Firewall (iptables, security group, ACL) che blocca la porta specifica; servizio non in ascolto sulla porta attesa; conntrack table piena (pacchetti droppati).
 
 **Soluzione:** Verificare che il servizio sia in ascolto e che non ci siano regole di firewall bloccanti.
 
