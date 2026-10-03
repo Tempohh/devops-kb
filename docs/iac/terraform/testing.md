@@ -7,9 +7,10 @@ search_keywords: [terraform testing, terratest, tflint, checkov, conftest, OPA, 
 parent: iac/terraform/_index
 related: [iac/terraform/fondamentali, iac/terraform/moduli, iac/terraform/state-management, ci-cd/pipeline]
 official_docs: https://developer.hashicorp.com/terraform/language/checks
-status: needs-review
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-09-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Terraform — Testing e Quality Gate
@@ -55,6 +56,9 @@ Testare il codice Terraform è essenziale quanto testare il codice applicativo: 
 
 !!! note "Terraform built-in checks (≥ v1.5)"
     Da Terraform 1.5, il blocco `check {}` permette asserzioni personalizzate nel piano stesso. Non richiede tool esterni ma è limitato a condizioni valutabili durante il plan.
+
+!!! note "tfsec → Trivy"
+    **tfsec** è stato assorbito da **Trivy** (`trivy config .`), scanner IaC open source di riferimento insieme a checkov. Pipeline basate su tfsec vanno migrate. Per OpenTofu esiste l'equivalente `tofu test` (vedi [OpenTofu](opentofu.md)).
 
 ## Architettura / Come Funziona
 
@@ -134,7 +138,7 @@ tflint --recursive
 # .tflint.hcl — configurazione tflint
 plugin "aws" {
   enabled = true
-  version = "0.31.0"
+  version = "0.40.0"  # fissare una release; aggiornare periodicamente
   source  = "github.com/terraform-linters/tflint-ruleset-aws"
 }
 
@@ -160,7 +164,7 @@ rule "terraform_required_providers" {
 $ tflint --recursive
 3 issue(s) found:
 
-Warning: aws_instance.web: "t2.micro" is previous generation (aws_instance_invalid_type)
+Warning: "t2.micro" is previous generation instance type (aws_instance_previous_type)
   on main.tf line 4:
    4:   instance_type = "t2.micro"
 
@@ -194,7 +198,7 @@ Check: CKV_AWS_8: "Ensure all data stored in the Launch configuration EBS is sec
 	FAILED for resource: aws_instance.web
 	File: /main.tf:1-15
 
-Check: CKV_AWS_135: "Ensure that EC2 instance should disable IMDSv1"
+Check: CKV_AWS_79: "Ensure Instance Metadata Service Version 1 is not enabled"
 	FAILED for resource: aws_instance.web
 	File: /main.tf:1-15
 
@@ -207,7 +211,7 @@ resource "aws_instance" "web" {
   ami           = "ami-0c55b159cbfafe1f0"
   instance_type = "t3.micro"
 
-  # checkov:skip=CKV_AWS_135:IMDSv1 necessario per agent legacy, ticket #1234
+  # checkov:skip=CKV_AWS_79:IMDSv1 necessario per agent legacy, ticket #1234
   metadata_options {
     http_tokens = "optional"
   }
@@ -252,11 +256,10 @@ conftest test tfplan.json --policy policy/
 # policy/required_tags.rego — Ogni risorsa AWS deve avere tag Environment e Owner
 package main
 
-import future.keywords.in
-
+# Sintassi OPA v1 (conftest recenti). Con conftest/OPA v0.x usare `deny[msg] {` senza `contains`/`if`.
 required_tags := ["Environment", "Owner", "CostCenter"]
 
-deny[msg] {
+deny contains msg if {
   resource := input.resource_changes[_]
   resource.type == "aws_instance"
 
@@ -270,7 +273,7 @@ deny[msg] {
   )
 }
 
-deny[msg] {
+deny contains msg if {
   resource := input.resource_changes[_]
   resource.type == "aws_instance"
   resource.change.after.instance_type == "t2.micro"
@@ -381,10 +384,16 @@ resource "aws_s3_bucket" "app_data" {
   bucket = "myapp-data-${var.environment}"
 }
 
+resource "aws_s3_bucket_acl" "app_data" {
+  bucket = aws_s3_bucket.app_data.id
+  acl    = "private"
+}
+
 # Check: il bucket non deve avere ACL public-read
+# (un check fallito produce un warning, non blocca plan/apply)
 check "bucket_not_public" {
   assert {
-    condition     = !contains(["public-read", "public-read-write"], aws_s3_bucket_acl.this.acl)
+    condition     = !contains(["public-read", "public-read-write"], aws_s3_bucket_acl.app_data.acl)
     error_message = "Il bucket ${aws_s3_bucket.app_data.id} non deve avere ACL pubblica."
   }
 }
@@ -441,6 +450,8 @@ run "cidr_is_valid" {
   }
 }
 
+# Test negativo: il modulo ha una `validation` su var.cidr_block (prefisso <= /24).
+# expect_failures dichiara che il fallimento della validation è il risultato atteso.
 run "cidr_rejects_too_small_block" {
   command = plan
 
@@ -448,10 +459,7 @@ run "cidr_rejects_too_small_block" {
     cidr_block = "10.0.0.0/29"
   }
 
-  assert {
-    condition     = tonumber(split("/", var.cidr_block)[1]) <= 24
-    error_message = "Il CIDR della VPC deve essere almeno /24."
-  }
+  expect_failures = [var.cidr_block]
 }
 ```
 
@@ -548,7 +556,7 @@ pre-commit install
 repos:
   # Hooks ufficiali Terraform
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.86.0
+    rev: v1.99.0  # esempio: aggiornare con `pre-commit autoupdate`
     hooks:
       # Formattazione automatica
       - id: terraform_fmt
@@ -575,7 +583,7 @@ repos:
 
   # Hook generici
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -621,7 +629,7 @@ Warning: Missing version constraint for provider "aws"
 # checkov:skip=CKV_AWS_123:Giustificazione + ticket reference
 
 # tflint: ignore specifico
-# tflint-ignore: aws_instance_invalid_type
+# tflint-ignore: aws_instance_previous_type
 
 # conftest: esclusione per risorsa (gestita in Rego con eccezioni esplicite)
 ```
@@ -641,7 +649,7 @@ modules/
         └── vpc_test.go    # Terratest per questo modulo
 ```
 
-- Ogni modulo condiviso deve avere almeno un test Terratest che verifica gli output principali
+- Ogni modulo condiviso deve avere almeno un test (`terraform test` o Terratest) che verifica gli output principali
 - I test di moduli devono essere eseguibili in isolamento (no dipendenze cross-modulo)
 - Usa `t.Parallel()` per ridurre i tempi quando si testano più moduli
 
@@ -662,7 +670,7 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.7.x"
+          terraform_version: "~> 1.9"
 
       - name: Format Check
         run: terraform fmt -check -recursive
@@ -672,8 +680,9 @@ jobs:
           terraform init -backend=false
           terraform validate
 
+      - uses: terraform-linters/setup-tflint@v4
+
       - name: tflint
-        uses: terraform-linters/setup-tflint@v4
         run: |
           tflint --init
           tflint --recursive
@@ -703,7 +712,7 @@ jobs:
 
 ### Problema: `terraform validate` passa ma `tflint` fallisce
 
-**Sintomo:** `terraform validate` non riporta errori, tflint riporta `aws_instance_invalid_type`.
+**Sintomo:** `terraform validate` non riporta errori, tflint riporta `aws_instance_invalid_type` (instance type inesistente) o `aws_instance_previous_type`.
 
 **Causa:** `terraform validate` controlla solo la sintassi HCL e i riferimenti interni. Non interroga il provider — non sa quali AMI o instance type esistono. tflint usa regole provider-specifiche che conoscono i valori validi.
 
@@ -715,8 +724,8 @@ tflint --init
 # Controlla la versione del ruleset
 cat .tflint.hcl | grep version
 
-# Aggiorna il ruleset se obsoleto
-tflint --init --upgrade
+# Se obsoleto: alza `version` in .tflint.hcl, poi riscarica il plugin
+tflint --init
 ```
 
 ---
@@ -743,15 +752,14 @@ checkov -d . --framework terraform --baseline .checkov.baseline
 
 **Sintomo:** Il test si blocca (timeout), le risorse rimangono su AWS.
 
-**Causa:** Il `defer terraform.Destroy()` non viene eseguito se il processo viene ucciso con SIGKILL.
+**Causa:** Il `defer terraform.Destroy()` non viene eseguito se il processo viene ucciso con SIGKILL o se scade il `-timeout` di `go test`.
 
 **Soluzione:**
 ```go
-// Usa TestCleanupOptions per registrare il cleanup anche su SIGTERM
+// defer non gira su SIGKILL, né se `go test -timeout` scade (panic del runner):
+// imposta -timeout > durata attesa e prevedi sempre uno sweeper esterno
+// (aws-nuke o cleanup basato su tag) schedulato nell'account di test.
 defer terraform.Destroy(t, terraformOptions)
-
-// In alternativa, configura un cleanup job separato
-// che usa aws-nuke o tag-based cleanup
 ```
 
 ```bash
@@ -789,7 +797,7 @@ conftest test tfplan.json --policy policy/ --trace 2>&1 | head -50
 
 **Sintomo:** `run` con `command = plan` fallisce con errore di configurazione provider anche se è dichiarato `mock_provider "aws" {}`.
 
-**Causa:** `mock_provider` deve essere dichiarato nello stesso file `.tftest.hcl` (o in un file `variables.tftest.hcl` condiviso) del `run` che lo usa, e il nome deve corrispondere esattamente al provider referenziato nel modulo (`aws`, non `aws.us_east_1` se il modulo usa un alias).
+**Causa:** `mock_provider` deve essere dichiarato nel file `.tftest.hcl` che contiene il `run`, e source/alias devono corrispondere al provider referenziato dal modulo. Se il modulo usa un provider con alias (`aws.us_east_1`), serve un mock con lo stesso `alias`; un mock senza alias non lo copre.
 
 **Soluzione:**
 ```hcl
@@ -811,8 +819,9 @@ mock_provider "aws" {
 ```yaml
 # .pre-commit-config.yaml — limita l'ambito
 - id: terraform_validate
-  # Esegue solo nelle directory con file .tf modificati
-  pass_filenames: false
+  # pre-commit-terraform raggruppa già per directory modificata; restringi
+  # ulteriormente con `files:` (es. solo modules/) se serve
+  files: ^modules/
 
 # Oppure: sposta i check pesanti (checkov) solo nella CI
 # e mantieni nel pre-commit solo fmt + validate (< 5 secondi)
