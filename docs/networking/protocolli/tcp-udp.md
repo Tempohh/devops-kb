@@ -6,10 +6,11 @@ tags: [tcp, udp, transport, connection-oriented, datagram]
 search_keywords: [tcp three way handshake, tcp four way termination, udp connectionless, tcp vs udp comparison, tcp flow control, tcp congestion control slow start cwnd, tcp state machine TIME_WAIT CLOSE_WAIT FIN_WAIT, tcp keepalive, tcp nagle algorithm, udp broadcast multicast]
 parent: networking/protocolli/_index
 related: [networking/protocolli/http2-http3, networking/protocolli/quic, networking/load-balancing/layer4-vs-layer7]
-official_docs: https://www.rfc-editor.org/rfc/rfc793
-status: complete
+official_docs: https://www.rfc-editor.org/rfc/rfc9293
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-03-03
+last_verified: 2026-10-03
 ---
 
 # TCP e UDP
@@ -67,7 +68,7 @@ Una connessione TCP è univocamente identificata da una quadrupla: `(IP_src, Por
 
 - **Well-known ports** (0–1023): HTTP (80), HTTPS (443), SSH (22), DNS (53)
 - **Registered ports** (1024–49151): applicazioni specifiche registrate con IANA (Internet Assigned Numbers Authority)
-- **Ephemeral ports** (49152–65535): porte temporanee assegnate ai client
+- **Ephemeral ports** (49152–65535 secondo IANA): porte temporanee assegnate ai client. Linux usa di default `32768–60999` (`net.ipv4.ip_local_port_range`): è questo range, non quello IANA, a limitare il numero di connessioni uscenti verso lo stesso `IP_dst:Port_dst`
 
 ---
 
@@ -113,6 +114,9 @@ La chiusura è asincrona perché TCP è full-duplex. Ogni lato chiude la propria
 3. Server invia FIN quando ha finito di trasmettere → chiude la direzione server→client
 4. Client risponde ACK e entra in **TIME_WAIT**
 
+!!! note "TIME_WAIT spetta a chi chiude per primo"
+    Il client è mostrato come active closer solo per esempio: TIME_WAIT lo accumula il lato che invia il primo FIN, che sia client o server. Un server HTTP che chiude per primo le connessioni accumula TIME_WAIT. Se i due FIN si incrociano (*simultaneous close*) entrambi passano da CLOSING a TIME_WAIT. Con `ACK` e `FIN` del server nello stesso segmento (frequente) il teardown si riduce a 3 segmenti.
+
 ### TCP State Machine
 
 ```
@@ -132,7 +136,7 @@ SYN_RCVD         SYN_SENT
           /              \
     FIN_WAIT_1        CLOSE_WAIT
          │                │ [snd FIN]
-    [rcv FIN-ACK]         ▼
+    [rcv ACK del FIN]     ▼
     FIN_WAIT_2       LAST_ACK
          │                │ [rcv ACK]
     [rcv FIN, snd ACK]    ▼
@@ -145,7 +149,7 @@ SYN_RCVD         SYN_SENT
 
 **Stati critici:**
 
-- **TIME_WAIT**: dopo aver inviato l'ACK finale, il client attende `2 × MSL` (Maximum Segment Lifetime, tipicamente 60s) per garantire che l'ACK sia arrivato e che vecchi pacchetti duplicati siano scomparsi dalla rete. Alta concentrazione di socket in TIME_WAIT è normale su server molto trafficati.
+- **TIME_WAIT**: dopo aver inviato l'ACK finale, chi ha chiuso per primo attende `2 × MSL` (Maximum Segment Lifetime) per garantire che l'ACK sia arrivato (altrimenti il peer ritrasmette il FIN) e che vecchi segmenti duplicati scompaiano dalla rete, evitando che vengano scambiati per dati di una nuova connessione con la stessa quadrupla. Su Linux la durata è fissa a 60s (`TCP_TIMEWAIT_LEN`, non configurabile via sysctl). Alta concentrazione di socket in TIME_WAIT è normale su server molto trafficati.
 - **CLOSE_WAIT**: il lato che ha ricevuto il FIN ma non ha ancora chiuso la propria direzione. Un numero elevato indica un bug applicativo (l'applicazione non chiude i socket).
 - **SYN_SENT / SYN_RCVD**: stati transitori durante l'handshake.
 
@@ -160,13 +164,13 @@ Il ricevitore annuncia quanta buffer space ha disponibile tramite il campo **Win
 
 TCP implementa 4 algoritmi per evitare di sovraccaricare la rete:
 
-1. **Slow Start**: alla partenza, `cwnd` (congestion window) parte da 1 MSS (Maximum Segment Size) e raddoppia ogni RTT fino a `ssthresh`
+1. **Slow Start**: alla partenza, `cwnd` (congestion window) parte da un *initial window* (IW) di 10 MSS (Maximum Segment Size) nelle implementazioni moderne (RFC 6928; 1 MSS era il valore storico) e raddoppia ogni RTT fino a `ssthresh`
 2. **Congestion Avoidance**: superata `ssthresh`, `cwnd` cresce di 1 MSS per RTT (crescita lineare)
 3. **Fast Retransmit**: alla ricezione di 3 ACK duplicati, il mittente ritrasmette il segmento perso senza attendere il timeout
 4. **Fast Recovery**: dopo fast retransmit, `ssthresh = cwnd/2` e si riparte dalla congestion avoidance (non da slow start)
 
 !!! note "TCP BBR"
-    Google ha sviluppato **BBR** (Bottleneck Bandwidth and RTT), un algoritmo di congestion control moderno che misura direttamente la bandwidth disponibile invece di dedurla dalle perdite. Significativamente più efficiente di CUBIC su reti con alto RTT o perdite non da congestione (es. reti wireless).
+    Google ha sviluppato **BBR** (Bottleneck Bandwidth and RTT), un algoritmo di congestion control moderno che misura direttamente la bandwidth disponibile invece di dedurla dalle perdite. Più efficiente di CUBIC (default su Linux) su reti con alto RTT o perdite non da congestione (es. reti wireless). Si abilita con `sysctl -w net.ipv4.tcp_congestion_control=bbr` (modulo `tcp_bbr`; spesso abbinato a `net.core.default_qdisc=fq`). Il kernel Linux include BBRv1; BBRv2/v3 sono evoluzioni che riducono l'aggressività verso i flussi CUBIC. Va misurato sul proprio carico: su reti a bassa perdita il vantaggio può essere nullo.
 
 ### Nagle's Algorithm
 
@@ -258,8 +262,9 @@ sysctl -w net.ipv4.tcp_keepalive_probes=5
 sysctl -w net.core.somaxconn=65535
 sysctl -w net.ipv4.tcp_max_syn_backlog=65535
 
-# Mitigare TIME_WAIT su server con molte connessioni short-lived
-# Permette riuso rapido dei socket in TIME_WAIT (sicuro con timestamp TCP)
+# Mitigare TIME_WAIT su host che APRONO molte connessioni short-lived (client, reverse proxy -> backend)
+# Permette di riusare socket in TIME_WAIT solo per connessioni in USCITA (richiede timestamp TCP).
+# Non ha effetto sulle connessioni in ingresso. Dal kernel 4.19 il default è 2 (solo loopback): 1 = globale
 sysctl -w net.ipv4.tcp_tw_reuse=1
 
 # Abilitare TCP Fast Open (riduce latenza eliminando RTT per connessioni ripetute)
@@ -312,14 +317,14 @@ if tcpConn, ok := conn.(*net.TCPConn); ok {
     Il parametro `net.core.somaxconn` limita la coda di connessioni in attesa di `accept()`. Su server web ad alto traffico, aumentarlo a 65535 ed impostare lo stesso valore nel listener dell'applicazione (es. `listen(fd, 65535)`).
 
 !!! tip "TIME_WAIT: non è un problema, è una funzionalità"
-    Migliaia di socket in TIME_WAIT su un server HTTP è normale e atteso. Indicano che il server sta attivamente chiudendo connessioni. Usare `tcp_tw_reuse=1` (non `tcp_tw_recycle`, deprecato e pericoloso con NAT) se l'accumulo causa esaurimento delle porte.
+    Migliaia di socket in TIME_WAIT su un server HTTP è normale e atteso. Indicano che il server sta attivamente chiudendo connessioni. Se l'accumulo causa esaurimento delle porte effimere, il caso tipico è un client/proxy che apre molte connessioni uscenti verso lo stesso backend: lì `tcp_tw_reuse=1` aiuta (non `tcp_tw_recycle`, rimosso e pericoloso con NAT). Su un server che riceve connessioni non serve: la quadrupla include la porta sorgente del client, quindi non c'è esaurimento lato server.
 
 !!! warning "tcp_tw_recycle è pericoloso"
     `net.ipv4.tcp_tw_recycle` è stato rimosso dal kernel Linux 4.12 perché causava drop silenzioso di connessioni legittime da client dietro NAT. Non usarlo mai.
 
 ### Keepalive: quando e come
 
-TCP keepalive permette di rilevare connessioni interrotte (es. crash del peer, link down) senza traffico applicativo. Configurare keepalive a livello applicativo (es. `SO_KEEPALIVE`) è preferibile al tuning di sistema perché consente valori diversi per diverse applicazioni.
+TCP keepalive permette di rilevare connessioni interrotte (es. crash del peer, link down) senza traffico applicativo. `SO_KEEPALIVE` abilita il meccanismo sul singolo socket (è disattivato di default); i tempi si possono sovrascrivere per socket con `TCP_KEEPIDLE`, `TCP_KEEPINTVL`, `TCP_KEEPCNT`. È preferibile al tuning di sistema perché consente valori diversi per diverse applicazioni. Utile anche per evitare che NAT e load balancer scartino per inattività le connessioni lunghe (idle timeout tipico 60–350s: keepalive_time di sistema, 7200s, è troppo alto per questo scopo).
 
 ---
 
@@ -329,12 +334,12 @@ TCP keepalive permette di rilevare connessioni interrotte (es. crash del peer, l
 
 **Sintomo:** `ss -tan | grep TIME_WAIT | wc -l` restituisce valori elevati (decine di migliaia).
 
-**Causa:** normale su server HTTP/HTTPS che chiudono le connessioni dopo ogni risposta (HTTP/1.0) o che usano connection: close.
+**Causa:** normale su host che chiudono per primi le connessioni dopo ogni risposta (HTTP/1.0, `Connection: close`). Diventa un problema solo se un host che apre connessioni uscenti esaurisce le porte effimere (errori `Cannot assign requested address`).
 
 **Soluzione:**
 1. Abilitare HTTP keep-alive nell'applicazione/proxy per riusare le connessioni
-2. Impostare `net.ipv4.tcp_tw_reuse=1`
-3. Se il server apre connessioni verso un backend (es. reverse proxy → app), considerare un connection pool
+2. Se il server apre connessioni verso un backend (es. reverse proxy → app), usare un connection pool
+3. Sugli host con connessioni uscenti: `net.ipv4.tcp_tw_reuse=1` e/o ampliare `net.ipv4.ip_local_port_range`
 
 ### Connection Refused vs Connection Timeout
 
@@ -396,7 +401,8 @@ sysctl -w net.ipv4.tcp_syncookies=1
 
 ## Riferimenti
 
-- [RFC 793 — Transmission Control Protocol](https://www.rfc-editor.org/rfc/rfc793)
+- [RFC 9293 — Transmission Control Protocol (TCP)](https://www.rfc-editor.org/rfc/rfc9293) (2022, sostituisce RFC 793)
+- [RFC 6928 — Increasing TCP's Initial Window](https://www.rfc-editor.org/rfc/rfc6928)
 - [RFC 768 — User Datagram Protocol](https://www.rfc-editor.org/rfc/rfc768)
 - [RFC 7323 — TCP Extensions for High Performance](https://www.rfc-editor.org/rfc/rfc7323)
 - [RFC 6298 — Computing TCP's Retransmission Timer](https://www.rfc-editor.org/rfc/rfc6298)
