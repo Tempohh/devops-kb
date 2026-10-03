@@ -10,7 +10,7 @@ official_docs: https://openfeature.dev/
 status: needs-review
 difficulty: intermediate
 last_updated: 2026-03-29
-last_verified: 2026-10-03
+last_verified: 2026-10-04
 ---
 
 # Feature Flags
@@ -187,17 +187,16 @@ import (
 
 func main() {
     // Configura il provider Flipt
-    // <!-- REVIEW: verificare nome costruttore (NewProvider?) e formato address nella versione corrente del provider -->
-    provider, err := flipt.New(
-        flipt.WithAddress("https://flipt.mycompany.internal:9000"),
-        flipt.WithNamespace("production"),
+    // address: URL HTTP(S) oppure host:port per gRPC (protocollo rilevato dal formato)
+    provider := flipt.NewProvider(
+        flipt.WithAddress("https://flipt.mycompany.internal:443"),
+        flipt.ForNamespace("production"),
     )
-    if err != nil {
-        log.Fatal(err)
-    }
 
     // Registra il provider globalmente — una sola volta al bootstrap
-    openfeature.SetProvider(provider)
+    if err := openfeature.SetProvider(provider); err != nil {
+        log.Fatal(err)
+    }
     client := openfeature.NewClient("checkout-service")
     ctx := context.Background()
 
@@ -232,19 +231,20 @@ func main() {
 ### OpenFeature con LaunchDarkly (Python)
 
 ```python
-import ldclient
-from ldclient.config import Config
 from openfeature import api
 from openfeature.evaluation_context import EvaluationContext
 
-# Setup provider LaunchDarkly tramite OpenFeature
-ldclient.set_config(Config("sdk-your-sdk-key-here"))
-ld_client = ldclient.get()
+# Provider ufficiale LaunchDarkly (pip install launchdarkly-openfeature-server, beta):
+# crea internamente il client LaunchDarkly dalla Config
+from ld_openfeature import LaunchDarklyProvider, Config
 
 # Wrapper OpenFeature — il codice sotto non sa che backend usa
-# <!-- REVIEW: verificare package/import del provider LaunchDarkly per Python OpenFeature -->
-from openfeature.contrib.provider.launchdarkly import LaunchDarklyProvider
-api.set_provider(LaunchDarklyProvider(ld_client))
+api.set_provider(LaunchDarklyProvider(Config("sdk-your-sdk-key-here")))
+
+# Client nativo: serve solo per track() (non coperto dall'API di valutazione OpenFeature)
+import ldclient
+ld_client = ldclient.get()  # <!-- CURRENCY: non verificato (2026-10) — il provider imposta il client globale ldclient? altrimenti ldclient.set_config(...) prima -->
+
 client = api.get_client("payment-service")
 
 # Context di valutazione — targeting_key deve essere stabile (user ID, non session ID)
