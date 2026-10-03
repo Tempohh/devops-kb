@@ -7,9 +7,10 @@ search_keywords: [App Service Plan, Azure Web App, Azure Functions serverless, d
 parent: cloud/azure/compute/_index
 related: [cloud/azure/security/key-vault, cloud/azure/networking/vnet, cloud/azure/monitoring/application-insights]
 official_docs: https://learn.microsoft.com/azure/app-service/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # App Service & Azure Functions
@@ -60,8 +61,10 @@ az webapp create \
   --resource-group $RG \
   --plan $PLAN_NAME \
   --name $APP_NAME \
-  --runtime "PYTHON:3.12" \
-  --assign-identity SystemAssigned
+  --runtime "PYTHON:3.12"
+
+# Managed Identity system-assigned (usata per ACR, Key Vault, DB)
+az webapp identity assign --resource-group $RG --name $APP_NAME
 
 # Configurare App Settings (variabili d'ambiente)
 az webapp config appsettings set \
@@ -94,8 +97,8 @@ az webapp list-runtimes --os-type linux --output table
 
 # Esempi comuni
 # PYTHON:3.12, PYTHON:3.11
-# NODE:20-lts, NODE:18-lts
-# DOTNETCORE:8.0
+# NODE:22-lts, NODE:20-lts   (Node 18 è EOL, evitarlo)
+# DOTNETCORE:8.0, DOTNETCORE:9.0
 # JAVA:21-java21
 # PHP:8.3
 # Containers: usa --deployment-container-image-name
@@ -181,8 +184,9 @@ az webapp create \
   --resource-group $RG \
   --plan $PLAN_NAME \
   --name $APP_NAME \
-  --deployment-container-image-name myacr.azurecr.io/myapp:latest \
-  --assign-identity SystemAssigned
+  --deployment-container-image-name myacr.azurecr.io/myapp:latest
+
+az webapp identity assign --resource-group $RG --name $APP_NAME
 
 # Autorizzare App Service a pullare da ACR via Managed Identity
 az role assignment create \
@@ -242,7 +246,7 @@ jobs:
 
 ### VNet Integration (Outbound — accesso a risorse private)
 
-La VNet integration permette all'App Service di raggiungere risorse nella VNet (database privati, Key Vault con private endpoint, ecc.). Richiede tier Standard+.
+La VNet integration permette all'App Service di raggiungere risorse nella VNet (database privati, Key Vault con private endpoint, ecc.). La VNet integration regionale è disponibile da tier Basic in su (non su Free/Shared). La subnet delegata è usata solo dall'app per il traffico uscente: dimensionarla per le istanze del piano (minimo /28, /26 consigliato per scalare).
 
 ```bash
 # Creare subnet delegata per App Service VNet integration
@@ -261,10 +265,11 @@ az webapp vnet-integration add \
   --subnet snet-appservice-outbound
 
 # Forzare tutto il traffico uscente attraverso la VNet (incluso Internet)
-az webapp config appsettings set \
+# (sostituisce il vecchio app setting WEBSITE_VNET_ROUTE_ALL=1)
+az webapp config set \
   --resource-group $RG \
   --name $APP_NAME \
-  --settings WEBSITE_VNET_ROUTE_ALL=1
+  --vnet-route-all-enabled true
 ```
 
 ### Private Endpoint (Inbound — accesso solo da VNet)
@@ -314,7 +319,7 @@ az webapp config ssl create \
 az webapp config ssl bind \
   --resource-group $RG \
   --name $APP_NAME \
-  --certificate-thumbprint $(az webapp config ssl show --resource-group $RG --name $APP_NAME --query thumbprint -o tsv) \
+  --certificate-thumbprint $(az webapp config ssl list --resource-group $RG --query "[?subjectName=='myapp.example.com'].thumbprint | [0]" -o tsv) \
   --ssl-type SNI
 
 # Importare certificato custom da Key Vault
@@ -352,31 +357,46 @@ az appservice plan create \
 
 | Piano | Cold Start | Scaling | Max Timeout | Use Case |
 |---|---|---|---|---|
-| **Consumption** | Sì (alcune sec) | Auto 0→∞ | 5 min (default), 10 min (max) | Workload intermittenti, pay-per-use |
-| **Premium** | No (pre-warmed) | Auto 1→∞ | Illimitato | Cold start sensibile, VNet, lunga esecuzione |
-| **Dedicated (App Service)** | No | Manuale/autoscale | Illimitato | Costo prevedibile, già su App Service Plan |
+| **Flex Consumption** | Ridotto (opzionali *always-ready* instances) | Auto 0→∞, per-function | 30 min (default), illimitato | **Default consigliato per nuovi workload serverless**: VNet, scaling rapido, pay-per-use |
+| **Consumption** (legacy) | Sì (alcune sec) | Auto 0→∞ | 5 min (default), 10 min (max) | Workload intermittenti, pay-per-use. Il Linux Consumption è in dismissione (fine supporto annunciata per settembre 2028) |
+| **Premium** | No (pre-warmed) | Auto 1→∞ | 30 min (default), illimitato | Cold start sensibile, VNet, lunga esecuzione |
+| **Dedicated (App Service)** | No | Manuale/autoscale | 30 min (default), illimitato | Costo prevedibile, già su App Service Plan |
+
+!!! warning "Consumption → Flex Consumption"
+    Microsoft indirizza i nuovi workload serverless verso **Flex Consumption**: stesso modello pay-per-use, ma con VNet integration, always-ready instances (elimina il cold start sui path critici) e concorrenza per istanza configurabile. Il piano Consumption classico resta per Windows e carichi esistenti; per Linux va pianificata la migrazione.
 
 ### Creare Function App
 
 ```bash
 # Creare storage account per Functions (obbligatorio)
+STORAGE="stfunc$RANDOM"   # nome unico, 3-24 caratteri minuscoli/numeri
 az storage account create \
   --resource-group $RG \
-  --name stfunc${RANDOM} \
+  --name $STORAGE \
   --sku Standard_LRS \
   --allow-blob-public-access false
 
-# Creare Function App Python — Consumption Plan
+# Creare Function App Python — Flex Consumption (raccomandato)
+az functionapp create \
+  --resource-group $RG \
+  --name func-flex-prod \
+  --storage-account $STORAGE \
+  --flexconsumption-location $LOCATION \
+  --runtime python \
+  --runtime-version 3.12
+
+# Creare Function App Python — Consumption classico (legacy)
 az functionapp create \
   --resource-group $RG \
   --name func-processor-prod \
-  --storage-account stfunc12345 \
+  --storage-account $STORAGE \
   --consumption-plan-location $LOCATION \
   --runtime python \
   --runtime-version 3.12 \
   --functions-version 4 \
-  --os-type Linux \
-  --assign-identity SystemAssigned
+  --os-type Linux
+
+az functionapp identity assign --resource-group $RG --name func-processor-prod
 
 # Creare Function App — Premium Plan (no cold start, VNet support)
 az functionapp plan create \
@@ -389,7 +409,7 @@ az functionapp plan create \
 az functionapp create \
   --resource-group $RG \
   --name func-critical-prod \
-  --storage-account stfunc12345 \
+  --storage-account $STORAGE \
   --plan asp-functions-premium \
   --runtime python \
   --runtime-version 3.12 \
@@ -413,7 +433,13 @@ app = func.FunctionApp()
 def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
     logging.info("HTTP trigger function processed a request.")
 
-    name = req.params.get("name") or req.get_json().get("name", "World")
+    name = req.params.get("name")
+    if not name:
+        try:
+            name = req.get_json().get("name")
+        except ValueError:  # body assente o non JSON (es. GET)
+            pass
+    name = name or "World"
 
     return func.HttpResponse(
         json.dumps({"message": f"Hello, {name}!"}),
@@ -425,7 +451,7 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
 #### Timer Trigger (Node.js)
 
 ```javascript
-// timerFunction/index.js
+// src/functions/timerFunction.js  (Node.js programming model v4)
 const { app } = require('@azure/functions');
 
 app.timer('timerTrigger', {
@@ -461,6 +487,9 @@ def blob_trigger(myblob: func.InputStream, context: func.Context):
     process_uploaded_file(data, myblob.name)
 ```
 
+!!! tip "Blob trigger a bassa latenza"
+    Il blob trigger di default usa polling dello storage: la latenza può arrivare a minuti e su container grandi la scansione è costosa. Per reattività quasi immediata usare `source="EventGrid"` (il trigger si sottoscrive agli eventi `BlobCreated` via Event Grid). Su Flex Consumption il trigger basato su Event Grid è l'unica modalità supportata.
+
 #### Service Bus Queue Trigger
 
 ```python
@@ -476,35 +505,38 @@ def servicebus_queue_trigger(azservicebus: func.ServiceBusMessage):
 
 ### Durable Functions
 
-Durable Functions estende Azure Functions con pattern di orchestrazione stateful: orchstrator coordinano activity in sequenza o in parallelo, con checkpoint automatici.
+Durable Functions estende Azure Functions con pattern di orchestrazione stateful: gli orchestrator coordinano activity in sequenza o in parallelo, con checkpoint automatici (event sourcing su storage: l'orchestrator viene ri-eseguito dall'inizio ("replay") a ogni risveglio, quindi il suo codice deve essere **deterministico** — niente `datetime.now()`, I/O o random diretti, solo nelle activity).
 
 ```python
-# orchestrator function
+# function_app.py — programming model v2 (decorator)
 import azure.durable_functions as df
+import azure.functions as func
 
+app = df.DFApp(http_auth_level=func.AuthLevel.FUNCTION)
+
+@app.route(route="orchestrators/start")
+@app.durable_client_input(client_name="client")
+async def http_start(req: func.HttpRequest, client):
+    instance_id = await client.start_new("orchestrator_function")
+    return client.create_check_status_response(req, instance_id)
+
+@app.orchestration_trigger(context_name="context")
 def orchestrator_function(context: df.DurableOrchestrationContext):
     # Esegui activity in sequenza
-    result1 = yield context.call_activity("ProcessStep1", "input data")
-    result2 = yield context.call_activity("ProcessStep2", result1)
+    result1 = yield context.call_activity("process_step1", "input data")
 
     # Esegui activity in parallelo (fan-out/fan-in)
     parallel_tasks = [
-        context.call_activity("ParallelTask", item)
+        context.call_activity("process_step1", item)
         for item in ["a", "b", "c", "d"]
     ]
     results = yield context.task_all(parallel_tasks)
 
-    return results
+    return [result1, *results]
 
-main = df.Orchestrator.create(orchestrator_function)
-```
-
-```python
-# activity function
-import azure.functions as func
-
-def main(inputData: str) -> str:
-    # Logica business qui
+@app.activity_trigger(input_name="inputData")
+def process_step1(inputData: str) -> str:
+    # Logica business e I/O qui (le activity non devono essere deterministiche)
     return f"Processed: {inputData}"
 ```
 
@@ -680,7 +712,7 @@ az webapp deployment slot swap \
 
 **Sintomo:** L'App Service non riesce a connettersi al database o ad altri servizi all'interno della VNet; timeout di connessione nei log.
 
-**Causa:** La subnet delegata non ha la delega `Microsoft.Web/serverFarms`, il routing non è configurato correttamente (`WEBSITE_VNET_ROUTE_ALL` mancante), oppure il Network Security Group (NSG) sulla subnet blocca il traffico uscente.
+**Causa:** La subnet delegata non ha la delega `Microsoft.Web/serverFarms`, il routing non è configurato correttamente (`vnetRouteAllEnabled` disattivo, ex `WEBSITE_VNET_ROUTE_ALL`), oppure il Network Security Group (NSG) sulla subnet blocca il traffico uscente.
 
 **Soluzione:** Verificare la delega della subnet, le regole NSG, e le app settings di routing.
 
@@ -703,11 +735,11 @@ az network nsg rule list \
   --nsg-name nsg-appservice \
   --output table
 
-# Forzare routing attraverso VNet (necessario per raggiungere risorse private)
-az webapp config appsettings set \
+# Forzare routing attraverso VNet (necessario per raggiungere risorse private non RFC1918)
+az webapp config set \
   --resource-group $RG \
   --name $APP_NAME \
-  --settings WEBSITE_VNET_ROUTE_ALL=1
+  --vnet-route-all-enabled true
 
 # Scaricare log per analisi offline
 az webapp log download \
