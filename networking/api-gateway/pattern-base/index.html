@@ -21682,7 +21682,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21707,7 +21707,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22045,7 +22045,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25014,7 +25014,7 @@
 <h1 id="api-gateway-pattern-e-concetti-base">API Gateway — Pattern e Concetti Base<a class="headerlink" href="#api-gateway-pattern-e-concetti-base" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
 <p>L'API Gateway è il pattern architetturale che definisce un singolo punto di ingresso per i client di un sistema a microservizi. Risponde a un problema concreto: i client (app mobile, SPA, servizi terzi) devono comunicare con decine di microservizi ognuno con il proprio contratto, versione e localizzazione di rete. Il gateway centralizza la complessità, esponendo un'interfaccia coerente e nascondendo la topologia interna.</p>
-<p>I responsabilità tipiche di un API gateway includono: routing verso i servizi corretti, autenticazione e autorizzazione, rate limiting, trasformazione delle richieste/risposte, aggregazione di più chiamate in una, caching, logging e tracing. Queste funzionalità sono <strong>cross-cutting concerns</strong> che altrimenti andrebbero reimplementati in ogni servizio.</p>
+<p>Le responsabilità tipiche di un API gateway includono: routing verso i servizi corretti, autenticazione e autorizzazione, rate limiting, trasformazione delle richieste/risposte, aggregazione di più chiamate in una, caching, logging e tracing. Queste funzionalità sono <strong>cross-cutting concerns</strong> che altrimenti andrebbero reimplementati in ogni servizio.</p>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <h3 id="funzionalita-principali">Funzionalità Principali<a class="headerlink" href="#funzionalita-principali" title="Permanent link">&para;</a></h3>
 <table>
@@ -25131,18 +25131,16 @@ Un <strong>API gateway</strong> combina routing applicativo con funzionalità di
 </span></code></pre></div>
 <p><strong>Vantaggi:</strong> Riduce i round-trip del client (1 chiamata invece di 3).
 <strong>Svantaggi:</strong> Aumenta la latenza totale della risposta al max delle latenze dei servizi aggregati (usare chiamate parallele).</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Esempio pseudo-config aggregation in Kong con plugin custom</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">plugins</span><span class="p">:</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">request-transformer</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">response-transformer</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">correlation-id</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Con AWS API Gateway + Lambda</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nt">functions</span><span class="p">:</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="nt">aggregateHandler</span><span class="p">:</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nt">handler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aggregator.handler</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nt">events</span><span class="p">:</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">http</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GET /api/dashboard</span>
+<div class="admonition note">
+<p class="admonition-title">L'aggregazione richiede codice</p>
+<p>I plugin dichiarativi (es. <code>request-transformer</code>, <code>response-transformer</code> in Kong) modificano una singola richiesta/risposta: <strong>non</strong> fanno fan-out verso più backend. L'aggregazione richiede un handler dedicato (plugin custom, funzione serverless, o un BFF/servizio di composizione, vedi Scenario 3). Alternativa: GraphQL gateway/federation.</p>
+</div>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Esempio: aggregazione con AWS API Gateway + Lambda (Serverless Framework)</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">functions</span><span class="p">:</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">aggregateHandler</span><span class="p">:</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">handler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aggregator.handler</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">events</span><span class="p">:</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">http</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GET /api/dashboard</span>
 </span></code></pre></div>
 <h3 id="3-api-versioning">3. API Versioning<a class="headerlink" href="#3-api-versioning" title="Permanent link">&para;</a></h3>
 <p>Strategie per mantenere backward compatibility:</p>
@@ -25249,38 +25247,43 @@ Un <strong>API gateway</strong> combina routing applicativo con funzionalità di
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="p">}</span>
 </span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>
 </span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="k">server</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">    </span><span class="kn">listen</span><span class="w"> </span><span class="mi">443</span><span class="w"> </span><span class="s">ssl</span><span class="w"> </span><span class="s">http2</span><span class="p">;</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">    </span><span class="kn">server_name</span><span class="w"> </span><span class="s">api.example.com</span><span class="p">;</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span><span class="c1"># Rate limiting (definito in http block)</span>
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">    </span><span class="c1"># limit_req_zone $http_authorization zone=by_token:10m rate=100r/m;</span>
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="s">/api/</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">        </span><span class="c1"># Rate limiting: 100 req/min per token JWT</span>
-</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="w">        </span><span class="kn">limit_req</span><span class="w"> </span><span class="s">zone=by_token</span><span class="w"> </span><span class="s">burst=20</span><span class="w"> </span><span class="s">nodelay</span><span class="p">;</span>
-</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="w">        </span><span class="kn">limit_req_status</span><span class="w"> </span><span class="mi">429</span><span class="p">;</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">    </span><span class="kn">listen</span><span class="w"> </span><span class="mi">443</span><span class="w"> </span><span class="s">ssl</span><span class="p">;</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">    </span><span class="kn">http2</span><span class="w"> </span><span class="no">on</span><span class="p">;</span><span class="w">                       </span><span class="c1"># nginx &gt;= 1.25.1 (il parametro "listen ... http2" è deprecato)</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">    </span><span class="kn">server_name</span><span class="w"> </span><span class="s">api.example.com</span><span class="p">;</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">    </span><span class="c1"># Con proxy_pass su variabile ($backend) nginx risolve i nomi a runtime:</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">    </span><span class="c1"># serve un resolver (es. kube-dns), altrimenti 502 "no resolver defined"</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">    </span><span class="kn">resolver</span><span class="w"> </span><span class="mi">10</span><span class="s">.96.0.10</span><span class="w"> </span><span class="s">valid=30s</span><span class="p">;</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="w">    </span><span class="c1"># Rate limiting (definito in http block)</span>
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="w">    </span><span class="c1"># limit_req_zone $http_authorization zone=by_token:10m rate=100r/m;</span>
 </span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>
-</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="w">        </span><span class="c1"># Auth tramite subrequest</span>
-</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="w">        </span><span class="kn">auth_request</span><span class="w"> </span><span class="s">/auth/validate</span><span class="p">;</span>
-</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="w">        </span><span class="kn">auth_request_set</span><span class="w"> </span><span class="nv">$user_id</span><span class="w"> </span><span class="nv">$upstream_http_x_user_id</span><span class="p">;</span>
-</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a>
-</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="w">        </span><span class="c1"># Propagazione identità al backend</span>
-</span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-User-Id</span><span class="w">     </span><span class="nv">$user_id</span><span class="p">;</span>
-</span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Request-Id</span><span class="w">  </span><span class="nv">$request_id</span><span class="p">;</span>
-</span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Forwarded-For</span><span class="w"> </span><span class="nv">$remote_addr</span><span class="p">;</span>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="s">/api/</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="w">        </span><span class="c1"># Rate limiting: 100 req/min per token JWT</span>
+</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="w">        </span><span class="kn">limit_req</span><span class="w"> </span><span class="s">zone=by_token</span><span class="w"> </span><span class="s">burst=20</span><span class="w"> </span><span class="s">nodelay</span><span class="p">;</span>
+</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="w">        </span><span class="kn">limit_req_status</span><span class="w"> </span><span class="mi">429</span><span class="p">;</span>
+</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a>
+</span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a><span class="w">        </span><span class="c1"># Auth tramite subrequest</span>
+</span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a><span class="w">        </span><span class="kn">auth_request</span><span class="w"> </span><span class="s">/auth/validate</span><span class="p">;</span>
+</span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a><span class="w">        </span><span class="kn">auth_request_set</span><span class="w"> </span><span class="nv">$user_id</span><span class="w"> </span><span class="nv">$upstream_http_x_user_id</span><span class="p">;</span>
 </span><span id="__span-9-32"><a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a>
-</span><span id="__span-9-33"><a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a><span class="w">        </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="nv">$backend</span><span class="p">;</span>
-</span><span id="__span-9-34"><a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a><span class="w">        </span><span class="kn">proxy_connect_timeout</span><span class="w"> </span><span class="s">5s</span><span class="p">;</span>
-</span><span id="__span-9-35"><a id="__codelineno-9-35" name="__codelineno-9-35" href="#__codelineno-9-35"></a><span class="w">        </span><span class="kn">proxy_read_timeout</span><span class="w">    </span><span class="s">30s</span><span class="p">;</span>
-</span><span id="__span-9-36"><a id="__codelineno-9-36" name="__codelineno-9-36" href="#__codelineno-9-36"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-9-33"><a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a><span class="w">        </span><span class="c1"># Propagazione identità al backend</span>
+</span><span id="__span-9-34"><a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-User-Id</span><span class="w">     </span><span class="nv">$user_id</span><span class="p">;</span>
+</span><span id="__span-9-35"><a id="__codelineno-9-35" name="__codelineno-9-35" href="#__codelineno-9-35"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Request-Id</span><span class="w">  </span><span class="nv">$request_id</span><span class="p">;</span>
+</span><span id="__span-9-36"><a id="__codelineno-9-36" name="__codelineno-9-36" href="#__codelineno-9-36"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Forwarded-For</span><span class="w"> </span><span class="nv">$remote_addr</span><span class="p">;</span>
 </span><span id="__span-9-37"><a id="__codelineno-9-37" name="__codelineno-9-37" href="#__codelineno-9-37"></a>
-</span><span id="__span-9-38"><a id="__codelineno-9-38" name="__codelineno-9-38" href="#__codelineno-9-38"></a><span class="w">    </span><span class="c1"># Endpoint interno per validazione JWT</span>
-</span><span id="__span-9-39"><a id="__codelineno-9-39" name="__codelineno-9-39" href="#__codelineno-9-39"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">/auth/validate</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-9-40"><a id="__codelineno-9-40" name="__codelineno-9-40" href="#__codelineno-9-40"></a><span class="w">        </span><span class="kn">internal</span><span class="p">;</span>
-</span><span id="__span-9-41"><a id="__codelineno-9-41" name="__codelineno-9-41" href="#__codelineno-9-41"></a><span class="w">        </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="s">http://auth-service/validate</span><span class="p">;</span>
-</span><span id="__span-9-42"><a id="__codelineno-9-42" name="__codelineno-9-42" href="#__codelineno-9-42"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Authorization</span><span class="w"> </span><span class="nv">$http_authorization</span><span class="p">;</span>
-</span><span id="__span-9-43"><a id="__codelineno-9-43" name="__codelineno-9-43" href="#__codelineno-9-43"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-9-44"><a id="__codelineno-9-44" name="__codelineno-9-44" href="#__codelineno-9-44"></a><span class="p">}</span>
+</span><span id="__span-9-38"><a id="__codelineno-9-38" name="__codelineno-9-38" href="#__codelineno-9-38"></a><span class="w">        </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="nv">$backend</span><span class="p">;</span>
+</span><span id="__span-9-39"><a id="__codelineno-9-39" name="__codelineno-9-39" href="#__codelineno-9-39"></a><span class="w">        </span><span class="kn">proxy_connect_timeout</span><span class="w"> </span><span class="s">5s</span><span class="p">;</span>
+</span><span id="__span-9-40"><a id="__codelineno-9-40" name="__codelineno-9-40" href="#__codelineno-9-40"></a><span class="w">        </span><span class="kn">proxy_read_timeout</span><span class="w">    </span><span class="s">30s</span><span class="p">;</span>
+</span><span id="__span-9-41"><a id="__codelineno-9-41" name="__codelineno-9-41" href="#__codelineno-9-41"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-9-42"><a id="__codelineno-9-42" name="__codelineno-9-42" href="#__codelineno-9-42"></a>
+</span><span id="__span-9-43"><a id="__codelineno-9-43" name="__codelineno-9-43" href="#__codelineno-9-43"></a><span class="w">    </span><span class="c1"># Endpoint interno per validazione JWT</span>
+</span><span id="__span-9-44"><a id="__codelineno-9-44" name="__codelineno-9-44" href="#__codelineno-9-44"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">/auth/validate</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-9-45"><a id="__codelineno-9-45" name="__codelineno-9-45" href="#__codelineno-9-45"></a><span class="w">        </span><span class="kn">internal</span><span class="p">;</span>
+</span><span id="__span-9-46"><a id="__codelineno-9-46" name="__codelineno-9-46" href="#__codelineno-9-46"></a><span class="w">        </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="s">http://auth-service/validate</span><span class="p">;</span>
+</span><span id="__span-9-47"><a id="__codelineno-9-47" name="__codelineno-9-47" href="#__codelineno-9-47"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Authorization</span><span class="w"> </span><span class="nv">$http_authorization</span><span class="p">;</span>
+</span><span id="__span-9-48"><a id="__codelineno-9-48" name="__codelineno-9-48" href="#__codelineno-9-48"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-9-49"><a id="__codelineno-9-49" name="__codelineno-9-49" href="#__codelineno-9-49"></a><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="traefik-come-api-gateway-in-kubernetes">Traefik come API Gateway in Kubernetes<a class="headerlink" href="#traefik-come-api-gateway-in-kubernetes" title="Permanent link">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Middleware: autenticazione JWT</span>
@@ -25346,13 +25349,16 @@ Un <strong>API gateway</strong> combina routing applicativo con funzionalità di
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>date<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>timedatectl<span class="w"> </span>status
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Decodificare il JWT e controllare exp/iat</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"eyJ..."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d.<span class="w"> </span>-f2<span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-m<span class="w"> </span>json.tool<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'exp|iat|nbf'</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Controllare i log del gateway per il motivo esatto del rifiuto</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>ingress-nginx<span class="w"> </span>deployment/ingress-nginx-controller<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"401\|unauthorized\|jwt"</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># Traefik: verificare configurazione forwardAuth</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>middleware<span class="w"> </span>jwt-auth<span class="w"> </span>-n<span class="w"> </span>default
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1">#   (JWT usa base64url senza padding: tr + padding evitano errori di base64 -d)</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="nv">p</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span><span class="s2">"eyJ..."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d.<span class="w"> </span>-f2<span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span><span class="s1">'_-'</span><span class="w"> </span><span class="s1">'/+'</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="k">$((</span><span class="w"> </span><span class="si">${#</span><span class="nv">p</span><span class="si">}</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="k">))</span><span class="w"> </span>-ne<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">do</span><span class="w"> </span><span class="nv">p</span><span class="o">=</span><span class="s2">"</span><span class="nv">$p</span><span class="s2">="</span><span class="p">;</span><span class="w"> </span><span class="k">done</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"</span><span class="nv">$p</span><span class="s2">"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-m<span class="w"> </span>json.tool<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'exp|iat|nbf'</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="c1"># Controllare i log del gateway per il motivo esatto del rifiuto</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># (esempio con ingress-nginx; il progetto è stato ritirato a marzo 2026, vedi nota in Relazioni)</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>ingress-nginx<span class="w"> </span>deployment/ingress-nginx-controller<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"401\|unauthorized\|jwt"</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="c1"># Traefik: verificare configurazione forwardAuth</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>middleware<span class="w"> </span>jwt-auth<span class="w"> </span>-n<span class="w"> </span>default
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-429-too-many-requests-inatteso">Scenario 2 — 429 Too Many Requests inatteso<a class="headerlink" href="#scenario-2-429-too-many-requests-inatteso" title="Permanent link">&para;</a></h3>
@@ -25413,21 +25419,21 @@ Un <strong>API gateway</strong> combina routing applicativo con funzionalità di
 <hr />
 <h3 id="scenario-4-circuit-breaker-aperto-in-modo-persistente-stato-open-bloccato">Scenario 4 — Circuit Breaker aperto in modo persistente (stato OPEN bloccato)<a class="headerlink" href="#scenario-4-circuit-breaker-aperto-in-modo-persistente-stato-open-bloccato" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il backend è tornato healthy, ma il gateway continua a rispondere <code>503 Service Unavailable</code> e non invia traffico al servizio.</p>
-<p><strong>Causa:</strong> Il circuit breaker è in stato OPEN e il tempo di half-open non scatta per via di una configurazione <code>probe-interval</code> troppo alto, oppure le probe requests in HALF-OPEN continuano a fallire per un motivo diverso dal problema originale (es. timeout troppo basso per le probe).</p>
-<p><strong>Soluzione:</strong> Verificare lo stato del circuit breaker, aumentare il timeout delle probe, o forzare il reset manuale in emergenza.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Kong: verificare stato del circuit breaker via Admin API</span>
+<p><strong>Causa:</strong> Il target è marcato unhealthy (Kong: health check passivi/attivi sull'upstream; nginx: <code>max_fails</code>/<code>fail_timeout</code>; Traefik: middleware <code>circuitBreaker</code>) e il tempo di recupero non è scaduto (<code>fallbackDuration</code>/<code>recoveryDuration</code> in Traefik, <code>fail_timeout</code> in nginx, <code>healthy.interval</code> degli active check in Kong), oppure le richieste di prova continuano a fallire per un motivo diverso dal problema originale (es. timeout troppo basso, health check su path sbagliato).</p>
+<p><strong>Soluzione:</strong> Verificare lo stato del target, correggere il path/timeout dell'health check, o forzare il reset manuale in emergenza.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Kong: verificare stato dei target via Admin API</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:8001/upstreams/&lt;upstream-name&gt;/health<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.data[] | {address, health, unhealthy_count}'</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.data[] | {target, health}'</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1"># Forzare il reset di un target a "healthy" manualmente</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://localhost:8001/upstreams/&lt;upstream-name&gt;/targets/&lt;target&gt;/healthy
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1"># Forzare un target a "healthy" manualmente (POST, non PUT)</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8001/upstreams/&lt;upstream-name&gt;/targets/&lt;target&gt;/healthy
 </span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1"># Nginx: non ha circuit breaker nativo — usare ngx_http_upstream_module</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1"># Controllare numero di failed attempts accumulati</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1"># Nginx OSS: nessun circuit breaker vero, solo health check passivi</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1"># Controllare i parametri di failure accumulati</span>
 </span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>nginx<span class="w"> </span>-T<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'max_fails|fail_timeout'</span>
 </span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="c1"># Traefik: verificare stato circuit breaker (se abilitato)</span>
-</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:8080/api/http/middlewares<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.[] | select(.type=="CircuitBreaker")'</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="c1"># Traefik: verificare se il middleware CircuitBreaker è configurato</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:8080/api/http/middlewares<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.[] | select(.type=="circuitbreaker")'</span>
 </span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
@@ -25444,6 +25450,10 @@ Un <strong>API gateway</strong> combina routing applicativo con funzionalità di
 <summary>Service Mesh — Traffic management east-west</summary>
 <p>Il service mesh e l'API gateway si complementano.</p>
 <p><strong>Approfondimento →</strong> <a href="../../service-mesh/concetti-base/">Concetti Base Service Mesh</a></p>
+</details>
+<details class="info">
+<summary>Kubernetes Gateway API — successore di Ingress</summary>
+<p>Su Kubernetes l'API gateway si esprime oggi con la <strong>Gateway API</strong> (<code>Gateway</code>, <code>HTTPRoute</code>, GA dalla v1.0), implementata da Envoy Gateway, Kong, Traefik, Istio, NGINX Gateway Fabric. Separa i ruoli (infra: <code>Gateway</code>; team applicativi: <code>HTTPRoute</code>) e standardizza routing per header/path, traffic split e filtri. Il controller <code>ingress-nginx</code> è stato ritirato (marzo 2026): per nuove installazioni preferire Gateway API.</p>
 </details>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
