@@ -7,9 +7,9 @@ search_keywords: [CIS benchmark, CIS Kubernetes Benchmark, kube-bench, OpenSCAP,
 parent: security/compliance/_index
 related: [security/compliance/audit-logging, security/autorizzazione/opa, security/supply-chain/admission-control, security/runtime/falco, ci-cd/strategie/pipeline-security]
 official_docs: https://www.cisecurity.org/cis-benchmarks
-status: draft
+status: complete
 difficulty: advanced
-last_updated: 2026-10-02
+last_updated: 2026-10-03
 ---
 
 # CIS Benchmarks e Compliance Scanning
@@ -25,7 +25,7 @@ Questo è **hardening preventivo misurabile** e complementa gli altri strati del
 - [OPA](../autorizzazione/opa.md) e l'[admission control](../supply-chain/admission-control.md) bloccano risorse non conformi *al momento della richiesta* (admission-time);
 - i CIS Benchmark verificano la **configurazione statica** di nodi, control plane e host *prima* che qualcuno li attacchi.
 
-Si usa per: onboarding di nuovi nodi/cluster, evidenza per audit (PCI-DSS, ISO 27001, SOC 2, requisiti DISA), rilevamento di *configuration drift*. **Non** sostituisce vulnerability scanning (CVE) né runtime detection: un nodo 100% CIS-compliant può comunque eseguire un'immagine vulnerabile.
+Si usa per: onboarding di nuovi nodi/cluster, evidenza per audit (PCI-DSS = standard sicurezza carte di pagamento, ISO 27001 = gestione della sicurezza delle informazioni, SOC 2 = attestazione sui controlli dei fornitori di servizi, DISA = agenzia IT della difesa USA), rilevamento di *configuration drift*. **Non** sostituisce vulnerability scanning (CVE) né runtime detection: un nodo 100% CIS-compliant può comunque eseguire un'immagine vulnerabile.
 
 ## Concetti Chiave
 
@@ -312,7 +312,7 @@ sudo oscap xccdf eval \
 
 #### DISA STIG vs CIS
 
-Stessa macchina, profili diversi: `stig` applica le regole DISA (più restrittive, richieste in ambito difesa/gov), `cis_*_l1/l2` quelle CIS. I due insiemi **si sovrappongono ma non coincidono**: alcune regole sono in conflitto (es. valori di timeout, opzioni di mount). Si sceglie **un** profilo target per macchina, non si sommano.
+Stessa macchina, profili diversi: `stig` applica le regole DISA (più restrittive, richieste in ambito difesa/gov), `cis_*_l1/l2` quelle CIS. I due insiemi **si sovrappongono ma non coincidono**: alcune regole sono in conflitto (es. valori di timeout, opzioni di mount). Si sceglie **un** profilo target per macchina, non si sommano: applicarli entrambi significherebbe imporre valori contraddittori sulla stessa opzione.
 
 #### Remediation
 
