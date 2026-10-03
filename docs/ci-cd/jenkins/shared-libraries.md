@@ -7,9 +7,10 @@ search_keywords: [Jenkins Shared Libraries, Global Shared Library, Jenkins vars,
 parent: ci-cd/jenkins/_index
 related: [ci-cd/jenkins/pipeline-fundamentals, ci-cd/jenkins/enterprise-patterns]
 official_docs: https://www.jenkins.io/doc/book/pipeline/shared-libraries/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Jenkins Shared Libraries
@@ -66,7 +67,11 @@ unclassified:
         implicit: false               # false = deve essere dichiarata nel Jenkinsfile
                                       # true  = automaticamente disponibile in tutte le pipeline
         allowVersionOverride: true    # permette @Library('name@branch') nel Jenkinsfile
-        includeInChangesets: false    # non triggera build su cambiamento library
+        includeInChangesets: false    # i commit della library NON compaiono nei changeset delle build
+                                      # (non triggera build: serve polling/webhook separato)
+        cachingConfiguration:         # opzionale: cache sul controller (default: nessuna cache, fetch a ogni build)
+          refreshTimeMinutes: 60
+          excludedVersionsStr: "main feature/"   # versioni mai in cache (branch mobili)
         retriever:
           modernSCM:
             scm:
@@ -226,7 +231,7 @@ def call(Map config, Closure body = null) {
         agent {
             kubernetes {
                 inheritFrom config.agentLabel
-                yaml libraryResource('pod-templates/standard.yaml')
+                yaml libraryResource('com/company/jenkins/pod-template-standard.yaml')
             }
         }
 
@@ -258,8 +263,11 @@ def call(Map config, Closure body = null) {
                 }
                 post {
                     always {
-                        if (config.junitPattern) {
-                            junit(testResults: config.junitPattern, allowEmptyResults: true)
+                        // Declarative non ammette 'if' nudo: serve script { }
+                        script {
+                            if (config.junitPattern) {
+                                junit(testResults: config.junitPattern, allowEmptyResults: true)
+                            }
                         }
                     }
                 }
@@ -559,13 +567,11 @@ class NotifySlackTest extends BasePipelineTest {
 ```groovy
 // build.gradle (Shared Library project)
 dependencies {
+    // BasePipelineTest è basato su JUnit 4 (org.junit.Test): niente useJUnitPlatform()
+    // senza junit-vintage-engine. Verificare l'ultima versione su Maven Central.
     testImplementation 'com.lesfurets:jenkins-pipeline-unit:1.21'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
+    testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.assertj:assertj-core:3.24.2'
-}
-
-test {
-    useJUnitPlatform()
 }
 ```
 
@@ -597,7 +603,7 @@ test {
 **Soluzione:** Verificare che la library sia dichiarata nel Jenkinsfile e che il branch/tag esista nel repository remoto. Controllare che il nome file in `vars/` corrisponda esattamente al nome dello step chiamato (case-sensitive).
 
 ```groovy
-// Verifica la dichiarazione — deve essere la prima riga del Jenkinsfile
+// Verifica la dichiarazione — @Library va prima di import e pipeline {}
 @Library('company-pipeline-lib@v2.3.1') _
 
 // Verifica che il tag esista nel repo della library
@@ -635,23 +641,24 @@ def parseJson(String text) {
 
 **Sintomo:** Dopo aver fatto un commit sulla library, le pipeline continuano a usare il vecchio codice.
 
-**Causa:** Jenkins cachea le Shared Libraries. Se la pipeline usa un branch (es. `@Library('lib@main')`), Jenkins non aggiorna automaticamente la cache ad ogni build.
+**Causa:** Di solito (a) è attiva l'opzione *Cache fetched versions on controller* con `refreshTimeMinutes` alto: la versione resta in cache finché non scade; (b) la pipeline punta a un **tag** già pubblicato (i tag sono immutabili per convenzione: se lo sposti, il controller può servire il vecchio commit); (c) si sta usando *Replay* o un build già avviato: la versione della library è fissata a inizio build.
 
-**Soluzione:** Forzare il refresh della cache dalla UI di Jenkins, oppure usare tag SemVer in produzione (i tag non vengono cachati allo stesso modo). In sviluppo, abilitare il fetch automatico.
+**Soluzione:** Su branch di sviluppo escludere la versione dalla cache o ridurre il refresh; in produzione non spostare mai un tag, pubblicarne uno nuovo.
 
 ```bash
-# Opzione 1: Forza il refresh dalla UI Jenkins
-# Manage Jenkins → Global Tool Configuration → Shared Libraries → "Clear cache"
+# Opzione 1: UI Jenkins
+# Manage Jenkins → System → Global Trusted Pipeline Libraries → Library
+#   → "Cache fetched versions on controller": disattiva, o abbassa "Refresh time"
+#   (JCasC: cachingConfiguration.refreshTimeMinutes / excludedVersionsStr)
 
-# Opzione 2: Configura polling SCM nella library (JCasC)
-# Aggiungere nella config della library:
-#   includeInChangesets: true
-
-# Opzione 3: Usare tag SemVer — ogni tag è univoco, nessun caching problem
+# Opzione 2: Tag nuovo, mai riscritto
 git tag v2.4.0
 git push origin v2.4.0
 # Nel Jenkinsfile: @Library('lib@v2.4.0') _
 ```
+
+!!! note "Trusted vs sandbox"
+    Le library globali (Manage Jenkins) sono **trusted**: girano senza Script Security sandbox e possono chiamare API Jenkins/Java arbitrarie, quindi il repo va protetto come infrastruttura. Le library a livello Folder/Job sono eseguite nel sandbox.
 
 ---
 
