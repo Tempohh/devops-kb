@@ -5422,7 +5422,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -5447,7 +5447,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -25597,9 +25597,18 @@
 - Throughput limitato a 250 MB/s</p>
 <p><strong>gp3:</strong>
 - IOPS <strong>separati dalla dimensione</strong>: baseline 3.000 IOPS (gratis, indipendentemente dal size)
-- IOPS configurabili fino a 16.000 IOPS aggiuntivi a pagamento ($0.005/IOPS provisioned sopra i 3.000)
-- Throughput configurabile fino a 1.000 MB/s
-- Sempre più economico di gp2 a parità di prestazioni</p>
+- IOPS configurabili a pagamento oltre i 3.000 inclusi ($0.005/IOPS provisioned sopra i 3.000), fino a 16.000 IOPS totali nella tabella sopra
+- Throughput: baseline 125 MB/s incluso, configurabile a pagamento fino a 1.000 MB/s
+- Il rapporto IOPS/GB è limitato (max 500 IOPS per GB provisioned)</p>
+<!-- REVIEW: AWS ha annunciato nel 2025 limiti gp3 più alti (fino a 64 TiB, 80.000 IOPS, 2.000 MiB/s). Verificare su docs.aws.amazon.com/ebs/latest/userguide/general-purpose.html e aggiornare tabella tipi volume -->
+
+<div class="admonition note">
+<p class="admonition-title">Come si ottiene la performance</p>
+<p>Su gp2 le IOPS dipendono dalla dimensione perché il volume accumula crediti burst in un bucket (BurstBalance) proporzionale ai GB. gp3 elimina il bucket: IOPS e throughput sono provisioned indipendentemente dalla capacità, quindi la performance è prevedibile e non esiste più il rischio di esaurire il burst.</p>
+</div>
+<ul>
+<li>Sempre più economico di gp2 a parità di prestazioni</li>
+</ul>
 <div class="admonition tip">
 <p class="admonition-title">Migra da gp2 a gp3</p>
 <p>gp3 offre sempre performance uguali o migliori a costo inferiore rispetto a gp2. La migrazione è online (no downtime) tramite Elastic Volumes.</p>
@@ -25632,12 +25641,14 @@
 </span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">  </span>--device<span class="w"> </span>/dev/xvdf
 </span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>
 </span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="c1"># Dopo l'attach, formattare e montare (su Linux)</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>lsblk
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>sudo<span class="w"> </span>mkfs<span class="w"> </span>-t<span class="w"> </span>xfs<span class="w"> </span>/dev/xvdf
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>sudo<span class="w"> </span>mkdir<span class="w"> </span>/data
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>sudo<span class="w"> </span>mount<span class="w"> </span>/dev/xvdf<span class="w"> </span>/data
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="c1"># Per mount persistente al reboot</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">'/dev/xvdf /data xfs defaults,nofail 0 2'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>-a<span class="w"> </span>/etc/fstab
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="c1"># Su istanze Nitro il device appare come /dev/nvme1n1, non /dev/xvdf: verificare con lsblk</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>lsblk
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>sudo<span class="w"> </span>mkfs<span class="w"> </span>-t<span class="w"> </span>xfs<span class="w"> </span>/dev/nvme1n1
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>sudo<span class="w"> </span>mkdir<span class="w"> </span>/data
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>sudo<span class="w"> </span>mount<span class="w"> </span>/dev/nvme1n1<span class="w"> </span>/data
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="c1"># Per mount persistente al reboot usare l'UUID (i nomi device NVMe possono cambiare tra reboot)</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="nv">UUID</span><span class="o">=</span><span class="k">$(</span>sudo<span class="w"> </span>blkid<span class="w"> </span>-s<span class="w"> </span>UUID<span class="w"> </span>-o<span class="w"> </span>value<span class="w"> </span>/dev/nvme1n1<span class="k">)</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"UUID=</span><span class="nv">$UUID</span><span class="s2"> /data xfs defaults,nofail 0 2"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>-a<span class="w"> </span>/etc/fstab
 </span></code></pre></div>
 <h3 id="multi-attach-io1io2">Multi-Attach (io1/io2)<a class="headerlink" href="#multi-attach-io1io2" title="Permanent link">&para;</a></h3>
 <p>I volumi io1 e io2 (non gp3/gp2) supportano Multi-Attach: lo stesso volume può essere attaccato a <strong>più istanze EC2 contemporaneamente nella stessa AZ</strong> (fino a 16 istanze).</p>
@@ -25742,8 +25753,8 @@
 </span></code></pre></div>
 <h3 id="cifratura-ebs">Cifratura EBS<a class="headerlink" href="#cifratura-ebs" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Tutti i dati a riposo sono cifrati con AES-256 tramite AWS KMS</li>
-<li>Tutti i dati in transito tra l'istanza e il volume sono cifrati</li>
+<li>La cifratura è <strong>opt-in</strong> per volume (o per default a livello account/Region, vedi sotto): i volumi cifrati usano AES-256 tramite AWS KMS</li>
+<li>Su un volume cifrato sono cifrati dati a riposo, dati in transito tra istanza e volume, snapshot e volumi derivati (sulle istanze supportate)</li>
 <li>Snapshot di volumi cifrati sono automaticamente cifrati</li>
 <li>Volumi creati da snapshot cifrati sono automaticamente cifrati</li>
 <li>Si può abilitare la cifratura di default a livello account/Region</li>
@@ -25793,15 +25804,15 @@
 <h3 id="performance-modes">Performance Modes<a class="headerlink" href="#performance-modes" title="Permanent link">&para;</a></h3>
 <p><strong>General Purpose (default):</strong>
 - Latenza più bassa (sub-ms per operazioni metadata)
-- Max 35.000 IOPS
-- Uso raccomanato per la maggior parte dei workload: web server, CMS, container</p>
-<p><strong>Max I/O:</strong>
-- Throughput aggregato più alto
-- Latenza più alta (~10ms)
-- Progettato per workload massivamente paralleli: HPC, big data analytics, media processing</p>
+- Max 35.000 IOPS con throughput Bursting/Provisioned (con Elastic i limiti IOPS sono molto più alti)
+- Uso raccomandato per la maggior parte dei workload: web server, CMS, container</p>
+<p><strong>Max I/O (legacy):</strong>
+- Throughput aggregato più alto, a scapito della latenza (più alta)
+- Progettato per workload massivamente paralleli: HPC, big data analytics, media processing
+- <strong>Non supportato</strong> con Elastic throughput né con i file system One Zone</p>
 <div class="admonition note">
 <p class="admonition-title">General Purpose vs Max I/O</p>
-<p>Il 99% dei workload funziona bene con General Purpose. Max I/O è necessario solo per applicazioni con migliaia di thread che accedono al file system contemporaneamente (es. cluster HPC con 1.000+ nodi).</p>
+<p>AWS raccomanda General Purpose per tutti i workload: con Elastic throughput elimina quasi sempre la necessità di Max I/O. Il performance mode si sceglie solo alla creazione e non è modificabile dopo.</p>
 </div>
 <h3 id="throughput-modes">Throughput Modes<a class="headerlink" href="#throughput-modes" title="Permanent link">&para;</a></h3>
 <table>
@@ -25815,21 +25826,27 @@
 <tbody>
 <tr>
 <td><strong>Bursting</strong> (legacy)</td>
-<td>Throughput proporzionale allo storage (1 MB/s per TB) con burst; legato alla dimensione</td>
-<td>File system piccoli con accesso intermittente</td>
+<td>Baseline proporzionale allo storage (50 MiB/s per TiB) con burst a crediti; legato alla dimensione</td>
+<td>File system grandi con accesso intermittente</td>
 </tr>
 <tr>
 <td><strong>Provisioned</strong></td>
-<td>Throughput fisso indipendentemente dallo storage</td>
+<td>Throughput fisso indipendentemente dallo storage, pagato a parte</td>
 <td>Throughput prevedibile richiesto, storage piccolo</td>
 </tr>
 <tr>
 <td><strong>Elastic</strong> (raccomandato)</td>
-<td>Scale automatico in base al workload, fino a 3 GB/s write / 10 GB/s read</td>
-<td>Workload variabile, cloud-native</td>
+<td>Scale automatico in base al workload; si paga il throughput effettivamente usato</td>
+<td>Workload variabile/imprevedibile, cloud-native</td>
 </tr>
 </tbody>
 </table>
+<!-- REVIEW: verificare limiti correnti Elastic per file system (AWS ha alzato i limiti nel 2024: fino a 20 GiB/s read e 5 GiB/s write nelle Region principali) -->
+
+<div class="admonition tip">
+<p class="admonition-title">Elastic vs Provisioned</p>
+<p>Elastic costa per GB trasferito: conviene se l'utilizzo medio è sotto circa il 5% del picco. Con carico alto e costante Provisioned può costare meno.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Cambiare throughput mode a Elastic</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>aws<span class="w"> </span>efs<span class="w"> </span>update-file-system<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--file-system-id<span class="w"> </span>fs-1234567890<span class="w"> </span><span class="se">\</span>
@@ -25866,7 +25883,7 @@
 </tr>
 </tbody>
 </table>
-<p><em>Costo di retrieval per IA: $0.01/GB. Prezzi us-east-1.</em></p>
+<p><em>Costo di retrieval per IA: $0.01/GB. Prezzi us-east-1. Esistono anche le classi One Zone (singola AZ, ~47% più economiche) per dati ricreabili. L'Archive richiede throughput Elastic o Provisioned.</em></p>
 <p><strong>EFS Lifecycle Management:</strong> transizione automatica tra tieri in base all'ultimo accesso.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Configurare lifecycle per EFS</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>aws<span class="w"> </span>efs<span class="w"> </span>put-lifecycle-configuration<span class="w"> </span><span class="se">\</span>
@@ -25880,19 +25897,22 @@
 <h3 id="mount-via-amazon-efs-utils">Mount via amazon-efs-utils<a class="headerlink" href="#mount-via-amazon-efs-utils" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Installare il mount helper</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>sudo<span class="w"> </span>yum<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>amazon-efs-utils<span class="w">  </span><span class="c1"># Amazon Linux</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>sudo<span class="w"> </span>apt-get<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>amazon-efs-utils<span class="w">  </span><span class="c1"># Ubuntu/Debian</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Montare il file system (con TLS — raccomandato)</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>sudo<span class="w"> </span>mount<span class="w"> </span>-t<span class="w"> </span>efs<span class="w"> </span>-o<span class="w"> </span>tls<span class="w"> </span>fs-1234567890:/<span class="w"> </span>/mnt/efs
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Ubuntu/Debian: il pacchetto non è nei repository ufficiali, va compilato (.deb) dal repo aws/efs-utils su GitHub</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># In alternativa montare con il client NFS standard (senza TLS):</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># sudo apt-get install -y nfs-common</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport fs-1234567890.efs.us-east-1.amazonaws.com:/ /mnt/efs</span>
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># Mount specifico AZ (per latenza ottimale)</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>sudo<span class="w"> </span>mount<span class="w"> </span>-t<span class="w"> </span>efs<span class="w"> </span>-o<span class="w"> </span>tls,az<span class="o">=</span>us-east-1a<span class="w"> </span>fs-1234567890:/<span class="w"> </span>/mnt/efs
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># Montare il file system (con TLS — raccomandato)</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>sudo<span class="w"> </span>mount<span class="w"> </span>-t<span class="w"> </span>efs<span class="w"> </span>-o<span class="w"> </span>tls<span class="w"> </span>fs-1234567890:/<span class="w"> </span>/mnt/efs
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># Mount permanente in /etc/fstab</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">'fs-1234567890:/ /mnt/efs efs defaults,_netdev,tls 0 0'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>-a<span class="w"> </span>/etc/fstab
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># Mount specifico AZ (per latenza ottimale)</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>sudo<span class="w"> </span>mount<span class="w"> </span>-t<span class="w"> </span>efs<span class="w"> </span>-o<span class="w"> </span>tls,az<span class="o">=</span>us-east-1a<span class="w"> </span>fs-1234567890:/<span class="w"> </span>/mnt/efs
 </span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="c1"># Mount con Access Point</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>sudo<span class="w"> </span>mount<span class="w"> </span>-t<span class="w"> </span>efs<span class="w"> </span>-o<span class="w"> </span>tls,accesspoint<span class="o">=</span>fsap-1234567890<span class="w"> </span>fs-1234567890:/<span class="w"> </span>/mnt/efs-app
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="c1"># Mount permanente in /etc/fstab</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">'fs-1234567890:/ /mnt/efs efs defaults,_netdev,tls 0 0'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>-a<span class="w"> </span>/etc/fstab
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="c1"># Mount con Access Point</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>sudo<span class="w"> </span>mount<span class="w"> </span>-t<span class="w"> </span>efs<span class="w"> </span>-o<span class="w"> </span>tls,accesspoint<span class="o">=</span>fsap-1234567890<span class="w"> </span>fs-1234567890:/<span class="w"> </span>/mnt/efs-app
 </span></code></pre></div>
 <h3 id="efs-access-points">EFS Access Points<a class="headerlink" href="#efs-access-points" title="Permanent link">&para;</a></h3>
 <p>Gli Access Points forniscono entry point applicativi al file system con: path radice configurabile, UID/GID forzati (i client vedono un user specifico), isolamento tra applicazioni.</p>
@@ -25955,7 +25975,11 @@
 - <strong>Integrazione nativa con S3</strong>: i file S3 appaiono come file nel file system Lustre; le scritture possono essere sincronizzate indietro su S3
 - Deployment types:
   - <strong>Scratch</strong> (temporaneo, no replication, altissima performance, economico): HPC jobs che non necessitano di persistenza
-  - <strong>Persistent</strong> (replicato su 2 server, tolleranza ai guasti): workload ML con dati persistenti</p>
+  - <strong>Persistent</strong> (dati replicati all'interno della stessa AZ, file server sostituiti automaticamente): workload ML con dati persistenti</p>
+<div class="admonition warning">
+<p class="admonition-title">Solo singola AZ</p>
+<p>FSx for Lustre vive sempre in una sola AZ: in caso di perdita dell'AZ i dati persistent non sono disponibili. Per DR usare backup o export su S3.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Creare FSx for Lustre collegato a S3</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>aws<span class="w"> </span>fsx<span class="w"> </span>create-file-system<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>--file-system-type<span class="w"> </span>LUSTRE<span class="w"> </span><span class="se">\</span>
@@ -25966,15 +25990,23 @@
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="s1">    "ExportPath": "s3://my-ml-data/results/",</span>
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="s1">    "DeploymentType": "PERSISTENT_2",</span>
 </span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="s1">    "PerUnitStorageThroughput": 250,</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="s1">    "DataCompressionType": "LZ4",</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="s1">    "AutoImportPolicy": "NEW_CHANGED_DELETED"</span>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="s1">  }'</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>
-</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="c1"># Montare FSx for Lustre su un'istanza EC2</span>
-</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>sudo<span class="w"> </span>amazon-linux-extras<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>lustre
-</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>sudo<span class="w"> </span>mount<span class="w"> </span>-t<span class="w"> </span>lustre<span class="w"> </span>-o<span class="w"> </span>relatime,flock<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="w">  </span>fs-1234567890.fsx.us-east-1.amazonaws.com@tcp:/fsx<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="w">  </span>/mnt/fsx
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="s1">    "DataCompressionType": "LZ4"</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="s1">  }'</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="c1"># Per PERSISTENT_2 il link a S3 si crea con una Data Repository Association</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="c1"># (ImportPath/ExportPath nel create-file-system valgono solo per SCRATCH_1/SCRATCH_2/PERSISTENT_1)</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>aws<span class="w"> </span>fsx<span class="w"> </span>create-data-repository-association<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="w">  </span>--file-system-id<span class="w"> </span>fs-1234567890<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="w">  </span>--file-system-path<span class="w"> </span>/datasets<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="w">  </span>--data-repository-path<span class="w"> </span>s3://my-ml-data/datasets/<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="w">  </span>--s3<span class="w"> </span><span class="s1">'{"AutoImportPolicy":{"Events":["NEW","CHANGED","DELETED"]},"AutoExportPolicy":{"Events":["NEW","CHANGED","DELETED"]}}'</span>
+</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a>
+</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="c1"># Montare FSx for Lustre su un'istanza EC2 (Amazon Linux 2023)</span>
+</span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a>sudo<span class="w"> </span>dnf<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>lustre-client
+</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="c1"># &lt;mount-name&gt; si ottiene da: aws fsx describe-file-systems (LustreConfiguration.MountName)</span>
+</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a>sudo<span class="w"> </span>mount<span class="w"> </span>-t<span class="w"> </span>lustre<span class="w"> </span>-o<span class="w"> </span>relatime,flock<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="w">  </span>fs-1234567890.fsx.us-east-1.amazonaws.com@tcp:/&lt;mount-name&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a><span class="w">  </span>/mnt/fsx
 </span></code></pre></div>
 <h3 id="fsx-for-netapp-ontap">FSx for NetApp ONTAP<a class="headerlink" href="#fsx-for-netapp-ontap" title="Permanent link">&para;</a></h3>
 <p>File system enterprise basato su NetApp ONTAP managed da AWS. Il più versatile: supporta NFS, SMB, iSCSI (Internet Small Computer System Interface) contemporaneamente, con feature enterprise come deduplica, compressione, thin provisioning.</p>
@@ -25984,7 +26016,8 @@
 - Thin provisioning (allocazione virtuale)
 - SnapMirror: replica ONTAP verso ONTAP (on-premises a FSx ONTAP)
 - FlexClone: cloni istantanei di volumi (utili per test/dev)
-- Scalabilità: storage capacity fino a 192 TB per storage virtual machine (SVM)
+- Scalabilità: tier SSD fino a centinaia di TiB per file system più un capacity pool tier (storage a oggetti, economico) per i dati freddi
+- Le SVM (Storage Virtual Machine) sono i contenitori logici di volumi, con endpoint e credenziali admin propri
 - Use case: lift &amp; shift di applicazioni enterprise NetApp, SAP, Oracle</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Creare FSx for NetApp ONTAP</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>aws<span class="w"> </span>fsx<span class="w"> </span>create-file-system<span class="w"> </span><span class="se">\</span>
@@ -25997,18 +26030,30 @@
 </span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="s1">    "AutomaticBackupRetentionDays": 30,</span>
 </span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="s1">    "PreferredSubnetId": "subnet-1234567890",</span>
 </span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="s1">    "RouteTableIds": ["rtb-1234567890"],</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="s1">    "FsxAdminPassword": "SecurePassword123!"</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="s1">    "FsxAdminPassword": "&lt;password-da-secrets-manager&gt;"</span>
 </span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="s1">  }'</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Password admin</p>
+<p>Non scrivere la password <code>fsxadmin</code> in chiaro nella shell history o negli script: recuperarla da Secrets Manager. <!-- REVIEW: verificare limiti capacità correnti ONTAP (scale-out Gen2) e protocolli (NVMe/TCP) --></p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Nota</p>
+<p>FSx for ONTAP ha come riferimento il tool NetApp per la replica: <strong>SnapMirror</strong> replica ONTAP→ONTAP (non verso S3).</p>
+</div>
 <h3 id="fsx-for-openzfs">FSx for OpenZFS<a class="headerlink" href="#fsx-for-openzfs" title="Permanent link">&para;</a></h3>
 <p>File system ZFS managed ad alte performance. Snapshot istantanei, cloni, compressione nativa.</p>
 <p><strong>Caratteristiche:</strong>
-- Throughput fino a 12,5 GB/s, IOPS fino a 1 milione
-- NFS v3 e v4.x
-- Snapshot istantanei (zero-copy), cloni da snapshot
-- Compressione Z-Standard
-- Deployment: Single-AZ (ottimizzato per performance) o Multi-AZ
-- Use case: database analitici, data science, applicazioni POSIX ad alta performance</p>
+- Throughput nell'ordine di 10+ GB/s, IOPS fino a 1 milione (i limiti variano per deployment type)
+- NFS v3 e v4.x</p>
+<!-- REVIEW: verificare limiti correnti per Single-AZ/Multi-AZ e supporto di protocolli aggiuntivi (SMB/iSCSI) -->
+
+<ul>
+<li>Snapshot istantanei (zero-copy), cloni da snapshot</li>
+<li>Compressione Z-Standard</li>
+<li>Deployment: Single-AZ (ottimizzato per performance) o Multi-AZ</li>
+<li>Use case: database analitici, data science, applicazioni POSIX ad alta performance</li>
+</ul>
 <h3 id="confronto-fsx">Confronto FSx<a class="headerlink" href="#confronto-fsx" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -26046,13 +26091,13 @@
 <td>S3 Integration</td>
 <td>No</td>
 <td>Nativa</td>
-<td>Via SnapMirror</td>
+<td>Indiretta (es. DataSync)</td>
 <td>No</td>
 </tr>
 <tr>
 <td>Multi-AZ</td>
 <td>Sì</td>
-<td>Persistent only</td>
+<td>No (solo singola AZ)</td>
 <td>Sì</td>
 <td>Sì</td>
 </tr>
@@ -26092,6 +26137,10 @@
 - Per ambienti che devono mantenere tutti i dati on-premises</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>On-premises (iSCSI client) → Volume Gateway → S3/EBS Snapshots
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">FSx File Gateway</p>
+<p>Il tipo <em>Amazon FSx File Gateway</em> (cache locale verso FSx for Windows) non è più disponibile ai nuovi clienti dal 2024: per nuovi progetti usare File Gateway verso S3 o accesso diretto a FSx via Direct Connect/VPN.</p>
+</div>
 <h3 id="tape-gateway">Tape Gateway<a class="headerlink" href="#tape-gateway" title="Permanent link">&para;</a></h3>
 <p>Emula una Virtual Tape Library (VTL) iSCSI. Le applicazioni di backup (Veeam, Backup Exec, NetBackup) scrivono su nastri virtuali che vengono archiviati su S3 o S3 Glacier.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>Backup Software → Tape Gateway (VTL) → S3 / S3 Glacier
@@ -26100,8 +26149,12 @@
 <hr />
 <h2 id="aws-snow-family">AWS Snow Family<a class="headerlink" href="#aws-snow-family" title="Permanent link">&para;</a></h2>
 <p>La Snow Family è una suite di dispositivi fisici per il trasferimento di dati offline e per l'edge computing in location senza connettività affidabile.</p>
+<div class="admonition warning">
+<p class="admonition-title">Disponibilità ridotta</p>
+<p>AWS ha chiuso ai nuovi clienti Snowcone (novembre 2024) e Snowball Edge (novembre 2025); Snowmobile non è più offerto. Per nuove migrazioni usare AWS DataSync, AWS Transfer Family, Direct Connect o Data Transfer Terminal. Le sezioni seguenti restano come riferimento per clienti esistenti e per l'esame di certificazione. <!-- REVIEW: verificare date e stato esatto di ogni dispositivo su docs.aws.amazon.com/snowball (availability change) --></p>
+</div>
 <p><strong>Quando usare Snow invece di trasferimento via Internet:</strong>
-- Quantità di dati &gt; 10 TB (con connessione a 1 Gbps il trasferimento prenderebbe &gt; 1 giorno)
+- Quantità di dati &gt; 10 TB (con connessione a 1 Gbps il trasferimento prende circa 1 giorno, e la banda è raramente dedicata al 100%)
 - Connettività limitata o inaffidabile
 - Necessità di elaborazione edge in ambienti remoti (navi, miniere, zone di conflitto)</p>
 <h3 id="snowcone">Snowcone<a class="headerlink" href="#snowcone" title="Permanent link">&para;</a></h3>
@@ -26204,20 +26257,22 @@
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>2. AWS spedisce il dispositivo
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>3. Collegare al network on-premises
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>4. Copiare dati (NFS, S3 compatible endpoint, SMB)
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>   - Snowball Client: aws snowball cp per trasferimenti
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>   - Endpoint S3-compatible del dispositivo con AWS CLI
 </span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>   - AWS OpsHub: GUI per gestione dispositivo
-</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>5. Rispedire il dispositivo ad AWS
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>5. Rispedire il dispositivo ad AWS (l'etichetta di spedizione E Ink si aggiorna da sola)
 </span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>6. AWS carica i dati su S3
-</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>7. AWS cancella il dispositivo (certificazione E-Ink)
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>7. AWS cancella i dati dal dispositivo secondo lo standard NIST 800-88
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Usare la CLI per copiare su Snowball (tramite manifest e unlock code ricevuti via email)</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>snowball<span class="w"> </span>cp<span class="w"> </span>/local/data/<span class="w"> </span>s3://my-bucket/data/<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span>--profile<span class="w"> </span>snowball
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="c1"># Copiare su Snowcone via DataSync</span>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>aws<span class="w"> </span>datasync<span class="w"> </span>create-task<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">  </span>--source-location-arn<span class="w"> </span>arn:aws:datasync:us-east-1:123456789012:location/loc-snowcone<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="w">  </span>--destination-location-arn<span class="w"> </span>arn:aws:datasync:us-east-1:123456789012:location/loc-s3
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Copiare su Snowball Edge via endpoint S3-compatible (credenziali ottenute con snowballEdge unlock-device / list-access-keys)</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>aws<span class="w"> </span>s3<span class="w"> </span>cp<span class="w"> </span>/local/data/<span class="w"> </span>s3://my-bucket/data/<span class="w"> </span>--recursive<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span>--endpoint-url<span class="w"> </span>https://192.0.2.10:8443<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span>--ca-bundle<span class="w"> </span>snowball-ca.pem<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">  </span>--profile<span class="w"> </span>snowballEdge
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># Copiare su Snowcone via DataSync</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>aws<span class="w"> </span>datasync<span class="w"> </span>create-task<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">  </span>--source-location-arn<span class="w"> </span>arn:aws:datasync:us-east-1:123456789012:location/loc-snowcone<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">  </span>--destination-location-arn<span class="w"> </span>arn:aws:datasync:us-east-1:123456789012:location/loc-s3
 </span></code></pre></div>
 <hr />
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
@@ -26254,7 +26309,7 @@
 <h3 id="efs-errore-di-mount-connection-timed-out">EFS: Errore di Mount "Connection Timed Out"<a class="headerlink" href="#efs-errore-di-mount-connection-timed-out" title="Permanent link">&para;</a></h3>
 <ol>
 <li>Verificare Security Group del mount target (porta 2049 NFS deve essere aperta dall'istanza EC2)</li>
-<li>Verificare che l'istanza sia nella stessa VPC del file system</li>
+<li>Verificare che l'istanza abbia routing verso il mount target (stessa VPC, oppure peering/Transit Gateway/VPN/Direct Connect) e che il DNS risolva il mount target</li>
 <li>Verificare che il mount helper <code>amazon-efs-utils</code> sia installato</li>
 </ol>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Debug connessione NFS</span>
