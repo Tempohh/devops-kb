@@ -21241,7 +21241,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21901,7 +21901,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21926,7 +21926,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22048,6 +22048,17 @@
     <span class="md-ellipsis">
       
         Rotazione certificati mTLS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alternative-al-sidecar-modalita-sidecar-less" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alternative al sidecar: modalità sidecar-less
       
     </span>
   </a>
@@ -24639,6 +24650,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#alternative-al-sidecar-modalita-sidecar-less" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alternative al sidecar: modalità sidecar-less
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -24900,7 +24922,7 @@
 <p>Questo argomento presuppone familiarità con:
 - <a href="../../fondamentali/tcpip/">TCP/IP</a> — modello di rete, cos'è un pacchetto, come funziona il routing
 - <a href="../../fondamentali/tls-ssl-basics/">TLS/SSL Basics</a> — TLS handshake, certificati, mutual TLS (mTLS)
-- Kubernetes di base — pod, container, namespace, Service (documentazione non ancora presente in questa KB)</p>
+- Kubernetes di base — pod, container, namespace, Service (<a href="../../../containers/kubernetes/workloads/">Workloads</a>, <a href="../../../containers/kubernetes/networking/">Networking</a>)</p>
 <p>Senza questi concetti, alcune sezioni potrebbero risultare difficili da contestualizzare.</p>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <div class="admonition note">
@@ -24950,7 +24972,7 @@
 </tr>
 <tr>
 <td><strong>Observability</strong></td>
-<td>Distributed tracing, golden metrics (latency, errors, saturation) automatici</td>
+<td>Distributed tracing, golden metrics (latency, traffic/request rate, errors) automatici per ogni servizio</td>
 </tr>
 <tr>
 <td><strong>Service discovery</strong></td>
@@ -24996,18 +25018,30 @@
     app_c -- "localhost" --&gt; proxy_c</code></pre>
 <h3 id="sidecar-injection">Sidecar Injection<a class="headerlink" href="#sidecar-injection" title="Permanent link">&para;</a></h3>
 <p>Il sidecar proxy viene iniettato automaticamente nei Pod tramite un <strong>Mutating Admission Webhook</strong> — un'estensione dell'API Kubernetes che intercetta le richieste di creazione degli oggetti e può modificarli prima che vengano salvati in etcd. Quando un Pod viene creato in un namespace con la label <code>istio-injection: enabled</code> (o equivalente), il control plane intercetta la richiesta all'API Server e modifica la specifica del Pod per aggiungere il container sidecar e un init container.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Abilitare sidecar injection su un namespace</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="l l-Scalar l-Scalar-Plain">kubectl label namespace production istio-injection=enabled</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="l l-Scalar l-Scalar-Plain"># Oppure su singolo Pod/Deployment con annotation</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="l l-Scalar l-Scalar-Plain">metadata</span><span class="p p-Indicator">:</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="nt">sidecar.istio.io/inject</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Abilitare sidecar injection su un namespace</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>production<span class="w"> </span>istio-injection<span class="o">=</span>enabled
+</span></code></pre></div>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Oppure su singolo Pod/Deployment con annotation</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># (nel pod template: spec.template.metadata)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">sidecar.istio.io/inject</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
 </span></code></pre></div>
 <h3 id="intercettazione-del-traffico">Intercettazione del traffico<a class="headerlink" href="#intercettazione-del-traffico" title="Permanent link">&para;</a></h3>
 <p>L'init container configura regole <strong>iptables</strong> che reindirizzano tutto il traffico in ingresso (porta 15006) e in uscita (porta 15001) attraverso il proxy Envoy. L'applicazione non sa nulla di questo: continua a fare richieste a <code>http://service-b:8080</code> come se parlasse direttamente al servizio.</p>
 <h3 id="rotazione-certificati-mtls">Rotazione certificati mTLS<a class="headerlink" href="#rotazione-certificati-mtls" title="Permanent link">&para;</a></h3>
 <p>Il control plane agisce da <strong>Certificate Authority (CA)</strong>. Ad ogni sidecar viene emesso un certificato <strong>SVID</strong> (SPIFFE Verifiable Identity Document) con identità basata sul service account Kubernetes. <strong>SPIFFE</strong> (Secure Production Identity Framework for Everyone) è lo standard open per assegnare identità crittografiche ai workload in ambienti distribuiti, indipendentemente dall'infrastruttura sottostante. I certificati vengono ruotati automaticamente (tipicamente ogni 24h) senza downtime.</p>
+<h3 id="alternative-al-sidecar-modalita-sidecar-less">Alternative al sidecar: modalità sidecar-less<a class="headerlink" href="#alternative-al-sidecar-modalita-sidecar-less" title="Permanent link">&para;</a></h3>
+<p>Il modello sidecar ha costi noti: ogni Pod paga CPU/RAM del proxy, l'injection richiede il restart dei workload per aggiornare il proxy, e l'init container con iptables complica job e startup ordering. Per questo l'ecosistema si è evoluto verso modelli <strong>sidecar-less</strong>:</p>
+<ul>
+<li><strong>Istio Ambient mode</strong> (GA da Istio 1.24, novembre 2024): il data plane si divide in due livelli. Un <strong>ztunnel</strong> per nodo (DaemonSet, scritto in Rust) gestisce solo L4: mTLS, identità, autorizzazione base, tunnel <strong>HBONE</strong> (HTTP/2 CONNECT su porta 15008). Un <strong>waypoint proxy</strong> (Envoy) per namespace o servizio, opzionale, aggiunge le funzioni L7 (routing, retry, policy HTTP) solo dove servono. Si abilita con la label <code>istio.io/dataplane-mode=ambient</code> sul namespace, senza restart dei Pod.</li>
+<li><strong>Cilium Service Mesh</strong>: mTLS e funzioni L7 basate su eBPF nel kernel e su Envoy per nodo, senza sidecar.</li>
+<li><strong>Linkerd</strong> resta sidecar-based, con un proxy Rust (<code>linkerd2-proxy</code>) molto leggero.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Perché conta</p>
+<p>Ambient sposta il trade-off: meno overhead per Pod e adozione più semplice, ma il blast radius di un componente per nodo è maggiore e la maturità operativa è inferiore a quella del sidecar. I concetti di questa pagina (control plane, data plane, mTLS, xDS) restano validi in entrambi i modelli. Per i dettagli, vedere <a href="../istio/">Istio</a>.</p>
+</div>
 <h2 id="service-mesh-vs-api-gateway">Service Mesh vs API Gateway<a class="headerlink" href="#service-mesh-vs-api-gateway" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -25136,40 +25170,40 @@
 <p class="admonition-title">mTLS STRICT in produzione</p>
 <p>In produzione, impostare sempre mTLS STRICT. La modalità PERMISSIVE (che accetta anche traffico plain) non deve essere usata a regime — è solo una fase di transizione.</p>
 </div>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Istio: abilitare mTLS STRICT per namespace</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">security.istio.io/v1beta1</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PeerAuthentication</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">mtls</span><span class="p">:</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">STRICT</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Istio: abilitare mTLS STRICT per namespace</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">security.istio.io/v1beta1</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PeerAuthentication</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">mtls</span><span class="p">:</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">STRICT</span>
 </span></code></pre></div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="sidecar-non-iniettato">Sidecar non iniettato<a class="headerlink" href="#sidecar-non-iniettato" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Verificare che il namespace abbia la label corretta</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>namespace<span class="w"> </span>production<span class="w"> </span>--show-labels
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Verificare che il webhook sia attivo</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>mutatingwebhookconfiguration
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Forzare il rollout per re-iniettare il sidecar</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deployment/my-app<span class="w"> </span>-n<span class="w"> </span>production
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Verificare che il namespace abbia la label corretta</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>namespace<span class="w"> </span>production<span class="w"> </span>--show-labels
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Verificare che il webhook sia attivo</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>mutatingwebhookconfiguration
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Forzare il rollout per re-iniettare il sidecar</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deployment/my-app<span class="w"> </span>-n<span class="w"> </span>production
 </span></code></pre></div>
 <h3 id="connection-refused-tra-servizi">Connection refused tra servizi<a class="headerlink" href="#connection-refused-tra-servizi" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Istio: verificare lo stato dei proxy</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>istioctl<span class="w"> </span>proxy-status
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Verificare la policy mTLS</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>istioctl<span class="w"> </span>x<span class="w"> </span>describe<span class="w"> </span>service<span class="w"> </span>my-service.production
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Controllare i log del sidecar (non dell'applicazione)</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>-c<span class="w"> </span>istio-proxy<span class="w"> </span>-n<span class="w"> </span>production
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Istio: verificare lo stato dei proxy</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>istioctl<span class="w"> </span>proxy-status
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Verificare la policy mTLS</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>istioctl<span class="w"> </span>x<span class="w"> </span>describe<span class="w"> </span>service<span class="w"> </span>my-service.production
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Controllare i log del sidecar (non dell'applicazione)</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>-c<span class="w"> </span>istio-proxy<span class="w"> </span>-n<span class="w"> </span>production
 </span></code></pre></div>
 <h3 id="latenza-inaspettata">Latenza inaspettata<a class="headerlink" href="#latenza-inaspettata" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Verificare le metriche di latenza del sidecar</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>-c<span class="w"> </span>istio-proxy<span class="w"> </span>--<span class="w"> </span>curl<span class="w"> </span>-s<span class="w"> </span>localhost:15000/stats<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"downstream_rq_time"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Verificare le metriche di latenza del sidecar</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>-c<span class="w"> </span>istio-proxy<span class="w"> </span>--<span class="w"> </span>curl<span class="w"> </span>-s<span class="w"> </span>localhost:15000/stats<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"downstream_rq_time"</span>
 </span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
@@ -25198,7 +25232,7 @@
 <li><a href="https://landscape.cncf.io/card-mode?category=service-mesh">Service Mesh Landscape — CNCF</a></li>
 <li><a href="https://microservices.io/patterns/deployment/service-mesh.html">Pattern: Service Mesh — microservices.io</a></li>
 <li><a href="https://istio.io/latest/docs/concepts/">Istio Concepts</a></li>
-<li><a href="https://linkerd.io/2.14/reference/architecture/">Linkerd Architecture</a></li>
+<li><a href="https://linkerd.io/2/reference/architecture/">Linkerd Architecture</a></li>
 </ul>
 
 

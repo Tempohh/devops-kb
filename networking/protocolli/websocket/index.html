@@ -21250,7 +21250,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21275,7 +21275,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22201,7 +22201,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25035,12 +25035,16 @@
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>  |    Sec-WebSocket-Accept: s3pPLMBiTxaQ...|
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>  |                                      |
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>  |══ WebSocket frames (full-duplex) ════|
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>  |   Client→Server: {"type":"msg","text":"ciao"}
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>  |   Server→Client: {"type":"msg","from":"Bob","text":"ciao"}
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>  |   Server→Client: {"type":"ping"}
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>  |   Client→Server: {"type":"pong"}
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>  |   Client→Server: text frame  {"type":"msg","text":"ciao"}
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>  |   Server→Client: text frame  {"type":"msg","from":"Bob","text":"ciao"}
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>  |   Server→Client: Ping frame (opcode 0x9, control frame)
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>  |   Client→Server: Pong frame (opcode 0xA, control frame)
 </span></code></pre></div>
-<p>Il campo <code>Sec-WebSocket-Accept</code> è il SHA-1 della <code>Sec-WebSocket-Key</code> concatenata con un GUID fisso — meccanismo anti-cache, non autentica il server.</p>
+<p>Il campo <code>Sec-WebSocket-Accept</code> è la codifica base64 dello SHA-1 di <code>Sec-WebSocket-Key</code> concatenata con un GUID fisso (<code>258EAFA5-E914-47DA-95CA-C5AB0DC85B11</code>). Prova che il server ha capito il protocollo WebSocket (evita che un server HTTP qualsiasi o una cache intermedia scambi la richiesta per una normale) — non autentica né il server né il client.</p>
+<div class="admonition note">
+<p class="admonition-title">Masking</p>
+<p>Tutti i frame <strong>client→server</strong> sono mascherati (campo <code>MASK=1</code>, chiave XOR di 32 bit casuale per frame): serve a impedire che un client malevolo faccia interpretare dati scelti da lui come richieste HTTP a proxy intermedi (cache poisoning). I frame server→client non sono mascherati.</p>
+</div>
 <h3 id="frame-websocket">Frame WebSocket<a class="headerlink" href="#frame-websocket" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a> 0                   1                   2                   3
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a> 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -25062,6 +25066,7 @@
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Server → Client: Ping frame (ogni 30s)
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>Client → Server: Pong frame (automatico o esplicito)
 </span></code></pre></div>
+<p>Ping e Pong sono <strong>control frame</strong> del protocollo, distinti dai messaggi applicativi. L'API <code>WebSocket</code> del browser non permette di inviare ping né di osservare i pong: il browser risponde ai ping da solo. Per un heartbeat lato client (es. rilevare un server muto) serve quindi un messaggio applicativo <code>{"type":"ping"}</code>.</p>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="server-nodejs-con-ws">Server Node.js con ws<a class="headerlink" href="#server-nodejs-con-ws" title="Permanent link">&para;</a></h3>
 <div class="language-javascript highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kd">const</span><span class="w"> </span><span class="nx">WebSocket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">require</span><span class="p">(</span><span class="s1">'ws'</span><span class="p">);</span>
@@ -25135,29 +25140,31 @@
 <h3 id="nginx-proxy-websocket">Nginx — Proxy WebSocket<a class="headerlink" href="#nginx-proxy-websocket" title="Permanent link">&para;</a></h3>
 <div class="language-nginx highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">upstream</span><span class="w"> </span><span class="s">websocket_backend</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">127.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="c1"># Per WebSocket non usare least_conn o ip_hash — le connessioni sono già persistenti</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="p">}</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="k">server</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="kn">listen</span><span class="w"> </span><span class="mi">443</span><span class="w"> </span><span class="s">ssl</span><span class="w"> </span><span class="s">http2</span><span class="p">;</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="kn">server_name</span><span class="w"> </span><span class="s">example.com</span><span class="p">;</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="s">/ws</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">        </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="s">http://websocket_backend</span><span class="p">;</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">        </span><span class="c1"># Header necessari per l'upgrade WebSocket</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">        </span><span class="kn">proxy_http_version</span><span class="w"> </span><span class="mi">1</span><span class="s">.1</span><span class="p">;</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Upgrade</span><span class="w"> </span><span class="nv">$http_upgrade</span><span class="p">;</span>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Connection</span><span class="w"> </span><span class="s">"upgrade"</span><span class="p">;</span>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Host</span><span class="w"> </span><span class="nv">$host</span><span class="p">;</span>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Real-IP</span><span class="w"> </span><span class="nv">$remote_addr</span><span class="p">;</span>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">        </span><span class="c1"># Timeout estesi per connessioni persistenti</span>
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">        </span><span class="kn">proxy_read_timeout</span><span class="w">  </span><span class="s">3600s</span><span class="p">;</span>
-</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">        </span><span class="kn">proxy_send_timeout</span><span class="w">  </span><span class="s">3600s</span><span class="p">;</span>
-</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">        </span><span class="kn">proxy_connect_timeout</span><span class="w"> </span><span class="s">10s</span><span class="p">;</span>
-</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="p">}</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="c1"># least_conn è adatto (le connessioni sono long-lived: round-robin può sbilanciare).</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="c1"># ip_hash serve solo se il protocollo richiede sticky session (es. fallback long-polling di Socket.IO)</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">}</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="k">server</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="kn">listen</span><span class="w"> </span><span class="mi">443</span><span class="w"> </span><span class="s">ssl</span><span class="p">;</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="kn">http2</span><span class="w"> </span><span class="no">on</span><span class="p">;</span><span class="w">   </span><span class="c1"># nginx &gt;= 1.25.1 (la forma "listen ... http2" è deprecata). I browser fanno comunque l'upgrade WebSocket su HTTP/1.1</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="kn">server_name</span><span class="w"> </span><span class="s">example.com</span><span class="p">;</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="s">/ws</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">        </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="s">http://websocket_backend</span><span class="p">;</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">        </span><span class="c1"># Header necessari per l'upgrade WebSocket</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">        </span><span class="kn">proxy_http_version</span><span class="w"> </span><span class="mi">1</span><span class="s">.1</span><span class="p">;</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Upgrade</span><span class="w"> </span><span class="nv">$http_upgrade</span><span class="p">;</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Connection</span><span class="w"> </span><span class="s">"upgrade"</span><span class="p">;</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">Host</span><span class="w"> </span><span class="nv">$host</span><span class="p">;</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">        </span><span class="kn">proxy_set_header</span><span class="w"> </span><span class="s">X-Real-IP</span><span class="w"> </span><span class="nv">$remote_addr</span><span class="p">;</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">        </span><span class="c1"># Timeout estesi per connessioni persistenti</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">        </span><span class="kn">proxy_read_timeout</span><span class="w">  </span><span class="s">3600s</span><span class="p">;</span>
+</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="w">        </span><span class="kn">proxy_send_timeout</span><span class="w">  </span><span class="s">3600s</span><span class="p">;</span>
+</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">        </span><span class="kn">proxy_connect_timeout</span><span class="w"> </span><span class="s">10s</span><span class="p">;</span>
+</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="websocket-in-kubernetes-ingress">WebSocket in Kubernetes (Ingress)<a class="headerlink" href="#websocket-in-kubernetes-ingress" title="Permanent link">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">networking.k8s.io/v1</span>
@@ -25184,7 +25191,8 @@
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Autenticazione</strong>: WebSocket non ha un meccanismo di auth nativo — usare JWT nell'URL (<code>?token=...</code>) o cookie HttpOnly per il primo handshake HTTP</li>
+<li><strong>Autenticazione</strong>: WebSocket non ha un meccanismo di auth nativo e l'API del browser non permette header custom (<code>Authorization</code>). Opzioni: cookie <code>HttpOnly</code>/<code>Secure</code>/<code>SameSite</code> sull'handshake; ticket monouso a vita breve ottenuto via REST e passato nell'URL; oppure token inviato come primo messaggio. Evitare JWT long-lived in <code>?token=...</code>: finisce nei log di proxy e server</li>
+<li><strong>Controllo <code>Origin</code></strong>: i browser inviano <code>Origin</code> nell'handshake ma la same-origin policy <strong>non</strong> si applica a WebSocket. Se l'auth è via cookie, senza verifica dell'<code>Origin</code> lato server un sito terzo può aprire il socket con le credenziali della vittima (Cross-Site WebSocket Hijacking, CSWSH). Validare <code>Origin</code> contro una allowlist e rifiutare con <code>403</code></li>
 <li><strong>Heartbeat</strong>: implementare ping/pong per rilevare connessioni morte (proxy e firewall chiudono connessioni inattive dopo 60-120s)</li>
 <li><strong>Riconnessione esponenziale</strong>: il client deve riconnettersi automaticamente con backoff esponenziale + jitter</li>
 <li><strong>Messaggio con schema</strong>: definire un formato JSON consistente con <code>type</code>, <code>payload</code>, <code>id</code> per ogni messaggio</li>
@@ -25195,7 +25203,7 @@
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-handshake-fallisce-nessun-101-switching-protocols">Scenario 1 — Handshake fallisce: nessun <code>101 Switching Protocols</code><a class="headerlink" href="#scenario-1-handshake-fallisce-nessun-101-switching-protocols" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il client riceve <code>200 OK</code> o <code>400 Bad Request</code> invece di <code>101 Switching Protocols</code>. La connessione WebSocket non si stabilisce mai.</p>
-<p><strong>Causa:</strong> Il reverse proxy (Nginx, HAProxy, AWS ALB) non propaga gli header <code>Upgrade</code> e <code>Connection: upgrade</code>, oppure usa HTTP/2 che non supporta l'upgrade WebSocket.</p>
+<p><strong>Causa:</strong> Il reverse proxy (Nginx, HAProxy, AWS ALB) non propaga gli header <code>Upgrade</code> e <code>Connection: upgrade</code> (Nginx per default parla HTTP/1.0 verso l'upstream e li scarta), oppure la richiesta arriva su HTTP/2, dove il meccanismo <code>Upgrade</code> non esiste (WebSocket su HTTP/2 richiede l'extended CONNECT di RFC 8441, supportato solo da alcuni stack).</p>
 <p><strong>Soluzione:</strong> Aggiungere nella configurazione del proxy gli header obbligatori per il protocollo WebSocket upgrade, e forzare HTTP/1.1 sul backend.</p>
 <div class="language-nginx highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">location</span><span class="w"> </span><span class="s">/ws</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">    </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="s">http://websocket_backend</span><span class="p">;</span>
@@ -25214,6 +25222,8 @@
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Sec-WebSocket-Version: 13"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">  </span>https://example.com/ws
 </span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Atteso nella risposta: HTTP/1.1 101 Switching Protocols</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># curl non parla WebSocket: dopo il 101 resta appeso, interrompere con Ctrl+C (o aggiungere --max-time 5).</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># Aggiungere --http1.1 per evitare la negoziazione HTTP/2 via ALPN. Alternativa: websocat</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="scenario-2-connessione-si-chiude-inaspettatamente-dopo-60-120-secondi">Scenario 2 — Connessione si chiude inaspettatamente dopo 60-120 secondi<a class="headerlink" href="#scenario-2-connessione-si-chiude-inaspettatamente-dopo-60-120-secondi" title="Permanent link">&para;</a></h3>
@@ -25264,9 +25274,13 @@
 </span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">  </span><span class="nx">pub</span><span class="p">.</span><span class="nx">publish</span><span class="p">(</span><span class="s1">'broadcast-channel'</span><span class="p">,</span><span class="w"> </span><span class="nx">message</span><span class="p">);</span><span class="w">  </span><span class="c1">// Tutte le istanze lo riceveranno</span>
 </span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="p">});</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Garanzie di consegna</p>
+<p>Redis Pub/Sub è <em>at-most-once</em>: se un'istanza è in restart o disconnessa, perde i messaggi pubblicati nel frattempo. Per consegna affidabile o replay dopo riconnessione usare Redis Streams o Kafka, e far inviare al client l'ultimo <code>id</code> ricevuto per recuperare il gap.</p>
+</div>
 <p>Verifica la connettività Redis:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>redis-cli<span class="w"> </span>-h<span class="w"> </span>redis-host<span class="w"> </span>ping
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>redis-cli<span class="w"> </span>-h<span class="w"> </span>redis-host<span class="w"> </span>monitor<span class="w">  </span><span class="c1"># Monitora i messaggi in transito</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>redis-cli<span class="w"> </span>-h<span class="w"> </span>redis-host<span class="w"> </span>monitor<span class="w">  </span><span class="c1"># Solo debug: rallenta sensibilmente Redis, evitare in produzione</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="scenario-4-handshake-fallisce-su-https-wss-non-funziona">Scenario 4 — Handshake fallisce su HTTPS / <code>wss://</code> non funziona<a class="headerlink" href="#scenario-4-handshake-fallisce-su-https-wss-non-funziona" title="Permanent link">&para;</a></h3>
