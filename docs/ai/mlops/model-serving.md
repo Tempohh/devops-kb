@@ -7,9 +7,10 @@ search_keywords: [vLLM, TGI text generation inference, model serving LLM, infere
 parent: ai/mlops/_index
 related: [ai/mlops/_index, ai/mlops/infrastruttura-gpu, ai/modelli/modelli-open-source, ai/mlops/pipeline-ml]
 official_docs: https://docs.vllm.ai/
-status: complete
+status: reviewed
 difficulty: expert
-last_updated: 2026-03-27
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Model Serving — vLLM, TGI e Deployment
@@ -18,7 +19,10 @@ last_updated: 2026-03-27
 
 Il model serving per LLM presenta sfide uniche rispetto al serving di modelli ML classici. La generazione di testo è un processo **autoregressivo**: il modello genera un token alla volta, e ogni token dipende da tutti quelli precedenti. Questo crea un trade-off naturale tra latenza (importante per l'utente) e throughput (importante per il costo). Le soluzioni moderne come vLLM e TGI affrontano queste sfide con tecniche sofisticate: KV cache management, continuous batching, e speculative decoding.
 
-Scegliere il serving framework giusto dipende dai requisiti: vLLM per throughput e production OpenAI-compatible API; TGI per integrazione HuggingFace; Triton per multi-model enterprise; Ollama per sviluppo e deployment semplice. In tutti i casi, il monitoring delle metriche specifiche LLM (TTFT, ITL, throughput, errori) è fondamentale.
+Scegliere il serving framework giusto dipende dai requisiti: vLLM per throughput e production OpenAI-compatible API; TGI per integrazione HuggingFace (ma vedi nota di manutenzione); Triton per multi-model enterprise; Ollama per sviluppo e deployment semplice. In tutti i casi, il monitoring delle metriche specifiche LLM (TTFT, ITL, throughput, errori) è fondamentale.
+
+!!! note "Alternative non trattate in dettaglio"
+    **SGLang** (RadixAttention, forte su prefix riuso e output strutturato) è l'alternativa a vLLM più diffusa in produzione; **llama.cpp / llama-server** per CPU e edge (formato GGUF); **TensorRT-LLM** per il massimo su GPU NVIDIA (richiede compilazione dell'engine); **llm-d** e **NVIDIA Dynamo** per serving distribuito/disaggregato su Kubernetes. Gli engine evolvono in fretta: i flag in questa pagina vanno verificati sulla versione installata (`vllm serve --help`).
 
 ## 1. Metriche di Serving LLM
 
@@ -64,12 +68,14 @@ vLLM è il framework open source più performante per serving LLM. Le sue innova
 pip install vllm
 
 # Avvio server OpenAI-compatible
+# --tensor-parallel-size = numero di GPU; --max-model-len = context window;
+# --max-num-seqs = max request simultanee; --gpu-memory-utilization = frazione di VRAM per vLLM
 vllm serve meta-llama/Llama-3.1-8B-Instruct \
     --dtype bfloat16 \
-    --tensor-parallel-size 1 \        # numero di GPU
-    --max-model-len 32768 \           # context window
-    --max-num-seqs 256 \              # max request simultanee
-    --gpu-memory-utilization 0.90 \   # % VRAM usata per vLLM
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 256 \
+    --gpu-memory-utilization 0.90 \
     --port 8000 \
     --api-key "my-secret-key"
 
@@ -84,7 +90,8 @@ vllm serve meta-llama/Llama-3.1-8B-Instruct \
     --quantization awq \
     --dtype auto
 
-# Con prefix caching (riusa KV cache di prompt condivisi)
+# Prefix caching (riusa KV cache di prompt condivisi): nel motore V1 è
+# attivo di default; il flag è necessario solo su versioni/motori più vecchi
 vllm serve model \
     --enable-prefix-caching \
     --max-num-batched-tokens 8192
@@ -123,9 +130,9 @@ for chunk in response:
 ```
 Problema tradizionale:
 Ogni request pre-alloca la VRAM per il KV cache del contesto massimo
-Se max_seq_len=8192, ogni request usa KV cache da 8192 token
+Se max_seq_len=8192, ogni request riserva KV cache da 8192 token
 → Ma la request media può usarne solo 500
-→ 94% della KV cache è sprecata (frammentazione esterna)
+→ ~94% della riserva è sprecata (frammentazione interna + riserva inutilizzata)
 
 PagedAttention (ispirato alla virtual memory degli OS):
 - KV cache è gestita in "pages" di dimensione fissa (es. 16 token)
@@ -134,8 +141,10 @@ PagedAttention (ispirato alla virtual memory degli OS):
 - Nessuna frammentazione: qualsiasi combinazione di request si ottimizza
 
 Risultato:
-- Fino a 24× miglioramento nel throughput rispetto a serving naive
+- Fino a 24× di throughput rispetto a HuggingFace Transformers (paper originale;
+  ~2-4× rispetto a FasterTransformer/Orca). Il guadagno reale dipende dal carico
 - Memoria usata proporzionale ai token effettivi, non al max_seq_len
+- Pages condivisibili tra sequenze (parallel sampling, prefix caching)
 ```
 
 ### Continuous Batching
@@ -156,9 +165,10 @@ Il batch è sempre pieno (o quasi)
 
 ```bash
 # Serve il modello base con supporto per più LoRA adapter
+# --max-loras = adapter contemporaneamente in GPU; --max-lora-rank >= rank massimo degli adapter
 vllm serve meta-llama/Llama-3.1-8B-Instruct \
     --enable-lora \
-    --max-loras 4 \                  # fino a 4 adapter in memoria
+    --max-loras 4 \
     --max-lora-rank 64 \
     --lora-modules \
         devops-expert=/path/to/devops-lora \
@@ -176,30 +186,32 @@ response = client.chat.completions.create(
 ### Benchmarking vLLM
 
 ```bash
-# Benchmark throughput
-python -m vllm.entrypoints.openai.api_server &
-python benchmarks/benchmark_throughput.py \
-    --backend vllm \
+# Benchmark offline di throughput (engine in-process, nessun server)
+vllm bench throughput \
     --model meta-llama/Llama-3.1-8B-Instruct \
-    --num-prompts 1000 \
-    --max-tokens 200
+    --input-len 512 --output-len 200 \
+    --num-prompts 1000
 
-# Output:
-# Throughput: 1234.56 requests/s
-# Total time: 811.43s
-# ...
-
-# Benchmark latenza (TTFT e ITL)
-python benchmarks/benchmark_latency.py \
+# Benchmark online contro il server già avviato: riporta TTFT, ITL, throughput
+vllm bench serve \
     --model meta-llama/Llama-3.1-8B-Instruct \
-    --input-len 512 \
-    --output-len 128 \
-    --num-iters 100
+    --dataset-name random --random-input-len 512 --random-output-len 128 \
+    --num-prompts 500 --request-rate 20
+
+# Latenza di un singolo batch (offline)
+vllm bench latency \
+    --model meta-llama/Llama-3.1-8B-Instruct \
+    --input-len 512 --output-len 128 --num-iters 30
 ```
+
+`vllm bench serve` è il test più realistico: misura anche TTFT/ITL con il carico concorrente reale. Gli script `benchmarks/*.py` del repo sono stati sostituiti dal sottocomando `vllm bench`.
 
 ## 3. HuggingFace TGI — Text Generation Inference
 
 TGI è il serving framework di HuggingFace, con forte integrazione con l'ecosistema HF.
+
+!!! warning "TGI in maintenance mode"
+    Da fine 2025 HuggingFace ha messo TGI in modalità manutenzione (solo fix minori) raccomandando vLLM o SGLang come engine per nuovi deployment. Per progetti nuovi preferire vLLM; TGI resta rilevante per installazioni esistenti.
 
 ```bash
 # Avvio con Docker (modo più semplice)
@@ -261,6 +273,7 @@ ollama serve &
 # Download e avvio modello
 ollama pull llama3.1:8b
 ollama run llama3.1:8b
+# (con systemd/Docker le variabili vanno impostate nell'ambiente del servizio)
 
 # API REST
 curl http://localhost:11434/v1/chat/completions \
@@ -271,27 +284,33 @@ curl http://localhost:11434/v1/chat/completions \
     "stream": true
   }'
 
-# Tuning per serving (variabili ambiente)
-OLLAMA_NUM_PARALLEL=4  # request parallele simultanee
-OLLAMA_MAX_LOADED_MODELS=2  # modelli in VRAM contemporaneamente
-OLLAMA_KEEP_ALIVE=5m  # mantieni modello in VRAM per N minuti
+# Tuning per serving: variabili d'ambiente da impostare PRIMA di `ollama serve`
+export OLLAMA_NUM_PARALLEL=4         # request parallele simultanee per modello
+export OLLAMA_MAX_LOADED_MODELS=2    # modelli in VRAM contemporaneamente
+export OLLAMA_KEEP_ALIVE=5m          # mantieni modello in VRAM per N minuti
+ollama serve
 ```
 
 ## 5. NVIDIA Triton Inference Server
 
-Triton è la soluzione enterprise NVIDIA per multi-model serving con supporto per diversi backend (TensorRT, PyTorch, ONNX, vLLM).
+Triton (rinominato **NVIDIA Dynamo Triton** nel 2025) è la soluzione enterprise NVIDIA per multi-model serving con supporto per diversi backend (TensorRT-LLM, PyTorch, ONNX, vLLM). Ha senso quando si servono insieme modelli eterogenei (LLM + embedding + modelli ML classici) con un'unica API HTTP/gRPC e metriche uniformi; per un solo LLM `vllm serve` è più semplice.
 
 ```bash
-# Struttura model repository
+# Struttura model repository (backend vLLM: parametri engine in model.json)
 model_repository/
-├── llama3_8b/
-│   ├── config.pbtxt    # configurazione modello
-│   └── 1/             # versione 1
-│       └── model.py   # implementazione (Python backend)
-└── llama3_70b/
-    ├── config.pbtxt
-    └── 1/
-        └── model.py
+└── llama3_8b/
+    ├── config.pbtxt    # configurazione modello
+    └── 1/              # versione 1
+        └── model.json  # argomenti engine vLLM (model, tensor_parallel_size, ...)
+```
+
+```text
+# model.json
+{
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "gpu_memory_utilization": 0.9,
+  "max_model_len": 8192
+}
 
 # config.pbtxt per vLLM backend
 name: "llama3_8b"
@@ -325,7 +344,7 @@ instance_group [
 # Avvio Triton
 docker run --gpus all -p 8000:8000 -p 8001:8001 -p 8002:8002 \
   -v $PWD/model_repository:/models \
-  nvcr.io/nvidia/tritonserver:24.01-vllm-python-py3 \
+  nvcr.io/nvidia/tritonserver:<YY.MM>-vllm-python-py3 \
   tritonserver --model-repository=/models
 
 # gRPC client
@@ -347,17 +366,22 @@ Target (70B): verifica 4 token in 1 forward pass (parallelo!)
               Se accetta tutti 4: +4 token con 1 pass del modello grande
               Se rifiuta al token3: scarti 3,4 e rigenera
 
-Speedup: 2-4× per generazione (spesso ~2.5×)
+Speedup: 2-4× per generazione (spesso ~2.5×), soprattutto a batch piccoli
 Qualità: identica al modello target (rejection sampling garantisce equivalenza)
 VRAM: aggiunge la VRAM del draft model
 ```
 
+Perché funziona: il decode è memory-bandwidth bound, quindi verificare k token in un forward pass costa quasi quanto generarne uno. A batch grandi la GPU è già compute bound e il beneficio si riduce o si annulla.
+
 ```bash
-# vLLM con speculative decoding
+# vLLM con speculative decoding (versioni recenti: JSON in --speculative-config;
+# i vecchi --speculative-model / --num-speculative-tokens sono stati rimossi)
 vllm serve meta-llama/Llama-3.1-70B-Instruct \
-    --speculative-model meta-llama/Llama-3.2-1B-Instruct \
-    --num-speculative-tokens 5 \      # 5 token proposti per step
+    --speculative-config '{"model": "meta-llama/Llama-3.2-1B-Instruct", "num_speculative_tokens": 5}' \
     --tensor-parallel-size 2
+
+# Senza draft model: n-gram (copia da prompt) oppure EAGLE (testa draft addestrata)
+#   --speculative-config '{"method": "ngram", "num_speculative_tokens": 5, "prompt_lookup_max": 4}'
 ```
 
 ### Quando Funziona lo Speculative Decoding
@@ -387,6 +411,8 @@ FUNZIONA MALE:
 | GPTQ | 4-bit | ~5 GB | 1.2× | Buona | Si |
 | AWQ | 4-bit | ~5 GB | 1.3× | Molto buona | Si (migliore di GPTQ) |
 
+I valori di tokens/s e qualità sono ordini di grandezza indicativi: dipendono da GPU, batch size e modello. Misurare sempre sul proprio carico (`vllm bench serve`) e valutare la qualità su un proprio eval set. FP8 richiede GPU con supporto nativo (Ada/Hopper/Blackwell); su Ampere vLLM usa solo weight-only (Marlin).
+
 ```bash
 # FP8 su H100 con vLLM
 vllm serve meta-llama/Llama-3.1-8B-Instruct \
@@ -408,6 +434,8 @@ vllm serve TheBloke/Llama-3.1-8B-Instruct-GPTQ \
 
 ### HPA con Custom Metrics GPU
 
+Metriche `External` richiedono un adapter (es. **prometheus-adapter**) che esponga le metriche Prometheus alla API `external.metrics.k8s.io`. Perché non la CPU: un pod vLLM è saturo molto prima che la CPU lo mostri; il segnale giusto è la coda (`vllm:num_requests_waiting`). Scale-up lento per via del caricamento modello (minuti): tenere `minReplicas` con margine e usare `behavior` per evitare flapping.
+
 ```yaml
 # hpa-vllm.yaml
 apiVersion: autoscaling/v2
@@ -426,7 +454,7 @@ spec:
     - type: External
       external:
         metric:
-          name: vllm_queue_depth  # metrica custom da Prometheus
+          name: vllm_num_requests_waiting  # nome esposto dall'adapter (da vllm:num_requests_waiting)
           selector:
             matchLabels:
               app: vllm
@@ -436,7 +464,7 @@ spec:
     - type: External
       external:
         metric:
-          name: nvidia_gpu_utilization
+          name: DCGM_FI_DEV_GPU_UTIL  # da dcgm-exporter (GPU Operator)
         target:
           type: AverageValue
           averageValue: "70"  # scala quando GPU > 70% utilizzo
@@ -459,13 +487,12 @@ spec:
     spec:
       containers:
         - name: vllm
-          image: vllm/vllm-openai:v0.6.0
+          image: vllm/vllm-openai:<versione-pinnata>  # mai :latest in produzione
           args:
             - --model=meta-llama/Llama-3.1-8B-Instruct
             - --tensor-parallel-size=1
             - --dtype=bfloat16
             - --max-model-len=32768
-            - --disable-log-requests
             - --uvicorn-log-level=warning
           resources:
             limits:
@@ -504,9 +531,8 @@ spec:
     - type: prometheus
       metadata:
         serverAddress: http://prometheus.monitoring.svc:9090
-        metricName: vllm_requests_in_flight
-        threshold: "20"  # max 20 request in-flight per replica
-        query: sum(vllm_requests_in_flight{app="vllm"}) / count(up{app="vllm"})
+        threshold: "20"  # max 20 request (running+waiting) per replica
+        query: sum(vllm:num_requests_running{app="vllm"} + vllm:num_requests_waiting{app="vllm"}) / count(up{app="vllm"})
 ```
 
 ## 9. Monitoring e SLA
@@ -530,14 +556,15 @@ vllm:time_per_output_token_seconds # ITL (histogram)
 vllm:e2e_request_latency_seconds  # latenza end-to-end (histogram)
 
 # Risorse
-vllm:gpu_cache_usage_perc         # % KV cache usata
-vllm:cpu_cache_usage_perc         # % CPU cache (swap)
+vllm:kv_cache_usage_perc          # % KV cache usata (versioni precedenti: vllm:gpu_cache_usage_perc)
 ```
+
+I nomi variano tra versioni (es. il motore V1 ha rimosso le metriche di swap su CPU): verificare con `curl localhost:8000/metrics | grep ^vllm`. Nelle query PromQL i due punti sono validi nel nome (`vllm:num_requests_waiting`).
 
 ```yaml
 # Grafana dashboard alert
 - alert: HighVLLMQueueDepth
-  expr: vllm_requests_waiting > 50
+  expr: sum(vllm:num_requests_waiting) > 50
   for: 2m
   labels:
     severity: warning
@@ -546,7 +573,7 @@ vllm:cpu_cache_usage_perc         # % CPU cache (swap)
     description: "Considerare scale-out del deployment vLLM"
 
 - alert: HighTTFT
-  expr: histogram_quantile(0.95, vllm_time_to_first_token_seconds_bucket) > 2
+  expr: histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m]))) > 2
   for: 5m
   labels:
     severity: warning
@@ -612,12 +639,13 @@ vllm serve meta-llama/Llama-3.1-8B-Instruct \
 # Verifica TTFT p95 con le metriche Prometheus
 curl -s http://localhost:8000/metrics | grep time_to_first_token
 
-# Misura la lunghezza media dei prompt in input
+# Misura la lunghezza media dei prompt in input (parole, ~0.75 parole/token in inglese;
+# per valori esatti usare il tokenizer del modello)
 python -c "
-import json, sys
+import json
 data = json.load(open('requests.json'))
 lengths = [len(r['prompt'].split()) for r in data]
-print(f'Avg: {sum(lengths)/len(lengths):.0f} tokens, Max: {max(lengths)}')
+print(f'Avg: {sum(lengths)/len(lengths):.0f} words, Max: {max(lengths)}')
 "
 ```
 
@@ -681,19 +709,20 @@ vllm serve meta-llama/Llama-3.1-8B-Instruct \
 # Verificare le request in volo con le metriche
 watch -n1 'curl -s http://localhost:8000/metrics | grep -E "num_requests_(running|waiting)"'
 
-# Benchmark per misurare il throughput massimo reale
-python benchmarks/benchmark_throughput.py \
-    --backend vllm \
+# Benchmark per misurare il throughput massimo reale (server già in esecuzione)
+# --request-rate: aumentare fino a saturazione
+vllm bench serve \
     --model meta-llama/Llama-3.1-8B-Instruct \
+    --dataset-name random --random-input-len 512 --random-output-len 128 \
     --num-prompts 500 \
-    --request-rate 50  # aumentare fino a saturazione
+    --request-rate 50
 ```
 
 ---
 
 ## Best Practices
 
-- **vLLM in produzione, Ollama per sviluppo**: vLLM offre 5-10× il throughput di Ollama grazie a PagedAttention e continuous batching.
+- **vLLM in produzione, Ollama per sviluppo**: sotto carico concorrente vLLM offre throughput di vari multipli rispetto a Ollama grazie a PagedAttention e continuous batching (il fattore dipende dal carico: misurarlo).
 - **Speculative decoding per output lunghi**: particolarmente efficace per code generation. Aumenta il throughput del 2-3× senza modificare la qualità.
 - **--gpu-memory-utilization 0.85-0.90**: lascia il 10-15% di VRAM libera per picchi di KV cache. 0.95 porta a OOM sotto carico.
 - **Readiness probe con delay lungo**: i modelli impiegano 30-120 secondi per caricarsi. Non troppo breve o il pod viene killato prima di essere pronto.
