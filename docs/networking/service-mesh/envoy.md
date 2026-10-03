@@ -9,7 +9,7 @@ related: [networking/service-mesh/istio, networking/service-mesh/concetti-base, 
 official_docs: https://www.envoyproxy.io/docs/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-09
+last_updated: 2026-10-03
 ---
 
 # Envoy Proxy
@@ -263,9 +263,8 @@ http_connection_manager:
         collector_cluster: zipkin_cluster
         collector_endpoint: "/api/v2/spans"
         collector_endpoint_version: HTTP_JSON
-
-  # Campionamento 1% del traffico in produzione
-  tracing:
+    # Campionamento 1% del traffico in produzione (value è una percentuale:
+    # 100 = tutto, troppo costoso in produzione per volume di span e overhead)
     random_sampling:
       value: 1.0
 ```
@@ -295,6 +294,60 @@ curl -s localhost:9901/stats | grep -E "upstream_rq_(5xx|4xx|timeout|retry)"
 
 # Verifica configurazione listener
 curl -s localhost:9901/config_dump | jq '.configs[] | select(.["@type"] | contains("ListenersConfigDump"))'
+```
+
+### Scenario 1 — `no healthy upstream` (503, flag `UH`)
+
+**Sintomo**: richieste fallite con 503 e response flag `UH`; nessun backend riceve traffico.
+
+**Causa**: tutti gli endpoint del cluster sono marcati unhealthy (health check falliti) o espulsi da outlier detection. Con `max_ejection_percent` alto Envoy può espellere quasi tutto il cluster.
+
+**Soluzione**: controllare lo stato per host; correggere il `/health` del backend o ridurre `max_ejection_percent`. Il panic threshold (default 50%) fa ignorare lo stato di salute quando troppi host sono unhealthy, evitando il blackout totale.
+
+```bash
+curl -s localhost:9901/clusters | grep -E "service_api::.*(health_flags|cx_active)"
+curl -s localhost:9901/stats | grep -E "service_api.*(outlier_detection.ejections_active|membership_healthy)"
+```
+
+### Scenario 2 — Config xDS non applicata (NACK)
+
+**Sintomo**: il control plane invia modifiche ma Envoy continua col comportamento vecchio.
+
+**Causa**: Envoy rifiuta (NACK) la risorsa perché invalida (typo, `@type` errato, filtro router non ultimo); mantiene l'ultima config valida.
+
+**Soluzione**: leggere i contatori di update rifiutati e il log del control plane/Envoy, correggere la risorsa.
+
+```bash
+curl -s localhost:9901/stats | grep -E "(update_rejected|update_failure|update_success)"
+curl -s localhost:9901/config_dump?resource=dynamic_listeners | jq '.configs[].error_state'
+```
+
+### Scenario 3 — 503 con flag `UF`/`UC` o timeout `UT`
+
+**Sintomo**: `upstream connect error`, `connection termination` o `upstream request timeout` intermittenti.
+
+**Causa**: `UF` = connessione upstream fallita; `UC` = connessione chiusa dall'upstream (spesso keep-alive del backend più corto di quello di Envoy, che riusa una connessione già chiusa); `UT` = timeout della route (default 15s) superato.
+
+**Soluzione**: allineare idle timeout (backend > Envoy), aumentare `timeout` di route se legittimo, limitare i retry per evitare retry storm.
+
+```bash
+# Attivare access log con %RESPONSE_FLAGS% e verificare i flag
+kubectl logs <pod> -c istio-proxy | grep -E '"(UF|UC|UT|UH)"'
+curl -s localhost:9901/stats | grep -E "upstream_cx_(connect_fail|destroy_remote)|upstream_rq_timeout"
+```
+
+### Scenario 4 — Connessioni rifiutate sul listener
+
+**Sintomo**: `connection refused` sulla porta del proxy; `/ready` risponde non-200.
+
+**Causa**: Envoy non ha ancora ricevuto LDS/CDS iniziali (stato `PRE_INITIALIZING`/`INITIALIZING`) oppure il listener non è in bind (porta occupata, address errato).
+
+**Soluzione**: verificare stato e listener attivi; controllare conflitti di porta.
+
+```bash
+curl -s localhost:9901/ready            # LIVE solo a init completato
+curl -s localhost:9901/listeners
+curl -s localhost:9901/server_info | jq .state
 ```
 
 ## Relazioni
