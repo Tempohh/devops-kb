@@ -4578,7 +4578,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -4603,7 +4603,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -4718,6 +4718,17 @@
     <span class="md-ellipsis">
       
         VPC Flow Logs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ipv6-e-vpc-block-public-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IPv6 e VPC Block Public Access
       
     </span>
   </a>
@@ -24568,6 +24579,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#ipv6-e-vpc-block-public-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IPv6 e VPC Block Public Access
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -24845,7 +24867,7 @@
 </span></code></pre></div>
 <hr />
 <h2 id="progettare-un-vpc-cidr-planning">Progettare un VPC — CIDR Planning<a class="headerlink" href="#progettare-un-vpc-cidr-planning" title="Permanent link">&para;</a></h2>
-<p>Prima di creare qualsiasi risorsa, è fondamentale pianificare con attenzione il <strong>CIDR block</strong> (Classless Inter-Domain Routing — notazione <code>IP/prefisso</code> per definire blocchi di indirizzi, es. <code>10.0.0.0/16</code>) del VPC. Una volta creato, il CIDR principale non può essere ridotto e aggiungere CIDR secondari ha limitazioni. La regola più importante: <strong>non sovrapporre mai i CIDR</strong> tra VPC che potrebbero dover comunicare in futuro tramite VPC Peering o Transit Gateway.</p>
+<p>Prima di creare qualsiasi risorsa, è fondamentale pianificare con attenzione il <strong>CIDR block</strong> (Classless Inter-Domain Routing — notazione <code>IP/prefisso</code> per definire blocchi di indirizzi, es. <code>10.0.0.0/16</code>) del VPC. Una volta creato, il CIDR principale <strong>non può essere modificato né rimosso</strong>; si possono solo aggiungere CIDR secondari (con limitazioni sui range ammessi e sulle sovrapposizioni con route esistenti). Per pianificare gli spazi su molti VPC/account esiste <strong>VPC IPAM</strong> (IP Address Manager), che alloca CIDR da pool senza sovrapposizioni. La regola più importante: <strong>non sovrapporre mai i CIDR</strong> tra VPC che potrebbero dover comunicare in futuro tramite VPC Peering o Transit Gateway.</p>
 <p>Il VPC può avere un CIDR da <code>/16</code> (65.536 IP) fino a <code>/28</code> (16 IP). Per produzione, <code>/16</code> è la scelta standard: offre spazio sufficiente per molte subnet senza essere sprecone.</p>
 <p><strong>Regole:</strong>
 - Non sovrapporre CIDR tra VPC che si devono connettere (peering, TGW — Transit Gateway)
@@ -24983,15 +25005,18 @@
 - Deve risiedere in una <strong>subnet pubblica</strong>
 - Richiede un <strong>Elastic IP</strong> associato
 - Bandwidth: da 5 Gbps fino a 100 Gbps (scaling automatico)
-- <strong>Non supporta</strong> IPv6 (per IPv6 usare Egress-only IGW)
-- <strong>Costo:</strong> $0.045/hr + $0.045/GB processato → significativo per alti volumi</p>
+- <strong>Non fa NAT per il traffico IPv6 nativo</strong> (per uscire in IPv6 senza essere raggiungibili usare Egress-only IGW; per raggiungere servizi solo-IPv4 da subnet IPv6-only supporta NAT64 + DNS64)
+- Esiste anche il tipo <strong>private</strong> (senza EIP): serve per connettività verso altre VPC/on-prem via TGW o VPN, non per Internet
+- <strong>Costo (us-east-1):</strong> $0.045/hr + $0.045/GB processato; in altre Region (es. eu-central-1) i prezzi sono leggermente superiori → verificare la pricing page. Significativo per alti volumi
+- Per evitare il single-AZ design esiste anche la modalità <strong>regional</strong> (un solo NAT GW che si estende su più AZ, introdotta a fine 2025): verificare disponibilità e prezzi nella documentazione ufficiale prima di adottarla</p>
 <div class="admonition warning">
 <p class="admonition-title">NAT Gateway per AZ</p>
 <p>Per alta disponibilità, creare <strong>un NAT Gateway per AZ</strong> e configurare route table private separate per AZ. Un singolo NAT GW è SPOF (Single Point of Failure) per le subnet private delle altre AZ.</p>
 </div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Costo NAT Gateway (approssimativo)</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># $0.045/hr × 24 × 30 = ~$32/mese + data processing</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Per workload con molto traffico outbound → considerare NAT Instance (EC2) come alternativa più economica</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Per ridurre il costo: VPC Gateway Endpoint per S3/DynamoDB (gratuiti) per togliere traffico dal NAT.</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># NAT Instance (EC2) è un'alternativa solo per dev/test o volumi molto bassi: va gestita, patchata, non scala.</span>
 </span></code></pre></div>
 <hr />
 <h2 id="elastic-ip-eip">Elastic IP (EIP)<a class="headerlink" href="#elastic-ip-eip" title="Permanent link">&para;</a></h2>
@@ -25014,9 +25039,9 @@
 </span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>aws<span class="w"> </span>ec2<span class="w"> </span>release-address<span class="w"> </span>--allocation-id<span class="w"> </span><span class="nv">$EIP_ID</span>
 </span></code></pre></div>
 <p><strong>Note:</strong>
-- <strong>Gratuito</strong> se associato a un'istanza running
-- <strong>$0.005/hr</strong> se non associato (AWS disincentiva EIP "parcheggiati")
-- Rimane nel tuo account fino a rilascio esplicito</p>
+- Da febbraio 2024 AWS addebita <strong>$0.005/hr per ogni indirizzo IPv4 pubblico</strong> (~$3.6/mese), sia EIP che IP pubblici auto-assegnati, <strong>anche se associati e in uso</strong> (free tier: 750 ore/mese per 12 mesi su EC2). Un EIP non associato costa quindi lo stesso: il costo non è più un disincentivo specifico ai "parcheggiati"
+- Rimane nel tuo account fino a rilascio esplicito
+- Per ridurre i costi: preferire IPv6 / subnet IPv6-only dove possibile, ALB davanti alle istanze invece di un IP pubblico per istanza, SSM Session Manager invece di SSH su IP pubblico</p>
 <hr />
 <h2 id="security-groups">Security Groups<a class="headerlink" href="#security-groups" title="Permanent link">&para;</a></h2>
 <p>I <strong>Security Groups</strong> sono firewall <strong>stateful</strong> applicati a livello di singola risorsa (istanza EC2, database RDS, load balancer...). Sono il meccanismo di sicurezza di rete più usato in AWS e il punto di controllo principale per la maggior parte delle architetture.</p>
@@ -25024,7 +25049,7 @@
 <p><strong>Caratteristiche:</strong>
 - <strong>Solo regole Allow</strong> — le regole <code>Deny</code> non esistono nei Security Group. Il traffico che non corrisponde a nessuna regola Allow viene automaticamente bloccato (deny implicito).
 - Si applicano a: EC2, RDS, ALB/NLB, Lambda in VPC, ECS tasks, ElastiCache, e altri
-- Un'istanza può avere più Security Group associati (fino a 5 per interfaccia), e i loro permessi si sommano
+- Un'istanza può avere più Security Group associati (quota di default 5 per interfaccia, aumentabile fino a 16), e i loro permessi si sommano. Di default un nuovo SG permette <strong>tutto l'outbound</strong> e nessun inbound
 - Le regole possono referenziare IP/CIDR oppure <strong>altri Security Group ID</strong> — questa è la caratteristica più potente: permette di dire "accetta traffico solo da risorse che hanno il Security Group X associato", senza dover conoscere i loro IP</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Creare Security Group</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nv">SG_WEB</span><span class="o">=</span><span class="k">$(</span>aws<span class="w"> </span>ec2<span class="w"> </span>create-security-group<span class="w"> </span><span class="se">\</span>
@@ -25148,14 +25173,15 @@
 </span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="c1"># 120: Allow TCP 1024-65535 to 0.0.0.0/0    (ephemeral ports)</span>
 </span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="c1"># *:   Deny All</span>
 </span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-network-acl-entry<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">    </span>--network-acl-id<span class="w"> </span>acl-xxxx<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">    </span>--rule-number<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">    </span>--protocol<span class="w"> </span><span class="m">6</span><span class="w"> </span><span class="se">\ </span><span class="w">    </span><span class="c1"># 6=TCP</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">    </span>--port-range<span class="w"> </span><span class="nv">From</span><span class="o">=</span><span class="m">80</span>,To<span class="o">=</span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">    </span>--cidr-block<span class="w"> </span><span class="m">0</span>.0.0.0/0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="w">    </span>--ingress<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="w">    </span>--rule-action<span class="w"> </span>allow
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1"># --protocol 6 = TCP</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-network-acl-entry<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">    </span>--network-acl-id<span class="w"> </span>acl-xxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">    </span>--rule-number<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">    </span>--protocol<span class="w"> </span><span class="m">6</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">    </span>--port-range<span class="w"> </span><span class="nv">From</span><span class="o">=</span><span class="m">80</span>,To<span class="o">=</span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="w">    </span>--cidr-block<span class="w"> </span><span class="m">0</span>.0.0.0/0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="w">    </span>--ingress<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="w">    </span>--rule-action<span class="w"> </span>allow
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">NACL stateless — ephemeral ports</p>
@@ -25198,13 +25224,17 @@
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span>--route-table-ids<span class="w"> </span><span class="nv">$PRIVATE_RT</span>
 </span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Interface Endpoint per Secrets Manager</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-vpc-endpoint<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span>--vpc-id<span class="w"> </span><span class="nv">$VPC_ID</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">    </span>--service-name<span class="w"> </span>com.amazonaws.eu-central-1.secretsmanager<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">    </span>--vpc-endpoint-type<span class="w"> </span>Interface<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">    </span>--subnet-ids<span class="w"> </span><span class="nv">$PRIVATE_SUBNET_A</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">    </span>--security-group-ids<span class="w"> </span><span class="nv">$SG_ENDPOINT</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">    </span>--private-dns-enabled<span class="w">    </span><span class="c1"># usa il DNS standard (*.secretsmanager.eu-central-1.amazonaws.com)</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># --private-dns-enabled: usa il DNS standard (secretsmanager.eu-central-1.amazonaws.com);</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="c1">#   richiede enableDnsSupport + enableDnsHostnames sul VPC</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># $SG_ENDPOINT deve permettere inbound 443 dalle subnet/SG dei client</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># Per HA: una subnet per AZ (ogni subnet = una ENI e un costo orario)</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-vpc-endpoint<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">    </span>--vpc-id<span class="w"> </span><span class="nv">$VPC_ID</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">    </span>--service-name<span class="w"> </span>com.amazonaws.eu-central-1.secretsmanager<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">    </span>--vpc-endpoint-type<span class="w"> </span>Interface<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">    </span>--subnet-ids<span class="w"> </span><span class="nv">$PRIVATE_SUBNET_A</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">    </span>--security-group-ids<span class="w"> </span><span class="nv">$SG_ENDPOINT</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">    </span>--private-dns-enabled
 </span></code></pre></div>
 <hr />
 <h2 id="vpc-flow-logs">VPC Flow Logs<a class="headerlink" href="#vpc-flow-logs" title="Permanent link">&para;</a></h2>
@@ -25212,22 +25242,23 @@
 <p>Sono uno strumento essenziale per due scopi principali: <strong>sicurezza</strong> (investigare accessi anomali, trovare quale IP sta tentando connessioni non autorizzate, verificare che le regole dei Security Group funzionino come previsto) e <strong>troubleshooting di rete</strong> (capire perché una connessione viene bloccata).</p>
 <p>I log possono essere inviati a CloudWatch Logs (per query in tempo quasi reale con Log Insights) o a S3 (più economico per retention lunga, analizzabile con Athena).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Abilitare Flow Logs su VPC (verso CloudWatch Logs)</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-flow-logs<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span>--resource-type<span class="w"> </span>VPC<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span>--resource-ids<span class="w"> </span><span class="nv">$VPC_ID</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span>--traffic-type<span class="w"> </span>ALL<span class="w"> </span><span class="se">\ </span><span class="w">          </span><span class="c1"># ALL | ACCEPT | REJECT</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span>--log-destination-type<span class="w"> </span>cloud-watch-logs<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span>--log-group-name<span class="w"> </span>/aws/vpc/flowlogs<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span>--deliver-logs-permission-arn<span class="w"> </span>arn:aws:iam::123456789012:role/VPCFlowLogsRole
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Verso S3 (più economico per retention lunga)</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-flow-logs<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">    </span>--resource-type<span class="w"> </span>VPC<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">    </span>--resource-ids<span class="w"> </span><span class="nv">$VPC_ID</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">    </span>--traffic-type<span class="w"> </span>REJECT<span class="w"> </span><span class="se">\ </span><span class="w">       </span><span class="c1"># Solo REJECT per analisi security</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">    </span>--log-destination-type<span class="w"> </span>s3<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span>--log-destination<span class="w"> </span>arn:aws:s3:::my-flowlogs-bucket<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">    </span>--log-format<span class="w"> </span><span class="s1">'${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}'</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># --traffic-type: ALL | ACCEPT | REJECT</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-flow-logs<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span>--resource-type<span class="w"> </span>VPC<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span>--resource-ids<span class="w"> </span><span class="nv">$VPC_ID</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span>--traffic-type<span class="w"> </span>ALL<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span>--log-destination-type<span class="w"> </span>cloud-watch-logs<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span>--log-group-name<span class="w"> </span>/aws/vpc/flowlogs<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">    </span>--deliver-logs-permission-arn<span class="w"> </span>arn:aws:iam::123456789012:role/VPCFlowLogsRole
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># Verso S3 (più economico per retention lunga); solo REJECT per analisi security</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-flow-logs<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">    </span>--resource-type<span class="w"> </span>VPC<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">    </span>--resource-ids<span class="w"> </span><span class="nv">$VPC_ID</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">    </span>--traffic-type<span class="w"> </span>REJECT<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span>--log-destination-type<span class="w"> </span>s3<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">    </span>--log-destination<span class="w"> </span>arn:aws:s3:::my-flowlogs-bucket<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">    </span>--log-format<span class="w"> </span><span class="s1">'${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}'</span>
 </span></code></pre></div>
 <p><strong>Analisi con Athena:</strong>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1">-- Query top talkers (Security Investigation)</span>
@@ -25239,6 +25270,12 @@
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">total_bytes</span><span class="w"> </span><span class="k">DESC</span>
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="k">LIMIT</span><span class="w"> </span><span class="mi">20</span><span class="p">;</span>
 </span></code></pre></div></p>
+<hr />
+<h2 id="ipv6-e-vpc-block-public-access">IPv6 e VPC Block Public Access<a class="headerlink" href="#ipv6-e-vpc-block-public-access" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>IPv6 / dual-stack:</strong> si può associare al VPC un blocco IPv6 (<code>/56</code>, da Amazon o BYOIP/IPAM) e assegnare <code>/64</code> alle subnet. Gli indirizzi IPv6 sono globalmente univoci: l'uscita verso Internet passa dall'IGW (route <code>::/0</code>), oppure da un <strong>Egress-only IGW</strong> se le istanze non devono essere raggiungibili dall'esterno. Esistono anche subnet <strong>IPv6-only</strong>. Perché conta: evita NAT GW e riduce il costo degli IPv4 pubblici.</li>
+<li><strong>VPC Block Public Access (BPA):</strong> guardrail a livello di Region/account (introdotto a fine 2024) che blocca il traffico da/verso gli IGW e gli Egress-only IGW di tutti i VPC, con eccezioni per VPC/subnet specifici. Utile per garantire che, in account non destinati a esporsi, nessun errore di route table apra l'accesso a Internet.</li>
+</ul>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-istanza-in-subnet-pubblica-non-raggiungibile-da-internet">Scenario 1 — Istanza in subnet pubblica non raggiungibile da Internet<a class="headerlink" href="#scenario-1-istanza-in-subnet-pubblica-non-raggiungibile-da-internet" title="Permanent link">&para;</a></h3>
