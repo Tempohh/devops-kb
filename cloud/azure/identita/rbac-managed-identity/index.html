@@ -6921,7 +6921,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6946,7 +6946,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7136,10 +7136,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#scenario-4-role-assignment-raggiunge-il-limite-2000-per-subscription" class="md-nav__link">
+  <a href="#scenario-4-role-assignment-raggiunge-il-limite-per-subscription" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scenario 4 — Role assignment raggiunge il limite (2000 per subscription)
+        Scenario 4 — Role assignment raggiunge il limite per subscription
       
     </span>
   </a>
@@ -7195,7 +7195,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24659,10 +24659,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#scenario-4-role-assignment-raggiunge-il-limite-2000-per-subscription" class="md-nav__link">
+  <a href="#scenario-4-role-assignment-raggiunge-il-limite-per-subscription" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scenario 4 — Role assignment raggiunge il limite (2000 per subscription)
+        Scenario 4 — Role assignment raggiunge il limite per subscription
       
     </span>
   </a>
@@ -24859,6 +24859,14 @@
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>Un assignment su Subscription vale per tutti i Resource Group e risorse figli.
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>Un Deny assignment blocca anche i permessi ereditati.
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Azure RBAC ≠ ruoli Entra ID</p>
+<p>Azure RBAC governa le <strong>risorse Azure</strong> (ARM, data plane dei servizi). I ruoli Entra ID (es. Global Administrator, User Administrator) governano il <strong>tenant</strong> (utenti, gruppi, app registration). Sono sistemi separati con role definition e assignment distinti; l'unico ponte è l'elevazione di accesso del Global Administrator (<em>elevate access</em>) verso User Access Administrator alla root.</p>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Deny assignment</p>
+<p>I deny assignment <strong>non</strong> sono creabili direttamente dall'utente: li generano servizi Azure come Deployment Stacks, Managed Applications e Blueprints (deprecato) per proteggere risorse gestite. Hanno precedenza sugli allow assignment.</p>
+</div>
 <hr />
 <h3 id="ruoli-built-in-fondamentali">Ruoli Built-in Fondamentali<a class="headerlink" href="#ruoli-built-in-fondamentali" title="Permanent link">&para;</a></h3>
 <table>
@@ -25100,20 +25108,23 @@
 </span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># 3. ManagedIdentityCredential (VM, App Service, Functions)</span>
 </span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="c1"># 4. AzureCliCredential (sviluppo locale)</span>
 </span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># 5. AzurePowerShellCredential (sviluppo locale)</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="n">credential</span> <span class="o">=</span> <span class="n">DefaultAzureCredential</span><span class="p">()</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># Key Vault</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="n">kv_client</span> <span class="o">=</span> <span class="n">SecretClient</span><span class="p">(</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>    <span class="n">vault_url</span><span class="o">=</span><span class="s2">"https://my-keyvault.vault.azure.net/"</span><span class="p">,</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>    <span class="n">credential</span><span class="o">=</span><span class="n">credential</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="p">)</span>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="n">secret</span> <span class="o">=</span> <span class="n">kv_client</span><span class="o">.</span><span class="n">get_secret</span><span class="p">(</span><span class="s2">"database-password"</span><span class="p">)</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="c1"># Blob Storage</span>
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="n">blob_client</span> <span class="o">=</span> <span class="n">BlobServiceClient</span><span class="p">(</span>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>    <span class="n">account_url</span><span class="o">=</span><span class="s2">"https://mystorageaccount.blob.core.windows.net"</span><span class="p">,</span>
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>    <span class="n">credential</span><span class="o">=</span><span class="n">credential</span>
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="p">)</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># (la catena reale include anche altre credential di sviluppo, es. Azure Developer CLI e VS Code)</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1"># In produzione preferire una credential esplicita (ManagedIdentityCredential): la catena</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># aggiunge latenza e può autenticarsi con un'identità inattesa.</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="n">credential</span> <span class="o">=</span> <span class="n">DefaultAzureCredential</span><span class="p">()</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="c1"># Key Vault</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="n">kv_client</span> <span class="o">=</span> <span class="n">SecretClient</span><span class="p">(</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>    <span class="n">vault_url</span><span class="o">=</span><span class="s2">"https://my-keyvault.vault.azure.net/"</span><span class="p">,</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>    <span class="n">credential</span><span class="o">=</span><span class="n">credential</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="p">)</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="n">secret</span> <span class="o">=</span> <span class="n">kv_client</span><span class="o">.</span><span class="n">get_secret</span><span class="p">(</span><span class="s2">"database-password"</span><span class="p">)</span>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="c1"># Blob Storage</span>
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="n">blob_client</span> <span class="o">=</span> <span class="n">BlobServiceClient</span><span class="p">(</span>
+</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>    <span class="n">account_url</span><span class="o">=</span><span class="s2">"https://mystorageaccount.blob.core.windows.net"</span><span class="p">,</span>
+</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>    <span class="n">credential</span><span class="o">=</span><span class="n">credential</span>
+</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Dall'interno di una VM con Managed Identity — ottenere token manualmente</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># (utile per debug o script bash)</span>
@@ -25136,23 +25147,31 @@
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span>--name<span class="w"> </span>myfunctionapp
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># AKS — nodo pool con User-Assigned MI</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>az<span class="w"> </span>aks<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">    </span>--name<span class="w"> </span>myaks<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">    </span>--enable-managed-identity<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">    </span>--assign-identity<span class="w"> </span>/subscriptions/<span class="nv">$SUBSCRIPTION_ID</span>/.../myapp-identity
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="c1"># Container Instances</span>
-</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a>az<span class="w"> </span>container<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="w">    </span>--name<span class="w"> </span>mycontainer<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="w">    </span>--image<span class="w"> </span>myapp:latest<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">    </span>--assign-identity<span class="w"> </span>/subscriptions/<span class="nv">$SUBSCRIPTION_ID</span>/.../myapp-identity
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># AKS — User-Assigned MI per il control plane (il cluster gestisce risorse Azure: LB, dischi, rete)</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># La kubelet identity (usata dai nodi, es. per AcrPull) è separata: --assign-kubelet-identity</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>az<span class="w"> </span>aks<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">    </span>--name<span class="w"> </span>myaks<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">    </span>--enable-managed-identity<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">    </span>--assign-identity<span class="w"> </span>/subscriptions/<span class="nv">$SUBSCRIPTION_ID</span>/.../myapp-identity<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">    </span>--enable-oidc-issuer<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="w">    </span>--enable-workload-identity<span class="w">   </span><span class="c1"># per i pod: federa un ServiceAccount K8s con una User-Assigned MI</span>
+</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a>
+</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="c1"># Container Instances</span>
+</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a>az<span class="w"> </span>container<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a><span class="w">    </span>--name<span class="w"> </span>mycontainer<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="w">    </span>--image<span class="w"> </span>myapp:latest<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="w">    </span>--assign-identity<span class="w"> </span>/subscriptions/<span class="nv">$SUBSCRIPTION_ID</span>/.../myapp-identity
 </span></code></pre></div>
 <hr />
 <h2 id="workload-identity-federation-github-actions-gcp-aws">Workload Identity Federation (GitHub Actions / GCP / AWS)<a class="headerlink" href="#workload-identity-federation-github-actions-gcp-aws" title="Permanent link">&para;</a></h2>
-<p><strong>Workload Identity Federation</strong> permette a identity esterne (GitHub Actions, Kubernetes SA, GCP, AWS) di ottenere token Entra ID senza client secret:</p>
+<p><strong>Workload Identity Federation</strong> permette a identity esterne (GitHub Actions, Kubernetes SA, GCP, AWS) di ottenere token Entra ID senza client secret. Meccanismo: il workload presenta il token OIDC firmato dal proprio IdP; Entra ID verifica <code>issuer</code>, <code>subject</code> e <code>audience</code> contro il <em>federated credential</em> configurato e, se corrispondono, scambia il token con un access token Entra ID. Nessun segreto da ruotare o da rubare: il token OIDC è di breve durata e legato al contesto di esecuzione.</p>
+<div class="admonition tip">
+<p class="admonition-title">Alternativa: federated credential su User-Assigned MI</p>
+<p>I federated credential si possono creare anche su una <strong>User-Assigned Managed Identity</strong> (<code>az identity federated-credential create</code>) invece che su una App Registration. Utile per evitare di gestire app registration/service principal e restare nel perimetro RBAC delle risorse Azure.</p>
+</div>
+<p>Esempio su App Registration per GitHub Actions:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Creare federated credential su App Registration per GitHub Actions</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>az<span class="w"> </span>ad<span class="w"> </span>app<span class="w"> </span>federated-credential<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span>--id<span class="w"> </span><span class="nv">$APP_ID</span><span class="w"> </span><span class="se">\</span>
@@ -25205,7 +25224,7 @@
 <h3 id="scenario-1-authorizationfailed-nonostante-role-assignment-assegnato">Scenario 1 — "AuthorizationFailed" nonostante role assignment assegnato<a class="headerlink" href="#scenario-1-authorizationfailed-nonostante-role-assignment-assegnato" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> L'operazione Azure fallisce con <code>AuthorizationFailed: ... does not have authorization to perform action</code>.</p>
 <p><strong>Causa:</strong> I role assignment richiedono fino a 5-10 minuti per propagarsi. In alternativa, il principal usa un token emesso <em>prima</em> dell'assignment (cache del token).</p>
-<p><strong>Soluzione:</strong> Attendere la propagazione e riacquisire un nuovo token. Verificare che l'assignment esista davvero e sullo scope corretto.</p>
+<p><strong>Soluzione:</strong> Attendere la propagazione e riacquisire un nuovo token. Per le <strong>Managed Identity</strong> i token sono cacheati dal backend Azure (fino a 24 ore): modifiche a ruoli o appartenenza a gruppi possono non essere visibili subito, e il token non si può forzare a rinnovarsi prima della scadenza. Per questo, per ruoli di accesso ai dati, si assegna il ruolo alla MI direttamente prima del primo utilizzo. Verificare che l'assignment esista davvero e sullo scope corretto.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Verificare che l'assignment esista e sia sullo scope giusto</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>az<span class="w"> </span>role<span class="w"> </span>assignment<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span>--assignee<span class="w"> </span><span class="nv">$PRINCIPAL_ID</span><span class="w"> </span><span class="se">\</span>
@@ -25224,7 +25243,7 @@
 <h3 id="scenario-2-managed-identity-non-riesce-ad-autenticarsi-imds-unreachable">Scenario 2 — Managed Identity non riesce ad autenticarsi (IMDS unreachable)<a class="headerlink" href="#scenario-2-managed-identity-non-riesce-ad-autenticarsi-imds-unreachable" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Errore <code>ManagedIdentityCredential authentication unavailable</code> o timeout su <code>169.254.169.254</code>.</p>
 <p><strong>Causa:</strong> L'endpoint IMDS (Instance Metadata Service) non è raggiungibile: tipico in ambienti container senza networking corretto, o se il servizio MI non è abilitato sulla risorsa.</p>
-<p><strong>Soluzione:</strong> Verificare che la Managed Identity sia abilitata sulla risorsa e che l'endpoint IMDS sia accessibile.</p>
+<p><strong>Soluzione:</strong> Verificare che la Managed Identity sia abilitata sulla risorsa e che l'endpoint IMDS sia accessibile. Nota: App Service, Functions e Container Apps non usano IMDS ma un endpoint locale esposto dalle variabili d'ambiente <code>IDENTITY_ENDPOINT</code> e <code>IDENTITY_HEADER</code>; l'SDK <code>azure-identity</code> lo gestisce in automatico. Con più identità User-Assigned va indicato il <code>client_id</code> (<code>ManagedIdentityCredential(client_id=...)</code>).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Verificare che la MI sia abilitata sulla VM</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>az<span class="w"> </span>vm<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
@@ -25262,9 +25281,9 @@
 </span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="w">    </span>--parameters<span class="w"> </span><span class="s1">'{"subject": "repo:myorg/myrepo:ref:refs/heads/main"}'</span>
 </span></code></pre></div>
 <hr />
-<h3 id="scenario-4-role-assignment-raggiunge-il-limite-2000-per-subscription">Scenario 4 — Role assignment raggiunge il limite (2000 per subscription)<a class="headerlink" href="#scenario-4-role-assignment-raggiunge-il-limite-2000-per-subscription" title="Permanent link">&para;</a></h3>
+<h3 id="scenario-4-role-assignment-raggiunge-il-limite-per-subscription">Scenario 4 — Role assignment raggiunge il limite per subscription<a class="headerlink" href="#scenario-4-role-assignment-raggiunge-il-limite-per-subscription" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Errore <code>RoleAssignmentLimitExceeded: The limit on the number of role assignments has been reached</code>.</p>
-<p><strong>Causa:</strong> Azure impone un limite di 2000 role assignment per subscription. Assegnazioni granulari per-utente per-risorsa esauriscono rapidamente il limite.</p>
+<p><strong>Causa:</strong> Azure impone un limite di role assignment per subscription (4000 al 2026; era 2000 in passato, verificare in <a href="https://learn.microsoft.com/azure/azure-resource-manager/management/azure-subscription-service-limits">Azure limits</a>). Assegnazioni granulari per-utente per-risorsa esauriscono rapidamente il limite.</p>
 <p><strong>Soluzione:</strong> Consolidare assignment usando gruppi Entra ID invece di singoli utenti, e assegnare su scope più ampi (Resource Group invece di singola risorsa).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Contare gli assignment nella subscription</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>az<span class="w"> </span>role<span class="w"> </span>assignment<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>

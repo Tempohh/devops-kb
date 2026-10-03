@@ -6912,7 +6912,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6956,7 +6956,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6981,7 +6981,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7031,6 +7031,17 @@
     <span class="md-ellipsis">
       
         Policy Initiative (Policy Set)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exemption-ed-enforcement-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exemption ed enforcement mode
       
     </span>
   </a>
@@ -24486,6 +24497,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#exemption-ed-enforcement-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exemption ed enforcement mode
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -24780,6 +24802,11 @@
 
 <h1 id="azure-governance">Azure Governance<a class="headerlink" href="#azure-governance" title="Permanent link">&para;</a></h1>
 <p>La <strong>governance Azure</strong> garantisce che le risorse siano usate in conformità con le policy aziendali, di sicurezza e di compliance.</p>
+<p>Strumenti e livello su cui agiscono: <strong>Management Groups</strong> (gerarchia di scope), <strong>Azure Policy</strong> (guardrail sulle risorse), <strong>Resource Locks</strong> (protezione da delete/modify), <strong>PIM</strong> e <strong>Conditional Access</strong> (controllo dell'accesso), <strong>Entra ID Governance</strong> (lifecycle degli accessi).</p>
+<div class="admonition warning">
+<p class="admonition-title">Azure Blueprints ritirato</p>
+<p><strong>Azure Blueprints</strong> è stato deprecato e ritirato (luglio 2026). Per i nuovi ambienti usare <strong>Template Specs</strong> + <strong>Deployment Stacks</strong> (deploy e lifecycle/deny-delete delle risorse) combinati con Policy initiative e Azure Landing Zones (Bicep/Terraform).</p>
+</div>
 <hr />
 <h2 id="management-groups">Management Groups<a class="headerlink" href="#management-groups" title="Permanent link">&para;</a></h2>
 <p>I <strong>Management Groups</strong> organizzano subscription in gerarchia per applicare policy e RBAC uniformemente:</p>
@@ -24811,10 +24838,14 @@
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># Listare gerarchia</span>
 </span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>az<span class="w"> </span>account<span class="w"> </span>management-group<span class="w"> </span>list<span class="w"> </span>--output<span class="w"> </span>table
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Root group e default</p>
+<p>Le nuove subscription finiscono di default sotto il <strong>Tenant Root Group</strong>. Per evitare che si accumulino lì senza policy, impostare un <em>default management group</em> (Hierarchy settings) e limitare con <em>require authorization</em> chi può creare Management Group. Policy e RBAC assegnati a un MG sono <strong>ereditati</strong> da tutti i figli: il perché della gerarchia è applicare una volta sola il guardrail al livello giusto.</p>
+</div>
 <hr />
 <h2 id="azure-policy">Azure Policy<a class="headerlink" href="#azure-policy" title="Permanent link">&para;</a></h2>
 <p><strong>Azure Policy</strong> applica e audita regole sulle risorse Azure in modo automatico.</p>
-<p><strong>Tipi di effect (ordine di valutazione):</strong></p>
+<p><strong>Tipi di effect</strong> (l'ordine reale di valutazione è: <code>Disabled</code> → <code>Append</code>/<code>Modify</code> → <code>Deny</code> → <code>Audit</code>; <code>AuditIfNotExists</code> e <code>DeployIfNotExists</code> vengono valutati dopo che il resource provider ha risposto con successo):</p>
 <table>
 <thead>
 <tr>
@@ -24829,7 +24860,7 @@
 </tr>
 <tr>
 <td><code>Audit</code></td>
-<td>Non blocca, registra non-compliance nell'Activity Log</td>
+<td>Non blocca, registra non-compliance come evento di warning nell'Activity Log</td>
 </tr>
 <tr>
 <td><code>AuditIfNotExists</code></td>
@@ -24837,15 +24868,15 @@
 </tr>
 <tr>
 <td><code>Append</code></td>
-<td>Aggiunge proprietà alla risorsa</td>
+<td>Aggiunge proprietà alla risorsa (legacy: preferire <code>Modify</code>)</td>
 </tr>
 <tr>
 <td><code>Modify</code></td>
-<td>Modifica tag o proprietà</td>
+<td>Aggiunge/aggiorna/rimuove tag o proprietà; richiede managed identity</td>
 </tr>
 <tr>
 <td><code>DeployIfNotExists</code></td>
-<td>Deploya risorsa se non esiste</td>
+<td>Deploya risorsa correlata se non esiste; richiede managed identity</td>
 </tr>
 <tr>
 <td><code>Deny</code></td>
@@ -24853,10 +24884,18 @@
 </tr>
 <tr>
 <td><code>DenyAction</code></td>
-<td>Blocca operazioni di delete/action</td>
+<td>Blocca specifiche azioni (oggi <code>DELETE</code>) su risorse</td>
+</tr>
+<tr>
+<td><code>Manual</code></td>
+<td>Compliance attestata manualmente (es. controlli non automatizzabili)</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Managed identity per Modify / DeployIfNotExists</p>
+<p>Questi effect agiscono con una <strong>managed identity dell'assignment</strong> (<code>--mi-system-assigned --location &lt;region&gt;</code>) a cui vanno assegnati i ruoli indicati in <code>roleDefinitionIds</code> della policy. Senza, la remediation fallisce con errori di autorizzazione.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Listare policy built-in disponibili</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>az<span class="w"> </span>policy<span class="w"> </span>definition<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[?policyType=='BuiltIn'].{Name:displayName, ID:name}"</span><span class="w"> </span><span class="se">\</span>
@@ -24871,47 +24910,46 @@
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span>--params<span class="w"> </span><span class="s1">'{"tagName": {"value": "Environment"}}'</span>
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
 </span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="c1"># Creare policy custom (esempio: blocco risorse in region non autorizzate)</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>cat<span class="w"> </span>&gt;<span class="w"> </span>allowed-regions-policy.json<span class="w"> </span><span class="s">&lt;&lt;'EOF'</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="s">{</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="s">  "properties": {</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="s">    "displayName": "Allowed locations",</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="s">    "description": "Restricts resource deployment to approved Azure regions",</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="s">    "policyType": "Custom",</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="s">    "mode": "Indexed",</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="s">    "parameters": {</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="s">      "allowedLocations": {</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="s">        "type": "Array",</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="s">        "metadata": {</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="s">          "displayName": "Allowed locations",</span>
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="s">          "description": "The list of allowed locations"</span>
-</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="s">        }</span>
-</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="s">      }</span>
-</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="s">    },</span>
-</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="s">    "policyRule": {</span>
-</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="s">      "if": {</span>
-</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="s">        "not": {</span>
-</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="s">          "field": "location",</span>
-</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="s">          "in": "[parameters('allowedLocations')]"</span>
-</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="s">        }</span>
-</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="s">      },</span>
-</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="s">      "then": {</span>
-</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="s">        "effect": "Deny"</span>
-</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="s">      }</span>
-</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="s">    }</span>
-</span><span id="__span-2-42"><a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a><span class="s">  }</span>
-</span><span id="__span-2-43"><a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="s">}</span>
-</span><span id="__span-2-44"><a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a><span class="s">EOF</span>
-</span><span id="__span-2-45"><a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a>
-</span><span id="__span-2-46"><a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a>az<span class="w"> </span>policy<span class="w"> </span>definition<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-47"><a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"allowed-regions"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-48"><a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="w">    </span>--rules<span class="w"> </span>@allowed-regions-policy.json
-</span><span id="__span-2-49"><a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a>
-</span><span id="__span-2-50"><a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a><span class="c1"># Assegnare con parametri</span>
-</span><span id="__span-2-51"><a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a>az<span class="w"> </span>policy<span class="w"> </span>assignment<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-52"><a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"restrict-to-eu"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-53"><a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a><span class="w">    </span>--policy<span class="w"> </span><span class="s2">"allowed-regions"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-54"><a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a><span class="w">    </span>--scope<span class="w"> </span><span class="s2">"/subscriptions/</span><span class="nv">$SUBSCRIPTION_ID</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-55"><a id="__codelineno-2-55" name="__codelineno-2-55" href="#__codelineno-2-55"></a><span class="w">    </span>--params<span class="w"> </span><span class="s1">'{"allowedLocations": {"value": ["italynorth", "westeurope", "northeurope", "germanywestcentral"]}}'</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># --rules vuole SOLO il blocco policyRule (if/then); parametri e mode sono flag separati</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>cat<span class="w"> </span>&gt;<span class="w"> </span>allowed-regions-rule.json<span class="w"> </span><span class="s">&lt;&lt;'EOF'</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="s">{</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="s">  "if": {</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="s">    "not": {</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="s">      "field": "location",</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="s">      "in": "[parameters('allowedLocations')]"</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="s">    }</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="s">  },</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="s">  "then": {</span>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="s">    "effect": "Deny"</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="s">  }</span>
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="s">}</span>
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="s">EOF</span>
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a>
+</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>cat<span class="w"> </span>&gt;<span class="w"> </span>allowed-regions-params.json<span class="w"> </span><span class="s">&lt;&lt;'EOF'</span>
+</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="s">{</span>
+</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="s">  "allowedLocations": {</span>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="s">    "type": "Array",</span>
+</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="s">    "metadata": {</span>
+</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="s">      "displayName": "Allowed locations",</span>
+</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="s">      "description": "The list of allowed locations"</span>
+</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="s">    }</span>
+</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="s">  }</span>
+</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="s">}</span>
+</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="s">EOF</span>
+</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a>
+</span><span id="__span-2-42"><a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a>az<span class="w"> </span>policy<span class="w"> </span>definition<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-43"><a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"allowed-regions"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-44"><a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a><span class="w">    </span>--display-name<span class="w"> </span><span class="s2">"Allowed locations"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-45"><a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a><span class="w">    </span>--mode<span class="w"> </span>Indexed<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-46"><a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a><span class="w">    </span>--rules<span class="w"> </span>allowed-regions-rule.json<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-47"><a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a><span class="w">    </span>--params<span class="w"> </span>allowed-regions-params.json
+</span><span id="__span-2-48"><a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a>
+</span><span id="__span-2-49"><a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="c1"># Assegnare con parametri</span>
+</span><span id="__span-2-50"><a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a>az<span class="w"> </span>policy<span class="w"> </span>assignment<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-51"><a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"restrict-to-eu"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-52"><a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a><span class="w">    </span>--policy<span class="w"> </span><span class="s2">"allowed-regions"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-53"><a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a><span class="w">    </span>--scope<span class="w"> </span><span class="s2">"/subscriptions/</span><span class="nv">$SUBSCRIPTION_ID</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-54"><a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a><span class="w">    </span>--params<span class="w"> </span><span class="s1">'{"allowedLocations": {"value": ["italynorth", "westeurope", "northeurope", "germanywestcentral"]}}'</span>
 </span></code></pre></div>
 <h3 id="policy-initiative-policy-set">Policy Initiative (Policy Set)<a class="headerlink" href="#policy-initiative-policy-set" title="Permanent link">&para;</a></h3>
 <p>Un'<strong>Initiative</strong> raggruppa più policy in un'unica assegnazione:</p>
@@ -24942,12 +24980,15 @@
 </span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[?complianceState=='NonCompliant'].{Policy:policyDefinitionName, Resource:resourceId}"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">    </span>--output<span class="w"> </span>table
 </span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>
-</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="c1"># Remediation task per DeployIfNotExists/Modify</span>
-</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>az<span class="w"> </span>policy<span class="w"> </span>remediation<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"remediate-tags"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a><span class="w">    </span>--policy-assignment<span class="w"> </span><span class="s2">"require-environment-tag"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="c1"># Remediation task: solo per assignment con effect DeployIfNotExists/Modify</span>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="c1"># (non ha senso su "require-environment-tag", che è Deny)</span>
+</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>az<span class="w"> </span>policy<span class="w"> </span>remediation<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"remediate-tags"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a><span class="w">    </span>--policy-assignment<span class="w"> </span><span class="s2">"&lt;assignment-con-modify-o-dine&gt;"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-33"><a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg
 </span></code></pre></div>
+<h3 id="exemption-ed-enforcement-mode">Exemption ed enforcement mode<a class="headerlink" href="#exemption-ed-enforcement-mode" title="Permanent link">&para;</a></h3>
+<p>Per escludere risorse in modo tracciato e con scadenza usare le <strong>exemption</strong> (<code>az policy exemption create</code>, categoria <code>Waiver</code> o <code>Mitigated</code>, con <code>--expires-on</code>), meglio di <code>notScopes</code> che esclude senza audit trail. Un assignment con <code>enforcementMode: DoNotEnforce</code> valuta la compliance senza applicare <code>Deny</code>/remediation: utile per testare una policy prima di attivarla.</p>
 <hr />
 <h2 id="resource-locks">Resource Locks<a class="headerlink" href="#resource-locks" title="Permanent link">&para;</a></h2>
 <p>I <strong>Resource Locks</strong> prevengono eliminazioni o modifiche accidentali:</p>
@@ -24982,9 +25023,13 @@
 <p class="admonition-title">CanNotDelete vs ReadOnly</p>
 <ul>
 <li><strong>CanNotDelete</strong>: permette modifiche, blocca solo delete. Usare per risorse produzione.</li>
-<li><strong>ReadOnly</strong>: blocca TUTTO, incluse operazioni che sembrano di lettura ma modificano state (es. <code>az vm list</code> può fallire perché richiede una write). Usare con cautela.</li>
+<li><strong>ReadOnly</strong>: blocca ogni write e ogni operazione che il provider implementa come <code>POST</code> (es. <code>listKeys</code> su Storage Account, avvio/stop di una VM, scrittura di tag). Le semplici letture (<code>az vm list</code>) funzionano. Usare con cautela.</li>
 </ul>
 </div>
+<ul>
+<li>I lock agiscono solo sul <strong>control plane</strong> (ARM): non impediscono modifiche ai dati (es. scrivere blob o righe SQL).</li>
+<li>I lock sono <strong>ereditati</strong> da risorse figlie; per eliminare una risorsa lockata va prima rimosso il lock (serve <code>Microsoft.Authorization/locks/*</code>, quindi Owner o User Access Administrator).</li>
+</ul>
 <hr />
 <h2 id="privileged-identity-management-pim">Privileged Identity Management (PIM)<a class="headerlink" href="#privileged-identity-management-pim" title="Permanent link">&para;</a></h2>
 <p><strong>PIM</strong> gestisce l'accesso privilegiato Just-In-Time (JIT) — i ruoli privilegiati vengono attivati solo quando necessari e per un periodo limitato:</p>
@@ -25003,7 +25048,8 @@
 - <strong>Justification:</strong> richiede motivazione per l'attivazione
 - <strong>Alerts:</strong> notifica quando si usa un ruolo privilegiato
 - <strong>Access reviews:</strong> revisione periodica degli assignment attivi/eligible</p>
-<p>PIM si configura tramite <strong>Azure Portal</strong> (Entra ID → Identity Governance → PIM) o <strong>MS Graph API</strong>.</p>
+<p>PIM copre due famiglie di ruoli: <strong>ruoli Entra ID</strong> (es. Global Administrator), <strong>ruoli Azure RBAC</strong> (Owner, Contributor su MG/subscription/RG) e <strong>gruppi</strong> (PIM for Groups). Si configura dal portale (Entra admin center → ID Governance → Privileged Identity Management) o via <strong>MS Graph API</strong> (ruoli Entra) / <strong>ARM API</strong> (ruoli Azure). Richiede licenze <strong>Entra ID P2</strong> o <strong>Entra ID Governance</strong>.</p>
+<p><strong>Perché:</strong> riduce la finestra di esposizione di un account compromesso: un attaccante che ruba un token non trova privilegi permanenti, e ogni attivazione lascia audit trail.</p>
 <hr />
 <h2 id="conditional-access">Conditional Access<a class="headerlink" href="#conditional-access" title="Permanent link">&para;</a></h2>
 <p>Le <strong>Conditional Access Policies</strong> di Entra ID controllano l'accesso alle app in base a condizioni:</p>
@@ -25020,27 +25066,36 @@
 </span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>  - Client app: browser, mobile app, exchange sync
 </span></code></pre></div>
 <p><strong>Policy esempio: richiedi MFA per admin fuori dalla rete aziendale:</strong></p>
-<p>Configurazione (tramite Entra ID portal → Security → Conditional Access):</p>
+<p>Configurazione (Entra admin center → Entra ID → Conditional Access, o Graph <code>POST /identity/conditionalAccess/policies</code>). Il JSON sotto è il body Graph; <code>62e90394-...</code> è il role template ID di Global Administrator e <code>&lt;named-location-id&gt;</code> l'ID della named location aziendale:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">"displayName"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Require MFA for admins outside corporate network"</span><span class="p">,</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">"conditions"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">"users"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">      </span><span class="nt">"includeRoles"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"62e90394-69f5-4237-9190-012177145e10"</span><span class="p">]</span><span class="w">  </span><span class="c1">// Global Admin role ID</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">      </span><span class="nt">"includeRoles"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"62e90394-69f5-4237-9190-012177145e10"</span><span class="p">]</span>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="p">},</span>
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="nt">"locations"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">      </span><span class="nt">"excludeLocations"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"named-location-corporate-ip"</span><span class="p">]</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="nt">"applications"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">      </span><span class="nt">"includeApplications"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"All"</span><span class="p">]</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span><span class="p">},</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">  </span><span class="nt">"grantControls"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span><span class="nt">"operator"</span><span class="p">:</span><span class="w"> </span><span class="s2">"OR"</span><span class="p">,</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">    </span><span class="nt">"builtInControls"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"mfa"</span><span class="p">]</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">  </span><span class="p">},</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">  </span><span class="nt">"state"</span><span class="p">:</span><span class="w"> </span><span class="s2">"enabled"</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="p">}</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">      </span><span class="nt">"includeLocations"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"All"</span><span class="p">],</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">      </span><span class="nt">"excludeLocations"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"&lt;named-location-id&gt;"</span><span class="p">]</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="nt">"applications"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">      </span><span class="nt">"includeApplications"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"All"</span><span class="p">]</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">  </span><span class="p">},</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">  </span><span class="nt">"grantControls"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">    </span><span class="nt">"operator"</span><span class="p">:</span><span class="w"> </span><span class="s2">"OR"</span><span class="p">,</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">    </span><span class="nt">"builtInControls"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"mfa"</span><span class="p">]</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">  </span><span class="p">},</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">  </span><span class="nt">"state"</span><span class="p">:</span><span class="w"> </span><span class="s2">"enabledForReportingButNotEnforced"</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="p">}</span>
 </span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Report-only prima di enforce</p>
+<p>Creare la policy in <strong>report-only</strong> (<code>enabledForReportingButNotEnforced</code>), verificare l'impatto con <em>Sign-in logs</em> / Insights workbook, poi passare a <code>enabled</code>. Escludere sempre almeno un account <strong>break-glass</strong> per non bloccare l'intero tenant.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">MFA obbligatoria per Azure</p>
+<p>Microsoft impone l'MFA per accesso ad Azure portal, Entra admin center e Intune (Phase 1) e, in rollout progressivo, per Azure CLI, PowerShell, SDK e IaC tool (Phase 2) con identità utente. Non sostituisce le Conditional Access policy, ma rende l'MFA un requisito di base; le workload identity usano managed identity/service principal.</p>
+</div>
 <hr />
 <h2 id="entra-id-governance">Entra ID Governance<a class="headerlink" href="#entra-id-governance" title="Permanent link">&para;</a></h2>
 <p><strong>Access Reviews</strong> — revisione periodica degli accessi per compliance:</p>
@@ -25056,6 +25111,8 @@
 <li>Flusso di richiesta → approvazione → provisioning automatico</li>
 <li>Gestione lifecycle: scadenza, rinnovo, rimozione automatica</li>
 </ul>
+<p><strong>Lifecycle Workflows</strong> — automatizzano joiner/mover/leaver (onboarding, cambio ruolo, offboarding) con task come abilitare/disabilitare l'account o rimuovere l'appartenenza a gruppi.</p>
+<p>Queste funzioni richiedono la licenza <strong>Microsoft Entra ID Governance</strong> (add-on a P1/P2).</p>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-policy-assegnata-ma-le-risorse-risultano-ancora-non-conformi">Scenario 1 — Policy assegnata ma le risorse risultano ancora non conformi<a class="headerlink" href="#scenario-1-policy-assegnata-ma-le-risorse-risultano-ancora-non-conformi" title="Permanent link">&para;</a></h3>
@@ -25078,8 +25135,8 @@
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-resource-lock-readonly-blocca-operazioni-di-lettura-o-tag">Scenario 2 — Resource Lock ReadOnly blocca operazioni di lettura o tag<a class="headerlink" href="#scenario-2-resource-lock-readonly-blocca-operazioni-di-lettura-o-tag" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> Operazioni come <code>az vm list</code>, <code>az tag update</code>, o deployment ARM falliscono con <code>AuthorizationFailed</code> o <code>ScopeLocked</code> su risorse con lock <code>ReadOnly</code>.</p>
-<p><strong>Causa:</strong> Il lock <code>ReadOnly</code> blocca tutte le operazioni che richiedono una write sul resource provider, incluse alcune che appaiono come lettura ma aggiornano metadata interni (es. tag, etag, list keys).</p>
+<p><strong>Sintomo:</strong> Operazioni come <code>az storage account keys list</code>, <code>az tag update</code>, o deployment ARM falliscono con <code>AuthorizationFailed</code> o <code>ScopeLocked</code> su risorse con lock <code>ReadOnly</code>.</p>
+<p><strong>Causa:</strong> Il lock <code>ReadOnly</code> blocca tutte le operazioni che richiedono una write o una chiamata <code>POST</code> sul resource provider, incluse alcune che appaiono come lettura (es. <code>listKeys</code>) e la scrittura di tag.</p>
 <p><strong>Soluzione:</strong> Rimuovere temporaneamente il lock, eseguire l'operazione, ripristinare il lock. Oppure usare <code>CanNotDelete</code> se il requisito è solo prevenire eliminazioni.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Verificare lock esistenti</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>az<span class="w"> </span>lock<span class="w"> </span>list<span class="w"> </span>--resource-group<span class="w"> </span>production-rg<span class="w"> </span>--output<span class="w"> </span>table
@@ -25108,14 +25165,15 @@
 <strong>Causa 2:</strong> Nessun approvatore configurato o approvatori non raggiungibili.
 <strong>Causa 3:</strong> Il ruolo ha una finestra di attivazione massima inferiore a quanto richiesto.</p>
 <p><strong>Soluzione:</strong> Verificare la configurazione del ruolo in PIM e la presenza di approvatori attivi.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Verificare assigned roles eligible tramite MS Graph (richiede Graph API token)</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>az<span class="w"> </span>rest<span class="w"> </span>--method<span class="w"> </span>GET<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span>--url<span class="w"> </span><span class="s2">"https://graph.microsoft.com/v1.0/roleManagement/directory/roleEligibilityScheduleRequests?\$filter=principalId eq '</span><span class="nv">$USER_OBJECT_ID</span><span class="s2">'"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span>--headers<span class="w"> </span><span class="s2">"Content-Type=application/json"</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Verificare stato richieste di attivazione PIM in sospeso</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>az<span class="w"> </span>rest<span class="w"> </span>--method<span class="w"> </span>GET<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span>--url<span class="w"> </span><span class="s2">"https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignmentScheduleRequests?\$filter=principalId eq '</span><span class="nv">$USER_OBJECT_ID</span><span class="s2">' and status eq 'PendingApproval'"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Ruoli Entra ID (directory roles) via MS Graph; per ruoli Azure RBAC usare l'ARM API</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># Microsoft.Authorization/roleEligibilityScheduleRequests</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>az<span class="w"> </span>rest<span class="w"> </span>--method<span class="w"> </span>GET<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span>--url<span class="w"> </span><span class="s2">"https://graph.microsoft.com/v1.0/roleManagement/directory/roleEligibilityScheduleRequests?\$filter=principalId eq '</span><span class="nv">$USER_OBJECT_ID</span><span class="s2">'"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span>--headers<span class="w"> </span><span class="s2">"Content-Type=application/json"</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># Verificare stato richieste di attivazione PIM in sospeso</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>az<span class="w"> </span>rest<span class="w"> </span>--method<span class="w"> </span>GET<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span>--url<span class="w"> </span><span class="s2">"https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignmentScheduleRequests?\$filter=principalId eq '</span><span class="nv">$USER_OBJECT_ID</span><span class="s2">' and status eq 'PendingApproval'"</span>
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Configurazione PIM</p>
@@ -25125,9 +25183,10 @@
 <h3 id="scenario-4-policy-assegnata-al-management-group-non-si-applica-alle-subscription-figlie">Scenario 4 — Policy assegnata al Management Group non si applica alle subscription figlie<a class="headerlink" href="#scenario-4-policy-assegnata-al-management-group-non-si-applica-alle-subscription-figlie" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Una policy assegnata a livello di Management Group non viene ereditata dalle subscription o resource group sottostanti; le risorse nelle subscription figlie risultano escluse dalla compliance.</p>
 <p><strong>Causa 1:</strong> La subscription è stata aggiunta al Management Group dopo l'assegnazione della policy e il ciclo di propagazione non è ancora completato.
-<strong>Causa 2:</strong> Esiste un'assegnazione a livello inferiore con effetto <code>Disabled</code> che sovrascrive la policy padre.
-<strong>Causa 3:</strong> La subscription ha un'exemption configurata.</p>
-<p><strong>Soluzione:</strong> Verificare la gerarchia, le exemption e i lock di policy.</p>
+<strong>Causa 2:</strong> L'assignment padre ha <code>notScopes</code> che escludono la subscription, oppure <code>enforcementMode: DoNotEnforce</code>. (Un assignment figlio con <code>Disabled</code> NON annulla quello del padre: ogni assignment è valutato in modo indipendente.)
+<strong>Causa 3:</strong> La subscription ha un'exemption configurata.
+<strong>Causa 4:</strong> La policy ha <code>mode: Indexed</code> e il tipo di risorsa non supporta tag/location, quindi non viene valutato.</p>
+<p><strong>Soluzione:</strong> Verificare gerarchia, <code>notScopes</code>, <code>enforcementMode</code> ed exemption.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Verificare che la subscription sia nel Management Group corretto</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>az<span class="w"> </span>account<span class="w"> </span>management-group<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"mg-production"</span><span class="w"> </span><span class="se">\</span>
@@ -25145,21 +25204,22 @@
 </span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">    </span>--subscription<span class="w"> </span><span class="nv">$SUBSCRIPTION_ID</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">    </span>--output<span class="w"> </span>table
 </span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="c1"># Controllare se esiste un override con Disabled a livello inferiore</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="c1"># Controllare notScopes ed enforcement mode degli assignment</span>
 </span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>az<span class="w"> </span>policy<span class="w"> </span>assignment<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">    </span>--subscription<span class="w"> </span><span class="nv">$SUBSCRIPTION_ID</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[?parameters.effect.value=='Disabled'].{Name:name, Scope:scope}"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="w">    </span>--output<span class="w"> </span>table
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"[].{Name:name, EnforcementMode:enforcementMode, NotScopes:notScopes}"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="w">    </span>--output<span class="w"> </span>json
 </span></code></pre></div>
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://learn.microsoft.com/azure/governance/policy/">Azure Policy Documentation</a></li>
 <li><a href="https://learn.microsoft.com/azure/governance/management-groups/">Management Groups</a></li>
-<li><a href="https://learn.microsoft.com/azure/active-directory/privileged-identity-management/">PIM Documentation</a></li>
-<li><a href="https://learn.microsoft.com/azure/active-directory/conditional-access/">Conditional Access</a></li>
+<li><a href="https://learn.microsoft.com/entra/id-governance/privileged-identity-management/">PIM Documentation</a></li>
+<li><a href="https://learn.microsoft.com/entra/identity/conditional-access/">Conditional Access</a></li>
 <li><a href="https://learn.microsoft.com/azure/azure-resource-manager/management/lock-resources">Resource Locks</a></li>
-<li><a href="https://learn.microsoft.com/azure/active-directory/governance/">Entra ID Governance</a></li>
+<li><a href="https://learn.microsoft.com/entra/id-governance/">Entra ID Governance</a></li>
+<li><a href="https://learn.microsoft.com/azure/azure-resource-manager/bicep/deployment-stacks">Deployment Stacks</a></li>
 <li><a href="https://learn.microsoft.com/azure/cloud-adoption-framework/ready/landing-zone/">Azure Landing Zones (CAF)</a></li>
 </ul>
 
