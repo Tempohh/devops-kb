@@ -7,9 +7,10 @@ search_keywords: [jenkins security, jenkins rbac, role strategy plugin, matrix a
 parent: ci-cd/jenkins/_index
 related: [ci-cd/jenkins/agent-infrastructure, ci-cd/jenkins/enterprise-patterns, ci-cd/jenkins/shared-libraries, security/secret-management, security/autenticazione]
 official_docs: https://www.jenkins.io/doc/book/security/
-status: complete
+status: needs-review
 difficulty: expert
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Jenkins Security & Governance
@@ -35,7 +36,7 @@ jenkins:
           userSearchBase: "ou=users,dc=corp,dc=example,dc=com"
           userSearch: "sAMAccountName={0}"       # Active Directory
           groupSearchBase: "ou=groups,dc=corp,dc=example,dc=com"
-          groupSearchFilter: "(member={0})"      # memberOf per AD
+          groupSearchFilter: "(member={0})"      # {0} = DN dell'utente; per AD annidato: (member:1.2.840.113556.1.4.1941:={0})
           groupMembershipStrategy:
             fromGroupSearch:
               filter: "(|(cn=jenkins-*)(cn=devops-*))"
@@ -69,16 +70,11 @@ jenkins:
       emailAttributeName: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
       maximumAuthenticationLifetime: 86400  # 24h
       usernameCaseConversion: "none"
-      # SP (Service Provider) configuration
-      spMetadataUrl: "https://jenkins.corp.example.com/securityRealm/metadata"
       binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
-      # Firma e cifratura
-      signRequests: true
-      keyStorePath: "/var/jenkins_home/saml-keystore.jks"
-      keyStorePassword: "${SAML_KEYSTORE_PASSWORD}"
-      privateKeyAlias: "jenkins-sp"
-      privateKeyPassword: "${SAML_KEY_PASSWORD}"
+      # <!-- REVIEW: verificare nomi esatti delle chiavi keystore/firma (keyStoreAuthConfiguration / advancedConfiguration) nella versione corrente del saml plugin: la forma piatta keyStorePath/signRequests precedente non è confermata -->
 ```
+
+Il metadata del Service Provider (SP) è esposto da Jenkins su `https://<jenkins>/securityRealm/metadata`: è l'URL da dare all'IdP, non una chiave CasC. Mantenere l'`Entity ID` dell'SP identico su Jenkins e IdP (vedi Troubleshooting, scenario 3). Con `JENKINS_URL` errata gli assertion vengono rifiutati.
 
 ### GitHub OAuth (per ambienti cloud-native)
 
@@ -107,7 +103,7 @@ jenkins:
         - "GROUP:Overall/Administer:jenkins-admins"
         # Read-only per tutti gli autenticati
         - "GROUP:Overall/Read:authenticated"
-        - "GROUP:Overall/Read:anonymous"   # rimuovere se non richiesto
+        # Non concedere Overall/Read ad anonymous salvo esposizione pubblica voluta
         # Developer: build e lettura log
         - "GROUP:Job/Build:jenkins-developers"
         - "GROUP:Job/Cancel:jenkins-developers"
@@ -118,104 +114,105 @@ jenkins:
         - "GROUP:Job/Read:jenkins-qa"
 ```
 
+!!! note "Sintassi permessi"
+    Il formato stringa `GROUP:<permesso>:<nome>` è quello storico del Matrix Authorization plugin; le versioni recenti (3.x) preferiscono la forma strutturata `entries: - group: {name: ..., permissions: [...]}`. Entrambe sono accettate: verificare quale genera la tua versione con *Configuration as Code → Export*.
+
 ### Role Strategy (autorizzazione granulare per folder/job)
 
 ```yaml
 jenkins:
   authorizationStrategy:
     roleStrategy:
-      dangerouslyAllowAnyoneToCreateRoles: false
-      rolesToCreate:
+      roles:
         # Ruoli globali
         global:
           - name: "admin"
             description: "Amministratori Jenkins"
             permissions:
               - "Overall/Administer"
-            assignments:
-              - "jenkins-admins"   # gruppo LDAP
+            entries:
+              - group: "jenkins-admins"   # gruppo LDAP/IdP
 
           - name: "viewer"
             description: "Read-only per tutti"
             permissions:
               - "Overall/Read"
               - "Job/Read"
-              - "Run/Replay"       # solo se si vuole allow replay
-            assignments:
-              - "authenticated"
+            entries:
+              - group: "authenticated"
 
-        # Ruoli per folder (pattern regex)
+        # Ruoli per item/folder: regex sul full name del job
         items:
           - name: "team-backend-developer"
             description: "Developer del team backend"
-            pattern: "backend/.*"   # regex: match folder backend e tutto sotto
+            patterns: ["backend/.*"]   # match folder backend e tutto sotto
             permissions:
               - "Job/Build"
               - "Job/Cancel"
               - "Job/Read"
               - "Job/Workspace"
               - "Run/Update"
-              - "View/Read"
-            assignments:
-              - "jenkins-team-backend"
+            entries:
+              - group: "jenkins-team-backend"
 
           - name: "team-backend-release"
             description: "Release manager backend"
-            pattern: "backend/.*"
+            patterns: ["backend/.*"]
             permissions:
               - "Job/Build"
-              - "Job/Configure"    # può modificare la pipeline
+              - "Job/Configure"    # può modificare la pipeline: concederlo con parsimonia
               - "Job/Read"
-              - "Run/Replay"
-              - "View/Read"
-              - "Credentials/View" # può vedere (non leggere) le credenziali
-            assignments:
-              - "jenkins-release-managers"
+              - "Run/Replay"       # Replay esegue Groovy modificato: equivale a Configure
+            entries:
+              - group: "jenkins-release-managers"
 
           - name: "team-frontend-developer"
-            pattern: "frontend/.*"
+            patterns: ["frontend/.*"]
             permissions:
               - "Job/Build"
               - "Job/Cancel"
               - "Job/Read"
-            assignments:
-              - "jenkins-team-frontend"
+            entries:
+              - group: "jenkins-team-frontend"
 ```
+
+!!! tip "Perché ruoli per pattern"
+    Il Role Strategy valuta le regex sul *full name* dell'item (`backend/auth-service`): un team ottiene permessi su un intero sotto-albero senza una matrix per ogni job. I permessi sono **cumulativi** tra ruoli globali e di item, quindi un ruolo globale troppo largo (es. `Job/Configure`) vanifica quelli per folder. Un ruolo `viewer` globale deve restare minimo.
 
 ### Folder-Level Permissions via Groovy Seed
 
+Alternativa quando i team sono creati dinamicamente: una matrix per folder (Folders plugin). Va eseguita come script con identità amministrativa (Script Console o job trusted), non in una pipeline sandboxed.
+
 ```groovy
-// seed-job: assegna permessi a livello di folder programmaticamente
-import com.cloudbees.hudson.plugins.folder.Folder
-import com.michelin.cio.hudson.plugins.rolestrategy.RoleBasedAuthorizationStrategy
+import com.cloudbees.hudson.plugins.folder.properties.AuthorizationMatrixProperty
+import hudson.model.Item
+import hudson.security.Permission
 
-def folderPermissions = [
-    'backend':  [developers: ['Job/Build', 'Job/Read'], leads: ['Job/Configure', 'Job/Build', 'Job/Read']],
-    'frontend': [developers: ['Job/Build', 'Job/Read'], leads: ['Job/Configure', 'Job/Build', 'Job/Read']],
-    'platform': [developers: ['Job/Read'],              admins:  ['Overall/Administer']],
-]
+// Permission.fromId vuole l'ID di classe ("hudson.model.Item.Build"), non "Job/Build"
+def devPerms  = [Item.READ, Item.BUILD]
+def leadPerms = [Item.READ, Item.BUILD, Item.CONFIGURE]
 
-folderPermissions.each { folderName, roles ->
+['backend', 'frontend'].each { folderName ->
     def folder = Jenkins.instance.getItem(folderName)
     if (!folder) {
-        echo "Folder ${folderName} non trovata, skip"
+        println "Folder ${folderName} non trovata, skip"
         return
     }
 
-    // Abilita sicurezza a livello folder (override globale)
-    def auth = new com.cloudbees.hudson.plugins.folder.properties.AuthorizationMatrixProperty()
-    roles.each { role, perms ->
-        perms.each { perm ->
-            auth.add(
-                hudson.security.Permission.fromId(perm),
-                "jenkins-${folderName}-${role}"   // gruppo LDAP
-            )
-        }
-    }
+    def auth = new AuthorizationMatrixProperty()
+    devPerms.each  { Permission p -> auth.add(p, "jenkins-${folderName}-developers") }  // gruppo LDAP
+    leadPerms.each { Permission p -> auth.add(p, "jenkins-${folderName}-leads") }
+
+    // rimuove una matrix preesistente per rendere lo script idempotente
+    folder.properties.findAll { it instanceof AuthorizationMatrixProperty }
+                     .each { folder.removeProperty(it) }
     folder.addProperty(auth)
     folder.save()
 }
 ```
+
+!!! note "Nota"
+    `AuthorizationMatrixProperty.add(Permission, String)` è deprecato nelle versioni recenti del Matrix Authorization plugin a favore di `add(Permission, PermissionEntry)`. <!-- REVIEW: verificare firma corrente di AuthorizationMatrixProperty.add -->
 
 ## Gestione Credenziali
 
@@ -264,7 +261,7 @@ pipeline {
                 )]) {
                     sh '''
                         chmod 600 $SSH_KEY
-                        ssh -i $SSH_KEY -o StrictHostKeyChecking=no \
+                        ssh -i $SSH_KEY -o UserKnownHostsFile=/etc/ssh/jenkins_known_hosts \
                             $SSH_USER@deploy.corp.example.com "systemctl restart myapp"
                     '''
                 }
@@ -295,9 +292,9 @@ pipeline {
 ### Kubernetes Secrets come Jenkins Credentials
 
 ```yaml
-# External Secrets Operator: sincronizza segreti da Vault/AWS SM a K8s,
-# poi Jenkins li legge come credenziali
-apiVersion: external-secrets.io/v1beta1
+# External Secrets Operator: sincronizza segreti da Vault/AWS SM a K8s;
+# il Secret viene montato nel pod Jenkins e letto da JCasC come file
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: jenkins-credentials-sync
@@ -313,7 +310,7 @@ spec:
     template:
       type: Opaque
       data:
-        # Formato atteso dal Kubernetes Credentials plugin
+        # chiavi = nomi dei file che compaiono in /run/secrets/additional
         nexus-username: "{{ .nexus_user }}"
         nexus-password: "{{ .nexus_pass }}"
         sonar-token: "{{ .sonar_token }}"
@@ -329,7 +326,9 @@ spec:
 ```
 
 ```yaml
-# jenkins-casc.yaml — legge le credenziali dallo secret K8s
+# jenkins-casc.yaml — il Secret K8s è montato in /run/secrets/additional
+# (helm chart: controller.additionalExistingSecrets / JCasC secretsFilesDirectory);
+# JCasC risolve ${nome-file} leggendo il contenuto del file
 credentials:
   system:
     domainCredentials:
@@ -337,16 +336,19 @@ credentials:
           - usernamePassword:
               scope: GLOBAL
               id: "nexus-credentials"
-              username: "${kubernetes:jenkins-credentials-k8s/nexus-username}"
-              password: "${kubernetes:jenkins-credentials-k8s/nexus-password}"
+              username: "${nexus-username}"
+              password: "${nexus-password}"
               description: "Nexus Repository (sync da Vault via ESO)"
 
           - string:
               scope: GLOBAL
               id: "sonar-token"
-              secret: "${kubernetes:jenkins-credentials-k8s/sonar-token}"
+              secret: "${sonar-token}"
               description: "SonarQube Token (sync da Vault via ESO)"
 ```
+
+!!! note "Alternativa: Kubernetes Credentials Provider"
+    Il plugin *Kubernetes Credentials Provider* espone direttamente i Secret K8s con label `jenkins.io/credentials-type` come credenziali Jenkins, senza passare da CasC. Il vantaggio è la rotazione senza riavvio; il costo è che i permessi sul Secret K8s diventano parte del modello di sicurezza Jenkins.
 
 ### HashiCorp Vault Integration
 
@@ -405,10 +407,14 @@ def call(String path, String field) {
             returnStdout: true
         ).trim()
 
-        return sh(
-            script: "VAULT_TOKEN=${token} vault kv get -field=${field} ${path}",
-            returnStdout: true
-        ).trim()
+        // Il token passa come env var (single-quote = nessuna interpolazione Groovy):
+        // interpolarlo in una stringa "..." lo esporrebbe nel log e nella process list
+        withEnv(["VAULT_TOKEN=${token}", "VAULT_FIELD=${field}", "VAULT_PATH=${path}"]) {
+            return sh(
+                script: 'vault kv get -field="$VAULT_FIELD" "$VAULT_PATH"',
+                returnStdout: true
+            ).trim()
+        }
     }
 }
 ```
@@ -481,47 +487,37 @@ class Utils implements Serializable {
 
 ### Gestione Approvazioni Script
 
+!!! warning "Non approvare in blocco"
+    Ogni signature approvata vale per **tutti** gli script non-sandbox e, per le signature non whitelisted, apre l'accesso a classi interne. Approvare `jenkins.model.Jenkins getInstance` o simili dà a chiunque possa modificare una pipeline l'accesso all'oggetto `Jenkins` (credenziali, configurazione): è una privilege escalation verso admin. Ogni signature va letta e giustificata; le signature "pericolose" sono evidenziate dalla UI di approvazione.
+
 ```groovy
-// Script per gestire le approvazioni in blocco (eseguire in Script Console)
+// Audit delle approvazioni (eseguire in Script Console, sola lettura)
 import org.jenkinsci.plugins.scriptsecurity.scripts.ScriptApproval
 
 def sa = ScriptApproval.get()
 
-// Lista signature pending
-sa.pendingSignatures.each { sig ->
-    println "PENDING: ${sig.signature}"
-}
+println "== PENDING =="
+sa.pendingSignatures.each { println it.signature }
 
-// Approva tutte le signature pending (ATTENZIONE: verificare prima cosa si approva)
-def approved = []
-sa.pendingSignatures.each { sig ->
-    // Filtra: approva solo signature della shared library aziendale
-    if (sig.signature.contains('com.example.') || sig.signature.contains('jenkins.')) {
-        sa.approveSignature(sig.signature)
-        approved << sig.signature
-    }
-}
-println "Approvati ${approved.size()} signature"
-sa.save()
+println "== GIA' APPROVATE =="
+sa.approvedSignatures.sort().each { println it }
+
+// Approvazione puntuale, dopo revisione manuale:
+// sa.approveSignature('method java.util.Map entrySet')   // salva da sé
 ```
 
 ```yaml
-# jenkins-casc.yaml — pre-approvazione signature note (riduce intervento manuale)
+# jenkins-casc.yaml — pre-approvazione di signature innocue (riduce intervento manuale)
 security:
   scriptApproval:
     approvedSignatures:
-      # Classi base Groovy sicure
-      - "method groovy.json.JsonSlurperClassic parseText java.lang.String"
-      - "method groovy.json.JsonOutput toJson java.lang.Object"
       - "staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods collect java.util.Collection groovy.lang.Closure"
       - "staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods findAll java.util.Collection groovy.lang.Closure"
-      # Jenkins API
-      - "method hudson.model.ItemGroup getItem java.lang.String"
-      - "method jenkins.model.Jenkins getInstance"
-      # Groovy utility
       - "staticMethod java.util.Collections unmodifiableList java.util.List"
       - "new java.util.LinkedHashMap"
 ```
+
+Per il parsing JSON preferire gli step `readJSON`/`writeJSON` (Pipeline Utility Steps) a `JsonSlurper`, che richiede approvazioni.
 
 ## Audit Trail e Compliance
 
@@ -531,18 +527,18 @@ security:
 # jenkins-casc.yaml
 unclassified:
   auditTrailPlugin:
-    # Log su file rotante
     loggers:
       - logFileAuditLogger:
-          log: "/var/log/jenkins/audit.log"
+          log: "/var/jenkins_home/logs/audit.log"   # su volume persistente
           limit: 50         # MB per file
-          count: 10         # file da mantenere
-          output: "JSON"    # JSON per parsing facile con ELK/Splunk
-    # Include TUTTE le azioni (default include solo build)
-    pattern: ".*"           # regex su URL — .* = tutto
+          count: 10         # file ruotati da mantenere
+    # Regex sugli URL loggati. Il default copre solo azioni mutanti (build, config, delete...).
+    # ".*" logga ANCHE ogni GET/polling: volume enorme e rumore. Estendere solo se serve.
+    pattern: ".*/(?:configSubmit|doDelete|postBuildResult|enable|disable|cancelQueue|stop|toggleLogKeep|doWipeOutWorkspace|createItem|createView|build|buildWithParameters|script|scriptText)/?.*"
+    # <!-- REVIEW: verificare nomi chiave CasC (logFileAuditLogger/pattern) e disponibilità output JSON del plugin Audit Trail nella versione in uso -->
 ```
 
-Esempio record di audit in JSON:
+L'Audit Trail registra **richieste HTTP** (chi, cosa, da quale IP): è la fonte per rispondere a "chi ha lanciato/cancellato questo job". Il formato nativo è testo; per ELK/Splunk normalizzarlo in JSON con l'agente di log (Filebeat/Fluent Bit) oppure usare il logger `syslog`/`console` del plugin. Record illustrativo dopo normalizzazione:
 
 ```json
 {
@@ -550,7 +546,6 @@ Esempio record di audit in JSON:
   "who": "john.doe@corp.example.com",
   "what": "POST /job/backend/auth-service/build",
   "remoteAddr": "10.0.1.50",
-  "userAgent": "Mozilla/5.0...",
   "result": "302 Found"
 }
 ```
@@ -564,20 +559,20 @@ unclassified:
     maxHistoryEntries: 50       # storico modifiche per job
     saveSystemConfiguration: true
     saveItemConfiguration: true
-    excludedClasses:             # esclude elementi rumorosi
-      - "hudson.model.RunMap"
     showChangeReasonCommentWindow: true  # richiede commento al cambio config
+    # <!-- REVIEW: verificare chiavi CasC (es. excludePattern) nella versione corrente -->
 ```
+
+Complementa l'Audit Trail: questo risponde a "*cosa* è cambiato" (diff del `config.xml`), l'altro a "*chi* e *quando*". Con pipeline da SCM la storia vera sta in Git: Job Config History serve per job UI-defined e configurazione di sistema.
 
 ### SIEM Integration — Forwarding a Splunk/ELK
 
-```yaml
-# Pipeline che invia eventi di audit a Splunk HEC
-// vars/auditEvent.groovy
+```groovy
+// vars/auditEvent.groovy — invia eventi di pipeline a Splunk HEC
 def call(Map config) {
     def event = [
-        time:       System.currentTimeMillis() / 1000,
-        host:       env.JENKINS_URL?.replaceAll('https?://', '').replaceAll('/', ''),
+        time:       (long) (System.currentTimeMillis() / 1000),
+        host:       env.JENKINS_URL?.replaceAll('https?://', '')?.replaceAll('/', ''),
         source:     'jenkins:pipeline',
         sourcetype: 'jenkins:audit',
         index:      'devops',
@@ -585,26 +580,23 @@ def call(Map config) {
             job:        env.JOB_NAME,
             build:      env.BUILD_NUMBER,
             branch:     env.GIT_BRANCH,
-            user:       env.BUILD_USER_ID ?: 'automation',
+            user:       env.BUILD_USER_ID ?: 'automation',  // richiede build-user-vars-plugin
             action:     config.action,
             result:     config.result ?: 'in-progress',
-            duration:   config.duration,
             env:        config.env,
             version:    config.version,
-            change_id:  env.CHANGE_ID,
-            timestamp:  new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'", TimeZone.getTimeZone('UTC'))
+            change_id:  env.CHANGE_ID
         ]
     ]
 
     withCredentials([string(credentialsId: 'splunk-hec-token', variable: 'SPLUNK_TOKEN')]) {
-        def payload = groovy.json.JsonOutput.toJson(event)
-        sh """
-            curl -k -s --retry 3 \
-                -H "Authorization: Splunk \$SPLUNK_TOKEN" \
-                -H "Content-Type: application/json" \
-                --data '${payload}' \
-                https://splunk-hec.corp.example.com:8088/services/collector
-        """
+        // httpRequest evita l'injection di shell dal payload e mantiene la verifica TLS
+        httpRequest url: 'https://splunk-hec.corp.example.com:8088/services/collector',
+                    httpMode: 'POST',
+                    contentType: 'APPLICATION_JSON',
+                    customHeaders: [[name: 'Authorization', value: "Splunk ${SPLUNK_TOKEN}", maskValue: true]],
+                    requestBody: groovy.json.JsonOutput.toJson(event),
+                    validResponseCodes: '200'
     }
 }
 ```
@@ -614,55 +606,44 @@ def call(Map config) {
 ### Configurazione di Sicurezza Base
 
 ```yaml
-# jenkins-casc.yaml — hardening completo
+# jenkins-casc.yaml — hardening di base
 jenkins:
-  # Disabilita esecuzioni sul controller
+  # Nessuna build sul controller: una build che gira lì legge JENKINS_HOME
+  # (credentials.xml, master.key) e può impersonare Jenkins. Si builda solo su agent.
   numExecutors: 0
 
-  # CSRF Protection (Cross-Site Request Forgery)
+  # CSRF protection: ogni POST richiede un crumb legato alla sessione
   crumbIssuer:
     standard:
-      excludeClientIPFromCrumb: false  # false = include IP nel crumb
-
-  # Disabilita CLI via remoting (usa REST API)
-  remotingSecurity:
-    enabled: true
-
-  # Security Headers
-  globalNodeProperties:
-    - envVars:
-        env:
-          - key: "JENKINS_OPTS"
-            value: "--httpPort=-1 --httpsPort=8443"  # solo HTTPS
+      excludeClientIPFromCrumb: false  # false = il crumb include l'IP del client
 
 security:
-  # Globale: disabilita accesso anonimo
+  # Job DSL: forza sandbox sugli script dei seed job
   globalJobDslSecurityConfiguration:
-    useScriptSecurity: true   # forza sandbox su Job DSL
+    useScriptSecurity: true
 
-  # Disable old remoting protocol
+  # Le build girano con i permessi dell'utente che le avvia, non di SYSTEM
+  # (richiede il plugin Authorize Project)
   queueItemAuthenticator:
     authenticators:
       - global:
-          strategy: "triggeringUsersAuthorizationStrategy"  # build con perms dell'utente che triggera
+          strategy: "triggeringUsersAuthorizationStrategy"
 
 unclassified:
-  # HTTPS/TLS — configurare nel processo di avvio Jenkins, non in CasC
-  # Aggiungere al Deployment K8s:
-  # args: ["--httpsPort=8443", "--httpsCertificate=/certs/tls.crt", "--httpsPrivateKey=/certs/tls.key"]
-
-  # Content Security Policy — riduce XSS surface
-  globalDefaultFlowDurabilityLevel:
-    durabilityHint: "PERFORMANCE_OPTIMIZED"  # per durability in K8s
-
-  # Nasconde la versione Jenkins dagli header HTTP
+  # Messaggio mostrato in home (banner di uso autorizzato)
   systemMessage: "Jenkins CI/CD Platform — Uso autorizzato"
 ```
 
+!!! note "Cosa non serve più configurare"
+    L'*Agent → Controller Access Control* (ex `remotingSecurity`) è sempre attivo dalle versioni recenti del core e non è disattivabile da UI: non esiste più un toggle da "abilitare". Anche la CSP (Content Security Policy) di Jenkins è impostata dal core; **non** sovrascriverla dall'Ingress, perché le regole `'unsafe-inline'` indeboliscono quella nativa.
+
+Oltre alla configurazione, la parte più efficace dell'hardening è operativa: tenere core (LTS) e plugin aggiornati e seguire i **Jenkins Security Advisories** (pubblicati sul sito jenkins.io e via mailing list `jenkinsci-advisories`). La maggior parte delle compromissioni reali passa da CVE in plugin non aggiornati, non da misconfigurazioni di CasC. Rimuovere i plugin inutilizzati riduce la superficie d'attacco.
+
 ### TLS e Ingress Kubernetes
 
+TLS termina sull'Ingress; tra Ingress e pod Jenkins il traffico resta HTTP 8080 dentro il cluster (protetto da NetworkPolicy). Terminare TLS direttamente su Jenkins (`--httpsPort`) serve solo senza reverse proxy.
+
 ```yaml
-# K8s: configurazione TLS con cert-manager
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -671,13 +652,6 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    # Security headers
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      more_set_headers "X-Frame-Options: SAMEORIGIN";
-      more_set_headers "X-Content-Type-Options: nosniff";
-      more_set_headers "X-XSS-Protection: 1; mode=block";
-      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
-      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';";
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: nginx
@@ -698,10 +672,13 @@ spec:
                   number: 8080
 ```
 
+!!! warning "ingress-nginx è in fine vita"
+    Il progetto Ingress NGINX (kubernetes/ingress-nginx) è stato dismesso a marzo 2026: nessuna patch di sicurezza oltre quella data. Per nuovi deploy valutare Gateway API o un altro controller (es. Traefik, Envoy Gateway). Inoltre le `configuration-snippet` sono disabilitate di default nelle versioni recenti (`allow-snippet-annotations: false`) per motivi di sicurezza, quindi non contare su header custom via snippet. Jenkins imposta già da sé `X-Frame-Options` e `X-Content-Type-Options`; `X-XSS-Protection` è obsoleto e va omesso.
+
 ### Network Policy — Isolamento Controller
 
 ```yaml
-# Blocca tutto il traffico in ingress tranne quello necessario
+# Default deny + solo i flussi necessari
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -716,7 +693,7 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # HTTPS dal cluster Ingress
+    # HTTP dall'Ingress controller
     - from:
         - namespaceSelector:
             matchLabels:
@@ -724,25 +701,32 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
-    # Agent JNLP/WebSocket
+    # Agent: JNLP (50000) e WebSocket (8080)
     - from:
         - namespaceSelector:
             matchLabels:
               jenkins-agent: "true"
       ports:
         - protocol: TCP
-          port: 50000   # JNLP
+          port: 50000
         - protocol: TCP
-          port: 8080    # WebSocket
+          port: 8080
   egress:
-    # LDAP/AD
-    - to: []
+    # DNS: senza questa regola, con Egress in policyTypes, nessun nome si risolve
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
       ports:
+        - protocol: UDP
+          port: 53
         - protocol: TCP
-          port: 636   # LDAPS
-    # GitHub
-    - to: []
-      ports:
+          port: 53
+    # LDAPS e HTTPS (GitHub, plugin update center): `to` omesso = qualunque destinazione
+    # su quella porta. Restringere con ipBlock/FQDN policy (CNI che le supportano)
+    - ports:
+        - protocol: TCP
+          port: 636
         - protocol: TCP
           port: 443
     # Kubernetes API (per creare agent pod)
@@ -759,43 +743,45 @@ spec:
 ### SAST/DAST Integration come Quality Gate
 
 ```groovy
-// vars/securityGate.groovy — blocca pipeline se fail security scan
+// vars/securityGate.groovy — blocca la pipeline se uno scan security fallisce
 def call(Map config = [:]) {
-    def severity    = config.severity ?: 'HIGH'
-    def fail        = config.failOnFinding ?: true
+    def severity = config.severity ?: 'HIGH'
+    // attenzione: `config.failOnFinding ?: true` renderebbe impossibile passare false
+    def fail     = config.containsKey('failOnFinding') ? config.failOnFinding : true
 
     parallel(
         'SAST — Semgrep': {
             sh """
                 semgrep scan \
-                    --config=p/jenkins \
                     --config=p/owasp-top-ten \
                     --sarif \
                     --output=semgrep-results.sarif \
+                    ${fail ? '--error' : ''} \
                     .
             """
-            // Pubblica risultati in GitHub PR / SonarQube
             recordIssues(
                 tools: [sarif(pattern: 'semgrep-results.sarif', id: 'semgrep', name: 'Semgrep SAST')]
             )
         },
         'Dependency Check — OWASP': {
-            sh """
-                dependency-check \
-                    --scan . \
-                    --format JSON \
-                    --format HTML \
-                    --out dependency-check-report \
-                    --failOnCVSS 7 \
-                    --nvdApiKey \$NVD_API_KEY
-            """
+            withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')]) {
+                sh '''
+                    dependency-check \
+                        --scan . \
+                        --format XML --format HTML \
+                        --out dependency-check-report \
+                        --failOnCVSS 7 \
+                        --nvdApiKey "$NVD_API_KEY"
+                '''
+            }
+            // il publisher legge l'XML: il formato XML va richiesto esplicitamente sopra
             dependencyCheckPublisher pattern: 'dependency-check-report/dependency-check-report.xml'
         },
         'Container Scan — Trivy': {
             sh """
                 trivy image \
                     --exit-code ${fail ? 1 : 0} \
-                    --severity ${severity},CRITICAL \
+                    --severity ${severity == 'CRITICAL' ? 'CRITICAL' : severity + ',CRITICAL'} \
                     --format sarif \
                     --output trivy-results.sarif \
                     ${env.IMAGE_NAME}:${env.VERSION}
@@ -804,6 +790,8 @@ def call(Map config = [:]) {
     )
 }
 ```
+
+Il gate è "shift-left" ma va applicato sul percorso che porta in produzione, non solo sulle PR: uno scan non bloccante produce solo rumore. Senza `--nvdApiKey` il download del database NVD è fortemente rate-limitato.
 
 ### SBOM Generation e Supply Chain
 
@@ -814,34 +802,30 @@ def call(Map config) {
     def version = config.version
     def format  = config.format ?: 'spdx-json'  // spdx-json, cyclonedx-json
 
-    // Genera SBOM dall'immagine container
-    sh """
-        syft ${image}:${version} \
-            -o ${format}=sbom.json \
-            -o table
-    """
+    // SBOM dall'immagine container
+    sh "syft ${image}:${version} -o ${format}=sbom.json -o table"
 
-    // Attesta l'SBOM con Cosign
-    withCredentials([string(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY')]) {
+    // Attestation firmata. La chiave è un credential di tipo *file*: Jenkins la scrive in un
+    // temp dir dell'agent e la cancella a fine blocco (niente cat/rm manuali).
+    withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
+                     string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')]) {
         sh """
-            echo "\$COSIGN_KEY" > /tmp/cosign.key
-            cosign attest \
-                --key /tmp/cosign.key \
+            cosign attest --yes \
+                --key \$COSIGN_KEY \
                 --type spdxjson \
                 --predicate sbom.json \
                 ${image}:${version}
-            rm /tmp/cosign.key
         """
     }
 
-    // Upload SBOM a Dependency Track
+    // Upload a Dependency-Track (API v1: multipart con projectName/projectVersion)
     withCredentials([string(credentialsId: 'deptrack-api-key', variable: 'DT_KEY')]) {
         sh """
-            curl -s -X POST \
+            curl -sf -X POST \
                 -H "X-API-Key: \$DT_KEY" \
-                -H "Content-Type: multipart/form-data" \
-                -F "project=${config.projectName}" \
-                -F "version=${version}" \
+                -F "autoCreate=true" \
+                -F "projectName=${config.projectName}" \
+                -F "projectVersion=${version}" \
                 -F "bom=@sbom.json" \
                 https://deptrack.corp.example.com/api/v1/bom
         """
@@ -851,86 +835,84 @@ def call(Map config) {
 }
 ```
 
+!!! tip "Keyless"
+    Con un OIDC token del CI, `cosign` può firmare in modalità *keyless* (Fulcio/Rekor): niente chiave privata da custodire in Jenkins. Su Jenkins richiede un provider OIDC (plugin) e un'identity policy lato verifica; la chiave statica resta la scelta più semplice in ambienti air-gapped.
+
 ### Policy as Code — OPA per Pipeline
 
 ```groovy
 // vars/opaCheck.groovy — verifica policy OPA prima di operazioni critiche
 def call(Map config) {
-    def policy  = config.policy   ?: 'deploy'
-    def input   = config.input    ?: [:]
-    def opaUrl  = config.opaUrl   ?: 'http://opa.policy-system.svc.cluster.local:8181'
+    def policy = config.policy ?: 'deploy'
+    def opaUrl = config.opaUrl ?: 'http://opa.policy-system.svc.cluster.local:8181'
 
-    def inputJson = groovy.json.JsonOutput.toJson([
-        input: input + [
-            build_user:    env.BUILD_USER_ID,
-            branch:        env.GIT_BRANCH,
-            job:           env.JOB_NAME,
-            timestamp:     new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'", TimeZone.getTimeZone('UTC'))
+    def body = groovy.json.JsonOutput.toJson([
+        input: (config.input ?: [:]) + [
+            build_user: env.BUILD_USER_ID,
+            branch:     env.GIT_BRANCH,
+            job:        env.JOB_NAME
         ]
     ])
 
-    def result = sh(
-        script: """
-            echo '${inputJson}' | curl -s -X POST \
-                -H "Content-Type: application/json" \
-                --data @- \
-                ${opaUrl}/v1/data/${policy}/allow
-        """,
-        returnStdout: true
-    ).trim()
+    def res = httpRequest url: "${opaUrl}/v1/data/${policy}/allow",
+                          httpMode: 'POST',
+                          contentType: 'APPLICATION_JSON',
+                          requestBody: body,
+                          validResponseCodes: '200'
 
-    def parsed = readJSON text: result
-    if (!parsed.result) {
-        def violations = parsed.explanation ?: 'Violazione policy senza dettagli'
-        error "OPA Policy ${policy}: DENIED — ${violations}"
+    // OPA risponde {"result": true|false}; se la regola è indefinita risponde {} (= negato)
+    def parsed = readJSON text: res.content
+    if (parsed.result != true) {
+        error "OPA Policy ${policy}: DENIED"
     }
-    echo "OPA Policy ${policy}: ALLOWED ✅"
+    echo "OPA Policy ${policy}: ALLOWED"
 }
 ```
 
 ```rego
-# policy/deploy.rego — OPA policy per deploy
+# policy/deploy.rego — sintassi Rego v1 (default da OPA 1.0)
 package deploy
 
-import future.keywords.in
+import rego.v1
 
-default allow = false
+default allow := false
 
-# Permetti deploy se tutte le condizioni sono soddisfatte
-allow {
+# Deploy permesso se tutte le condizioni sono soddisfatte
+allow if {
     valid_branch
     not production_during_freeze
     authorized_user
 }
 
-# Solo da branch approvati
-valid_branch {
-    input.branch in ["main", "release/current"]
+valid_branch if input.branch in {"main", "release/current"}
+
+is_production if contains(input.job, "production")
+
+# Freeze produzione: da venerdì 17:00 a domenica (orario UTC).
+# time.weekday restituisce il NOME del giorno ("Friday"), non un numero.
+production_during_freeze if {
+    is_production
+    time.weekday(time.now_ns()) in {"Saturday", "Sunday"}
 }
 
-# No deploy in production durante freeze (venerdì 17-24, weekend)
-production_during_freeze {
-    input.job contains "production"
-    time.weekday(time.now_ns()) in [5, 6, 0]  # ven, sab, dom
+production_during_freeze if {
+    is_production
+    time.weekday(time.now_ns()) == "Friday"
+    time.clock(time.now_ns())[0] >= 17
 }
 
-production_during_freeze {
-    input.job contains "production"
-    hour := time.clock(time.now_ns())[0]
-    hour >= 17
-    time.weekday(time.now_ns()) == 4  # giovedì sera = freeze anticipato
-}
+# Ambienti non-prod: tutti gli utenti
+authorized_user if not is_production
 
-# Solo utenti nel gruppo release-managers per production
-authorized_user {
-    not input.job contains "production"  # ambienti non-prod: tutti OK
-}
-
-authorized_user {
-    input.job contains "production"
-    input.build_user in data.release_managers  # caricato da file JSON esterno
+# Production: solo release manager (data.release_managers caricato come bundle/data JSON)
+authorized_user if {
+    is_production
+    input.build_user in data.release_managers
 }
 ```
+
+!!! note "OPA 1.0"
+    Dal 2025 (OPA 1.0) la sintassi v1 è quella di default: le regole richiedono `if` e `contains`/`in` sono keyword native; i vecchi `allow { ... }` e `import future.keywords` non compilano senza `--v0-compatible`. `time.now_ns()` cambia a ogni valutazione: per test deterministici passare l'ora via `input`.
 
 ## Tabella Rischi e Controlli
 
@@ -976,8 +958,8 @@ Jenkins.instance.getAllItems(com.cloudbees.hudson.plugins.folder.Folder).each { 
 
 **Soluzione:** Verificare l'esistenza e lo scope delle credenziali:
 
-```bash
-# Script Console — lista credenziali accessibili da un folder specifico
+```groovy
+// Script Console — lista le credenziali dello store di sistema (dominio global)
 def store = Jenkins.instance.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0]
 store.getCredentials(com.cloudbees.plugins.credentials.domains.Domain.global()).each {
   println "ID: ${it.id} — Type: ${it.class.simpleName}"
@@ -988,7 +970,7 @@ store.getCredentials(com.cloudbees.plugins.credentials.domains.Domain.global()).
 # Verifica via CLI Jenkins
 java -jar jenkins-cli.jar -s https://jenkins.corp.example.com/ \
   -auth admin:${API_TOKEN} \
-  list-credentials-as-xml "folder/subfolder"
+  list-credentials-as-xml system::system::jenkins   # store di sistema; per un folder: folder::items::<nome-folder>
 ```
 
 ### Scenario 3 — SAML redirect loop dopo login
@@ -1031,7 +1013,6 @@ upstream jenkins_cluster {
 security:
   scriptApproval:
     approvedSignatures:
-      - "method groovy.lang.GroovyObject getProperty java.lang.String"
       - "staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods collect java.util.Collection groovy.lang.Closure"
       - "method java.util.Map entrySet"
 ```
@@ -1059,7 +1040,7 @@ pipeline {
     stage('Deploy') {
       steps {
         script {
-          def user = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')?.userId ?: 'timer/api'
+          def user = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')[0]?.userId ?: 'timer/api'
           echo "AUDIT: deploy eseguito da ${user} — build #${env.BUILD_NUMBER} — ${new Date()}"
         }
         // ... passi di deploy
@@ -1072,10 +1053,10 @@ pipeline {
 ```bash
 # Verifica configurazione Audit Trail plugin
 # Manage Jenkins → Configure System → Audit Trail
-# Assicurarsi che "Log Location" punti a un path persistente
-# e che "Log File Size" sia adeguato (default 100MB)
+# Assicurarsi che "Log Location" punti a un path persistente (PVC)
+# e che "Log File Size" / "Log File Count" siano adeguati alla retention richiesta
 
-# Lettura diretta del log audit
+# Lettura diretta del log audit (stesso path configurato in CasC)
 tail -f /var/jenkins_home/logs/audit.log | grep -E "(POST|DELETE|PUT)"
 ```
 
