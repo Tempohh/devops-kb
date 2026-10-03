@@ -7,9 +7,10 @@ search_keywords: [AWS Route 53, DNS, hosted zone, public hosted zone, private ho
 parent: cloud/aws/networking/_index
 related: [cloud/aws/networking/vpc, cloud/aws/networking/cloudfront, cloud/aws/compute/ec2-autoscaling]
 official_docs: https://docs.aws.amazon.com/route53/latest/developerguide/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Route 53 — DNS Managed
@@ -69,7 +70,8 @@ aws route53 associate-vpc-with-hosted-zone \
 
 **Alias Record** (specifico AWS):
 - Funziona come CNAME ma può essere usato su root domain (`@`)
-- Punta a endpoint AWS (ALB, CloudFront, S3 static, API Gateway, ELB)
+- Punta a endpoint AWS (ALB/NLB/CLB, CloudFront, S3 static website, API Gateway, Global Accelerator, VPC endpoint, Elastic Beanstalk) o a un altro record nella stessa hosted zone — non a DNS name di istanze EC2
+- L'`HostedZoneId` in `AliasTarget` è quello **del target** (es. dell'ALB per Region, di CloudFront sempre `Z2FDTNDATAQYW2`), non della tua zona
 - **Gratuito** (nessun costo per query a alias records AWS)
 - Supporta health checks sulla risorsa target
 
@@ -279,7 +281,10 @@ aws route53 get-health-check-status \
 - **Calculated** — aggregazione di più health check (AND/OR)
 - **CloudWatch Alarm** — basato su allarme CloudWatch (per risorse private)
 
-**Route 53 Health Checkers** si trovano in 15 Region globali — il target deve essere accessibile da tutte per passare.
+**Route 53 Health Checkers** sono distribuiti in 8 Region AWS pubbliche (circa 15 checker per health check): l'endpoint è considerato healthy se almeno ~18% dei checker lo vede sano. Il target deve quindi accettare traffico dagli IP dei checker (range pubblicati in `ip-ranges.json`, servizio `ROUTE53_HEALTHCHECKS`) — security group e WAF non devono bloccarli.
+
+!!! warning "Risorse private"
+    I checker stanno su Internet: non raggiungono IP privati di un VPC. Per endpoint privati crea un **CloudWatch Alarm** sulla metrica (es. `UnHealthyHostCount`) e un health check di tipo CloudWatch Alarm che lo segue.
 
 ---
 
@@ -311,7 +316,15 @@ aws route53resolver create-resolver-rule \
     --domain-name "corp.local" \
     --resolver-endpoint-id rslvr-out-xxxx \
     --target-ips Ip=192.168.1.53,Port=53 Ip=192.168.1.54,Port=53
+
+# La regola NON ha effetto finché non è associata al VPC
+aws route53resolver associate-resolver-rule \
+    --resolver-rule-id rslvr-rr-xxxx \
+    --vpc-id $VPC_ID
 ```
+
+!!! note "Requisiti endpoint"
+    Ogni endpoint richiede almeno 2 IP in subnet (AZ) diverse per alta disponibilità. Il security group deve consentire DNS (TCP+UDP 53): in ingresso dai server on-prem per l'INBOUND, in uscita verso i DNS on-prem per l'OUTBOUND. On-prem deve raggiungere gli IP dell'endpoint via VPN/Direct Connect. Le regole di forwarding sono condivisibili tra account con AWS RAM.
 
 ---
 
@@ -342,7 +355,50 @@ aws route53resolver associate-firewall-rule-group \
     --vpc-id $VPC_ID \
     --priority 100 \
     --name "association"
+
+# Senza almeno una regola il rule group non fa nulla: collegare la domain list
+aws route53resolver create-firewall-rule \
+    --firewall-rule-group-id rslvr-frg-xxxx \
+    --firewall-domain-list-id fdl-xxxx \
+    --priority 10 \
+    --action BLOCK \
+    --block-response NXDOMAIN \
+    --name "block-malware"
 ```
+
+!!! tip "Managed lists e Advanced"
+    Oltre alle liste citate esistono `AWSManagedDomainsAggregateThreatList` e `AWSManagedDomainsAmazonGuardDutyThreatList`. **DNS Firewall Advanced** aggiunge rilevamento di DGA (Domain Generation Algorithm) e DNS tunneling. Il firewall filtra solo le query che passano dal Resolver del VPC (`.2`): client che usano DNS esterni lo aggirano, quindi blocca anche l'egress 53/853 verso Internet.
+
+---
+
+## DNSSEC
+
+**DNSSEC** (DNS Security Extensions) firma i record con crittografia a chiave pubblica, così i resolver validanti rilevano risposte falsificate (cache poisoning). Route 53 supporta il **signing** delle public hosted zone: la KSK (Key Signing Key) è una chiave asimmetrica ECC_NIST_P256 in **AWS KMS** (deve stare in `us-east-1`); le ZSK sono gestite da Route 53. Dopo `enable-hosted-zone-dnssec` bisogna pubblicare il record **DS** nel registrar/zona parent, altrimenti la catena di fiducia non si chiude.
+
+```bash
+aws route53 create-key-signing-key \
+    --hosted-zone-id Z1234567890 \
+    --key-management-service-arn arn:aws:kms:us-east-1:111122223333:key/xxxx \
+    --name company-ksk --status ACTIVE \
+    --caller-reference "$(date +%s)"
+aws route53 enable-hosted-zone-dnssec --hosted-zone-id Z1234567890
+aws route53 get-dnssec --hosted-zone-id Z1234567890   # contiene il DS da pubblicare
+```
+
+!!! warning "Rischio outage"
+    Un DS errato o una KSK KMS disabilitata/eliminata rende il dominio non risolvibile per i resolver validanti. Prima di abilitare riduci il TTL e imposta un allarme CloudWatch su `DNSSECInternalFailure` e `DNSSECKeySigningKeysNeedingAction`.
+
+---
+
+## Best Practices
+
+- **Alias invece di CNAME** verso risorse AWS: gratuito, supportato all'apex, segue gli IP del target. Il TTL dell'alias è quello del target.
+- **TTL basso prima di un cambio** (es. 60s, 24-48h prima): il failover DNS dura health check (`RequestInterval` × `FailureThreshold`) + TTL cache dei client. Con `RequestInterval: 10` (fast, costo extra) ~30s + TTL.
+- **Failover**: preferisci `EvaluateTargetHealth: true` su alias verso ALB/NLB, health check esplicito per IP/endpoint non-alias.
+- **Health check profondo ma leggero**: `/health` che verifica dipendenze critiche, senza sovraccaricare il backend (15 checker × ogni 30s).
+- **Infrastructure as Code**: gestisci le zone con Terraform/CloudFormation, non a mano; proteggi le zone critiche con policy IAM e SCP.
+- **Private Hosted Zone** per DNS interno (split-horizon): stesso nome in zona pubblica e privata, il VPC vede solo la privata.
+- **Weighted per canary**: Weight 0 = nessun traffico (tranne se tutti i record sono 0, allora equiparti). Il DNS non è un load balancer preciso: i resolver cachano.
 
 ---
 
@@ -403,9 +459,14 @@ curl -v https://api.company.com/health
 **Soluzione:** Verificare associazione VPC e DNS attributes.
 
 ```bash
-# Verificare VPC associati alla hosted zone
-aws route53 list-vpc-association-authorizations \
-    --hosted-zone-id Z1234567890
+# Verificare VPC associati alla hosted zone (sezione VPCs)
+aws route53 get-hosted-zone --id Z1234567890 --query 'VPCs'
+
+# Solo per VPC in un ALTRO account: prima autorizzare dall'account della zona...
+aws route53 create-vpc-association-authorization \
+    --hosted-zone-id Z1234567890 \
+    --vpc VPCRegion=eu-central-1,VPCId=vpc-xxxxx
+# ...poi eseguire associate-vpc-with-hosted-zone dall'account del VPC
 
 # Verificare DNS attributes del VPC
 aws ec2 describe-vpc-attribute \
@@ -432,7 +493,7 @@ aws route53 associate-vpc-with-hosted-zone \
 
 **Sintomo:** Un client in una location specifica (es. Italia) riceve il record `Default` invece del record configurato per `Europe`.
 
-**Causa:** Route 53 geolocation usa la posizione rilevata dall'IP del resolver DNS del client, non dell'IP del client stesso. Se il resolver è un DNS pubblico (8.8.8.8) geolocalizzato diversamente, la policy fallisce. In alternativa, il record per la location specifica non è stato creato.
+**Causa:** Route 53 geolocation usa la posizione rilevata dall'IP del resolver DNS del client, non dell'IP del client stesso, salvo che il resolver invii EDNS0 Client Subnet (ECS, es. 8.8.8.8 lo fa, altri no). Se il resolver è anycast/geolocalizzato diversamente, la policy fallisce. In alternativa, il record per la location specifica non è stato creato.
 
 **Soluzione:** Verificare i record esistenti e testare con un resolver specifico.
 
