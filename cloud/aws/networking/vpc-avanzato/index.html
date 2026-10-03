@@ -4613,7 +4613,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -4638,7 +4638,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24752,6 +24752,10 @@
 
 
 <h1 id="vpc-avanzato-connectivity">VPC Avanzato — Connectivity<a class="headerlink" href="#vpc-avanzato-connectivity" title="Permanent link">&para;</a></h1>
+<div class="admonition note">
+<p class="admonition-title">Snippet CLI</p>
+<p>Negli esempi i commenti <code># ...</code> dopo il <code>\</code> di continuazione riga sono solo didattici: in una shell reale <strong>rompono</strong> il comando (il <code>\</code> deve essere l'ultimo carattere della riga). Rimuoverli prima di eseguire.</p>
+</div>
 <h2 id="vpc-peering">VPC Peering<a class="headerlink" href="#vpc-peering" title="Permanent link">&para;</a></h2>
 <p>Il <strong>VPC Peering</strong> crea una connessione privata tra due VPC — stesso account, account diversi, o Region diverse.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>VPC-A (10.0.0.0/16) ←──── Peering ────→ VPC-B (10.1.0.0/16)
@@ -24792,6 +24796,7 @@
 - Non transitivo (A→B→C non funziona)
 - Non supporta Edge-to-Edge routing (on-premises VPN di VPC-A non raggiunge VPC-B via peering)
 - Per molti VPC → usare <strong>Transit Gateway</strong></p>
+<p><strong>Costi:</strong> nessun costo orario per il peering; si paga il trasferimento dati cross-AZ e cross-Region (stessa AZ nella stessa Region: gratis). Con N VPC servono N·(N−1)/2 peering e altrettante route: oltre poche unità la gestione diventa ingestibile, da qui il TGW.</p>
 <hr />
 <h2 id="transit-gateway-tgw">Transit Gateway (TGW)<a class="headerlink" href="#transit-gateway-tgw" title="Permanent link">&para;</a></h2>
 <p>Il <strong>Transit Gateway</strong> è un hub di rete regionale che connette VPC, VPN e Direct Connect in un'unica topologia hub-and-spoke.</p>
@@ -24827,7 +24832,7 @@
 </span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-transit-gateway-vpc-attachment<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">    </span>--transit-gateway-id<span class="w"> </span><span class="nv">$TGW_ID</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">    </span>--vpc-id<span class="w"> </span>vpc-AAAA<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">    </span>--subnet-ids<span class="w"> </span>subnet-xxx<span class="w"> </span>subnet-yyy<span class="w"> </span><span class="se">\ </span><span class="w">   </span><span class="c1"># subnet in AZ diverse</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">    </span>--subnet-ids<span class="w"> </span>subnet-xxx<span class="w"> </span>subnet-yyy<span class="w"> </span><span class="se">\ </span><span class="w">   </span><span class="c1"># 1 subnet per AZ (max una per AZ)</span>
 </span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">    </span>--options<span class="w"> </span><span class="s2">"ApplianceModeSupport=disable,DnsSupport=enable,Ipv6Support=disable"</span>
 </span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>
 </span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="c1"># Condividere TGW con altri account via Resource Access Manager</span>
@@ -24853,7 +24858,12 @@
 <p><strong>Costi TGW:</strong>
 - $0.05/hr per TGW attachment
 - $0.02/GB dati processati
-- Per 10 VPC: $0.05 × 10 × 24 × 30 = ~$360/mese (solo attachment)</p>
+- Per 10 VPC: $0.05 × 10 × 24 × 30 = ~$360/mese (solo attachment)
+- Prezzi indicativi (us-east-1), variano per Region: verificare la pagina pricing ufficiale.</p>
+<details class="info">
+<summary>Alternative gestite al TGW fai-da-te</summary>
+<p><strong>AWS Cloud WAN</strong> gestisce reti globali multi-Region con policy dichiarativa (segmenti) al posto di TGW + peering manuali. <strong>VPC Lattice</strong> risolve la connettività <em>service-to-service</em> a livello applicativo (L7) senza dover far combaciare CIDR o route. Scegliere TGW quando serve routing L3 classico e controllo sulle route table.</p>
+</details>
 <hr />
 <h2 id="aws-privatelink">AWS PrivateLink<a class="headerlink" href="#aws-privatelink" title="Permanent link">&para;</a></h2>
 <p><strong>PrivateLink</strong> permette di esporre un servizio (tuo o di un vendor) in modo privato tramite <strong>Interface Endpoint</strong>, senza passare per Internet.</p>
@@ -24865,12 +24875,16 @@
 <p><strong>Use case:</strong>
 - Accedere a servizi AWS (Secrets Manager, ECR, SSM...) da subnet private
 - Acquistare servizi SaaS esposti su AWS Marketplace via PrivateLink
-- Esporre microservizi interni ad altri team/account senza VPC peering</p>
+- Esporre microservizi interni ad altri team/account senza VPC peering (nessun requisito di CIDR non sovrapposti; il traffico è unidirezionale consumer → provider)</p>
+<div class="admonition tip">
+<p class="admonition-title">Tipi di endpoint</p>
+<p>Oltre agli <strong>Interface Endpoint</strong> (ENI + costo orario + per GB) esistono i <strong>Gateway Endpoint</strong> (solo S3 e DynamoDB, gratuiti, basati su route in route table), i <strong>Gateway Load Balancer Endpoint</strong> (appliance di sicurezza in-line) e gli endpoint per risorse/service network (VPC Lattice). Per S3/DynamoDB da dentro il VPC preferire il Gateway Endpoint.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Lato Provider: creare Endpoint Service (dietro a NLB)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-vpc-endpoint-service-configuration<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span>--network-load-balancer-arns<span class="w"> </span>arn:aws:elasticloadbalancing:...<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span>--acceptance-required<span class="w"> </span><span class="se">\ </span><span class="w">      </span><span class="c1"># accettazione manuale richiesta</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span>--private-dns-name<span class="w"> </span><span class="s2">"api.company.internal"</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span>--private-dns-name<span class="w"> </span><span class="s2">"api.example.com"</span><span class="w">     </span><span class="c1"># dominio pubblico di tua proprietà</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Lato Consumer: creare Interface Endpoint</span>
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-vpc-endpoint<span class="w"> </span><span class="se">\</span>
@@ -24881,6 +24895,10 @@
 </span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span>--security-group-ids<span class="w"> </span>sg-endpoint<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span>--private-dns-enabled
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Private DNS name</p>
+<p>Il <code>private-dns-name</code> deve essere un dominio <strong>che possiedi</strong> e va verificato con un record TXT pubblico (<code>describe-vpc-endpoint-services</code> / <code>start-vpc-endpoint-service-private-dns-verification</code>); un nome <code>.internal</code> non è verificabile. Senza verifica il consumer usa solo il DNS generato <code>vpce-xxx.vpce-svc-xxx...amazonaws.com</code>.</p>
+</div>
 <hr />
 <h2 id="site-to-site-vpn">Site-to-Site VPN<a class="headerlink" href="#site-to-site-vpn" title="Permanent link">&para;</a></h2>
 <p>Il <strong>Site-to-Site VPN</strong> connette la rete on-premises al VPC via Internet con tunnel IPSec cifrati.</p>
@@ -24958,15 +24976,15 @@
 </tr>
 <tr>
 <td><strong>Hosted</strong></td>
-<td>50 Mbps - 10 Gbps</td>
-<td>Partner gestisce la connessione fisica</td>
+<td>50 Mbps - 25 Gbps</td>
+<td>Partner gestisce la connessione fisica (1 VIF per connessione)</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Virtual Interfaces (VIF):</strong>
-- <strong>Private VIF</strong> → accesso a VPC specifico via VGW
+- <strong>Private VIF</strong> → accesso a VPC via VGW (direttamente o tramite DX Gateway)
 - <strong>Public VIF</strong> → accesso a tutti i servizi AWS pubblici (S3, DynamoDB...) bypassando Internet
-- <strong>Transit VIF</strong> → accesso a TGW (per molti VPC)</p>
+- <strong>Transit VIF</strong> → accesso a uno o più TGW tramite DX Gateway (per molti VPC)</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Direct Connect si gestisce prevalentemente via Console</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># Processo:</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># 1. Richiedere DX connection (o tramite partner)</span>
@@ -24993,8 +25011,13 @@
 Connette un singolo DX a molteplici VPC (anche in Region diverse).</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>On-premises ── DX ── DX Gateway ── VGW ── VPC-A (eu-central-1)
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>                                 ── VGW ── VPC-B (eu-west-1)
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>                                 ── TGW ── VPC-C, VPC-D...
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>On-premises ── DX ── DX Gateway ── TGW ── VPC-C, VPC-D...   (Transit VIF)
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">VGW e TGW non si mescolano</p>
+<p>Un DX Gateway si associa a VGW (con Private VIF) <strong>oppure</strong> a TGW (con Transit VIF), non a entrambi: per usare i due modelli servono DX Gateway distinti.</p>
+</div>
 <p><strong>DX vs VPN:</strong></p>
 <table>
 <thead>
@@ -25067,7 +25090,8 @@ Connette un singolo DX a molteplici VPC (anche in Region diverse).</p>
 </span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a><span class="w">    </span>--target-network-cidr<span class="w"> </span><span class="m">10</span>.0.0.0/16<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="w">    </span>--authorize-all-groups
 </span></code></pre></div>
-<p><strong>Costo:</strong> $0.10/hr per endpoint + $0.05/hr per connessione attiva.</p>
+<p><strong>Costo:</strong> $0.10/hr per ogni subnet associata all'endpoint + $0.05/hr per connessione client attiva (us-east-1). Associare più subnet per HA moltiplica il costo fisso.</p>
+<p>Oltre all'autenticazione con certificato (mutual TLS) sono supportati Active Directory e SAML (federazione IdP); in team numerosi sono preferibili perché permettono revoca e MFA centralizzati.</p>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-vpc-peering-traffico-non-fluisce-dopo-creazione">Scenario 1 — VPC Peering: traffico non fluisce dopo creazione<a class="headerlink" href="#scenario-1-vpc-peering-traffico-non-fluisce-dopo-creazione" title="Permanent link">&para;</a></h3>
@@ -25093,8 +25117,8 @@ Connette un singolo DX a molteplici VPC (anche in Region diverse).</p>
 <hr />
 <h3 id="scenario-2-transit-gateway-attachment-in-stato-pending-o-failed">Scenario 2 — Transit Gateway: attachment in stato <code>pending</code> o <code>failed</code><a class="headerlink" href="#scenario-2-transit-gateway-attachment-in-stato-pending-o-failed" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> L'attachment TGW-VPC rimane in stato <code>pending</code> o passa a <code>failed</code> dopo alcuni minuti.</p>
-<p><strong>Causa:</strong> Le subnet selezionate per l'attachment non hanno una route verso il TGW, oppure non esistono subnet in tutte le AZ richieste. Un'altra causa comune: il TGW appartiene a un altro account e l'accettazione RAM è in sospeso.</p>
-<p><strong>Soluzione:</strong> Verificare che le subnet dell'attachment siano in AZ diverse e che l'account destinatario abbia accettato la resource share RAM.</p>
+<p><strong>Causa:</strong> Cause comuni: (1) il TGW è di un altro account e l'invito RAM non è stato accettato (l'attachment non può nemmeno essere creato); (2) <code>AutoAcceptSharedAttachments=disable</code> e il proprietario del TGW non ha accettato l'attachment (stato <code>pendingAcceptance</code>); (3) subnet non valide (più di una per AZ, o AZ non supportata). Una route mancante nelle route table del VPC <strong>non</strong> blocca l'attachment, ma fa fallire il traffico.</p>
+<p><strong>Soluzione:</strong> Accettare la resource share RAM, poi accettare l'attachment dal lato proprietario del TGW; verificare una sola subnet per AZ.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Controllare stato attachment</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-transit-gateway-vpc-attachments<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span>--filters<span class="w"> </span><span class="nv">Name</span><span class="o">=</span>transit-gateway-id,Values<span class="o">=</span><span class="nv">$TGW_ID</span><span class="w"> </span><span class="se">\</span>
@@ -25108,6 +25132,10 @@ Connette un singolo DX a molteplici VPC (anche in Region diverse).</p>
 </span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="c1"># Accettare invitation RAM</span>
 </span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>aws<span class="w"> </span>ram<span class="w"> </span>accept-resource-share-invitation<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">    </span>--resource-share-invitation-arn<span class="w"> </span>arn:aws:ram:...
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># Dal proprietario del TGW: accettare l'attachment in pendingAcceptance</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>aws<span class="w"> </span>ec2<span class="w"> </span>accept-transit-gateway-vpc-attachment<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">    </span>--transit-gateway-attachment-id<span class="w"> </span>tgw-attach-xxxx
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-site-to-site-vpn-tunnel-ipsec-down">Scenario 3 — Site-to-Site VPN: tunnel IPSec DOWN<a class="headerlink" href="#scenario-3-site-to-site-vpn-tunnel-ipsec-down" title="Permanent link">&para;</a></h3>
