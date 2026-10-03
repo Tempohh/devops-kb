@@ -7,9 +7,10 @@ search_keywords: [quick udp internet connections, quic protocol, http/3, udp, 0-
 parent: networking/protocolli/_index
 related: [networking/protocolli/http2-http3, networking/protocolli/tcp-udp, networking/fondamentali/tcpip, networking/fondamentali/tls-ssl-basics]
 official_docs: https://www.rfc-editor.org/rfc/rfc9000
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # QUIC
@@ -110,10 +111,18 @@ Applicazione (HTTP/3)
 
 ### Controllo della Congestione
 
-QUIC implementa algoritmi di controllo della congestione equivalenti a TCP (CUBIC, BBR) ma in user space. L'ACK mechanism di QUIC è più preciso di TCP grazie a:
-- Packet number monotonicamente crescenti (no ambiguità nei retransmit)
-- Timestamp precisi per calcolo RTT
-- Selective ACK nativo (no workaround come TCP SACK)
+QUIC implementa algoritmi di controllo della congestione equivalenti a TCP (NewReno come baseline in RFC 9002, più CUBIC e BBR) ma in user space: ogni libreria può sceglierli e aggiornarli senza toccare il kernel. Il loss recovery (RFC 9002) è più preciso di TCP grazie a:
+- Packet number monotonicamente crescenti: un pacchetto ritrasmesso ha un nuovo number, quindi nessuna ambiguità tra originale e retransmit nel calcolo RTT
+- Campo `ACK Delay` nell'ACK frame: il ricevente dichiara quanto ha trattenuto l'ACK, così il mittente sottrae il ritardo dal campione RTT
+- Range di ACK (equivalente di SACK) sempre presenti nel frame, non un'opzione negoziata
+
+### Perché UDP e perché cifrato
+
+QUIC usa UDP per **ossification**: i middlebox (NAT, firewall) di Internet ispezionano e talvolta bloccano header TCP non standard, rendendo impossibile evolvere TCP. Sopra UDP, QUIC cifra anche quasi tutti i metadati di trasporto (packet number, frame): i middlebox vedono solo pochi campi invarianti (RFC 8999) e non possono più dipendere da dettagli che bloccherebbero future evoluzioni (esiste già QUIC v2, RFC 9369, per evitare ossification della versione).
+
+### Connection ID e load balancer
+
+Poiché la connessione sopravvive al cambio di IP:porta, un load balancer L4 che instrada per 4-tupla manderebbe i pacchetti migrati a un backend sbagliato. Servono LB *QUIC-aware* che instradano sul Connection ID (es. QUIC-LB, draft IETF, o eBPF/Katran in ambienti hyperscale). Senza, la migration funziona solo con un singolo server o con hashing consistente sul CID.
 
 ## Configurazione & Pratica
 
@@ -127,6 +136,7 @@ server {
 
     http2 on;
     http3 on;
+    quic_retry on;  # address validation: mitiga amplification/spoofing
 
     ssl_certificate     /etc/ssl/certs/example.crt;
     ssl_certificate_key /etc/ssl/private/example.key;
@@ -147,7 +157,8 @@ server {
 ### Verifica supporto QUIC
 
 ```bash
-# curl con supporto HTTP/3 (curl 7.66+)
+# curl compilato con backend HTTP/3 (ngtcp2+nghttp3 o quiche); verificare con: curl -V | grep HTTP3
+# --http3 prova h3 con fallback; --http3-only forza solo h3
 curl --http3 https://example.com -I
 
 # Output atteso:
@@ -166,6 +177,7 @@ curl -I https://example.com | grep alt-svc
 ### Configurazione HAProxy con QUIC
 
 ```
+# Richiede HAProxy 2.6+ (stabile dalla 2.8) e una libreria TLS con API QUIC (OpenSSL 3.5+, quictls, AWS-LC)
 frontend https_frontend
     bind :443 ssl crt /etc/ssl/combined.pem alpn h2,http/1.1
     bind quic4@:443 ssl crt /etc/ssl/combined.pem alpn h3
@@ -213,7 +225,7 @@ aws ec2 authorize-security-group-ingress --group-id sg-0123 --protocol udp --por
 
 **Sintomo**: la prima richiesta e le successive restano su HTTP/2, pur con QUIC attivo.
 
-**Causa**: il browser scopre HTTP/3 solo tramite header `Alt-Svc` ricevuto su HTTP/1.1 o HTTP/2; se manca (o un proxy lo rimuove) non tenta QUIC.
+**Causa**: il browser scopre HTTP/3 tramite header `Alt-Svc` ricevuto su HTTP/1.1 o HTTP/2 (la prima visita resta quindi su TCP), oppure in anticipo via record DNS `HTTPS` (SVCB, RFC 9460) con `alpn=h3`; se mancano (o un proxy rimuove l'header) non tenta QUIC.
 
 **Soluzione**: aggiungere l'header e verificare che arrivi al client.
 
@@ -267,5 +279,7 @@ nstat -az UdpRcvbufErrors
 
 - [RFC 9000 — QUIC Transport Protocol](https://www.rfc-editor.org/rfc/rfc9000)
 - [RFC 9114 — HTTP/3](https://www.rfc-editor.org/rfc/rfc9114)
-- [Cloudflare — QUIC Blog](https://blog.cloudflare.com/quic-v1-2/)
+- [RFC 9001 — Using TLS to Secure QUIC](https://www.rfc-editor.org/rfc/rfc9001)
+- [RFC 9002 — QUIC Loss Detection and Congestion Control](https://www.rfc-editor.org/rfc/rfc9002)
+- [RFC 9369 — QUIC Version 2](https://www.rfc-editor.org/rfc/rfc9369)
 - [HTTP/3 Explained](https://http3-explained.haxx.se/)
