@@ -7,9 +7,10 @@ search_keywords: [http2 multiplexing, http2 server push, hpack header compressio
 parent: networking/protocolli/_index
 related: [networking/protocolli/tcp-udp, networking/protocolli/quic, networking/load-balancing/layer4-vs-layer7]
 official_docs: https://http2.github.io/
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # HTTP/2 e HTTP/3
@@ -24,7 +25,7 @@ HTTP è il protocollo applicativo alla base del Web. La versione 1.1 (1997) ha s
 - **Header verbosi e non compressi**: ogni richiesta ripete gli stessi header (User-Agent, Cookie, Accept) in chiaro
 - **Nessun server push**: il server non può inviare risorse proattivamente
 
-**HTTP/2** (2015, RFC 7540, aggiornata da RFC 9113 nel 2022) risolve questi problemi rimanendo su TCP, introducendo un layer di framing binario sopra TLS.
+**HTTP/2** (2015, RFC 7540, aggiornata da RFC 9113 nel 2022) risolve questi problemi rimanendo su TCP, introducendo un layer di framing binario (di norma trasportato su TLS, negoziato via ALPN — Application-Layer Protocol Negotiation, estensione TLS con cui client e server concordano `h2`).
 
 **HTTP/3** (2022, RFC 9114) va oltre: abbandona TCP e costruisce HTTP sopra QUIC (UDP-based), eliminando il HOL blocking anche a livello di trasporto.
 
@@ -117,7 +118,7 @@ Il server push permetteva al server di inviare risorse proattivamente (es. CSS e
 
 ### HTTP/2: Stream Prioritization
 
-HTTP/2 supportava una gerarchia di priorità degli stream (albero di dipendenze). In pratica raramente implementata correttamente dai server. HTTP/3 utilizza invece le **Extensible Priorities** (RFC 9218), più semplici: header `Priority` con urgency (0–7) e flag `incremental`, senza albero di dipendenze. (QPACK, invece, è la compressione header di HTTP/3, non gestisce priorità.)
+HTTP/2 supportava una gerarchia di priorità degli stream (albero di dipendenze). In pratica raramente implementata correttamente dai server. Il modello è stato sostituito dalle **Extensible Priorities** (RFC 9218, usabili sia con HTTP/2 che con HTTP/3), più semplici: header `Priority` con urgency (0–7) e flag `incremental`, senza albero di dipendenze. (QPACK, invece, è la compressione header di HTTP/3, non gestisce priorità.)
 
 ---
 
@@ -132,8 +133,8 @@ HTTP/2 supportava una gerarchia di priorità degli stream (albero di dipendenze)
 | HOL Blocking trasporto | N/A | Sì (TCP) | No (QUIC streams) |
 | Header compression | No | HPACK | QPACK |
 | TLS | Opzionale | Richiesto in pratica | Integrato (TLS 1.3) |
-| Handshake latency | 2 RTT (TCP) + 1-2 RTT (TLS) | 2 RTT (TCP) + 1-2 RTT (TLS) | 1 RTT (0-RTT possibile) |
-| Server Push | No | Sì (deprecato) | No (rimosso) |
+| Handshake latency | 1 RTT (TCP) + 0 (HTTP) o 1-2 RTT (TLS 1.3 / 1.2) | 1 RTT (TCP) + 1 RTT (TLS 1.3) o 2 (TLS 1.2) | 1 RTT (0-RTT in resumption, con rischio replay) |
+| Server Push | No | Sì (deprecato) | Definito da RFC 9114 ma di fatto non usato |
 | Connection Migration | No | No | Sì |
 | Supporto browser | Universale | >97% | >95% |
 
@@ -184,7 +185,7 @@ server {
 
     ssl_certificate     /etc/ssl/certs/example.com.crt;
     ssl_certificate_key /etc/ssl/private/example.com.key;
-    ssl_protocols       TLSv1.3;        # QUIC richiede TLS 1.3
+    ssl_protocols       TLSv1.2 TLSv1.3; # QUIC usa solo TLS 1.3; TLS 1.2 serve al fallback HTTP/2 su TCP (stesso server block)
 
     # Annunciare supporto HTTP/3 tramite header Alt-Svc
     add_header Alt-Svc 'h3=":443"; ma=86400';
@@ -224,7 +225,7 @@ curl -sI https://example.com | grep -i alt-svc
 ### Stato del supporto (2026)
 
 - **HTTP/2**: supportato da tutti i browser moderni (Chrome, Firefox, Safari, Edge) — > 97% degli utenti
-- **HTTP/3**: supportato da Chrome 87+, Firefox 88+, Safari 14+ — > 95% degli utenti
+- **HTTP/3**: abilitato di default da Chrome 87+, Firefox 88+, Safari 16.4+ — > 95% degli utenti
 
 ### Strategia di migrazione
 
@@ -249,7 +250,10 @@ curl -sI https://example.com | grep -i alt-svc
     Con HTTP/1.1, minimizzare il numero di richieste era critico. Con HTTP/2, le richieste multiple su una connessione hanno overhead minimo. Suddividere bundle grandi permette caching granulare: se cambia solo `app.js`, il browser non deve re-scaricare `vendor.js`.
 
 !!! tip "HTTP/2: aumentare i concurrent streams se necessario"
-    Il default di 100 stream concorrenti è sufficiente per la maggior parte dei casi. Applicazioni con molte richieste parallele (dashboard con dozzine di widget) possono beneficiare di valori più alti (128–256).
+    Il default di Nginx (128 stream concorrenti; la RFC 9113 raccomanda almeno 100) è sufficiente per la maggior parte dei casi. Applicazioni con molte richieste parallele (dashboard con dozzine di widget) possono beneficiare di valori più alti (256), al costo di più memoria per connessione.
+
+!!! warning "HTTP/2 Rapid Reset (CVE-2023-44487)"
+    Un client può aprire e annullare (`RST_STREAM`) stream a raffica, aggirando il limite di stream concorrenti e saturando il server (DDoS record nel 2023). Mantenere server/proxy/CDN aggiornati (Nginx ≥ 1.25.3) e limitare le richieste per connessione (`keepalive_requests`).
 
 !!! warning "HTTP/3: verificare la compatibilità dei middlebox"
     Alcuni firewall aziendali bloccano UDP sulla porta 443. HTTP/3 fallisce silenziosamente e torna a HTTP/2. Monitorare i rate di upgrade per rilevare ambienti problematici.
