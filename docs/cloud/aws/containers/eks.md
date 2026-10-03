@@ -7,9 +7,10 @@ search_keywords: [Amazon EKS, Elastic Kubernetes Service, EKS managed node group
 parent: cloud/aws/containers/_index
 related: [cloud/aws/compute/containers-ecs-eks, cloud/aws/iam/policies-avanzate, cloud/aws/networking/vpc, cloud/aws/networking/vpc-avanzato, cloud/aws/security/kms-secrets, cloud/aws/monitoring/cloudwatch, cloud/aws/monitoring/observability, containers/kubernetes/architettura, containers/kubernetes/networking, containers/kubernetes/sicurezza]
 official_docs: https://docs.aws.amazon.com/eks/latest/userguide/
-status: complete
+status: needs-review
 difficulty: advanced
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Amazon EKS — Elastic Kubernetes Service
@@ -26,6 +27,12 @@ EKS è la scelta standard per organizzazioni enterprise che:
 - Team senza esperienza Kubernetes — ECS ha curva di apprendimento molto più bassa
 - Workloads semplici, stateless, solo su AWS — ECS si integra più profondamente con servizi AWS nativi
 - Budget limitato — il control plane EKS costa $0.10/ora (~$73/mese) per cluster; ECS è gratuito
+
+!!! warning "Versioni K8s e Extended Support"
+    Ogni versione Kubernetes ha ~14 mesi di *standard support* su EKS, poi 12 mesi di *extended support* a pagamento ($0.60/ora per cluster invece di $0.10) e infine upgrade forzato da AWS. Pianificare upgrade regolari: restare su una versione vecchia costa 6× sul control plane.
+
+!!! tip "EKS Auto Mode"
+    **EKS Auto Mode** (dal 2024) delega ad AWS anche la data plane: nodi (basati su Karpenter gestito), load balancing, storage EBS, networking e DNS sono gestiti e aggiornati da AWS, con una fee aggiuntiva per istanza. Riduce il lavoro operativo delle sezioni Node Groups, Karpenter e Add-on sotto; si sceglie quando non servono AMI custom, DaemonSet privilegiati o controllo fine sui componenti. Questo documento descrive il modello classico (a controllo pieno).
 
 ---
 
@@ -71,7 +78,7 @@ kind: ClusterConfig
 metadata:
   name: production
   region: eu-central-1
-  version: "1.31"
+  version: "1.34"   # <!-- REVIEW: verificare versioni K8s attualmente in standard support su EKS -->
   tags:
     Environment: production
     Team: platform
@@ -187,7 +194,7 @@ eksctl get cluster --name production
 # Creare cluster (solo control plane — nodi da aggiungere separatamente)
 aws eks create-cluster \
     --name production \
-    --kubernetes-version 1.31 \
+    --kubernetes-version 1.34 \
     --role-arn arn:aws:iam::123456789012:role/EKSClusterRole \
     --resources-vpc-config \
         subnetIds=subnet-a,subnet-b,subnet-c,\
@@ -196,13 +203,12 @@ aws eks create-cluster \
         endpointPublicAccess=true,\
         publicAccessCidrs=1.2.3.4/32    # limitare accesso pubblico all'API server
 
-# Abilitare OIDC provider (necessario per IRSA)
-aws eks associate-identity-provider-config \
-    --cluster-name production \
-    --oidc '{
-        "issuerUrl": "https://oidc.eks.eu-central-1.amazonaws.com/id/XXXXXXXX"
-    }'
+# Abilitare OIDC provider IAM (necessario per IRSA) — vedi sezione IRSA
+eksctl utils associate-iam-oidc-provider --cluster production --approve
 ```
+
+!!! note "Non usare `associate-identity-provider-config` per IRSA"
+    Quel comando associa un IdP OIDC *esterno* per autenticare utenti umani verso l'API server, non crea l'OIDC provider IAM che serve a IRSA.
 
 ---
 
@@ -234,7 +240,8 @@ aws eks create-nodegroup \
 aws eks update-nodegroup-version \
     --cluster-name production \
     --nodegroup-name workers-general \
-    --release-version latest   # oppure versione specifica
+    # senza --release-version usa l'ultima AMI release per la versione K8s corrente;
+    # per fissare una AMI release: --release-version <versione-esatta>
 
 # Scalare manualmente
 aws eks update-nodegroup-config \
@@ -264,12 +271,23 @@ aws ec2 create-launch-template \
         "MetadataOptions": {"HttpTokens": "required", "HttpPutResponseHopLimit": 2}
     }'
 
-# Bootstrap script per unire il nodo al cluster
-# (incluso nell'AMI ufficiale EKS)
-/etc/eks/bootstrap.sh production \
-    --b64-cluster-ca <CA_DATA> \
-    --apiserver-endpoint https://ENDPOINT.gr7.eu-central-1.eks.amazonaws.com \
-    --kubelet-extra-args '--node-labels=workload-type=custom'
+```
+
+Su **AL2023** il nodo si unisce al cluster tramite `nodeadm` (UserData in formato MIME con un documento `NodeConfig`); `/etc/eks/bootstrap.sh` esiste solo su AL2, che è fuori supporto.
+
+```yaml
+# UserData (parte application/node.eks.aws) per AL2023
+apiVersion: node.eks.aws/v1alpha1
+kind: NodeConfig
+spec:
+  cluster:
+    name: production
+    apiServerEndpoint: https://ENDPOINT.gr7.eu-central-1.eks.amazonaws.com
+    certificateAuthority: <CA_DATA_BASE64>
+    cidr: 172.20.0.0/16        # service CIDR del cluster
+  kubelet:
+    flags:
+      - --node-labels=workload-type=custom
 ```
 
 ### Fargate Profiles
@@ -400,14 +418,15 @@ spec:
 ```
 
 !!! tip "EKS Pod Identity — alternativa moderna a IRSA"
-    Dal 2023, AWS ha introdotto **EKS Pod Identity** come alternativa semplificata a IRSA. Non richiede OIDC provider per account, e la configurazione è interamente lato AWS (non richiede annotazioni sul ServiceAccount).
+    Dal 2023, AWS ha introdotto **EKS Pod Identity** come alternativa semplificata a IRSA. Non richiede OIDC provider per cluster, e la configurazione è interamente lato AWS (nessuna annotazione sul ServiceAccount). Un agent (DaemonSet) sui nodi serve le credenziali ai pod. La trust policy del role è unica e riusabile tra cluster: principal `pods.eks.amazonaws.com`, azioni `sts:AssumeRole` e `sts:TagSession`.
+
+    Limiti: **non funziona su Fargate** né su nodi non EC2 (es. EKS Anywhere); lì resta IRSA.
 
     ```bash
-    # Abilitare EKS Pod Identity Agent (add-on)
+    # Abilitare EKS Pod Identity Agent (add-on; senza --addon-version usa la default)
     aws eks create-addon \
         --cluster-name production \
-        --addon-name eks-pod-identity-agent \
-        --addon-version latest
+        --addon-name eks-pod-identity-agent
 
     # Creare associazione Pod Identity
     aws eks create-pod-identity-association \
@@ -428,7 +447,7 @@ Gli **EKS Managed Add-ons** sono componenti di cluster gestiti da AWS: aggiornam
 ```bash
 # Listare add-on disponibili per la versione K8s
 aws eks describe-addon-versions \
-    --kubernetes-version 1.31 \
+    --kubernetes-version 1.34 \
     --query 'addons[].{Name:addonName, Versions:addonVersions[0].addonVersion}' \
     --output table
 
@@ -441,11 +460,12 @@ aws eks create-addon \
     --configuration-values '{"enableNetworkPolicy":"true"}' \
     --resolve-conflicts OVERWRITE   # OVERWRITE: sovrascrive config esistente; PRESERVE: mantiene
 
-# Aggiornare add-on esistente
+# Aggiornare add-on esistente (la AWS CLI non accetta "latest": indicare una versione esatta
+# ottenuta da describe-addon-versions; eksctl invece accetta "latest")
 aws eks update-addon \
     --cluster-name production \
     --addon-name coredns \
-    --addon-version latest \
+    --addon-version v1.11.4-eksbuild.2 \
     --resolve-conflicts OVERWRITE
 
 # Status add-on
@@ -460,6 +480,8 @@ aws eks describe-addon \
 ```bash
 # ─── AWS Load Balancer Controller ───────────────────────────────────────────
 # Gestisce ALB (Ingress) e NLB (Service type LoadBalancer)
+# Prerequisito: ServiceAccount "aws-load-balancer-controller" già creato con IAM role
+# (IRSA o Pod Identity) e la policy ufficiale del controller, altrimenti serviceAccount.create=false non basta
 helm repo add eks https://aws.github.io/eks-charts
 helm repo update
 
@@ -473,7 +495,7 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
 
 # ─── Karpenter (node autoprovisioner) ───────────────────────────────────────
 # Sostituisce Cluster Autoscaler: provisioning nodi in secondi (non minuti)
-helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
+# (versione chart di esempio: usare l'ultima release stabile compatibile con la versione K8s)helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
     --version "1.0.4" \
     --namespace kube-system \
     --set settings.clusterName=production \
@@ -524,7 +546,7 @@ spec:
     cpu: "500"
     memory: 2000Gi
   disruption:
-    consolidationPolicy: WhenUnderutilized
+    consolidationPolicy: WhenEmptyOrUnderutilized   # v1: "WhenUnderutilized" (v1beta1) non è più valido
     consolidateAfter: 30s
     budgets:
       - nodes: "10%"                    # al massimo 10% dei nodi rimossi in una volta
@@ -562,8 +584,8 @@ Il **VPC CNI** (aws-node DaemonSet) assegna IP VPC nativi ai pod — ogni pod ot
 
 ```bash
 # Calcolo IP disponibili per pod
-# Ogni nodo può avere al massimo (max_ENI × max_IPs_per_ENI - 1) pod
-# m7g.xlarge: 4 ENI × 15 IP = 60 pod max
+# Senza prefix delegation: max pod = ENI × (IP per ENI − 1) + 2
+# m7g.xlarge: 4 × (15 − 1) + 2 = 58 pod max
 
 # Abilitare prefix delegation (aumenta drasticamente la capacità pod)
 # Ogni ENI può avere prefissi /28 invece di IP singoli → 16× più pod
@@ -603,7 +625,6 @@ metadata:
   name: myapp-ingress
   namespace: myapp
   annotations:
-    kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internet-facing     # o internal
     alb.ingress.kubernetes.io/target-type: ip             # ip (raccomandato) o instance
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:...:certificate/xxx
@@ -612,6 +633,7 @@ metadata:
     alb.ingress.kubernetes.io/healthcheck-path: /health
     alb.ingress.kubernetes.io/group.name: production-apps # condivide ALB tra più Ingress
 spec:
+  ingressClassName: alb   # sostituisce l'annotazione deprecata kubernetes.io/ingress.class
   rules:
     - host: myapp.example.com
       http:
@@ -672,11 +694,16 @@ aws eks associate-access-policy \
 # AmazonEKSEditPolicy         — edit (no RBAC)
 # AmazonEKSViewPolicy         — read-only
 
-# Abilitare Access Entries sul cluster (disabilita aws-auth)
+# Abilitare Access Entries sul cluster.
+# API_AND_CONFIG_MAP: usa access entries E aws-auth (fase di migrazione)
+# API: solo access entries (aws-auth ignorata)
+# La transizione è a senso unico: CONFIG_MAP → API_AND_CONFIG_MAP → API, non si torna indietro
 aws eks update-cluster-config \
     --name production \
-    --access-config authenticationMode=API_AND_CONFIG_MAP  # o API
+    --access-config authenticationMode=API_AND_CONFIG_MAP
 ```
+
+Per mappare un principal IAM a un gruppo RBAC (come `myapp-developers` sotto) si passa `--kubernetes-groups myapp-developers` a `create-access-entry`; le access policy `associate-access-policy` e i gruppi RBAC sono due meccanismi alternativi/complementari.
 
 ```yaml
 # RBAC per team applicativo
@@ -692,9 +719,8 @@ rules:
   - apiGroups: [""]
     resources: ["pods/log", "pods/exec"]
     verbs: ["get", "list"]
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: []   # nessun accesso ai secrets (IRSA/External Secrets gestisce i segreti)
+  # Nessuna regola per "secrets": RBAC è solo additivo (deny implicito),
+  # quindi basta non concedere l'accesso (i segreti arrivano via IRSA/External Secrets)
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -757,19 +783,24 @@ aws eks describe-cluster \
 
 # Listare versioni disponibili
 aws eks describe-addon-versions \
-    --kubernetes-version 1.32 \
+    --kubernetes-version 1.35 \
     --query 'addons[].addonName' \
     --output text
 
-# Controllare deprecated APIs (fondamentale prima di ogni upgrade)
-# kubectl convert è il comando per controllare compatibility
-kubectl api-versions | sort
+# Controllare API deprecate/rimosse e altri blocker (fondamentale prima di ogni upgrade):
+# gli Upgrade Insights di EKS analizzano l'audit log del cluster
+aws eks list-insights --cluster-name production \
+    --filter category=UPGRADE_READINESS
+aws eks describe-insight --cluster-name production --id <INSIGHT_ID>
 
 # ─── Step 2: Upgrade control plane ──────────────────────────────────────────
-# Solo 1 minor version per volta (1.30 → 1.31, poi 1.31 → 1.32)
+# Solo 1 minor version per volta (1.33 → 1.34, poi 1.34 → 1.35)
 aws eks update-cluster-version \
     --name production \
-    --kubernetes-version 1.32
+    --kubernetes-version 1.35   # <!-- REVIEW: verificare che 1.35 sia disponibile su EKS -->
+
+# Nota: dopo l'upgrade del control plane i nodi possono restare max 3 minor indietro
+# (version skew kubelet), ma è buona pratica allinearli subito
 
 # Monitorare progresso (può richiedere 10-20 minuti)
 aws eks describe-update \
@@ -780,11 +811,16 @@ aws eks describe-update \
 # ─── Step 3: Aggiornare add-on managed ──────────────────────────────────────
 for addon in vpc-cni coredns kube-proxy aws-ebs-csi-driver; do
     echo "Aggiornamento add-on: $addon"
+    # versione default dell'add-on per la nuova versione K8s
+    version=$(aws eks describe-addon-versions \
+        --addon-name $addon --kubernetes-version 1.35 \
+        --query 'addons[0].addonVersions[?compatibilities[0].defaultVersion==`true`].addonVersion | [0]' \
+        --output text)
     aws eks update-addon \
         --cluster-name production \
         --addon-name $addon \
-        --addon-version latest \
-        --resolve-conflicts OVERWRITE
+        --addon-version "$version" \
+        --resolve-conflicts PRESERVE   # OVERWRITE cancellerebbe personalizzazioni (es. enableNetworkPolicy)
 
     # Attendere completamento
     aws eks wait addon-active \
@@ -796,8 +832,8 @@ done
 # Managed Node Groups: rolling update automatico
 aws eks update-nodegroup-version \
     --cluster-name production \
-    --nodegroup-name workers-general \
-    --release-version latest
+    --nodegroup-name workers-general
+    # (ultima AMI release per la versione K8s del control plane)
 
 # Monitorare (può richiedere 20-40 minuti per node group grande)
 eksctl get nodegroup \
@@ -816,14 +852,14 @@ kubectl get events --sort-by='.lastTimestamp' | tail -20
 # Upgrade completo automatizzato con eksctl
 eksctl upgrade cluster \
     --name production \
-    --version 1.32 \
+    --version 1.35 \
     --approve
 
 # Upgrade node group con eksctl
 eksctl upgrade nodegroup \
     --cluster production \
     --name workers-general \
-    --kubernetes-version 1.32
+    --kubernetes-version 1.35
 ```
 
 ---
@@ -846,20 +882,20 @@ aws eks update-cluster-config \
 aws eks create-addon \
     --cluster-name production \
     --addon-name amazon-cloudwatch-observability \
-    --addon-version latest \
     --service-account-role-arn arn:aws:iam::123456789012:role/EKS-CWObservabilityRole
 ```
 
 ```yaml
 # Prometheus + Grafana via Helm (stack di osservabilità standard)
 # kube-prometheus-stack include: Prometheus, Grafana, AlertManager, node-exporter
+# Prima creare il Secret "grafana-admin" (chiavi admin-user/admin-password): mai password in chiaro
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 
 helm install kube-prometheus-stack \
     prometheus-community/kube-prometheus-stack \
     --namespace monitoring \
     --create-namespace \
-    --set grafana.adminPassword=changeme \
+    --set grafana.admin.existingSecret=grafana-admin \
     --set prometheus.prometheusSpec.retention=30d \
     --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName=gp3 \
     --set prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage=50Gi
