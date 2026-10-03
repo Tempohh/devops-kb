@@ -5564,7 +5564,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -5589,7 +5589,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -25295,22 +25295,22 @@
 <tbody>
 <tr>
 <td>MySQL</td>
-<td>5.7, 8.0</td>
-<td>Il più comune; compatibile con Aurora MySQL</td>
+<td>8.0, 8.4 (LTS)</td>
+<td>Il più comune; compatibile con Aurora MySQL. 5.7 è fuori supporto standard</td>
 </tr>
 <tr>
 <td>PostgreSQL</td>
-<td>12–16</td>
-<td>Feature-rich; compatibile con Aurora PostgreSQL</td>
+<td>13–18</td>
+<td>Feature-rich; compatibile con Aurora PostgreSQL. Le versioni EOL (≤12) passano in Extended Support</td>
 </tr>
 <tr>
 <td>MariaDB</td>
-<td>10.5, 10.6, 10.11</td>
+<td>10.6, 10.11, 11.4</td>
 <td>Fork MySQL; alcune feature aggiuntive</td>
 </tr>
 <tr>
 <td>Oracle</td>
-<td>19c, 21c</td>
+<td>19c</td>
 <td>BYOL (Bring Your Own License) o License Included</td>
 </tr>
 <tr>
@@ -25325,6 +25325,10 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition warning">
+<p class="admonition-title">Extended Support a pagamento</p>
+<p>Quando una versione major raggiunge l'EOL community, RDS/Aurora la mantiene in <strong>Extended Support</strong> (fino a 3 anni) con un sovrapprezzo per vCPU-ora, e dopo la scadenza esegue l'upgrade forzato. Le versioni supportate cambiano spesso: verificarle con <code>aws rds describe-db-engine-versions --engine mysql --query 'DBEngineVersions[].EngineVersion'</code> invece di fidarsi della tabella.</p>
+</div>
 <h3 id="instance-classes">Instance Classes<a class="headerlink" href="#instance-classes" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -25381,7 +25385,7 @@
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>--engine<span class="w"> </span>mysql<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span>--engine-version<span class="w"> </span><span class="m">8</span>.0<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span>--master-username<span class="w"> </span>admin<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span>--master-user-password<span class="w"> </span>MySecurePassword123!<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span>--manage-master-user-password<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span>--allocated-storage<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span>--storage-type<span class="w"> </span>gp3<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>--iops<span class="w"> </span><span class="m">3000</span><span class="w"> </span><span class="se">\</span>
@@ -25402,12 +25406,16 @@
 </span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">  </span>--db-instance-identifier<span class="w"> </span>my-prod-db<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">  </span>--force-failover
 </span></code></pre></div>
-<p><strong>Multi-AZ Cluster (Novità):</strong> RDS supporta ora anche un deployment Multi-AZ con 1 writer + 2 reader automatici (diverso dalle Read Replicas classiche), con failover &lt; 35 secondi.</p>
+<div class="admonition tip">
+<p class="admonition-title">Password gestita da RDS</p>
+<p><code>--manage-master-user-password</code> fa creare e ruotare a RDS la password master in Secrets Manager (cifrata con KMS): niente password in chiaro nella shell history, negli script o nello state IaC. Il secret si legge da <code>MasterUserSecret.SecretArn</code>.</p>
+</div>
+<p><strong>Multi-AZ DB Cluster:</strong> deployment alternativo (solo MySQL e PostgreSQL) con 1 writer + 2 reader in 3 AZ, replica semi-sincrona. A differenza della standby classica i 2 reader <strong>sono leggibili</strong> (reader endpoint) e il failover è tipicamente &lt; 35 secondi. Costa di più (3 istanze) ma evita di comprare Aurora quando servono solo HA rapida e letture.</p>
 <h3 id="read-replicas">Read Replicas<a class="headerlink" href="#read-replicas" title="Permanent link">&para;</a></h3>
 <p>Le Read Replicas sono copie asincrone del database primario, accessibili per le operazioni di sola lettura. Riducono il carico sul primario per query di report, analytics, o applicazioni read-heavy.</p>
 <p><strong>Caratteristiche:</strong>
 - Replica <strong>asincrona</strong> (possibile lag, non garantisce consistency immediata)
-- Fino a <strong>15 Read Replicas</strong> per istanza RDS (5 per MySQL)
+- Fino a <strong>15 Read Replicas</strong> per istanza RDS MySQL/MariaDB/PostgreSQL (5 per Oracle e SQL Server)
 - Possono essere in <strong>Region diverse</strong> (Cross-Region Read Replica) per DR o utenti globali
 - Ogni replica ha il proprio endpoint di connessione
 - Possono essere <strong>promosse</strong> a database standalone (irreversibile — non è più una replica)
@@ -25488,7 +25496,7 @@
 - IAM authentication (token IAM invece di password)
 - Integrazione con Secrets Manager (rotazione automatica credenziali)
 - Failover ridotto del 66% rispetto a connessione diretta
-- Supporta: MySQL, PostgreSQL, SQL Server, Aurora MySQL/PostgreSQL</p>
+- Supporta: MySQL, MariaDB, PostgreSQL, SQL Server, Aurora MySQL/PostgreSQL</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Creare RDS Proxy</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>aws<span class="w"> </span>rds<span class="w"> </span>create-db-proxy<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--db-proxy-name<span class="w"> </span>my-rds-proxy<span class="w"> </span><span class="se">\</span>
@@ -25619,12 +25627,18 @@
 </span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">      </span>--port<span class="o">=</span><span class="m">3306</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">      </span>--user<span class="o">=</span>iam_user<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">      </span>--password<span class="o">=</span><span class="s2">"</span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">      </span>--ssl-ca<span class="o">=</span>rds-ca-2019-root.pem<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">      </span>--ssl-ca<span class="o">=</span>global-bundle.pem<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">      </span>--enable-cleartext-plugin
 </span></code></pre></div>
 <h3 id="enhanced-monitoring-e-performance-insights">Enhanced Monitoring e Performance Insights<a class="headerlink" href="#enhanced-monitoring-e-performance-insights" title="Permanent link">&para;</a></h3>
 <p><strong>Enhanced Monitoring:</strong> metriche OS con granularità fino a 1 secondo (CPU per processo, memoria, I/O, filesystem). Dati inviati a CloudWatch Logs.</p>
 <p><strong>Performance Insights:</strong> strumento di analisi delle query. Identifica quali query consumano più risorse, breakdown per wait event, top SQL, top host.</p>
+<!-- REVIEW: verificare stato/date di EOL di Performance Insights a favore di CloudWatch Database Insights (modalità Standard/Advanced) e retention 731 giorni -->
+<div class="admonition note">
+<p class="admonition-title">Database Insights</p>
+<p>AWS sta sostituendo Performance Insights con <strong>CloudWatch Database Insights</strong>, che aggiunge vista di flotta e correlazione con le metriche CloudWatch. Per i cluster nuovi preferire Database Insights; i flag <code>--enable-performance-insights</code> restano utili per istanze esistenti.</p>
+</div>
+<p>Il bundle CA <code>global-bundle.pem</code> si scarica da <code>https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem</code>; i vecchi certificati <code>rds-ca-2019</code> sono scaduti.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Abilitare Enhanced Monitoring</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>aws<span class="w"> </span>rds<span class="w"> </span>modify-db-instance<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--db-instance-identifier<span class="w"> </span>my-prod-db<span class="w"> </span><span class="se">\</span>
@@ -25640,7 +25654,7 @@
 </span></code></pre></div>
 <hr />
 <h2 id="amazon-aurora">Amazon Aurora<a class="headerlink" href="#amazon-aurora" title="Permanent link">&para;</a></h2>
-<p>Aurora è un database relazionale cloud-native sviluppato da AWS, compatibile con MySQL 5.&#8542;.0 e PostgreSQL 12–16. Non è semplicemente MySQL/PostgreSQL su un'architettura migliorata: l'engine di storage è stato completamente riscritto per il cloud.</p>
+<p>Aurora è un database relazionale cloud-native sviluppato da AWS, compatibile con MySQL 8.0/8.4 (Aurora MySQL v3/v4) e PostgreSQL 13+. Non è semplicemente MySQL/PostgreSQL su un'architettura migliorata: l'engine di storage è stato completamente riscritto per il cloud.</p>
 <h3 id="architettura-aurora-storage-cluster">Architettura Aurora — Storage Cluster<a class="headerlink" href="#architettura-aurora-storage-cluster" title="Permanent link">&para;</a></h3>
 <p>L'elemento distintivo di Aurora è il <strong>Cluster Volume</strong> condiviso:</p>
 <ul>
@@ -25668,9 +25682,9 @@
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>aws<span class="w"> </span>rds<span class="w"> </span>create-db-cluster<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--db-cluster-identifier<span class="w"> </span>my-aurora-cluster<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--engine<span class="w"> </span>aurora-mysql<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--engine-version<span class="w"> </span><span class="m">8</span>.0.mysql_aurora.3.04.0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--engine-version<span class="w"> </span><span class="m">8</span>.0.mysql_aurora.3.10.0<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span>--master-username<span class="w"> </span>admin<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span>--master-user-password<span class="w"> </span>MySecurePassword123!<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span>--manage-master-user-password<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span>--vpc-security-group-ids<span class="w"> </span>sg-1234567890<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">  </span>--db-subnet-group-name<span class="w"> </span>my-db-subnet-group<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">  </span>--backup-retention-period<span class="w"> </span><span class="m">7</span><span class="w"> </span><span class="se">\</span>
@@ -25700,10 +25714,11 @@
 </span><span id="__span-9-34"><a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a><span class="w">  </span>--query<span class="w"> </span><span class="s1">'DBClusters[0].{Endpoint:Endpoint,ReaderEndpoint:ReaderEndpoint}'</span>
 </span></code></pre></div>
 <h3 id="aurora-serverless-v2">Aurora Serverless v2<a class="headerlink" href="#aurora-serverless-v2" title="Permanent link">&para;</a></h3>
-<p>Aurora Serverless v2 scala automaticamente in base al carico, da 0.5 a 256 ACU (Aurora Capacity Units). Ogni ACU corrisponde approssimativamente a 2 GB RAM + vCPU proporzionale.</p>
+<p>Aurora Serverless v2 scala automaticamente in base al carico, da 0 (con auto-pause) o 0.5 fino a 256 ACU (Aurora Capacity Units). Ogni ACU corrisponde approssimativamente a 2 GiB RAM + vCPU proporzionale. Serverless v1 è stato dismesso (EOL marzo 2025): v2 è l'unica opzione.</p>
 <p><strong>Vantaggi:</strong>
 - Non paghi per capacità non utilizzata
-- Scale in/out in frazioni di secondo (vs v1 che aveva cold start di minuti)
+- Scale in/out in frazioni di secondo, in-place, senza disconnettere i client
+- Con <code>MinCapacity=0</code> e <code>SecondsUntilAutoPause</code> l'istanza va in pausa quando inattiva (nessun costo compute, resume in ~15 s): ideale per dev/test
 - Può coesistere con istanze provisioniali nello stesso cluster</p>
 <p><strong>Use case ideali:</strong>
 - Ambienti dev/test con utilizzo intermittente
@@ -25713,9 +25728,9 @@
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>aws<span class="w"> </span>rds<span class="w"> </span>create-db-cluster<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--db-cluster-identifier<span class="w"> </span>my-serverless-cluster<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>--engine<span class="w"> </span>aurora-postgresql<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span>--engine-version<span class="w"> </span><span class="m">15</span>.4<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span>--engine-version<span class="w"> </span><span class="m">16</span>.4<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>--master-username<span class="w"> </span>admin<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span>--master-user-password<span class="w"> </span>MySecurePassword123!<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span>--manage-master-user-password<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span>--serverless-v2-scaling-configuration<span class="w"> </span><span class="nv">MinCapacity</span><span class="o">=</span><span class="m">0</span>.5,MaxCapacity<span class="o">=</span><span class="m">64</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span>--storage-encrypted
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
@@ -25734,32 +25749,32 @@
 <h3 id="aurora-global-database">Aurora Global Database<a class="headerlink" href="#aurora-global-database" title="Permanent link">&para;</a></h3>
 <p>Aurora Global Database permette di avere <strong>un primary</strong> in una Region e fino a <strong>5 secondary</strong> in altre Region, con:
 - <strong>RPO</strong> (Recovery Point Objective — massima perdita di dati accettabile) <strong>&lt; 1 secondo</strong> (replication lag tipicamente &lt; 1s)
-- <strong>RTO</strong> (Recovery Time Objective — tempo massimo di ripristino del servizio) <strong>&lt; 1 minuto</strong> (failover gestito manualmente)
+- <strong>RTO</strong> (Recovery Time Objective — tempo massimo di ripristino del servizio) tipicamente di <strong>minuti</strong> (il failover cross-Region è avviato da te o dalla tua automazione, e l'applicazione deve puntare al nuovo endpoint)
 - Secondary Region è read-only (può essere promossa a primary in caso di disaster)</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Creare un Aurora Global Database</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Creare un Aurora Global Database a partire da un cluster esistente (diventa il primary)</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>aws<span class="w"> </span>rds<span class="w"> </span>create-global-cluster<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--global-cluster-identifier<span class="w"> </span>my-global-db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--engine<span class="w"> </span>aurora-mysql<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--engine-version<span class="w"> </span><span class="m">8</span>.0.mysql_aurora.3.04.0
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Associare il cluster primario</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>aws<span class="w"> </span>rds<span class="w"> </span>modify-db-cluster<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span>--db-cluster-identifier<span class="w"> </span>my-aurora-cluster<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">  </span>--global-cluster-identifier<span class="w"> </span>my-global-db
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="c1"># Aggiungere una Region secondaria</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>aws<span class="w"> </span>rds<span class="w"> </span>create-db-cluster<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>--db-cluster-identifier<span class="w"> </span>my-aurora-eu<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">  </span>--engine<span class="w"> </span>aurora-mysql<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">  </span>--global-cluster-identifier<span class="w"> </span>my-global-db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">  </span>--region<span class="w"> </span>eu-west-1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">  </span>--storage-encrypted<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">  </span>--kms-key-id<span class="w"> </span>arn:aws:kms:eu-west-1:123456789012:key/mrk-5678
-</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a>
-</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="c1"># Failover managed (promuovi region secondaria)</span>
-</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a>aws<span class="w"> </span>rds<span class="w"> </span>failover-global-cluster<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="w">  </span>--global-cluster-identifier<span class="w"> </span>my-global-db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="w">  </span>--target-db-cluster-arn<span class="w"> </span>arn:aws:rds:eu-west-1:123456789012:cluster:my-aurora-eu
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--source-db-cluster-identifier<span class="w"> </span>arn:aws:rds:us-east-1:123456789012:cluster:my-aurora-cluster
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># Aggiungere una Region secondaria</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>aws<span class="w"> </span>rds<span class="w"> </span>create-db-cluster<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span>--db-cluster-identifier<span class="w"> </span>my-aurora-eu<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span>--engine<span class="w"> </span>aurora-mysql<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">  </span>--global-cluster-identifier<span class="w"> </span>my-global-db<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">  </span>--region<span class="w"> </span>eu-west-1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">  </span>--storage-encrypted<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span>--kms-key-id<span class="w"> </span>arn:aws:kms:eu-west-1:123456789012:key/mrk-5678
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="c1"># Switchover pianificato (nessuna perdita dati, ruoli scambiati: manutenzione, DR drill)</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>aws<span class="w"> </span>rds<span class="w"> </span>switchover-global-cluster<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">  </span>--global-cluster-identifier<span class="w"> </span>my-global-db<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">  </span>--target-db-cluster-identifier<span class="w"> </span>arn:aws:rds:eu-west-1:123456789012:cluster:my-aurora-eu
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="c1"># Failover non pianificato (Region primaria down): possibile perdita dei dati non ancora replicati</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a>aws<span class="w"> </span>rds<span class="w"> </span>failover-global-cluster<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="w">  </span>--global-cluster-identifier<span class="w"> </span>my-global-db<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="w">  </span>--target-db-cluster-identifier<span class="w"> </span>arn:aws:rds:eu-west-1:123456789012:cluster:my-aurora-eu<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="w">  </span>--allow-data-loss
 </span></code></pre></div>
 <h3 id="aurora-backtrack">Aurora Backtrack<a class="headerlink" href="#aurora-backtrack" title="Permanent link">&para;</a></h3>
 <p>Backtrack permette di "tornare indietro nel tempo" su un cluster Aurora MySQL senza dover ripristinare da uno snapshot. Non richiede la creazione di un nuovo cluster.</p>
@@ -25773,13 +25788,14 @@
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>aws<span class="w"> </span>rds<span class="w"> </span>create-db-cluster<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>--db-cluster-identifier<span class="w"> </span>my-aurora-cluster<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span>--engine<span class="w"> </span>aurora-mysql<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span>--backtrack-window<span class="w"> </span><span class="m">72</span><span class="w"> </span><span class="se">\ </span><span class="w"> </span><span class="c1"># ore</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span>--backtrack-window<span class="w"> </span><span class="m">259200</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span><span class="c1"># ... altri parametri ...</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Eseguire il backtrack</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>aws<span class="w"> </span>rds<span class="w"> </span>backtrack-db-cluster<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">  </span>--db-cluster-identifier<span class="w"> </span>my-aurora-cluster<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">  </span>--backtrack-to<span class="w"> </span><span class="s2">"2024-01-15T14:30:00+00:00"</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># --backtrack-window è in SECONDI (259200 = 72 ore)</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># Eseguire il backtrack</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>aws<span class="w"> </span>rds<span class="w"> </span>backtrack-db-cluster<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">  </span>--db-cluster-identifier<span class="w"> </span>my-aurora-cluster<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">  </span>--backtrack-to<span class="w"> </span><span class="s2">"2024-01-15T14:30:00+00:00"</span>
 </span></code></pre></div>
 <h3 id="bluegreen-deployments">Blue/Green Deployments<a class="headerlink" href="#bluegreen-deployments" title="Permanent link">&para;</a></h3>
 <p>Blue/Green permette aggiornamenti zero-downtime per RDS e Aurora: crea una copia "green" del database, applica le modifiche, esegue il switchover in &lt;1 minuto.</p>
@@ -25796,11 +25812,18 @@
 </span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">  </span>--blue-green-deployment-identifier<span class="w"> </span>bgd-1234567890<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">  </span>--switchover-timeout<span class="w"> </span><span class="m">300</span><span class="w">  </span><span class="c1"># secondi di attesa per completamento transazioni</span>
 </span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="c1"># Eliminare il blue (vecchio) dopo verifica</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>aws<span class="w"> </span>rds<span class="w"> </span>delete-blue-green-deployment<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="w">  </span>--blue-green-deployment-identifier<span class="w"> </span>bgd-1234567890<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="w">  </span>--delete-source
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="c1"># Dopo lo switchover il vecchio blue viene rinominato (suffisso -old1) e resta in piedi:</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="c1"># eliminare prima il deployment (rimuove solo il tracking), poi l'istanza vecchia dopo verifica</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>aws<span class="w"> </span>rds<span class="w"> </span>delete-blue-green-deployment<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="w">  </span>--blue-green-deployment-identifier<span class="w"> </span>bgd-1234567890
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>aws<span class="w"> </span>rds<span class="w"> </span>delete-db-instance<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="w">  </span>--db-instance-identifier<span class="w"> </span>my-prod-db-old1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="w">  </span>--skip-final-snapshot
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Come funziona</p>
+<p>Green è una copia sincronizzata via replica logica (MySQL binlog / PostgreSQL logical replication) mantenuta aggiornata dal blue. Lo switchover mette il blue in sola lettura, attende che green recuperi il lag, poi scambia i nomi degli endpoint: l'app non cambia connection string. Il rollback richiede un nuovo deployment: dopo lo switchover la replica verso il vecchio blue non prosegue.</p>
+</div>
 <h3 id="aurora-io-optimized">Aurora I/O-Optimized<a class="headerlink" href="#aurora-io-optimized" title="Permanent link">&para;</a></h3>
 <p>Aurora I/O-Optimized è un pricing alternativo per workload I/O intensivi. Invece di pagare per ogni operazione I/O, si paga un prezzo per storage più alto ma con I/O illimitato.</p>
 <p><strong>Quando conviene:</strong> se il costo delle I/O supera il 25% del costo totale del cluster Aurora.</p>
@@ -25811,20 +25834,20 @@
 </span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span>--apply-immediately
 </span></code></pre></div>
 <h3 id="aurora-ml-integration">Aurora ML Integration<a class="headerlink" href="#aurora-ml-integration" title="Permanent link">&para;</a></h3>
-<p>Aurora può fare chiamate dirette a SageMaker (per inferenza ML custom) e Amazon Comprehend (per analisi del sentiment) tramite SQL.</p>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1">-- Aurora MySQL + SageMaker: classificare il sentiment di review</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">product_id</span><span class="p">,</span><span class="w"> </span><span class="n">review_text</span><span class="p">,</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="n">aws_sagemaker_invoke_endpoint</span><span class="p">(</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="s1">'my-sentiment-endpoint'</span><span class="p">,</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="s1">'{"text": "'</span><span class="p">,</span><span class="w"> </span><span class="n">review_text</span><span class="p">,</span><span class="w"> </span><span class="s1">'"}'</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">  </span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">sentiment_prediction</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="k">FROM</span><span class="w"> </span><span class="n">product_reviews</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">review_date</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="s1">'2024-01-01'</span><span class="p">;</span>
+<p>Aurora può fare chiamate dirette a SageMaker (inferenza ML custom) e Amazon Comprehend (sentiment) tramite SQL. Richiede un IAM role associato al cluster (<code>aws rds add-role-to-db-cluster --feature-name ...</code>) con permessi sul servizio ML.</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1">-- Aurora MySQL + Comprehend: funzione nativa</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">review_id</span><span class="p">,</span><span class="w"> </span><span class="n">aws_comprehend_detect_sentiment</span><span class="p">(</span><span class="n">review_text</span><span class="p">,</span><span class="w"> </span><span class="s1">'en'</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">sentiment</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="k">FROM</span><span class="w"> </span><span class="n">product_reviews</span><span class="p">;</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1">-- Aurora MySQL + SageMaker: si dichiara una stored function che punta all'endpoint</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">FUNCTION</span><span class="w"> </span><span class="n">predict_sentiment</span><span class="w"> </span><span class="p">(</span><span class="n">review_text</span><span class="w"> </span><span class="nb">TEXT</span><span class="p">)</span><span class="w"> </span><span class="k">RETURNS</span><span class="w"> </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">)</span><span class="w"> </span><span class="n">CHARSET</span><span class="w"> </span><span class="n">utf8mb4</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">  </span><span class="k">ALIAS</span><span class="w"> </span><span class="n">aws_sagemaker_invoke_endpoint</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">  </span><span class="n">ENDPOINT</span><span class="w"> </span><span class="n">NAME</span><span class="w"> </span><span class="s1">'my-sentiment-endpoint'</span><span class="p">;</span>
 </span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="c1">-- Aurora PostgreSQL + Comprehend: analisi sentiment nativa</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">review_id</span><span class="p">,</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">  </span><span class="n">aws_comprehend_detect_sentiment</span><span class="p">(</span><span class="n">review_text</span><span class="p">,</span><span class="w"> </span><span class="s1">'en'</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">sentiment</span>
-</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="k">FROM</span><span class="w"> </span><span class="n">product_reviews</span><span class="p">;</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="c1">-- Aurora PostgreSQL: estensione aws_ml (CREATE EXTENSION aws_ml)</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">review_id</span><span class="p">,</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">sentiment</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="k">FROM</span><span class="w"> </span><span class="n">product_reviews</span><span class="p">,</span>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">  </span><span class="k">LATERAL</span><span class="w"> </span><span class="n">aws_comprehend</span><span class="p">.</span><span class="n">detect_sentiment</span><span class="p">(</span><span class="n">review_text</span><span class="p">,</span><span class="w"> </span><span class="s1">'en'</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">s</span><span class="p">;</span>
 </span></code></pre></div>
 <hr />
 <h2 id="confronto-rds-vs-aurora">Confronto RDS vs Aurora<a class="headerlink" href="#confronto-rds-vs-aurora" title="Permanent link">&para;</a></h2>
@@ -25849,7 +25872,7 @@
 </tr>
 <tr>
 <td>Replicas</td>
-<td>5 Read Replicas</td>
+<td>fino a 15 Read Replicas (5 Oracle/SQL Server)</td>
 <td>15 Aurora Replicas</td>
 </tr>
 <tr>
