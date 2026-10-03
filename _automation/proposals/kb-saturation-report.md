@@ -325,3 +325,12 @@ Nessun `new-file` `score: high` con gap esplicito -> **zero proposte**. Non lett
 (PASSO 2): nulla di nuovo da valutare. Focus: nessuno nuovo; residuo `iac/ansible` non esplorato
 per saturazione. Prossima sessione: non prima di 2026-10-09; solo `currency`/`consolidate`/`review`
 o `new-file` high.
+
+## Aggiornamento sessione #757 (2026-10-03)
+
+Gate (via `py`): file_count 330, target 330, headroom 0, over_target **true**. `pending/` vuota.
+Ultimo commit in `docs/` e' new_topic #730; nessuna modifica KB da allora (#731-#756 senza proposte).
+Nessun `new-file` `score: high` con gap esplicito -> **zero proposte**. Non letti 10 file
+(PASSO 2): nulla di nuovo da valutare. Focus: nessuno nuovo; residuo `iac/ansible` non esplorato
+per saturazione. Prossima sessione: non prima di 2026-10-09; solo `currency`/`consolidate`/`review`
+o `new-file` high.
