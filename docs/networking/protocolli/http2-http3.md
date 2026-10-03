@@ -3,13 +3,13 @@ title: "HTTP/2 e HTTP/3"
 slug: http2-http3
 category: networking
 tags: [http2, http3, quic, performance, multiplexing]
-search_keywords: [http2 multiplexing, http2 server push, hpack header compression, http2 streams, http3 quic, http2 head of line blocking, http2 binary framing, http2 prioritization, migration to http2]
+search_keywords: [http2 multiplexing, http2 server push, hpack header compression, http2 streams, http3 quic, http2 head of line blocking, http2 binary framing, http2 prioritization, migration to http2, qpack, alpn, alt-svc, 0-rtt, connection migration, multiplessazione, compressione header, h2, h3]
 parent: networking/protocolli/_index
 related: [networking/protocolli/tcp-udp, networking/protocolli/quic, networking/load-balancing/layer4-vs-layer7]
 official_docs: https://http2.github.io/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-10-03
 ---
 
 # HTTP/2 e HTTP/3
@@ -24,7 +24,7 @@ HTTP è il protocollo applicativo alla base del Web. La versione 1.1 (1997) ha s
 - **Header verbosi e non compressi**: ogni richiesta ripete gli stessi header (User-Agent, Cookie, Accept) in chiaro
 - **Nessun server push**: il server non può inviare risorse proattivamente
 
-**HTTP/2** (2015, RFC 7540) risolve questi problemi rimanendo su TCP, introducendo un layer di framing binario sopra TLS.
+**HTTP/2** (2015, RFC 7540, aggiornata da RFC 9113 nel 2022) risolve questi problemi rimanendo su TCP, introducendo un layer di framing binario sopra TLS.
 
 **HTTP/3** (2022, RFC 9114) va oltre: abbandona TCP e costruisce HTTP sopra QUIC (UDP-based), eliminando il HOL blocking anche a livello di trasporto.
 
@@ -117,7 +117,7 @@ Il server push permetteva al server di inviare risorse proattivamente (es. CSS e
 
 ### HTTP/2: Stream Prioritization
 
-HTTP/2 supportava una gerarchia di priorità degli stream (albero di dipendenze). In pratica raramente implementata correttamente dai server. HTTP/3 utilizza invece **QPACK prioritization** più semplice.
+HTTP/2 supportava una gerarchia di priorità degli stream (albero di dipendenze). In pratica raramente implementata correttamente dai server. HTTP/3 utilizza invece le **Extensible Priorities** (RFC 9218), più semplici: header `Priority` con urgency (0–7) e flag `incremental`, senza albero di dipendenze. (QPACK, invece, è la compressione header di HTTP/3, non gestisce priorità.)
 
 ---
 
@@ -320,7 +320,8 @@ curl --version | grep "HTTP3"
 
 ## Riferimenti
 
-- [RFC 7540 — HTTP/2](https://www.rfc-editor.org/rfc/rfc7540)
+- [RFC 9113 — HTTP/2 (obsoleta RFC 7540)](https://www.rfc-editor.org/rfc/rfc9113)
+- [RFC 9218 — Extensible Prioritization Scheme for HTTP](https://www.rfc-editor.org/rfc/rfc9218)
 - [RFC 9114 — HTTP/3](https://www.rfc-editor.org/rfc/rfc9114)
 - [RFC 7541 — HPACK: Header Compression for HTTP/2](https://www.rfc-editor.org/rfc/rfc7541)
 - [http2.github.io — Risorse ufficiali HTTP/2](https://http2.github.io/)
