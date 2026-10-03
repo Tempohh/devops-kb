@@ -7,9 +7,10 @@ search_keywords: [blue green deployment, canary deployment, rolling update, feat
 parent: ci-cd/strategie/_index
 related: [ci-cd/strategie/_index, ci-cd/gitops/argocd, ci-cd/gitops/flux, containers/kubernetes/_index]
 official_docs: https://argo-rollouts.readthedocs.io/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Strategie di Deployment
@@ -67,6 +68,9 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
+      # Il controller del Deployment crea un nuovo ReplicaSet e scala i due RS
+      # nel rispetto di questi limiti: maxSurge = capacità extra consentita (più veloce,
+      # costa risorse), maxUnavailable = capacità che si può perdere (più lento se 0).
       maxSurge: 2           # Max 2 pod extra (oltre i 10 desiderati): fino a 12 pod
       maxUnavailable: 1     # Max 1 pod non disponibile: almeno 9 pod sempre up
       # Valori percentuali sono supportati:
@@ -183,7 +187,24 @@ spec:
   ports:
     - port: 80
       targetPort: 8080
+
+---
+# Service di preview: punta SEMPRE al green, per testarlo prima dello switch
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-green
+spec:
+  selector:
+    app: myapp
+    version: green
+  ports:
+    - port: 80
+      targetPort: 8080
 ```
+
+!!! note "Perché lo switch è istantaneo"
+    Il Service non instrada nulla di per sé: kube-proxy (o la dataplane CNI) programma le regole sugli endpoint dei pod che matchano il selector. Cambiare il selector aggiorna gli EndpointSlice e quindi tutte le regole in pochi secondi. Le connessioni TCP già aperte restano però sui pod blue finché non vengono chiuse: per long-lived connection (gRPC, WebSocket) serve un drain esplicito.
 
 ```bash
 # Script di switch Blue-Green
@@ -197,8 +218,10 @@ fi
 echo "Switching da $CURRENT a $NEW"
 
 # Test del nuovo deployment
-kubectl run test-pod --image=curlimages/curl --rm -it --restart=Never -- \
-  curl http://myapp-$NEW.default.svc.cluster.local/health
+#   (usa il Service di preview "myapp-$NEW": nel manifest sopra esiste solo myapp-green;
+#    per lo switch inverso serve un analogo myapp-blue)
+kubectl run test-pod --image=curlimages/curl --rm -i --restart=Never -- \
+  curl -fsS http://myapp-$NEW.default.svc.cluster.local/health
 
 # Switch del traffico
 kubectl patch svc myapp \
@@ -267,6 +290,9 @@ Distribuisce la nuova versione a un sottoinsieme di utenti, aumentando gradualme
 
 ### Canary con NGINX Ingress Controller
 
+!!! warning "ingress-nginx è stato ritirato (marzo 2026)"
+    Il progetto Kubernetes `ingress-nginx` (annotazioni `nginx.ingress.kubernetes.io/canary*`) è stato dismesso da SIG Network a marzo 2026: nessun nuovo rilascio né fix di sicurezza. Gli esempi sotto restano validi per cluster esistenti, ma per nuove installazioni usare **Gateway API** (`HTTPRoute` con `backendRefs` pesati, supportato da Argo Rollouts tramite il plugin `gatewayAPI` e da Flagger) o un altro controller (Istio, Envoy Gateway, Traefik, NGINX Gateway Fabric). Il meccanismo è identico: un router L7 divide il traffico in base a pesi/header tra Service stable e canary.
+
 ```yaml
 # Ingress principale (v1)
 apiVersion: networking.k8s.io/v1
@@ -326,7 +352,8 @@ kubectl annotate ingress myapp-canary \
   nginx.ingress.kubernetes.io/canary-weight="50" \
   --overwrite
 
-# Deploy completo: disabilita canary, aggiorna stable
+# Promozione: PRIMA aggiorna l'immagine del Deployment/Ingress stable alla v2,
+# POI disabilita il canary (altrimenti il traffico torna alla v1)
 kubectl annotate ingress myapp-canary \
   nginx.ingress.kubernetes.io/canary="false" \
   --overwrite
@@ -354,20 +381,21 @@ spec:
         - analysis:
             templates:
               - templateName: error-rate
+            args:
+              - name: service-name        # senza args l'AnalysisRun fallisce: l'arg è richiesto
+                value: myapp-canary
         - setWeight: 20
         - pause: {duration: 5m}
         - analysis:
             templates:
               - templateName: error-rate
-              - templateName: latency-p99
+              - templateName: latency-p99   # (template analogo, non mostrato)
+            args:
+              - name: service-name
+                value: myapp-canary
         - setWeight: 50
         - pause: {duration: 10m}
-        - analysis:
-            templates:
-              - templateName: error-rate
-              - templateName: latency-p99
-              - templateName: saturation
-        - setWeight: 100
+        # l'ultimo step di setWeight a 100 promuove completamente il canary
 
 ---
 # AnalysisTemplate con query Prometheus
@@ -424,19 +452,18 @@ Release ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─►
 ```java
 // Integrazione OpenFeature (Java)
 import dev.openfeature.sdk.*;
+import dev.openfeature.contrib.providers.flagd.FlagdProvider;
 
-// Configurare il provider (Flipt, flagd, LaunchDarkly, Unleash...)
+// Il provider è l'unico pezzo vendor-specific (flagd, Flipt, LaunchDarkly, Unleash...):
+// cambiarlo non richiede modifiche al codice di valutazione sotto.
 OpenFeatureAPI api = OpenFeatureAPI.getInstance();
-api.setProvider(new FliptProvider(
-    FliptProviderConfig.newBuilder()
-        .host("https://flipt.mycompany.internal")
-        .build()
-));
+api.setProviderAndWait(new FlagdProvider());   // flagd: valutazione via sidecar/servizio
 
 Client client = api.getClient("my-service");
 
-// Uso nel codice
+// Uso nel codice (targeting key = identità usata per il bucketing percentuale)
 EvaluationContext ctx = new ImmutableContext(
+    "user-12345",
     Map.of(
         "userId", new Value("user-12345"),
         "email", new Value("user@example.com"),
@@ -459,12 +486,14 @@ if (newCheckoutEnabled) {
 
 ### Flipt — Self-Hosted Feature Flag Server
 
+!!! note "Flipt 1.x vs 2.x"
+    Gli esempi usano la linea 1.x (DB + REST API `/api/v1`). Flipt 2 è git-native (i flag vivono in un repo Git); verificare la documentazione della versione in uso prima di copiare API e variabili d'ambiente.
+
 ```yaml
-# docker-compose.yml per Flipt
-version: '3.8'
+# docker-compose.yml per Flipt (l'attributo "version" è obsoleto in Compose v2: omesso)
 services:
   flipt:
-    image: flipt/flipt:v1.39.0
+    image: flipt/flipt:v1.39.0   # esempio: pinnare sempre un tag esplicito, aggiornarlo periodicamente
     ports:
       - "8080:8080"    # UI e REST API
       - "9000:9000"    # gRPC
@@ -564,7 +593,7 @@ client.track("checkout-completed", context, metric_value=order.total)
 # - La metrica di business viene raccolta nel codice
 # - La decisione viene presa dopo analisi statistica
 
-apiVersion: networking.istio.io/v1beta1
+apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: myapp
@@ -594,7 +623,7 @@ Il shadow deployment replica il traffico in produzione verso la nuova versione, 
 
 ```yaml
 # Con Istio: mirroring del traffico
-apiVersion: networking.istio.io/v1beta1
+apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: myapp
@@ -628,7 +657,7 @@ spec:
 | **Canary** | No | Basso (1.1x) | Automatico | Alta | Molto basso | Microservizi, alta frequenza deploy |
 | **Feature Flags** | No | Basso | Istantaneo (toggle) | Alta (SDK) | Molto basso | Feature release decoupled dal deploy |
 | **A/B Testing** | No | Basso | Instantaneo | Alta | Basso | Decisioni product, ottimizzazione UX |
-| **Shadow** | No | Alto (2x) | N/A (non in prod) | Alta | Nessuno | Validazione pre-produzione |
+| **Shadow** | No | Alto (2x) | N/A (nessun utente servito dalla v2) | Alta | Basso per gli utenti, ma side-effect duplicati se non idempotente | Validazione con traffico reale prima del rilascio |
 
 **Raccomandazioni per contesto:**
 
@@ -639,7 +668,7 @@ spec:
 | Microservizi ad alto traffico | Canary con Argo Rollouts/Flagger |
 | Release di feature significative | Feature Flags |
 | Validazione ML model | Shadow Deployment |
-| Database migration | Recreate in finestra + expand-contract |
+| Database migration | Expand-contract con Rolling/Canary (zero downtime); Recreate in finestra solo per breaking change non evitabili |
 
 ## Troubleshooting
 
