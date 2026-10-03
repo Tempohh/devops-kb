@@ -7,10 +7,10 @@ search_keywords: [zero trust network, ztna, zero trust architecture, never trust
 parent: networking/sicurezza/_index
 related: [networking/sicurezza/vpn-ipsec, networking/sicurezza/firewall-waf, networking/sicurezza/wireguard, networking/service-mesh/istio, networking/kubernetes/network-policies, security/network/zero-trust]
 official_docs: https://csrc.nist.gov/publications/detail/sp/800-207/final
-status: needs-review
+status: reviewed
 difficulty: advanced
-last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Zero Trust Networking
@@ -180,16 +180,30 @@ spec:
 
 ### Identity-Aware Proxy con Cloudflare Access
 
-!!! warning "Versione provider"
-    Esempio scritto per il provider Terraform Cloudflare v4. Dalla v5 le risorse sono rinominate `cloudflare_zero_trust_access_*` e le policy sono oggetti riutilizzabili collegati all'applicazione (non più `application_id` sulla policy). Verificare la documentazione del provider prima di usarlo.
-
-<!-- REVIEW: verificare sintassi esatta equivalente per provider Cloudflare v5 (cloudflare_zero_trust_access_application / _policy) -->
+!!! note "Versione provider"
+    Esempio per il provider Terraform Cloudflare **v5** (`~> 5.0`). Rispetto alla v4: risorse rinominate `cloudflare_zero_trust_*`; i blocchi annidati diventano *attributi* (`cors_headers = { ... }`, `include = [{ ... }]`); la policy è un oggetto **riutilizzabile a livello account** (niente `application_id`/`precedence` sulla policy) e si collega all'applicazione tramite l'attributo `policies`.
 
 ```hcl
-# terraform/cloudflare_access.tf (provider cloudflare ~> 4.x)
+# terraform/cloudflare_access.tf (provider cloudflare ~> 5.x)
 
-# Definisce l'applicazione protetta
-resource "cloudflare_access_application" "internal_app" {
+# Policy riutilizzabile: solo utenti del gruppo engineering con dispositivo compliant
+resource "cloudflare_zero_trust_access_policy" "engineering_only" {
+  account_id = var.account_id
+  name       = "Engineering Access"
+  decision   = "allow"
+
+  # include = OR tra le regole; require = AND
+  include = [{
+    group = { id = cloudflare_zero_trust_access_group.engineering.id }
+  }]
+
+  require = [{
+    device_posture = { integration_uid = cloudflare_zero_trust_device_posture_rule.os_version.id }
+  }]
+}
+
+# Definisce l'applicazione protetta e le associa la policy
+resource "cloudflare_zero_trust_access_application" "internal_app" {
   zone_id          = var.zone_id
   name             = "Internal Dashboard"
   domain           = "dashboard.example.com"
@@ -197,27 +211,15 @@ resource "cloudflare_access_application" "internal_app" {
   session_duration = "8h"
 
   # Abilita CORS per browser
-  cors_headers {
-    allowed_origins = ["https://dashboard.example.com"]
+  cors_headers = {
+    allowed_origins   = ["https://dashboard.example.com"]
     allow_all_methods = true
   }
-}
 
-# Policy di accesso: solo utenti del gruppo engineering con dispositivo compliant
-resource "cloudflare_access_policy" "engineering_only" {
-  application_id = cloudflare_access_application.internal_app.id
-  zone_id        = var.zone_id
-  name           = "Engineering Access"
-  precedence     = 1
-  decision       = "allow"
-
-  include {
-    group = [cloudflare_access_group.engineering.id]
-  }
-
-  require {
-    device_posture = [cloudflare_device_posture_rule.os_version.id]
-  }
+  policies = [{
+    id         = cloudflare_zero_trust_access_policy.engineering_only.id
+    precedence = 1
+  }]
 }
 ```
 
@@ -283,24 +285,21 @@ spire-server entry create \
 # Controlla se il dispositivo è conforme prima di concedere accesso
 
 # Check: versione OS minima
-resource "cloudflare_device_posture_rule" "os_version" {
+# (provider cloudflare ~> 5.x: `input` è un attributo, non un blocco)
+resource "cloudflare_zero_trust_device_posture_rule" "os_version" {
   account_id = var.account_id
   name       = "Minimum OS Version"
   type       = "os_version"
 
-  input {
+  input = {
     version          = "14.0"  # macOS 14+
-    operator         = ">="
+    version_operator = ">="
     operating_system = "mac"
   }
 }
 
-# Check: certificato aziendale installato
-resource "cloudflare_device_posture_rule" "client_cert" {
-  account_id = var.account_id
-  name       = "Corporate Certificate"
-  type       = "client_certificate"
-}
+# Altri type disponibili: disk_encryption, firewall, client_certificate_v2,
+# domain_joined, e integrazioni EDR/MDM (crowdstrike_s2s, intune, kolide, ...)
 ```
 
 ## Best Practices
