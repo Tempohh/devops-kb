@@ -7,9 +7,10 @@ search_keywords: [kms, key management service, cmk, customer master key, symmetr
 parent: cloud/aws/security/_index
 related: [cloud/aws/security/network-security, cloud/aws/security/compliance-audit, cloud/aws/storage/s3-avanzato, cloud/aws/database/rds-aurora]
 official_docs: https://docs.aws.amazon.com/kms/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # KMS, Secrets Manager, Parameter Store e ACM
@@ -24,7 +25,10 @@ Questo documento copre la gestione della crittografia e dei secrets in AWS: AWS 
 
 ### Concetti Fondamentali
 
-AWS KMS è il servizio centralizzato per la gestione delle chiavi crittografiche in AWS. Le chiavi KMS non lasciano mai il servizio in plaintext — tutte le operazioni crittografiche avvengono all'interno di KMS su hardware validato FIPS (Federal Information Processing Standard) 140-2 Level 3.
+AWS KMS è il servizio centralizzato per la gestione delle chiavi crittografiche in AWS. Le chiavi KMS non lasciano mai il servizio in plaintext — tutte le operazioni crittografiche avvengono all'interno di KMS su hardware validato FIPS (Federal Information Processing Standard) 140-3 Level 3 (HSM — Hardware Security Module — gestiti da AWS).
+
+!!! note "Terminologia: CMK → KMS key"
+    AWS ha rinominato "Customer Master Key (CMK)" in **KMS key**. In questo documento "CMK" indica una *customer managed key*, cioè una KMS key creata e gestita dal cliente.
 
 **Tipi di chiave (KMS Key Types):**
 
@@ -34,6 +38,7 @@ AWS KMS è il servizio centralizzato per la gestione delle chiavi crittografiche
 | **Asymmetric RSA** | Sign/Verify, Encrypt/Decrypt | RSA 2048/3072/4096 | Per PKI, digital signatures |
 | **Asymmetric ECC** | Sign/Verify | P-256, P-384, P-521, secp256k1 | Per blockchain, JWT |
 | **HMAC** | Generate/Verify MAC | HMAC-SHA256/384/512 | Per token di autenticazione |
+| **Asymmetric ML-DSA** | Sign/Verify | ML-DSA-44/65/87 | Firme post-quantum (FIPS 204) |
 
 ### Tipi di KMS Keys
 
@@ -54,7 +59,7 @@ AWS KMS è il servizio centralizzato per la gestione delle chiavi crittografiche
 **Customer Managed Keys (CMK):**
 - Create e gestite interamente dal cliente
 - Controllo granulare tramite Key Policy
-- Rotazione configurabile (automatica annuale o manuale)
+- Rotazione configurabile (automatica con periodo 90–2560 giorni, default 365; oppure on-demand)
 - Audit completo via CloudTrail
 - **$1/mese per CMK + $0.03 per 10.000 API calls**
 - Eliminabili con periodo di attesa (7-30 giorni)
@@ -196,7 +201,7 @@ aws kms list-grants --key-id alias/myapp-encryption
 
 ### Envelope Encryption
 
-L'Envelope Encryption è il pattern fondamentale di KMS per cifrare dati di grandi dimensioni:
+L'Envelope Encryption è il pattern fondamentale di KMS per cifrare dati di grandi dimensioni. **Perché:** `Encrypt` accetta max 4 KB e ogni chiamata è un round-trip di rete verso KMS; cifrando localmente con una DEK, a KMS arrivano solo i 32 byte della chiave, non i dati. Il master key resta in KMS e i dati non lasciano mai l'applicazione.
 
 1. KMS genera una **Data Encryption Key (DEK)** in forma plaintext + cifrata
 2. Il plaintext DEK viene usato per cifrare i dati
@@ -235,16 +240,19 @@ def encrypt_data(plaintext: bytes, key_id: str) -> dict:
         KeyId=key_id,
         KeySpec='AES_256'
     )
-    plaintext_key = response['Plaintext']     # usare e poi distruggere
+    plaintext_key = response['Plaintext']     # usare e poi scartare
     encrypted_key = response['CiphertextBlob']  # archiviare
+    # In produzione passare EncryptionContext={...} (sia qui sia in decrypt):
+    # viene autenticato (AAD) e appare nei log CloudTrail
 
     # 2. Cifrare i dati con la data key (AES-256-GCM)
     aesgcm = AESGCM(plaintext_key)
     nonce = os.urandom(12)  # 96 bits per GCM
     ciphertext = aesgcm.encrypt(nonce, plaintext, None)
 
-    # 3. Pulire la plaintext key dalla memoria
-    plaintext_key = b'\x00' * len(plaintext_key)
+    # 3. Rilasciare il riferimento alla plaintext key.
+    # Nota: `bytes` in Python è immutabile, quindi non è possibile azzerarlo davvero;
+    # per un wiping reale usare un bytearray/librerie dedicate (es. AWS Encryption SDK).
     del plaintext_key
 
     return {
@@ -267,8 +275,7 @@ def decrypt_data(encrypted_data: str, encrypted_key: str) -> bytes:
     ciphertext = data[12:]
     plaintext = aesgcm.decrypt(nonce, ciphertext, None)
 
-    # 3. Pulire la plaintext key
-    plaintext_key = b'\x00' * len(plaintext_key)
+    # 3. Rilasciare il riferimento alla plaintext key
     del plaintext_key
 
     return plaintext
@@ -310,9 +317,10 @@ aws kms replicate-key \
 ### Rotazione Automatica
 
 ```bash
-# Abilitare rotazione automatica annuale (solo symmetric CMK)
+# Abilitare rotazione automatica (solo symmetric CMK; default 365 giorni)
 aws kms enable-key-rotation \
-  --key-id alias/myapp-encryption
+  --key-id alias/myapp-encryption \
+  --rotation-period-in-days 365   # opzionale: 90-2560
 
 # Verificare stato rotazione
 aws kms get-key-rotation-status \
@@ -342,7 +350,7 @@ CloudHSM è un Hardware Security Module dedicato (non condiviso) in conformità 
 - Necessità di controllo assoluto (AWS non può mai vedere le chiavi)
 - Performance molto elevata di crittografia RSA/ECC
 
-**Costo:** ~$1.45/ora per modulo HSM (significativamente più costoso di KMS).
+**Costo:** circa $1.5/ora per modulo HSM (≈ $1.100/mese; verificare il prezzo corrente per Region/tipo) — significativamente più costoso di KMS. Un cluster di produzione richiede almeno 2 HSM in AZ diverse per alta disponibilità.
 
 ```bash
 # Creare un cluster CloudHSM
@@ -434,7 +442,7 @@ def get_db_credentials(secret_name: str) -> dict:
     response = client.get_secret_value(SecretId=secret_name)
     return json.loads(response['SecretString'])
 
-# Uso (la password viene recuperata ogni volta — Secrets Manager gestisce la cache)
+# Uso (ogni chiamata fa una GetSecretValue a pagamento: il client boto3 NON fa caching)
 creds = get_db_credentials('prod/myapp/database')
 conn = mysql.connect(
     host=creds['host'],
@@ -488,6 +496,9 @@ aws secretsmanager put-resource-policy \
   --secret-id "prod/myapp/database" \
   --resource-policy file://secret-policy.json
 ```
+
+!!! warning "Cross-account richiede una CMK"
+    Un secret cifrato con la chiave AWS managed `aws/secretsmanager` non è accessibile da altri account (la sua key policy non è modificabile). Usare una CMK con key policy che consenta `kms:Decrypt` all'account/ruolo esterno, oltre alla resource policy del secret.
 
 ### Pricing Secrets Manager
 
@@ -569,7 +580,7 @@ aws ssm get-parameter-history \
 |--|---------|---------|
 | Numero parametri | 10.000 | 100.000 |
 | Dimensione max | 4 KB | 8 KB |
-| Costo storage | Gratuito | $0.05/10.000 API |
+| Costo | Gratuito (storage e API standard throughput) | $0.05/parametro/mese + $0.05/10.000 API |
 | Parameter policies | No | Sì (scadenza, notifiche) |
 
 ```bash
@@ -584,7 +595,7 @@ aws ssm put-parameter \
       "Type": "Expiration",
       "Version": "1.0",
       "Attributes": {
-        "Timestamp": "2024-06-01T00:00:00.000Z"
+        "Timestamp": "2027-06-01T00:00:00.000Z"
       }
     },
     {
@@ -632,8 +643,8 @@ config = get_app_config('myapp', 'prod')
 |---------|----------------|-----------------|
 | **Rotazione automatica** | Sì (built-in per RDS, Redshift, DocumentDB) | No (serve Lambda custom) |
 | **Costo** | $0.40/secret/mese | Gratuito (Standard tier) |
-| **Tipi di dato** | Solo secrets JSON | String, StringList, SecureString |
-| **Gerarchie path** | No (solo naming convention) | Sì (path nativo `/app/env/param`) |
+| **Tipi di dato** | Testo o binario (tipicamente JSON key/value) | String, StringList, SecureString |
+| **Gerarchie path** | Solo naming convention (nessuna query per path) | Sì (path nativo `/app/env/param`, `get-parameters-by-path`) |
 | **Versioning** | Sì (staging labels) | Sì (versioni numeriche) |
 | **Cross-account** | Sì (resource policy) | Limitato (richiede condivisione esplicita) |
 | **Dimensione max** | 64 KB | 4 KB (Standard) / 8 KB (Advanced) |
@@ -662,8 +673,11 @@ ACM gestisce certificati TLS/SSL per servizi AWS. I certificati pubblici sono **
 - AWS App Runner
 - Amazon OpenSearch Service
 
-!!! warning "ACM non è installabile su EC2"
-    I certificati ACM non possono essere esportati o installati direttamente su EC2 o altri server. Per EC2, usare ACM Private CA + Let's Encrypt, o importare un certificato da CA esterna.
+!!! warning "Certificati ACM e EC2"
+    Di default i certificati pubblici ACM sono legati ai servizi integrati e la chiave privata non è esportabile: non si installano direttamente su EC2 o server on-prem. Opzioni: (1) **certificati pubblici esportabili** (opt-in alla richiesta, a pagamento, introdotti nel 2025; l'export non rinnova automaticamente il deploy sul server), (2) certificati da ACM Private CA, (3) certificato di CA esterna (es. Let's Encrypt) gestito sul server.
+
+!!! note "CloudFront richiede us-east-1"
+    Un certificato usato da CloudFront deve essere richiesto/importato nella Region **us-east-1**; per ALB/API Gateway regionali serve nella Region della risorsa.
 
 ### Validazione
 
@@ -722,6 +736,9 @@ aws acm-pca create-certificate-authority \
   --certificate-authority-type ROOT \
   --tags Key=Name,Value=internal-root-ca
 
+# La CA nasce in stato PENDING_CERTIFICATE: va attivata prima dell'uso
+# (get-certificate-authority-csr → issue-certificate → import-certificate-authority-certificate)
+
 # Emettere un certificato dalla Private CA
 aws acm request-certificate \
   --domain-name "internal-service.myapp.internal" \
@@ -763,7 +780,7 @@ aws cloudwatch put-metric-alarm \
 2. **Abilitare rotazione automatica** (annuale) per tutte le CMK symmetric
 3. Seguire il **principio del minimo privilegio** nelle Key Policy
 4. Usare **Bucket Key** con S3 SSE-KMS per ridurre costi API calls
-5. **CloudTrail** deve loggare le API KMS per audit (abilitare Data Events)
+5. **CloudTrail** deve loggare le API KMS per audit (le chiamate KMS sono *management events*, già inclusi in un trail di management; non servono Data Events)
 6. Non condividere CMK tra ambienti diversi (prod/staging/dev hanno chiavi separate)
 
 ### Secrets Manager
@@ -784,21 +801,6 @@ aws cloudwatch put-metric-alarm \
 ---
 
 ## Troubleshooting
-
-### "AccessDeniedException" su KMS
-
-1. Verificare la Key Policy — il principal deve essere esplicitamente autorizzato
-2. Verificare la IAM Policy del principal
-3. Verificare che non ci sia una SCP Organizations che nega l'accesso
-4. Per encrypt/decrypt S3: verificare che il bucket sia nella stessa Region della chiave
-
-```bash
-# Simulare una policy per debug
-aws iam simulate-principal-policy \
-  --policy-source-arn arn:aws:iam::123456789012:role/AppRole \
-  --action-names kms:Decrypt \
-  --resource-arns arn:aws:kms:us-east-1:123456789012:key/mrk-1234
-```
 
 ### Scenario 1 — AccessDeniedException su KMS
 
@@ -840,7 +842,7 @@ aws kms get-key-policy \
 
 ```bash
 # Monitorare eventi di rotazione
-aws cloudwatch filter-log-events \
+aws logs filter-log-events \
   --log-group-name "/aws/lambda/SecretsManagerRDSMySQLRotation" \
   --filter-pattern "ERROR" \
   --start-time $(date -d '1 hour ago' +%s000)
@@ -855,9 +857,9 @@ aws secretsmanager describe-secret \
 
 **Sintomo:** `aws ssm get-parameter` restituisce la stringa in forma cifrata (`AQICAHi...`) invece del valore in chiaro.
 
-**Causa:** Manca il flag `--with-decryption`, oppure il principal non ha `kms:Decrypt` sulla chiave usata per cifrare il parametro.
+**Causa:** Manca il flag `--with-decryption` (senza, SSM restituisce il ciphertext). Se invece il flag c'è ma il principal non ha `kms:Decrypt` sulla chiave, l'errore è `AccessDeniedException`, non un valore cifrato.
 
-**Soluzione:** Aggiungere `--with-decryption` al comando e verificare che il ruolo IAM abbia `kms:Decrypt` sulla CMK corretta.
+**Soluzione:** Aggiungere `--with-decryption` al comando e verificare che il ruolo IAM abbia `kms:Decrypt` sulla CMK corretta (con la chiave default `aws/ssm` non serve alcuna policy KMS aggiuntiva nello stesso account).
 
 ```bash
 # Corretto: aggiungere --with-decryption
@@ -868,9 +870,9 @@ aws ssm get-parameter \
   --output text
 
 # Verificare quale chiave KMS cifra il parametro
-aws ssm get-parameter \
-  --name "/myapp/prod/db-password" \
-  --query 'Parameter.{Type:Type,LastModified:LastModifiedDate}'
+aws ssm describe-parameters \
+  --parameter-filters Key=Name,Option=Equals,Values=/myapp/prod/db-password \
+  --query 'Parameters[*].{Type:Type,KeyId:KeyId}'
 
 # Aggiungere permesso kms:Decrypt al ruolo (inline policy)
 aws iam put-role-policy \
