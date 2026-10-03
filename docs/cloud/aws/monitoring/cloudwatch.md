@@ -7,9 +7,10 @@ search_keywords: [cloudwatch, metrics, namespace, dimensions, statistics, high r
 parent: cloud/aws/monitoring/_index
 related: [cloud/aws/monitoring/observability, cloud/aws/security/compliance-audit, cloud/aws/messaging/sqs-sns]
 official_docs: https://docs.aws.amazon.com/cloudwatch/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Amazon CloudWatch — Metrics, Logs, Alarms, Dashboards
@@ -90,8 +91,8 @@ CloudWatch conserva le metriche con granularità diversa a seconda dell'età:
 | Ultimi 63 giorni | 5 minuti |
 | Ultimi 455 giorni (~15 mesi) | 1 ora |
 
-!!! warning "Dati aggregati perduti"
-    Dopo 15 mesi, i dati a 1 minuto vengono aggregati in dati orari e i dati ad 1 minuto vengono eliminati. Pianificare export verso S3 per retention storica più lunga.
+!!! warning "Dati aggregati e scadenza"
+    I dati sono **aggregati progressivamente** a granularità più grossolana (1 s → 1 min dopo 3 ore, 1 min → 5 min dopo 15 giorni, 5 min → 1 ora dopo 63 giorni): un picco di pochi secondi non è più recuperabile dopo 3 ore. Oltre i 455 giorni i datapoint **scadono** e sono persi. Per retention storica più lunga usare Metric Streams verso S3/Firehose o un backend esterno (es. Prometheus/AMP).
 
 ### High-Resolution Metrics
 
@@ -202,7 +203,7 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
 # Deploy tramite SSM (per fleet di istanze)
 aws ssm send-command \
   --document-name "AmazonCloudWatch-ManageAgent" \
-  --parameters 'action=configure,mode=ec2,optionalConfigurationLocation=/myapp/cloudwatch-agent-config,optionalRestart=yes' \
+  --parameters 'action=configure,mode=ec2,optionalConfigurationSource=ssm,optionalConfigurationLocation=/myapp/cloudwatch-agent-config,optionalRestart=yes' \
   --targets '[{"Key":"tag:Environment","Values":["production"]}]'
 ```
 
@@ -260,7 +261,7 @@ aws logs tail "/myapp/application" --follow --format short
 
 ### Subscription Filters
 
-I Subscription Filters inviano eventi di log in real-time a una destinazione (Lambda, Kinesis Streams, Kinesis Firehose, OpenSearch).
+I Subscription Filters inviano eventi di log in real-time (compressi gzip + base64) a una destinazione: Lambda, Kinesis Data Streams o Data Firehose (da Firehose si arriva a S3, OpenSearch, Splunk ecc.). Limite di default: **2 subscription filter per log group**. Per Lambda serve anche una resource policy (`lambda add-permission` per `logs.amazonaws.com`); per Kinesis/Firehose un `--role-arn` assumibile da CloudWatch Logs.
 
 ```bash
 # Subscription verso Lambda
@@ -284,6 +285,11 @@ aws logs put-destination \
   --destination-name "CrossAccountDestination" \
   --target-arn arn:aws:kinesis:us-east-1:DEST_ACCOUNT:stream/central-logs \
   --role-arn arn:aws:iam::DEST_ACCOUNT:role/CloudWatchDestinationRole
+
+# 1b. Nel destination account: autorizzare l'account sorgente
+aws logs put-destination-policy \
+  --destination-name "CrossAccountDestination" \
+  --access-policy '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"SOURCE_ACCOUNT_ID"},"Action":"logs:PutSubscriptionFilter","Resource":"arn:aws:logs:us-east-1:DEST_ACCOUNT:destination:CrossAccountDestination"}]}'
 
 # 2. Nel source account: subscription al destination
 aws logs put-subscription-filter \
@@ -366,8 +372,8 @@ fields @timestamp, endpoint, duration_ms, status_code
     pct(duration_ms, 95) as p95_latency,
     pct(duration_ms, 99) as p99_latency,
     count(*) as request_count
-  by endpoint, bin(5m) as time_window
-| sort time_window desc, avg_latency desc
+  by endpoint, bin(5m)
+| sort avg_latency desc
 
 # Analisi Lambda cold starts
 fields @timestamp, @duration, @billedDuration, @initDuration
@@ -388,11 +394,10 @@ fields @timestamp, clientIp, requestPath
 # Visualizzazione time-series degli errori
 fields @timestamp, @message
 | filter @message like /ERROR/
-| stats count(*) as error_count by bin(15m) as time_window
-| sort time_window asc
+| stats count(*) as error_count by bin(15m)
 
 # Parse di log non strutturati con regex
-parse @message /(?P<level>INFO|ERROR|WARN|DEBUG)\s+(?P<component>\S+)\s+(?P<message>.+)/
+parse @message /(?<level>INFO|ERROR|WARN|DEBUG)\s+(?<component>\S+)\s+(?<msg>.+)/
 | filter level = "ERROR"
 | stats count(*) as count by component
 | sort count desc
@@ -410,6 +415,9 @@ aws logs start-query \
 QUERY_ID="query-id-from-above"
 aws logs get-query-results --query-id $QUERY_ID
 ```
+
+!!! note "Altri linguaggi di query e Live Tail"
+    Oltre al linguaggio nativo (Logs Insights QL), Logs Insights supporta anche **OpenSearch PPL** e **OpenSearch SQL**. **Live Tail** (console o `aws logs start-live-tail`) mostra i log in streaming durante un deploy/incidente. La classe di log **Infrequent Access** costa meno in ingestion ma ha meno funzionalità (niente subscription filter né metric filter): usarla solo per log consultati raramente.
 
 ---
 
@@ -500,10 +508,12 @@ aws cloudwatch put-composite-alarm \
 ```bash
 # Creare un modello di anomaly detection
 aws cloudwatch put-anomaly-detector \
-  --namespace AWS/EC2 \
-  --metric-name CPUUtilization \
-  --dimensions '[{"Name": "InstanceId", "Value": "i-1234567890abcdef0"}]' \
-  --stat Average \
+  --single-metric-anomaly-detector '{
+    "Namespace": "AWS/EC2",
+    "MetricName": "CPUUtilization",
+    "Dimensions": [{"Name": "InstanceId", "Value": "i-1234567890abcdef0"}],
+    "Stat": "Average"
+  }' \
   --configuration '{
     "ExcludedTimeRanges": [
       {
@@ -590,12 +600,13 @@ aws cloudwatch put-metric-alarm \
 
 ## EMF — Embedded Metric Format
 
-EMF permette di creare metriche CloudWatch direttamente nei log strutturati, senza chiamare l'API `PutMetricData` separatamente. Questo riduce i costi e la complessità.
+EMF permette di creare metriche CloudWatch direttamente nei log strutturati, senza chiamare l'API `PutMetricData` separatamente. Questo elimina latenza, throttling e codice di chiamata dell'API, e conserva nel log il dettaglio ad alta cardinalità per Log Insights.
 
-**Come funziona:** si scrive un log JSON con un campo `_aws` speciale che CloudWatch interpreta per estrarre metriche. Il costo è quello dei log (più economico delle API call PutMetricData).
+**Come funziona:** si scrive un log JSON con un campo `_aws` speciale che CloudWatch Logs interpreta per estrarre metriche. Il costo è quello di ingestion dei log **più** quello delle custom metric create: non è necessariamente più economico di `PutMetricData` (che non ha costo per chiamata ma per metrica), quindi evitare di emettere EMF con dimensioni a cardinalità alta.
 
 ```python
 import json
+import os
 import time
 
 def emit_emf(metric_name: str, value: float, unit: str,
@@ -647,7 +658,7 @@ metrics = Metrics(namespace="MyApp/Orders", service="OrderProcessor")
 @metrics.log_metrics(capture_cold_start_metric=True)
 def handler(event, context):
     metrics.add_metric(name="OrdersProcessed", unit=MetricUnit.Count, value=1)
-    metrics.add_metric(name="OrderAmount", unit=MetricUnit.None, value=event['amount'])
+    metrics.add_metric(name="OrderAmount", unit=MetricUnit.NoUnit, value=event['amount'])
     metrics.add_dimension(name="OrderType", value=event.get('type', 'standard'))
     return process(event)
 ```
@@ -722,8 +733,13 @@ aws ecs update-cluster-settings \
   --cluster my-ecs-cluster \
   --settings name=containerInsights,value=enabled
 
-# Abilitare Container Insights per EKS
-# Prima installare l'add-on ADOT o CloudWatch agent su EKS
+# Variante "enhanced observability" (metriche più granulari, a livello di pod/container)
+aws ecs update-cluster-settings \
+  --cluster my-ecs-cluster \
+  --settings name=containerInsights,value=enhanced
+
+# Abilitare Container Insights per EKS: l'add-on installa CloudWatch agent + Fluent Bit
+# (i nodi/service account necessitano della policy CloudWatchAgentServerPolicy)
 aws eks create-addon \
   --cluster-name my-eks-cluster \
   --addon-name amazon-cloudwatch-observability
@@ -742,7 +758,7 @@ aws cloudwatch list-metrics \
 ### Metriche
 
 1. Usare **dimensioni significative** — non aggiungere troppi valori unici per dimensione (limiti di cardinalità)
-2. **EMF** per Lambda e container — riduce costi API e latenza
+2. **EMF** per Lambda e container — niente chiamate API/throttling; attenzione al costo di ingestion dei log
 3. **High-Resolution** solo quando necessario — costo più elevato
 4. **GetMetricData** invece di GetMetricStatistics per query multiple
 
@@ -751,7 +767,7 @@ aws cloudwatch list-metrics \
 1. **Retention policy** su ogni log group — evitare accumulo infinito
 2. **Structured logging** (JSON) — facilita le query con Log Insights e Metric Filters
 3. **Log group naming convention:** `/aws/service/name` o `/myapp/component/environment`
-4. **Subscription filter** verso S3 per archivio a lungo termine
+4. **Subscription filter → Firehose → S3** (o export task) per archivio a lungo termine
 
 ### Allarmi
 
@@ -767,14 +783,14 @@ aws cloudwatch list-metrics \
 ### Dati Mancanti in CloudWatch
 
 1. Verificare che il CloudWatch Agent sia in esecuzione: `sudo systemctl status amazon-cloudwatch-agent`
-2. Verificare i permessi IAM del ruolo dell'istanza (serve `cloudwatch:PutMetricData`, `logs:PutLogEvents`)
+2. Verificare i permessi IAM del ruolo dell'istanza (managed policy `CloudWatchAgentServerPolicy`: `cloudwatch:PutMetricData`, `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents`)
 3. Verificare la connettività all'endpoint CloudWatch (usa VPC Endpoint se in VPC privata)
 
 ### Allarme Bloccato in INSUFFICIENT_DATA
 
 1. Verificare che le dimensioni dell'allarme corrispondano esattamente a quelle della metrica
 2. Verificare che la metrica esista (potrebbe essere stata eliminata o rinominata)
-3. Aumentare il `evaluation-periods` per dare più tempo alla metrica di arrivare
+3. Se la metrica è intermittente (es. errori Lambda, che non è pubblicata senza errori) impostare `--treat-missing-data notBreaching` invece del default `missing`
 
 ### Log Insights: Risultati Vuoti
 
