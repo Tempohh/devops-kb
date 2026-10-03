@@ -7,9 +7,10 @@ search_keywords: [MCP production, MCP produzione, deploy MCP server, Model Conte
 parent: ai/agents/_index
 related: [ai/agents/claude-agent-sdk, ai/agents/agent-patterns, security/autenticazione/oauth2-oidc, security/secret-management/vault, containers/kubernetes/networking, networking/api-gateway/rate-limiting, monitoring/tools/otel-collector-kubernetes]
 official_docs: https://modelcontextprotocol.io/specification
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-02
+last_verified: 2026-10-03
 ---
 
 # MCP in Produzione
@@ -97,7 +98,9 @@ Con sessioni stateful il server tiene in memoria lo stato della sessione (subscr
 # server.py — MCP server remoto stateless con validazione token
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("ops-tools", stateless_http=True, json_response=True)
+# host="0.0.0.0": il default dell'SDK è 127.0.0.1, irraggiungibile da fuori dal Pod
+mcp = FastMCP("ops-tools", host="0.0.0.0", port=8000,
+              stateless_http=True, json_response=True)
 
 @mcp.tool()
 def get_deployment_status(namespace: str, name: str) -> str:
@@ -106,9 +109,12 @@ def get_deployment_status(namespace: str, name: str) -> str:
     ...
 
 if __name__ == "__main__":
-    # Ascolta su 0.0.0.0:8000, endpoint /mcp
+    # Endpoint /mcp su 0.0.0.0:8000
     mcp.run(transport="streamable-http")
 ```
+
+!!! note "Dove si innesta la validazione"
+    L'esempio mostra solo il transport. La verifica del Bearer token (sezione seguente) va agganciata come token verifier dell'SDK (`token_verifier` + `AuthSettings` in `FastMCP`) oppure come middleware ASGI davanti all'app, o delegata al gateway. Con `host="0.0.0.0"` configurare anche gli `Host`/`Origin` consentiti (transport security dell'SDK), perché la protezione anti DNS-rebinding automatica vale solo per bind su localhost.
 
 ### Validazione del token (resource server)
 
@@ -168,7 +174,7 @@ Documento di metadata:
 I secret di backend (token API, password DB) vivono **nel server**, mai nel client né nel `mcp.json`. Vedi [Vault](../../security/secret-management/vault.md).
 
 ```yaml
-# ExternalSecret / Vault Agent: il Pod riceve i secret come file, non come env var committate
+# Vault Agent Injector: il Pod riceve i secret come file, non come env var committate
 apiVersion: v1
 kind: Pod
 metadata:
@@ -247,7 +253,7 @@ spec:
   egress:
     - to:   # DNS
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
-      ports: [{port: 53, protocol: UDP}]
+      ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
     - to:   # solo API interna necessaria
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}
       ports: [{port: 4317}]
@@ -259,6 +265,9 @@ spec:
 ### Ingress con streaming corretto (nginx)
 
 Le risposte SSE/streaming si rompono se il proxy bufferizza o chiude connessioni idle.
+
+!!! warning "Ingress NGINX è a fine vita"
+    Il progetto community `ingress-nginx` è stato dichiarato in ritiro (manutenzione best-effort fino a marzo 2026, nessun fix di sicurezza successivo). Le annotation sotto restano valide per cluster esistenti, ma per nuovi deploy valutare **Gateway API** con un'implementazione supportata (timeout e buffering si configurano con le policy specifiche dell'implementazione). I principi — buffering off, HTTP/1.1, timeout lunghi — non cambiano.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -467,6 +476,7 @@ servers:
 ## Riferimenti
 
 - [MCP Specification — Transports](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports)
+- [MCP Specification — revisioni](https://modelcontextprotocol.io/specification) (la spec è versionata per data: controllare la revisione più recente supportata da client e SDK)
 - [MCP Specification — Authorization](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)
 - [MCP Security Best Practices](https://modelcontextprotocol.io/specification/draft/basic/security_best_practices)
 - RFC 9728 — OAuth 2.0 Protected Resource Metadata; RFC 8707 — Resource Indicators; RFC 8693 — Token Exchange
