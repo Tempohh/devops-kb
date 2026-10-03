@@ -1503,9 +1503,18 @@ def _cascade_candidates(state: dict, c: dict, now: datetime) -> dict:
                 out["lifecycle"].append(("audit", rel, "status:draft — porta il file al gate "
                                          "(sezioni template, Troubleshooting, keyword, related)"))
         elif st == "needs-review":
-            if not blocked("review", rel, cd):
-                out["lifecycle"].append(("review", rel, "status:needs-review — risolvi i marker "
-                                         "<!-- REVIEW/CURRENCY --> e rivaluta il file"))
+            # I marker lasciati da una review sono quasi sempre fatti da verificare
+            # su fonte esterna: li risolve 'currency' (WebFetch su official_docs).
+            # Ripetere 'review' subito darebbe lo stesso esito, e il cooldown sul
+            # tipo review li parcheggiava per 30 giorni.
+            markers = re.findall(r"<!--\s*(?:REVIEW|CURRENCY):\s*(.*?)-->", txt, re.S)
+            if markers and not blocked("currency", rel, cd):
+                out["lifecycle"].append(("currency", rel, f"status:needs-review — verifica e risolvi "
+                                         f"{len(markers)} marker: " + " | ".join(
+                                             " ".join(m.split())[:140] for m in markers[:5])))
+            elif not markers and not blocked("review", rel, cd):
+                out["lifecycle"].append(("review", rel, "status:needs-review — rivaluta il file "
+                                         "(modifica significativa senza marker aperti)"))
         elif st == "complete":
             issues = [i for i in _preflight(txt)["issues"] if not i.startswith("status:")]
             broken = _broken_related(fm)

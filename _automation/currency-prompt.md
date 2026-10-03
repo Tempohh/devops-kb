@@ -12,7 +12,11 @@ Leggi `_automation/current-task.json` per `path`. Il file ha (o dovrebbe avere)
 ## Processo
 
 ### Fase 1 — Estrai le affermazioni datate
-Rileggi il file e segna ogni punto che dipende dal tempo:
+**Priorità:** i marker `<!-- REVIEW: ... -->` / `<!-- CURRENCY: ... -->` già nel file
+(il `reason` del task li elenca). Ognuno è un fatto da verificare: verificato →
+correggi il testo e **rimuovi il marker**; non verificabile → lascia il marker.
+
+Poi rileggi il file e segna ogni altro punto che dipende dal tempo:
 - numeri di versione presentati come "corrente/ultimo"
 - prezzi, limiti, quote
 - identificatori di modello / SKU / nomi commerciali
