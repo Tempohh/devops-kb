@@ -22258,7 +22258,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22283,7 +22283,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22462,10 +22462,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#referencegrant-cross-namespace-completo" class="md-nav__link">
+  <a href="#referencegrant-secret-tls-cross-namespace" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ReferenceGrant — Cross-Namespace completo
+        ReferenceGrant — Secret TLS cross-namespace
       
     </span>
   </a>
@@ -24779,10 +24779,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#referencegrant-cross-namespace-completo" class="md-nav__link">
+  <a href="#referencegrant-secret-tls-cross-namespace" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ReferenceGrant — Cross-Namespace completo
+        ReferenceGrant — Secret TLS cross-namespace
       
     </span>
   </a>
@@ -25100,11 +25100,19 @@
 
 <h1 id="kubernetes-gateway-api">Kubernetes Gateway API<a class="headerlink" href="#kubernetes-gateway-api" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>La <strong>Kubernetes Gateway API</strong> è il successore ufficiale di Ingress per la gestione del traffico in entrata nei cluster Kubernetes. Diventata GA (stable) per le funzionalità core con Kubernetes 1.28, risolve i limiti strutturali di Ingress: un singolo tipo di risorsa (<code>Ingress</code>) gestiva tutto, costringendo i vendor a proliferare annotations non portabili. Gateway API introduce un modello a tre livelli con tipi separati per ruoli diversi — infra team, platform team, app team — e supporta nativamente protocolli che Ingress non può gestire: gRPC, TCP/UDP, TLS passthrough.</p>
-<p>Quando usarla: cluster nuovi su Kubernetes 1.28+, ambienti multi-tenant con teams separati, casi d'uso che richiedono traffic splitting nativo, gRPC routing, o TLS passthrough senza annotations vendor-specific. Quando <strong>non</strong> usarla: cluster legacy con controller che non supportano ancora Gateway API, ambienti dove Ingress funziona e non porta valore aggiunto la migrazione.</p>
+<p>La <strong>Kubernetes Gateway API</strong> è il successore ufficiale di Ingress per la gestione del traffico in entrata nei cluster Kubernetes. Giunta a GA (v1.0, ottobre 2023) per le funzionalità core, risolve i limiti strutturali di Ingress: un singolo tipo di risorsa (<code>Ingress</code>) gestiva tutto, costringendo i vendor a proliferare annotations non portabili. Gateway API introduce un modello a tre livelli con tipi separati per ruoli diversi — infra team, platform team, app team — e supporta nativamente protocolli che Ingress non può gestire: gRPC, TCP/UDP, TLS passthrough.</p>
+<div class="admonition note">
+<p class="admonition-title">Non è legata alla versione di Kubernetes</p>
+<p>Gateway API è un set di <strong>CRD</strong> con versionamento proprio (<code>gateway-api</code> v1.x), non una API built-in di Kubernetes: si installa sul cluster indipendentemente dalla versione del control plane (ogni release dichiara le versioni K8s minime supportate). Il motivo: poter evolvere le API più velocemente del ciclo di rilascio di K8s. Il numero di versione rilevante è quindi quello delle CRD e della conformance del controller, non "1.28".</p>
+</div>
+<p>Quando usarla: cluster nuovi, ambienti multi-tenant con teams separati, casi d'uso che richiedono traffic splitting nativo, gRPC routing, o TLS passthrough senza annotations vendor-specific. Quando <strong>non</strong> usarla: cluster legacy con controller che non supportano ancora Gateway API, ambienti dove Ingress funziona e non porta valore aggiunto la migrazione.</p>
 <div class="admonition warning">
 <p class="admonition-title">GA ≠ tutto stabile</p>
-<p>Il core (GatewayClass, Gateway, HTTPRoute) è GA. Funzionalità avanzate come <code>TCPRoute</code>, <code>UDPRoute</code>, <code>GRPCRoute</code> e le Policy Attachment sono ancora in canale <code>experimental</code> — verificare supporto nel controller specifico prima di usarle in produzione.</p>
+<p>Nel canale <code>standard</code> sono GA <code>GatewayClass</code>, <code>Gateway</code>, <code>HTTPRoute</code> e <code>GRPCRoute</code> (GA dalla v1.1); altre feature recenti (es. <code>BackendTLSPolicy</code>) sono entrate nello standard nelle release successive. Restano in <code>experimental</code>: <code>TCPRoute</code>, <code>UDPRoute</code>, <code>TLSRoute</code> e diverse policy. Controllare release notes e conformance del controller scelto prima di usarle in produzione.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">ingress-nginx è in dismissione</p>
+<p>Il progetto Kubernetes <code>ingress-nginx</code> è stato annunciato in retirement (manutenzione best-effort fino a marzo 2026): chi lo usa ancora deve pianificare la migrazione, e Gateway API è la destinazione naturale. Nota: <code>ingress-nginx</code> <strong>non</strong> implementa Gateway API; serve un controller diverso (es. NGINX Gateway Fabric, Envoy Gateway, Traefik, Cilium, Istio).</p>
 </div>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <h3 id="il-modello-a-tre-livelli">Il Modello a Tre Livelli<a class="headerlink" href="#il-modello-a-tre-livelli" title="Permanent link">&para;</a></h3>
@@ -25162,7 +25170,7 @@
 </tr>
 <tr>
 <td><code>GRPCRoute</code></td>
-<td>Experimental</td>
+<td>Stable (GA da v1.1)</td>
 <td>Routing gRPC nativo</td>
 </tr>
 <tr>
@@ -25183,15 +25191,15 @@
 </tbody>
 </table>
 <h3 id="policy-attachment">Policy Attachment<a class="headerlink" href="#policy-attachment" title="Permanent link">&para;</a></h3>
-<p>Gateway API introduce <code>PolicyAttachment</code> per applicare policy trasversali (timeout, retry, autenticazione, rate limiting) alle risorse senza annotations. Le policy si "attaccano" a Gateway, HTTPRoute o Service tramite <code>targetRef</code>.</p>
+<p>Gateway API introduce <code>PolicyAttachment</code> per applicare policy trasversali (timeout, retry, autenticazione, rate limiting) alle risorse senza annotations. Le policy si "attaccano" a Gateway, HTTPRoute o Service tramite <code>targetRefs</code>. Il perché: i parametri specifici di una feature o di un'implementazione non sporcano gli oggetti core e hanno ciclo di vita e RBAC propri.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># BackendLBPolicy (experimental) — esempio di policy attachment</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io/v1alpha2</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">BackendLBPolicy</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nt">metadata</span><span class="p">:</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">orders-lb-policy</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">targetRef</span><span class="p">:</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">targetRefs</span><span class="p">:</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Service</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">orders-service</span>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span><span class="nt">sessionPersistence</span><span class="p">:</span>
@@ -25219,44 +25227,74 @@
 </span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>                                └──          → postgres-svc:5432
 </span></code></pre></div>
 <h3 id="cross-namespace-routing-e-referencegrant">Cross-Namespace Routing e ReferenceGrant<a class="headerlink" href="#cross-namespace-routing-e-referencegrant" title="Permanent link">&para;</a></h3>
-<p>Una delle funzionalità chiave di Gateway API è il routing cross-namespace controllato. Un <code>HTTPRoute</code> nel namespace <code>orders</code> può referenziare un <code>Gateway</code> nel namespace <code>infra</code>, ma solo se esiste un <code>ReferenceGrant</code> che lo autorizza esplicitamente.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Nel namespace infra: autorizza orders a usare il gateway</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io/v1beta1</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReferenceGrant</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">allow-orders-routes</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">infra</span><span class="w">          </span><span class="c1"># namespace dove sta il Gateway</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="nt">from</span><span class="p">:</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTPRoute</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">orders</span><span class="w">       </span><span class="c1"># namespace autorizzato a referenziare</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span><span class="nt">to</span><span class="p">:</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Gateway</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-gateway</span>
+<p>Una delle funzionalità chiave di Gateway API è il routing cross-namespace controllato. Esistono <strong>due meccanismi distinti</strong>, spesso confusi:</p>
+<table>
+<thead>
+<tr>
+<th>Riferimento cross-namespace</th>
+<th>Chi autorizza</th>
+<th>Meccanismo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HTTPRoute</code> (ns <code>orders</code>) → <code>Gateway</code> (ns <code>infra</code>) via <code>parentRefs</code></td>
+<td>Il proprietario del Gateway</td>
+<td><code>listeners[].allowedRoutes.namespaces</code> sul Gateway (<code>Same</code>, <code>All</code>, <code>Selector</code>)</td>
+</tr>
+<tr>
+<td><code>HTTPRoute</code> → <code>Service</code> in altro namespace (<code>backendRefs</code>)</td>
+<td>Il proprietario del Service</td>
+<td><code>ReferenceGrant</code> nel namespace del Service</td>
+</tr>
+<tr>
+<td><code>Gateway</code> → <code>Secret</code> TLS in altro namespace (<code>certificateRefs</code>)</td>
+<td>Il proprietario del Secret</td>
+<td><code>ReferenceGrant</code> nel namespace del Secret</td>
+</tr>
+</tbody>
+</table>
+<p>Il motivo: un riferimento verso risorse altrui sarebbe un vettore di escalation (esporre il Service o leggere il Secret di un altro tenant). L'handshake bilaterale lo impedisce: chi riferisce dichiara, chi possiede consente.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Esempio: HTTPRoute in "orders" con backendRef verso un Service nel namespace "shared"</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># Il ReferenceGrant sta nel namespace della risorsa referenziata (shared)</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io/v1beta1</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReferenceGrant</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">allow-orders-to-shared-svc</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="nt">from</span><span class="p">:</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTPRoute</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">orders</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">  </span><span class="nt">to</span><span class="p">:</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Service</span>
 </span></code></pre></div>
-<p>Senza <code>ReferenceGrant</code>, un HTTPRoute in un namespace non può referenziare risorse in un altro — sicurezza by design.</p>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="installazione-nginx-gateway-fabric">Installazione — NGINX Gateway Fabric<a class="headerlink" href="#installazione-nginx-gateway-fabric" title="Permanent link">&para;</a></h3>
-<p>NGINX Gateway Fabric è la scelta per chi già usa nginx-ingress e vuole una migrazione naturale.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Installa le CRD di Gateway API (prerequisito per qualsiasi controller)</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Installa canale experimental (TCPRoute, GRPCRoute, ecc.)</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/experimental-install.yaml
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Installa NGINX Gateway Fabric tramite Helm</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>helm<span class="w"> </span>install<span class="w"> </span>ngf<span class="w"> </span>oci://ghcr.io/nginxinc/charts/nginx-gateway-fabric<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span>--namespace<span class="w"> </span>nginx-gateway<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.4.0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span>--set<span class="w"> </span>service.type<span class="o">=</span>LoadBalancer
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="c1"># Verifica installazione</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>nginx-gateway
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>kubectl<span class="w"> </span>get<span class="w"> </span>gatewayclass
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="c1"># Output atteso: nginx   gateway.nginx.org/nginx-gateway-controller   True</span>
+<p>NGINX Gateway Fabric è l'implementazione Gateway API di F5/NGINX, valida per chi conosce già NGINX come data plane. Controllare nella documentazione del progetto i prerequisiti della versione scelta (alcune release richiedono una specifica release delle CRD).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Scegliere la release dalla pagina releases di kubernetes-sigs/gateway-api</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># (e verificare quale versione supporta il controller scelto)</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">GATEWAY_API_VERSION</span><span class="o">=</span>&lt;vX.Y.Z&gt;
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Installa le CRD di Gateway API (prerequisito per qualsiasi controller)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/kubernetes-sigs/gateway-api/releases/download/<span class="si">${</span><span class="nv">GATEWAY_API_VERSION</span><span class="si">}</span>/standard-install.yaml
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># In alternativa (NON in aggiunta): canale experimental, superset dello standard</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># (TCPRoute, UDPRoute, TLSRoute, ...). Non mescolare i due canali sullo stesso cluster.</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/experimental-install.yaml</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1"># Installa NGINX Gateway Fabric tramite Helm (chart OCI ufficiale; pinnare --version in produzione)</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>helm<span class="w"> </span>install<span class="w"> </span>ngf<span class="w"> </span>oci://ghcr.io/nginx/charts/nginx-gateway-fabric<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">  </span>--namespace<span class="w"> </span>nginx-gateway<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">  </span>--set<span class="w"> </span>service.type<span class="o">=</span>LoadBalancer
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="c1"># Verifica installazione</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>nginx-gateway
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>kubectl<span class="w"> </span>get<span class="w"> </span>gatewayclass
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="c1"># Output atteso: nginx   gateway.nginx.org/nginx-gateway-controller   True</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Verifica che le CRD siano installate</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>crd<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>gateway.networking.k8s.io
@@ -25269,7 +25307,7 @@
 <p>Envoy Gateway è il progetto CNCF basato su Envoy proxy, raccomandato per ambienti cloud-native.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Installa Envoy Gateway</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>helm<span class="w"> </span>install<span class="w"> </span>eg<span class="w"> </span>oci://docker.io/envoyproxy/gateway-helm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--version<span class="w"> </span>v1.2.1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--version<span class="w"> </span>&lt;vX.Y.Z&gt;<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--namespace<span class="w"> </span>envoy-gateway-system<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>--create-namespace
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
@@ -25354,24 +25392,27 @@
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># Controllare "Status.Parents" — deve mostrare "Accepted: True"</span>
 </span></code></pre></div>
 <h3 id="tls-con-cert-manager">TLS con cert-manager<a class="headerlink" href="#tls-con-cert-manager" title="Permanent link">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># ClusterIssuer Let's Encrypt</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager.io/v1</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">letsencrypt-prod</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span><span class="nt">acme</span><span class="p">:</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">    </span><span class="nt">server</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://acme-v02.api.letsencrypt.org/directory</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">    </span><span class="nt">email</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">admin@example.com</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">    </span><span class="nt">privateKeySecretRef</span><span class="p">:</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">letsencrypt-prod-key</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">    </span><span class="nt">solvers</span><span class="p">:</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">http01</span><span class="p">:</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">        </span><span class="nt">gatewayHTTPRoute</span><span class="p">:</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">          </span><span class="nt">parentRefs</span><span class="p">:</span>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-gateway</span>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">            </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">infra</span>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">            </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Gateway</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Prerequisito: cert-manager con supporto Gateway API abilitato</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># (config `enableGatewayAPI: true`, oppure il feature gate ExperimentalGatewayAPISupport</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># sulle versioni più vecchie). Le CRD Gateway API vanno installate prima di cert-manager.</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># ClusterIssuer Let's Encrypt</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager.io/v1</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">letsencrypt-prod</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">  </span><span class="nt">acme</span><span class="p">:</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">    </span><span class="nt">server</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://acme-v02.api.letsencrypt.org/directory</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">    </span><span class="nt">email</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">admin@example.com</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">    </span><span class="nt">privateKeySecretRef</span><span class="p">:</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">letsencrypt-prod-key</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">    </span><span class="nt">solvers</span><span class="p">:</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">http01</span><span class="p">:</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">        </span><span class="nt">gatewayHTTPRoute</span><span class="p">:</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">          </span><span class="nt">parentRefs</span><span class="p">:</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-gateway</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">            </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">infra</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">            </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Gateway</span>
 </span></code></pre></div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Certificate — cert-manager crea il Secret automaticamente</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager.io/v1</span>
@@ -25385,9 +25426,12 @@
 </span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">letsencrypt-prod</span>
 </span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
 </span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">  </span><span class="nt">dnsNames</span><span class="p">:</span>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"*.example.com"</span>
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"example.com"</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"orders.example.com"</span><span class="w">       </span><span class="c1"># HTTP-01 NON può emettere wildcard</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Wildcard = DNS-01</p>
+<p>Let's Encrypt emette certificati wildcard (<code>*.example.com</code>) solo con challenge <strong>DNS-01</strong>. Il solver <code>http01</code>/<code>gatewayHTTPRoute</code> sopra funziona solo per hostname espliciti; per un wildcard serve un solver <code>dns01</code> (Route53, Cloud DNS, Cloudflare...).</p>
+</div>
 <h3 id="traffic-management-avanzato">Traffic Management Avanzato<a class="headerlink" href="#traffic-management-avanzato" title="Permanent link">&para;</a></h3>
 <h4 id="canary-release-con-weight-based-routing">Canary Release con Weight-Based Routing<a class="headerlink" href="#canary-release-con-weight-based-routing" title="Permanent link">&para;</a></h4>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io/v1</span>
@@ -25500,8 +25544,8 @@
 </span><span id="__span-15-47"><a id="__codelineno-15-47" name="__codelineno-15-47" href="#__codelineno-15-47"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">orders-service</span>
 </span><span id="__span-15-48"><a id="__codelineno-15-48" name="__codelineno-15-48" href="#__codelineno-15-48"></a><span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8080</span>
 </span></code></pre></div>
-<h4 id="grpcroute-experimental">GRPCRoute (experimental)<a class="headerlink" href="#grpcroute-experimental" title="Permanent link">&para;</a></h4>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io/v1alpha2</span>
+<h4 id="grpcroute-ga-dalla-v11">GRPCRoute (GA dalla v1.1)<a class="headerlink" href="#grpcroute-ga-dalla-v11" title="Permanent link">&para;</a></h4>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io/v1</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GRPCRoute</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="nt">metadata</span><span class="p">:</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">payment-grpc</span>
@@ -25527,22 +25571,23 @@
 </span><span id="__span-16-24"><a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">payment-grpc-service</span>
 </span><span id="__span-16-25"><a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a><span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">9090</span>
 </span></code></pre></div>
-<h3 id="referencegrant-cross-namespace-completo">ReferenceGrant — Cross-Namespace completo<a class="headerlink" href="#referencegrant-cross-namespace-completo" title="Permanent link">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Scenario: HTTPRoute nel namespace "orders" referenzia un Secret TLS nel namespace "infra"</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io/v1beta1</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReferenceGrant</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">allow-orders-to-read-tls</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">infra</span><span class="w">               </span><span class="c1"># namespace dove sta il Secret</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">  </span><span class="nt">from</span><span class="p">:</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io</span>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTPRoute</span>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="w">    </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">orders</span><span class="w">            </span><span class="c1"># chi può referenziare</span>
-</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="w">  </span><span class="nt">to</span><span class="p">:</span>
-</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
-</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secret</span>
-</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">wildcard-cert</span><span class="w">          </span><span class="c1"># Secret specifico autorizzato</span>
+<h3 id="referencegrant-secret-tls-cross-namespace">ReferenceGrant — Secret TLS cross-namespace<a class="headerlink" href="#referencegrant-secret-tls-cross-namespace" title="Permanent link">&para;</a></h3>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Scenario: Gateway nel namespace "infra" usa un certificato in "certs"</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># (nel Gateway: certificateRefs: [{name: wildcard-cert, namespace: certs}])</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io/v1beta1</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReferenceGrant</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">allow-gateway-to-read-tls</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">certs</span><span class="w">               </span><span class="c1"># namespace dove sta il Secret</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="w">  </span><span class="nt">from</span><span class="p">:</span>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Gateway</span><span class="w">                </span><span class="c1"># è il Gateway (non l'HTTPRoute) a leggere il Secret</span>
+</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="w">    </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">infra</span>
+</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="w">  </span><span class="nt">to</span><span class="p">:</span>
+</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secret</span>
+</span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">wildcard-cert</span><span class="w">          </span><span class="c1"># Secret specifico autorizzato</span>
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
@@ -25550,7 +25595,8 @@
 <p>Mantenere GatewayClass e Gateway in un namespace dedicato (<code>infra</code>, <code>platform</code>, <code>gateway-system</code>). Gli app team non devono avere accesso a questi namespace. Ogni namespace applicativo espone solo HTTPRoute.</p>
 </div>
 <ul>
-<li><strong>ReferenceGrant espliciti</strong>: non usare <code>allowedRoutes.namespaces.from: All</code> in produzione — preferire <code>Selector</code> con label che i platform team controllano</li>
+<li><strong><code>allowedRoutes</code> restrittivo</strong>: non usare <code>namespaces.from: All</code> in produzione — preferire <code>Selector</code> con label che solo il platform team può applicare ai namespace</li>
+<li><strong>ReferenceGrant minimi</strong>: indicare sempre <code>name</code> della risorsa target quando possibile, per concedere solo ciò che serve</li>
 <li><strong>Una GatewayClass per controller</strong>: se si usano più controller (nginx per HTTP, istio per service mesh), creare GatewayClass distinte con nomi descrittivi</li>
 <li><strong><code>sectionName</code> nei parentRefs</strong>: specificare sempre il listener esatto — evita ambiguità quando il Gateway ha listener multipli (80, 443, 9443...)</li>
 <li><strong>Status conditions</strong>: monitorare <code>status.parents[].conditions</code> nelle HTTPRoute — <code>Accepted: False</code> indica un problema di configurazione (spesso ReferenceGrant mancante)</li>
@@ -25623,31 +25669,28 @@
 </tr>
 <tr>
 <td>Maturità</td>
-<td>GA, ampio supporto</td>
-<td>Core GA da K8s 1.28</td>
+<td>GA ma API congelata (nessuna nuova feature)</td>
+<td>Core GA dalla v1.0 (2023), in evoluzione attiva</td>
 </tr>
 </tbody>
 </table>
 <h2 id="migrazione-da-ingress">Migrazione da Ingress<a class="headerlink" href="#migrazione-da-ingress" title="Permanent link">&para;</a></h2>
 <h3 id="strategia-di-migrazione-graduale">Strategia di Migrazione Graduale<a class="headerlink" href="#strategia-di-migrazione-graduale" title="Permanent link">&para;</a></h3>
-<p>La migrazione non è big-bang: Gateway API e Ingress coesistono sullo stesso cluster. Ogni controller che supporta entrambi (nginx-ingress ≥ 1.9, Traefik v3, Istio, Cilium) può gestirli in parallelo.</p>
+<p>La migrazione non è big-bang: Gateway API e Ingress coesistono sullo stesso cluster. Molti controller supportano entrambe le API (es. Traefik, Istio, Cilium, Kong), mentre <code>ingress-nginx</code> supporta solo Ingress: in quel caso si affianca un controller Gateway API e si sposta il traffico per host/namespace.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Verifica se il controller già supporta Gateway API</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>gatewayclass
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># Se vuoto: installare il nuovo controller Gateway API-native</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="c1"># Verifica versione Kubernetes (deve essere &gt;= 1.28 per core GA)</span>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>kubectl<span class="w"> </span>version<span class="w"> </span>--short
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="c1"># Verifica versione Kubernetes e compatibilità con la release CRD scelta</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>kubectl<span class="w"> </span>version
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Tool di migrazione automatica (converte Ingress → HTTPRoute)</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Installa il plugin kubectl</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>kubectl<span class="w"> </span>krew<span class="w"> </span>install<span class="w"> </span>gateway-api
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="c1"># Genera HTTPRoute equivalenti a tutti gli Ingress nel namespace</span>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>ingress<span class="w"> </span>-n<span class="w"> </span>production<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">  </span>kubectl<span class="w"> </span>gateway-api<span class="w"> </span>convert<span class="w"> </span>--from<span class="w"> </span>ingress<span class="w"> </span>--namespace<span class="w"> </span>production
-</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>
-</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="c1"># Preview: mostra le HTTPRoute che verrebbe generate senza applicarle</span>
-</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>kubectl<span class="w"> </span>gateway-api<span class="w"> </span>convert<span class="w"> </span>--from<span class="w"> </span>ingress<span class="w"> </span>-n<span class="w"> </span>production<span class="w"> </span>--dry-run<span class="o">=</span>client
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Tool ufficiale di migrazione: ingress2gateway (kubernetes-sigs/ingress2gateway)</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Legge gli Ingress dal cluster (o da file) e stampa le risorse Gateway API equivalenti.</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># Le annotations dei vari provider sono tradotte solo in parte: rivedere sempre l'output.</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>ingress2gateway<span class="w"> </span>print<span class="w"> </span>--providers<span class="w"> </span>ingress-nginx<span class="w"> </span>-n<span class="w"> </span>production<span class="w"> </span>&gt;<span class="w"> </span>gateway-resources.yaml
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="c1"># Rivedere, poi applicare</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--dry-run<span class="o">=</span>server<span class="w"> </span>-f<span class="w"> </span>gateway-resources.yaml
 </span></code></pre></div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Prima (Ingress)</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">networking.k8s.io/v1</span>
@@ -25767,16 +25810,16 @@
 <hr />
 <h3 id="scenario-4-traffic-splitting-non-funziona-tutti-su-v1">Scenario 4 — Traffic splitting non funziona (tutti su v1)<a class="headerlink" href="#scenario-4-traffic-splitting-non-funziona-tutti-su-v1" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Nonostante <code>weight: 10</code> su orders-v2, tutto il traffico va su orders-v1.</p>
-<p><strong>Causa:</strong> Il controller non supporta il traffic splitting (non tutti i controller implementano la feature — verificare la conformance matrix). Oppure il <code>weight: 0</code> non viene interpretato come "rimuovi" ma come "uguale".</p>
+<p><strong>Causa:</strong> Il controller non supporta il traffic splitting (non tutti i controller implementano la feature — verificare la conformance matrix). Oppure un <code>weight: 0</code> su un backend: significa "nessun traffico" (non "quota uguale"); se omesso il default è 1.</p>
 <p><strong>Soluzione:</strong></p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Verifica la conformance del controller per HTTPRoute</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="c1"># Documentazione: https://gateway-api.sigs.k8s.io/implementations/</span>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
 </span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># Test rapido: invia 100 richieste e conta la distribuzione</span>
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="k">for</span><span class="w"> </span>i<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>seq<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">100</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="w">  </span>curl<span class="w"> </span>-s<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span>-w<span class="w"> </span><span class="s2">"%{http_code}\n"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">    </span>-H<span class="w"> </span><span class="s2">"Host: orders.example.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">    </span>https://&lt;GATEWAY-IP&gt;/api/v1/orders
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="c1"># (presuppone che l'app esponga la propria versione, es. un endpoint /version)</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="k">for</span><span class="w"> </span>i<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>seq<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">100</span><span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">  </span>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">"Host: orders.example.com"</span><span class="w"> </span>https://&lt;GATEWAY-IP&gt;/api/v1/version
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">  </span><span class="nb">echo</span>
 </span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="k">done</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c
 </span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>
 </span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="c1"># Verifica che entrambi i Service abbiano endpoint</span>
@@ -25790,16 +25833,16 @@
 <hr />
 <h3 id="scenario-5-referencegrant-non-risolve-il-problema-cross-namespace">Scenario 5 — ReferenceGrant non risolve il problema cross-namespace<a class="headerlink" href="#scenario-5-referencegrant-non-risolve-il-problema-cross-namespace" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>ReferenceGrant</code> creato ma la HTTPRoute continua a mostrare <code>RefNotPermitted</code>.</p>
-<p><strong>Causa:</strong> Il <code>ReferenceGrant</code> deve essere nel namespace della risorsa referenziata (non nel namespace dell'HTTPRoute), e i campi <code>from</code>/<code>to</code> devono corrispondere esattamente.</p>
+<p><strong>Causa:</strong> Il <code>ReferenceGrant</code> deve essere nel namespace della risorsa referenziata (non nel namespace dell'HTTPRoute), e i campi <code>from</code>/<code>to</code> devono corrispondere esattamente. Attenzione: il riferimento HTTPRoute → Gateway <strong>non</strong> usa ReferenceGrant (vedi <code>allowedRoutes</code>), quindi un grant di quel tipo non ha effetto. <code>RefNotPermitted</code> compare nella condition <code>ResolvedRefs</code> dei <code>backendRefs</code>.</p>
 <p><strong>Soluzione:</strong></p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Verifica posizione e configurazione del ReferenceGrant</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>referencegrant<span class="w"> </span>-A
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="c1"># Il ReferenceGrant DEVE essere nel namespace del Gateway/Secret, non dell'HTTPRoute</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="c1"># Il ReferenceGrant DEVE essere nel namespace del Service/Secret referenziato</span>
 </span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>
-</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>referencegrant<span class="w"> </span>allow-orders-routes<span class="w"> </span>-n<span class="w"> </span>infra
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>referencegrant<span class="w"> </span>allow-orders-to-shared-svc<span class="w"> </span>-n<span class="w"> </span>shared
 </span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="c1"># Verificare:</span>
 </span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="c1">#   From: [ {Group: gateway.networking.k8s.io, Kind: HTTPRoute, Namespace: orders} ]</span>
-</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="c1">#   To:   [ {Group: gateway.networking.k8s.io, Kind: Gateway, Name: prod-gateway} ]</span>
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="c1">#   To:   [ {Group: "", Kind: Service} ]</span>
 </span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>
 </span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a><span class="c1"># Verifica case-sensitive: "HTTPRoute" non "Httproute"</span>
 </span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a>kubectl<span class="w"> </span>get<span class="w"> </span>referencegrant<span class="w"> </span>-n<span class="w"> </span>infra<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A5<span class="w"> </span><span class="s2">"from:"</span>
@@ -25807,12 +25850,12 @@
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
 <summary>Ingress — Il predecessore</summary>
-<p>Gateway API è il successore di Ingress. Durante la migrazione, entrambi coesistono. Ingress rimane la scelta per cluster pre-1.28 o controller legacy.</p>
+<p>Gateway API è il successore di Ingress. Durante la migrazione, entrambi coesistono. Ingress resta utilizzabile (API stabile ma congelata) dove il controller non supporta ancora Gateway API.</p>
 <p><strong>Approfondimento →</strong> <a href="../ingress/">Ingress e Ingress Controller</a></p>
 </details>
 <details class="info">
 <summary>Service Mesh — Integrazione</summary>
-<p>Istio e Linkerd supportano Gateway API come data plane. Con Istio, il Gateway API controlla anche il traffico est-ovest via <code>HTTPRoute</code> cross-mesh.</p>
+<p>Istio supporta Gateway API sia per l'ingress sia per il traffico est-ovest; Linkerd usa <code>HTTPRoute</code> per il routing interno al mesh (iniziativa GAMMA) ma non fornisce un ingress Gateway API proprio.</p>
 <p><strong>Approfondimento →</strong> <a href="../../service-mesh/linkerd/">Linkerd Service Mesh</a></p>
 </details>
 <details class="info">
