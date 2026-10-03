@@ -7,9 +7,10 @@ search_keywords: [AWS SQS, Simple Queue Service, FIFO queue, Standard queue, SNS
 parent: cloud/aws/messaging/_index
 related: [cloud/aws/messaging/eventbridge-kinesis, cloud/aws/compute/lambda, cloud/aws/security/kms-secrets]
 official_docs: https://docs.aws.amazon.com/sqs/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # SQS & SNS
@@ -22,15 +23,18 @@ last_updated: 2026-03-28
 
 | Caratteristica | Standard | FIFO |
 |---------------|----------|------|
-| Throughput | Unlimited | 300 msg/s (3000 con batching) |
+| Throughput | Praticamente illimitato | Default 300 API call/s per azione (3000 msg/s con batching); la **high throughput mode** arriva a decine di migliaia di msg/s (limiti per region, vedi doc) |
 | Ordering | Best-effort | Garantito (per MessageGroupId) |
-| Delivery | At-least-once | Exactly-once |
+| Delivery | At-least-once (possibili duplicati) | Exactly-once processing (dedup lato SQS) |
 | Deduplicazione | No | Sì (5 minuti dedup window) |
 | Naming | `nome` | `nome.fifo` |
-| Dead Letter Queue | Sì | Sì (FIFO DLQ) |
+| Dead Letter Queue | Sì | Sì (la DLQ deve essere anch'essa FIFO) |
 | Lambda trigger | Sì | Sì |
-| Prezzo | Più basso | Più alto (~10x) |
-| Use case | Worker pool, idempotent tasks | Ordini, transazioni, sequenze |
+| Prezzo | Più basso | Leggermente più alto (~25% per richiesta, verificare pricing della region) |
+| Use case | Worker pool, task idempotenti | Ordini, transazioni, sequenze |
+
+!!! note "Perché at-least-once"
+    Standard replica i messaggi su più server: una `DeleteMessage` può non raggiungere tutte le repliche e il messaggio può essere riconsegnato. I consumer Standard vanno quindi scritti **idempotenti**.
 
 ### Parametri Chiave
 
@@ -38,7 +42,7 @@ last_updated: 2026-03-28
 |-----------|---------|-------|-------------|
 | Message Retention | 4 giorni | 1 min - 14 giorni | Quanto a lungo SQS conserva i messaggi |
 | Visibility Timeout | 30s | 0s - 12h | Tempo per processare il messaggio prima che riappaia |
-| Message Size | - | max 256 KB | Payload massimo (usa S3 + Extended Client per oltre) |
+| Message Size | 1 MiB | 1 B - 1 MiB | Payload massimo (portato da 256 KB a 1 MiB nel 2025; oltre → S3 + Extended Client) |
 | Long Polling Wait | 0s | 0-20s | `ReceiveMessageWaitTimeSeconds` — riduce costi |
 | Delivery Delay | 0s | 0s - 15 min | Ritardo prima che il messaggio sia visibile |
 | Batch Size | 1 | 1-10 (Standard), 1-10 (FIFO) | Messaggi per operazione Send/Receive/Delete |
@@ -84,7 +88,7 @@ aws sqs send-message \
     --message-body '{"event": "reminder"}' \
     --delay-seconds 30
 
-# Inviare batch (fino a 10 messaggi, max 256KB totali)
+# Inviare batch (fino a 10 messaggi, max 1 MiB totale)
 aws sqs send-message-batch \
     --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-queue \
     --entries '[
@@ -136,6 +140,9 @@ SQS Lifecycle
 - Imposta `VisibilityTimeout > tempo_max_elaborazione` (con margine 2-3x)
 - Se un job supera il tempo previsto → chiama `ChangeMessageVisibility` per estenderlo
 - `maxReceiveCount` in RedrivePolicy = massimo retry prima di andare in DLQ
+- Con Lambda come consumer: `VisibilityTimeout` ≥ 6× il timeout della funzione (raccomandazione AWS), altrimenti i messaggi riappaiono mentre la funzione li sta ancora elaborando
+- La retention della DLQ decorre dal momento di **enqueue originale** (non dall'arrivo in DLQ): impostala più lunga della coda sorgente (es. 14 giorni vs 4)
+- Cifratura: SSE-SQS (chiavi gestite da SQS) è attiva di default sulle nuove code; usa SSE-KMS solo se serve controllo sulla chiave (vedi `kms-secrets`)
 
 ---
 
@@ -146,8 +153,11 @@ SQS Lifecycle
 aws sqs send-message \
     --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/orders.fifo \
     --message-body '{"orderId": "ORD-001", "amount": 99.99}' \
-    --message-group-id "customer-456" \       # tutti i msg del customer-456 in ordine
-    --message-deduplication-id "ORD-001-v1"  # stesso ID = stesso messaggio (5min window)
+    --message-group-id "customer-456" \
+    --message-deduplication-id "ORD-001-v1"
+
+# --message-group-id: tutti i msg del customer-456 in ordine
+# --message-deduplication-id: stesso ID = stesso messaggio (scartato entro 5 min)
 
 # MessageGroupId: definisce il "gruppo di ordinamento"
 # - Messaggi con stesso GroupId sono consegnati in ordine FIFO
@@ -167,7 +177,7 @@ aws sqs receive-message \
     --max-number-of-messages 10
 
 # DLQ Redrive — rispedire messaggi dalla DLQ alla coda sorgente
-# (disponibile in console o via API — disponibile dal 2021)
+# (console dal 2021; API start-message-move-task dal 2023; funziona anche con DLQ FIFO)
 aws sqs start-message-move-task \
     --source-arn arn:aws:sqs:eu-central-1:123456789012:myapp-dlq \
     --destination-arn arn:aws:sqs:eu-central-1:123456789012:myapp-queue \
@@ -200,8 +210,13 @@ aws lambda create-event-source-mapping \
     --batch-size 10 \
     --maximum-batching-window-in-seconds 5 \
     --function-response-types '["ReportBatchItemFailures"]'
-    # ReportBatchItemFailures = partial batch failure support
+
+# ReportBatchItemFailures = partial batch failure support.
+# Per code Standard limitare la concorrenza ed evitare di saturare i downstream:
+#   --scaling-config MaximumConcurrency=10
 ```
+
+Senza `ReportBatchItemFailures` un errore su **un** record rimette in coda l'intero batch, con rielaborazione dei messaggi già riusciti. In una coda FIFO, al primo errore smetti di elaborare il resto del gruppo e restituisci come failure anche i record successivi dello stesso `MessageGroupId`, per preservare l'ordine.
 
 ```python
 # Lambda handler con partial batch failure
@@ -234,23 +249,21 @@ def process_order(order):
 
 ### SQS Extended Client Library
 
-Per messaggi **oltre 256 KB** (fino a 2 GB), il payload viene salvato su S3:
+Per messaggi **oltre 1 MiB** (fino a 2 GB), il payload viene salvato su S3 e nella coda viaggia solo un puntatore. Soglia configurabile: con `always_through_s3=False` si usa S3 solo oltre la soglia.
 
+<!-- REVIEW: verificare nome pacchetto/API della libreria Python (sqs-extended-client) sulla versione corrente -->
 ```python
-# Python — boto3 + amazon-sqs-extended-client-python
-# pip install amazon-sqs-extended-client
+# Python — boto3 + sqs-extended-client
+# pip install sqs-extended-client
 
-from sqs_extended_client import SQSExtendedClientSession
+import boto3
 import json
+import sqs_extended_client  # noqa: F401 — estende il client boto3 con gli attributi sotto
 
-session = SQSExtendedClientSession()
-sqs = session.client(
-    'sqs',
-    region_name='eu-central-1',
-    sqs_large_payload_support='my-large-messages-bucket',  # bucket S3
-    always_through_s3=False,  # True = sempre via S3, False = solo se >256KB
-    message_size_threshold=256 * 1024
-)
+sqs = boto3.client('sqs', region_name='eu-central-1')
+sqs.large_payload_support = 'my-large-messages-bucket'  # bucket S3
+sqs.always_through_s3 = False  # True = sempre via S3, False = solo oltre la soglia
+sqs.message_size_threshold = 1024 * 1024
 
 # Inviare messaggio grande (automaticamente su S3)
 sqs.send_message(
@@ -274,22 +287,11 @@ body = json.loads(message['Messages'][0]['Body'])  # già risolto da S3
 aws sqs set-queue-attributes \
     --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-queue \
     --attributes '{
-        "Policy": "{
-            \"Version\": \"2012-10-17\",
-            \"Statement\": [{
-                \"Effect\": \"Allow\",
-                \"Principal\": {\"Service\": \"sns.amazonaws.com\"},
-                \"Action\": \"sqs:SendMessage\",
-                \"Resource\": \"arn:aws:sqs:eu-central-1:123456789012:myapp-queue\",
-                \"Condition\": {
-                    \"ArnLike\": {
-                        \"aws:SourceArn\": \"arn:aws:sns:eu-central-1:123456789012:myapp-topic\"
-                    }
-                }
-            }]
-        }"
+        "Policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"sns.amazonaws.com\"},\"Action\":\"sqs:SendMessage\",\"Resource\":\"arn:aws:sqs:eu-central-1:123456789012:myapp-queue\",\"Condition\":{\"ArnLike\":{\"aws:SourceArn\":\"arn:aws:sns:eu-central-1:123456789012:myapp-topic\"}}}]}"
     }'
 ```
+
+La condition `aws:SourceArn` è essenziale: senza di essa **qualsiasi** topic SNS (anche di altri account) potrebbe scrivere nella coda (confused deputy).
 
 ---
 
@@ -319,7 +321,7 @@ SNS_ARN=$(aws sns create-topic \
     --query 'TopicArn' \
     --output text)
 
-# Creare topic FIFO (solo subscriber SQS FIFO)
+# Creare topic FIFO (subscriber ammessi: code SQS FIFO e, dal 2023, anche Standard)
 aws sns create-topic \
     --name orders.fifo \
     --attributes '{
@@ -416,6 +418,9 @@ aws sns set-subscription-attributes \
 - `{"suffix": ".error"}` — finisce con suffisso
 - `{"numeric": [">", 100]}` — confronto numerico (`>`, `>=`, `<`, `<=`, `=`)
 - `{"exists": true}` — attributo presente/assente
+- `{"equals-ignore-case": "Order"}` — confronto case-insensitive
+
+Più chiavi nella stessa policy sono in **AND**; più valori nello stesso array in **OR**. Di default il filtro si applica ai `MessageAttributes`; con `FilterPolicyScope=MessageBody` si filtra sul JSON del body (utile quando il publisher non può impostare attributi, es. eventi S3 o CloudWatch). I messaggi scartati dal filtro non costano consegna e non arrivano al subscriber.
 
 ---
 
@@ -442,7 +447,7 @@ for QUEUE in inventory-service-queue notification-service-queue analytics-servic
 
     aws sqs set-queue-attributes \
         --queue-url $QUEUE_URL \
-        --attributes "{\"Policy\": \"{\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":{\\\"Service\\\":\\\"sns.amazonaws.com\\\"},\\\"Action\\\":\\\"sqs:SendMessage\\\",\\\"Resource\\\":\\\"$QUEUE_ARN\\\"}]}\"}"
+        --attributes "{\"Policy\": \"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":{\\\"Service\\\":\\\"sns.amazonaws.com\\\"},\\\"Action\\\":\\\"sqs:SendMessage\\\",\\\"Resource\\\":\\\"$QUEUE_ARN\\\",\\\"Condition\\\":{\\\"ArnEquals\\\":{\\\"aws:SourceArn\\\":\\\"arn:aws:sns:eu-central-1:123456789012:order-events\\\"}}}]}\"}"
 
     # Sottoscrivere la coda al topic SNS
     aws sns subscribe \
@@ -464,9 +469,10 @@ done
 
 ```bash
 # Creare Platform Application (AWS gestisce token device)
+# --platform: APNS (iOS), GCM (Android: nome API storico, oggi usa FCM), ADM (Amazon)
 aws sns create-platform-application \
     --name myapp-ios \
-    --platform APNS \                       # APNS (iOS), GCM/FCM (Android), ADM (Amazon)
+    --platform APNS \
     --attributes '{
         "PlatformCredential": "private-key-content",
         "PlatformPrincipal": "certificate-content"
@@ -503,6 +509,9 @@ aws sns publish \
 ## Amazon SES — Simple Email Service
 
 **SES** è il servizio per l'invio di email transazionali e marketing ad alto volume.
+
+!!! note "API v1 vs v2"
+    I comandi `aws ses ...` sono l'API v1 (legacy, ancora supportata). Per nuovi progetti usa `aws sesv2`, che unifica identity, configuration set, suppression list e account-level settings.
 
 ```bash
 # Verificare dominio (aggiungere record DNS TXT/CNAME/MX per DKIM + MAIL FROM)
@@ -553,7 +562,8 @@ aws sesv2 send-email \
 **SES — Limiti e produzione:**
 - Sandbox iniziale: solo indirizzi verificati, 200 email/giorno
 - Richiesta aumento limite per produzione (via console → "Request Production Access")
-- Gestire bounce e complaint: tasso bounce <2%, complaint <0.1% per non essere sospesi
+- Gestire bounce e complaint: tieni bounce <2% e complaint <0.1%; AWS mette l'account in review/probation oltre ~5% bounce e 0.1% complaint e può sospendere l'invio a ~10% / 0.5%
+- Autenticare il dominio con DKIM (e SPF/DMARC) per la deliverability; usa la suppression list per non reinviare a indirizzi in bounce
 
 ---
 
@@ -654,9 +664,9 @@ aws cloudwatch get-metric-statistics \
 
 **Sintomo:** Con una coda FIFO si ricevono messaggi duplicati, oppure messaggi con stesso `MessageGroupId` arrivano in ordine errato.
 
-**Causa:** Duplicati: il `MessageDeduplicationId` non è univoco o `ContentBasedDeduplication` è disabilitato e il producer non fornisce un ID. Ordine errato: consumer diversi stanno elaborando lo stesso `MessageGroupId` in parallelo (non consentito in FIFO).
+**Causa:** Duplicati: il producer ritenta dopo oltre 5 minuti (finestra di dedup scaduta), oppure usa un `MessageDeduplicationId` diverso a ogni retry (es. timestamp), che annulla la deduplicazione. Duplicati lato consumer: visibility timeout scaduto prima della `DeleteMessage`. Ordine errato: producer multipli/concorrenti sullo stesso `MessageGroupId` (l'ordine è quello di arrivo a SQS), oppure `MessageGroupId` diverso per messaggi che dovrebbero essere ordinati.
 
-**Soluzione:** Garantire `MessageDeduplicationId` univoco per ogni messaggio (o abilitare `ContentBasedDeduplication`). In FIFO, messaggi con stesso `MessageGroupId` sono consegnati a un unico consumer alla volta.
+**Soluzione:** Usare un `MessageDeduplicationId` **deterministico** (es. ID di business dell'ordine) riusato a ogni retry dello stesso messaggio, oppure `ContentBasedDeduplication`. SQS consegna i messaggi di un `MessageGroupId` a un consumer alla volta; per scalare usa molti group ID distinti. Rendi comunque il consumer idempotente.
 
 ```bash
 # Verificare attributi della coda FIFO
@@ -664,12 +674,12 @@ aws sqs get-queue-attributes \
     --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/orders.fifo \
     --attribute-names FifoQueue ContentBasedDeduplication DeduplicationScope
 
-# Inviare con MessageDeduplicationId esplicito e univoco
+# Inviare con MessageDeduplicationId deterministico (stesso ID a ogni retry)
 aws sqs send-message \
     --queue-url https://sqs.eu-central-1.amazonaws.com/123456789012/orders.fifo \
     --message-body '{"orderId": "ORD-001"}' \
     --message-group-id "customer-456" \
-    --message-deduplication-id "ORD-001-$(date +%s%N)"
+    --message-deduplication-id "ORD-001-created"
 
 # Abilitare ContentBasedDeduplication (evita gestione manuale degli ID)
 aws sqs set-queue-attributes \
