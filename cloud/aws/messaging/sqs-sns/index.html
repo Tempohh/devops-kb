@@ -6336,7 +6336,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -6361,7 +6361,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -25032,8 +25032,8 @@
 <tbody>
 <tr>
 <td>Throughput</td>
-<td>Unlimited</td>
-<td>300 msg/s (3000 con batching)</td>
+<td>Praticamente illimitato</td>
+<td>Default 300 API call/s per azione (3000 msg/s con batching); la <strong>high throughput mode</strong> arriva a decine di migliaia di msg/s (limiti per region, vedi doc)</td>
 </tr>
 <tr>
 <td>Ordering</td>
@@ -25042,8 +25042,8 @@
 </tr>
 <tr>
 <td>Delivery</td>
-<td>At-least-once</td>
-<td>Exactly-once</td>
+<td>At-least-once (possibili duplicati)</td>
+<td>Exactly-once processing (dedup lato SQS)</td>
 </tr>
 <tr>
 <td>Deduplicazione</td>
@@ -25058,7 +25058,7 @@
 <tr>
 <td>Dead Letter Queue</td>
 <td>Sì</td>
-<td>Sì (FIFO DLQ)</td>
+<td>Sì (la DLQ deve essere anch'essa FIFO)</td>
 </tr>
 <tr>
 <td>Lambda trigger</td>
@@ -25068,15 +25068,19 @@
 <tr>
 <td>Prezzo</td>
 <td>Più basso</td>
-<td>Più alto (~10x)</td>
+<td>Leggermente più alto (~25% per richiesta, verificare pricing della region)</td>
 </tr>
 <tr>
 <td>Use case</td>
-<td>Worker pool, idempotent tasks</td>
+<td>Worker pool, task idempotenti</td>
 <td>Ordini, transazioni, sequenze</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Perché at-least-once</p>
+<p>Standard replica i messaggi su più server: una <code>DeleteMessage</code> può non raggiungere tutte le repliche e il messaggio può essere riconsegnato. I consumer Standard vanno quindi scritti <strong>idempotenti</strong>.</p>
+</div>
 <h3 id="parametri-chiave">Parametri Chiave<a class="headerlink" href="#parametri-chiave" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -25102,9 +25106,9 @@
 </tr>
 <tr>
 <td>Message Size</td>
-<td>-</td>
-<td>max 256 KB</td>
-<td>Payload massimo (usa S3 + Extended Client per oltre)</td>
+<td>1 MiB</td>
+<td>1 B - 1 MiB</td>
+<td>Payload massimo (portato da 256 KB a 1 MiB nel 2025; oltre → S3 + Extended Client)</td>
 </tr>
 <tr>
 <td>Long Polling Wait</td>
@@ -25164,7 +25168,7 @@
 </span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">    </span>--message-body<span class="w"> </span><span class="s1">'{"event": "reminder"}'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">    </span>--delay-seconds<span class="w"> </span><span class="m">30</span>
 </span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>
-</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="c1"># Inviare batch (fino a 10 messaggi, max 256KB totali)</span>
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="c1"># Inviare batch (fino a 10 messaggi, max 1 MiB totale)</span>
 </span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a>aws<span class="w"> </span>sqs<span class="w"> </span>send-message-batch<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="w">    </span>--queue-url<span class="w"> </span>https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-queue<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="w">    </span>--entries<span class="w"> </span><span class="s1">'[</span>
@@ -25210,21 +25214,27 @@
 <p><strong>Best practice:</strong>
 - Imposta <code>VisibilityTimeout &gt; tempo_max_elaborazione</code> (con margine 2-3x)
 - Se un job supera il tempo previsto → chiama <code>ChangeMessageVisibility</code> per estenderlo
-- <code>maxReceiveCount</code> in RedrivePolicy = massimo retry prima di andare in DLQ</p>
+- <code>maxReceiveCount</code> in RedrivePolicy = massimo retry prima di andare in DLQ
+- Con Lambda come consumer: <code>VisibilityTimeout</code> ≥ 6× il timeout della funzione (raccomandazione AWS), altrimenti i messaggi riappaiono mentre la funzione li sta ancora elaborando
+- La retention della DLQ decorre dal momento di <strong>enqueue originale</strong> (non dall'arrivo in DLQ): impostala più lunga della coda sorgente (es. 14 giorni vs 4)
+- Cifratura: SSE-SQS (chiavi gestite da SQS) è attiva di default sulle nuove code; usa SSE-KMS solo se serve controllo sulla chiave (vedi <code>kms-secrets</code>)</p>
 <hr />
 <h3 id="fifo-queue-ordinamento-e-deduplicazione">FIFO Queue — Ordinamento e Deduplicazione<a class="headerlink" href="#fifo-queue-ordinamento-e-deduplicazione" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># FIFO richiede MessageGroupId (ordinamento) e MessageDeduplicationId</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>aws<span class="w"> </span>sqs<span class="w"> </span>send-message<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span>--queue-url<span class="w"> </span>https://sqs.eu-central-1.amazonaws.com/123456789012/orders.fifo<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span>--message-body<span class="w"> </span><span class="s1">'{"orderId": "ORD-001", "amount": 99.99}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span>--message-group-id<span class="w"> </span><span class="s2">"customer-456"</span><span class="w"> </span><span class="se">\ </span><span class="w">      </span><span class="c1"># tutti i msg del customer-456 in ordine</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span>--message-deduplication-id<span class="w"> </span><span class="s2">"ORD-001-v1"</span><span class="w">  </span><span class="c1"># stesso ID = stesso messaggio (5min window)</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span>--message-group-id<span class="w"> </span><span class="s2">"customer-456"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span>--message-deduplication-id<span class="w"> </span><span class="s2">"ORD-001-v1"</span>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># MessageGroupId: definisce il "gruppo di ordinamento"</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># - Messaggi con stesso GroupId sono consegnati in ordine FIFO</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># - Messaggi con GroupId diversi sono indipendenti (parallelismo)</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># ContentBasedDeduplication=true → SHA-256 del body come deduplication ID automatico</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># --message-group-id: tutti i msg del customer-456 in ordine</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># --message-deduplication-id: stesso ID = stesso messaggio (scartato entro 5 min)</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># MessageGroupId: definisce il "gruppo di ordinamento"</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># - Messaggi con stesso GroupId sono consegnati in ordine FIFO</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># - Messaggi con GroupId diversi sono indipendenti (parallelismo)</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># ContentBasedDeduplication=true → SHA-256 del body come deduplication ID automatico</span>
 </span></code></pre></div>
 <hr />
 <h3 id="dead-letter-queue-dlq">Dead Letter Queue (DLQ)<a class="headerlink" href="#dead-letter-queue-dlq" title="Permanent link">&para;</a></h3>
@@ -25234,7 +25244,7 @@
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span>--max-number-of-messages<span class="w"> </span><span class="m">10</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># DLQ Redrive — rispedire messaggi dalla DLQ alla coda sorgente</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># (disponibile in console o via API — disponibile dal 2021)</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># (console dal 2021; API start-message-move-task dal 2023; funziona anche con DLQ FIFO)</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>aws<span class="w"> </span>sqs<span class="w"> </span>start-message-move-task<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span>--source-arn<span class="w"> </span>arn:aws:sqs:eu-central-1:123456789012:myapp-dlq<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span>--destination-arn<span class="w"> </span>arn:aws:sqs:eu-central-1:123456789012:myapp-queue<span class="w"> </span><span class="se">\</span>
@@ -25263,8 +25273,12 @@
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span>--batch-size<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span>--maximum-batching-window-in-seconds<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span>--function-response-types<span class="w"> </span><span class="s1">'["ReportBatchItemFailures"]'</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="c1"># ReportBatchItemFailures = partial batch failure support</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1"># ReportBatchItemFailures = partial batch failure support.</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># Per code Standard limitare la concorrenza ed evitare di saturare i downstream:</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1">#   --scaling-config MaximumConcurrency=10</span>
 </span></code></pre></div>
+<p>Senza <code>ReportBatchItemFailures</code> un errore su <strong>un</strong> record rimette in coda l'intero batch, con rielaborazione dei messaggi già riusciti. In una coda FIFO, al primo errore smetti di elaborare il resto del gruppo e restituisci come failure anche i record successivi dello stesso <code>MessageGroupId</code>, per preservare l'ordine.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Lambda handler con partial batch failure</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
@@ -25292,33 +25306,31 @@
 </span></code></pre></div>
 <hr />
 <h3 id="sqs-extended-client-library">SQS Extended Client Library<a class="headerlink" href="#sqs-extended-client-library" title="Permanent link">&para;</a></h3>
-<p>Per messaggi <strong>oltre 256 KB</strong> (fino a 2 GB), il payload viene salvato su S3:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Python — boto3 + amazon-sqs-extended-client-python</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># pip install amazon-sqs-extended-client</span>
+<p>Per messaggi <strong>oltre 1 MiB</strong> (fino a 2 GB), il payload viene salvato su S3 e nella coda viaggia solo un puntatore. Soglia configurabile: con <code>always_through_s3=False</code> si usa S3 solo oltre la soglia.</p>
+<!-- REVIEW: verificare nome pacchetto/API della libreria Python (sqs-extended-client) sulla versione corrente -->
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Python — boto3 + sqs-extended-client</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># pip install sqs-extended-client</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">sqs_extended_client</span><span class="w"> </span><span class="kn">import</span> <span class="n">SQSExtendedClientSession</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">boto3</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">session</span> <span class="o">=</span> <span class="n">SQSExtendedClientSession</span><span class="p">()</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">sqs</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">client</span><span class="p">(</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="s1">'sqs'</span><span class="p">,</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    <span class="n">region_name</span><span class="o">=</span><span class="s1">'eu-central-1'</span><span class="p">,</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    <span class="n">sqs_large_payload_support</span><span class="o">=</span><span class="s1">'my-large-messages-bucket'</span><span class="p">,</span>  <span class="c1"># bucket S3</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="n">always_through_s3</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>  <span class="c1"># True = sempre via S3, False = solo se &gt;256KB</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="n">message_size_threshold</span><span class="o">=</span><span class="mi">256</span> <span class="o">*</span> <span class="mi">1024</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="p">)</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="c1"># Inviare messaggio grande (automaticamente su S3)</span>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="n">sqs</span><span class="o">.</span><span class="n">send_message</span><span class="p">(</span>
-</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>    <span class="n">QueueUrl</span><span class="o">=</span><span class="s1">'https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-queue'</span><span class="p">,</span>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>    <span class="n">MessageBody</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">large_data_object</span><span class="p">)</span>
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="p">)</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>
-</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="c1"># Il consumer riceve il riferimento S3 → lo risolve automaticamente</span>
-</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="n">message</span> <span class="o">=</span> <span class="n">sqs</span><span class="o">.</span><span class="n">receive_message</span><span class="p">(</span>
-</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>    <span class="n">QueueUrl</span><span class="o">=</span><span class="s1">'https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-queue'</span>
-</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="p">)</span>
-</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="n">body</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">'Messages'</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">'Body'</span><span class="p">])</span>  <span class="c1"># già risolto da S3</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sqs_extended_client</span>  <span class="c1"># noqa: F401 — estende il client boto3 con gli attributi sotto</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">sqs</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">'sqs'</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="s1">'eu-central-1'</span><span class="p">)</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">sqs</span><span class="o">.</span><span class="n">large_payload_support</span> <span class="o">=</span> <span class="s1">'my-large-messages-bucket'</span>  <span class="c1"># bucket S3</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">sqs</span><span class="o">.</span><span class="n">always_through_s3</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># True = sempre via S3, False = solo oltre la soglia</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">sqs</span><span class="o">.</span><span class="n">message_size_threshold</span> <span class="o">=</span> <span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Inviare messaggio grande (automaticamente su S3)</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">sqs</span><span class="o">.</span><span class="n">send_message</span><span class="p">(</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    <span class="n">QueueUrl</span><span class="o">=</span><span class="s1">'https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-queue'</span><span class="p">,</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    <span class="n">MessageBody</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">large_data_object</span><span class="p">)</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="p">)</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="c1"># Il consumer riceve il riferimento S3 → lo risolve automaticamente</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="n">message</span> <span class="o">=</span> <span class="n">sqs</span><span class="o">.</span><span class="n">receive_message</span><span class="p">(</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>    <span class="n">QueueUrl</span><span class="o">=</span><span class="s1">'https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-queue'</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="p">)</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="n">body</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s1">'Messages'</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s1">'Body'</span><span class="p">])</span>  <span class="c1"># già risolto da S3</span>
 </span></code></pre></div>
 <hr />
 <h3 id="queue-policy-resource-based-policy">Queue Policy (Resource-Based Policy)<a class="headerlink" href="#queue-policy-resource-based-policy" title="Permanent link">&para;</a></h3>
@@ -25326,22 +25338,10 @@
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>aws<span class="w"> </span>sqs<span class="w"> </span>set-queue-attributes<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span>--queue-url<span class="w"> </span>https://sqs.eu-central-1.amazonaws.com/123456789012/myapp-queue<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span>--attributes<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="s1">        "Policy": "{</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="s1">            \"Version\": \"2012-10-17\",</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="s1">            \"Statement\": [{</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="s1">                \"Effect\": \"Allow\",</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="s1">                \"Principal\": {\"Service\": \"sns.amazonaws.com\"},</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="s1">                \"Action\": \"sqs:SendMessage\",</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="s1">                \"Resource\": \"arn:aws:sqs:eu-central-1:123456789012:myapp-queue\",</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="s1">                \"Condition\": {</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="s1">                    \"ArnLike\": {</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="s1">                        \"aws:SourceArn\": \"arn:aws:sns:eu-central-1:123456789012:myapp-topic\"</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="s1">                    }</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="s1">                }</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="s1">            }]</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="s1">        }"</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="s1">    }'</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="s1">        "Policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"sns.amazonaws.com\"},\"Action\":\"sqs:SendMessage\",\"Resource\":\"arn:aws:sqs:eu-central-1:123456789012:myapp-queue\",\"Condition\":{\"ArnLike\":{\"aws:SourceArn\":\"arn:aws:sns:eu-central-1:123456789012:myapp-topic\"}}}]}"</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="s1">    }'</span>
 </span></code></pre></div>
+<p>La condition <code>aws:SourceArn</code> è essenziale: senza di essa <strong>qualsiasi</strong> topic SNS (anche di altri account) potrebbe scrivere nella coda (confused deputy).</p>
 <hr />
 <h2 id="amazon-sns-simple-notification-service">Amazon SNS — Simple Notification Service<a class="headerlink" href="#amazon-sns-simple-notification-service" title="Permanent link">&para;</a></h2>
 <p><strong>SNS</strong> è un servizio di <strong>pub/sub</strong> completamente gestito. I producer inviano messaggi a un <strong>topic</strong> e SNS li distribuisce a tutti i subscriber.</p>
@@ -25404,7 +25404,7 @@
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'TopicArn'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span>--output<span class="w"> </span>text<span class="k">)</span>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Creare topic FIFO (solo subscriber SQS FIFO)</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Creare topic FIFO (subscriber ammessi: code SQS FIFO e, dal 2023, anche Standard)</span>
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>aws<span class="w"> </span>sns<span class="w"> </span>create-topic<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span>--name<span class="w"> </span>orders.fifo<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span>--attributes<span class="w"> </span><span class="s1">'{</span>
@@ -25494,7 +25494,9 @@
 - <code>{"prefix": "order"}</code> — inizia con prefisso
 - <code>{"suffix": ".error"}</code> — finisce con suffisso
 - <code>{"numeric": ["&gt;", 100]}</code> — confronto numerico (<code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>=</code>)
-- <code>{"exists": true}</code> — attributo presente/assente</p>
+- <code>{"exists": true}</code> — attributo presente/assente
+- <code>{"equals-ignore-case": "Order"}</code> — confronto case-insensitive</p>
+<p>Più chiavi nella stessa policy sono in <strong>AND</strong>; più valori nello stesso array in <strong>OR</strong>. Di default il filtro si applica ai <code>MessageAttributes</code>; con <code>FilterPolicyScope=MessageBody</code> si filtra sul JSON del body (utile quando il publisher non può impostare attributi, es. eventi S3 o CloudWatch). I messaggi scartati dal filtro non costano consegna e non arrivano al subscriber.</p>
 <hr />
 <h3 id="fan-out-pattern-sns-multiple-sqs">Fan-Out Pattern — SNS → Multiple SQS<a class="headerlink" href="#fan-out-pattern-sns-multiple-sqs" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Pattern classico: 1 producer → 1 SNS topic → N SQS queues</span>
@@ -25517,7 +25519,7 @@
 </span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>
 </span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="w">    </span>aws<span class="w"> </span>sqs<span class="w"> </span>set-queue-attributes<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="w">        </span>--queue-url<span class="w"> </span><span class="nv">$QUEUE_URL</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="w">        </span>--attributes<span class="w"> </span><span class="s2">"{\"Policy\": \"{\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":{\\\"Service\\\":\\\"sns.amazonaws.com\\\"},\\\"Action\\\":\\\"sqs:SendMessage\\\",\\\"Resource\\\":\\\"</span><span class="nv">$QUEUE_ARN</span><span class="s2">\\\"}]}\"}"</span>
+</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="w">        </span>--attributes<span class="w"> </span><span class="s2">"{\"Policy\": \"{\\\"Version\\\":\\\"2012-10-17\\\",\\\"Statement\\\":[{\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":{\\\"Service\\\":\\\"sns.amazonaws.com\\\"},\\\"Action\\\":\\\"sqs:SendMessage\\\",\\\"Resource\\\":\\\"</span><span class="nv">$QUEUE_ARN</span><span class="s2">\\\",\\\"Condition\\\":{\\\"ArnEquals\\\":{\\\"aws:SourceArn\\\":\\\"arn:aws:sns:eu-central-1:123456789012:order-events\\\"}}}]}\"}"</span>
 </span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a>
 </span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">    </span><span class="c1"># Sottoscrivere la coda al topic SNS</span>
 </span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a><span class="w">    </span>aws<span class="w"> </span>sns<span class="w"> </span>subscribe<span class="w"> </span><span class="se">\</span>
@@ -25534,42 +25536,47 @@
 <hr />
 <h3 id="sns-mobile-push">SNS Mobile Push<a class="headerlink" href="#sns-mobile-push" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Creare Platform Application (AWS gestisce token device)</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>aws<span class="w"> </span>sns<span class="w"> </span>create-platform-application<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span>--name<span class="w"> </span>myapp-ios<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span>--platform<span class="w"> </span>APNS<span class="w"> </span><span class="se">\ </span><span class="w">                      </span><span class="c1"># APNS (iOS), GCM/FCM (Android), ADM (Amazon)</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">    </span>--attributes<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="s1">        "PlatformCredential": "private-key-content",</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="s1">        "PlatformPrincipal": "certificate-content"</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="s1">    }'</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># Registrare device token (normalmente fatto dall'app lato client tramite SDK)</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>aws<span class="w"> </span>sns<span class="w"> </span>create-platform-endpoint<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">    </span>--platform-application-arn<span class="w"> </span>arn:aws:sns:...:app/APNS/myapp-ios<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">    </span>--token<span class="w"> </span><span class="s2">"device-token-from-apns"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">    </span>--custom-user-data<span class="w"> </span><span class="s2">"userId=123"</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1"># Inviare push notification diretta (target: endpoint specifico)</span>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>aws<span class="w"> </span>sns<span class="w"> </span>publish<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">    </span>--target-arn<span class="w"> </span>arn:aws:sns:...:endpoint/APNS/myapp-ios/xxxx<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">    </span>--message-structure<span class="w"> </span>json<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">    </span>--message<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="s1">        "APNS": "{\"aps\":{\"alert\":\"Nuovo messaggio!\",\"badge\":1}}",</span>
-</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="s1">        "APNS_SANDBOX": "{\"aps\":{\"alert\":\"Nuovo messaggio!\",\"badge\":1}}"</span>
-</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="s1">    }'</span>
-</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a>
-</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="c1"># Inviare a tutti i device iscritti al topic</span>
-</span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a>aws<span class="w"> </span>sns<span class="w"> </span>publish<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a><span class="w">    </span>--topic-arn<span class="w"> </span>arn:aws:sns:...:myapp-notifications<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-28"><a id="__codelineno-11-28" name="__codelineno-11-28" href="#__codelineno-11-28"></a><span class="w">    </span>--message-structure<span class="w"> </span>json<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-29"><a id="__codelineno-11-29" name="__codelineno-11-29" href="#__codelineno-11-29"></a><span class="w">    </span>--message<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-11-30"><a id="__codelineno-11-30" name="__codelineno-11-30" href="#__codelineno-11-30"></a><span class="s1">        "default": "Nuovo messaggio!",</span>
-</span><span id="__span-11-31"><a id="__codelineno-11-31" name="__codelineno-11-31" href="#__codelineno-11-31"></a><span class="s1">        "APNS": "{\"aps\":{\"alert\":\"Nuovo messaggio!\"}}",</span>
-</span><span id="__span-11-32"><a id="__codelineno-11-32" name="__codelineno-11-32" href="#__codelineno-11-32"></a><span class="s1">        "GCM": "{\"notification\":{\"title\":\"Nuovo messaggio!\"}}"</span>
-</span><span id="__span-11-33"><a id="__codelineno-11-33" name="__codelineno-11-33" href="#__codelineno-11-33"></a><span class="s1">    }'</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># --platform: APNS (iOS), GCM (Android: nome API storico, oggi usa FCM), ADM (Amazon)</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>aws<span class="w"> </span>sns<span class="w"> </span>create-platform-application<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span>--name<span class="w"> </span>myapp-ios<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">    </span>--platform<span class="w"> </span>APNS<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span>--attributes<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="s1">        "PlatformCredential": "private-key-content",</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="s1">        "PlatformPrincipal": "certificate-content"</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="s1">    }'</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="c1"># Registrare device token (normalmente fatto dall'app lato client tramite SDK)</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>aws<span class="w"> </span>sns<span class="w"> </span>create-platform-endpoint<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">    </span>--platform-application-arn<span class="w"> </span>arn:aws:sns:...:app/APNS/myapp-ios<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">    </span>--token<span class="w"> </span><span class="s2">"device-token-from-apns"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">    </span>--custom-user-data<span class="w"> </span><span class="s2">"userId=123"</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="c1"># Inviare push notification diretta (target: endpoint specifico)</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>aws<span class="w"> </span>sns<span class="w"> </span>publish<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">    </span>--target-arn<span class="w"> </span>arn:aws:sns:...:endpoint/APNS/myapp-ios/xxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">    </span>--message-structure<span class="w"> </span>json<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">    </span>--message<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="s1">        "APNS": "{\"aps\":{\"alert\":\"Nuovo messaggio!\",\"badge\":1}}",</span>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="s1">        "APNS_SANDBOX": "{\"aps\":{\"alert\":\"Nuovo messaggio!\",\"badge\":1}}"</span>
+</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="s1">    }'</span>
+</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a>
+</span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a><span class="c1"># Inviare a tutti i device iscritti al topic</span>
+</span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a>aws<span class="w"> </span>sns<span class="w"> </span>publish<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-28"><a id="__codelineno-11-28" name="__codelineno-11-28" href="#__codelineno-11-28"></a><span class="w">    </span>--topic-arn<span class="w"> </span>arn:aws:sns:...:myapp-notifications<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-29"><a id="__codelineno-11-29" name="__codelineno-11-29" href="#__codelineno-11-29"></a><span class="w">    </span>--message-structure<span class="w"> </span>json<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-30"><a id="__codelineno-11-30" name="__codelineno-11-30" href="#__codelineno-11-30"></a><span class="w">    </span>--message<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-11-31"><a id="__codelineno-11-31" name="__codelineno-11-31" href="#__codelineno-11-31"></a><span class="s1">        "default": "Nuovo messaggio!",</span>
+</span><span id="__span-11-32"><a id="__codelineno-11-32" name="__codelineno-11-32" href="#__codelineno-11-32"></a><span class="s1">        "APNS": "{\"aps\":{\"alert\":\"Nuovo messaggio!\"}}",</span>
+</span><span id="__span-11-33"><a id="__codelineno-11-33" name="__codelineno-11-33" href="#__codelineno-11-33"></a><span class="s1">        "GCM": "{\"notification\":{\"title\":\"Nuovo messaggio!\"}}"</span>
+</span><span id="__span-11-34"><a id="__codelineno-11-34" name="__codelineno-11-34" href="#__codelineno-11-34"></a><span class="s1">    }'</span>
 </span></code></pre></div>
 <hr />
 <h2 id="amazon-ses-simple-email-service">Amazon SES — Simple Email Service<a class="headerlink" href="#amazon-ses-simple-email-service" title="Permanent link">&para;</a></h2>
 <p><strong>SES</strong> è il servizio per l'invio di email transazionali e marketing ad alto volume.</p>
+<div class="admonition note">
+<p class="admonition-title">API v1 vs v2</p>
+<p>I comandi <code>aws ses ...</code> sono l'API v1 (legacy, ancora supportata). Per nuovi progetti usa <code>aws sesv2</code>, che unifica identity, configuration set, suppression list e account-level settings.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Verificare dominio (aggiungere record DNS TXT/CNAME/MX per DKIM + MAIL FROM)</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>aws<span class="w"> </span>ses<span class="w"> </span>verify-domain-identity<span class="w"> </span>--domain<span class="w"> </span>company.com
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>aws<span class="w"> </span>ses<span class="w"> </span>verify-domain-dkim<span class="w"> </span>--domain<span class="w"> </span>company.com
@@ -25617,7 +25624,8 @@
 <p><strong>SES — Limiti e produzione:</strong>
 - Sandbox iniziale: solo indirizzi verificati, 200 email/giorno
 - Richiesta aumento limite per produzione (via console → "Request Production Access")
-- Gestire bounce e complaint: tasso bounce &lt;2%, complaint &lt;0.1% per non essere sospesi</p>
+- Gestire bounce e complaint: tieni bounce &lt;2% e complaint &lt;0.1%; AWS mette l'account in review/probation oltre ~5% bounce e 0.1% complaint e può sospendere l'invio a ~10% / 0.5%
+- Autenticare il dominio con DKIM (e SPF/DMARC) per la deliverability; usa la suppression list per non reinviare a indirizzi in bounce</p>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-messaggi-non-vengono-consumati-stuck-in-queue">Scenario 1 — Messaggi non vengono consumati (stuck in queue)<a class="headerlink" href="#scenario-1-messaggi-non-vengono-consumati-stuck-in-queue" title="Permanent link">&para;</a></h3>
@@ -25692,19 +25700,19 @@
 <hr />
 <h3 id="scenario-4-fifo-queue-messaggi-duplicati-o-fuori-ordine">Scenario 4 — FIFO Queue: messaggi duplicati o fuori ordine<a class="headerlink" href="#scenario-4-fifo-queue-messaggi-duplicati-o-fuori-ordine" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Con una coda FIFO si ricevono messaggi duplicati, oppure messaggi con stesso <code>MessageGroupId</code> arrivano in ordine errato.</p>
-<p><strong>Causa:</strong> Duplicati: il <code>MessageDeduplicationId</code> non è univoco o <code>ContentBasedDeduplication</code> è disabilitato e il producer non fornisce un ID. Ordine errato: consumer diversi stanno elaborando lo stesso <code>MessageGroupId</code> in parallelo (non consentito in FIFO).</p>
-<p><strong>Soluzione:</strong> Garantire <code>MessageDeduplicationId</code> univoco per ogni messaggio (o abilitare <code>ContentBasedDeduplication</code>). In FIFO, messaggi con stesso <code>MessageGroupId</code> sono consegnati a un unico consumer alla volta.</p>
+<p><strong>Causa:</strong> Duplicati: il producer ritenta dopo oltre 5 minuti (finestra di dedup scaduta), oppure usa un <code>MessageDeduplicationId</code> diverso a ogni retry (es. timestamp), che annulla la deduplicazione. Duplicati lato consumer: visibility timeout scaduto prima della <code>DeleteMessage</code>. Ordine errato: producer multipli/concorrenti sullo stesso <code>MessageGroupId</code> (l'ordine è quello di arrivo a SQS), oppure <code>MessageGroupId</code> diverso per messaggi che dovrebbero essere ordinati.</p>
+<p><strong>Soluzione:</strong> Usare un <code>MessageDeduplicationId</code> <strong>deterministico</strong> (es. ID di business dell'ordine) riusato a ogni retry dello stesso messaggio, oppure <code>ContentBasedDeduplication</code>. SQS consegna i messaggi di un <code>MessageGroupId</code> a un consumer alla volta; per scalare usa molti group ID distinti. Rendi comunque il consumer idempotente.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Verificare attributi della coda FIFO</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>aws<span class="w"> </span>sqs<span class="w"> </span>get-queue-attributes<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span>--queue-url<span class="w"> </span>https://sqs.eu-central-1.amazonaws.com/123456789012/orders.fifo<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">    </span>--attribute-names<span class="w"> </span>FifoQueue<span class="w"> </span>ContentBasedDeduplication<span class="w"> </span>DeduplicationScope
 </span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># Inviare con MessageDeduplicationId esplicito e univoco</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># Inviare con MessageDeduplicationId deterministico (stesso ID a ogni retry)</span>
 </span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>aws<span class="w"> </span>sqs<span class="w"> </span>send-message<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">    </span>--queue-url<span class="w"> </span>https://sqs.eu-central-1.amazonaws.com/123456789012/orders.fifo<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">    </span>--message-body<span class="w"> </span><span class="s1">'{"orderId": "ORD-001"}'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">    </span>--message-group-id<span class="w"> </span><span class="s2">"customer-456"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">    </span>--message-deduplication-id<span class="w"> </span><span class="s2">"ORD-001-</span><span class="k">$(</span>date<span class="w"> </span>+%s%N<span class="k">)</span><span class="s2">"</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">    </span>--message-deduplication-id<span class="w"> </span><span class="s2">"ORD-001-created"</span>
 </span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>
 </span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="c1"># Abilitare ContentBasedDeduplication (evita gestione manuale degli ID)</span>
 </span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>aws<span class="w"> </span>sqs<span class="w"> </span>set-queue-attributes<span class="w"> </span><span class="se">\</span>
