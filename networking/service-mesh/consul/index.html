@@ -21962,7 +21962,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22041,7 +22041,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22066,7 +22066,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25064,8 +25064,12 @@
 <p>Ogni nodo del cluster Consul esegue un <strong>agente</strong>, in due modalità:</p>
 <ul>
 <li><strong>Server</strong>: mantiene lo stato del cluster tramite <strong>Raft consensus</strong> (algoritmo che elegge un leader e replica il log solo con maggioranza dei nodi, il <em>quorum</em>), replica il catalogo servizi, risponde alle query DNS/HTTP. Tipicamente 3 o 5 server per datacenter (quorum dispari).</li>
-<li><strong>Client</strong>: gira su ogni nodo applicativo (VM o come DaemonSet in k8s), inoltra le richieste ai server e esegue gli health check locali.</li>
+<li><strong>Client</strong>: gira su ogni nodo applicativo VM/bare metal, inoltra le richieste ai server e esegue gli health check locali.</li>
 </ul>
+<div class="admonition note">
+<p class="admonition-title">Kubernetes: architettura consul-dataplane (consul-k8s ≥ 1.0 / Consul ≥ 1.14)</p>
+<p>Su Kubernetes i client agent (DaemonSet) e il gossip <strong>non sono più usati</strong> di default: ogni pod mesh ha un processo <strong>consul-dataplane</strong> che avvolge Envoy e parla direttamente via gRPC con i server. Motivo: meno porte/gossip da aprire, niente agent per nodo da aggiornare, sidecar più leggero. Il modello client+gossip resta per VM e Nomad.</p>
+</div>
 <h3 id="gossip-protocol-serf">Gossip protocol (Serf)<a class="headerlink" href="#gossip-protocol-serf" title="Permanent link">&para;</a></h3>
 <p>I nodi si scoprono e si tengono sincronizzati tramite <strong>Serf</strong>, un protocollo gossip epidemico basato su SWIM (Scalable Weakly-consistent Infection-style Membership: ogni nodo sonda periodicamente peer casuali, così il costo per nodo resta costante al crescere del cluster). Serve per: cluster membership, failure detection e propagazione di eventi, senza dipendere da un single point of failure per il discovery iniziale.</p>
 <h3 id="catalogo-servizi-e-dns">Catalogo servizi e DNS<a class="headerlink" href="#catalogo-servizi-e-dns" title="Permanent link">&para;</a></h3>
@@ -25081,33 +25085,35 @@
 
         subgraph VM["VM Legacy"]
             vmapp["app legacy\n:8080"]
+            vmsidecar["Envoy sidecar\n(Connect)"]
             vmagent["Consul Client Agent"]
         end
 
         subgraph K8s["Kubernetes"]
             subgraph PodA["Pod: checkout"]
                 appA["checkout app"]
-                sidecarA["Envoy sidecar\n(Consul Connect)"]
+                sidecarA["consul-dataplane\n+ Envoy"]
             end
             syncns["consul-k8s\ncatalog sync"]
         end
     end
 
     vmagent -- "gossip (Serf)" --&gt; s1
-    syncns -- "gossip (Serf)" --&gt; s1
+    sidecarA -- "gRPC (xDS, discovery)" --&gt; s1
+    syncns -- "API catalogo" --&gt; s1
     s1 -- "Raft replication" --&gt; s2
     s1 -- "Raft replication" --&gt; s3
 
     vmagent -- "registra servizio" --&gt; s1
     syncns -- "sync catalogo k8s &lt;-&gt; VM" --&gt; s1
 
-    sidecarA -- "mTLS Connect" --&gt; vmapp</code></pre>
+    sidecarA -- "mTLS Connect" --&gt; vmsidecar
+    vmsidecar --&gt; vmapp</code></pre>
 <h3 id="consul-on-kubernetes">Consul on Kubernetes<a class="headerlink" href="#consul-on-kubernetes" title="Permanent link">&para;</a></h3>
 <p>Il deployment su Kubernetes avviene tramite <strong>Helm chart ufficiale</strong> (<code>consul-k8s</code>), che installa:</p>
 <ul>
 <li>Consul server (StatefulSet) — o punta a server esterni già esistenti</li>
-<li>Consul client (DaemonSet) su ogni nodo</li>
-<li><strong>Connect Inject</strong> webhook — inietta automaticamente il sidecar Envoy nei pod annotati</li>
+<li><strong>Connect Inject</strong> webhook — inietta automaticamente il sidecar (consul-dataplane + Envoy) nei pod annotati</li>
 <li><strong>Catalog Sync</strong> — sincronizza bidirezionalmente i servizi tra il catalogo Consul (VM, Nomad) e i Service Kubernetes</li>
 </ul>
 <h3 id="mtls-connect-ca">mTLS: Connect CA<a class="headerlink" href="#mtls-connect-ca" title="Permanent link">&para;</a></h3>
@@ -25118,7 +25124,19 @@
 <li>I certificati usano identità <strong>SPIFFE</strong>-compatibili, coerenti con quanto descritto in <a href="../../../security/autenticazione/mtls-spiffe/">mTLS e SPIFFE</a></li>
 </ul>
 <h3 id="intentions-autorizzazione-l4l7">Intentions — autorizzazione L4/L7<a class="headerlink" href="#intentions-autorizzazione-l4l7" title="Permanent link">&para;</a></h3>
-<p>Le <strong>intentions</strong> sono le regole allow/deny che definiscono quali servizi possono comunicare tra loro, equivalenti concettualmente alle <code>AuthorizationPolicy</code> di Istio ma più semplici (modello a coppie source→destination).</p>
+<p>Le <strong>intentions</strong> sono le regole allow/deny che definiscono quali servizi possono comunicare tra loro, equivalenti concettualmente alle <code>AuthorizationPolicy</code> di Istio ma più semplici (modello a coppie source→destination). Sono applicate dal sidecar Envoy del <em>destinatario</em>; a L4 si basano sull'identità SPIFFE del certificato client, a L7 (con protocollo <code>http</code>) possono filtrare per path/metodo/header.</p>
+<div class="admonition warning">
+<p class="admonition-title">Default allow senza ACL</p>
+<p>Se il sistema ACL è disabilitato o ha <code>default_policy = allow</code>, le intentions senza match risultano <strong>allow</strong>. Il deny-all effettivo richiede ACL con default <code>deny</code> oppure un'intention <code>* → *</code> deny esplicita.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Licenza e stato del prodotto</p>
+<p>Da agosto 2023 Consul (come tutto HashiCorp) è rilasciato con licenza <strong>BSL 1.1</strong>, non più MPL: l'uso interno è libero, ma non si può offrirlo come servizio concorrente. HashiCorp è stata acquisita da IBM (chiusura 2025). Le feature Enterprise (namespaces, admin partitions) restano a pagamento. Valutare la licenza prima dell'adozione.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">CLI vs config entry</p>
+<p>I comandi <code>consul intention ...</code> usati sotto sono comodi per prove ma sono il modello legacy; in produzione si preferisce il config entry <code>service-intentions</code> (o la CRD <code>ServiceIntentions</code> su k8s), versionabile in Git.</p>
+</div>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="installazione-su-kubernetes-helm">Installazione su Kubernetes (Helm)<a class="headerlink" href="#installazione-su-kubernetes-helm" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Aggiungere repo Helm HashiCorp</span>
@@ -25147,26 +25165,30 @@
 </span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>consul
 </span></code></pre></div>
 <h3 id="registrare-un-servizio-vm-legacy">Registrare un servizio VM legacy<a class="headerlink" href="#registrare-un-servizio-vm-legacy" title="Permanent link">&para;</a></h3>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">// /etc/consul.d/legacy-app.json sull'agent client della VM</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="p">{</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">"service"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"legacy-billing"</span><span class="p">,</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">"port"</span><span class="p">:</span><span class="w"> </span><span class="mi">8080</span><span class="p">,</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nt">"tags"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"legacy"</span><span class="p">,</span><span class="w"> </span><span class="s2">"vm"</span><span class="p">],</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">"check"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">      </span><span class="nt">"http"</span><span class="p">:</span><span class="w"> </span><span class="s2">"http://localhost:8080/health"</span><span class="p">,</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">      </span><span class="nt">"interval"</span><span class="p">:</span><span class="w"> </span><span class="s2">"10s"</span><span class="p">,</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">      </span><span class="nt">"timeout"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2s"</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span><span class="p">}</span>
+<p>File <code>/etc/consul.d/legacy-app.json</code> sull'agent client della VM. Il blocco <code>connect.sidecar_service</code> registra anche un proxy: serve perché il servizio sia raggiungibile via mTLS dal mesh.</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">"service"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"legacy-billing"</span><span class="p">,</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">"port"</span><span class="p">:</span><span class="w"> </span><span class="mi">8080</span><span class="p">,</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">"tags"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"legacy"</span><span class="p">,</span><span class="w"> </span><span class="s2">"vm"</span><span class="p">],</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nt">"check"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">      </span><span class="nt">"http"</span><span class="p">:</span><span class="w"> </span><span class="s2">"http://localhost:8080/health"</span><span class="p">,</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">      </span><span class="nt">"interval"</span><span class="p">:</span><span class="w"> </span><span class="s2">"10s"</span><span class="p">,</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">      </span><span class="nt">"timeout"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2s"</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span><span class="nt">"connect"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"sidecar_service"</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="p">}</span>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="p">}</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Ricaricare la configurazione dell'agent client</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>consul<span class="w"> </span>reload
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Verificare che il servizio sia registrato e sano</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>consul<span class="w"> </span>catalog<span class="w"> </span>services
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>consul<span class="w"> </span>health<span class="w"> </span>check<span class="w"> </span>legacy-billing
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Avviare il sidecar Envoy della VM (richiede envoy nel PATH)</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>consul<span class="w"> </span>connect<span class="w"> </span>envoy<span class="w"> </span>-sidecar-for<span class="w"> </span>legacy-billing<span class="w"> </span><span class="p">&amp;</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Verificare che il servizio sia registrato e sano</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>consul<span class="w"> </span>catalog<span class="w"> </span>services
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://127.0.0.1:8500/v1/health/service/legacy-billing?passing
 </span></code></pre></div>
 <h3 id="sidecar-injection-su-kubernetes-annotation">Sidecar injection su Kubernetes (annotation)<a class="headerlink" href="#sidecar-injection-su-kubernetes-annotation" title="Permanent link">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apps/v1</span>
@@ -25218,19 +25240,19 @@
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># Verificare le intentions attive</span>
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>consul<span class="w"> </span>intention<span class="w"> </span>check<span class="w"> </span>checkout<span class="w"> </span>legacy-billing
 </span></code></pre></div>
-<div class="language-hcl highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Alternativa dichiarativa via CRD su Kubernetes</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="err">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="nv">consul.hashicorp.com</span><span class="err">/v</span><span class="m">1</span><span class="err">alpha</span><span class="m">1</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="err">kind</span><span class="p">:</span><span class="w"> </span><span class="err">ServiceIntentions</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="err">metadata</span><span class="p">:</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="err">name</span><span class="p">:</span><span class="w"> </span><span class="err">legacy-billing</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="err">spec</span><span class="p">:</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="err">destination</span><span class="p">:</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="err">name</span><span class="p">:</span><span class="w"> </span><span class="err">legacy-billing</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span><span class="err">sources</span><span class="p">:</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="err">-</span><span class="w"> </span><span class="err">name</span><span class="p">:</span><span class="w"> </span><span class="err">checkout</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">      </span><span class="err">action</span><span class="p">:</span><span class="w"> </span><span class="err">allow</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span><span class="err">-</span><span class="w"> </span><span class="err">name</span><span class="p">:</span><span class="w"> </span><span class="s2">"*"</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">      </span><span class="err">action</span><span class="p">:</span><span class="w"> </span><span class="err">deny</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Alternativa dichiarativa via CRD su Kubernetes</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">consul.hashicorp.com/v1alpha1</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceIntentions</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">legacy-billing</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="nt">destination</span><span class="p">:</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">legacy-billing</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span><span class="nt">sources</span><span class="p">:</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">checkout</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">allow</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="s">"*"</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deny</span>
 </span></code></pre></div>
 <h3 id="kv-store-per-configurazione">KV store per configurazione<a class="headerlink" href="#kv-store-per-configurazione" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Scrivere una chiave di configurazione</span>
@@ -25257,7 +25279,7 @@
 </div>
 <ul>
 <li><strong>ACL (Access Control List) abilitate in produzione</strong>: senza ACL chiunque può scrivere nel catalogo o nel KV store. Abilitare <code>acl.enabled = true</code> con default policy <code>deny</code>.</li>
-<li><strong>Mesh Gateway per multi-datacenter</strong>: per comunicazione cross-datacenter senza esporre ogni singolo servizio, usare i Mesh Gateway invece di aprire rotte dirette.</li>
+<li><strong>Mesh Gateway per multi-datacenter</strong>: per comunicazione cross-datacenter senza esporre ogni singolo servizio, usare i Mesh Gateway invece di aprire rotte dirette. Per collegare cluster/partizioni oggi si preferisce il <strong>cluster peering</strong> (relazione 1:1 con scambio di token, nessun pool WAN condiviso) alla federazione WAN tradizionale.</li>
 <li><strong>Terminating Gateway per servizi esterni non mesh-aware</strong>: registrare database o API esterne dietro un Terminating Gateway per portarle sotto mTLS Connect senza modificarle.</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -25271,7 +25293,7 @@
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># /etc/systemd/resolved.conf.d/consul.conf -&gt; [Resolve] DNS=127.0.0.1:8600  Domains=~consul</span>
 </span></code></pre></div>
 <h3 id="scenario-2-sidecar-envoy-non-iniettato">Scenario 2 — Sidecar Envoy non iniettato<a class="headerlink" href="#scenario-2-sidecar-envoy-non-iniettato" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo</strong>: il pod parte con un solo container, nessun <code>consul-connect-envoy-sidecar</code>.</p>
+<p><strong>Sintomo</strong>: il pod parte con un solo container, nessun container <code>consul-dataplane</code> (nelle versioni pre-1.0 di consul-k8s: <code>envoy-sidecar</code>) né init container <code>consul-connect-inject-init</code>.</p>
 <p><strong>Causa</strong>: webhook <code>connect-inject</code> (mutating admission webhook che modifica il pod alla creazione) disabilitato, annotation mancante, o pod creato prima dell'abilitazione.</p>
 <p><strong>Soluzione</strong>: verificare i values Helm e l'annotation, poi ricreare il pod (l'injection avviene solo alla creazione).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>helm<span class="w"> </span>get<span class="w"> </span>values<span class="w"> </span>consul<span class="w"> </span>-n<span class="w"> </span>consul<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A2<span class="w"> </span>connectInject
@@ -25299,8 +25321,7 @@
 <p><strong>Soluzione</strong>: controllare i values Helm e i log del pod di sync.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>helm<span class="w"> </span>get<span class="w"> </span>values<span class="w"> </span>consul<span class="w"> </span>-n<span class="w"> </span>consul<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A4<span class="w"> </span>syncCatalog
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>consul<span class="w"> </span>deploy/consul-sync-catalog
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>default<span class="w"> </span>&lt;pod&gt;<span class="w"> </span>-c<span class="w"> </span>consul-connect-envoy-sidecar<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span>wget<span class="w"> </span>-qO-<span class="w"> </span>http://localhost:19000/config_dump<span class="w">   </span><span class="c1"># config Envoy effettiva</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>consul<span class="w"> </span>consul-server-0<span class="w"> </span>--<span class="w"> </span>consul<span class="w"> </span>catalog<span class="w"> </span>services<span class="w">   </span><span class="c1"># cosa vede il catalogo</span>
 </span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
