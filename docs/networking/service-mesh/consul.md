@@ -14,7 +14,7 @@ related:
 official_docs: https://developer.hashicorp.com/consul/docs
 status: complete
 difficulty: advanced
-last_updated: 2026-09-27
+last_updated: 2026-10-03
 ---
 
 # Consul
@@ -36,12 +36,12 @@ Questo lo rende la scelta tipica per infrastrutture **ibride** o in migrazione v
 
 Ogni nodo del cluster Consul esegue un **agente**, in due modalità:
 
-- **Server**: mantiene lo stato del cluster tramite **Raft consensus**, replica il catalogo servizi, risponde alle query DNS/HTTP. Tipicamente 3 o 5 server per datacenter (quorum dispari).
+- **Server**: mantiene lo stato del cluster tramite **Raft consensus** (algoritmo che elegge un leader e replica il log solo con maggioranza dei nodi, il *quorum*), replica il catalogo servizi, risponde alle query DNS/HTTP. Tipicamente 3 o 5 server per datacenter (quorum dispari).
 - **Client**: gira su ogni nodo applicativo (VM o come DaemonSet in k8s), inoltra le richieste ai server e esegue gli health check locali.
 
 ### Gossip protocol (Serf)
 
-I nodi si scoprono e si tengono sincronizzati tramite **Serf**, un protocollo gossip epidemico basato su SWIM. Serve per: cluster membership, failure detection e propagazione di eventi, senza dipendere da un single point of failure per il discovery iniziale.
+I nodi si scoprono e si tengono sincronizzati tramite **Serf**, un protocollo gossip epidemico basato su SWIM (Scalable Weakly-consistent Infection-style Membership: ogni nodo sonda periodicamente peer casuali, così il costo per nodo resta costante al crescere del cluster). Serve per: cluster membership, failure detection e propagazione di eventi, senza dipendere da un single point of failure per il discovery iniziale.
 
 ### Catalogo servizi e DNS
 
@@ -261,32 +261,81 @@ consul watch -type=key -key=config/checkout/max_retries my-reload-script.sh
 !!! warning "Overhead operativo del cluster separato"
     A differenza di Istio (che riusa il control plane Kubernetes), Consul richiede di mantenere un cluster server dedicato con il proprio quorum Raft e gossip pool. In ambienti puramente Kubernetes questo è complessità aggiuntiva non giustificata se non serve l'integrazione VM/ibrida.
 
-- **ACL abilitate in produzione**: senza ACL chiunque può scrivere nel catalogo o nel KV store. Abilitare `acl.enabled = true` con default policy `deny`.
+- **ACL (Access Control List) abilitate in produzione**: senza ACL chiunque può scrivere nel catalogo o nel KV store. Abilitare `acl.enabled = true` con default policy `deny`.
 - **Mesh Gateway per multi-datacenter**: per comunicazione cross-datacenter senza esporre ogni singolo servizio, usare i Mesh Gateway invece di aprire rotte dirette.
 - **Terminating Gateway per servizi esterni non mesh-aware**: registrare database o API esterne dietro un Terminating Gateway per portarle sotto mTLS Connect senza modificarle.
 
 ## Troubleshooting
 
-| Sintomo | Causa probabile | Soluzione |
-|---------|-----------------|-----------|
-| Servizio non risolve via DNS (`NXDOMAIN` su `*.service.consul`) | Agent locale non registrato o DNS forwarding non configurato | `consul members` per verificare che l'agent sia nel cluster; controllare `dnsmasq`/`systemd-resolved` forwarding verso porta 8600 |
-| Sidecar Envoy non iniettato su pod k8s | Webhook `connect-inject` disabilitato o annotation mancante | Verificare `connectInject.enabled: true` nei values Helm; controllare annotation `consul.hashicorp.com/connect-inject: "true"` sul pod |
-| Comunicazione bloccata tra due servizi mTLS-enabled | Intention di deny implicito (default-deny attivo, nessuna intention allow creata) | `consul intention check <source> <destination>`; creare intention allow esplicita |
-| Cluster server perde il leader / quorum non raggiunto | Numero pari di server o partizione di rete tra i nodi Raft | Usare sempre un numero dispari di server (3 o 5); verificare `consul operator raft list-peers` |
-| Catalog sync non propaga servizi VM verso k8s | `syncCatalog.toK8S` disabilitato o filtro tag non corrispondente | Verificare i values Helm `syncCatalog`; controllare i tag di sync configurati (`-consul-k8s-tag` di default) |
+### Scenario 1 — Servizio non risolve via DNS
+
+**Sintomo**: `NXDOMAIN` su `<service>.service.consul`.
+
+**Causa**: agent locale non nel cluster, oppure il resolver di sistema non inoltra il dominio `.consul` alla porta DNS di Consul (8600, non la 53 standard).
+
+**Soluzione**: verificare membership, interrogare direttamente Consul per isolare il problema, poi configurare il forwarding (`dnsmasq`/`systemd-resolved`).
 
 ```bash
-# Stato generale del cluster e dei membri
 consul members
+dig @127.0.0.1 -p 8600 legacy-billing.service.consul
+# systemd-resolved: inoltra solo il dominio .consul
+# /etc/systemd/resolved.conf.d/consul.conf -> [Resolve] DNS=127.0.0.1:8600  Domains=~consul
+```
+
+### Scenario 2 — Sidecar Envoy non iniettato
+
+**Sintomo**: il pod parte con un solo container, nessun `consul-connect-envoy-sidecar`.
+
+**Causa**: webhook `connect-inject` (mutating admission webhook che modifica il pod alla creazione) disabilitato, annotation mancante, o pod creato prima dell'abilitazione.
+
+**Soluzione**: verificare i values Helm e l'annotation, poi ricreare il pod (l'injection avviene solo alla creazione).
+
+```bash
+helm get values consul -n consul | grep -A2 connectInject
+kubectl get deploy checkout -o jsonpath='{.spec.template.metadata.annotations}'
+kubectl rollout restart deploy/checkout
+```
+
+### Scenario 3 — Comunicazione bloccata tra servizi mTLS
+
+**Sintomo**: connessioni rifiutate/reset tra due servizi Connect, nonostante entrambi siano sani.
+
+**Causa**: intention di deny (esplicita o default-deny globale) senza una regola allow per la coppia source→destination.
+
+**Soluzione**: controllare l'esito dell'intention e creare l'allow esplicita.
+
+```bash
+consul intention check checkout legacy-billing
+consul intention create -allow checkout legacy-billing
+```
+
+### Scenario 4 — Cluster server senza leader
+
+**Sintomo**: errori `No cluster leader`, scritture e registrazioni falliscono.
+
+**Causa**: quorum Raft perso (la maggioranza dei server `N/2+1` non è raggiungibile) per partizione di rete o server down; un numero pari di server non aumenta la tolleranza ai guasti.
+
+**Soluzione**: ripristinare i server mancanti; usare 3 o 5 server; ispezionare i peer e i log.
+
+```bash
 consul operator raft list-peers
-
-# Log dell'agent per debug
-journalctl -u consul -f          # VM (systemd)
+journalctl -u consul -f                  # VM (systemd)
 kubectl logs -n consul consul-server-0   # Kubernetes
+```
 
-# Verificare configurazione e certificati di un sidecar Envoy iniettato
+### Scenario 5 — Catalog sync non propaga i servizi VM verso k8s
+
+**Sintomo**: servizi registrati dalla VM assenti come Service Kubernetes.
+
+**Causa**: `syncCatalog.toK8S` disabilitato oppure filtri di sync (tag, namespace) non corrispondenti.
+
+**Soluzione**: controllare i values Helm e i log del pod di sync.
+
+```bash
+helm get values consul -n consul | grep -A4 syncCatalog
+kubectl logs -n consul deploy/consul-sync-catalog
 kubectl exec -n default <pod> -c consul-connect-envoy-sidecar -- \
-  wget -qO- http://localhost:19000/config_dump
+  wget -qO- http://localhost:19000/config_dump   # config Envoy effettiva
 ```
 
 ## Relazioni
