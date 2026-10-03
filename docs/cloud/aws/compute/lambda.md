@@ -9,7 +9,7 @@ related: [cloud/aws/messaging/sqs-sns, cloud/aws/messaging/eventbridge-kinesis, 
 official_docs: https://docs.aws.amazon.com/lambda/latest/dg/
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-09
+last_updated: 2026-10-03
 ---
 
 # AWS Lambda — Serverless
@@ -469,6 +469,69 @@ aws lambda create-alias \
 - `10M × $0.20/1M = $2 (invocazioni)`
 - `10M × 0.1s × 0.5GB × $0.0000166667 = $8.33 (duration)`
 - Totale: ~$10.33/mese
+
+---
+
+## Troubleshooting
+
+### Scenario 1 — Throttling (`TooManyRequestsException`)
+
+**Sintomo**: invocazioni sincrone falliscono con HTTP 429; metrica CloudWatch `Throttles` > 0; messaggi SQS tornano in coda.
+
+**Causa**: concurrency account (default 1000/Region) esaurita da altre funzioni, oppure reserved concurrency della funzione troppo bassa (o impostata a 0, che blocca ogni invocazione).
+
+**Soluzione**: controllare la reserved concurrency, ridurre quella di funzioni meno critiche o chiedere un aumento quota via Service Quotas. Per le sorgenti SQS, limitare `MaximumConcurrency` sull'event source mapping così i throttle non consumano i retry del messaggio.
+
+```bash
+aws lambda get-function-concurrency --function-name MyFunction
+aws lambda get-account-settings --query 'AccountLimit.ConcurrentExecutions'
+aws lambda put-function-concurrency --function-name MyFunction --reserved-concurrent-executions 100
+aws lambda update-event-source-mapping --uuid <uuid> --scaling-config MaximumConcurrency=20
+```
+
+### Scenario 2 — Timeout (`Task timed out after N seconds`)
+
+**Sintomo**: log con `Task timed out after 3.00 seconds`; invocazioni che terminano sempre al valore di timeout.
+
+**Causa**: timeout default (3 s) troppo basso, memoria insufficiente (CPU proporzionale alla memoria), oppure chiamate di rete bloccate — tipico di Lambda in VPC senza NAT Gateway o VPC Endpoint.
+
+**Soluzione**: alzare timeout e memoria (verificare con Power Tuning), e per funzioni in VPC aggiungere NAT/VPC Endpoint. Il timeout di una funzione dietro API Gateway non deve superare il limite dell'integrazione (29 s di default).
+
+```bash
+aws lambda update-function-configuration --function-name MyFunction --timeout 60 --memory-size 1024
+aws logs filter-log-events --log-group-name /aws/lambda/MyFunction --filter-pattern "Task timed out"
+```
+
+### Scenario 3 — `AccessDeniedException` / permessi mancanti
+
+**Sintomo**: `User: arn:aws:sts::...:assumed-role/... is not authorized to perform ...` nei log, oppure la sorgente (S3, SNS) non riesce a invocare la funzione.
+
+**Causa**: due policy distinte — l'**execution role** governa cosa la funzione può chiamare; la **resource-based policy** governa chi può invocare la funzione. Confonderle è l'errore più comune.
+
+**Soluzione**: aggiungere l'azione mancante all'execution role (least privilege) oppure `add-permission` per il principal invocante.
+
+```bash
+aws lambda get-function --function-name MyFunction --query 'Configuration.Role'
+aws lambda get-policy --function-name MyFunction          # chi può invocare
+aws iam list-attached-role-policies --role-name lambda-basic-role
+aws lambda add-permission --function-name MyFunction --statement-id sns-invoke \
+    --action lambda:InvokeFunction --principal sns.amazonaws.com --source-arn <topic-arn>
+```
+
+### Scenario 4 — Cold start lenti o `Runtime.OutOfMemory` / `Runtime.ImportModuleError`
+
+**Sintomo**: `Init Duration` elevata in `REPORT`; oppure `Runtime.OutOfMemory` / `Runtime.ImportModuleError: Unable to import module`.
+
+**Causa**: package grande o init pesante fuori dall'handler; memoria troppo bassa; dipendenze compilate per architettura diversa (es. layer x86_64 su funzione arm64) o handler path errato.
+
+**Soluzione**: confrontare `Max Memory Used` con la memoria configurata, ricostruire le dipendenze per l'architettura corretta, verificare `--handler`, usare SnapStart/Provisioned Concurrency per latenza critica.
+
+```bash
+aws logs start-query --log-group-name /aws/lambda/MyFunction \
+    --start-time $(date -d '-1 hour' +%s) --end-time $(date +%s) \
+    --query-string 'filter @type="REPORT" | stats max(@initDuration), max(@maxMemoryUsed/1024/1024) by bin(5m)'
+aws lambda get-function-configuration --function-name MyFunction --query '[Handler,Architectures,Layers]'
+```
 
 ---
 
