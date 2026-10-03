@@ -7,22 +7,23 @@ search_keywords: [AWS Global Accelerator, GA, Global Accelerator, anycast IP, st
 parent: cloud/aws/networking/_index
 related: [cloud/aws/networking/elastic-load-balancing, cloud/aws/networking/route53, cloud/aws/networking/cloudfront, cloud/aws/networking/vpc]
 official_docs: https://docs.aws.amazon.com/global-accelerator/latest/dg/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-09-27
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # AWS Global Accelerator
 
 ## Panoramica
 
-**AWS Global Accelerator (GA)** è un servizio di networking che assegna **2 IP anycast statici** e instrada il traffico verso l'endpoint AWS più vicino e più sano (ALB, NLB, EC2, Elastic IP) attraverso la **rete backbone globale di AWS**, non attraverso l'internet pubblico. Il client si connette sempre agli stessi 2 IP; GA decide internamente verso quale regione/endpoint instradare, e in caso di failure sposta il traffico su un altro endpoint in **secondi**, senza che il client debba ri-risolvere alcun nome DNS.
+**AWS Global Accelerator (GA)** è un servizio di networking che assegna **2 IP anycast statici** e instrada il traffico verso l'endpoint AWS più vicino e più sano (ALB, NLB, EC2, Elastic IP) attraverso la **rete backbone globale di AWS**, non attraverso l'internet pubblico. Il client si connette sempre agli stessi 2 IP; GA decide internamente verso quale regione/endpoint instradare, e in caso di failure sposta il traffico su un altro endpoint in **decine di secondi** (dominati dal tempo di detection dell'health check), senza che il client debba ri-risolvere alcun nome DNS.
 
 È un servizio **completamente diverso** da CloudFront e da Route 53, anche se tutti e tre appaiono nelle discussioni su "traffico globale":
 
 - **CloudFront** è una CDN: cache contenuti HTTP/HTTPS al bordo (edge location) e serve risposte dalla cache più vicina. Non è pensato per protocolli generici (TCP/UDP) né per applicazioni non cacheable.
 - **Route 53 failover routing** è **DNS-based**: cambia la risposta DNS quando un health check fallisce, ma il cambiamento si propaga solo dopo che il **TTL** del record scade lato client/resolver — spesso minuti, talvolta più per resolver che ignorano il TTL.
-- **Global Accelerator** non fa caching e non è DNS-based per il failover: gli IP anycast restano fissi, e il routing interno alla rete AWS cambia **senza redirigere il client altrove**. Il failover è quindi dell'ordine dei **secondi**, non dei minuti.
+- **Global Accelerator** non fa caching e non è DNS-based per il failover: gli IP anycast restano fissi, e il routing interno alla rete AWS cambia **senza redirigere il client altrove**. Il failover è quindi dell'ordine di **decine di secondi** (con health check a 10s), non dei minuti.
 
 Si usa GA quando serve: un **IP statico** stabile per whitelist su firewall di terzi, un **RTO molto basso** in scenari multi-regione (disaster recovery attivo-passivo o attivo-attivo), traffico **non-HTTP** (gaming UDP, IoT, VoIP) che CloudFront non può accelerare, oppure quando serve instradare il traffico sul backbone AWS invece che sul routing BGP pubblico per ridurre latenza e jitter. **Non serve** per contenuti statici/cacheable via HTTP (CloudFront è più economico ed efficace) e non serve quando un failover di qualche minuto via Route 53 è accettabile (costo inferiore, nessun servizio aggiuntivo).
 
@@ -36,7 +37,7 @@ Si usa GA quando serve: un **IP statico** stabile per whitelist su firewall di t
     - **Endpoint group**: insieme di endpoint associati a **una Region**; ha un `traffic dial` (0-100%) e health check propri.
     - **Endpoint**: destinazione finale — ALB, NLB, istanza EC2, o Elastic IP.
     - **Traffic dial**: percentuale di traffico instradabile verso un endpoint group; usato per drenare gradualmente una regione o per blue/green a livello regionale.
-    - **Client affinity**: `NONE` (default, hash su 4-tuple: IP/porta sorgente e destinazione) oppure `SOURCE_IP` (hash solo su IP sorgente, per protocolli che richiedono che tutte le connessioni di un client finiscano sullo stesso endpoint, es. UDP stateful).
+    - **Client affinity**: `NONE` (default, hash su 5-tuple: IP/porta sorgente, IP/porta destinazione, protocollo) oppure `SOURCE_IP` (hash su IP sorgente + IP destinazione, per protocolli che richiedono che tutte le connessioni di un client finiscano sullo stesso endpoint, es. UDP stateful).
 
 ### Standard Accelerator vs Custom Routing Accelerator
 
@@ -44,7 +45,7 @@ Si usa GA quando serve: un **IP statico** stabile per whitelist su firewall di t
 |---|---|---|
 | Uso tipico | Failover multi-regione, IP fissi per app HTTP/TCP/UDP | Gaming/IoT con migliaia di container/VM dietro pochi IP, porta destinazione custom per client |
 | Endpoint | ALB, NLB, EC2, Elastic IP | Solo VPC subnet (mappa porta pubblica → porta privata su istanza specifica) |
-| Health check | Sì, per endpoint group | Sì, a livello di subnet/istanza |
+| Health check | Sì, per endpoint group | No (GA non esegue health check sugli endpoint custom routing) |
 | Porte | Listener espliciti definiti dall'utente | Range di porte mappate 1:1 o N:1 verso destinazioni interne |
 | Caso d'uso distintivo | DR multi-region, API globali | Piattaforme multiplayer con matchmaking che assegna client a server specifici |
 
@@ -72,6 +73,9 @@ Global Accelerator (valuta endpoint group per health + traffic dial)
   └──► Endpoint group us-east-1 (traffic dial 0%, standby) ──► ALB / NLB / EC2
 ```
 
+!!! warning "Traffic dial 0% = nessun failover automatico"
+    Un endpoint group con dial a 0% **non riceve traffico nemmeno se l'altro è unhealthy**: il dial limita la quota instradabile verso il gruppo. Lo schema sopra è quindi un **failover manuale** (si alza il dial a 100% durante l'incidente). Per failover **automatico** lasciare entrambi i gruppi a 100%: GA instrada alla regione sana più vicina al client (active-active), oppure usare un dial parziale sullo standby.
+
 ### Flusso di failover
 
 1. Il **health check** dell'endpoint group (configurabile: path HTTP/HTTPS, porta, intervallo, soglia) rileva un endpoint o un'intera regione come unhealthy.
@@ -84,7 +88,7 @@ Il `traffic dial` non è un semplice on/off: riducendolo gradualmente (es. 100% 
 
 ### Zonal shift e zonal autoshift
 
-GA supporta anche lo **spostamento a livello di Availability Zone** (non solo Region) tramite Route 53 Application Recovery Controller / Zonal Shift: utile quando un problema è isolato a una AZ e non a un'intera regione.
+Lo **zonal shift** (Route 53 Application Recovery Controller) non è una funzione di GA ma dei load balancer ALB/NLB che stanno dietro: sposta il traffico fuori da una singola Availability Zone quando il problema è isolato a quella AZ. GA gestisce il failover a livello di endpoint/Region; i due meccanismi si combinano.
 
 ---
 
@@ -94,11 +98,12 @@ GA supporta anche lo **spostamento a livello di Availability Zone** (non solo Re
 
 ```bash
 # 1. Creare l'accelerator (IP anycast statici assegnati automaticamente)
-aws globalaccelerator create-accelerator \
+ACCELERATOR_ARN=$(aws globalaccelerator create-accelerator \
   --name prod-api-accelerator \
   --ip-address-type IPV4 \
   --enabled \
-  --region us-west-2   # il control plane di GA vive sempre in us-west-2
+  --region us-west-2 \
+  --query 'Accelerator.AcceleratorArn' --output text)   # il control plane di GA vive sempre in us-west-2
 
 # 2. Recuperare gli IP statici assegnati
 aws globalaccelerator describe-accelerator \
@@ -159,6 +164,8 @@ aws globalaccelerator describe-endpoint-group \
 ### Terraform
 
 ```hcl
+# Le API di GA sono servite solo da us-west-2: il provider AWS va configurato
+# con region = "us-west-2" (o un alias dedicato) per queste risorse.
 resource "aws_globalaccelerator_accelerator" "api" {
   name            = "prod-api-accelerator"
   ip_address_type = "IPV4"
