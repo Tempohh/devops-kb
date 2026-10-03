@@ -7,12 +7,15 @@ search_keywords: [ARM Templates, Azure Resource Manager, Bicep, IaC Azure, Infra
 parent: cloud/azure/ci-cd/_index
 related: [cloud/azure/ci-cd/azure-devops, cloud/azure/identita/rbac-managed-identity]
 official_docs: https://learn.microsoft.com/azure/azure-resource-manager/bicep/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # ARM Templates & Bicep
+
+**ARM** (Azure Resource Manager) è il layer di controllo di Azure: ogni deploy, da portale, CLI o IaC (*Infrastructure as Code*), diventa una chiamata ARM. Un **ARM template** è il formato JSON dichiarativo accettato da ARM; **Bicep** è un DSL (*Domain-Specific Language*) che viene transpilato in ARM JSON prima del deploy. Perché esiste: il JSON è verboso e difficile da leggere/modularizzare. Come funziona: `az deployment` compila il `.bicep` in JSON e lo invia ad ARM, che calcola le dipendenze e crea le risorse in parallelo. Nessun tfstate da gestire: lo stato "vero" è quello delle risorse in Azure.
 
 ## Confronto IaC Azure
 
@@ -22,7 +25,10 @@ last_updated: 2026-03-28
 | **ARM JSON** | JSON | Nessuno | No | Alta (verbose) | Legacy, generazione automatica |
 | **Terraform** | HCL | Stato remoto (tfstate) | Sì | Media | Multi-cloud, team già Terraform |
 | **Pulumi** | Python/TS/Go/C# | Stato remoto | Sì | Media-Alta | Developer-centric |
-| **Azure Developer CLI** | Bicep + convention | Nessuno | No | Bassa | Sviluppo rapido app |
+| **Azure Developer CLI** | Bicep (o Terraform) + convention | Nessuno (solo config ambiente locale in `.azure/`) | No | Bassa | Sviluppo rapido app |
+
+!!! note "Terraform vs OpenTofu"
+    OpenTofu è il fork open source di Terraform (Linux Foundation) e usa lo stesso provider `azurerm` e gli stessi backend: gli esempi Terraform di questa pagina valgono per entrambi.
 
 ---
 
@@ -61,7 +67,7 @@ var appServicePlanName = 'asp-${appName}-${environment}'
 var webAppName = '${appName}-${environment}-${suffix}'
 var sqlServerName = 'sql-${appName}-${environment}-${suffix}'
 var sqlDbName = '${appName}-db'
-var keyVaultName = 'kv-${appName}-${suffix}'    // max 24 chars
+var keyVaultName = take('kv-${appName}-${suffix}', 24)    // max 24 chars: take() evita l'overflow
 var tags = {
   Environment: environment
   Application: appName
@@ -109,9 +115,9 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
       ]
     }
   }
-  dependsOn: [
-    keyVaultAccessPolicy               // KV policy deve esistere prima
-  ]
+  // NIENTE dependsOn su keyVaultRoleAssignment: la role assignment usa
+  // webApp.identity.principalId, quindi dipende già da webApp → sarebbe una dipendenza circolare.
+  // I Key Vault reference vengono risolti a runtime da App Service, non al deploy.
 }
 
 // ── Deployment Slot (staging) — solo prod ─────────────────────────────────
@@ -187,7 +193,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
 }
 
 // ── RBAC: Web App → Key Vault ─────────────────────────────────────────────
-resource keyVaultAccessPolicy 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource keyVaultRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(keyVault.id, webApp.id, '4633458b-17de-408a-b874-0445c86b69e6')
   scope: keyVault
   properties: {
@@ -207,7 +213,25 @@ output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 output keyVaultName string = keyVault.name
 ```
 
+!!! warning "Rete privata"
+    Con `publicNetworkAccess: 'Disabled'` su SQL e Key Vault l'esempio **non è funzionante end-to-end**: servono Private Endpoint + Private DNS Zone e VNet Integration sulla Web App (non mostrati). Senza, l'app non risolve i Key Vault reference e non raggiunge il DB. Il secret con la connection string va inoltre preferibilmente sostituito da autenticazione Entra ID (managed identity) verso SQL.
+
 ### Parametri File
+
+Formato nativo consigliato: **`.bicepparam`** (GA da Bicep 0.18), tipizzato e validato contro il template tramite `using`; il JSON sotto resta valido e necessario per ARM puro.
+
+```bicep
+// prod.bicepparam
+using './main.bicep'
+
+param environment = 'prod'
+param appName = 'ecommerce'
+param appServiceSku = 'P2v3'
+// secret letto da Key Vault a deploy-time (il vault deve avere enabledForTemplateDeployment)
+param sqlAdminPassword = az.getSecret('<SUB_ID>', 'secrets-rg', 'deploy-secrets', 'sql-admin-password')
+```
+
+Equivalente in JSON:
 
 ```json
 // prod.parameters.json
@@ -235,8 +259,14 @@ output keyVaultName string = keyVault.name
 ### Deploy Bicep
 
 ```bash
-# Validare (dry-run sintattico)
+# Compilare/validare sintassi (genera main.json, non contatta Azure)
 az bicep build --file main.bicep
+
+# Validazione lato ARM (controlla anche parametri e quote, senza creare nulla)
+az deployment group validate \
+    --resource-group myapp-rg \
+    --template-file main.bicep \
+    --parameters @prod.parameters.json
 
 # What-if — mostra cosa cambierà SENZA applicare
 az deployment group what-if \
@@ -284,6 +314,9 @@ param environmentVars object = {}
 resource webApp 'Microsoft.Web/sites@2023-12-01' = {
   name: name
   location: location
+  identity: {
+    type: 'SystemAssigned'            // necessario per l'output principalId
+  }
   properties: {
     serverFarmId: planId
     siteConfig: {
@@ -333,7 +366,8 @@ module webApp 'br:myacr.azurecr.io/bicep/app-service:v1.0' = {
 }
 
 # Public Bicep Registry (Microsoft)
-module keyVault 'br/public:avm/res/key-vault/vault:0.6.0' = {
+# (AVM = Azure Verified Modules; fissare sempre una versione esistente, vedi tag nel registry)
+module keyVault 'br/public:avm/res/key-vault/vault:<VERSIONE>' = {
   name: 'keyVaultDeploy'
   params: { ... }
 }
@@ -391,24 +425,19 @@ module keyVault 'br/public:avm/res/key-vault/vault:0.6.0' = {
 
 ## Deployment Stacks
 
-**Deployment Stacks** (GA 2024) gestisce il lifecycle completo delle risorse: crea, aggiorna e **elimina** le risorse rimosse dal template (simile a Terraform plan/apply):
+**Deployment Stacks** (GA 2024) trattano il deployment come un'unità gestita: ARM ricorda quali risorse appartengono allo stack e, al redeploy, **elimina o scollega** quelle rimosse dal template (`--action-on-unmanage`). Perché: il deploy Bicep standard è incrementale e lascia orfane le risorse tolte dal codice; la modalità Complete le elimina ma agisce sull'intero RG ed è rischiosa. Differenza da Terraform: non c'è file di stato (lo stack vive in ARM) e non esiste un `plan` equivalente (il `what-if` non è supportato sugli stack).
 
 ```bash
-# Creare stack
+# Creare stack (lo stesso comando aggiorna uno stack esistente; non c'è "az stack group update")
+# --deny-settings-mode: none | denyDelete | denyWriteAndDelete
+# --action-on-unmanage: detachAll | deleteResources | deleteAll
 az stack group create \
     --name production-stack \
     --resource-group myapp-rg \
     --template-file main.bicep \
     --parameters @prod.parameters.json \
-    --deny-settings-mode none \          # DenyDelete, DenyWriteAndDelete, none
-    --action-on-unmanage deleteAll       # deleteAll, deleteResources, detachAll
-
-# Update stack (rimuove risorse non più nel template)
-az stack group update \
-    --name production-stack \
-    --resource-group myapp-rg \
-    --template-file main.bicep \
-    --parameters @prod.parameters.json
+    --deny-settings-mode denyDelete \
+    --action-on-unmanage deleteResources
 
 # Eliminare stack (e le risorse gestite)
 az stack group delete \
@@ -416,6 +445,9 @@ az stack group delete \
     --resource-group myapp-rg \
     --action-on-unmanage deleteAll
 ```
+
+!!! warning "Attenzione"
+    `deleteAll` elimina anche i resource group gestiti dallo stack. Con dati stateful usare `detachAll` o `deleteResources` e `--deny-settings-mode denyDelete` per proteggere le risorse da cancellazioni fuori dallo stack.
 
 ---
 
@@ -490,7 +522,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.100"
+      version = "~> 4.0"
     }
   }
   backend "azurerm" {
@@ -498,12 +530,15 @@ terraform {
     storage_account_name = "tfstatemycompany"
     container_name       = "tfstate"
     key                  = "production/main.tfstate"
+    use_oidc             = true        # backend: OIDC (Entra ID) invece di access key
+    use_azuread_auth     = true
   }
 }
 
 provider "azurerm" {
   features {}
-  use_oidc = true                      # GitHub Actions OIDC (no client secret)
+  subscription_id = var.subscription_id   # obbligatorio da azurerm 4.0
+  use_oidc        = true                  # GitHub Actions OIDC (no client secret)
 }
 
 resource "azurerm_resource_group" "main" {
@@ -539,7 +574,7 @@ terraform destroy
 
 **Causa:** La risorsa esiste ma con proprietà incompatibili (es. SKU non modificabile dopo creazione, o nome già preso da altra subscription).
 
-**Soluzione:** Verificare lo stato della risorsa con `az resource show`, usare `what-if` per identificare i conflitti prima del deploy. Per risorse non modificabili, eliminare e ricreare.
+**Soluzione:** Verificare lo stato della risorsa con `az resource show`, usare `what-if` per identificare i conflitti prima del deploy. Per risorse non modificabili, eliminare e ricreare (attenzione alla perdita di dati su risorse stateful).
 
 ```bash
 # Identificare la risorsa in conflitto
@@ -563,9 +598,9 @@ az resource delete \
 
 **Sintomo:** `az bicep build` fallisce con errore `BCP057` riferito a un simbolo non trovato (es. variabile, resource, modulo).
 
-**Causa:** Riferimento a una risorsa o variabile definita dopo il punto di utilizzo, oppure typo nel nome simbolico. Bicep richiede che le dipendenze siano dichiarate nello stesso scope.
+**Causa:** Typo nel nome simbolico (case-sensitive), simbolo definito in un altro file/modulo non importato, o accesso a una risorsa figlia fuori scope. L'ordine delle dichiarazioni **non** conta: Bicep costruisce il grafo delle dipendenze dai riferimenti, quindi `dependsOn` esplicito serve solo per dipendenze non espresse da un riferimento (e mai per BCP057).
 
-**Soluzione:** Controllare l'ordine delle dichiarazioni, verificare i nomi esatti (case-sensitive), usare `dependsOn` esplicito se necessario.
+**Soluzione:** Verificare il nome esatto del simbolo, che sia dichiarato nello stesso file (o esposto come `output` del modulo), e che `param`/`var` esistano.
 
 ```bash
 # Compilare e vedere tutti gli errori
@@ -609,28 +644,32 @@ az resource list --resource-group myapp-rg --output table
 
 **Sintomo:** `terraform plan` o `terraform apply` fallisce con `Error acquiring the state lock` su Azure Blob Storage.
 
-**Causa:** Un precedente processo Terraform è terminato in modo anomalo lasciando un lock attivo sul blob, oppure un altro utente/pipeline sta eseguendo operazioni in parallelo.
+**Causa:** Il backend `azurerm` implementa il lock come **lease sul blob dello state stesso** (`production/main.tfstate`), non come blob `.lock` separato. Un processo terminato in modo anomalo, o una pipeline concorrente, lascia il lease attivo.
 
-**Soluzione:** Verificare che non ci siano operazioni Terraform attive in altre pipeline, poi rimuovere il lock manualmente se orfano.
+**Soluzione:** Verificare che non ci siano operazioni Terraform attive in altre pipeline, poi sbloccare.
 
 ```bash
-# Verificare lo stato del lock (nel container tfstate)
+# Verificare lo stato del lease sul blob di state
 az storage blob show \
     --account-name tfstatemycompany \
     --container-name tfstate \
-    --name "production/main.tfstate.lock" \
-    --auth-mode login
+    --name "production/main.tfstate" \
+    --auth-mode login \
+    --query "properties.lease"
 
 # Forzare sblocco (solo se si è certi che nessun altro processo è attivo)
-terraform force-unlock <LOCK_ID>
+terraform force-unlock <LOCK_ID>      # LOCK_ID è riportato nel messaggio di errore
 
-# In alternativa: eliminare il blob di lock direttamente
-az storage blob delete \
+# In alternativa: rompere il lease direttamente
+az storage blob lease break \
     --account-name tfstatemycompany \
     --container-name tfstate \
-    --name "production/main.tfstate.lock" \
+    --blob-name "production/main.tfstate" \
     --auth-mode login
 ```
+
+!!! danger "Non eliminare il blob"
+    Cancellare `main.tfstate` distrugge lo state: Terraform perderebbe traccia di tutte le risorse gestite.
 
 ---
 
