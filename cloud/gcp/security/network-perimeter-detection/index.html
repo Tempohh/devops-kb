@@ -24726,7 +24726,7 @@
 
 <h1 id="protezione-di-rete-e-detection-su-gcp">Protezione di Rete e Detection su GCP<a class="headerlink" href="#protezione-di-rete-e-detection-su-gcp" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>GCP separa la protezione a livello di rete/perimetro in tre servizi complementari che rispondono a domande diverse: <strong>Cloud Armor</strong> filtra il traffico L7 in ingresso verso i servizi dietro un Global Load Balancer (è il WAF/anti-DDoS di GCP); <strong>VPC Service Controls</strong> crea un perimetro a livello di API che impedisce l'esfiltrazione di dati anche quando le credenziali IAM sono valide; <strong>Security Command Center</strong> è il layer di detection/CSPM che aggrega misconfigurazioni, vulnerabilità e minacce attive su tutto l'estate GCP.</p>
+<p>GCP separa la protezione a livello di rete/perimetro in tre servizi complementari che rispondono a domande diverse: <strong>Cloud Armor</strong> filtra il traffico L7 in ingresso verso i servizi dietro un Global Load Balancer (è il WAF/anti-DDoS di GCP); <strong>VPC Service Controls</strong> crea un perimetro a livello di API che impedisce l'esfiltrazione di dati anche quando le credenziali IAM sono valide; <strong>Security Command Center</strong> è il layer di detection/CSPM (Cloud Security Posture Management, verifica continua delle misconfigurazioni) che aggrega misconfigurazioni, vulnerabilità e minacce attive su tutto l'estate GCP.</p>
 <p><strong>Quando servono:</strong>
 - Servizi pubblici (API, web app) dietro Global External Load Balancer esposti a traffico internet non fidato → Cloud Armor
 - Dati sensibili (PII, dati finanziari) in BigQuery/GCS che non devono uscire dal perimetro aziendale anche se un insider ha credenziali IAM valide → VPC Service Controls
@@ -24767,14 +24767,14 @@
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Le regole si valutano in ordine di priorità, non di specificità</p>
-<p>Cloud Armor valuta le regole in ordine di <strong>priorità numerica crescente</strong> (0 = più alta) e si ferma alla prima che matcha. Una regola generica con priorità più bassa (numero più piccolo) di una regola specifica la ignora completamente — causa comune di "la regola non si applica".</p>
+<p>Cloud Armor valuta le regole in ordine di <strong>priorità numerica crescente</strong> (0 = più alta) e si ferma alla prima che matcha. Una regola generica con numero di priorità più piccolo di una regola specifica (quindi valutata prima) la rende irraggiungibile — causa comune di "la regola non si applica".</p>
 </div>
 <h3 id="preconfigured-waf-rules-sensitivity-level">Preconfigured WAF Rules — Sensitivity Level<a class="headerlink" href="#preconfigured-waf-rules-sensitivity-level" title="Permanent link">&para;</a></h3>
-<p>Le regole OWASP CRS hanno un <strong>sensitivity level</strong> (1-4, default 4 = più permissivo in termini di blocco, meno falsi positivi) che bilancia copertura contro falsi positivi:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Livello 1 → massima protezione, più falsi positivi (richiede tuning attento)
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Livello 2 → protezione alta
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>Livello 3 → bilanciato (consigliato come punto di partenza)
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>Livello 4 → default, minimo rischio di falsi positivi, copertura minore
+<p>Le regole OWASP CRS (Core Rule Set, set open-source di firme ModSecurity per attacchi web) hanno un <strong>sensitivity level</strong> (1-4) che bilancia copertura contro falsi positivi: ogni livello include le firme dei livelli inferiori, quindi salendo si aggiungono firme più aggressive.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Livello 1 → poche firme ad alta confidenza, minimo rischio di falsi positivi (punto di partenza)
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Livello 2 → copertura maggiore, qualche falso positivo da tarare
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>Livello 3 → protezione alta, tuning necessario
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>Livello 4 → massima copertura, più falsi positivi (richiede tuning attento)
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Preview mode prima di enforcing</p>
