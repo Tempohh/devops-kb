@@ -7,9 +7,10 @@ search_keywords: [ELB, Elastic Load Balancing, ALB, Application Load Balancer, N
 parent: cloud/aws/networking/_index
 related: [cloud/aws/networking/vpc, cloud/aws/networking/route53, cloud/aws/networking/cloudfront, cloud/aws/compute/ec2-autoscaling, cloud/aws/containers/eks, networking/load-balancing/layer4-vs-layer7]
 official_docs: https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-09-26
+last_verified: 2026-10-03
 ---
 
 # Elastic Load Balancing (ALB, NLB, GWLB)
@@ -93,7 +94,7 @@ Client ──► DNS (myalb-123.eu-west-1.elb.amazonaws.com)
 | NLB | **Disattivo** | A pagamento se attivato (~0,01 $/GB per direzione) |
 | GWLB | **Disattivo** | A pagamento se attivato |
 
-Con cross-zone disattivo ogni nodo invia traffico solo ai target della propria AZ: con 2 AZ e distribuzione target sbilanciata (es. 2 target in a, 8 in b) i primi ricevono il 50% del traffico ciascun nodo → **hot spot**. Attivarlo su NLB migliora la distribuzione ma introduce costo e latenza inter-AZ.
+Con cross-zone disattivo ogni nodo invia traffico solo ai target della propria AZ: con 2 AZ e distribuzione target sbilanciata (es. 2 target in a, 8 in b) ogni nodo riceve ~50% del traffico: i 2 target di a ne prendono il 25% ciascuno, gli 8 di b solo il 6,25% → **hot spot** su a. Attivarlo su NLB migliora la distribuzione ma introduce costo e latenza inter-AZ.
 
 ### Preservazione client IP e Proxy Protocol v2
 
@@ -111,7 +112,7 @@ Con cross-zone disattivo ogni nodo invia traffico solo ai target della propria A
 
 ### GWLB e appliance di sicurezza
 
-Il **Gateway Load Balancer** si inserisce nel percorso di rete tramite **Gateway Load Balancer Endpoint (GWLBE)** e route table: il traffico viene incapsulato in **GENEVE (UDP 6081)** e inviato a una flotta di appliance (firewall, IDS/IPS, DPI) che lo restituisce dopo l'ispezione. Mantiene i flussi "sticky" (5-tuple) sulla stessa appliance e scala orizzontalmente.
+Il **Gateway Load Balancer** si inserisce nel percorso di rete tramite **Gateway Load Balancer Endpoint (GWLBE)** e route table: il traffico viene incapsulato in **GENEVE** (Generic Network Virtualization Encapsulation, UDP 6081; preserva il pacchetto originale e porta metadati di flusso) e inviato a una flotta di appliance (firewall, IDS/IPS, DPI) che lo restituisce dopo l'ispezione. Mantiene i flussi "sticky" (5-tuple) sulla stessa appliance e scala orizzontalmente.
 
 ```text
 Client ─► IGW ─► [route table] ─► GWLBE ─► GWLB ─(GENEVE:6081)─► Appliance fleet
@@ -327,7 +328,6 @@ kind: Service
 metadata:
   name: tcp-gateway
   annotations:
-    service.beta.kubernetes.io/aws-load-balancer-type: external
     service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
 spec:
@@ -342,7 +342,7 @@ spec:
 Con `target-type: ip` il rolling update di un Deployment può rimuovere un pod prima che l'ALB smetta di inviargli traffico: aggiungere un **pod readiness gate** (`elbv2.k8s.aws/pod-readiness-gate-inject: enabled` sul namespace) e un `preStop` sleep pari al deregistration delay.
 
 !!! warning "Costo"
-    Ogni Ingress senza `group.name` crea un **ALB dedicato** (~16–22 $/mese + LCU). Raggruppare gli Ingress con `group.name` o usare un solo ALB con regole per host.
+    Ogni Ingress senza `group.name` crea un **ALB dedicato** (~16–22 $/mese + LCU, *Load Balancer Capacity Unit*, l'unità di fatturazione basata su connessioni, richieste e byte; più i costi per IPv4 pubblici). Raggruppare gli Ingress con `group.name` o usare un solo ALB con regole per host.
 
 ---
 
@@ -375,7 +375,7 @@ Con `target-type: ip` il rolling update di un Deployment può rimuovere un pod p
 ### 503 Service Unavailable
 
 - **Sintomo**: `503` generato dal LB (`target_status_code=-`).
-- **Cause**: nessun target registrato o healthy nel TG (e nessun fail-open possibile); TG vuoto dopo un deploy; capacità del LB in scaling.
+- **Cause**: nessun target **registrato** nel TG (con target registrati ma tutti unhealthy scatta il fail-open, quindi di norma non 503); TG vuoto dopo un deploy; regola con peso 0 su tutti i TG; capacità del LB in scaling.
 - **Soluzione**:
 ```bash
 aws elbv2 describe-target-health --target-group-arn "$TG_ARN"
