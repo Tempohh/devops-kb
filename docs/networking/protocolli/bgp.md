@@ -7,9 +7,10 @@ search_keywords: [border gateway protocol, bgp-4, ebgp, ibgp, asn, autonomous sy
 parent: networking/protocolli/_index
 related: [networking/kubernetes/cni, networking/sicurezza/ddos-protezione, networking/sicurezza/vpn-ipsec, networking/fondamentali/tcpip, cloud/aws/networking/vpc-avanzato, cloud/azure/networking/connettivita]
 official_docs: https://www.rfc-editor.org/rfc/rfc4271
-status: complete
+status: needs-review
 difficulty: advanced
 last_updated: 2026-09-26
+last_verified: 2026-10-03
 ---
 
 # BGP — Border Gateway Protocol
@@ -97,12 +98,12 @@ Idle → Connect → Active → OpenSent → OpenConfirm → Established
 
 | Timer | Default | Note |
 |-------|---------|------|
-| Keepalive | 60 s (Cisco/FRR) | 1/3 dell'hold time |
-| Hold time | 180 s (Cisco) / 90 s (Junos) | Si negozia il minimo tra i due peer |
+| Keepalive | 60 s (Cisco/Junos 30 s) / 3 s (FRR) | 1/3 dell'hold time |
+| Hold time | 180 s (Cisco) / 90 s (Junos) / 9 s (FRR) | Si negozia il minimo tra i due peer |
 | ConnectRetry | 120 s (RFC: 120) | Ritentativo TCP |
 | MRAI eBGP / iBGP | 30 s / 5 s (RFC) | Intervallo minimo tra UPDATE per prefisso |
 
-Con timer BGP i failure detection richiede decine di secondi. **BFD** (RFC 5880) rileva il guasto del link in 100–300 ms e abbatte subito la sessione BGP.
+Con i soli timer BGP il rilevamento di un guasto richiede decine di secondi (FRR, con default 3/9 s, scende a ~9 s; abbassare troppo i timer rende però la sessione fragile sotto carico CPU). **BFD** (RFC 5880) rileva il guasto del link in 100–300 ms e abbatte subito la sessione BGP.
 
 ## Architettura / Come Funziona
 
@@ -212,8 +213,8 @@ Ogni **Virtual Interface (VIF)** è una sessione eBGP tra il router on-prem (ASN
 
 | VIF | Termina su | Uso |
 |-----|-----------|-----|
-| Private | VGW o Direct Connect Gateway | Accesso a VPC (max 100 prefissi annunciati da AWS→on-prem per DXGW; limiti da verificare in quota) |
-| Transit | Direct Connect Gateway → Transit Gateway | Accesso a molte VPC via TGW; **una sola** Transit VIF per connessione dedicata (hosted: una per connessione) |
+| Private | VGW o Direct Connect Gateway (DXGW) | Accesso a VPC (max 100 prefissi annunciati dall'on-prem verso AWS per sessione BGP: oltre il limite la sessione va **down**) |
+| Transit | DXGW → Transit Gateway (TGW) | Accesso a molte VPC via TGW; **una sola** Transit VIF per connessione dedicata (hosted: una per connessione); i prefissi annunciati da AWS sono quelli degli *allowed prefixes* dell'associazione DXGW–TGW (max 20) |
 | Public | Servizi pubblici AWS | Prefissi pubblici AWS, richiede prefissi pubblici propri |
 
 ```text
@@ -257,7 +258,7 @@ Stato atteso: `bgpPeerState: available` e `bgpStatus: up`.
 
 ### Transit Gateway con Site-to-Site VPN dinamica e ECMP
 
-Una VPN Site-to-Site con routing dinamico usa 2 tunnel IPsec per connessione, ciascuno con una sessione eBGP verso link-local `169.254.x.x/30`. Con **Transit Gateway** si può abilitare **ECMP** sui tunnel VPN (non disponibile su VGW), moltiplicando la banda oltre il limite di ~1,25 Gbps per tunnel.
+Una VPN Site-to-Site con routing dinamico usa 2 tunnel IPsec per connessione, ciascuno con una sessione eBGP verso link-local `169.254.x.x/30`. Con **Transit Gateway** si può abilitare **ECMP** sui tunnel VPN (non disponibile su VGW), moltiplicando la banda oltre il limite di ~1,25 Gbps per tunnel. **ECMP** (Equal-Cost Multi-Path) = più percorsi di pari costo usati in parallelo per ripartire i flussi.
 
 ```bash
 # TGW con supporto ECMP VPN abilitato alla creazione
@@ -282,7 +283,10 @@ Requisiti ECMP: stessa lunghezza AS_PATH e stesso MED dai due tunnel; il router 
 
 ### Kubernetes bare metal: Cilium BGP Control Plane
 
-Cilium annuncia Pod CIDR e Service (LoadBalancer/ExternalIP) al router di rete con la CRD `CiliumBGPClusterConfig` (API v2, Cilium ≥ 1.16).
+Cilium annuncia Pod CIDR e Service (LoadBalancer/ExternalIP) al router **ToR** (Top-of-Rack, lo switch in cima al rack) con la CRD `CiliumBGPClusterConfig` (BGP Control Plane v2, Cilium ≥ 1.16).
+
+!!! note "Versione API"
+    Gli esempi usano `cilium.io/v2alpha1` (Cilium 1.16–1.17). <!-- REVIEW: verificare che da Cilium 1.18 le CRD BGP siano promosse a `cilium.io/v2` e aggiornare apiVersion degli esempi -->
 
 ```yaml
 apiVersion: cilium.io/v2alpha1
@@ -388,7 +392,7 @@ spec:
   myASN: 64512
   peerASN: 65000
   peerAddress: 10.0.0.1
-  bfdProfile: fast
+  bfdProfile: fast        # richiede una risorsa BFDProfile chiamata "fast" (metallb.io/v1beta1)
 ---
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
@@ -420,7 +424,7 @@ spec:
 - Nei cluster Kubernetes: limitare il `nodeSelector` ai nodi che devono annunciare, e usare `externalTrafficPolicy: Local` con BGP per preservare l'IP sorgente e annunciare solo i nodi che ospitano pod.
 
 !!! warning "Anti-pattern"
-    Redistribuire BGP in un IGP (e viceversa) senza filtri. Annunciare `0.0.0.0/0` per errore a un peer di transit. Usare `network` su prefissi non presenti nella RIB (l'annuncio non parte). Dimenticare che senza `route-map`/policy le sessioni eBGP FRR ≥ 8 non scambiano route (`RFC 8212`).
+    Redistribuire BGP in un IGP (e viceversa) senza filtri. Annunciare `0.0.0.0/0` per errore a un peer di transit. Usare `network` su prefissi non presenti nella RIB (l'annuncio non parte). Dimenticare che senza `route-map`/policy le sessioni eBGP FRR ≥ 7.4 (`bgp ebgp-requires-policy`, default) non scambiano route (`RFC 8212`).
 
 ## Troubleshooting
 
@@ -456,7 +460,7 @@ vtysh -c "show ip route 10.10.0.0/16"        # il prefisso deve esistere nella R
 vtysh -c "show route-map DA-UPSTREAM"
 ```
 
-**Cause:** `network` su un prefisso non presente nella RIB (creare una route `Null0`/di aggregato), address-family non attivata (`neighbor ... activate`), **policy mancante** (RFC 8212: eBGP senza route-map non scambia nulla), filtro in uscita troppo restrittivo, `next-hop` non raggiungibile in iBGP (`next-hop-self`), prefissi `invalid` scartati da ROV. Su Direct Connect: prefisso oltre il limite (100 per Private VIF via DXGW → la sessione resta up ma AWS ignora l'eccedenza; controllare `--bgp-peers` e i limiti di quota) o non contenuto nell'allowed prefixes del DXGW.
+**Cause:** `network` su un prefisso non presente nella RIB (creare una route `Null0`/di aggregato), address-family non attivata (`neighbor ... activate`), **policy mancante** (RFC 8212: eBGP senza route-map non scambia nulla), filtro in uscita troppo restrittivo, `next-hop` non raggiungibile in iBGP (`next-hop-self`), prefissi `invalid` scartati da ROV. Su Direct Connect: prefisso non contenuto negli *allowed prefixes* del DXGW (AWS non lo annuncia verso le VPC/on-prem), oppure superamento del limite di 100 prefissi per sessione (la sessione BGP va down: aggregare i prefissi).
 
 ### Flapping e route dampening
 
@@ -479,11 +483,11 @@ journalctl -u frr | grep -i "bgp.*down"
 vtysh -c "show rpki prefix-table"
 vtysh -c "show ip bgp 203.0.113.0/24"      # cerca "validation-state: invalid"
 
-# Verifica ROA e visibilità esterna
-whois -h whois.bgpmon.net 203.0.113.0/24
+# Verifica ROA e visibilità esterna (API RIPEstat; sostituire ASN e prefisso)
+curl -s "https://stat.ripe.net/data/rpki-validation/data.json?resource=AS64500&prefix=203.0.113.0/24"
 ```
 
-**Azioni:** creare/aggiornare le **ROA** nel portale del RIR (con `maxLength` corretto), attivare ROV (in FRR: blocco `rpki` con cache RTR + route-map con `match rpki invalid` → `deny`), contattare l'operatore che ha annunciato il prefisso e l'upstream per filtrare. Per i leak: prefix-list per cliente derivate da IRR (`bgpq4`), `maximum-prefix`, e le communities di **peer lock**/**only-to-customer (OTC, RFC 9234)**.
+**Azioni:** creare/aggiornare le **ROA** nel portale del RIR (con `maxLength` corretto), attivare ROV (in FRR: blocco `rpki` con cache RTR + route-map con `match rpki invalid` → `deny`), contattare l'operatore che ha annunciato il prefisso e l'upstream per filtrare. Per i leak: prefix-list per cliente derivate dagli **IRR** (Internet Routing Registry, database pubblici di route object; tool `bgpq4`), `maximum-prefix`, **Peerlock** (filtri sui path che contengono AS di grandi transit) e l'attributo **Only-to-Customer (OTC, RFC 9234)**, che marca le route apprese da provider/peer per impedirne il leak verso altri provider/peer.
 
 ### Kubernetes: peer BGP giù o Service non raggiungibile
 
