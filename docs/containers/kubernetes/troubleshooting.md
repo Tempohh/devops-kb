@@ -9,7 +9,7 @@ related: [containers/kubernetes/workloads, containers/kubernetes/scheduling-avan
 official_docs: https://kubernetes.io/docs/tasks/debug/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-03
 ---
 
 # Troubleshooting Kubernetes
@@ -176,7 +176,7 @@ kubectl debug <pod> -n <ns> \
 
 ---
 
-## Troubleshooting Networking
+## Diagnostica Networking
 
 ```bash
 # Test DNS interno
@@ -213,7 +213,7 @@ kubectl run tracer --image=nicolaka/netshoot --rm -it -- \
 
 ---
 
-## Troubleshooting Storage
+## Diagnostica Storage
 
 ```bash
 # PVC non si lega a un PV
@@ -241,7 +241,7 @@ kubectl exec <pod> -- \
 
 ---
 
-## Troubleshooting Nodi
+## Diagnostica Nodi
 
 ```bash
 # Nodo NotReady
@@ -466,6 +466,32 @@ kubectl logs -n kube-system <csi-controller-pod> -c csi-provisioner --tail=50
 
 # Se volumeBindingMode=WaitForFirstConsumer: il PV viene creato solo quando il pod è schedulato
 kubectl get storageclass <class> -o jsonpath='{.volumeBindingMode}'
+```
+
+---
+
+### Scenario 5 — ImagePullBackOff / ErrImagePull
+
+**Sintomo:** Il pod resta in `ErrImagePull`, poi `ImagePullBackOff`; il kubelet ritenta con backoff esponenziale (fino a 5 minuti).
+
+**Causa:** Tag inesistente, registry privato senza `imagePullSecrets`, registry irraggiungibile dal nodo oppure rate limit di Docker Hub (limite di pull per IP anonimo).
+
+**Soluzione:** Leggere il messaggio esatto negli Events: distingue "not found", "unauthorized" e timeout di rete.
+
+```bash
+# Messaggio d'errore preciso
+kubectl describe pod <pod> -n <ns> | grep -A8 "Events:"
+
+# Verifica il secret di pull e che sia referenziato dal pod/ServiceAccount
+kubectl get pod <pod> -n <ns> -o jsonpath='{.spec.imagePullSecrets}'
+kubectl get secret <secret> -n <ns> -o jsonpath='{.type}'   # atteso: kubernetes.io/dockerconfigjson
+
+# Crea il secret per un registry privato
+kubectl create secret docker-registry regcred \
+    --docker-server=<registry> --docker-username=<user> --docker-password=<token> -n <ns>
+
+# Test di pull diretto dal nodo (bypassa il kubelet)
+crictl pull <image>:<tag>
 ```
 
 ---
