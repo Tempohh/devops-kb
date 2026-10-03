@@ -9,8 +9,8 @@ related: [cloud/aws/security/kms-secrets, cloud/aws/security/compliance-audit, c
 official_docs: https://docs.aws.amazon.com/waf/
 status: needs-review
 difficulty: advanced
-last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # WAF, Shield, Network Firewall e Sicurezza di Rete AWS
@@ -260,9 +260,12 @@ aws wafv2 put-logging-configuration \
 - **$5.00/Web ACL/mese**
 - **$1.00/regola/mese** (regole custom)
 - **$0.60 per 1 milione di richieste** ispezionate
-- **Bot Control:** canone mensile per Web ACL + costo per milione di richieste, diverso tra livello Common e Targeted
-- **Fraud Control ATP/ACFP:** canone mensile per Web ACL + costo per 1.000 richieste di login analizzate
-<!-- REVIEW: verificare su https://aws.amazon.com/waf/pricing/ i prezzi esatti di Bot Control (Common/Targeted) e ATP/ACFP: le cifre precedenti ($30 Targeted, $30 ATP) erano probabilmente errate; verificare anche i piani flat-rate con CloudFront -->
+- **Bot Control Common:** $10/Web ACL/mese + $1.00 per milione di richieste (prime 10M gratuite)
+- **Bot Control Targeted:** $10/Web ACL/mese + $10.00 per milione di richieste (primo 1M gratuito)
+- **Fraud Control ATP/ACFP:** $10/Web ACL/mese ciascuno + costo per richiesta a scaglioni (da $1.000 per milione, cioè $1 per 1.000, per i primi 2M, fino a $50 per milione ai volumi alti)
+- **CAPTCHA:** $0.40 per 1.000 tentativi
+- I prezzi variano per regione; verificare su [AWS WAF pricing](https://aws.amazon.com/waf/pricing/)
+<!-- CURRENCY: non verificato (2026-10) — piani flat-rate WAF con CloudFront non confermati dalla pagina pricing -->
 
 I prezzi cambiano nel tempo: verificare sempre la pagina ufficiale.
 
