@@ -5037,7 +5037,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -5062,7 +5062,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -5234,17 +5234,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#snapstart-per-java" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        SnapStart per Java
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#pricing-lambda" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5313,6 +5302,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relazioni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relazioni
+      
+    </span>
+  </a>
   
 </li>
       
@@ -24690,17 +24690,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#snapstart-per-java" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        SnapStart per Java
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#pricing-lambda" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -24769,6 +24758,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relazioni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relazioni
+      
+    </span>
+  </a>
   
 </li>
       
@@ -24923,13 +24923,6 @@
       
       
       
-        <a href="../../../../tags/#tag:extensions" class="md-tag">extensions</a>
-      
-    
-      
-      
-      
-      
         <a href="../../../../tags/#tag:functions" class="md-tag">functions</a>
       
     
@@ -24938,13 +24931,6 @@
       
       
         <a href="../../../../tags/#tag:lambda" class="md-tag">lambda</a>
-      
-    
-      
-      
-      
-      
-        <a href="../../../../tags/#tag:lambda-at-edge" class="md-tag">lambda-at-edge</a>
       
     
       
@@ -24995,7 +24981,8 @@
 - Processi che richiedono più di 15 minuti → valuta ECS/Fargate o EC2
 - Applicazioni con stato persistente in memoria → Lambda è stateless per definizione
 - Workload con traffico costante e alto volume → EC2 o container sono più economici
-- Applicazioni che richiedono accesso a filesystem POSIX → ECS con EFS</p>
+- Applicazioni che richiedono filesystem locale persistente o molto grande → Lambda può montare EFS, ma <code>/tmp</code> è effimero e il mount EFS in VPC aggiunge latenza; per I/O intensivo valuta ECS/EC2
+- Workflow lunghi con stato → orchestra con Step Functions (o Lambda durable functions, vedi nota in Fondamentali) invece di una singola funzione</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Lambda Model
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  Event Source               Lambda Function             Output
@@ -25009,7 +24996,7 @@
 </span></code></pre></div>
 <hr />
 <h2 id="fondamentali">Fondamentali<a class="headerlink" href="#fondamentali" title="Permanent link">&para;</a></h2>
-<p><strong>Limiti (al 2025):</strong></p>
+<p><strong>Limiti (fine 2025 — verificare su <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a>):</strong></p>
 <table>
 <thead>
 <tr>
@@ -25020,7 +25007,7 @@
 <tbody>
 <tr>
 <td>Timeout massimo</td>
-<td>15 minuti</td>
+<td>15 minuti (default alla creazione: 3 s)</td>
 </tr>
 <tr>
 <td>Memoria</td>
@@ -25036,31 +25023,41 @@
 </tr>
 <tr>
 <td>Package size (zip)</td>
-<td>50 MB (zipped) / 250 MB (unzipped)</td>
+<td>50 MB (zipped, upload diretto) / 250 MB (unzipped, <strong>layer inclusi</strong>)</td>
 </tr>
 <tr>
 <td>Package size (container)</td>
-<td>10 GB</td>
+<td>10 GB (immagine non compressa)</td>
 </tr>
 <tr>
 <td>Payload sincrono</td>
-<td>6 MB (request) / 6 MB (response)</td>
+<td>6 MB (request) / 6 MB (response); con response streaming fino a 200 MB (Function URL)</td>
 </tr>
 <tr>
 <td>Payload asincrono</td>
-<td>256 KB</td>
+<td>1 MB (era 256 KB fino al 2025)</td>
 </tr>
 <tr>
 <td>Concurrency default</td>
-<td>1000 per account per Region</td>
+<td>1000 per account per Region (account nuovi: spesso molto meno, verificare con <code>get-account-settings</code>)</td>
 </tr>
 <tr>
-<td>Durata ambiente</td>
-<td>15 minuti (poi cold start alla prossima invocazione)</td>
+<td>Scaling rate</td>
+<td>+1000 ambienti ogni 10 s per funzione, finché non si raggiunge il limite account</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Runtime supportati:</strong> Node.js 20/22, Python 3.11/3.12/3.13, Java 17/21, .NET 8, Ruby 3.&#8532;.3, Go (custom runtime), Custom Runtime (Amazon Linux 2023)</p>
+<div class="admonition note">
+<p class="admonition-title">Vita dell'execution environment</p>
+<p>Un ambiente può restare caldo per minuti/ore ed essere riusato da più invocazioni, ma AWS <strong>non garantisce</strong> nessuna durata: può essere riciclato in qualsiasi momento (anche dopo ~poche ore al massimo). Non farci affidamento per cache o stato; il cold start si ripresenta ad ogni nuovo ambiente (scale-out, deploy, riciclo).</p>
+</div>
+<p><strong>Runtime supportati (fine 2025):</strong> Node.js 20/22/24, Python 3.11–3.14, Java 17/21/25, .NET 8, Ruby 3.2–3.4, Go e altri linguaggi compilati via OS-only runtime <code>provided.al2023</code>. I runtime vengono deprecati periodicamente (es. Node.js 18, Python 3.8-3.9): controlla la <a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html">lista aggiornata</a> prima di scegliere.</p>
+<div class="admonition info">
+<p class="admonition-title">Novità recenti (re:Invent 2025)</p>
+<p><strong>Lambda durable functions</strong> (workflow con checkpoint/replay fino a lunga durata, in codice) e <strong>Lambda Managed Instances</strong> (funzioni su istanze EC2 gestite, per carichi costanti) ampliano i casi d'uso oltre il modello classico. Non sono trattate qui.
+<!-- REVIEW: verificare disponibilità/regioni/pricing di durable functions e Managed Instances ed eventualmente aggiungere sezioni dedicate --></p>
+</div>
+<p><strong>Architetture:</strong> <code>arm64</code> (Graviton) costa ~20% in meno per GB-secondo e offre in genere miglior price-performance (fino a ~34% secondo AWS); <code>x86_64</code> resta necessario se le dipendenze native non hanno build ARM.</p>
 <hr />
 <h2 id="creare-e-configurare-una-lambda">Creare e Configurare una Lambda<a class="headerlink" href="#creare-e-configurare-una-lambda" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Creare execution role</span>
@@ -25075,52 +25072,51 @@
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="s1">        }]</span>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="s1">    }'</span>
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># Policy base: CloudWatch Logs + VPC networking</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>aws<span class="w"> </span>iam<span class="w"> </span>attach-role-policy<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span>--role-name<span class="w"> </span>lambda-basic-role<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span>--policy-arn<span class="w"> </span>arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="c1"># Package funzione</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>zip<span class="w"> </span><span class="k">function</span>.zip<span class="w"> </span>handler.py
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
-</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="c1"># Creare funzione</span>
-</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>aws<span class="w"> </span>lambda<span class="w"> </span>create-function<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="w">    </span>--runtime<span class="w"> </span>python3.12<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">    </span>--role<span class="w"> </span>arn:aws:iam::123456789012:role/lambda-basic-role<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="w">    </span>--handler<span class="w"> </span>handler.lambda_handler<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="w">    </span>--zip-file<span class="w"> </span>fileb://function.zip<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="w">    </span>--timeout<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="w">    </span>--memory-size<span class="w"> </span><span class="m">256</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="w">    </span>--environment<span class="w"> </span><span class="nv">Variables</span><span class="o">=</span><span class="s1">'{DB_HOST=rds.company.com,ENV=prod}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="w">    </span>--ephemeral-storage<span class="w"> </span><span class="nv">Size</span><span class="o">=</span><span class="m">1024</span><span class="w"> </span><span class="se">\ </span><span class="w">       </span><span class="c1"># /tmp storage in MB</span>
-</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="w">    </span>--architectures<span class="w"> </span>arm64<span class="w"> </span><span class="se">\ </span><span class="w">              </span><span class="c1"># arm64 per Graviton (20% più economico)</span>
-</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="w">    </span>--description<span class="w"> </span><span class="s2">"API handler"</span>
-</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>
-</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="c1"># Aggiornare codice</span>
-</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>aws<span class="w"> </span>lambda<span class="w"> </span>update-function-code<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a><span class="w">    </span>--zip-file<span class="w"> </span>fileb://function.zip
-</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>
-</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="c1"># Invocare manualmente</span>
-</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>aws<span class="w"> </span>lambda<span class="w"> </span>invoke<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a><span class="w">    </span>--payload<span class="w"> </span><span class="s1">'{"key": "value"}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a><span class="w">    </span>--cli-binary-format<span class="w"> </span>raw-in-base64-out<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-45"><a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a><span class="w">    </span>response.json
-</span><span id="__span-1-46"><a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a>cat<span class="w"> </span>response.json
-</span><span id="__span-1-47"><a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a>
-</span><span id="__span-1-48"><a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a><span class="c1"># Invocare asincrono</span>
-</span><span id="__span-1-49"><a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a>aws<span class="w"> </span>lambda<span class="w"> </span>invoke-async<span class="w"> </span><span class="se">\ </span><span class="w">      </span><span class="c1"># DEPRECATED — usare --invocation-type Event</span>
-</span><span id="__span-1-50"><a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-51"><a id="__codelineno-1-51" name="__codelineno-1-51" href="#__codelineno-1-51"></a><span class="w">    </span>--invoke-args<span class="w"> </span>payload.json
-</span><span id="__span-1-52"><a id="__codelineno-1-52" name="__codelineno-1-52" href="#__codelineno-1-52"></a>
-</span><span id="__span-1-53"><a id="__codelineno-1-53" name="__codelineno-1-53" href="#__codelineno-1-53"></a>aws<span class="w"> </span>lambda<span class="w"> </span>invoke<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-54"><a id="__codelineno-1-54" name="__codelineno-1-54" href="#__codelineno-1-54"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-55"><a id="__codelineno-1-55" name="__codelineno-1-55" href="#__codelineno-1-55"></a><span class="w">    </span>--invocation-type<span class="w"> </span>Event<span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># Asincrono</span>
-</span><span id="__span-1-56"><a id="__codelineno-1-56" name="__codelineno-1-56" href="#__codelineno-1-56"></a><span class="w">    </span>--payload<span class="w"> </span><span class="s1">'{"key":"value"}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-57"><a id="__codelineno-1-57" name="__codelineno-1-57" href="#__codelineno-1-57"></a><span class="w">    </span>--cli-binary-format<span class="w"> </span>raw-in-base64-out<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-58"><a id="__codelineno-1-58" name="__codelineno-1-58" href="#__codelineno-1-58"></a><span class="w">    </span>/dev/null
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># Policy base: solo CloudWatch Logs</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># (per Lambda in VPC serve AWSLambdaVPCAccessExecutionRole, che include anche i permessi ENI)</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>aws<span class="w"> </span>iam<span class="w"> </span>attach-role-policy<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span>--role-name<span class="w"> </span>lambda-basic-role<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span>--policy-arn<span class="w"> </span>arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># Package funzione</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>zip<span class="w"> </span><span class="k">function</span>.zip<span class="w"> </span>handler.py
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="c1"># Creare funzione</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>aws<span class="w"> </span>lambda<span class="w"> </span>create-function<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">    </span>--runtime<span class="w"> </span>python3.12<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="w">    </span>--role<span class="w"> </span>arn:aws:iam::123456789012:role/lambda-basic-role<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="w">    </span>--handler<span class="w"> </span>handler.lambda_handler<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="w">    </span>--zip-file<span class="w"> </span>fileb://function.zip<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="w">    </span>--timeout<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="w">    </span>--memory-size<span class="w"> </span><span class="m">256</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="w">    </span>--environment<span class="w"> </span><span class="s2">"Variables={DB_HOST=rds.company.com,ENV=prod}"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="w">    </span>--ephemeral-storage<span class="w"> </span><span class="nv">Size</span><span class="o">=</span><span class="m">1024</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="w">    </span>--architectures<span class="w"> </span>arm64<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="w">    </span>--description<span class="w"> </span><span class="s2">"API handler"</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="c1"># --ephemeral-storage: dimensione di /tmp in MB</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="c1"># --architectures arm64: Graviton, ~20% più economico per GB-secondo</span>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a><span class="c1"># Aggiornare codice</span>
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>aws<span class="w"> </span>lambda<span class="w"> </span>update-function-code<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a><span class="w">    </span>--zip-file<span class="w"> </span>fileb://function.zip
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>
+</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a><span class="c1"># Invocare manualmente</span>
+</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>aws<span class="w"> </span>lambda<span class="w"> </span>invoke<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-45"><a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-46"><a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a><span class="w">    </span>--payload<span class="w"> </span><span class="s1">'{"key": "value"}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-47"><a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a><span class="w">    </span>--cli-binary-format<span class="w"> </span>raw-in-base64-out<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-48"><a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a><span class="w">    </span>response.json
+</span><span id="__span-1-49"><a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a>cat<span class="w"> </span>response.json
+</span><span id="__span-1-50"><a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a>
+</span><span id="__span-1-51"><a id="__codelineno-1-51" name="__codelineno-1-51" href="#__codelineno-1-51"></a><span class="c1"># Invocare in modo asincrono (--invocation-type Event: risponde 202 subito, retry gestiti da Lambda)</span>
+</span><span id="__span-1-52"><a id="__codelineno-1-52" name="__codelineno-1-52" href="#__codelineno-1-52"></a>aws<span class="w"> </span>lambda<span class="w"> </span>invoke<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-53"><a id="__codelineno-1-53" name="__codelineno-1-53" href="#__codelineno-1-53"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-54"><a id="__codelineno-1-54" name="__codelineno-1-54" href="#__codelineno-1-54"></a><span class="w">    </span>--invocation-type<span class="w"> </span>Event<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-55"><a id="__codelineno-1-55" name="__codelineno-1-55" href="#__codelineno-1-55"></a><span class="w">    </span>--payload<span class="w"> </span><span class="s1">'{"key":"value"}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-56"><a id="__codelineno-1-56" name="__codelineno-1-56" href="#__codelineno-1-56"></a><span class="w">    </span>--cli-binary-format<span class="w"> </span>raw-in-base64-out<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-57"><a id="__codelineno-1-57" name="__codelineno-1-57" href="#__codelineno-1-57"></a><span class="w">    </span>/dev/null
 </span></code></pre></div>
 <hr />
 <h2 id="handler-struttura-del-codice">Handler — Struttura del Codice<a class="headerlink" href="#handler-struttura-del-codice" title="Permanent link">&para;</a></h2>
@@ -25156,7 +25152,7 @@
 </span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a>        <span class="p">}</span>
 </span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
 </span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>        <span class="k">raise</span>   <span class="c1"># Lambda ritentar se configurato</span>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>        <span class="k">raise</span>   <span class="c1"># rilancia: Lambda ritenta se configurato (invocazioni async / event source mapping)</span>
 </span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>
 </span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="k">def</span><span class="w"> </span><span class="nf">process</span><span class="p">(</span><span class="n">event</span><span class="p">):</span>
 </span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>    <span class="c1"># business logic</span>
@@ -25189,7 +25185,7 @@
 <p>La <strong>concurrency</strong> di Lambda è il numero di invocazioni in esecuzione simultaneamente. Per default, un account AWS ha un limite di 1.000 esecuzioni concorrenti per Region, condiviso tra tutte le Lambda functions. Superato questo limite, le invocazioni vengono <strong>throttlate</strong> (rifiutate con errore <code>TooManyRequestsException</code>).</p>
 <p>Esistono due meccanismi per gestire la concurrency:
 - <strong>Reserved Concurrency</strong>: riserva un numero fisso di esecuzioni concorrenti per una funzione, garantendo che non venga "soffocata" dal traffico di altre funzioni — ma allo stesso tempo ponendo un tetto massimo (utile per proteggere sistemi a valle come un database).
-- <strong>Provisioned Concurrency</strong>: pre-inizializza un numero fisso di ambienti di esecuzione, eliminando completamente il cold start per quella funzione (a costo di pagare per il provisioning anche in assenza di traffico).</p>
+- <strong>Provisioned Concurrency</strong>: pre-inizializza un numero fisso di ambienti di esecuzione, eliminando il cold start per le invocazioni che rientrano in quel numero (a costo di pagare per il provisioning anche in assenza di traffico). Oltre la soglia le invocazioni usano ambienti on-demand, quindi con cold start. Si applica a una versione o a un alias, mai a <code>$LATEST</code>.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Lambda Concurrency
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>  Account Limit (default 1000)
@@ -25209,23 +25205,26 @@
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Elimina cold start — paghi per le ore di provisioning anche se non usi</span>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>aws<span class="w"> </span>lambda<span class="w"> </span>put-provisioned-concurrency-config<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span>--qualifier<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\ </span><span class="w">                   </span><span class="c1"># versione o alias</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span>--qualifier<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span>--provisioned-concurrent-executions<span class="w"> </span><span class="m">50</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="c1"># Application Auto Scaling per Provisioned Concurrency</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>aws<span class="w"> </span>application-autoscaling<span class="w"> </span>register-scalable-target<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">    </span>--service-namespace<span class="w"> </span>lambda<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">    </span>--resource-id<span class="w"> </span><span class="k">function</span>:MyFunction:prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">    </span>--scalable-dimension<span class="w"> </span>lambda:function:ProvisionedConcurrency<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">    </span>--min-capacity<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">    </span>--max-capacity<span class="w"> </span><span class="m">100</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># --qualifier: versione o alias</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="c1"># Application Auto Scaling per Provisioned Concurrency</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1"># (poi serve anche una scaling policy: put-scaling-policy con target tracking</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="c1">#  sulla metrica LambdaProvisionedConcurrencyUtilization)</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>aws<span class="w"> </span>application-autoscaling<span class="w"> </span>register-scalable-target<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">    </span>--service-namespace<span class="w"> </span>lambda<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">    </span>--resource-id<span class="w"> </span><span class="k">function</span>:MyFunction:prod<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">    </span>--scalable-dimension<span class="w"> </span>lambda:function:ProvisionedConcurrency<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">    </span>--min-capacity<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">    </span>--max-capacity<span class="w"> </span><span class="m">100</span>
 </span></code></pre></div>
 <p><strong>Cold Start:</strong> il tempo di inizializzazione dell'ambiente Lambda (download codice, inizializzazione runtime, esecuzione codice fuori dall'handler).</p>
 <p><strong>Ridurre il Cold Start:</strong>
-- Usare runtime veloci (Node.js, Python)
-- Minimizzare dimensione package
-- Usare arm64 (Graviton) — ~30% più veloce
-- <strong>SnapStart</strong> per Java: salva snapshot RAM dell'ambiente dopo init → resume &lt;1s
+- Usare runtime con init leggero (Node.js, Python); evitare framework pesanti (es. Spring completo) o usare SnapStart
+- Minimizzare dimensione package e codice eseguito fuori dall'handler (lazy init di ciò che non serve sempre)
+- Più memoria = più CPU: spesso abbassa anche l'<code>Init Duration</code> (verificare con Power Tuning)
+- <strong>SnapStart</strong> (Java, Python, .NET): snapshot dell'ambiente dopo la fase init, ripristinato al posto di rieseguirla
 - Provisioned Concurrency per funzioni latency-sensitive</p>
 <hr />
 <h2 id="triggers-event-sources">Triggers — Event Sources<a class="headerlink" href="#triggers-event-sources" title="Permanent link">&para;</a></h2>
@@ -25233,24 +25232,47 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Function URL (endpoint HTTP pubblico diretto, senza API Gateway)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>aws<span class="w"> </span>lambda<span class="w"> </span>create-function-url-config<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span>--auth-type<span class="w"> </span>NONE<span class="w"> </span><span class="se">\ </span><span class="w">                 </span><span class="c1"># NONE o AWS_IAM</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span>--auth-type<span class="w"> </span>NONE<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span>--cors<span class="w"> </span><span class="s1">'{"AllowOrigins": ["*"], "AllowMethods": ["GET","POST"]}'</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Restituisce: https://xxxx.lambda-url.eu-central-1.on.aws/</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># Con auth IAM (per chiamate inter-servizio sicure)</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>aws<span class="w"> </span>lambda<span class="w"> </span>create-function-url-config<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span>--auth-type<span class="w"> </span>AWS_IAM
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># --auth-type: NONE (pubblico) oppure AWS_IAM</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Restituisce: https://xxxx.lambda-url.eu-central-1.on.aws/</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># Con auth NONE servono le resource-based policy che rendono la URL pubblica</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># (dal 2025 per le nuove URL servono entrambe le azioni, non solo InvokeFunctionUrl)</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>aws<span class="w"> </span>lambda<span class="w"> </span>add-permission<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span>--statement-id<span class="w"> </span>url-public-url<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span>--action<span class="w"> </span>lambda:InvokeFunctionUrl<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">    </span>--principal<span class="w"> </span><span class="s2">"*"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">    </span>--function-url-auth-type<span class="w"> </span>NONE
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>aws<span class="w"> </span>lambda<span class="w"> </span>add-permission<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">    </span>--statement-id<span class="w"> </span>url-public-invoke<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">    </span>--action<span class="w"> </span>lambda:InvokeFunction<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">    </span>--principal<span class="w"> </span><span class="s2">"*"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">    </span>--invoked-via-function-url
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="c1"># Con auth IAM (per chiamate inter-servizio sicure)</span>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>aws<span class="w"> </span>lambda<span class="w"> </span>create-function-url-config<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="w">    </span>--auth-type<span class="w"> </span>AWS_IAM
 </span></code></pre></div>
 <h3 id="sqs-event-source-mapping">SQS Event Source Mapping<a class="headerlink" href="#sqs-event-source-mapping" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Lambda consuma messaggi da SQS automaticamente</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>aws<span class="w"> </span>lambda<span class="w"> </span>create-event-source-mapping<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span>--event-source-arn<span class="w"> </span>arn:aws:sqs:eu-central-1:123456789012:MyQueue<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span>--batch-size<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\ </span><span class="w">                  </span><span class="c1"># fino a 10 messaggi per invocazione</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span>--maximum-batching-window-in-seconds<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># attendi fino a 30s per riempire batch</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span>--function-response-types<span class="w"> </span><span class="s1">'["ReportBatchItemFailures"]'</span><span class="w">   </span><span class="c1"># partial batch failure</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span>--batch-size<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span>--maximum-batching-window-in-seconds<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span>--function-response-types<span class="w"> </span><span class="s1">'["ReportBatchItemFailures"]'</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1"># --batch-size: fino a 10 messaggi per invocazione (FIFO: max 10; standard: fino a 10.000 con batching window)</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># --maximum-batching-window-in-seconds: attendi fino a 30 s per riempire il batch (max 300)</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># ReportBatchItemFailures: abilita il partial batch failure (vedi handler sotto)</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">SQS: visibility timeout e DLQ</p>
+<p>Imposta il <strong>visibility timeout</strong> della coda ad almeno 6× il timeout della funzione, altrimenti i messaggi riappaiono mentre sono ancora in elaborazione. La <strong>DLQ va configurata sulla coda sorgente</strong> (redrive policy con <code>maxReceiveCount</code>), non sulla Lambda: per le sorgenti SQS la DLQ/Destination della funzione non si applica.</p>
+</div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Gestione parziale del batch (non fallire l'intero batch se alcuni messaggi falliscono)</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">lambda_handler</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">batch_failures</span> <span class="o">=</span> <span class="p">[]</span>
@@ -25266,50 +25288,55 @@
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="c1"># SQS ritenterà solo i messaggi falliti</span>
 </span></code></pre></div>
 <h3 id="s3-event-notification">S3 Event Notification<a class="headerlink" href="#s3-event-notification" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Configurare S3 per notificare Lambda su PutObject</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>aws<span class="w"> </span>s3api<span class="w"> </span>put-bucket-notification-configuration<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span>--notification-configuration<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="s1">        "LambdaFunctionConfigurations": [{</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="s1">            "LambdaFunctionArn": "arn:aws:lambda:...:function:ProcessUpload",</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="s1">            "Events": ["s3:ObjectCreated:*"],</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="s1">            "Filter": {</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="s1">                "Key": {"FilterRules": [</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="s1">                    {"Name": "prefix", "Value": "uploads/"},</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="s1">                    {"Name": "suffix", "Value": ".jpg"}</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="s1">                ]}</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="s1">            }</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="s1">        }]</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="s1">    }'</span>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="c1"># Aggiungere permission Lambda per S3</span>
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>aws<span class="w"> </span>lambda<span class="w"> </span>add-permission<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">    </span>--function-name<span class="w"> </span>ProcessUpload<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">    </span>--statement-id<span class="w"> </span>s3-invoke<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="w">    </span>--action<span class="w"> </span>lambda:InvokeFunction<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="w">    </span>--principal<span class="w"> </span>s3.amazonaws.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="w">    </span>--source-arn<span class="w"> </span>arn:aws:s3:::my-bucket<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="w">    </span>--source-account<span class="w"> </span><span class="m">123456789012</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># 1) PRIMA la permission: S3 verifica di poter invocare la funzione quando salvi la notifica,</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1">#    altrimenti put-bucket-notification-configuration fallisce</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>aws<span class="w"> </span>lambda<span class="w"> </span>add-permission<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span>--function-name<span class="w"> </span>ProcessUpload<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span>--statement-id<span class="w"> </span>s3-invoke<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span>--action<span class="w"> </span>lambda:InvokeFunction<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span>--principal<span class="w"> </span>s3.amazonaws.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span>--source-arn<span class="w"> </span>arn:aws:s3:::my-bucket<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">    </span>--source-account<span class="w"> </span><span class="m">123456789012</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># 2) Configurare S3 per notificare Lambda su PutObject</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>aws<span class="w"> </span>s3api<span class="w"> </span>put-bucket-notification-configuration<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">    </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">    </span>--notification-configuration<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="s1">        "LambdaFunctionConfigurations": [{</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="s1">            "LambdaFunctionArn": "arn:aws:lambda:...:function:ProcessUpload",</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="s1">            "Events": ["s3:ObjectCreated:*"],</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="s1">            "Filter": {</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="s1">                "Key": {"FilterRules": [</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="s1">                    {"Name": "prefix", "Value": "uploads/"},</span>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="s1">                    {"Name": "suffix", "Value": ".jpg"}</span>
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="s1">                ]}</span>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="s1">            }</span>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="s1">        }]</span>
+</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="s1">    }'</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Loop ricorsivo</p>
+<p>Se la funzione scrive nello stesso bucket/prefisso che la innesca, crea un loop infinito (e costi). Usa prefissi distinti o un bucket di output separato.</p>
+</div>
 <h3 id="dynamodb-streams-kinesis">DynamoDB Streams / Kinesis<a class="headerlink" href="#dynamodb-streams-kinesis" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Lambda triggered da DynamoDB Streams</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>aws<span class="w"> </span>lambda<span class="w"> </span>create-event-source-mapping<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span>--function-name<span class="w"> </span>ProcessDDBStream<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span>--event-source-arn<span class="w"> </span>arn:aws:dynamodb:...:table/MyTable/stream/2026-01-01T00:00:00.000<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span>--batch-size<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span>--starting-position<span class="w"> </span>LATEST<span class="w"> </span><span class="se">\ </span><span class="w">       </span><span class="c1"># LATEST, TRIM_HORIZON, AT_TIMESTAMP</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span>--bisect-batch-on-function-error<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># divide batch su errore</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span>--starting-position<span class="w"> </span>LATEST<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span>--bisect-batch-on-function-error<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span>--maximum-retry-attempts<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span>--destination-config<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="s1">        "OnFailure": {</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="s1">            "Destination": "arn:aws:sqs:...:DLQ"    # Dead Letter Queue</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="s1">        }</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="s1">    }'</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span>--destination-config<span class="w"> </span><span class="s1">'{"OnFailure": {"Destination": "arn:aws:sqs:...:DLQ"}}'</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="c1"># --starting-position: LATEST, TRIM_HORIZON, AT_TIMESTAMP</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># --bisect-batch-on-function-error: su errore divide il batch a metà per isolare il record "poison"</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># OnFailure: coda SQS/topic SNS che riceve i metadati dei batch scartati dopo i retry (non i record)</span>
 </span></code></pre></div>
+<p>Senza <code>--maximum-retry-attempts</code> (default: infiniti, fino alla scadenza del record) un record malformato <strong>blocca lo shard</strong>: imposta sempre retry/età massima e una destination di failure.</p>
 <hr />
 <h2 id="lambda-layers">Lambda Layers<a class="headerlink" href="#lambda-layers" title="Permanent link">&para;</a></h2>
 <p>I <strong>Lambda Layers</strong> sono archivi ZIP contenenti librerie, dipendenze o codice condiviso che possono essere riutilizzati da più funzioni Lambda. Senza i Layers, ogni funzione dovrebbe includere le proprie dipendenze nel package — con il rischio di duplicare decine di MB di librerie comuni tra funzioni diverse.</p>
-<p>I Layers risolvono due problemi: riducono le dimensioni del deployment package (migliorando i cold start) e centralizzano la gestione delle versioni delle dipendenze (aggiornare una libreria in un Layer la aggiorna per tutte le funzioni che lo usano).</p>
+<p>I Layers risolvono due problemi: riducono la dimensione del deployment package della singola funzione (deploy più rapidi) e centralizzano le dipendenze comuni. Non riducono però il cold start: il contenuto dei layer viene comunque scaricato ed estratto e il totale (funzione + layer) resta entro il limite di 250 MB unzipped. Un layer è una versione <strong>immutabile</strong>: per aggiornare una libreria pubblichi una nuova versione e devi riconfigurare ogni funzione (non si propaga da sola).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Creare layer con dipendenze Python</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt<span class="w"> </span>-t<span class="w"> </span>python/
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>zip<span class="w"> </span>-r<span class="w"> </span>layer.zip<span class="w"> </span>python/
@@ -25332,17 +25359,15 @@
 <hr />
 <h2 id="lambda-in-vpc">Lambda in VPC<a class="headerlink" href="#lambda-in-vpc" title="Permanent link">&para;</a></h2>
 <p>Di default, Lambda gira in una rete gestita da AWS e può accedere a Internet e ai servizi AWS pubblici, ma non alle risorse private del tuo VPC (RDS, ElastiCache, EC2 in subnet private). Configurando Lambda in VPC, la funzione viene connessa alle tue subnet private e può raggiungere queste risorse.</p>
-<p>Attenzione: mettere Lambda in VPC ha implicazioni importanti. La funzione perde l'accesso diretto a Internet (richiede un NAT Gateway per le chiamate verso l'esterno) e all'inizio aggiungeva latenza ai cold start. Le versioni più recenti del runtime hanno migliorato questo aspetto, ma è comunque qualcosa da considerare.</p>
+<p>Attenzione: mettere Lambda in VPC ha implicazioni importanti. La funzione perde l'accesso diretto a Internet (richiede un NAT Gateway per le chiamate verso l'esterno). Dal 2019 le ENI (Elastic Network Interface — interfaccia di rete virtuale) sono condivise e create alla configurazione della funzione (Hyperplane), quindi la penalità sul cold start è trascurabile; resta però da dimensionare le subnet (IP disponibili) e da curare le security group.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>aws<span class="w"> </span>lambda<span class="w"> </span>update-function-configuration<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">    </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span>--vpc-config<span class="w"> </span><span class="nv">SubnetIds</span><span class="o">=</span>subnet-private-a,subnet-private-b,<span class="se">\</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">        </span><span class="nv">SecurityGroupIds</span><span class="o">=</span>sg-lambda
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># IMPORTANTE: Lambda in VPC usa ENI (Elastic Network Interface)</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># - Aggiunge 100-200ms di cold start iniziale (creazione ENI, ora migliorata)</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># - Richiede NAT Gateway per accesso Internet</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># - Richiede VPC Endpoints per accesso a servizi AWS senza Internet</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="c1"># - IAM Policy DEVE includere: ec2:CreateNetworkInterface, ec2:DescribeNetworkInterfaces, ec2:DeleteNetworkInterface</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span>--vpc-config<span class="w"> </span><span class="s2">"SubnetIds=subnet-private-a,subnet-private-b,SecurityGroupIds=sg-lambda"</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># - Richiede NAT Gateway per accesso Internet (Lambda in subnet pubblica NON ottiene IP pubblico)</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># - Richiede VPC Endpoints (gateway per S3/DynamoDB, interface per gli altri) per servizi AWS senza Internet</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># - L'execution role DEVE includere ec2:CreateNetworkInterface, ec2:DescribeNetworkInterfaces,</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1">#   ec2:DeleteNetworkInterface: più semplice allegare AWSLambdaVPCAccessExecutionRole</span>
 </span></code></pre></div>
 <hr />
 <h2 id="destinations-e-dlq-dead-letter-queue-coda-che-riceve-gli-eventi-non-elaborati-dopo-tutti-i-retry">Destinations e DLQ (Dead Letter Queue — coda che riceve gli eventi non elaborati dopo tutti i retry)<a class="headerlink" href="#destinations-e-dlq-dead-letter-queue-coda-che-riceve-gli-eventi-non-elaborati-dopo-tutti-i-retry" title="Permanent link">&para;</a></h2>
@@ -25365,42 +25390,50 @@
 <hr />
 <h2 id="lambda-power-tuning">Lambda Power Tuning<a class="headerlink" href="#lambda-power-tuning" title="Permanent link">&para;</a></h2>
 <p><strong>AWS Lambda Power Tuning</strong> è uno State Machine Step Functions che identifica la configurazione ottimale memoria/costo.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Installa tramite SAR (Serverless Application Repository)</span>
+<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Installa tramite SAR (Serverless Application Repository)</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># https://serverlessrepo.aws.amazon.com/applications/arn:aws:serverlessrepo:us-east-1:451282441545:applications~aws-lambda-power-tuning</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Esegui con payload di test per trovare il sweet spot memoria/costo</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># Tool testa automaticamente: 128, 256, 512, 1024, 2048, 3008 MB</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># e restituisce grafici costo vs performance</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># Input: lambdaARN, powerValues (default: 128, 256, 512, 1024, 1536, 3008 MB; accetta fino a 10240), num, payload</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># Output: grafico costo vs durata e la configurazione consigliata (strategy: cost, speed o balanced)</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Perché serve: CPU e prezzo crescono con la memoria, ma la durata cala → più memoria può costare meno</span>
 </span></code></pre></div>
-<hr />
-<h2 id="snapstart-per-java">SnapStart per Java<a class="headerlink" href="#snapstart-per-java" title="Permanent link">&para;</a></h2>
-<p><strong>SnapStart</strong> (Java 11+) elimina il cold start Java salvando snapshot dell'ambiente inizializzato.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>aws<span class="w"> </span>lambda<span class="w"> </span>update-function-configuration<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">    </span>--function-name<span class="w"> </span>MyJavaFunction<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span>--snap-start<span class="w"> </span><span class="nv">ApplyOn</span><span class="o">=</span>PublishedVersions
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>---
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>## SnapStart per Java
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1"># Pubblicare versione (SnapStart si attiva solo su versioni pubblicate)</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>aws<span class="w"> </span>lambda<span class="w"> </span>publish-version<span class="w"> </span>--function-name<span class="w"> </span>MyJavaFunction
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="c1"># Creare alias che punta alla versione con SnapStart</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>aws<span class="w"> </span>lambda<span class="w"> </span>create-alias<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">    </span>--function-name<span class="w"> </span>MyJavaFunction<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">    </span>--name<span class="w"> </span>prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">    </span>--function-version<span class="w"> </span><span class="m">1</span>
-</span></code></pre></div>
-<p><strong>Risultato:</strong> riduzione cold start Java da 10-15s a &lt;1s.</p>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>**SnapStart** riduce drasticamente il cold start (Java 11+ e, più di recente, Python 3.12+ e .NET 8+) eseguendo la fase init una sola volta alla pubblicazione di una versione: Lambda salva uno snapshot (memoria + disco) dell'ambiente inizializzato e lo ripristina per i nuovi ambienti invece di rieseguire l'init. Attenzione a ciò che l'init cattura: connessioni di rete, seed random e dati temporanei vanno rigenerati con i *runtime hooks*. Non è compatibile con Provisioned Concurrency, EFS e `/tmp` &gt; 512 MB.
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>```bash
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>aws lambda update-function-configuration \
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>    --function-name MyJavaFunction \
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>    --snap-start ApplyOn=PublishedVersions
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a># Pubblicare versione (SnapStart si attiva solo su versioni pubblicate)
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>aws lambda publish-version --function-name MyJavaFunction
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a># Creare alias che punta alla versione con SnapStart
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>aws lambda create-alias \
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a>    --function-name MyJavaFunction \
+</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a>    --name prod \
+</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a>    --function-version 1
+</span></code></pre></div></p>
+<p><strong>Risultato:</strong> AWS indica miglioramenti fino a ~10× sui cold start (tipicamente da multi-secondo a sub-secondo restore per Java); il guadagno dipende dal tempo di init. SnapStart non è gratuito: si pagano cache dello snapshot e restore.</p>
+<!-- REVIEW: verificare prezzi SnapStart correnti per runtime -->
+
+<p>Dalla fine del 2025 anche la fase <strong>init</strong> è fatturata per tutti i runtime gestiti: un init pesante costa, non solo rallenta.</p>
 <hr />
 <h2 id="pricing-lambda">Pricing Lambda<a class="headerlink" href="#pricing-lambda" title="Permanent link">&para;</a></h2>
+<p>Prezzi indicativi us-east-1 (variano per Region; verificare su <a href="https://aws.amazon.com/lambda/pricing/">Lambda Pricing</a>):</p>
 <ul>
 <li><strong>$0.20 per 1 milione di invocazioni</strong> (+ 1M gratuite/mese)</li>
-<li><strong>$0.0000166667 per GB-secondo</strong> (+ 400.000 GB-secondi/mese gratuiti)</li>
-<li>arm64 (Graviton): ~20% meno costoso di x86_64</li>
-<li>Provisioned Concurrency: $0.0000041 per GB-secondo provisionato</li>
+<li><strong>$0.0000166667 per GB-secondo</strong> x86_64 (+ 400.000 GB-secondi/mese gratuiti); arm64 $0.0000133334 (~20% in meno)</li>
+<li>Provisioned Concurrency: ~$0.0000041667 per GB-secondo provisionato (più la durata d'uso a tariffa ridotta)</li>
 </ul>
 <p><strong>Esempio:</strong> funzione 512 MB, 100ms durata, 10M invocazioni/mese:
 - <code>10M × $0.20/1M = $2 (invocazioni)</code>
 - <code>10M × 0.1s × 0.5GB × $0.0000166667 = $8.33 (duration)</code>
-- Totale: ~$10.33/mese</p>
+- Totale: ~$10.33/mese (x86_64, free tier escluso)</p>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-throttling-toomanyrequestsexception">Scenario 1 — Throttling (<code>TooManyRequestsException</code>)<a class="headerlink" href="#scenario-1-throttling-toomanyrequestsexception" title="Permanent link">&para;</a></h3>
@@ -25415,7 +25448,7 @@
 <h3 id="scenario-2-timeout-task-timed-out-after-n-seconds">Scenario 2 — Timeout (<code>Task timed out after N seconds</code>)<a class="headerlink" href="#scenario-2-timeout-task-timed-out-after-n-seconds" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo</strong>: log con <code>Task timed out after 3.00 seconds</code>; invocazioni che terminano sempre al valore di timeout.</p>
 <p><strong>Causa</strong>: timeout default (3 s) troppo basso, memoria insufficiente (CPU proporzionale alla memoria), oppure chiamate di rete bloccate — tipico di Lambda in VPC senza NAT Gateway o VPC Endpoint.</p>
-<p><strong>Soluzione</strong>: alzare timeout e memoria (verificare con Power Tuning), e per funzioni in VPC aggiungere NAT/VPC Endpoint. Il timeout di una funzione dietro API Gateway non deve superare il limite dell'integrazione (29 s di default).</p>
+<p><strong>Soluzione</strong>: alzare timeout e memoria (verificare con Power Tuning), e per funzioni in VPC aggiungere NAT/VPC Endpoint. Il timeout di una funzione dietro API Gateway non deve superare il limite dell'integrazione (29 s di default; per le REST API regionali/private il limite è aumentabile, per le HTTP API resta 30 s).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>aws<span class="w"> </span>lambda<span class="w"> </span>update-function-configuration<span class="w"> </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span>--timeout<span class="w"> </span><span class="m">60</span><span class="w"> </span>--memory-size<span class="w"> </span><span class="m">1024</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>aws<span class="w"> </span>logs<span class="w"> </span>filter-log-events<span class="w"> </span>--log-group-name<span class="w"> </span>/aws/lambda/MyFunction<span class="w"> </span>--filter-pattern<span class="w"> </span><span class="s2">"Task timed out"</span>
 </span></code></pre></div>
@@ -25438,6 +25471,28 @@
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span>--query-string<span class="w"> </span><span class="s1">'filter @type="REPORT" | stats max(@initDuration), max(@maxMemoryUsed/1024/1024) by bin(5m)'</span>
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>aws<span class="w"> </span>lambda<span class="w"> </span>get-function-configuration<span class="w"> </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span>--query<span class="w"> </span><span class="s1">'[Handler,Architectures,Layers]'</span>
 </span></code></pre></div>
+<hr />
+<h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
+<details class="info">
+<summary>SQS e SNS — Approfondimento</summary>
+<p>SQS è la sorgente più comune per carichi asincroni con retry e DLQ; SNS fa fan-out verso più Lambda.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../../messaging/sqs-sns/">SQS e SNS</a></p>
+</details>
+<details class="info">
+<summary>EventBridge e Kinesis — Approfondimento</summary>
+<p>EventBridge instrada eventi (anche schedulati) verso Lambda; Kinesis alimenta funzioni su stream ordinati per shard.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../../messaging/eventbridge-kinesis/">EventBridge e Kinesis</a></p>
+</details>
+<details class="info">
+<summary>S3 — Approfondimento</summary>
+<p>Le S3 Event Notification invocano Lambda alla creazione/rimozione di oggetti.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../../storage/s3/">S3</a></p>
+</details>
+<details class="info">
+<summary>CloudFront — Approfondimento</summary>
+<p>CloudFront può eseguire logica edge (Lambda@Edge, CloudFront Functions), non trattata in questa pagina.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../../networking/cloudfront/">CloudFront</a></p>
+</details>
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
