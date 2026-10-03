@@ -9,7 +9,7 @@ related: [cloud/aws/compute/containers-ecs-eks, cloud/aws/iam/policies-avanzate,
 official_docs: https://docs.aws.amazon.com/eks/latest/userguide/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-25
+last_updated: 2026-10-03
 ---
 
 # Amazon EKS — Elastic Kubernetes Service
@@ -894,7 +894,13 @@ helm install kube-prometheus-stack \
 
 ## Troubleshooting
 
-**Nodi in stato `NotReady`**
+### Scenario 1 — Nodi in stato `NotReady`
+
+**Sintomo**: `kubectl get nodes` mostra nodi `NotReady`; i pod vengono evict o non schedulati.
+
+**Causa**: il kubelet non riesce a riportare lo stato al control plane — disco/memoria esauriti o CNI (Container Network Interface, plugin di rete) non inizializzato.
+
+**Soluzione**:
 
 ```bash
 # Verificare stato nodi e causa
@@ -911,7 +917,13 @@ kubectl get pods -n kube-system -l k8s-app=aws-node
 kubectl logs -n kube-system -l k8s-app=aws-node --tail=50
 ```
 
-**Pod bloccati in `Pending`**
+### Scenario 2 — Pod bloccati in `Pending`
+
+**Sintomo**: il pod resta `Pending`, evento `FailedScheduling`.
+
+**Causa**: lo scheduler non trova un nodo idoneo — risorse insufficienti, taint senza toleration, affinity non soddisfatta, o Fargate profile che non matcha namespace/label.
+
+**Soluzione**:
 
 ```bash
 # Verificare eventi del pod
@@ -934,7 +946,13 @@ aws eks describe-fargate-profile \
     --fargate-profile-name app-serverless
 ```
 
-**Errore `ImagePullBackOff`**
+### Scenario 3 — Errore `ImagePullBackOff`
+
+**Sintomo**: pod in `ErrImagePull` / `ImagePullBackOff`.
+
+**Causa**: il nodo non autentica su ECR (policy di lettura mancante sul role) oppure non raggiunge l'endpoint ECR (subnet privata senza NAT Gateway o VPC endpoint).
+
+**Soluzione**:
 
 ```bash
 # Verificare accesso ECR dal nodo
@@ -948,7 +966,13 @@ aws iam list-attached-role-policies \
     --role-name EKSFargatePodExecutionRole
 ```
 
-**IRSA non funziona (credenziali non disponibili)**
+### Scenario 4 — IRSA non funziona (credenziali non disponibili)
+
+**Sintomo**: l'app riceve `AccessDenied` o `NoCredentialProviders`; `aws sts get-caller-identity` mostra il role del nodo invece di quello atteso.
+
+**Causa**: annotazione `eks.amazonaws.com/role-arn` mancante, OIDC provider assente in IAM, o trust policy con `sub` (namespace/SA) errato. Il webhook inietta le variabili solo ai pod creati dopo l'annotazione.
+
+**Soluzione**:
 
 ```bash
 # Verificare annotazione sul ServiceAccount
@@ -966,7 +990,13 @@ aws iam get-role --role-name <ROLE_NAME> \
 kubectl exec -it <POD> -- aws sts get-caller-identity
 ```
 
-**Upgrade fallisce o cluster bloccato**
+### Scenario 5 — Upgrade fallisce o cluster bloccato
+
+**Sintomo**: `describe-update` riporta `Failed` o l'update resta `InProgress` oltre i tempi normali.
+
+**Causa**: admission webhook (validating/mutating) irraggiungibili che bloccano le modifiche, API deprecate ancora in uso, o pod di sistema non healthy.
+
+**Soluzione**:
 
 ```bash
 # Verificare status update in corso
