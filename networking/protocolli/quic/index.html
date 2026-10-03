@@ -21136,7 +21136,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21180,7 +21180,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21205,7 +21205,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21338,6 +21338,28 @@
     <span class="md-ellipsis">
       
         Controllo della Congestione
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#perche-udp-e-perche-cifrato" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Perché UDP e perché cifrato
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#connection-id-e-load-balancer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connection ID e load balancer
       
     </span>
   </a>
@@ -21526,7 +21548,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -21596,7 +21618,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24689,6 +24711,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#perche-udp-e-perche-cifrato" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Perché UDP e perché cifrato
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#connection-id-e-load-balancer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Connection ID e load balancer
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -25072,10 +25116,14 @@
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>└─────────────────────────────────────┘
 </span></code></pre></div>
 <h3 id="controllo-della-congestione">Controllo della Congestione<a class="headerlink" href="#controllo-della-congestione" title="Permanent link">&para;</a></h3>
-<p>QUIC implementa algoritmi di controllo della congestione equivalenti a TCP (CUBIC, BBR) ma in user space. L'ACK mechanism di QUIC è più preciso di TCP grazie a:
-- Packet number monotonicamente crescenti (no ambiguità nei retransmit)
-- Timestamp precisi per calcolo RTT
-- Selective ACK nativo (no workaround come TCP SACK)</p>
+<p>QUIC implementa algoritmi di controllo della congestione equivalenti a TCP (NewReno come baseline in RFC 9002, più CUBIC e BBR) ma in user space: ogni libreria può sceglierli e aggiornarli senza toccare il kernel. Il loss recovery (RFC 9002) è più preciso di TCP grazie a:
+- Packet number monotonicamente crescenti: un pacchetto ritrasmesso ha un nuovo number, quindi nessuna ambiguità tra originale e retransmit nel calcolo RTT
+- Campo <code>ACK Delay</code> nell'ACK frame: il ricevente dichiara quanto ha trattenuto l'ACK, così il mittente sottrae il ritardo dal campione RTT
+- Range di ACK (equivalente di SACK) sempre presenti nel frame, non un'opzione negoziata</p>
+<h3 id="perche-udp-e-perche-cifrato">Perché UDP e perché cifrato<a class="headerlink" href="#perche-udp-e-perche-cifrato" title="Permanent link">&para;</a></h3>
+<p>QUIC usa UDP per <strong>ossification</strong>: i middlebox (NAT, firewall) di Internet ispezionano e talvolta bloccano header TCP non standard, rendendo impossibile evolvere TCP. Sopra UDP, QUIC cifra anche quasi tutti i metadati di trasporto (packet number, frame): i middlebox vedono solo pochi campi invarianti (RFC 8999) e non possono più dipendere da dettagli che bloccherebbero future evoluzioni (esiste già QUIC v2, RFC 9369, per evitare ossification della versione).</p>
+<h3 id="connection-id-e-load-balancer">Connection ID e load balancer<a class="headerlink" href="#connection-id-e-load-balancer" title="Permanent link">&para;</a></h3>
+<p>Poiché la connessione sopravvive al cambio di IP:porta, un load balancer L4 che instrada per 4-tupla manderebbe i pacchetti migrati a un backend sbagliato. Servono LB <em>QUIC-aware</em> che instradano sul Connection ID (es. QUIC-LB, draft IETF, o eBPF/Katran in ambienti hyperscale). Senza, la migration funziona solo con un singolo server o con hashing consistente sul CID.</p>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="abilitare-http3-con-nginx">Abilitare HTTP/3 con Nginx<a class="headerlink" href="#abilitare-http3-con-nginx" title="Permanent link">&para;</a></h3>
 <div class="language-nginx highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Richiede Nginx 1.25+ compilato con --with-http_v3_module</span>
@@ -25085,50 +25133,53 @@
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="kn">http2</span><span class="w"> </span><span class="no">on</span><span class="p">;</span>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="kn">http3</span><span class="w"> </span><span class="no">on</span><span class="p">;</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="kn">ssl_certificate</span><span class="w">     </span><span class="s">/etc/ssl/certs/example.crt</span><span class="p">;</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="kn">ssl_certificate_key</span><span class="w"> </span><span class="s">/etc/ssl/private/example.key</span><span class="p">;</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span><span class="c1"># Necessario per QUIC</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="kn">ssl_protocols</span><span class="w"> </span><span class="s">TLSv1.3</span><span class="p">;</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">    </span><span class="kn">ssl_early_data</span><span class="w"> </span><span class="no">on</span><span class="p">;</span><span class="w">  </span><span class="c1"># Abilita 0-RTT</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">    </span><span class="c1"># Annuncia supporto HTTP/3 al browser</span>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">    </span><span class="kn">add_header</span><span class="w"> </span><span class="s">Alt-Svc</span><span class="w"> </span><span class="s">'h3=":443"</span><span class="p">;</span><span class="w"> </span><span class="kn">ma=86400'</span><span class="p">;</span>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="s">/</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">        </span><span class="kn">root</span><span class="w"> </span><span class="s">/var/www/html</span><span class="p">;</span>
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="p">}</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="kn">quic_retry</span><span class="w"> </span><span class="no">on</span><span class="p">;</span><span class="w">  </span><span class="c1"># address validation: mitiga amplification/spoofing</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="kn">ssl_certificate</span><span class="w">     </span><span class="s">/etc/ssl/certs/example.crt</span><span class="p">;</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span><span class="kn">ssl_certificate_key</span><span class="w"> </span><span class="s">/etc/ssl/private/example.key</span><span class="p">;</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="c1"># Necessario per QUIC</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">    </span><span class="kn">ssl_protocols</span><span class="w"> </span><span class="s">TLSv1.3</span><span class="p">;</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">    </span><span class="kn">ssl_early_data</span><span class="w"> </span><span class="no">on</span><span class="p">;</span><span class="w">  </span><span class="c1"># Abilita 0-RTT</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">    </span><span class="c1"># Annuncia supporto HTTP/3 al browser</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">    </span><span class="kn">add_header</span><span class="w"> </span><span class="s">Alt-Svc</span><span class="w"> </span><span class="s">'h3=":443"</span><span class="p">;</span><span class="w"> </span><span class="kn">ma=86400'</span><span class="p">;</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="s">/</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">        </span><span class="kn">root</span><span class="w"> </span><span class="s">/var/www/html</span><span class="p">;</span>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="verifica-supporto-quic">Verifica supporto QUIC<a class="headerlink" href="#verifica-supporto-quic" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># curl con supporto HTTP/3 (curl 7.66+)</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>curl<span class="w"> </span>--http3<span class="w"> </span>https://example.com<span class="w"> </span>-I
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Output atteso:</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># HTTP/3 200</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># content-type: text/html</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># Verifica con browser: Chrome DevTools → Network → Protocol → h3</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Test con quiche (tool Cloudflare)</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>quiche-client<span class="w"> </span>https://example.com
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Verifica header Alt-Svc</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>curl<span class="w"> </span>-I<span class="w"> </span>https://example.com<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>alt-svc
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># curl compilato con backend HTTP/3 (ngtcp2+nghttp3 o quiche); verificare con: curl -V | grep HTTP3</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># --http3 prova h3 con fallback; --http3-only forza solo h3</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>curl<span class="w"> </span>--http3<span class="w"> </span>https://example.com<span class="w"> </span>-I
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Output atteso:</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># HTTP/3 200</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># content-type: text/html</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># Verifica con browser: Chrome DevTools → Network → Protocol → h3</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="c1"># Test con quiche (tool Cloudflare)</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>quiche-client<span class="w"> </span>https://example.com
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1"># Verifica header Alt-Svc</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>curl<span class="w"> </span>-I<span class="w"> </span>https://example.com<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>alt-svc
 </span></code></pre></div>
 <h3 id="configurazione-haproxy-con-quic">Configurazione HAProxy con QUIC<a class="headerlink" href="#configurazione-haproxy-con-quic" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>frontend https_frontend
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    bind :443 ssl crt /etc/ssl/combined.pem alpn h2,http/1.1
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    bind quic4@:443 ssl crt /etc/ssl/combined.pem alpn h3
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    http-response set-header alt-svc 'h3=":443"; ma=86400'
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    default_backend app_servers
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>backend app_servers
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    server app1 10.0.0.1:8080 check
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>    server app2 10.0.0.2:8080 check
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a># Richiede HAProxy 2.6+ (stabile dalla 2.8) e una libreria TLS con API QUIC (OpenSSL 3.5+, quictls, AWS-LC)
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>frontend https_frontend
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    bind :443 ssl crt /etc/ssl/combined.pem alpn h2,http/1.1
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    bind quic4@:443 ssl crt /etc/ssl/combined.pem alpn h3
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>    http-response set-header alt-svc 'h3=":443"; ma=86400'
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    default_backend app_servers
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>backend app_servers
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>    server app1 10.0.0.1:8080 check
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    server app2 10.0.0.2:8080 check
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
@@ -25155,7 +25206,7 @@
 </span></code></pre></div>
 <h3 id="scenario-2-il-client-non-passa-mai-a-http3">Scenario 2 — Il client non passa mai a HTTP/3<a class="headerlink" href="#scenario-2-il-client-non-passa-mai-a-http3" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo</strong>: la prima richiesta e le successive restano su HTTP/2, pur con QUIC attivo.</p>
-<p><strong>Causa</strong>: il browser scopre HTTP/3 solo tramite header <code>Alt-Svc</code> ricevuto su HTTP/1.1 o HTTP/2; se manca (o un proxy lo rimuove) non tenta QUIC.</p>
+<p><strong>Causa</strong>: il browser scopre HTTP/3 tramite header <code>Alt-Svc</code> ricevuto su HTTP/1.1 o HTTP/2 (la prima visita resta quindi su TCP), oppure in anticipo via record DNS <code>HTTPS</code> (SVCB, RFC 9460) con <code>alpn=h3</code>; se mancano (o un proxy rimuove l'header) non tenta QUIC.</p>
 <p><strong>Soluzione</strong>: aggiungere l'header e verificare che arrivi al client.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>curl<span class="w"> </span>-sI<span class="w"> </span>https://example.com<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>alt-svc
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># atteso: alt-svc: h3=":443"; ma=86400</span>
@@ -25192,7 +25243,9 @@
 <ul>
 <li><a href="https://www.rfc-editor.org/rfc/rfc9000">RFC 9000 — QUIC Transport Protocol</a></li>
 <li><a href="https://www.rfc-editor.org/rfc/rfc9114">RFC 9114 — HTTP/3</a></li>
-<li><a href="https://blog.cloudflare.com/quic-v1-2/">Cloudflare — QUIC Blog</a></li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9001">RFC 9001 — Using TLS to Secure QUIC</a></li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9002">RFC 9002 — QUIC Loss Detection and Congestion Control</a></li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9369">RFC 9369 — QUIC Version 2</a></li>
 <li><a href="https://http3-explained.haxx.se/">HTTP/3 Explained</a></li>
 </ul>
 

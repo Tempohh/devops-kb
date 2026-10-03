@@ -21145,7 +21145,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21170,7 +21170,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21541,7 +21541,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21576,7 +21576,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -21646,7 +21646,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25071,7 +25071,7 @@
 - <strong>Multiple connessioni TCP</strong>: i browser aprono 6–8 connessioni parallele per aggirare l'HOL blocking, ma questo spreca risorse e aumenta la latenza (ogni connessione richiede un handshake)
 - <strong>Header verbosi e non compressi</strong>: ogni richiesta ripete gli stessi header (User-Agent, Cookie, Accept) in chiaro
 - <strong>Nessun server push</strong>: il server non può inviare risorse proattivamente</p>
-<p><strong>HTTP/2</strong> (2015, RFC 7540, aggiornata da RFC 9113 nel 2022) risolve questi problemi rimanendo su TCP, introducendo un layer di framing binario sopra TLS.</p>
+<p><strong>HTTP/2</strong> (2015, RFC 7540, aggiornata da RFC 9113 nel 2022) risolve questi problemi rimanendo su TCP, introducendo un layer di framing binario (di norma trasportato su TLS, negoziato via ALPN — Application-Layer Protocol Negotiation, estensione TLS con cui client e server concordano <code>h2</code>).</p>
 <p><strong>HTTP/3</strong> (2022, RFC 9114) va oltre: abbandona TCP e costruisce HTTP sopra QUIC (UDP-based), eliminando il HOL blocking anche a livello di trasporto.</p>
 <hr />
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
@@ -25172,7 +25172,7 @@
 <h3 id="http2-server-push-deprecato-in-pratica">HTTP/2: Server Push (Deprecato in pratica)<a class="headerlink" href="#http2-server-push-deprecato-in-pratica" title="Permanent link">&para;</a></h3>
 <p>Il server push permetteva al server di inviare risorse proattivamente (es. CSS e JS insieme all'HTML, senza che il client le richiedesse). In pratica si è rivelato difficile da ottimizzare (rischio di inviare risorse già in cache) ed è stato deprecato in Chrome nel 2022. Preferire preload links (<code>&lt;link rel="preload"&gt;</code>).</p>
 <h3 id="http2-stream-prioritization">HTTP/2: Stream Prioritization<a class="headerlink" href="#http2-stream-prioritization" title="Permanent link">&para;</a></h3>
-<p>HTTP/2 supportava una gerarchia di priorità degli stream (albero di dipendenze). In pratica raramente implementata correttamente dai server. HTTP/3 utilizza invece le <strong>Extensible Priorities</strong> (RFC 9218), più semplici: header <code>Priority</code> con urgency (0–7) e flag <code>incremental</code>, senza albero di dipendenze. (QPACK, invece, è la compressione header di HTTP/3, non gestisce priorità.)</p>
+<p>HTTP/2 supportava una gerarchia di priorità degli stream (albero di dipendenze). In pratica raramente implementata correttamente dai server. Il modello è stato sostituito dalle <strong>Extensible Priorities</strong> (RFC 9218, usabili sia con HTTP/2 che con HTTP/3), più semplici: header <code>Priority</code> con urgency (0–7) e flag <code>incremental</code>, senza albero di dipendenze. (QPACK, invece, è la compressione header di HTTP/3, non gestisce priorità.)</p>
 <hr />
 <h2 id="confronto-performance">Confronto Performance<a class="headerlink" href="#confronto-performance" title="Permanent link">&para;</a></h2>
 <table>
@@ -25229,15 +25229,15 @@
 </tr>
 <tr>
 <td>Handshake latency</td>
-<td>2 RTT (TCP) + 1-2 RTT (TLS)</td>
-<td>2 RTT (TCP) + 1-2 RTT (TLS)</td>
-<td>1 RTT (0-RTT possibile)</td>
+<td>1 RTT (TCP) + 0 (HTTP) o 1-2 RTT (TLS 1.3 / 1.2)</td>
+<td>1 RTT (TCP) + 1 RTT (TLS 1.3) o 2 (TLS 1.2)</td>
+<td>1 RTT (0-RTT in resumption, con rischio replay)</td>
 </tr>
 <tr>
 <td>Server Push</td>
 <td>No</td>
 <td>Sì (deprecato)</td>
-<td>No (rimosso)</td>
+<td>Definito da RFC 9114 ma di fatto non usato</td>
 </tr>
 <tr>
 <td>Connection Migration</td>
@@ -25293,7 +25293,7 @@
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="kn">ssl_certificate</span><span class="w">     </span><span class="s">/etc/ssl/certs/example.com.crt</span><span class="p">;</span>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span><span class="kn">ssl_certificate_key</span><span class="w"> </span><span class="s">/etc/ssl/private/example.com.key</span><span class="p">;</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span><span class="kn">ssl_protocols</span><span class="w">       </span><span class="s">TLSv1.3</span><span class="p">;</span><span class="w">        </span><span class="c1"># QUIC richiede TLS 1.3</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span><span class="kn">ssl_protocols</span><span class="w">       </span><span class="s">TLSv1.2</span><span class="w"> </span><span class="s">TLSv1.3</span><span class="p">;</span><span class="w"> </span><span class="c1"># QUIC usa solo TLS 1.3; TLS 1.2 serve al fallback HTTP/2 su TCP (stesso server block)</span>
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span><span class="c1"># Annunciare supporto HTTP/3 tramite header Alt-Svc</span>
 </span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span><span class="kn">add_header</span><span class="w"> </span><span class="s">Alt-Svc</span><span class="w"> </span><span class="s">'h3=":443"</span><span class="p">;</span><span class="w"> </span><span class="kn">ma=86400'</span><span class="p">;</span>
@@ -25328,7 +25328,7 @@
 <h3 id="stato-del-supporto-2026">Stato del supporto (2026)<a class="headerlink" href="#stato-del-supporto-2026" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>HTTP/2</strong>: supportato da tutti i browser moderni (Chrome, Firefox, Safari, Edge) — &gt; 97% degli utenti</li>
-<li><strong>HTTP/3</strong>: supportato da Chrome 87+, Firefox 88+, Safari 14+ — &gt; 95% degli utenti</li>
+<li><strong>HTTP/3</strong>: abilitato di default da Chrome 87+, Firefox 88+, Safari 16.4+ — &gt; 95% degli utenti</li>
 </ul>
 <h3 id="strategia-di-migrazione">Strategia di migrazione<a class="headerlink" href="#strategia-di-migrazione" title="Permanent link">&para;</a></h3>
 <ol>
@@ -25357,7 +25357,11 @@
 </div>
 <div class="admonition tip">
 <p class="admonition-title">HTTP/2: aumentare i concurrent streams se necessario</p>
-<p>Il default di 100 stream concorrenti è sufficiente per la maggior parte dei casi. Applicazioni con molte richieste parallele (dashboard con dozzine di widget) possono beneficiare di valori più alti (128–256).</p>
+<p>Il default di Nginx (128 stream concorrenti; la RFC 9113 raccomanda almeno 100) è sufficiente per la maggior parte dei casi. Applicazioni con molte richieste parallele (dashboard con dozzine di widget) possono beneficiare di valori più alti (256), al costo di più memoria per connessione.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">HTTP/2 Rapid Reset (CVE-2023-44487)</p>
+<p>Un client può aprire e annullare (<code>RST_STREAM</code>) stream a raffica, aggirando il limite di stream concorrenti e saturando il server (DDoS record nel 2023). Mantenere server/proxy/CDN aggiornati (Nginx ≥ 1.25.3) e limitare le richieste per connessione (<code>keepalive_requests</code>).</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">HTTP/3: verificare la compatibilità dei middlebox</p>

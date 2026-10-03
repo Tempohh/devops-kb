@@ -21136,7 +21136,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21171,7 +21171,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21215,7 +21215,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -21240,7 +21240,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -21651,7 +21651,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25318,12 +25318,12 @@
 <tbody>
 <tr>
 <td>Keepalive</td>
-<td>60 s (Cisco/FRR)</td>
+<td>60 s (Cisco/Junos 30 s) / 3 s (FRR)</td>
 <td>&#8531; dell'hold time</td>
 </tr>
 <tr>
 <td>Hold time</td>
-<td>180 s (Cisco) / 90 s (Junos)</td>
+<td>180 s (Cisco) / 90 s (Junos) / 9 s (FRR)</td>
 <td>Si negozia il minimo tra i due peer</td>
 </tr>
 <tr>
@@ -25338,7 +25338,7 @@
 </tr>
 </tbody>
 </table>
-<p>Con timer BGP i failure detection richiede decine di secondi. <strong>BFD</strong> (RFC 5880) rileva il guasto del link in 100–300 ms e abbatte subito la sessione BGP.</p>
+<p>Con i soli timer BGP il rilevamento di un guasto richiede decine di secondi (FRR, con default 3/9 s, scende a ~9 s; abbassare troppo i timer rende però la sessione fragile sotto carico CPU). <strong>BFD</strong> (RFC 5880) rileva il guasto del link in 100–300 ms e abbatte subito la sessione BGP.</p>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
 <h3 id="tabelle-e-flusso-delle-route">Tabelle e flusso delle route<a class="headerlink" href="#tabelle-e-flusso-delle-route" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>   Peer eBGP ──UPDATE──▶ Adj-RIB-In ──inbound policy──▶ Loc-RIB ──best path──▶ FIB (kernel)
@@ -25465,13 +25465,13 @@
 <tbody>
 <tr>
 <td>Private</td>
-<td>VGW o Direct Connect Gateway</td>
-<td>Accesso a VPC (max 100 prefissi annunciati da AWS→on-prem per DXGW; limiti da verificare in quota)</td>
+<td>VGW o Direct Connect Gateway (DXGW)</td>
+<td>Accesso a VPC (max 100 prefissi annunciati dall'on-prem verso AWS per sessione BGP: oltre il limite la sessione va <strong>down</strong>)</td>
 </tr>
 <tr>
 <td>Transit</td>
-<td>Direct Connect Gateway → Transit Gateway</td>
-<td>Accesso a molte VPC via TGW; <strong>una sola</strong> Transit VIF per connessione dedicata (hosted: una per connessione)</td>
+<td>DXGW → Transit Gateway (TGW)</td>
+<td>Accesso a molte VPC via TGW; <strong>una sola</strong> Transit VIF per connessione dedicata (hosted: una per connessione); i prefissi annunciati da AWS sono quelli degli <em>allowed prefixes</em> dell'associazione DXGW–TGW (max 20)</td>
 </tr>
 <tr>
 <td>Public</td>
@@ -25512,7 +25512,7 @@
 </span></code></pre></div>
 <p>Stato atteso: <code>bgpPeerState: available</code> e <code>bgpStatus: up</code>.</p>
 <h3 id="transit-gateway-con-site-to-site-vpn-dinamica-e-ecmp">Transit Gateway con Site-to-Site VPN dinamica e ECMP<a class="headerlink" href="#transit-gateway-con-site-to-site-vpn-dinamica-e-ecmp" title="Permanent link">&para;</a></h3>
-<p>Una VPN Site-to-Site con routing dinamico usa 2 tunnel IPsec per connessione, ciascuno con una sessione eBGP verso link-local <code>169.254.x.x/30</code>. Con <strong>Transit Gateway</strong> si può abilitare <strong>ECMP</strong> sui tunnel VPN (non disponibile su VGW), moltiplicando la banda oltre il limite di ~1,25 Gbps per tunnel.</p>
+<p>Una VPN Site-to-Site con routing dinamico usa 2 tunnel IPsec per connessione, ciascuno con una sessione eBGP verso link-local <code>169.254.x.x/30</code>. Con <strong>Transit Gateway</strong> si può abilitare <strong>ECMP</strong> sui tunnel VPN (non disponibile su VGW), moltiplicando la banda oltre il limite di ~1,25 Gbps per tunnel. <strong>ECMP</strong> (Equal-Cost Multi-Path) = più percorsi di pari costo usati in parallelo per ripartire i flussi.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># TGW con supporto ECMP VPN abilitato alla creazione</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-transit-gateway<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--description<span class="w"> </span><span class="s2">"tgw-hub"</span><span class="w"> </span><span class="se">\</span>
@@ -25532,7 +25532,11 @@
 </span></code></pre></div>
 <p>Requisiti ECMP: stessa lunghezza AS_PATH e stesso MED dai due tunnel; il router on-prem deve annunciare <strong>lo stesso prefisso con attributi uguali</strong> su entrambi i tunnel, e le connessioni devono avere ECMP abilitato su TGW.</p>
 <h3 id="kubernetes-bare-metal-cilium-bgp-control-plane">Kubernetes bare metal: Cilium BGP Control Plane<a class="headerlink" href="#kubernetes-bare-metal-cilium-bgp-control-plane" title="Permanent link">&para;</a></h3>
-<p>Cilium annuncia Pod CIDR e Service (LoadBalancer/ExternalIP) al router di rete con la CRD <code>CiliumBGPClusterConfig</code> (API v2, Cilium ≥ 1.16).</p>
+<p>Cilium annuncia Pod CIDR e Service (LoadBalancer/ExternalIP) al router <strong>ToR</strong> (Top-of-Rack, lo switch in cima al rack) con la CRD <code>CiliumBGPClusterConfig</code> (BGP Control Plane v2, Cilium ≥ 1.16).</p>
+<div class="admonition note">
+<p class="admonition-title">Versione API</p>
+<p>Gli esempi usano <code>cilium.io/v2alpha1</code> (Cilium 1.16–1.17). <!-- REVIEW: verificare che da Cilium 1.18 le CRD BGP siano promosse a <code>cilium.io/v2</code> e aggiornare apiVersion degli esempi --></p>
+</div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cilium.io/v2alpha1</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CiliumBGPClusterConfig</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -25625,7 +25629,7 @@
 </span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nt">myASN</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">64512</span>
 </span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span><span class="nt">peerASN</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">65000</span>
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">  </span><span class="nt">peerAddress</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10.0.0.1</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span><span class="nt">bfdProfile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fast</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span><span class="nt">bfdProfile</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fast</span><span class="w">        </span><span class="c1"># richiede una risorsa BFDProfile chiamata "fast" (metallb.io/v1beta1)</span>
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="nn">---</span>
 </span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metallb.io/v1beta1</span>
 </span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">IPAddressPool</span>
@@ -25658,7 +25662,7 @@
 </ul>
 <div class="admonition warning">
 <p class="admonition-title">Anti-pattern</p>
-<p>Redistribuire BGP in un IGP (e viceversa) senza filtri. Annunciare <code>0.0.0.0/0</code> per errore a un peer di transit. Usare <code>network</code> su prefissi non presenti nella RIB (l'annuncio non parte). Dimenticare che senza <code>route-map</code>/policy le sessioni eBGP FRR ≥ 8 non scambiano route (<code>RFC 8212</code>).</p>
+<p>Redistribuire BGP in un IGP (e viceversa) senza filtri. Annunciare <code>0.0.0.0/0</code> per errore a un peer di transit. Usare <code>network</code> su prefissi non presenti nella RIB (l'annuncio non parte). Dimenticare che senza <code>route-map</code>/policy le sessioni eBGP FRR ≥ 7.4 (<code>bgp ebgp-requires-policy</code>, default) non scambiano route (<code>RFC 8212</code>).</p>
 </div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="sessione-bloccata-in-active-o-idle">Sessione bloccata in <code>Active</code> o <code>Idle</code><a class="headerlink" href="#sessione-bloccata-in-active-o-idle" title="Permanent link">&para;</a></h3>
@@ -25685,7 +25689,7 @@
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>vtysh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"show ip route 10.10.0.0/16"</span><span class="w">        </span><span class="c1"># il prefisso deve esistere nella RIB</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>vtysh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"show route-map DA-UPSTREAM"</span>
 </span></code></pre></div>
-<p><strong>Cause:</strong> <code>network</code> su un prefisso non presente nella RIB (creare una route <code>Null0</code>/di aggregato), address-family non attivata (<code>neighbor ... activate</code>), <strong>policy mancante</strong> (RFC 8212: eBGP senza route-map non scambia nulla), filtro in uscita troppo restrittivo, <code>next-hop</code> non raggiungibile in iBGP (<code>next-hop-self</code>), prefissi <code>invalid</code> scartati da ROV. Su Direct Connect: prefisso oltre il limite (100 per Private VIF via DXGW → la sessione resta up ma AWS ignora l'eccedenza; controllare <code>--bgp-peers</code> e i limiti di quota) o non contenuto nell'allowed prefixes del DXGW.</p>
+<p><strong>Cause:</strong> <code>network</code> su un prefisso non presente nella RIB (creare una route <code>Null0</code>/di aggregato), address-family non attivata (<code>neighbor ... activate</code>), <strong>policy mancante</strong> (RFC 8212: eBGP senza route-map non scambia nulla), filtro in uscita troppo restrittivo, <code>next-hop</code> non raggiungibile in iBGP (<code>next-hop-self</code>), prefissi <code>invalid</code> scartati da ROV. Su Direct Connect: prefisso non contenuto negli <em>allowed prefixes</em> del DXGW (AWS non lo annuncia verso le VPC/on-prem), oppure superamento del limite di 100 prefissi per sessione (la sessione BGP va down: aggregare i prefissi).</p>
 <h3 id="flapping-e-route-dampening">Flapping e route dampening<a class="headerlink" href="#flapping-e-route-dampening" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> sessione o singoli prefissi che oscillano; log con <code>Down BGP Notification Hold Timer Expired</code> o continui UPDATE/WITHDRAW.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>vtysh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"show bgp neighbors 192.0.2.2"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"Hold|Keepalive|Last reset|flap"</span>
@@ -25699,10 +25703,10 @@
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>vtysh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"show rpki prefix-table"</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>vtysh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"show ip bgp 203.0.113.0/24"</span><span class="w">      </span><span class="c1"># cerca "validation-state: invalid"</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1"># Verifica ROA e visibilità esterna</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>whois<span class="w"> </span>-h<span class="w"> </span>whois.bgpmon.net<span class="w"> </span><span class="m">203</span>.0.113.0/24
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1"># Verifica ROA e visibilità esterna (API RIPEstat; sostituire ASN e prefisso)</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">"https://stat.ripe.net/data/rpki-validation/data.json?resource=AS64500&amp;prefix=203.0.113.0/24"</span>
 </span></code></pre></div>
-<p><strong>Azioni:</strong> creare/aggiornare le <strong>ROA</strong> nel portale del RIR (con <code>maxLength</code> corretto), attivare ROV (in FRR: blocco <code>rpki</code> con cache RTR + route-map con <code>match rpki invalid</code> → <code>deny</code>), contattare l'operatore che ha annunciato il prefisso e l'upstream per filtrare. Per i leak: prefix-list per cliente derivate da IRR (<code>bgpq4</code>), <code>maximum-prefix</code>, e le communities di <strong>peer lock</strong>/<strong>only-to-customer (OTC, RFC 9234)</strong>.</p>
+<p><strong>Azioni:</strong> creare/aggiornare le <strong>ROA</strong> nel portale del RIR (con <code>maxLength</code> corretto), attivare ROV (in FRR: blocco <code>rpki</code> con cache RTR + route-map con <code>match rpki invalid</code> → <code>deny</code>), contattare l'operatore che ha annunciato il prefisso e l'upstream per filtrare. Per i leak: prefix-list per cliente derivate dagli <strong>IRR</strong> (Internet Routing Registry, database pubblici di route object; tool <code>bgpq4</code>), <code>maximum-prefix</code>, <strong>Peerlock</strong> (filtri sui path che contengono AS di grandi transit) e l'attributo <strong>Only-to-Customer (OTC, RFC 9234)</strong>, che marca le route apprese da provider/peer per impedirne il leak verso altri provider/peer.</p>
 <h3 id="kubernetes-peer-bgp-giu-o-service-non-raggiungibile">Kubernetes: peer BGP giù o Service non raggiungibile<a class="headerlink" href="#kubernetes-peer-bgp-giu-o-service-non-raggiungibile" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>cilium bgp peers</code> mostra <code>active</code>/<code>idle</code>, oppure il LoadBalancer IP non risponde.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>cilium<span class="w"> </span>bgp<span class="w"> </span>peers
