@@ -7,9 +7,10 @@ search_keywords: [github actions matrix, reusable workflow, workflow_call, compo
 parent: ci-cd/github-actions/_index
 related: [ci-cd/github-actions/enterprise, ci-cd/jenkins/pipeline-fundamentals, security/secret-management]
 official_docs: https://docs.github.com/en/actions/using-workflows/reusing-workflows
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # GitHub Actions — Workflow Avanzati
@@ -63,6 +64,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Build
+        shell: bash   # su Windows il default è pwsh: bash esegue lo script ./mvnw
         run: ./mvnw --batch-mode clean package
 
       - name: SonarQube Analysis
@@ -88,9 +90,10 @@ jobs:
       - uses: actions/checkout@v4
       - id: set-matrix
         run: |
-          # Genera la matrice dinamicamente (es. da file o script)
-          MATRIX=$(cat .github/test-matrix.json)
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          # Genera la matrice dinamicamente (es. da file o script).
+          # jq -c compatta su UNA riga: un output multilinea spezzerebbe $GITHUB_OUTPUT
+          MATRIX=$(jq -c . .github/test-matrix.json)
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
 
   test:
     needs: generate-matrix
@@ -211,10 +214,14 @@ jobs:
 ```
 
 !!! note "Limitazioni Reusable Workflows"
-    - Massimo **4 livelli** di nesting (workflow che chiama workflow che chiama workflow...)
-    - Non è possibile usare una **matrix strategy** per chiamare reusable workflows (workaround: matrix nel called workflow)
-    - I secrets devono essere esplicitamente passati con `secrets:` o con `secrets: inherit`
-    - Il called workflow deve trovarsi in un repository accessibile al caller (stesso repo o repository pubblico/stesso org)
+    - Nesting fino a **10 livelli** (caller incluso) e max **50 workflow unici** per run (limiti storici: 4 e 20 — verificare la doc se si lavora su GHES)
+    - Una **matrix** è supportata anche sul job che chiama un reusable workflow (`strategy.matrix` accanto a `uses:`); ogni combinazione lancia una chiamata
+    - I secrets devono essere esplicitamente passati con `secrets:` o con `secrets: inherit` (`inherit` funziona solo nella stessa organization/enterprise)
+    - Il called workflow deve essere accessibile al caller: stesso repo, repo pubblico, oppure repo privato/interno con *Actions → Access* abilitato
+    - Referenziare il called workflow con **tag o commit SHA**, non `@main`: un push su `main` del repo condiviso altera tutte le pipeline chiamanti
+
+!!! warning "Script injection"
+    Nei blocchi `run:` non interpolare mai input non fidati (`${{ inputs.* }}`, `github.head_ref`, titoli di PR) direttamente nella shell: l'espressione viene espansa *prima* dell'esecuzione e può iniettare comandi. Passarli via `env:` e usare `"$VAR"` nello script. L'esempio sopra interpola per brevità.
 
 ## Composite Actions
 
@@ -283,7 +290,7 @@ runs:
         cache-to: type=gha,mode=max
 
     - name: Scan immagine con Trivy
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.28.0  # pin a tag/SHA, mai @master (supply chain)
       with:
         image-ref: ${{ inputs.registry }}/${{ inputs.image-name }}:${{ inputs.image-tag }}
         format: 'sarif'
@@ -296,8 +303,10 @@ runs:
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
-      shell: bash
 ```
+
+!!! note "`shell` solo per gli step `run`"
+    In una composite action ogni step `run:` **deve** dichiarare `shell:`; gli step `uses:` non lo accettano (workflow invalido). `full-image-ref` contiene tutti i tag generati da `metadata-action`, uno per riga.
 
 Utilizzo della composite action nel workflow:
 
@@ -361,11 +370,13 @@ GitHub Actions Runner riceve credenziali temporanee
   "Type": "AWS::IAM::OIDCProvider",
   "Properties": {
     "Url": "https://token.actions.githubusercontent.com",
-    "ClientIdList": ["sts.amazonaws.com"],
-    "ThumbprintList": ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+    "ClientIdList": ["sts.amazonaws.com"]
   }
 }
 ```
+
+!!! note "Thumbprint"
+    `ThumbprintList` non serve più per GitHub: AWS valida il certificato con la propria libreria di CA fidate. Le guide che lo richiedono sono precedenti al 2023.
 
 **Step 2: Creare il ruolo IAM con Trust Policy**
 
@@ -490,7 +501,7 @@ jobs:
           DB_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}  # Secret dell'environment
 ```
 
-**Configurazione via GitHub UI / API (`POST /repos/{owner}/{repo}/environments`):**
+**Configurazione via GitHub UI / API (`PUT /repos/{owner}/{repo}/environments/{environment_name}`):**
 
 ```json
 {
@@ -546,9 +557,9 @@ on:
 concurrency:
   group: ci-${{ github.event.pull_request.number }}
   cancel-in-progress: true
+```
 
----
-
+```yaml
 # Deploy production: non cancellare mai un deploy in corso
 jobs:
   deploy-prod:
@@ -625,16 +636,13 @@ jobs:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
-            ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
             ${{ runner.os }}-maven-
 
-      # Cache npm
+      # Cache npm (si cacha ~/.npm, non node_modules: `npm ci` lo cancella comunque)
       - name: Cache npm dependencies
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.npm
-            node_modules
+          path: ~/.npm
           key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-npm-
@@ -664,8 +672,9 @@ jobs:
 ```
 
 !!! tip "Cache vs Artifacts"
-    - **Cache**: dati che possono essere rigenerati (dipendenze, build cache). Condiviso tra run, non tra workflow diversi. Max 10 GB per repository.
-    - **Artifacts**: output del build da condividere tra job dello stesso run o da scaricare. Retention configurabile, non condiviso tra run.
+    - **Cache**: dati rigenerabili (dipendenze, build cache), riusati tra run e anche tra workflow diversi dello stesso repo con la stessa key. Scope per branch: un branch legge le cache proprie e quelle del branch di base/default, mai di branch fratelli. 10 GB per repository di default (estendibile a pagamento); le entry non usate da 7 giorni vengono eliminate.
+    - **Artifacts**: output del build da condividere tra job dello stesso run o da scaricare. Retention configurabile, non pensati per il riuso tra run.
+    - Per i casi comuni `setup-java`, `setup-node`, `setup-python` hanno l'input `cache:` che sostituisce `actions/cache` manuale.
 
 ## GitHub Packages — Publish Docker Image
 
@@ -719,7 +728,7 @@ jobs:
 
       - name: Build and push Docker image
         id: push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -732,7 +741,7 @@ jobs:
           sbom: true
 
       - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v3
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.push.outputs.digest }}
@@ -797,7 +806,7 @@ jobs:
 
 **Sintomo:** Un job della matrix fallisce e tutti gli altri job paralleli vengono cancellati, nonostante `fail-fast: false` sia impostato.
 
-**Causa:** `fail-fast` è impostato a livello di `strategy` ma un job upstream (via `needs:`) è fallito, propagando la cancellazione. Oppure il `cancel-in-progress: true` di un concurrency group sta intervenendo.
+**Causa:** con `fail-fast: false` un fallimento non cancella i fratelli; la cancellazione arriva da altro: `cancel-in-progress: true` di un concurrency group (un nuovo push cancella il run), una cancellazione manuale, oppure `fail-fast` rimasto al default `true` perché posizionato fuori da `strategy`.
 
 **Soluzione:** Verificare che `fail-fast: false` sia nella sezione `strategy` del job matrix (non altrove) e che nessun concurrency group stia cancellando i run.
 
@@ -825,7 +834,7 @@ concurrency:
 
 **Sintomo:** La cache non viene mai ripristinata; ogni run ricostruisce le dipendenze da zero. Il log mostra `Cache not found for key: ...`.
 
-**Causa:** La cache key include un hash del lock file (`hashFiles`) ma il lock file è diverso tra branch, oppure il path della cache non corrisponde alla directory effettiva delle dipendenze.
+**Causa:** (a) la key cambia a ogni run (es. `hashFiles` su file modificati o pattern che non trova file → hash vuoto); (b) la cache è stata salvata solo da un branch fratello (scope per branch: va prima creata sul branch di base/default); (c) entry eliminata per inattività (7 giorni) o per superamento del limite; (d) il path non corrisponde alla directory effettiva delle dipendenze.
 
 **Soluzione:** Verificare il path della cache e usare `restore-keys` come fallback per partial match.
 
