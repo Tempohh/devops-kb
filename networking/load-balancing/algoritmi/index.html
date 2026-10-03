@@ -21423,7 +21423,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21467,7 +21467,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21492,7 +21492,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21593,10 +21593,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#least-response-time-nginx-plus-haproxy" class="md-nav__link">
+  <a href="#least-response-time-nginx-plus-envoy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Least Response Time (Nginx Plus / HAProxy)
+        Least Response Time (Nginx Plus, Envoy)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#random-e-power-of-two-choices-p2c" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Random e Power of Two Choices (P2C)
       
     </span>
   </a>
@@ -21757,7 +21768,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22548,7 +22559,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24595,10 +24606,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#least-response-time-nginx-plus-haproxy" class="md-nav__link">
+  <a href="#least-response-time-nginx-plus-envoy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Least Response Time (Nginx Plus / HAProxy)
+        Least Response Time (Nginx Plus, Envoy)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#random-e-power-of-two-choices-p2c" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Random e Power of Two Choices (P2C)
       
     </span>
   </a>
@@ -24936,6 +24958,13 @@
 <td>Sì</td>
 <td>Medio</td>
 </tr>
+<tr>
+<td>Power of Two Choices</td>
+<td>Sì (2 campioni)</td>
+<td>Sì</td>
+<td>No</td>
+<td>Basso</td>
+</tr>
 </tbody>
 </table>
 <h2 id="algoritmi-principali">Algoritmi Principali<a class="headerlink" href="#algoritmi-principali" title="Permanent link">&para;</a></h2>
@@ -24964,10 +24993,11 @@
 <div class="language-nginx highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">weight=5</span><span class="p">;</span><span class="w">  </span><span class="c1"># Server potente</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">weight=2</span><span class="p">;</span><span class="w">  </span><span class="c1"># Server medio</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.3</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">weight=1</span><span class="p">;</span><span class="w">  </span><span class="c1"># Server debole o canary (1%)</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.3</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">weight=1</span><span class="p">;</span><span class="w">  </span><span class="c1"># Server debole (1/8 = 12,5% del traffico)</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="p">}</span>
 </span></code></pre></div>
-<p><strong>Uso pratico:</strong> Canary deployment (inviare 1-5% del traffico a una nuova versione), migrazione graduale, backend con hardware diverso.</p>
+<p>Nginx usa uno <em>smooth</em> weighted round robin: le richieste del server pesante sono intercalate (A B A C A B A A), non raggruppate in burst.</p>
+<p><strong>Uso pratico:</strong> Canary deployment (inviare 1-5% del traffico a una nuova versione, vedi Scenario 4 per il calcolo dei pesi), migrazione graduale, backend con hardware diverso.</p>
 <h3 id="least-connections">Least Connections<a class="headerlink" href="#least-connections" title="Permanent link">&para;</a></h3>
 <p>Invia la richiesta al server con il minor numero di connessioni attive in quel momento. Tiene conto del carico reale — un server lento accoderà più connessioni e riceverà meno nuove richieste.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Server A: 150 connessioni attive
@@ -24990,12 +25020,13 @@
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    server s2 10.0.0.2:8080 check
 </span></code></pre></div>
 <h3 id="ip-hash">IP Hash<a class="headerlink" href="#ip-hash" title="Permanent link">&para;</a></h3>
-<p>Calcola un hash dell'IP del client e lo mappa in modo deterministico a un server backend. Lo stesso client andrà sempre sullo stesso backend (finché il backend è disponibile). Implementa la <strong>session affinity</strong> basata su IP.</p>
+<p>Calcola un hash dell'IP del client e lo mappa in modo deterministico a un server backend. Lo stesso client andrà sempre sullo stesso backend (finché il pool non cambia). Implementa la <strong>session affinity</strong> basata su IP. In HAProxy l'equivalente è <code>balance source</code>.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Client 192.168.1.10 → hash(192.168.1.10) % 3 = 1 → Server B (sempre)
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Client 10.0.0.50    → hash(10.0.0.50) % 3 = 0    → Server A (sempre)
 </span></code></pre></div>
+<p>Il modulo sul numero di server è il punto debole: se N cambia (scale-out, backend rimosso), la maggior parte dei client viene rimappata. Il Consistent Hashing (sotto) risolve questo problema. In Nginx <code>ip_hash</code> per IPv4 usa solo i primi 3 ottetti (/24), quindi client della stessa subnet finiscono sullo stesso backend.</p>
 <p><strong>Quando usare:</strong> Applicazioni con sessioni server-side (state nel filesystem, in-memory), WebSocket (le connessioni sono persistenti), applicazioni che non possono usare sessioni distribuite.
-<strong>Svantaggio:</strong> Se un backend cade, tutti i suoi client devono migrare. Distribuzione potenzialmente sbilanciata se pochi IP grandi (NAT aziendale).</p>
+<strong>Svantaggio:</strong> Se un backend cade, tutti i suoi client devono migrare. Distribuzione potenzialmente sbilanciata se pochi IP grandi (NAT — Network Address Translation — aziendale: molti utenti condividono un solo IP pubblico).</p>
 <div class="language-nginx highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">    </span><span class="kn">ip_hash</span><span class="p">;</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
@@ -25003,47 +25034,62 @@
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.3</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">down</span><span class="p">;</span><span class="w">  </span><span class="c1"># Temporaneamente fuori senza invalidare le hash</span>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="p">}</span>
 </span></code></pre></div>
-<h3 id="least-response-time-nginx-plus-haproxy">Least Response Time (Nginx Plus / HAProxy)<a class="headerlink" href="#least-response-time-nginx-plus-haproxy" title="Permanent link">&para;</a></h3>
-<p>Combina connessioni attive e latenza misurata: invia la richiesta al server con il minor numero di connessioni attive E il minor tempo di risposta medio. Più sofisticato di Least Connections ma richiede misurazioni attive.</p>
+<h3 id="least-response-time-nginx-plus-envoy">Least Response Time (Nginx Plus, Envoy)<a class="headerlink" href="#least-response-time-nginx-plus-envoy" title="Permanent link">&para;</a></h3>
+<p>Combina connessioni attive e latenza misurata: invia la richiesta al server con il minor numero di connessioni attive E il minor tempo di risposta medio. Più sofisticato di Least Connections ma richiede misurazioni continue sul traffico reale.</p>
 <div class="language-nginx highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Nginx Plus (commerciale)</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="kn">least_time</span><span class="w"> </span><span class="s">header</span><span class="p">;</span><span class="w">  </span><span class="c1"># last_byte per considerare la risposta completa</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="kn">least_time</span><span class="w"> </span><span class="s">header</span><span class="p">;</span><span class="w">  </span><span class="c1"># header = tempo al primo byte; last_byte = risposta completa</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="p">}</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a># HAProxy
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>backend app_pool
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    balance leastconn
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    option http-server-close  # Necessario per misurare latenza
+<div class="admonition note">
+<p class="admonition-title">HAProxy non ha un algoritmo least-response-time</p>
+<p>HAProxy non offre un <code>balance</code> basato sulla latenza: si usa <code>leastconn</code> oppure <code>random(2)</code> (vedi sotto). Envoy invece fornisce <code>LEAST_REQUEST</code> (con P2C) e, nelle versioni recenti, bilanciamento sensibile alla latenza (peak EWMA — media mobile esponenziale — è l'approccio usato da Linkerd).</p>
+</div>
+<h3 id="random-e-power-of-two-choices-p2c">Random e Power of Two Choices (P2C)<a class="headerlink" href="#random-e-power-of-two-choices-p2c" title="Permanent link">&para;</a></h3>
+<p><strong>Random</strong> sceglie un backend a caso: nessuno stato, ottimo con molti LB indipendenti che non condividono informazioni. <strong>Power of Two Choices</strong> estrae a caso <em>due</em> backend e sceglie quello con meno connessioni: si ottiene quasi la qualità di Least Connections senza scansionare tutti i server né sincronizzare lo stato tra più istanze di LB (evita l'effetto "herd": tutti gli LB che mandano insieme il burst sul server momentaneamente meno carico).</p>
+<div class="language-nginx highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">    </span><span class="kn">random</span><span class="w"> </span><span class="s">two</span><span class="w"> </span><span class="s">least_conn</span><span class="p">;</span><span class="w">   </span><span class="c1"># P2C in Nginx</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.3</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="p">}</span>
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a># HAProxy
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>backend app_pool
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    balance random(2)        # P2C: 2 candidati, sceglie il meno carico
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    server s1 10.0.0.1:8080 check
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    server s2 10.0.0.2:8080 check
 </span></code></pre></div>
 <h3 id="consistent-hashing">Consistent Hashing<a class="headerlink" href="#consistent-hashing" title="Permanent link">&para;</a></h3>
 <p>Variante di IP Hash che usa un <strong>ring hash</strong> — quando un server viene aggiunto o rimosso, solo le richieste mappate su quel server vengono riassegnate, non tutte. Cruciale per sistemi di caching distribuito.</p>
-<div class="language-nginx highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Nginx — hash su un campo applicativo (es. X-User-ID)</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="kn">hash</span><span class="w"> </span><span class="nv">$http_x_user_id</span><span class="w"> </span><span class="s">consistent</span><span class="p">;</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.3</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="p">}</span>
+<div class="language-nginx highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Nginx — hash su un campo applicativo (es. X-User-ID)</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="kn">hash</span><span class="w"> </span><span class="nv">$http_x_user_id</span><span class="w"> </span><span class="s">consistent</span><span class="p">;</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.3</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="p">}</span>
 </span></code></pre></div>
+<p>Meccanismo: server e chiavi sono mappati sullo stesso anello di hash; ogni chiave va al primo server incontrato in senso orario. Rimuovere un server sposta solo le sue chiavi sul successivo (circa 1/N del totale invece di quasi tutte). In HAProxy: <code>balance source</code> (o <code>balance uri</code>) con <code>hash-type consistent</code>. Varianti più recenti (Maglev, bounded loads) limitano anche lo sbilanciamento; Envoy le espone come <code>MAGLEV</code> e <code>RING_HASH</code>.</p>
 <p><strong>Quando usare:</strong> Backend stateful con caching (Memcached, Varnish), quando aggiungere/rimuovere server deve impattare il minimo di client.</p>
 <h2 id="sticky-sessions-con-cookie">Sticky Sessions con Cookie<a class="headerlink" href="#sticky-sessions-con-cookie" title="Permanent link">&para;</a></h2>
 <p>Per applicazioni stateful, IP Hash è approssimativo (più client dietro NAT vanno sullo stesso server). La soluzione migliore è la <strong>sticky session con cookie</strong>:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a># HAProxy — Cookie-based sticky session
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>backend app_pool
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    balance roundrobin
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    cookie SERVERID insert indirect nocache httponly secure
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    server s1 10.0.0.1:8080 check cookie s1
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    server s2 10.0.0.2:8080 check cookie s2
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>    server s3 10.0.0.3:8080 check cookie s3
+<div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a># HAProxy — Cookie-based sticky session
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>backend app_pool
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    balance roundrobin
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    cookie SERVERID insert indirect nocache httponly secure
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>    server s1 10.0.0.1:8080 check cookie s1
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    server s2 10.0.0.2:8080 check cookie s2
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    server s3 10.0.0.3:8080 check cookie s3
 </span></code></pre></div>
-<div class="language-nginx highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Nginx Plus — sticky cookie</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="kn">sticky</span><span class="w"> </span><span class="s">cookie</span><span class="w"> </span><span class="s">srv_id</span><span class="w"> </span><span class="s">expires=1h</span><span class="w"> </span><span class="s">httponly</span><span class="w"> </span><span class="s">secure</span><span class="p">;</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="p">}</span>
+<div class="language-nginx highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Nginx Plus — sticky cookie</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="kn">sticky</span><span class="w"> </span><span class="s">cookie</span><span class="w"> </span><span class="s">srv_id</span><span class="w"> </span><span class="s">expires=1h</span><span class="w"> </span><span class="s">httponly</span><span class="w"> </span><span class="s">secure</span><span class="p">;</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>Il LB inserisce un cookie nella risposta con l'ID del server. Le richieste successive con quel cookie vengono sempre inviate allo stesso backend.</p>
 <div class="admonition warning">
@@ -25061,70 +25107,69 @@
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-distribuzione-sbilanciata-con-round-robin">Scenario 1 — Distribuzione sbilanciata con Round Robin<a class="headerlink" href="#scenario-1-distribuzione-sbilanciata-con-round-robin" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Un backend riceve molte più connessioni degli altri nonostante Round Robin sia configurato; il carico CPU/memoria è fortemente asimmetrico.</p>
-<p><strong>Causa:</strong> Round Robin distribuisce le <em>nuove connessioni</em> equamente, ma le connessioni HTTP keep-alive rimangono aperte. Se i client riutilizzano le connessioni, alcune finiscono concentrate su pochi backend. Anche richieste con latenza molto diversa (alcune istantanee, altre lente) possono saturare un singolo server.</p>
-<p><strong>Soluzione:</strong> Passare a Least Connections che bilancia sulle connessioni <em>attive</em> anziché sul conteggio delle nuove.</p>
-<div class="language-nginx highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">    </span><span class="kn">least_conn</span><span class="p">;</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.3</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="p">}</span>
+<p><strong>Causa:</strong> Round Robin conta le assegnazioni, non il carico. Un LB L7 (Nginx, HAProxy in modalità http) alterna per <em>richiesta</em>, ma se alcune richieste durano molto più di altre un backend accumula richieste lente in corso e si satura. Con un LB L4 (o gRPC/HTTP/2 con connessioni long-lived) il bilanciamento avviene per <em>connessione</em>: poche connessioni multiplexate pesanti possono finire sullo stesso backend e restarci per ore.</p>
+<p><strong>Soluzione:</strong> Passare a Least Connections, che bilancia sulle connessioni <em>attive</em> anziché sul conteggio delle assegnazioni. Per gRPC usare un LB L7 che bilancia per richiesta/stream.</p>
+<div class="language-nginx highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">    </span><span class="kn">least_conn</span><span class="p">;</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.3</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="p">}</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Verificare distribuzione connessioni attive su Nginx</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>nginx<span class="w"> </span>-T<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A5<span class="w"> </span><span class="s2">"upstream"</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># HAProxy: controllare distribuzione tramite stats</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"show stat"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/var/run/haproxy/admin.sock<span class="w"> </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d<span class="s1">','</span><span class="w"> </span>-f1,2,48
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Nginx OSS non espone contatori per upstream: contare le connessioni verso ogni backend</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>ss<span class="w"> </span>-tn<span class="w"> </span>state<span class="w"> </span>established<span class="w"> </span><span class="s1">'( dport = :8080 )'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">'NR&gt;1 {print $4}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># HAProxy: pxname, svname, scur (sessioni correnti), stot (sessioni totali)</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"show stat"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/var/run/haproxy/admin.sock<span class="w"> </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d<span class="s1">','</span><span class="w"> </span>-f1,2,5,8
 </span></code></pre></div>
 <h3 id="scenario-2-backend-sovraccarico-con-ip-hash-traffico-nat">Scenario 2 — Backend sovraccarico con IP Hash (traffico NAT)<a class="headerlink" href="#scenario-2-backend-sovraccarico-con-ip-hash-traffico-nat" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Un singolo backend riceve il 70-90% del traffico; gli altri sono quasi idle. L'algoritmo è <code>ip_hash</code>.</p>
 <p><strong>Causa:</strong> I client si trovano dietro un NAT aziendale o un proxy condiviso — decine/centinaia di utenti appaiono come un singolo IP pubblico. Hash di quell'IP punta sempre allo stesso backend.</p>
 <p><strong>Soluzione:</strong> Sostituire IP Hash con sticky session basata su cookie, che distribuisce i client individualmente anche se provengono dallo stesso IP.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a># HAProxy — Cookie sticky session
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>backend app_pool
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>    balance roundrobin
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    cookie SERVERID insert indirect nocache httponly secure
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>    server s1 10.0.0.1:8080 check cookie s1
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>    server s2 10.0.0.2:8080 check cookie s2
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    server s3 10.0.0.3:8080 check cookie s3
+<div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a># HAProxy — Cookie sticky session
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>backend app_pool
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    balance roundrobin
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    cookie SERVERID insert indirect nocache httponly secure
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    server s1 10.0.0.1:8080 check cookie s1
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>    server s2 10.0.0.2:8080 check cookie s2
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>    server s3 10.0.0.3:8080 check cookie s3
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Diagnosticare distribuzione IP sorgente nei log Nginx</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>awk<span class="w"> </span><span class="s1">'{print $1}'</span><span class="w"> </span>/var/log/nginx/access.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-20
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Diagnosticare distribuzione IP sorgente nei log Nginx</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>awk<span class="w"> </span><span class="s1">'{print $1}'</span><span class="w"> </span>/var/log/nginx/access.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-20
 </span></code></pre></div>
 <h3 id="scenario-3-client-perde-la-sessione-dopo-scale-out">Scenario 3 — Client perde la sessione dopo scale-out<a class="headerlink" href="#scenario-3-client-perde-la-sessione-dopo-scale-out" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Dopo l'aggiunta di nuovi backend (o un riavvio rolling), alcuni utenti vengono disconnessi o perdono il carrello/login.</p>
 <p><strong>Causa:</strong> La sessione HTTP è salvata in memoria locale del backend originale. Quando il load balancer manda la richiesta successiva a un server diverso (es. dopo scale-out che cambia il modulo di routing), la sessione non esiste.</p>
 <p><strong>Soluzione:</strong> Spostare le sessioni su storage condiviso (Redis), oppure configurare session affinity per garantire che ogni client torni sempre sullo stesso backend.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Verificare che il backend Redis sia raggiungibile</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>redis-cli<span class="w"> </span>-h<span class="w"> </span>redis.internal<span class="w"> </span>ping
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Controllare connessioni attive a Redis dall'applicazione</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>ss<span class="w"> </span>-tn<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>:6379
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Verificare che il backend Redis sia raggiungibile</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>redis-cli<span class="w"> </span>-h<span class="w"> </span>redis.internal<span class="w"> </span>ping
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Controllare connessioni attive a Redis dall'applicazione</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>ss<span class="w"> </span>-tn<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>:6379
 </span></code></pre></div>
-<div class="language-nginx highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Nginx: abilitare sticky cookie (Nginx Plus)</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span><span class="kn">sticky</span><span class="w"> </span><span class="s">cookie</span><span class="w"> </span><span class="s">srv_id</span><span class="w"> </span><span class="s">expires=1h</span><span class="w"> </span><span class="s">httponly</span><span class="w"> </span><span class="s">secure</span><span class="p">;</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="p">}</span>
+<div class="language-nginx highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Nginx: abilitare sticky cookie (Nginx Plus)</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span><span class="kn">sticky</span><span class="w"> </span><span class="s">cookie</span><span class="w"> </span><span class="s">srv_id</span><span class="w"> </span><span class="s">expires=1h</span><span class="w"> </span><span class="s">httponly</span><span class="w"> </span><span class="s">secure</span><span class="p">;</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="scenario-4-canary-riceve-traffico-superiore-al-previsto">Scenario 4 — Canary riceve traffico superiore al previsto<a class="headerlink" href="#scenario-4-canary-riceve-traffico-superiore-al-previsto" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il backend canary (nuova versione) riceve il 20-30% del traffico invece dell'1-5% configurato.</p>
 <p><strong>Causa:</strong> Il peso (weight) non è proporzionale alla somma totale dei pesi. Errore comune: <code>weight=1</code> su 3 server totali equivale a 33%, non all'1%.</p>
-<p><strong>Soluzione:</strong> Calcolare i pesi in modo che la somma rifletta la percentuale desiderata. Per il 2% su 3 server: un server con <code>weight=98</code> e uno con <code>weight=2</code>.</p>
-<div class="language-nginx highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">    </span><span class="c1"># Canary al ~2%: 49+49+2 = 100 (proporzione diretta)</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">weight=49</span><span class="p">;</span><span class="w">  </span><span class="c1"># Versione stabile</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">weight=49</span><span class="p">;</span><span class="w">  </span><span class="c1"># Versione stabile</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.3</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">weight=2</span><span class="p">;</span><span class="w">   </span><span class="c1"># Canary ~2%</span>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="p">}</span>
+<p><strong>Soluzione:</strong> Calcolare i pesi in modo che la somma rifletta la percentuale desiderata. Per il 2% su 3 server: due stabili con <code>weight=49</code> e il canary con <code>weight=2</code> (somma 100).</p>
+<div class="language-nginx highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">    </span><span class="c1"># Canary al ~2%: 49+49+2 = 100 (proporzione diretta)</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">weight=49</span><span class="p">;</span><span class="w">  </span><span class="c1"># Versione stabile</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">weight=49</span><span class="p">;</span><span class="w">  </span><span class="c1"># Versione stabile</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.3</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">weight=2</span><span class="p">;</span><span class="w">   </span><span class="c1"># Canary ~2%</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="p">}</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Verificare distribuzione reale analizzando i log</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>grep<span class="w"> </span><span class="s2">"upstream_addr"</span><span class="w"> </span>/var/log/nginx/access.log<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">'{print $NF}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="c1"># Formula: percentuale canary = weight_canary / sum(all_weights)</span>
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">"print(f'Canary: {2/(49+49+2)*100:.1f}%')"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Verificare distribuzione reale: richiede $upstream_addr come ULTIMO campo del log_format</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>awk<span class="w"> </span><span class="s1">'{print $NF}'</span><span class="w"> </span>/var/log/nginx/access.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># Formula: percentuale canary = weight_canary / sum(all_weights)</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">"print(f'Canary: {2/(49+49+2)*100:.1f}%')"</span>
 </span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">

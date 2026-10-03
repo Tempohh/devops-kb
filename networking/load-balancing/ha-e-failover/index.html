@@ -21423,7 +21423,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21458,7 +21458,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21502,7 +21502,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21527,7 +21527,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22604,7 +22604,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24997,18 +24997,23 @@
 <h3 id="active-passive-con-vrrpkeepalived">Active-Passive con VRRP/Keepalived<a class="headerlink" href="#active-passive-con-vrrpkeepalived" title="Permanent link">&para;</a></h3>
 <p>Il pattern più comune per HA del load balancer: due istanze Nginx/HAProxy, un <strong>Virtual IP</strong> (VIP) flottante che appartiene sempre all'istanza primaria. In caso di guasto della primaria, il VIP migra automaticamente alla secondaria in 1-3 secondi.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>                     VIP: 10.0.0.100
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>                          │
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>              ┌───────────┴───────────┐
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>              ▼
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>     LB-Primary (MASTER)         LB-Secondary (BACKUP)
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>      10.0.0.1                    10.0.0.2
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>      [ACTIVE]                   [Standby]
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>              │
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>     ┌────────┼────────┐
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>     ▼        ▼        ▼
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>  Backend1  Backend2  Backend3
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>                (posseduto dal MASTER)
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>                          │
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>              ┌───────────┴───────────┐
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>              ▼                       ┆ (standby)
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>     LB-Primary (MASTER)         LB-Secondary (BACKUP)
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>      10.0.0.1                    10.0.0.2
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>      [ACTIVE]                    [Standby]
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>              │
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>     ┌────────┼────────┐
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>     ▼        ▼        ▼
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>  Backend1  Backend2  Backend3
 </span></code></pre></div>
-<p><strong>VRRP (Virtual Router Redundancy Protocol)</strong> è il protocollo che gestisce il VIP. Keepalived è la sua implementazione Linux più diffusa.</p>
+<p><strong>VRRP (Virtual Router Redundancy Protocol)</strong> è il protocollo che gestisce il VIP: il MASTER invia advertisement periodici (IP protocol 112, multicast <code>224.0.0.18</code>); se i BACKUP non ne ricevono per ~3×<code>advert_int</code> assumono il ruolo di MASTER e annunciano il VIP con <em>gratuitous ARP</em> (così gli switch aggiornano la tabella MAC). Keepalived è la sua implementazione Linux più diffusa.</p>
+<div class="admonition warning">
+<p class="admonition-title">Cloud pubblico</p>
+<p>VRRP/gratuitous ARP spesso non funzionano nelle VPC dei cloud provider (niente multicast, il VIP non è un IP L2 spostabile). Lì l'HA del LB si ottiene con servizi gestiti (ALB/NLB, Azure LB, GCP LB) o con spostamento di IP via API; Keepalived resta tipico per on-premise/bare metal.</p>
+</div>
 <h3 id="active-active">Active-Active<a class="headerlink" href="#active-active" title="Permanent link">&para;</a></h3>
 <p>Entrambe le istanze del LB sono attive e ricevono traffico. Richiede un meccanismo upstream (DNS round-robin, Anycast, BGP ECMP) per distribuire le connessioni:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>DNS: lb.example.com → [10.0.0.1, 10.0.0.2]
@@ -25018,6 +25023,10 @@
 </span></code></pre></div>
 <p><strong>Vantaggi:</strong> doppia capacità, nessun failover lento.
 <strong>Svantaggi:</strong> più complesso; sessioni sticky difficili; entrambi devono condividere la stessa configurazione.</p>
+<div class="admonition note">
+<p class="admonition-title">DNS round-robin non è health-aware</p>
+<p>Il DNS restituisce comunque l'IP di un LB caduto finché il TTL non scade. Per failover rapido combinare con health check DNS (Route 53, ecc.), oppure usare Anycast/BGP ECMP (il router smette di annunciare la route quando il LB cade). Con ECMP/active-active mantenere ciascun LB dimensionato per reggere l'intero carico (N+1), altrimenti la caduta di uno satura l'altro.</p>
+</div>
 <h3 id="health-check-passive-vs-active">Health Check: Passive vs Active<a class="headerlink" href="#health-check-passive-vs-active" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -25043,7 +25052,7 @@
 </tr>
 </tbody>
 </table>
-<p>Usare entrambi: passive per rilevamento immediato in produzione, active per rilevare backend degr adati prima che ricevano traffico.</p>
+<p>Usare entrambi: passive per rilevamento immediato in produzione, active per rilevare backend degradati prima che ricevano traffico.</p>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
 <h3 id="failover-con-keepalived">Failover con Keepalived<a class="headerlink" href="#failover-con-keepalived" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Stato normale:           Failover:
@@ -25104,65 +25113,67 @@
 </span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>    priority 110            # Priorità più alta sul primary (secondary: 100)
 </span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>    advert_int 1            # Advertisement VRRP ogni 1 secondo
 </span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>
-</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>    authentication {
-</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>        auth_type PASS
-</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>        auth_pass MySecretPass123
-</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>    }
-</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>
-</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a>    virtual_ipaddress {
-</span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a>        10.0.0.100/24 dev eth0  # Il VIP
-</span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a>    }
-</span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a>
-</span><span id="__span-5-32"><a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a>    track_script {
-</span><span id="__span-5-33"><a id="__codelineno-5-33" name="__codelineno-5-33" href="#__codelineno-5-33"></a>        check_nginx
-</span><span id="__span-5-34"><a id="__codelineno-5-34" name="__codelineno-5-34" href="#__codelineno-5-34"></a>    }
-</span><span id="__span-5-35"><a id="__codelineno-5-35" name="__codelineno-5-35" href="#__codelineno-5-35"></a>}
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>    # PASS: solo i primi 8 caratteri contano e non è vera sicurezza (testo in chiaro);
+</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>    # serve a evitare collisioni accidentali. Proteggere il segmento L2 / usare unicast_peer.
+</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>    authentication {
+</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>        auth_type PASS
+</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>        auth_pass K3epAl1v
+</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a>    }
+</span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a>
+</span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a>    virtual_ipaddress {
+</span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a>        10.0.0.100/24 dev eth0  # Il VIP
+</span><span id="__span-5-32"><a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a>    }
+</span><span id="__span-5-33"><a id="__codelineno-5-33" name="__codelineno-5-33" href="#__codelineno-5-33"></a>
+</span><span id="__span-5-34"><a id="__codelineno-5-34" name="__codelineno-5-34" href="#__codelineno-5-34"></a>    track_script {
+</span><span id="__span-5-35"><a id="__codelineno-5-35" name="__codelineno-5-35" href="#__codelineno-5-35"></a>        check_nginx
+</span><span id="__span-5-36"><a id="__codelineno-5-36" name="__codelineno-5-36" href="#__codelineno-5-36"></a>    }
+</span><span id="__span-5-37"><a id="__codelineno-5-37" name="__codelineno-5-37" href="#__codelineno-5-37"></a>}
 </span></code></pre></div>
+<p>Con <code>weight -20</code> il fallimento dello script porta la priorità del primary a 90 (&lt; 100 del secondary) e innesca il failover. Il peso negativo deve superare la differenza di priorità tra i nodi, altrimenti il failover non avviene.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a># /etc/keepalived/keepalived.conf — LB-Secondary (BACKUP)
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>vrrp_instance VI_1 {
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    state  BACKUP           # BACKUP sul secondary
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    interface eth0
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    virtual_router_id 51    # Stesso valore del primary
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    priority 100            # Priorità più bassa
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    advert_int 1
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    authentication {
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>        auth_type PASS
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>        auth_pass MySecretPass123
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    }
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    virtual_ipaddress {
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>        10.0.0.100/24 dev eth0
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    }
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>
-</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>    track_script {
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>        check_nginx
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>    }
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>}
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a># Servono anche qui global_defs e il blocco vrrp_script check_nginx (identici al primary):
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a># senza la definizione, track_script check_nginx rende la configurazione non valida.
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>vrrp_instance VI_1 {
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    state  BACKUP           # BACKUP sul secondary
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    interface eth0
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    virtual_router_id 51    # Stesso valore del primary
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    priority 100            # Priorità più bassa
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    advert_int 1
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    authentication {
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>        auth_type PASS
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>        auth_pass MySecretPass123
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    }
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    virtual_ipaddress {
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>        10.0.0.100/24 dev eth0
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>    }
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>    track_script {
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>        check_nginx
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>    }
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>}
 </span></code></pre></div>
 <h3 id="nginx-health-check-passivo-e-failover-backend">Nginx — Health Check Passivo e Failover Backend<a class="headerlink" href="#nginx-health-check-passivo-e-failover-backend" title="Permanent link">&para;</a></h3>
 <div class="language-nginx highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">upstream</span><span class="w"> </span><span class="s">backend_pool</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="p">;</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.3</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">backup</span><span class="p">;</span><span class="w">  </span><span class="c1"># Usato solo se tutti gli altri sono down</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="c1"># Health check passivo (Nginx open source)</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="c1"># max_fails: errori consecutivi prima di marcare come down</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span><span class="c1"># fail_timeout: quanto tempo restare in stato "down" + finestra per contare i fail</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">max_fails=3</span><span class="w"> </span><span class="s">fail_timeout=30s</span><span class="p">;</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">max_fails=3</span><span class="w"> </span><span class="s">fail_timeout=30s</span><span class="p">;</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="p">}</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="k">server</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="s">/</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">        </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="s">http://backend_pool</span><span class="p">;</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">        </span><span class="c1"># Retry su errori di connessione e timeout (NON su 5xx per evitare double-POST)</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">        </span><span class="kn">proxy_next_upstream</span><span class="w"> </span><span class="s">error</span><span class="w"> </span><span class="s">timeout</span><span class="w"> </span><span class="s">invalid_header</span><span class="p">;</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">        </span><span class="kn">proxy_next_upstream_tries</span><span class="w"> </span><span class="mi">3</span><span class="p">;</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">        </span><span class="kn">proxy_next_upstream_timeout</span><span class="w"> </span><span class="s">10s</span><span class="p">;</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="p">}</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">    </span><span class="c1"># Health check passivo (Nginx open source)</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="c1"># max_fails: errori consecutivi prima di marcare come down</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="c1"># fail_timeout: finestra per contare i fail + tempo in stato "down"</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.1</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">max_fails=3</span><span class="w"> </span><span class="s">fail_timeout=30s</span><span class="p">;</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.2</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">max_fails=3</span><span class="w"> </span><span class="s">fail_timeout=30s</span><span class="p">;</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="kn">server</span><span class="w"> </span><span class="n">10.0.0.3</span><span class="p">:</span><span class="mi">8080</span><span class="w"> </span><span class="s">backup</span><span class="p">;</span><span class="w">  </span><span class="c1"># Usato solo se tutti gli altri sono down</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">}</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="k">server</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="kn">location</span><span class="w"> </span><span class="s">/</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">        </span><span class="kn">proxy_pass</span><span class="w"> </span><span class="s">http://backend_pool</span><span class="p">;</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">        </span><span class="c1"># Retry su errori di connessione e timeout (NON su 5xx per evitare double-POST)</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">        </span><span class="kn">proxy_next_upstream</span><span class="w"> </span><span class="s">error</span><span class="w"> </span><span class="s">timeout</span><span class="w"> </span><span class="s">invalid_header</span><span class="p">;</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">        </span><span class="kn">proxy_next_upstream_tries</span><span class="w"> </span><span class="mi">3</span><span class="p">;</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">        </span><span class="kn">proxy_next_upstream_timeout</span><span class="w"> </span><span class="s">10s</span><span class="p">;</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="haproxy-health-check-attivo-e-circuit-breaker">HAProxy — Health Check Attivo e Circuit Breaker<a class="headerlink" href="#haproxy-health-check-attivo-e-circuit-breaker" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>backend app_pool
@@ -25187,35 +25198,38 @@
 </span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>    timeout server  30s
 </span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>    timeout tunnel  3600s  # Per WebSocket
 </span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>    # Graceful draining con connessioni in corso
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>    option redispatch  # Se un backend cade durante una richiesta, ritenta su altro backend
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>    # Se la connessione al server fallisce (o il server sticky è down), ritenta su un altro backend
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>    option redispatch
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>    retries 3
 </span></code></pre></div>
 <h3 id="zero-downtime-deployment-con-draining">Zero-Downtime Deployment con Draining<a class="headerlink" href="#zero-downtime-deployment-con-draining" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Script per deploy zero-downtime con HAProxy</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># 1. Segnala al LB di smettere di inviare traffico al backend da aggiornare</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"disable server app_pool/s1"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># 2. Aspetta che le connessioni esistenti terminino (max 60s)</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="k">for</span><span class="w"> </span>i<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="o">{</span><span class="m">1</span>..30<span class="o">}</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span><span class="nv">CONNS</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span><span class="s2">"show stat"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">            </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span>-F<span class="s1">','</span><span class="w"> </span><span class="s1">'/app_pool,s1/{print $18}'</span><span class="k">)</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">    </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"Connessioni attive s1: </span><span class="nv">$CONNS</span><span class="s2">"</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">    </span><span class="o">[</span><span class="w"> </span><span class="s2">"</span><span class="nv">$CONNS</span><span class="s2">"</span><span class="w"> </span>-eq<span class="w"> </span><span class="s2">"0"</span><span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="k">break</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">    </span>sleep<span class="w"> </span><span class="m">2</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="k">done</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="c1"># 3. Aggiorna il backend</span>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>docker<span class="w"> </span>pull<span class="w"> </span>myapp:v2
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>docker<span class="w"> </span>stop<span class="w"> </span>myapp-s1
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span>--name<span class="w"> </span>myapp-s1<span class="w"> </span>-p<span class="w"> </span><span class="m">8080</span>:8080<span class="w"> </span>myapp:v2
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a>
-</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="c1"># 4. Verifica health check</span>
-</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>sleep<span class="w"> </span><span class="m">5</span>
-</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>curl<span class="w"> </span>-f<span class="w"> </span>http://10.0.0.1:8080/health
-</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>
-</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="c1"># 5. Reintegra nel pool</span>
-</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"enable server app_pool/s1"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># 1. Drain: nessuna NUOVA connessione (le esistenti proseguono)</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1">#    Richiede "stats socket ... level admin" in global</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"set server app_pool/s1 state drain"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># 2. Aspetta che le connessioni esistenti terminino (max 60s)</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1">#    Campo CSV 5 = scur (sessioni correnti); il campo 18 è lo status</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="k">for</span><span class="w"> </span>i<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="o">{</span><span class="m">1</span>..30<span class="o">}</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">    </span><span class="nv">CONNS</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span><span class="s2">"show stat"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">            </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span>-F<span class="s1">','</span><span class="w"> </span><span class="s1">'/^app_pool,s1,/{print $5}'</span><span class="k">)</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">    </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"Connessioni attive s1: </span><span class="nv">$CONNS</span><span class="s2">"</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">    </span><span class="o">[</span><span class="w"> </span><span class="s2">"</span><span class="nv">$CONNS</span><span class="s2">"</span><span class="w"> </span>-eq<span class="w"> </span><span class="s2">"0"</span><span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="k">break</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">    </span>sleep<span class="w"> </span><span class="m">2</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="k">done</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="c1"># 3. Aggiorna il backend</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>docker<span class="w"> </span>pull<span class="w"> </span>myapp:v2
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a>docker<span class="w"> </span>stop<span class="w"> </span>myapp-s1
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span>--name<span class="w"> </span>myapp-s1<span class="w"> </span>-p<span class="w"> </span><span class="m">8080</span>:8080<span class="w"> </span>myapp:v2
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="c1"># 4. Verifica health check</span>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>sleep<span class="w"> </span><span class="m">5</span>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a>curl<span class="w"> </span>-f<span class="w"> </span>http://10.0.0.1:8080/health
+</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a>
+</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="c1"># 5. Reintegra nel pool (torna in stato ready, rispettando slowstart)</span>
+</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"set server app_pool/s1 state ready"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
@@ -25225,6 +25239,9 @@
 <li><strong>Backup server (sorry page)</strong>: avere sempre un backend di fallback che risponde con un messaggio di manutenzione invece che un timeout</li>
 <li><strong>Connection draining</strong>: sempre drenare prima di spegnere un backend — non terminarlo bruscamente</li>
 <li><strong>Monitorare lo stato di Keepalived</strong>: loggare i failover VRRP per capire la frequenza e le cause</li>
+<li><strong>Preemption</strong>: di default il nodo a priorità maggiore riprende il VIP appena torna su, causando un secondo failover. Se il nodo è instabile usare <code>nopreempt</code> (con <code>state BACKUP</code> su entrambi) e riprendere il ruolo in modo controllato</li>
+<li><strong>Split-brain</strong>: se il traffico VRRP tra i nodi si interrompe (firewall, partizione di rete) entrambi si dichiarano MASTER e il VIP è duplicato. Mantenere i nodi sullo stesso segmento L2 o usare <code>unicast_peer</code>, e allertare su VIP presente su più nodi</li>
+<li><strong>Sincronizzare la config</strong>: i due LB devono avere config identica (config management, es. Ansible); stato sticky/stick-table non migra col VIP, salvo <code>peers</code> in HAProxy</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-vip-non-migra-al-failover">Scenario 1 — VIP non migra al failover<a class="headerlink" href="#scenario-1-vip-non-migra-al-failover" title="Permanent link">&para;</a></h3>
@@ -25238,9 +25255,9 @@
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># Verifica che il VIP sia presente sul nodo attivo</span>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>ip<span class="w"> </span>addr<span class="w"> </span>show<span class="w"> </span>eth0<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="m">10</span>.0.0.100
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># Test: simula failure manuale (abbassa priorità)</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="c1"># Sul primary, abbassa la priorità temporaneamente</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="nb">kill</span><span class="w"> </span>-STOP<span class="w"> </span><span class="k">$(</span>pgrep<span class="w"> </span>keepalived<span class="k">)</span><span class="w">   </span><span class="c1"># oppure systemctl stop keepalived</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># Test: simula failure manuale del primary</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="c1"># (NON usare kill -STOP: il processo congelato non rilascia il VIP -&gt; rischio split-brain)</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>systemctl<span class="w"> </span>stop<span class="w"> </span>keepalived
 </span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># Controlla se il VIP migra al secondary entro 3s</span>
 </span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>ssh<span class="w"> </span>secondary<span class="w"> </span><span class="s2">"ip addr show eth0 | grep 10.0.0.100"</span>
 </span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>
@@ -25254,7 +25271,7 @@
 <p><strong>Soluzione:</strong> Aumentare <code>fail_timeout</code> e il valore di <code>fall</code>/<code>rise</code>, controllare la latenza dell'endpoint <code>/health</code>, investigare le cause lato applicazione.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># HAProxy: mostra stato backend in tempo reale</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>watch<span class="w"> </span>-n1<span class="w"> </span><span class="s1">'echo "show stat" | socat stdio /run/haproxy/admin.sock \</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="s1">  | awk -F"," "NR==1 || /app_pool/" | cut -d, -f1,2,18,19,43'</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="s1">  | awk -F"," "NR==1 || /app_pool/" | cut -d, -f1,2,18,19,37'</span><span class="w">   </span><span class="c1"># status, weight, check_status</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># HAProxy: log degli ultimi state change</span>
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>grep<span class="w"> </span><span class="s2">"Server app_pool"</span><span class="w"> </span>/var/log/haproxy.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-30
@@ -25269,13 +25286,13 @@
 <h3 id="scenario-3-spike-di-errori-502503-durante-deploy">Scenario 3 — Spike di errori 502/503 durante deploy<a class="headerlink" href="#scenario-3-spike-di-errori-502503-durante-deploy" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Durante un rolling deploy si registrano errori HTTP 5xx per 10-30 secondi prima del ripristino.</p>
 <p><strong>Causa:</strong> Il backend viene spento prima che le connessioni attive vengano drenate, oppure il nuovo container risponde al health check prima di essere pronto a gestire traffico reale.</p>
-<p><strong>Soluzione:</strong> Implementare graceful drain prima dello spegnimento, aggiungere <code>slow_start</code> per la reintegrazione, e assicurarsi che l'health check verifichi la readiness applicativa completa (non solo che il processo sia up).</p>
+<p><strong>Soluzione:</strong> Implementare graceful drain prima dello spegnimento, aggiungere <code>slowstart</code> (HAProxy) per la reintegrazione, e assicurarsi che l'health check verifichi la readiness applicativa completa (non solo che il processo sia up).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># HAProxy: drain manuale prima dello spegnimento</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"disable server app_pool/s1"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"set server app_pool/s1 state drain"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Attendi connessioni a zero</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Attendi connessioni a zero (campo 5 = scur)</span>
 </span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="k">until</span><span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="s2">"</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span><span class="s1">'show stat'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span>-F<span class="s1">','</span><span class="w"> </span><span class="s1">'/app_pool,s1/{print $18}'</span><span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"0"</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span>-F<span class="s1">','</span><span class="w"> </span><span class="s1">'/^app_pool,s1,/{print $5}'</span><span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"0"</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
 </span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"Waiting for connections to drain..."</span><span class="p">;</span><span class="w"> </span>sleep<span class="w"> </span><span class="m">2</span>
 </span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="k">done</span>
 </span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>
@@ -25284,7 +25301,7 @@
 </span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>
 </span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="c1"># Dopo il deploy: riabilita gradualmente (HAProxy slowstart)</span>
 </span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="c1"># Aggiungere nel config: server s1 10.0.0.1:8080 check slowstart 60s</span>
-</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"enable server app_pool/s1"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"set server app_pool/s1 state ready"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-backend-rimane-in-stato-down-dopo-recovery">Scenario 4 — Backend rimane in stato DOWN dopo recovery<a class="headerlink" href="#scenario-4-backend-rimane-in-stato-down-dopo-recovery" title="Permanent link">&para;</a></h3>
@@ -25294,17 +25311,16 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># HAProxy: verifica stato dettagliato del backend</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"show stat"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span>-F<span class="s1">','</span><span class="w"> </span><span class="s1">'NR==1{print} /app_pool,s1/{print}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d,<span class="w"> </span>-f1,2,17,18,19,43
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d,<span class="w"> </span>-f1,2,18,19,37,38<span class="w">   </span><span class="c1"># status, weight, check_status, check_code</span>
 </span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1"># HAProxy: forza reintegrazione manuale</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"enable server app_pool/s1"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"set server app_pool/s1 state ready"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="c1"># Nginx Plus: verifica stato upstream (richiede API)</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>curl<span class="w"> </span>http://localhost/api/6/http/upstreams/backend_pool/servers
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="c1"># Verifica che il check script di Keepalived passi manualmente</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>/etc/keepalived/check_nginx.sh<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"OK"</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"FAIL"</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1"># HAProxy: forza reintegrazione manuale (esce da maint/drain)</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"set server app_pool/s1 state ready"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>socat<span class="w"> </span>stdio<span class="w"> </span>/run/haproxy/admin.sock
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="c1"># Nginx Plus: verifica stato upstream (richiede API)</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>curl<span class="w"> </span>http://localhost/api/6/http/upstreams/backend_pool/servers
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="c1"># Verifica che il check script di Keepalived passi manualmente</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>/etc/keepalived/check_nginx.sh<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"OK"</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"FAIL"</span>
 </span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
@@ -25320,7 +25336,7 @@
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://www.keepalived.org/manpage.html">Keepalived User Guide</a></li>
-<li><a href="https://www.haproxy.org/download/2.8/doc/configuration.txt">HAProxy Configuration Manual</a></li>
+<li><a href="https://docs.haproxy.org/3.2/configuration.html">HAProxy Configuration Manual</a></li>
 <li><a href="https://docs.nginx.com/nginx/admin-guide/load-balancer/http-health-check/">Nginx Active Health Checks</a></li>
 </ul>
 
