@@ -4146,7 +4146,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -4171,7 +4171,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24807,9 +24807,9 @@
 <h2 id="gerarchia-dellinfrastruttura">Gerarchia dell'Infrastruttura<a class="headerlink" href="#gerarchia-dellinfrastruttura" title="Permanent link">&para;</a></h2>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>AWS Global Network (backbone privato fibra ottica mondiale)
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>│
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── Region (34+ geografiche)
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── Region (35+ geografiche — il numero cresce, verificare sul sito ufficiale)
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│   ├── Availability Zone A  (datacenter cluster fisicamente separato)
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│   ├── Availability Zone B  (min 3 AZ per Region)
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│   ├── Availability Zone B  (tipicamente ≥3 AZ per Region)
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│   └── Availability Zone C
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>├── Local Zone (estensione Region in città — latenza &lt;10ms)
@@ -24829,7 +24829,8 @@
 - Ogni Region ha un <strong>nome</strong> (es. <code>eu-central-1</code>) e un <strong>nome geografico</strong> (Francoforte)
 - Le Region sono <strong>completamente isolate</strong> tra loro — fault isolation geografica
 - I dati <strong>non abbandonano mai</strong> una Region senza configurazione esplicita (data residency/sovranità)
-- Ogni Region ha ≥3 AZ (la maggior parte ne ha 3-6)
+- Quasi tutte le Region hanno ≥3 AZ (3-6); qualche Region storica ne espone solo 2 ai nuovi account (es. <code>us-west-1</code>)
+- Le Region più recenti (es. Milano <code>eu-south-1</code>, Spagna <code>eu-south-2</code>) sono <strong>opt-in</strong>: vanno abilitate per account (Console → Account → AWS Regions, o <code>aws account enable-region</code>) prima dell'uso; le Region storiche sono sempre attive
 - Non tutte le Region hanno tutti i servizi — verificare sempre la disponibilità</p>
 <p><strong>Regions principali (Italia/Europa):</strong></p>
 <table>
@@ -24894,7 +24895,7 @@
 </table>
 <div class="admonition note">
 <p class="admonition-title">Scegliere una Region</p>
-<p>Criteri in ordine: <strong>1) Compliance/Data Sovereignty</strong> → <strong>2) Latency</strong> → <strong>3) Servizi disponibili</strong> → <strong>4) Pricing</strong> (varia fino al 20% tra Region)</p>
+<p>Criteri in ordine: <strong>1) Compliance/Data Sovereignty</strong> → <strong>2) Latency</strong> → <strong>3) Servizi disponibili</strong> → <strong>4) Pricing</strong> (varia sensibilmente tra Region: <code>us-east-1</code> è tipicamente tra le più economiche)</p>
 </div>
 <hr />
 <h2 id="availability-zones-az">Availability Zones (AZ)<a class="headerlink" href="#availability-zones-az" title="Permanent link">&para;</a></h2>
@@ -24902,12 +24903,12 @@
 <p><strong>Caratteristiche:</strong>
 - Separazione fisica: power, cooling, networking <strong>indipendenti</strong>
 - Connesse tra loro con fibra ridondante a <strong>&lt;10ms</strong> di latenza
-- Il nome AZ (es. <code>eu-central-1a</code>) non corrisponde necessariamente allo stesso datacenter fisico tra account diversi (AWS randomizza il mapping per distribuire il carico)
+- Il nome AZ (es. <code>eu-central-1a</code>) non corrisponde necessariamente allo stesso datacenter fisico tra account diversi: AWS randomizza il mapping per evitare che tutti gli account si concentrino sulla <code>a</code>. L'identificatore stabile è l'<strong>AZ ID</strong> (es. <code>euc1-az1</code>), uguale per tutti gli account: usarlo quando si coordina il placement tra account (es. VPC sharing, PrivateLink)
 - I servizi <strong>Multi-AZ</strong> replicano su ≥2 AZ per alta disponibilità</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Listare le AZ disponibili in una Region</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-availability-zones<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span>--region<span class="w"> </span>eu-central-1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'AvailabilityZones[*].{Name:ZoneName,State:State}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'AvailabilityZones[*].{Name:ZoneName,Id:ZoneId,State:State}'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span>--output<span class="w"> </span>table
 </span></code></pre></div>
 <p><strong>Servizi con supporto Multi-AZ nativo:</strong>
@@ -24930,13 +24931,13 @@
 <tbody>
 <tr>
 <td>Edge Locations</td>
-<td>600+</td>
-<td>CloudFront CDN, Lambda@Edge, Route 53</td>
+<td>600+ (PoP)</td>
+<td>CloudFront CDN, CloudFront Functions, Route 53 DNS</td>
 </tr>
 <tr>
 <td>Regional Edge Caches</td>
 <td>13</td>
-<td>Cache intermedia tra origin e edge</td>
+<td>Cache intermedia tra origin e edge; qui girano le Lambda@Edge</td>
 </tr>
 </tbody>
 </table>
@@ -24967,7 +24968,7 @@
 <h2 id="wavelength-zones">Wavelength Zones<a class="headerlink" href="#wavelength-zones" title="Permanent link">&para;</a></h2>
 <p>Le <strong>Wavelength Zones</strong> integrano l'infrastruttura AWS direttamente nelle reti <strong>5G</strong> degli operatori di telecomunicazione.</p>
 <ul>
-<li>Latenza ultra-bassa (&lt;10ms) per applicazioni mobili 5G</li>
+<li>Latenza ultra-bassa (target a singola cifra di ms) per applicazioni mobili 5G, perché il traffico resta nella rete dell'operatore</li>
 <li>I device mobili si connettono direttamente al compute AWS senza passare per Internet</li>
 <li>Use case: video streaming live, AR/VR, veicoli autonomi, IoT industriale</li>
 </ul>
@@ -24995,7 +24996,7 @@
 <p><strong>Caratteristiche:</strong>
 - Stesso hardware, APIs e tools del cloud AWS
 - Latenza molto bassa per workload on-premises
-- Connessione obbligatoria alla Region "parent" (Outpost Region)
+- Connessione obbligatoria alla Region "parent" tramite <strong>Service Link</strong> (VPN gestita su Direct Connect o Internet): serve per control plane, monitoring e aggiornamenti
 - Gestione tramite AWS Console/CLI come servizi cloud normali</p>
 <p><strong>Use case:</strong> Compliance con data residency, latenza ultra-bassa per sistemi industriali, modernizzazione graduale legacy</p>
 <hr />
@@ -25011,7 +25012,7 @@
 <p><strong>Vantaggi del backbone privato:</strong>
 - Throughput e latenza prevedibili (non soggetti a congestione Internet)
 - Sicurezza (traffico non esposto a Internet)
-- Riduzione dei costi di trasferimento dati inter-Region rispetto a Internet</p>
+- Il traffico inter-Region resta comunque <strong>a pagamento</strong> (data transfer out inter-Region): il backbone migliora qualità e sicurezza, non azzera i costi</p>
 <hr />
 <h2 id="confronto-global-vs-regional-vs-az-scoped">Confronto: Global vs Regional vs AZ-scoped<a class="headerlink" href="#confronto-global-vs-regional-vs-az-scoped" title="Permanent link">&para;</a></h2>
 <table>
@@ -25024,11 +25025,11 @@
 <tbody>
 <tr>
 <td><strong>Global</strong></td>
-<td>IAM, Route 53, CloudFront, WAF (Web Application Firewall — global), AWS Organizations</td>
+<td>IAM, Route 53, CloudFront, AWS Organizations (control plane in <code>us-east-1</code>)</td>
 </tr>
 <tr>
 <td><strong>Regional</strong></td>
-<td>VPC, EC2, S3, RDS, Lambda, SQS, SNS, DynamoDB, ECS, EKS</td>
+<td>VPC, EC2, S3, RDS, Lambda, SQS, SNS, DynamoDB, ECS, EKS, ACM, AWS WAF</td>
 </tr>
 <tr>
 <td><strong>AZ-scoped</strong></td>
@@ -25038,28 +25039,31 @@
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Esame CLF-C02</p>
-<p>Ricordare: IAM è <strong>globale</strong> (non ha Region). Route 53 e CloudFront sono <strong>globali</strong>. S3 bucket ha nome globale univoco ma i dati risiedono in una specifica Region. EC2 è <strong>regionale</strong> (si sceglie AZ/Subnet al lancio).</p>
+<p>Ricordare: IAM è <strong>globale</strong> (non ha Region). Route 53 e CloudFront sono <strong>globali</strong>. AWS WAF è regionale (per CloudFront si crea con scope <code>CLOUDFRONT</code> in <code>us-east-1</code>; i certificati ACM per CloudFront vanno anch'essi in <code>us-east-1</code>). S3 bucket ha nome globale univoco ma i dati risiedono in una specifica Region. EC2 è <strong>regionale</strong> (si sceglie AZ/Subnet al lancio).</p>
 </div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-servizio-non-disponibile-nella-region-scelta">Scenario 1 — Servizio non disponibile nella Region scelta<a class="headerlink" href="#scenario-1-servizio-non-disponibile-nella-region-scelta" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> <code>InvalidClientTokenId</code> o errore "service not available in this region" quando si tenta di creare una risorsa.</p>
-<p><strong>Causa:</strong> Non tutti i servizi AWS sono disponibili in tutte le Region. Le Region più recenti (es. <code>eu-south-1</code> Milano) hanno copertura parziale.</p>
+<p><strong>Sintomo:</strong> <code>Could not connect to the endpoint URL</code>, errore "not available in this region", oppure <code>InvalidClientTokenId</code> se la Region è opt-in e non ancora abilitata.</p>
+<p><strong>Causa:</strong> Non tutti i servizi AWS sono disponibili in tutte le Region. Le Region più recenti (es. <code>eu-south-1</code> Milano) hanno copertura parziale e sono opt-in.</p>
 <p><strong>Soluzione:</strong> Verificare la disponibilità del servizio nella Region target prima del deploy.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Verificare i servizi disponibili in una Region specifica</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>aws<span class="w"> </span>ssm<span class="w"> </span>get-parameters-by-path<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span>--path<span class="w"> </span>/aws/service/global-infrastructure/regions/eu-south-1/services<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'Parameters[*].Name'</span><span class="w"> </span>--output<span class="w"> </span>text
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># In alternativa, controllare via CLI quale Region supporta un servizio</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-regions<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span>--filters<span class="w"> </span><span class="s2">"Name=opt-in-status,Values=opted-in,opt-in-not-required"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'Regions[*].RegionName'</span><span class="w"> </span>--output<span class="w"> </span>table
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># Al contrario: in quali Region è disponibile un servizio (es. Lambda)</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>aws<span class="w"> </span>ssm<span class="w"> </span>get-parameters-by-path<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span>--path<span class="w"> </span>/aws/service/global-infrastructure/services/lambda/regions<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'Parameters[*].Value'</span><span class="w"> </span>--output<span class="w"> </span>text
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1"># Region dell'account e stato opt-in</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>aws<span class="w"> </span>account<span class="w"> </span>list-regions<span class="w"> </span>--query<span class="w"> </span><span class="s1">'Regions[*].[RegionName,RegionOptStatus]'</span><span class="w"> </span>--output<span class="w"> </span>table
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-latenza-elevata-tra-servizi-in-az-diverse">Scenario 2 — Latenza elevata tra servizi in AZ diverse<a class="headerlink" href="#scenario-2-latenza-elevata-tra-servizi-in-az-diverse" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Latenza inattesa tra istanze EC2 o tra un'EC2 e un RDS, nonostante entrambi siano nella stessa Region.</p>
-<p><strong>Causa:</strong> I servizi sono in AZ diverse. La latenza inter-AZ è &lt;10ms ma non è zero — per workload I/O intensivi può diventare rilevante. Oppure il mapping AZ (es. <code>eu-central-1a</code>) differisce tra account diversi.</p>
+<p><strong>Causa:</strong> I servizi sono in AZ diverse. La latenza inter-AZ è a singola cifra di ms ma non è zero — per workload I/O intensivi può diventare rilevante. Il traffico inter-AZ è inoltre <strong>a pagamento</strong> (circa 0,01 $/GB per direzione): servizi molto "chiacchieroni" in AZ diverse costano. Oppure il mapping AZ (es. <code>eu-central-1a</code>) differisce tra account: confrontare gli AZ ID, non i nomi.</p>
 <p><strong>Soluzione:</strong> Verificare il placement effettivo delle risorse e consolidarle nella stessa AZ se necessario (attenzione: riduce la fault tolerance).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Verificare in quale AZ si trovano le istanze EC2</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-instances<span class="w"> </span><span class="se">\</span>
@@ -25074,30 +25078,41 @@
 <hr />
 <h3 id="scenario-3-data-residency-violata-dati-replicati-fuori-dalla-region">Scenario 3 — Data residency violata: dati replicati fuori dalla Region<a class="headerlink" href="#scenario-3-data-residency-violata-dati-replicati-fuori-dalla-region" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Audit di compliance segnala dati in Region non autorizzate. Tipicamente S3 Cross-Region Replication o backup automatici configurati verso Region diverse.</p>
-<p><strong>Causa:</strong> Feature di replication o backup cross-Region abilitate esplicitamente o per default in alcuni servizi (es. AWS Backup con vault policy, S3 CRR, RDS automated backups cross-region).</p>
-<p><strong>Soluzione:</strong> Applicare SCP (Service Control Policy) a livello di AWS Organizations per bloccare azioni cross-Region non autorizzate.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Verificare le regole di replication su un bucket S3</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>aws<span class="w"> </span>s3api<span class="w"> </span>get-bucket-replication<span class="w"> </span>--bucket<span class="w"> </span>nome-bucket
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Verificare le policy SCP applicate all'account</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>aws<span class="w"> </span>organizations<span class="w"> </span>list-policies-for-target<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span>--target-id<span class="w"> </span>&lt;account-id&gt;<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span>--filter<span class="w"> </span>SERVICE_CONTROL_POLICY<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'Policies[*].{Name:Name,Id:Id}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span>--output<span class="w"> </span>table
+<p><strong>Causa:</strong> Feature di replication o backup cross-Region configurate esplicitamente da qualcuno nell'account (S3 CRR, AWS Backup con copy rule, RDS cross-region automated backups, copia di snapshot/AMI). Nessuna è attiva di default: va cercato chi l'ha creata.</p>
+<p><strong>Soluzione:</strong> Applicare SCP (Service Control Policy) a livello di AWS Organizations che neghi ogni azione fuori dalle Region approvate tramite la condition <code>aws:RequestedRegion</code>. I servizi globali (IAM, Organizations, Route 53, CloudFront, Support…) vanno esclusi con <code>NotAction</code>, altrimenti si bloccano.</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">"Version"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2012-10-17"</span><span class="p">,</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">"Statement"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">"Sid"</span><span class="p">:</span><span class="w"> </span><span class="s2">"DenyOutsideEU"</span><span class="p">,</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="nt">"Effect"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Deny"</span><span class="p">,</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="nt">"NotAction"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"iam:*"</span><span class="p">,</span><span class="w"> </span><span class="s2">"organizations:*"</span><span class="p">,</span><span class="w"> </span><span class="s2">"route53:*"</span><span class="p">,</span><span class="w"> </span><span class="s2">"cloudfront:*"</span><span class="p">,</span><span class="w"> </span><span class="s2">"support:*"</span><span class="p">,</span><span class="w"> </span><span class="s2">"sts:*"</span><span class="p">],</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="nt">"Resource"</span><span class="p">:</span><span class="w"> </span><span class="s2">"*"</span><span class="p">,</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span><span class="nt">"Condition"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"StringNotEquals"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"aws:RequestedRegion"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"eu-central-1"</span><span class="p">,</span><span class="w"> </span><span class="s2">"eu-south-1"</span><span class="p">]}}</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span><span class="p">}]</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="p">}</span>
+</span></code></pre></div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Verificare le regole di replication su un bucket S3</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>aws<span class="w"> </span>s3api<span class="w"> </span>get-bucket-replication<span class="w"> </span>--bucket<span class="w"> </span>nome-bucket
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Verificare le policy SCP applicate all'account</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>aws<span class="w"> </span>organizations<span class="w"> </span>list-policies-for-target<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span>--target-id<span class="w"> </span>&lt;account-id&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span>--filter<span class="w"> </span>SERVICE_CONTROL_POLICY<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'Policies[*].{Name:Name,Id:Id}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span>--output<span class="w"> </span>table
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-outpost-non-raggiungibile-perdita-di-connettivita-con-la-region-parent">Scenario 4 — Outpost non raggiungibile: perdita di connettività con la Region parent<a class="headerlink" href="#scenario-4-outpost-non-raggiungibile-perdita-di-connettivita-con-la-region-parent" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Le risorse sull'Outpost diventano irraggiungibili o le API calls falliscono con timeout. Il management plane smette di rispondere.</p>
 <p><strong>Causa:</strong> L'Outpost richiede connettività continua verso la Region parent tramite Service Link. Se la WAN o il Direct Connect si interrompe, il control plane perde contatto.</p>
 <p><strong>Soluzione:</strong> Verificare lo stato del Service Link e della connettività di rete verso la Region parent. Le risorse già in esecuzione continuano a funzionare localmente, ma non è possibile gestirle tramite console/API.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Verificare lo stato degli Outpost e del loro Service Link</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>aws<span class="w"> </span>outposts<span class="w"> </span>list-outposts<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'Outposts[*].{Name:Name,Id:OutpostId,SiteId:SiteId,LifeCycleStatus:LifeCycleStatus}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>--output<span class="w"> </span>table
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># Verificare la connettività verso la Region parent (eseguire dall'Outpost)</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>curl<span class="w"> </span>-I<span class="w"> </span>https://ec2.eu-central-1.amazonaws.com
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Verificare lo stato degli Outpost e del loro Service Link</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>aws<span class="w"> </span>outposts<span class="w"> </span>list-outposts<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'Outposts[*].{Name:Name,Id:OutpostId,SiteId:SiteId,LifeCycleStatus:LifeCycleStatus}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span>--output<span class="w"> </span>table
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Verificare la connettività verso la Region parent (eseguire dall'Outpost)</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>curl<span class="w"> </span>-I<span class="w"> </span>https://ec2.eu-central-1.amazonaws.com
 </span></code></pre></div>
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
