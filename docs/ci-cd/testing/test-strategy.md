@@ -7,9 +7,10 @@ search_keywords: [test pyramid, test strategy, test strategia, unit test, integr
 parent: ci-cd/testing/_index
 related: [ci-cd/testing/contract-testing, ci-cd/github-actions/workflow-avanzati, ci-cd/gitlab-ci/pipeline-avanzato, ci-cd/strategie/pipeline-security]
 official_docs: https://testcontainers.com/
-status: complete
+status: needs-review
 difficulty: intermediate
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Test Strategy per Microservizi
@@ -116,9 +117,10 @@ class OrderRepositoryTest {
         new PostgreSQLContainer<>("postgres:16-alpine")
             .withDatabaseName("testdb")
             .withUsername("test")
-            .withPassword("test")
-            .withReuse(true); // riusa il container tra test della stessa JVM
+            .withPassword("test");
 
+    // Spring Boot 3.1+: in alternativa a @DynamicPropertySource basta annotare il
+    // campo con @ServiceConnection e le proprietà datasource sono configurate in automatico.
     @DynamicPropertySource
     static void overrideProperties(DynamicPropertyRegistry registry) {
         // Inietta l'URL del container nel contesto Spring
@@ -165,8 +167,7 @@ class KafkaOrderConsumerTest {
 
     @Container
     static KafkaContainer kafka =
-        new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"))
-            .withReuse(true);
+        new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"));
 
     @DynamicPropertySource
     static void overrideKafkaProperties(DynamicPropertyRegistry registry) {
@@ -488,11 +489,14 @@ mvn org.pitest:pitest-maven:mutationCoverage
 ### mutmut — Python
 
 ```bash
-# Installa
+# Installa (mutmut 3.x; su Windows richiede WSL)
 pip install mutmut
 
-# Esegui su un modulo specifico
-mutmut run --paths-to-mutate src/domain/pricing.py
+# Il perimetro si configura in pyproject.toml (mutmut 3.x), non più con --paths-to-mutate:
+#   [tool.mutmut]
+#   paths_to_mutate = ["src/domain/"]
+#   tests_dir = ["tests/"]
+mutmut run
 
 # Visualizza risultati
 mutmut results
@@ -502,25 +506,22 @@ mutmut results
 # + if discount_rate >= 0.5:
 # ^^^^^^^^ questo mutante è sopravvissuto → manca un test per il boundary
 
-# Applica un mutante per ispezionarlo
-mutmut apply 5
-# ... scrivi un test che lo uccida ...
-mutmut unapply
-
-# HTML report
-mutmut html
+# Ispeziona il diff di un mutante e navigali in una TUI interattiva
+mutmut show <nome-mutante>
+mutmut browse
+# ... scrivi un test che lo uccida e rilancia mutmut run ...
 ```
 
 ### go-mutesting — Go
 
 ```bash
-# Installa
-go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest
+# Installa il fork mantenuto (il repo originale zimmski/go-mutesting è poco attivo)
+go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest
 
 # Esegui su un package
 go-mutesting ./internal/domain/...
 
-# Output:
+# Output (formato indicativo, varia per versione):
 # PASS: mutation at "pricing.go:34:5" was detected by tests
 # FAIL: mutation at "pricing.go:67:12" was NOT detected by tests
 # Mutation score: 68.0% (17/25)
@@ -533,7 +534,9 @@ go-mutesting ./internal/domain/...
 mutation-testing:
   runs-on: ubuntu-latest
   needs: [unit-tests]
-  # Solo su PR: il filtro sui path del dominio va nel trigger on.pull_request.paths
+  # Solo su PR. Attenzione: `paths:` nel trigger vale per l'INTERO workflow (salterebbe
+  # anche unit/integration): per filtrare solo questo job usa un workflow separato
+  # oppure dorny/paths-filter + `if: needs.changes.outputs.domain == 'true'`
   if: github.event_name == 'pull_request'
   steps:
     - uses: actions/checkout@v4
@@ -563,11 +566,18 @@ mutation-testing:
 
 **Usa Awaitility/polling invece di sleep fissi.** Un `Thread.sleep(3000)` è sia lento che fragile. Awaitility (Java), `tenacity` (Python), o un semplice loop con timeout verificano la condizione non appena è vera.
 
-!!! tip "Testcontainers con `withReuse(true)`"
-    In sviluppo locale, `withReuse(true)` mantiene i container attivi tra diverse run di test, riducendo il tempo di startup da 5-10 secondi a 0. In CI, la riusabilità è gestita dai layer di cache Docker. Da abilitare per container pesanti come Kafka e database.
+!!! tip "Testcontainers: `withReuse(true)` solo in locale e con avvio manuale"
+    `withReuse(true)` lascia il container vivo tra diverse run di test (startup da 5-10 secondi a ~0), ma richiede **opt-in esplicito** (`testcontainers.reuse.enable=true` in `~/.testcontainers.properties`) e **non è compatibile col lifecycle automatico** di `@Container`/`@Testcontainers`: va avviato a mano (`container.start()` in un blocco `static {}`). È pensato per lo sviluppo locale, non per la CI (runner effimeri: i layer di cache Docker velocizzano solo il pull dell'immagine, non l'avvio del container). Per condividere un container tra più classi di test nella stessa run usa un singleton (`static` avviato una volta, eventualmente in una classe base).
 
 !!! tip "Test splitting per parallelizzare"
-    Per suite di integration test molto grandi, usa `--shard` (Jest) o `--split-by=timing` (GitHub Actions matrix) per distribuire i test su più runner in parallelo. Dimezza i tempi con 2 runner, riduce di 2/3 con 3.
+    Per suite di integration test molto grandi, distribuisci i test su più runner in parallelo: `--shard=1/3` (Jest/Playwright), `pytest-split`/`pytest-xdist` (Python), o una `matrix` GitHub Actions in cui ogni job esegue un sottoinsieme di classi/tag (lo split per timing richiede un tool dedicato, es. `--split-by=timings` di CircleCI). Con N runner il tempo scende verso 1/N, limitato dal job più lento e dall'overhead di setup.
+
+!!! note "Testcontainers 1.x vs 2.x"
+    Gli esempi usano l'API 1.x (`PostgreSQLContainer<?>` generico, artifact `org.testcontainers:postgresql`). Testcontainers 2.x ha rinominato gli artifact (prefisso `testcontainers-`) e spostato/de-genericizzato alcune classi dei moduli (es. `PostgreSQLContainer`, `KafkaContainer`). Il pattern (container `static`, property dinamiche) resta identico.
+    <!-- REVIEW: verificare package/artifact esatti Testcontainers 2.x e versioni correnti di pitest-maven / pitest-junit5-plugin / WireMock -->
+
+!!! info "Piramide, trophy, honeycomb"
+    Per i microservizi la piramide classica è discussa: molta logica sta nell'**integrazione** tra servizi e DB, non nelle singole funzioni. Il *testing trophy* (Kent C. Dodds) e il *honeycomb* (Spotify) spostano il peso sugli integration/component test, con pochi unit test su logica pura. Il principio resta: più il test è in alto, più è lento e fragile, quindi meno scenari. Scegli la forma in base a dove vive la complessità del servizio.
 
 !!! warning "Non mockare il database per gli integration test"
     Database embedded come H2 o SQLite usati al posto di PostgreSQL/MySQL hanno comportamenti diversi: SQL dialetti, constraint di integrità, JSON columns, generated columns. I bug trovati in produzione che passano sui mock sono bug che i test dovevano trovare ma non hanno trovato. Usa Testcontainers con il DB reale.
@@ -601,7 +611,7 @@ export DOCKER_HOST=unix:///var/run/docker.sock
 
 **Causa**: il container viene avviato e fermato per ogni test invece di essere condiviso (campo di istanza non `static`, fixture pytest con scope `function`).
 
-**Soluzione**: dichiarare il container `static` in Java (lifecycle legato alla classe), usare `scope="session"` per le fixture pytest, abilitare `withReuse(true)` in locale.
+**Soluzione**: dichiarare il container `static` in Java (lifecycle legato alla classe), usare `scope="session"` per le fixture pytest; in locale, opzionalmente, reuse con avvio manuale (vedi tip sopra).
 
 ```java
 // SBAGLIATO: un container per test
@@ -667,9 +677,10 @@ spring.kafka.consumer.group-id: test-group-${random.uuid} # gruppo unico per evi
 
 **Causa**: `github.event.pull_request.changed_files` è un **numero** (conteggio file), non una lista: `contains(..., 'src/main/...')` è sempre falso.
 
-**Soluzione**: filtrare con `paths:` sul trigger, oppure con un'action come `dorny/paths-filter`.
+**Soluzione**: filtrare con `dorny/paths-filter` (job `changes` + `needs`), oppure spostare il job in un workflow dedicato con `paths:` sul trigger (così il filtro non esclude gli altri job di test).
 
 ```yaml
+# Workflow dedicato mutation.yml
 on:
   pull_request:
     paths:
