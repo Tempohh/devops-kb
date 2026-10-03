@@ -20889,7 +20889,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -20914,7 +20914,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25089,13 +25089,6 @@
 <td>Pool di IP pubblici condivisi (raro oggi)</td>
 </tr>
 <tr>
-<td><strong>Full Cone NAT</strong></td>
-<td>—</td>
-<td>IP sorgente</td>
-<td>Uscita</td>
-<td>Tutti i pacchetti esterni verso IP:porta tradotta arrivano all'host</td>
-</tr>
-<tr>
 <td><strong>Hairpin NAT</strong></td>
 <td>NAT Loopback, NAT Reflection</td>
 <td>Sorgente e destinazione</td>
@@ -25104,6 +25097,10 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Full Cone, Restricted, Symmetric: comportamento, non tipo</p>
+<p>Full Cone / Restricted Cone / Port-Restricted Cone / Symmetric (classificazione RFC 3489, superata da RFC 4787) descrivono come un NAT <strong>assegna le mappature</strong> e <strong>filtra il traffico entrante</strong>, non una configurazione diversa. In Full Cone ogni host esterno può inviare pacchetti all'<code>IP:porta</code> pubblico già mappato; in Symmetric ogni destinazione diversa ottiene una porta pubblica diversa (e accetta risposte solo da quella destinazione). Conta per NAT traversal di P2P/VoIP/WebRTC: con NAT Symmetric lo STUN non basta e serve un relay TURN. Il NAT Linux (conntrack) si comporta in pratica come "port-restricted/symmetric" verso peer sconosciuti.</p>
+</div>
 <h3 id="pat-port-address-translation">PAT — Port Address Translation<a class="headerlink" href="#pat-port-address-translation" title="Permanent link">&para;</a></h3>
 <p>PAT (o NAPT, o "NAT Overload") è la forma più comune di NAT: consente a N host privati di condividere <strong>un singolo IP pubblico</strong> usando le porte come discriminante. Il router mantiene una <strong>tabella di conntrack (connection tracking)</strong> che mappa ogni connessione uscente:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Connessione originale:    192.168.1.10:54321 → 8.8.8.8:53
@@ -25180,8 +25177,12 @@
 </tbody>
 </table>
 <div class="admonition warning">
-<p class="admonition-title">Doppio NAT</p>
-<p>Se una rete usa indirizzi privati che si sovrappongono con la rete remota (es. entrambi usano <code>192.168.1.0/24</code>), le connessioni VPN o site-to-site falliscono silenziosamente. Pianificare spazi di indirizzamento non sovrapposti è fondamentale prima di estendere la rete.</p>
+<p class="admonition-title">Indirizzi sovrapposti</p>
+<p>Se una rete usa indirizzi privati che si sovrappongono con la rete remota (es. entrambi usano <code>192.168.1.0/24</code>), le connessioni VPN o site-to-site falliscono silenziosamente: il routing non sa se <code>192.168.1.5</code> sia locale o remoto. Pianificare spazi di indirizzamento non sovrapposti prima di estendere la rete; se impossibile, si ricorre a NAT 1:1 tra i due lati (static NAT di un prefisso su uno non sovrapposto).</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">CGNAT e IPv6</p>
+<p><strong>CGNAT</strong> (Carrier-Grade NAT): l'ISP stesso fa NAT44 davanti ai clienti, usando lo spazio condiviso <code>100.64.0.0/10</code> (RFC 6598). Conseguenza: l'IP "WAN" del router di casa non è pubblico e il port forwarding verso l'esterno non funziona (serve VPN/tunnel in uscita o IPv6). <strong>IPv6</strong> nasce per eliminare la necessità di NAT: ogni host ha indirizzi globali e la protezione passa da un firewall stateful, non dalla traduzione. NAT66/NPTv6 (RFC 6296) esistono ma sono rari; NAT64 + DNS64 serve invece a far raggiungere servizi IPv4 da reti IPv6-only.</p>
 </div>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
 <h3 id="snat-flusso-completo">SNAT — Flusso Completo<a class="headerlink" href="#snat-flusso-completo" title="Permanent link">&para;</a></h3>
@@ -25216,8 +25217,8 @@
 <h3 id="nat-in-kubernetes">NAT in Kubernetes<a class="headerlink" href="#nat-in-kubernetes" title="Permanent link">&para;</a></h3>
 <p>In Kubernetes, NAT è ovunque:</p>
 <ul>
-<li><strong>kube-proxy (iptables mode)</strong>: usa DNAT per redirigere il traffico verso un Service IP (ClusterIP) ai Pod effettivi. Ogni <code>ClusterIP:porta</code> viene tradotta in <code>PodIP:porta</code> tramite regole iptables DNAT nella chain <code>KUBE-SERVICES</code>.</li>
-<li><strong>NodePort</strong>: DNAT da <code>NodeIP:NodePort</code> al Pod. SNAT opzionale per garantire che la risposta torni attraverso lo stesso nodo.</li>
+<li><strong>kube-proxy (iptables mode)</strong>: usa DNAT per redirigere il traffico verso un Service IP (ClusterIP) ai Pod effettivi. Ogni <code>ClusterIP:porta</code> viene tradotta in <code>PodIP:porta</code> tramite regole iptables DNAT nella chain <code>KUBE-SERVICES</code>. Esistono anche la modalità <code>nftables</code> (GA da Kubernetes 1.33, stesso principio con nftables) e CNI come Cilium che sostituiscono kube-proxy con eBPF, facendo la traduzione Service→Pod nel datapath eBPF senza regole iptables.</li>
+<li><strong>NodePort</strong>: DNAT da <code>NodeIP:NodePort</code> al Pod. Con <code>externalTrafficPolicy: Cluster</code> (default) viene fatto anche SNAT, così la risposta torna attraverso lo stesso nodo ma il Pod perde l'IP client originale; con <code>Local</code> l'IP sorgente è preservato (e il traffico va solo a Pod sul nodo).</li>
 <li><strong>LoadBalancer</strong>: DNAT dall'IP esterno del load balancer al ClusterIP, poi al Pod.</li>
 <li><strong>CNI Plugin (Masquerade)</strong>: il traffico uscente dai Pod verso Internet è soggetto a SNAT/masquerade (IP sorgente del Pod → IP del nodo).</li>
 </ul>
@@ -25240,11 +25241,15 @@
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">  </span>-j<span class="w"> </span>MASQUERADE
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
 </span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1"># ===== Abilitare il forwarding IP (obbligatorio per NAT) =====</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="nb">echo</span><span class="w"> </span><span class="m">1</span><span class="w"> </span>&gt;<span class="w"> </span>/proc/sys/net/ipv4/ip_forward
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># Persistente (sysctl.conf):</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"net.ipv4.ip_forward = 1"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>/etc/sysctl.conf
-</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>sysctl<span class="w"> </span>-p
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.ip_forward<span class="o">=</span><span class="m">1</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># Persistente (drop-in dedicato, preferibile a modificare sysctl.conf):</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"net.ipv4.ip_forward = 1"</span><span class="w"> </span>&gt;<span class="w"> </span>/etc/sysctl.d/99-ip-forward.conf
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>sysctl<span class="w"> </span>--system
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">iptables oggi è spesso iptables-nft</p>
+<p>Sulle distro recenti (Debian 10+, RHEL 8+, Ubuntu 20.10+) il comando <code>iptables</code> è <code>iptables-nft</code>: stessa sintassi, ma le regole vivono in nftables (<code>nft list ruleset</code> le mostra). Non mescolare regole <code>iptables</code> e <code>nft</code> sugli stessi hook senza sapere cosa si fa, e se c'è firewalld/ufw/Docker/kube-proxy che gestisce le tabelle, le regole manuali possono essere sovrascritte.</p>
+</div>
 <h3 id="iptables-dnat-port-forwarding">iptables — DNAT (Port Forwarding)<a class="headerlink" href="#iptables-dnat-port-forwarding" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># ===== Port Forwarding: porta 80 pubblica → server interno 192.168.1.20:8080 =====</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-A<span class="w"> </span>PREROUTING<span class="w"> </span><span class="se">\</span>
@@ -25255,24 +25260,33 @@
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Consenti il traffico forwardato verso il server interno</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>iptables<span class="w"> </span>-A<span class="w"> </span>FORWARD<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span>-p<span class="w"> </span>tcp<span class="w"> </span>-d<span class="w"> </span><span class="m">192</span>.168.1.20<span class="w"> </span>--dport<span class="w"> </span><span class="m">8080</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span>-m<span class="w"> </span>state<span class="w"> </span>--state<span class="w"> </span>NEW,ESTABLISHED,RELATED<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span>-m<span class="w"> </span>conntrack<span class="w"> </span>--ctstate<span class="w"> </span>NEW,ESTABLISHED,RELATED<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span>-j<span class="w"> </span>ACCEPT
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># ===== Port Forwarding multiplo (porta 443) =====</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-A<span class="w"> </span>PREROUTING<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span>-i<span class="w"> </span>eth0<span class="w"> </span>-p<span class="w"> </span>tcp<span class="w"> </span>--dport<span class="w"> </span><span class="m">443</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">  </span>-j<span class="w"> </span>DNAT<span class="w"> </span>--to-destination<span class="w"> </span><span class="m">192</span>.168.1.20:8443
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="c1"># ===== Visualizzare le regole NAT correnti =====</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-L<span class="w"> </span>-n<span class="w"> </span>-v<span class="w"> </span>--line-numbers
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="c1"># ===== Hairpin NAT (accesso da LAN tramite IP pubblico) =====</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="c1"># Senza questa regola, gli host interni non raggiungono 203.0.113.1:80</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-A<span class="w"> </span>POSTROUTING<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">  </span>-s<span class="w"> </span><span class="m">192</span>.168.1.0/24<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">  </span>-d<span class="w"> </span><span class="m">192</span>.168.1.20<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">  </span>-p<span class="w"> </span>tcp<span class="w"> </span>--dport<span class="w"> </span><span class="m">8080</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">  </span>-j<span class="w"> </span>MASQUERADE
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># (il modulo `state` è legacy: `conntrack --ctstate` è il sostituto)</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># La risposta server→client è coperta da una regola ESTABLISHED,RELATED generica in FORWARD</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># ===== Port Forwarding multiplo (porta 443) =====</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-A<span class="w"> </span>PREROUTING<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">  </span>-i<span class="w"> </span>eth0<span class="w"> </span>-p<span class="w"> </span>tcp<span class="w"> </span>--dport<span class="w"> </span><span class="m">443</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span>-j<span class="w"> </span>DNAT<span class="w"> </span>--to-destination<span class="w"> </span><span class="m">192</span>.168.1.20:8443
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="c1"># ===== Visualizzare le regole NAT correnti =====</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-L<span class="w"> </span>-n<span class="w"> </span>-v<span class="w"> </span>--line-numbers
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="c1"># ===== Hairpin NAT (accesso da LAN tramite IP pubblico) =====</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="c1"># Servono DUE regole. 1) DNAT anche per il traffico che arriva dalla LAN</span>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="c1"># (la regola sopra con `-i eth0` vale solo per l'interfaccia esterna):</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-A<span class="w"> </span>PREROUTING<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">  </span>-i<span class="w"> </span>br-lan<span class="w"> </span>-d<span class="w"> </span><span class="m">203</span>.0.113.1<span class="w"> </span>-p<span class="w"> </span>tcp<span class="w"> </span>--dport<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">  </span>-j<span class="w"> </span>DNAT<span class="w"> </span>--to-destination<span class="w"> </span><span class="m">192</span>.168.1.20:8080
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="c1"># 2) MASQUERADE: senza, il server risponderebbe direttamente al client LAN</span>
+</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="c1"># (stessa subnet) con IP sorgente 192.168.1.20 invece di 203.0.113.1,</span>
+</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="c1"># e il client scarterebbe la risposta (mismatch con la connessione attesa)</span>
+</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-A<span class="w"> </span>POSTROUTING<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="w">  </span>-s<span class="w"> </span><span class="m">192</span>.168.1.0/24<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">  </span>-d<span class="w"> </span><span class="m">192</span>.168.1.20<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">  </span>-p<span class="w"> </span>tcp<span class="w"> </span>--dport<span class="w"> </span><span class="m">8080</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">  </span>-j<span class="w"> </span>MASQUERADE
 </span></code></pre></div>
 <h3 id="nftables-snat-e-dnat-alternativa-moderna-a-iptables">nftables — SNAT e DNAT (alternativa moderna a iptables)<a class="headerlink" href="#nftables-snat-e-dnat-alternativa-moderna-a-iptables" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># ===== Configurazione nftables equivalente a iptables NAT =====</span>
@@ -25337,11 +25351,15 @@
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span>--destination-cidr-block<span class="w"> </span><span class="m">0</span>.0.0.0/0<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">  </span>--nat-gateway-id<span class="w"> </span>nat-0abc123
 </span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="c1"># NAT Instance (alternativa economica, deprecata ma ancora usata):</span>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="c1"># Richiede di disabilitare il source/destination check sull'istanza EC2</span>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>aws<span class="w"> </span>ec2<span class="w"> </span>modify-instance-attribute<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">  </span>--instance-id<span class="w"> </span>i-0abc123<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">  </span>--no-source-dest-check
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="c1"># Prerequisito: la subnet che ospita il NAT Gateway deve essere "pubblica"</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="c1"># (route 0.0.0.0/0 → Internet Gateway). Per alta disponibilità: un NAT Gateway per AZ.</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="c1"># NAT Instance (alternativa economica, sconsigliata): l'AMI NAT gestita da AWS</span>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="c1"># è fuori supporto dal dicembre 2023, quindi serve un'AMI/script propri.</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="c1"># Richiede di disabilitare il source/destination check sull'istanza EC2</span>
+</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>aws<span class="w"> </span>ec2<span class="w"> </span>modify-instance-attribute<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">  </span>--instance-id<span class="w"> </span>i-0abc123<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="w">  </span>--no-source-dest-check
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
@@ -25355,7 +25373,7 @@
 <ul>
 <li><strong>Conntrack table size</strong>: in sistemi ad alto traffico, la tabella conntrack può esaurirsi (<code>nf_conntrack: table full, dropping packet</code>). Aumenta il limite con <code>sysctl net.netfilter.nf_conntrack_max=524288</code> e monitora con <code>conntrack -S</code>.</li>
 <li><strong>NAT e VPN</strong>: il traffico IPsec tradizionale non attraversa NAT perché i protocolli AH/ESP non hanno porte. Usa sempre <strong>NAT-T</strong> (NAT Traversal, UDP 4500) per VPN IPsec attraverso NAT.</li>
-<li><strong>Porte ephemeral</strong>: il range di porte usato per PAT è di default 32768–60999 su Linux. Per SNAT con molte connessioni concorrenti, configura un pool di IP pubblici oppure espandi il range con <code>net.ipv4.ip_local_port_range</code>.</li>
+<li><strong>Esaurimento porte PAT</strong>: netfilter cerca di mantenere la porta sorgente originale; se è già in uso per quella stessa tupla, ne sceglie un'altra (porte ≥1024 → range 1024–65535; <code>ip_local_port_range</code> governa solo le connessioni <em>locali</em> dell'host, non il PAT). L'unicità è per tupla completa, quindi il limite (~64k) vale per ogni coppia <code>IP dst:porta dst</code>; verso una singola destinazione molto popolare (es. un API gateway) con migliaia di connessioni al secondo si finisce le porte. Rimedi: pool di IP pubblici (<code>-j SNAT --to-source 203.0.113.1-203.0.113.4</code>), più NAT Gateway/IP, connessioni persistenti (keep-alive).</li>
 <li><strong>Simmetria del routing</strong>: con SNAT/DNAT, il pacchetto di ritorno deve passare attraverso lo stesso firewall che ha fatto la traduzione originale. Architetture asimmetriche (active-active senza sincronizzazione conntrack) causano connessioni interrotte.</li>
 <li><strong>Non esporre servizi con DNAT senza firewall</strong>: il port forwarding da solo non è sicuro. Aggiungi sempre regole <code>FORWARD</code> che limitino le sorgenti autorizzate.</li>
 </ul>
@@ -25411,52 +25429,56 @@
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.netfilter.nf_conntrack_max<span class="o">=</span><span class="m">524288</span>
 </span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Persistente</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"net.netfilter.nf_conntrack_max = 524288"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>/etc/sysctl.conf
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"net.netfilter.nf_conntrack_hashsize = 131072"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>/etc/sysctl.conf
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>sysctl<span class="w"> </span>-p
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1"># Ridurre i timeout per connessioni in stato TIME_WAIT</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.netfilter.nf_conntrack_tcp_timeout_time_wait<span class="o">=</span><span class="m">30</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.netfilter.nf_conntrack_tcp_timeout_established<span class="o">=</span><span class="m">3600</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"net.netfilter.nf_conntrack_max = 524288"</span><span class="w"> </span>&gt;<span class="w"> </span>/etc/sysctl.d/99-conntrack.conf
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>sysctl<span class="w"> </span>--system
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># Hash table: NON è un sysctl scrivibile (nf_conntrack_buckets è read-only);</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1"># si imposta come parametro del modulo (regola pratica: buckets ≈ max / 4)</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="nb">echo</span><span class="w"> </span><span class="m">131072</span><span class="w"> </span>&gt;<span class="w"> </span>/sys/module/nf_conntrack/parameters/hashsize
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1"># Persistente: /etc/modprobe.d/nf_conntrack.conf → options nf_conntrack hashsize=131072</span>
 </span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="c1"># Visualizzare distribuzione per stato</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>conntrack<span class="w"> </span>-L<span class="w"> </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">'{print $4}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="c1"># Ridurre i timeout per connessioni in stato TIME_WAIT</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.netfilter.nf_conntrack_tcp_timeout_time_wait<span class="o">=</span><span class="m">30</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.netfilter.nf_conntrack_tcp_timeout_established<span class="o">=</span><span class="m">3600</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="c1"># Visualizzare distribuzione per stato</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>conntrack<span class="w"> </span>-L<span class="w"> </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">'{print $4}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn
 </span></code></pre></div>
 <h3 id="vpn-ipsec-non-funziona-attraverso-nat">VPN IPsec Non Funziona Attraverso NAT<a class="headerlink" href="#vpn-ipsec-non-funziona-attraverso-nat" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo</strong>: la VPN IPsec fallisce con errore <code>NO_PROPOSAL_CHOSEN</code> oppure i pacchetti non arrivano al peer.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># IPsec IKE usa UDP 500 (phase 1) e UDP 4500 con NAT-T (phase 2)</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># Verificare che le porte siano aperte sul firewall</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Abilitare NAT-T nel config StrongSwan</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># /etc/ipsec.conf</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># conn myvpn</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1">#   ...</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1">#   forceencaps=yes    # Forza NAT-T anche se non rilevato</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1">#   nat_traversal=yes</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># Verificare che il firewall permetta UDP 4500 (NAT-T)</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>iptables<span class="w"> </span>-L<span class="w"> </span>INPUT<span class="w"> </span>-n<span class="w"> </span>-v<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="m">4500</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="c1"># Se non c'è: aggiungere</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>iptables<span class="w"> </span>-A<span class="w"> </span>INPUT<span class="w"> </span>-p<span class="w"> </span>udp<span class="w"> </span>--dport<span class="w"> </span><span class="m">4500</span><span class="w"> </span>-j<span class="w"> </span>ACCEPT
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>iptables<span class="w"> </span>-A<span class="w"> </span>INPUT<span class="w"> </span>-p<span class="w"> </span>udp<span class="w"> </span>--dport<span class="w"> </span><span class="m">500</span><span class="w">  </span>-j<span class="w"> </span>ACCEPT
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="c1"># Catturare il traffico IKE</span>
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>tcpdump<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-n<span class="w"> </span><span class="s1">'udp port 500 or udp port 4500'</span>
+<p><strong>Sintomo</strong>: il tunnel IPsec si stabilisce (IKE ok) ma il traffico ESP non passa, o l'IKE non completa dietro NAT, con timeout o pacchetti che non arrivano al peer. (<code>NO_PROPOSAL_CHOSEN</code> indica invece un mismatch di algoritmi/proposal, non un problema di NAT.)</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># IKE parte su UDP 500; se rileva NAT (payload NAT-D) si sposta su UDP 4500</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># e incapsula l'ESP in UDP 4500 (NAT-T, RFC 3947/3948).</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Verificare che le porte siano aperte sul firewall</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># strongSwan: NAT-T è sempre attivo (il vecchio `nat_traversal=yes` non esiste più).</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Per forzare l'encapsulation anche se il NAT non viene rilevato:</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># /etc/ipsec.conf          →  forceencaps=yes</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># /etc/swanctl/swanctl.conf →  encap = yes   (dentro la connection)</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Verificare che il firewall permetta UDP 4500 (NAT-T)</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>iptables<span class="w"> </span>-L<span class="w"> </span>INPUT<span class="w"> </span>-n<span class="w"> </span>-v<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="m">4500</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># Se non c'è: aggiungere (-I per metterle prima di eventuali DROP)</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>iptables<span class="w"> </span>-I<span class="w"> </span>INPUT<span class="w"> </span>-p<span class="w"> </span>udp<span class="w"> </span>--dport<span class="w"> </span><span class="m">4500</span><span class="w"> </span>-j<span class="w"> </span>ACCEPT
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>iptables<span class="w"> </span>-I<span class="w"> </span>INPUT<span class="w"> </span>-p<span class="w"> </span>udp<span class="w"> </span>--dport<span class="w"> </span><span class="m">500</span><span class="w">  </span>-j<span class="w"> </span>ACCEPT
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="c1"># Catturare il traffico IKE</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>tcpdump<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-n<span class="w"> </span><span class="s1">'udp port 500 or udp port 4500'</span>
 </span></code></pre></div>
 <h3 id="hairpin-nat-nat-loopback-non-funziona">Hairpin NAT / NAT Loopback Non Funziona<a class="headerlink" href="#hairpin-nat-nat-loopback-non-funziona" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo</strong>: dall'interno della LAN, accedere al server tramite IP pubblico fallisce (timeout), ma funziona dall'esterno.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Verificare se c'è una regola di hairpin NAT</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-L<span class="w"> </span>POSTROUTING<span class="w"> </span>-n<span class="w"> </span>-v<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>MASQUERADE
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Se non c'è, aggiungere:</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-A<span class="w"> </span>POSTROUTING<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>-s<span class="w"> </span><span class="m">192</span>.168.1.0/24<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span>-d<span class="w"> </span><span class="m">192</span>.168.1.20<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span>-p<span class="w"> </span>tcp<span class="w"> </span>--dport<span class="w"> </span><span class="m">8080</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span>-j<span class="w"> </span>MASQUERADE
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># Alternativa: configurare un DNS split-horizon che risolva il dominio</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># con l'IP privato per i client interni (soluzione più elegante)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Verificare se ci sono sia il DNAT dalla LAN (PREROUTING) sia la MASQUERADE</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-L<span class="w"> </span>PREROUTING<span class="w"> </span>-n<span class="w"> </span>-v
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-L<span class="w"> </span>POSTROUTING<span class="w"> </span>-n<span class="w"> </span>-v<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>MASQUERADE
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># Se manca la MASQUERADE, aggiungere (il DNAT dalla LAN: vedi sezione iptables sopra):</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-A<span class="w"> </span>POSTROUTING<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span>-s<span class="w"> </span><span class="m">192</span>.168.1.0/24<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span>-d<span class="w"> </span><span class="m">192</span>.168.1.20<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span>-p<span class="w"> </span>tcp<span class="w"> </span>--dport<span class="w"> </span><span class="m">8080</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">  </span>-j<span class="w"> </span>MASQUERADE
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># Alternativa: configurare un DNS split-horizon che risolva il dominio</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="c1"># con l'IP privato per i client interni (soluzione più elegante)</span>
 </span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <p>NAT si integra con molti altri argomenti della KB:</p>
@@ -25467,7 +25489,7 @@
 </details>
 <details class="info">
 <summary>VPN IPsec — NAT Traversal</summary>
-<p>IPsec non attraversa NAT nativamente. Il protocollo AH non è compatibile con NAT; ESP può funzionare solo con NAT-T (UDP encapsulation). La configurazione VPN deve tenere conto del NAT tra i peer.</p>
+<p>IPsec non attraversa bene il NAT: AH non è compatibile (autentica anche l'header IP, che il NAT modifica); ESP non ha porte, quindi il PAT non può distinguere più tunnel e in pratica serve NAT-T (ESP incapsulato in UDP 4500). La configurazione VPN deve tenere conto del NAT tra i peer.</p>
 <p><strong>Approfondimento completo →</strong> <a href="../../sicurezza/vpn-ipsec/">VPN e IPsec</a></p>
 </details>
 <details class="info">
