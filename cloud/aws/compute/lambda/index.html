@@ -5256,6 +5256,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-throttling-toomanyrequestsexception" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Throttling (TooManyRequestsException)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-timeout-task-timed-out-after-n-seconds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Timeout (Task timed out after N seconds)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-accessdeniedexception-permessi-mancanti" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — AccessDeniedException / permessi mancanti
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-cold-start-lenti-o-runtimeoutofmemory-runtimeimportmoduleerror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Cold start lenti o Runtime.OutOfMemory / Runtime.ImportModuleError
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#riferimenti" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -15899,7 +15960,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24114,7 +24175,7 @@
     
   
   
-    <span class="md-status md-status--draft"></span>
+    <span class="md-status md-status--complete"></span>
   
 
   
@@ -24647,6 +24708,67 @@
       
     </span>
   </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-throttling-toomanyrequestsexception" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Throttling (TooManyRequestsException)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-timeout-task-timed-out-after-n-seconds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Timeout (Task timed out after N seconds)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-accessdeniedexception-permessi-mancanti" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — AccessDeniedException / permessi mancanti
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-cold-start-lenti-o-runtimeoutofmemory-runtimeimportmoduleerror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Cold start lenti o Runtime.OutOfMemory / Runtime.ImportModuleError
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -25279,6 +25401,43 @@
 - <code>10M × $0.20/1M = $2 (invocazioni)</code>
 - <code>10M × 0.1s × 0.5GB × $0.0000166667 = $8.33 (duration)</code>
 - Totale: ~$10.33/mese</p>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="scenario-1-throttling-toomanyrequestsexception">Scenario 1 — Throttling (<code>TooManyRequestsException</code>)<a class="headerlink" href="#scenario-1-throttling-toomanyrequestsexception" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: invocazioni sincrone falliscono con HTTP 429; metrica CloudWatch <code>Throttles</code> &gt; 0; messaggi SQS tornano in coda.</p>
+<p><strong>Causa</strong>: concurrency account (default 1000/Region) esaurita da altre funzioni, oppure reserved concurrency della funzione troppo bassa (o impostata a 0, che blocca ogni invocazione).</p>
+<p><strong>Soluzione</strong>: controllare la reserved concurrency, ridurre quella di funzioni meno critiche o chiedere un aumento quota via Service Quotas. Per le sorgenti SQS, limitare <code>MaximumConcurrency</code> sull'event source mapping così i throttle non consumano i retry del messaggio.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>aws<span class="w"> </span>lambda<span class="w"> </span>get-function-concurrency<span class="w"> </span>--function-name<span class="w"> </span>MyFunction
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>aws<span class="w"> </span>lambda<span class="w"> </span>get-account-settings<span class="w"> </span>--query<span class="w"> </span><span class="s1">'AccountLimit.ConcurrentExecutions'</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>aws<span class="w"> </span>lambda<span class="w"> </span>put-function-concurrency<span class="w"> </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span>--reserved-concurrent-executions<span class="w"> </span><span class="m">100</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>aws<span class="w"> </span>lambda<span class="w"> </span>update-event-source-mapping<span class="w"> </span>--uuid<span class="w"> </span>&lt;uuid&gt;<span class="w"> </span>--scaling-config<span class="w"> </span><span class="nv">MaximumConcurrency</span><span class="o">=</span><span class="m">20</span>
+</span></code></pre></div>
+<h3 id="scenario-2-timeout-task-timed-out-after-n-seconds">Scenario 2 — Timeout (<code>Task timed out after N seconds</code>)<a class="headerlink" href="#scenario-2-timeout-task-timed-out-after-n-seconds" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: log con <code>Task timed out after 3.00 seconds</code>; invocazioni che terminano sempre al valore di timeout.</p>
+<p><strong>Causa</strong>: timeout default (3 s) troppo basso, memoria insufficiente (CPU proporzionale alla memoria), oppure chiamate di rete bloccate — tipico di Lambda in VPC senza NAT Gateway o VPC Endpoint.</p>
+<p><strong>Soluzione</strong>: alzare timeout e memoria (verificare con Power Tuning), e per funzioni in VPC aggiungere NAT/VPC Endpoint. Il timeout di una funzione dietro API Gateway non deve superare il limite dell'integrazione (29 s di default).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>aws<span class="w"> </span>lambda<span class="w"> </span>update-function-configuration<span class="w"> </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span>--timeout<span class="w"> </span><span class="m">60</span><span class="w"> </span>--memory-size<span class="w"> </span><span class="m">1024</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>aws<span class="w"> </span>logs<span class="w"> </span>filter-log-events<span class="w"> </span>--log-group-name<span class="w"> </span>/aws/lambda/MyFunction<span class="w"> </span>--filter-pattern<span class="w"> </span><span class="s2">"Task timed out"</span>
+</span></code></pre></div>
+<h3 id="scenario-3-accessdeniedexception-permessi-mancanti">Scenario 3 — <code>AccessDeniedException</code> / permessi mancanti<a class="headerlink" href="#scenario-3-accessdeniedexception-permessi-mancanti" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>User: arn:aws:sts::...:assumed-role/... is not authorized to perform ...</code> nei log, oppure la sorgente (S3, SNS) non riesce a invocare la funzione.</p>
+<p><strong>Causa</strong>: due policy distinte — l'<strong>execution role</strong> governa cosa la funzione può chiamare; la <strong>resource-based policy</strong> governa chi può invocare la funzione. Confonderle è l'errore più comune.</p>
+<p><strong>Soluzione</strong>: aggiungere l'azione mancante all'execution role (least privilege) oppure <code>add-permission</code> per il principal invocante.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>aws<span class="w"> </span>lambda<span class="w"> </span>get-function<span class="w"> </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span>--query<span class="w"> </span><span class="s1">'Configuration.Role'</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>aws<span class="w"> </span>lambda<span class="w"> </span>get-policy<span class="w"> </span>--function-name<span class="w"> </span>MyFunction<span class="w">          </span><span class="c1"># chi può invocare</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>aws<span class="w"> </span>iam<span class="w"> </span>list-attached-role-policies<span class="w"> </span>--role-name<span class="w"> </span>lambda-basic-role
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>aws<span class="w"> </span>lambda<span class="w"> </span>add-permission<span class="w"> </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span>--statement-id<span class="w"> </span>sns-invoke<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">    </span>--action<span class="w"> </span>lambda:InvokeFunction<span class="w"> </span>--principal<span class="w"> </span>sns.amazonaws.com<span class="w"> </span>--source-arn<span class="w"> </span>&lt;topic-arn&gt;
+</span></code></pre></div>
+<h3 id="scenario-4-cold-start-lenti-o-runtimeoutofmemory-runtimeimportmoduleerror">Scenario 4 — Cold start lenti o <code>Runtime.OutOfMemory</code> / <code>Runtime.ImportModuleError</code><a class="headerlink" href="#scenario-4-cold-start-lenti-o-runtimeoutofmemory-runtimeimportmoduleerror" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>Init Duration</code> elevata in <code>REPORT</code>; oppure <code>Runtime.OutOfMemory</code> / <code>Runtime.ImportModuleError: Unable to import module</code>.</p>
+<p><strong>Causa</strong>: package grande o init pesante fuori dall'handler; memoria troppo bassa; dipendenze compilate per architettura diversa (es. layer x86_64 su funzione arm64) o handler path errato.</p>
+<p><strong>Soluzione</strong>: confrontare <code>Max Memory Used</code> con la memoria configurata, ricostruire le dipendenze per l'architettura corretta, verificare <code>--handler</code>, usare SnapStart/Provisioned Concurrency per latenza critica.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>aws<span class="w"> </span>logs<span class="w"> </span>start-query<span class="w"> </span>--log-group-name<span class="w"> </span>/aws/lambda/MyFunction<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">    </span>--start-time<span class="w"> </span><span class="k">$(</span>date<span class="w"> </span>-d<span class="w"> </span><span class="s1">'-1 hour'</span><span class="w"> </span>+%s<span class="k">)</span><span class="w"> </span>--end-time<span class="w"> </span><span class="k">$(</span>date<span class="w"> </span>+%s<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span>--query-string<span class="w"> </span><span class="s1">'filter @type="REPORT" | stats max(@initDuration), max(@maxMemoryUsed/1024/1024) by bin(5m)'</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>aws<span class="w"> </span>lambda<span class="w"> </span>get-function-configuration<span class="w"> </span>--function-name<span class="w"> </span>MyFunction<span class="w"> </span>--query<span class="w"> </span><span class="s1">'[Handler,Architectures,Layers]'</span>
+</span></code></pre></div>
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>

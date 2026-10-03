@@ -5544,6 +5544,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-nodi-in-stato-notready" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Nodi in stato NotReady
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-pod-bloccati-in-pending" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Pod bloccati in Pending
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-errore-imagepullbackoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Errore ImagePullBackOff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-irsa-non-funziona-credenziali-non-disponibili" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — IRSA non funziona (credenziali non disponibili)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-upgrade-fallisce-o-cluster-bloccato" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Upgrade fallisce o cluster bloccato
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -16028,7 +16089,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24243,7 +24304,7 @@
     
   
   
-    <span class="md-status md-status--draft"></span>
+    <span class="md-status md-status--complete"></span>
   
 
   
@@ -24894,6 +24955,67 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-nodi-in-stato-notready" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Nodi in stato NotReady
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-pod-bloccati-in-pending" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Pod bloccati in Pending
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-errore-imagepullbackoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Errore ImagePullBackOff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-irsa-non-funziona-credenziali-non-disponibili" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — IRSA non funziona (credenziali non disponibili)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-upgrade-fallisce-o-cluster-bloccato" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Upgrade fallisce o cluster bloccato
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -25900,7 +26022,10 @@
 </div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<p><strong>Nodi in stato <code>NotReady</code></strong></p>
+<h3 id="scenario-1-nodi-in-stato-notready">Scenario 1 — Nodi in stato <code>NotReady</code><a class="headerlink" href="#scenario-1-nodi-in-stato-notready" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>kubectl get nodes</code> mostra nodi <code>NotReady</code>; i pod vengono evict o non schedulati.</p>
+<p><strong>Causa</strong>: il kubelet non riesce a riportare lo stato al control plane — disco/memoria esauriti o CNI (Container Network Interface, plugin di rete) non inizializzato.</p>
+<p><strong>Soluzione</strong>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Verificare stato nodi e causa</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>node<span class="w"> </span>&lt;NODE_NAME&gt;
 </span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>--field-selector<span class="w"> </span>involvedObject.name<span class="o">=</span>&lt;NODE_NAME&gt;
@@ -25914,7 +26039,10 @@
 </span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="c1"># Verificare logs VPC CNI</span>
 </span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>-l<span class="w"> </span>k8s-app<span class="o">=</span>aws-node<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
 </span></code></pre></div>
-<p><strong>Pod bloccati in <code>Pending</code></strong></p>
+<h3 id="scenario-2-pod-bloccati-in-pending">Scenario 2 — Pod bloccati in <code>Pending</code><a class="headerlink" href="#scenario-2-pod-bloccati-in-pending" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: il pod resta <code>Pending</code>, evento <code>FailedScheduling</code>.</p>
+<p><strong>Causa</strong>: lo scheduler non trova un nodo idoneo — risorse insufficienti, taint senza toleration, affinity non soddisfatta, o Fargate profile che non matcha namespace/label.</p>
+<p><strong>Soluzione</strong>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Verificare eventi del pod</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>&lt;POD_NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
@@ -25934,7 +26062,10 @@
 </span><span id="__span-25-17"><a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a><span class="w">    </span>--cluster-name<span class="w"> </span>production<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-25-18"><a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a><span class="w">    </span>--fargate-profile-name<span class="w"> </span>app-serverless
 </span></code></pre></div>
-<p><strong>Errore <code>ImagePullBackOff</code></strong></p>
+<h3 id="scenario-3-errore-imagepullbackoff">Scenario 3 — Errore <code>ImagePullBackOff</code><a class="headerlink" href="#scenario-3-errore-imagepullbackoff" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: pod in <code>ErrImagePull</code> / <code>ImagePullBackOff</code>.</p>
+<p><strong>Causa</strong>: il nodo non autentica su ECR (policy di lettura mancante sul role) oppure non raggiunge l'endpoint ECR (subnet privata senza NAT Gateway o VPC endpoint).</p>
+<p><strong>Soluzione</strong>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Verificare accesso ECR dal nodo</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># Il node group deve avere AmazonEC2ContainerRegistryReadOnly policy</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
@@ -25945,7 +26076,10 @@
 </span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>aws<span class="w"> </span>iam<span class="w"> </span>list-attached-role-policies<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="w">    </span>--role-name<span class="w"> </span>EKSFargatePodExecutionRole
 </span></code></pre></div>
-<p><strong>IRSA non funziona (credenziali non disponibili)</strong></p>
+<h3 id="scenario-4-irsa-non-funziona-credenziali-non-disponibili">Scenario 4 — IRSA non funziona (credenziali non disponibili)<a class="headerlink" href="#scenario-4-irsa-non-funziona-credenziali-non-disponibili" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: l'app riceve <code>AccessDenied</code> o <code>NoCredentialProviders</code>; <code>aws sts get-caller-identity</code> mostra il role del nodo invece di quello atteso.</p>
+<p><strong>Causa</strong>: annotazione <code>eks.amazonaws.com/role-arn</code> mancante, OIDC provider assente in IAM, o trust policy con <code>sub</code> (namespace/SA) errato. Il webhook inietta le variabili solo ai pod creati dopo l'annotazione.</p>
+<p><strong>Soluzione</strong>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Verificare annotazione sul ServiceAccount</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>sa<span class="w"> </span>&lt;SA_NAME&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;NAMESPACE&gt;
 </span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="c1"># Deve avere: eks.amazonaws.com/role-arn: arn:aws:iam::...</span>
@@ -25960,7 +26094,10 @@
 </span><span id="__span-27-12"><a id="__codelineno-27-12" name="__codelineno-27-12" href="#__codelineno-27-12"></a><span class="c1"># Test manuale dal pod</span>
 </span><span id="__span-27-13"><a id="__codelineno-27-13" name="__codelineno-27-13" href="#__codelineno-27-13"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>&lt;POD&gt;<span class="w"> </span>--<span class="w"> </span>aws<span class="w"> </span>sts<span class="w"> </span>get-caller-identity
 </span></code></pre></div>
-<p><strong>Upgrade fallisce o cluster bloccato</strong></p>
+<h3 id="scenario-5-upgrade-fallisce-o-cluster-bloccato">Scenario 5 — Upgrade fallisce o cluster bloccato<a class="headerlink" href="#scenario-5-upgrade-fallisce-o-cluster-bloccato" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>describe-update</code> riporta <code>Failed</code> o l'update resta <code>InProgress</code> oltre i tempi normali.</p>
+<p><strong>Causa</strong>: admission webhook (validating/mutating) irraggiungibili che bloccano le modifiche, API deprecate ancora in uso, o pod di sistema non healthy.</p>
+<p><strong>Soluzione</strong>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Verificare status update in corso</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>aws<span class="w"> </span>eks<span class="w"> </span>list-updates<span class="w"> </span>--name<span class="w"> </span>production
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>aws<span class="w"> </span>eks<span class="w"> </span>describe-update<span class="w"> </span>--name<span class="w"> </span>production<span class="w"> </span>--update-id<span class="w"> </span>&lt;UPDATE_ID&gt;
