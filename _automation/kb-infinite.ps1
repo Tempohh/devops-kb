@@ -186,7 +186,9 @@ try {
     # di scansione KB ogni ~30-60s (criticita' #5). Limite solo per questa
     # sessione locale: run_once.py (CI) non inietta piu' proposal a coda vuota.
     $lastProposalInjectAt        = [datetime]::MinValue
-    $ProposalMinIntervalSeconds  = 600   # min 10 minuti tra due iniezioni proposal in questa sessione
+    $ProposalBaseIntervalSeconds = 600   # intervallo base tra due iniezioni proposal
+    $ProposalMaxIntervalSeconds  = 21600 # tetto backoff: 6 ore
+    $ProposalMinIntervalSeconds  = $ProposalBaseIntervalSeconds  # raddoppia a ogni proposal vuota (SKIP)
     $throttleNotified            = $false # evita di ristampare il messaggio di throttle a ogni tick da 30s
 
     function Show-RunHeader {
@@ -617,6 +619,11 @@ try {
                 $pendingCount = "($($sn.total_pending) task rimasti)"
             } catch {}
 
+            if ($task.type -eq "proposal") {
+                # Backoff: proposal vuota -> raddoppia l'attesa (max 6h); con proposte -> reset
+                if ($fileWasCreated) { $ProposalMinIntervalSeconds = $ProposalBaseIntervalSeconds }
+                else { $ProposalMinIntervalSeconds = [Math]::Min($ProposalMaxIntervalSeconds, $ProposalMinIntervalSeconds * 2) }
+            }
             $logVerb    = if ($fileWasCreated) { "CREATED" } else { "SKIP" }
             $tokenCount = if ($tokens) { $tokens.total_tokens } else { 0 }
             Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] $logVerb task=$($task.id) elapsed=${elapsed}s tokens=$tokenCount lines=$fileLines" -Encoding UTF8
@@ -626,6 +633,8 @@ try {
             # Su conflitto di rebase (es. state.yaml toccato dalla CI) annulla il rebase e
             # lascia il commit locale: si risolve a mano, il loop continua.
             try {
+                # proposal vuota = solo churn di state.yaml: niente commit
+                if (-not ($task.type -eq "proposal" -and -not $fileWasCreated)) {
                 & git -C $ProjectRoot add -A 2>&1 | Out-Null
                 & git -C $ProjectRoot diff --cached --quiet
                 if ($LASTEXITCODE -ne 0) {
@@ -645,6 +654,7 @@ try {
                             Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [WRN] GIT_PUSH_FAIL task=$($task.id)" -Encoding UTF8
                         }
                     }
+                }
                 }
             } catch {
                 Write-Host "  [GIT] errore: $($_.Exception.Message)" -ForegroundColor Yellow
