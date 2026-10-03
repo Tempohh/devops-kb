@@ -876,7 +876,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -911,7 +911,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21927,7 +21927,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22433,7 +22433,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22477,7 +22477,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22502,7 +22502,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22869,7 +22869,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -22904,7 +22904,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25151,6 +25151,10 @@
 </span></code></pre></div>
 <p><strong>Phase 1 (IKE SA)</strong>: negozia i parametri per proteggere la comunicazione IKE stessa (DH key exchange, algoritmi).
 <strong>Phase 2 (Child SA / IPsec SA)</strong>: negozia i parametri per il traffico dati (quale traffico, cifratura, integrità).</p>
+<div class="admonition note">
+<p class="admonition-title">Phase &frac12; in IKEv2</p>
+<p>La terminologia Phase &frac12; viene da IKEv1 (Main/Aggressive Mode + Quick Mode) ed è rimasta nei menu di molti firewall. In IKEv2 <code>IKE_SA_INIT</code> + <code>IKE_AUTH</code> creano l'IKE SA <strong>e</strong> la prima Child SA in 4 messaggi totali; ulteriori Child SA si aggiungono con <code>CREATE_CHILD_SA</code>. Il rekeying avviene periodicamente (<code>ikelifetime</code>/<code>keylife</code>) per limitare la quantità di dati cifrati con la stessa chiave.</p>
+</div>
 <h3 id="wireguard-architettura-semplificata">WireGuard — Architettura Semplificata<a class="headerlink" href="#wireguard-architettura-semplificata" title="Permanent link">&para;</a></h3>
 <p>WireGuard è radicalmente più semplice:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a># Ogni peer ha:
@@ -25167,17 +25171,21 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Installa WireGuard</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>apt<span class="w"> </span>install<span class="w"> </span>wireguard
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Genera chiavi su entrambi i server</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>wg<span class="w"> </span>genkey<span class="w"> </span><span class="p">|</span><span class="w"> </span>tee<span class="w"> </span>server-private.key<span class="w"> </span><span class="p">|</span><span class="w"> </span>wg<span class="w"> </span>pubkey<span class="w"> </span>&gt;<span class="w"> </span>server-public.key
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>wg<span class="w"> </span>genkey<span class="w"> </span><span class="p">|</span><span class="w"> </span>tee<span class="w"> </span>client-private.key<span class="w"> </span><span class="p">|</span><span class="w"> </span>wg<span class="w"> </span>pubkey<span class="w"> </span>&gt;<span class="w"> </span>client-public.key
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>cat<span class="w"> </span>server-private.key<span class="w">  </span><span class="c1"># Es: 8GboYh...</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>cat<span class="w"> </span>server-public.key<span class="w">   </span><span class="c1"># Es: xYmDMH...</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Genera una coppia di chiavi su OGNI server (la chiave privata non lascia mai l'host;</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># si scambiano solo le chiavi pubbliche). umask evita file leggibili da altri utenti.</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nb">umask</span><span class="w"> </span><span class="m">077</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>wg<span class="w"> </span>genkey<span class="w"> </span><span class="p">|</span><span class="w"> </span>tee<span class="w"> </span>private.key<span class="w"> </span><span class="p">|</span><span class="w"> </span>wg<span class="w"> </span>pubkey<span class="w"> </span>&gt;<span class="w"> </span>public.key
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>cat<span class="w"> </span>public.key<span class="w">   </span><span class="c1"># Es: xYmDMH... — da copiare nel [Peer] dell'altro server</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Esempio con reti 10.0.0.0/8 e 172.16.0.0/12</p>
+<p>Le subnet dei due siti <strong>non devono sovrapporsi</strong> tra loro né con la subnet del tunnel: per questo il tunnel usa <code>192.168.255.0/30</code> (fuori da <code>10.0.0.0/8</code> e <code>172.16.0.0/12</code>). Con <code>MASQUERADE</code> il traffico arriva all'altro sito con l'IP del gateway, utile se gli host non hanno una route di ritorno verso il tunnel; in alternativa, rimuoverlo e aggiungere sugli host (o sul router del sito) la route verso la rete remota, così i log mantengono l'IP sorgente reale.</p>
+</div>
 <div class="language-ini highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># /etc/wireguard/wg0.conf — Server A (10.0.0.0/8)</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="k">[Interface]</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="na">Address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">10.100.0.1/30</span><span class="w">         </span><span class="c1"># IP tunnel per questo peer</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="na">Address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">192.168.255.1/30</span><span class="w">      </span><span class="c1"># IP tunnel per questo peer</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="na">PrivateKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&lt;SERVER-A-PRIVATE-KEY&gt;</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="na">ListenPort</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">51820</span>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
@@ -25187,14 +25195,14 @@
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="k">[Peer]</span>
 </span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="na">PublicKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&lt;SERVER-B-PUBLIC-KEY&gt;</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="na">AllowedIPs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">10.100.0.2/32, 172.16.0.0/12</span><span class="w">   </span><span class="c1"># IP tunnel B + rete B</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="na">AllowedIPs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">192.168.255.2/32, 172.16.0.0/12</span><span class="w">   </span><span class="c1"># IP tunnel B + rete B</span>
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="na">Endpoint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&lt;SERVER-B-PUBLIC-IP&gt;:51820</span>
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="na">PersistentKeepalive</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">25</span><span class="w">    </span><span class="c1"># Mantieni vivo attraverso NAT</span>
 </span></code></pre></div>
 <div class="language-ini highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># /etc/wireguard/wg0.conf — Server B (172.16.0.0/12)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">[Interface]</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="na">Address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">10.100.0.2/30</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="na">Address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">192.168.255.2/30</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="na">PrivateKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&lt;SERVER-B-PRIVATE-KEY&gt;</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="na">ListenPort</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">51820</span>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
@@ -25203,7 +25211,7 @@
 </span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
 </span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="k">[Peer]</span>
 </span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="na">PublicKey</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&lt;SERVER-A-PUBLIC-KEY&gt;</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="na">AllowedIPs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">10.100.0.1/32, 10.0.0.0/8</span><span class="w">     </span><span class="c1"># IP tunnel A + rete A</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="na">AllowedIPs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">192.168.255.1/32, 10.0.0.0/8</span><span class="w">  </span><span class="c1"># IP tunnel A + rete A</span>
 </span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="na">Endpoint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&lt;SERVER-A-PUBLIC-IP&gt;:51820</span>
 </span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="na">PersistentKeepalive</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">25</span>
 </span></code></pre></div>
@@ -25219,12 +25227,12 @@
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1">#</span>
 </span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1"># peer: &lt;SERVER-B-PUBLIC-KEY&gt;</span>
 </span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1">#   endpoint: x.x.x.x:51820</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1">#   allowed ips: 10.100.0.2/32, 172.16.0.0/12</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1">#   allowed ips: 192.168.255.2/32, 172.16.0.0/12</span>
 </span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="c1">#   latest handshake: 5 seconds ago</span>
 </span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="c1">#   transfer: 1.23 MiB received, 456 KiB sent</span>
 </span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
 </span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1"># Test connettività</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>ping<span class="w"> </span><span class="m">10</span>.100.0.2<span class="w">          </span><span class="c1"># Ping tunnel endpoint</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>ping<span class="w"> </span><span class="m">192</span>.168.255.2<span class="w">       </span><span class="c1"># Ping tunnel endpoint</span>
 </span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>ping<span class="w"> </span><span class="m">172</span>.16.0.1<span class="w">          </span><span class="c1"># Ping host in rete remota</span>
 </span></code></pre></div>
 <h3 id="strongswan-ipsecikev2">StrongSwan — IPsec/IKEv2<a class="headerlink" href="#strongswan-ipsecikev2" title="Permanent link">&para;</a></h3>
@@ -25282,36 +25290,47 @@
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a># /etc/ipsec.secrets
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>: RSA server-key.pem
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>user1 : EAP "SecurePassword123!"
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>user1 : EAP "&lt;PASSWORD-FORTE-GENERATA&gt;"
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">ipsec.conf vs swanctl.conf</p>
+<p><code>ipsec.conf</code>/<code>ipsec.secrets</code> (plugin <em>stroke</em>, pacchetto <code>strongswan-starter</code>) è il formato legacy: strongSwan 5.x+ raccomanda <code>swanctl.conf</code> con il demone <code>charon-systemd</code> e il comando <code>swanctl --load-all</code>. L'esempio sopra resta valido su molte distribuzioni, ma per nuove installazioni preferire <code>swanctl</code>. Con <code>eap-mschapv2</code> le credenziali sono password: usare password robuste o, meglio, autenticazione a certificato anche per i client.</p>
+</div>
 <h3 id="aws-site-to-site-vpn">AWS Site-to-Site VPN<a class="headerlink" href="#aws-site-to-site-vpn" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Crea Customer Gateway (il tuo router on-premise)</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-customer-gateway<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--type<span class="w"> </span>ipsec.1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--public-ip<span class="w"> </span><span class="m">203</span>.0.113.10<span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># IP pubblico del tuo router</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--bgp-asn<span class="w"> </span><span class="m">65000</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Crea Virtual Private Gateway e attaccalo alla VPC</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-vpn-gateway<span class="w"> </span>--type<span class="w"> </span>ipsec.1
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>aws<span class="w"> </span>ec2<span class="w"> </span>attach-vpn-gateway<span class="w"> </span>--vpn-gateway-id<span class="w"> </span>vgw-xxx<span class="w"> </span>--vpc-id<span class="w"> </span>vpc-xxx
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="c1"># Crea connessione VPN</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-vpn-connection<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span>--type<span class="w"> </span>ipsec.1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>--customer-gateway-id<span class="w"> </span>cgw-xxx<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">  </span>--vpn-gateway-id<span class="w"> </span>vgw-xxx<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">  </span>--options<span class="w"> </span><span class="s1">'{"StaticRoutesOnly":false}'</span><span class="w">  </span><span class="c1"># Usa BGP</span>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="c1"># Scarica configurazione per il tuo dispositivo</span>
-</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-vpn-connections<span class="w"> </span>--vpn-connection-ids<span class="w"> </span>vpn-xxx
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># --public-ip: IP pubblico del tuo router (203.0.113.10 = indirizzo di esempio)</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-customer-gateway<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--type<span class="w"> </span>ipsec.1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--public-ip<span class="w"> </span><span class="m">203</span>.0.113.10<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span>--bgp-asn<span class="w"> </span><span class="m">65000</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Crea Virtual Private Gateway e attaccalo alla VPC</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-vpn-gateway<span class="w"> </span>--type<span class="w"> </span>ipsec.1
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>aws<span class="w"> </span>ec2<span class="w"> </span>attach-vpn-gateway<span class="w"> </span>--vpn-gateway-id<span class="w"> </span>vgw-xxx<span class="w"> </span>--vpc-id<span class="w"> </span>vpc-xxx
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="c1"># Crea connessione VPN</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-vpn-connection<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>--type<span class="w"> </span>ipsec.1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">  </span>--customer-gateway-id<span class="w"> </span>cgw-xxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">  </span>--vpn-gateway-id<span class="w"> </span>vgw-xxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">  </span>--options<span class="w"> </span><span class="s1">'{"StaticRoutesOnly":false}'</span><span class="w">  </span><span class="c1"># Usa BGP</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="c1"># Scarica configurazione per il tuo dispositivo</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-vpn-connections<span class="w"> </span>--vpn-connection-ids<span class="w"> </span>vpn-xxx
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Due tunnel, Transit Gateway</p>
+<p>Ogni connessione AWS Site-to-Site VPN crea <strong>due tunnel</strong> su endpoint AWS diversi (alta disponibilità): configurali entrambi sul router on-premise, altrimenti durante le manutenzioni AWS perdi la connettività. Per collegare più VPC usa un <strong>Transit Gateway</strong> al posto di un Virtual Private Gateway per VPC. Con <code>StaticRoutesOnly: false</code> il routing è dinamico via BGP (Border Gateway Protocol).</p>
+</div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>WireGuard per nuove implementazioni</strong>: più semplice, più performante, più sicuro per default — preferirlo a IPsec quando non c'è vincolo di interoperabilità hardware</li>
-<li><strong>IKEv2 per IPsec</strong>: usare sempre IKEv2 (mai IKEv1, mai L2TP/IPsec che usa IKEv1)</li>
+<li><strong>IKEv2 per IPsec</strong>: usare sempre IKEv2 (mai IKEv1, che ha problemi noti con PSK in Aggressive Mode); evitare L2TP/IPsec (doppio incapsulamento, tipicamente IKEv1, overhead alto) e PPTP (rotto crittograficamente)</li>
+<li><strong>Crittografia post-quantum</strong>: il rischio "harvest now, decrypt later" riguarda i key exchange DH/ECDH. IKEv2 supporta key exchange aggiuntivi (RFC 9370, es. ML-KEM in strongSwan 6.x) in modalità ibrida; WireGuard non negozia algoritmi, ma supporta una PSK opzionale simmetrica (<code>PresharedKey</code>) come strato di difesa extra. Valutare per dati con lunga vita di riservatezza</li>
+<li><strong>Reti mesh (Tailscale, Headscale, NetBird)</strong>: costruite su WireGuard, aggiungono identità (SSO), ACL e NAT traversal automatico; sono la via pratica per accesso remoto dei developer quando una VPN classica è troppo rigida e uno ZTNA completo è eccessivo</li>
 <li><strong>Certificati invece di PSK</strong>: Pre-Shared Key è scomodo da ruotare e più vulnerabile — usare certificati per produzione</li>
 <li><strong>PFS (Perfect Forward Secrecy)</strong>: configurare DH group 14+ (o ECDH) per IKEv2 — garantisce che le chiavi di sessione non siano compromesse anche se la chiave a lungo termine lo fosse</li>
-<li><strong>Monitoring</strong>: monitorare lo stato dei tunnel — i tunnel IPsec cadono silenziosamente; configurare alert su <code>ike.sa</code> count</li>
+<li><strong>Monitoring</strong>: monitorare lo stato dei tunnel — i tunnel IPsec cadono silenziosamente; configurare alert su numero di IKE/Child SA stabilite (es. <code>swanctl --list-sas</code>) e, per WireGuard, sull'età di <code>latest handshake</code> (&gt;3 minuti con traffico attivo = problema)</li>
 <li><strong>Split tunneling</strong>: in remote access VPN, inviare solo il traffico interno attraverso il tunnel — non tutto Internet — per ridurre il carico e non degradare la navigazione dell'utente</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
