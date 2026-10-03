@@ -9,15 +9,17 @@ related: [iac/terraform/fondamentali, iac/terraform/state-management, containers
 official_docs: https://docs.crossplane.io/
 status: needs-review
 difficulty: advanced
-last_updated: 2026-10-02
+last_updated: 2026-10-03
 last_verified: 2026-10-03
 ---
 
 # Crossplane — Fondamentali
 
-!!! warning "Versione: esempi in stile Crossplane v1 / Upbound provider v1"
-    Gli esempi di questa pagina usano la API v1 (Composition `mode: Resources` con `patches`, `connectionDetails`, Claim, `provider-aws-*` v1.x). Crossplane v2 (2025) ha cambiato il modello: XR namespaced come default (i Claim restano solo in modalità legacy), solo Composition `mode: Pipeline` (patch-and-transform nativo rimosso: si usa `function-patch-and-transform`), connection details nativi e `deletionPolicy` sostituiti da logica nelle funzioni e `managementPolicies`, provider con MR namespaced (`*.m.upbound.io`).
-    <!-- REVIEW: riscrivere Composition/XRD/Claim/connection secret in stile v2 (Pipeline, XR namespaced, scope XRD) e verificare versioni provider/chart correnti; vedi prop-140 -->
+!!! note "Versione: esempi in stile Crossplane v2 (v2.4.x) e provider-upjet-aws v2.x"
+    Gli esempi usano il modello v2: XR **namespaced** (`scope: Namespaced` nella XRD `apiextensions.crossplane.io/v2`), Composition solo `mode: Pipeline` con `function-patch-and-transform`, MR namespaced dei provider v2 (`*.aws.m.upbound.io`) e `managementPolicies`. Versioni di riferimento verificate a ottobre 2026: Crossplane `v2.4.2`, `provider-aws-*` `v2.8.1`, `function-patch-and-transform` `v0.8.2`.
+
+!!! warning "Migrazione v1 → v2"
+    Rimossi in v2: patch-and-transform nativo (`mode: Resources`), `ControllerConfig`, external secret store, connection details dell'XR (`connectionDetails`, `publishConnectionDetailsTo`) e registry di default (i package vanno indicati con path completo, es. `xpkg.crossplane.io/crossplane-contrib/...`). I **Claim** esistono solo per XRD legacy (`apiextensions.crossplane.io/v1`, `scope: LegacyCluster`): in v2 lo sviluppatore crea direttamente l'XR nel proprio namespace. Le MR cluster-scoped `*.aws.upbound.io` restano per compatibilità, ma le nuove vanno scritte con le varianti namespaced `*.aws.m.upbound.io`. La maggior parte dei setup v1 che non usano le feature rimosse si aggiorna senza modifiche.
 
 ## Panoramica
 
@@ -53,66 +55,76 @@ kind: Provider
 metadata:
   name: provider-aws-s3
 spec:
-  package: xpkg.upbound.io/upbound/provider-aws-s3:v1.10.0
+  package: xpkg.crossplane.io/crossplane-contrib/provider-aws-s3:v2.8.1
 ```
 
 ### Managed Resource (MR)
 Una **Managed Resource** è un oggetto Kubernetes 1:1 con una risorsa cloud reale: un `Bucket` MR corrisponde esattamente a un bucket S3, un `RDSInstance` MR a un'istanza RDS. È l'equivalente concettuale di una `resource` Terraform, ma vive come CR (Custom Resource) nell'etcd del cluster invece che in uno state file.
 
 ```yaml
-apiVersion: s3.aws.upbound.io/v1beta1
+apiVersion: s3.aws.m.upbound.io/v1beta1   # variante namespaced (v2)
 kind: Bucket
 metadata:
   name: my-app-bucket
+  namespace: team-checkout
 spec:
   forProvider:
     region: eu-west-1
     tags:
       Environment: production
   providerConfigRef:
+    kind: ClusterProviderConfig
     name: aws-provider-config
+  managementPolicies: ["*"]   # default: controllo completo
 ```
 
 ### Composite Resource (XR) e Composition
-Una **Composite Resource (XR)** è un'astrazione custom che aggrega più Managed Resource in un'unica unità logica: ad esempio un XR "Database" che internamente crea `RDSInstance` + `SecurityGroup` + `Subnet`. La **Composition** è il template che definisce QUALI Managed Resource compongono l'XR e come i loro campi si collegano ai parametri esposti.
+Una **Composite Resource (XR)** è un'astrazione custom che aggrega più Managed Resource in un'unica unità logica: ad esempio un XR "Database" che internamente crea `RDSInstance` + `SecurityGroup` + `Subnet`. La **Composition** è il template che definisce QUALI Managed Resource compongono l'XR e come i loro campi si collegano ai parametri esposti. In v2 è sempre una pipeline di funzioni (vedi [Composition Functions](#layered-composition-e-funzioni-composition-functions)).
 
 ```yaml
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
-  name: xpostgresqlinstances.aws.example.org
+  name: postgresqlinstances.aws.example.org
 spec:
   compositeTypeRef:
     apiVersion: example.org/v1alpha1
-    kind: XPostgreSQLInstance
-  resources:
-    - name: rdsinstance
-      base:
-        apiVersion: rds.aws.upbound.io/v1beta1
-        kind: Instance
-        spec:
-          forProvider:
-            engine: postgres
-            instanceClass: db.t3.medium
-      patches:
-        - fromFieldPath: "spec.parameters.storageGB"
-          toFieldPath: "spec.forProvider.allocatedStorage"
+    kind: PostgreSQLInstance
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: crossplane-contrib-function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: rdsinstance
+            base:
+              apiVersion: rds.aws.m.upbound.io/v1beta1
+              kind: Instance
+              spec:
+                forProvider:
+                  engine: postgres
+                  instanceClass: db.t3.medium
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: "spec.parameters.storageGB"
+                toFieldPath: "spec.forProvider.allocatedStorage"
 ```
 
 ### XRD (CompositeResourceDefinition)
-La **XRD** definisce lo schema (OpenAPI) dell'astrazione self-service esposta agli sviluppatori: quali campi possono impostare (es. `storageGB`, `engineVersion`), senza vedere i dettagli implementativi della Composition. La XRD genera automaticamente il CRD dell'XR e, se abilitato, del `Claim` namespaced corrispondente.
+La **XRD** definisce lo schema (OpenAPI) dell'astrazione self-service esposta agli sviluppatori: quali campi possono impostare (es. `storageGB`, `engineVersion`), senza vedere i dettagli implementativi della Composition. In v2 la XRD (`apiextensions.crossplane.io/v2`) dichiara lo `scope` dell'XR (`Namespaced` di default, oppure `Cluster`) e genera il CRD dell'XR; non servono più `claimNames` né un tipo `X...` separato.
 
 ```yaml
-apiVersion: apiextensions.crossplane.io/v1
+apiVersion: apiextensions.crossplane.io/v2
 kind: CompositeResourceDefinition
 metadata:
-  name: xpostgresqlinstances.example.org
+  name: postgresqlinstances.example.org
 spec:
+  scope: Namespaced
   group: example.org
   names:
-    kind: XPostgreSQLInstance
-    plural: xpostgresqlinstances
-  claimNames:
     kind: PostgreSQLInstance
     plural: postgresqlinstances
   versions:
@@ -137,8 +149,8 @@ spec:
               required: [parameters]
 ```
 
-### Claim
-Il **Claim** è l'oggetto namespaced che uno sviluppatore crea per richiedere un'istanza dell'astrazione XR, senza toccare i dettagli cloud:
+### XR namespaced (e Claim legacy)
+In v2 lo sviluppatore crea direttamente l'**XR namespaced** nel proprio namespace, senza toccare i dettagli cloud. Il **Claim** (oggetto namespaced che puntava a un XR cluster-scoped) sopravvive solo per le XRD legacy v1:
 
 ```yaml
 apiVersion: example.org/v1alpha1
@@ -201,29 +213,36 @@ Perché è "control loop e non on-demand": non serve che un umano lanci `pulumi 
 
 ### Layered Composition e Funzioni (Composition Functions)
 
-Le versioni recenti di Crossplane (Functions GA dalla v1.17; unica modalità supportata in v2) sostituiscono il patching nativo delle Composition con **Composition Functions**: pipeline di funzioni (container OCI, tipicamente scritte in Go/Python) che ricevono l'XR in input e producono i Managed Resource in output, abilitando logica condizionale complessa (loop, if/else) impossibile con il solo patching YAML.
+Crossplane v2 ha rimosso il patching nativo delle Composition: l'unica modalità è `mode: Pipeline` con **Composition Functions**, pipeline di funzioni (container OCI, tipicamente scritte in Go/Python) che ricevono l'XR in input e producono le risorse composte in output, abilitando logica condizionale complessa (loop, if/else) impossibile con il solo patching YAML. Le funzioni vanno installate con un oggetto `Function`:
 
 ```yaml
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: crossplane-contrib-function-patch-and-transform
+spec:
+  package: xpkg.crossplane.io/crossplane-contrib/function-patch-and-transform:v0.8.2
+---
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
-  name: xpostgresqlinstances.aws.example.org
+  name: postgresqlinstances.aws.example.org
 spec:
   compositeTypeRef:
     apiVersion: example.org/v1alpha1
-    kind: XPostgreSQLInstance
+    kind: PostgreSQLInstance
   mode: Pipeline
   pipeline:
     - step: compose-rds
       functionRef:
-        name: function-patch-and-transform
+        name: crossplane-contrib-function-patch-and-transform
       input:
         apiVersion: pt.fn.crossplane.io/v1beta1
         kind: Resources
         resources:
           - name: rdsinstance
             base:
-              apiVersion: rds.aws.upbound.io/v1beta1
+              apiVersion: rds.aws.m.upbound.io/v1beta1
               kind: Instance
 ```
 
@@ -241,7 +260,8 @@ helm repo update
 # Installare Crossplane nel namespace dedicato
 helm install crossplane crossplane-stable/crossplane \
   --namespace crossplane-system \
-  --create-namespace
+  --create-namespace \
+  --version 2.4.2   # pinnare la versione; v2.x richiede package con path registry completo
 
 # Verificare che i pod siano Running
 kubectl get pods -n crossplane-system
@@ -257,14 +277,14 @@ kind: Provider
 metadata:
   name: provider-aws-s3
 spec:
-  package: xpkg.upbound.io/upbound/provider-aws-s3:v1.10.0
+  package: xpkg.crossplane.io/crossplane-contrib/provider-aws-s3:v2.8.1
 ---
 apiVersion: pkg.crossplane.io/v1
 kind: Provider
 metadata:
   name: provider-aws-rds
 spec:
-  package: xpkg.upbound.io/upbound/provider-aws-rds:v1.10.0
+  package: xpkg.crossplane.io/crossplane-contrib/provider-aws-rds:v2.8.1
 EOF
 
 # Verificare che il provider sia installato e healthy
@@ -282,8 +302,8 @@ type: Opaque
 data:
   creds: <base64 di un file credentials AWS>
 ---
-apiVersion: aws.upbound.io/v1beta1
-kind: ProviderConfig
+apiVersion: aws.m.upbound.io/v1beta1
+kind: ClusterProviderConfig   # ProviderConfig (namespaced) vale solo per le MR dello stesso namespace
 metadata:
   name: aws-provider-config
 spec:
@@ -297,19 +317,17 @@ spec:
 
 ### Composition Completa — Astrazione "Database"
 
-Composizione che espone un'astrazione "Database" nascondendo RDS + Security Group + Subnet Group (esempio semplificato, patching diretto):
+Composizione che espone un'astrazione "Database" nascondendo RDS + Security Group + Subnet Group (esempio semplificato, pipeline con `function-patch-and-transform`, XR namespaced):
 
 ```yaml
-apiVersion: apiextensions.crossplane.io/v1
+apiVersion: apiextensions.crossplane.io/v2
 kind: CompositeResourceDefinition
 metadata:
-  name: xdatabases.platform.example.org
+  name: databases.platform.example.org
 spec:
+  scope: Namespaced
   group: platform.example.org
   names:
-    kind: XDatabase
-    plural: xdatabases
-  claimNames:
     kind: Database
     plural: databases
   versions:
@@ -333,53 +351,70 @@ spec:
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
-  name: xdatabases-aws
+  name: databases-aws
   labels:
     provider: aws
 spec:
   compositeTypeRef:
     apiVersion: platform.example.org/v1alpha1
-    kind: XDatabase
-  resources:
-    - name: subnetgroup
-      base:
-        apiVersion: rds.aws.upbound.io/v1beta1
-        kind: SubnetGroup
-        spec:
-          forProvider:
-            region: eu-west-1
-    - name: securitygroup
-      base:
-        apiVersion: ec2.aws.upbound.io/v1beta1
-        kind: SecurityGroup
-        spec:
-          forProvider:
-            region: eu-west-1
-            ingress:
-              - fromPort: 5432
-                toPort: 5432
-                protocol: tcp
-                cidrBlocks: ["10.0.0.0/8"]
-    - name: rdsinstance
-      base:
-        apiVersion: rds.aws.upbound.io/v1beta1
-        kind: Instance
-        spec:
-          forProvider:
-            engine: postgres
-            engineVersion: "15"
-            region: eu-west-1
-      patches:
-        - fromFieldPath: "spec.parameters.storageGB"
-          toFieldPath: "spec.forProvider.allocatedStorage"
-        - fromFieldPath: "spec.parameters.instanceClass"
-          toFieldPath: "spec.forProvider.instanceClass"
-      connectionDetails:
-        - fromConnectionSecretKey: endpoint
-        - fromConnectionSecretKey: password
+    kind: Database
+  mode: Pipeline
+  pipeline:
+    - step: compose-resources
+      functionRef:
+        name: crossplane-contrib-function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: subnetgroup
+            base:
+              apiVersion: rds.aws.m.upbound.io/v1beta1
+              kind: SubnetGroup
+              spec:
+                forProvider:
+                  region: eu-west-1
+          - name: securitygroup
+            base:
+              apiVersion: ec2.aws.m.upbound.io/v1beta1
+              kind: SecurityGroup
+              spec:
+                forProvider:
+                  region: eu-west-1
+          - name: rdsinstance
+            base:
+              apiVersion: rds.aws.m.upbound.io/v1beta1
+              kind: Instance
+              spec:
+                forProvider:
+                  engine: postgres
+                  engineVersion: "15"
+                  region: eu-west-1
+                managementPolicies: ["*"]
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: "spec.parameters.storageGB"
+                toFieldPath: "spec.forProvider.allocatedStorage"
+              - type: FromCompositeFieldPath
+                fromFieldPath: "spec.parameters.instanceClass"
+                toFieldPath: "spec.forProvider.instanceClass"
+              # connection secret: scritto dalla MR nel namespace dell'XR
+              - type: FromCompositeFieldPath
+                fromFieldPath: "metadata.name"
+                toFieldPath: "spec.writeConnectionSecretToRef.name"
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-conn"
 ```
 
-Richiesta self-service dello sviluppatore (claim namespaced):
+<!-- CURRENCY: non verificato (2026-10) — patch del connection secret MR namespaced (writeConnectionSecretToRef) e securitygroup/subnet wiring omessi per brevità; controllare la reference del provider -->
+
+!!! note "Connection details in v2"
+    L'XR non espone più `connectionDetails`/`writeConnectionSecretToRef`. Il Secret con le credenziali lo scrive la singola MR (o una funzione, es. `function-go-templating`) nello stesso namespace dell'XR.
+
+Richiesta self-service dello sviluppatore (XR namespaced, nessun Claim):
 
 ```yaml
 apiVersion: platform.example.org/v1alpha1
@@ -391,13 +426,11 @@ spec:
   parameters:
     storageGB: 50
     instanceClass: db.t3.medium
-  writeConnectionSecretToRef:
-    name: checkout-db-conn
 ```
 
 ```bash
-# Lo sviluppatore applica il claim: nessuna conoscenza di RDS/VPC richiesta
-kubectl apply -f database-claim.yaml -n team-checkout
+# Lo sviluppatore applica l'XR: nessuna conoscenza di RDS/VPC richiesta
+kubectl apply -f database.yaml -n team-checkout
 
 # Verificare lo stato di provisioning
 kubectl get database checkout-db -n team-checkout
@@ -505,7 +538,7 @@ Il job `render-diff` fallisce se l'output della Composition cambia senza che lo 
 - **Platform engineering e multi-tenancy**: usare XRD per definire il "menu" di astrazioni disponibili (Database, Cluster, Topic) e RBAC Kubernetes per limitare chi può creare claim in quale namespace
 - **Pattern GitOps**: versionare Composition e XRD in Git, sincronizzarle nel cluster via ArgoCD/Flux; i claim degli sviluppatori vivono in repository applicative separate, seguendo lo stesso flusso GitOps dei Deployment applicativi
 - **Provider modulari (`provider-family`)**: installare solo i sotto-provider necessari (es. `provider-aws-s3` invece del monolitico `provider-aws`) per ridurre il numero di CRD installati e il tempo di avvio
-- **`publishConnectionDetailsTo` / connection secrets**: non esporre mai credenziali cloud generate direttamente nei log del claim; propagarle sempre come Secret Kubernetes referenziato
+- **Connection secrets**: non esporre mai credenziali cloud generate nei log o nello status dell'XR; propagarle sempre come Secret Kubernetes nello stesso namespace dell'XR (`publishConnectionDetailsTo` e external secret store sono rimossi in v2)
 - **Versionare le Composition Functions**: se si usa `mode: Pipeline`, taggare le immagini delle funzioni con versioni semantiche esplicite, mai `latest`, per evitare comportamento non riproducibile del reconciler
 
 !!! warning "Rischio: Composition come single point of failure organizzativo"
@@ -518,7 +551,7 @@ Il job `render-diff` fallisce se l'output della Composition cambia senza che lo 
 | Un XRD con decine di parametri opzionali | Astrazione che espone troppa complessità implementativa | Limitare i parametri del claim al minimo indispensabile per lo sviluppatore |
 | Modificare Managed Resource manualmente con `kubectl edit` | Il reconciler la sovrascrive al ciclo successivo | Modificare sempre la Composition o l'XR, mai la MR generata |
 | Provider monolitico (`provider-aws` intero) per un solo servizio | CRD e RBAC surface inutilmente ampi | Usare `provider-family-aws` con solo i sotto-provider richiesti |
-| Nessun `deletionPolicy` esplicito su risorse critiche | Cancellazione accidentale del claim distrugge il database in produzione | `spec.deletionPolicy: Orphan` su MR critiche, per scollegare senza distruggere |
+| Nessuna `managementPolicies` esplicita su risorse critiche | Cancellazione accidentale dell'XR distrugge il database in produzione | `managementPolicies: ["Observe", "Create", "Update", "LateInitialize"]` (senza `Delete`) su MR critiche, per scollegare senza distruggere; `deletionPolicy` è deprecato |
 
 ---
 
@@ -544,7 +577,7 @@ kubectl logs -n crossplane-system deploy/provider-aws-s3-<hash>
 **Causa:** tipicamente un patch nella Composition referenzia un `fromFieldPath` inesistente nello schema XRD, oppure una Managed Resource ha un campo `forProvider` non valido per l'API cloud.
 ```bash
 # Vedere eventi e condizioni dell'XR
-kubectl describe xdatabase <nome>
+kubectl describe database <nome> -n <namespace>
 
 # Vedere lo stato delle singole Managed Resource generate
 kubectl get managed -l crossplane.io/composite=<nome-xr>
@@ -566,9 +599,9 @@ kubectl describe bucket my-app-bucket
 ```
 **Soluzione:** estendere la policy IAM associata alle credenziali nel Secret referenziato dal `ProviderConfig`, seguendo il principio del privilegio minimo per le sole azioni richieste dal provider.
 
-### Claim creato ma nessuna Composition selezionata (`no matching composition`)
-**Sintomo:** il claim resta in stato vuoto/pending, evento `cannot find a Composition matching the composite resource's compositionSelector`.
-**Causa:** la Composition non è stata applicata, oppure `compositionSelector.matchLabels` nel claim non corrisponde alle label della Composition installata.
+### XR creato ma nessuna Composition selezionata (`no matching composition`)
+**Sintomo:** l'XR resta in stato vuoto/pending, evento `cannot find a Composition matching the composite resource's compositionSelector`.
+**Causa:** la Composition non è stata applicata, oppure `compositionSelector.matchLabels` nell'XR non corrisponde alle label della Composition installata.
 ```bash
 # Elencare le Composition disponibili e le loro label
 kubectl get compositions --show-labels
@@ -576,7 +609,7 @@ kubectl get compositions --show-labels
 # Verificare il selector richiesto dal claim
 kubectl get database checkout-db -n team-checkout -o yaml | grep -A3 compositionSelector
 ```
-**Soluzione:** applicare la Composition mancante o correggere le label/selector affinché combacino, oppure impostare `compositionRef.name` esplicito nel claim se si vuole bypassare la selezione per label.
+**Soluzione:** applicare la Composition mancante o correggere le label/selector affinché combacino, oppure impostare `spec.crossplane.compositionRef.name` esplicito nell'XR (in v2 i campi di macchinario stanno sotto `spec.crossplane`) se si vuole bypassare la selezione per label.
 
 ---
 
