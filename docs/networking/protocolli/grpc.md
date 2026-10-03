@@ -9,7 +9,7 @@ related: [networking/protocolli/http2-http3, networking/protocolli/websocket, ne
 official_docs: https://grpc.io/docs/
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-10-03
 ---
 
 # gRPC
@@ -31,6 +31,8 @@ Il file `.proto` è il contratto del servizio: definisce i messaggi (strutture d
 syntax = "proto3";
 
 package user.v1;
+
+import "google/protobuf/timestamp.proto";  // necessario per google.protobuf.Timestamp
 
 option go_package = "github.com/example/user/v1";
 
@@ -330,13 +332,77 @@ spec:
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| `DEADLINE_EXCEEDED` | Timeout troppo basso o server lento | Aumentare deadline, ottimizzare server |
-| `UNAVAILABLE` dopo deploy | Load balancer non aggiornato | Implementare retry con backoff esponenziale |
-| Tutto il traffico su 1 pod | LB L4 non bilancia HTTP/2 | Usare LB L7 o load balancing client-side |
-| Errori schema dopo aggiornamento | Field number modificato | Mai modificare field numbers esistenti |
-| Browser non si connette | HTTP/2 non negoziato o gRPC-Web non abilitato | Usare grpc-gateway o grpc-web proxy |
+### Scenario 1 — `DEADLINE_EXCEEDED`
+
+**Sintomo**: le chiamate falliscono con `rpc error: code = DeadlineExceeded` anche se il server risponde.
+
+**Causa**: la deadline (timeout assoluto propagato nell'header `grpc-timeout`) è più bassa della latenza reale, oppure una catena di servizi consuma il budget prima dell'ultimo hop.
+
+**Soluzione**: misurare la latenza per metodo, alzare la deadline dove giustificato e propagare sempre il `ctx` ai servizi a valle, così il budget residuo è coerente.
+
+```bash
+# Misura il tempo reale della chiamata (-max-time = deadline lato client)
+grpcurl -plaintext -max-time 10 -d '{"user_id":"user-123"}' \
+  localhost:50051 user.v1.UserService/GetUser
+```
+
+### Scenario 2 — `UNAVAILABLE` dopo un deploy
+
+**Sintomo**: picco di errori `UNAVAILABLE` durante il rolling update.
+
+**Causa**: il client riusa connessioni HTTP/2 verso pod terminati; il pod riceve SIGTERM prima che l'endpoint sia rimosso dal Service.
+
+**Soluzione**: retry con backoff esponenziale (service config), `preStop` sleep e shutdown graceful (`GracefulStop()`) per drenare gli stream in corso.
+
+```bash
+# Verifica che il pod risponda al health check gRPC standard
+grpcurl -plaintext localhost:50051 grpc.health.v1.Health/Check
+kubectl rollout status deployment/user-service
+kubectl get endpoints user-service
+```
+
+### Scenario 3 — Tutto il traffico su un solo pod
+
+**Sintomo**: un pod è saturo, gli altri sono idle, pur con più repliche.
+
+**Causa**: un LB L4 (o un Service ClusterIP) bilancia per connessione TCP; HTTP/2 multiplexa tutte le chiamate su una sola connessione long-lived.
+
+**Soluzione**: usare un LB L7 (Envoy, NGINX, Istio) oppure un Service *headless* con load balancing client-side `round_robin`.
+
+```bash
+# Service headless: il DNS restituisce tutti i pod IP
+kubectl get svc user-service -o jsonpath='{.spec.clusterIP}'   # deve essere None
+# Lato client Go: dial con dns:/// e policy round_robin
+#   grpc.NewClient("dns:///user-service:50051",
+#     grpc.WithDefaultServiceConfig(`{"loadBalancingConfig":[{"round_robin":{}}]}`))
+```
+
+### Scenario 4 — Errori di deserializzazione dopo un aggiornamento dello schema
+
+**Sintomo**: campi vuoti o errori `proto: cannot parse invalid wire-format data` tra versioni diverse di client e server.
+
+**Causa**: un field number è stato cambiato o riusato; sul wire protobuf identifica i campi solo per numero, non per nome.
+
+**Soluzione**: non modificare mai i numeri esistenti, marcare i campi rimossi con `reserved`, e controllare le breaking change in CI.
+
+```bash
+# Rileva breaking change rispetto al branch main
+buf breaking --against '.git#branch=main'
+```
+
+### Scenario 5 — Il browser non si connette
+
+**Sintomo**: `fetch` o client JS fallisce con errore di rete/protocollo verso il servizio gRPC.
+
+**Causa**: i browser non espongono trailer e framing HTTP/2 di gRPC, quindi non possono parlare gRPC nativo.
+
+**Soluzione**: esporre gRPC-Web tramite proxy (Envoy `grpc_web` filter) oppure un'API REST con grpc-gateway.
+
+```bash
+# Verifica che il proxy risponda a una richiesta gRPC-Web
+curl -i -X POST https://api.example.com/user.v1.UserService/GetUser \
+  -H "content-type: application/grpc-web+proto" -H "x-grpc-web: 1"
+```
 
 ## Relazioni
 
