@@ -7,9 +7,10 @@ search_keywords: [tekton, tekton pipelines, tekton ci/cd, tekton kubernetes, clo
 parent: ci-cd/tools/_index
 related: [ci-cd/gitops/argocd, ci-cd/pipeline, ci-cd/strategie/pipeline-security, containers/openshift/gitops-pipelines, containers/kubernetes/operators-crd]
 official_docs: https://tekton.dev/docs/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-26
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Tekton
@@ -18,7 +19,7 @@ last_updated: 2026-03-26
 
 Tekton è un framework open-source **Kubernetes-native** per la costruzione di pipeline CI/CD. A differenza di Jenkins, GitHub Actions o GitLab CI — sistemi esterni al cluster — Tekton si installa come estensione dell'API Kubernetes tramite CRD (Custom Resource Definition) e usa i pod Kubernetes come unità di esecuzione. Ogni step di una pipeline è un container, ogni task è un pod, ogni configurazione è un manifest YAML applicabile con `kubectl`. Questo approccio elimina la dipendenza da un server CI separato, sfrutta l'infrastruttura Kubernetes già esistente, e rende le pipeline portabili tra qualsiasi cluster.
 
-Tekton è un progetto CNCF Graduated (dal 2022), alla base di OpenShift Pipelines (Red Hat) e usato come building block da altre soluzioni CI/CD cloud-native. Il pattern più comune è usare Tekton per la parte **CI** (build, test, push immagine) e ArgoCD per la parte **CD** (deploy GitOps-style) — complementari per natura.
+Tekton è un progetto open-source nato in Google (Knative Build) e graduato nella CD Foundation (2022); in seguito è passato sotto l'ombrello CNCF. <!-- REVIEW: verificare livello di maturità CNCF attuale (incubating/graduated) --> È alla base di OpenShift Pipelines (Red Hat) e usato come building block da altre soluzioni CI/CD cloud-native. Il pattern più comune è usare Tekton per la parte **CI** (build, test, push immagine) e ArgoCD per la parte **CD** (deploy GitOps-style) — complementari per natura.
 
 !!! warning "Tekton NON è un sistema CI/CD completo out-of-the-box"
     Tekton è un framework a basso livello: non include UI avanzata, notifiche, policy di retention automatica, o dashboard ricca senza installare componenti aggiuntivi (Tekton Dashboard, Tekton Chains). Va usato quando si vuole controllo totale sulla pipeline come risorsa Kubernetes, non quando si vuole velocità di setup iniziale.
@@ -89,7 +90,7 @@ PipelineRun (risorsa Kubernetes creata)
       │
       ├─ TaskRun: git-clone     → Pod K8s con 1 container
       ├─ TaskRun: run-tests     → Pod K8s con 1 container
-      ├─ TaskRun: build-push    → Pod K8s con 2 container (build + push)
+      ├─ TaskRun: build-push    → Pod K8s (1 step kaniko: build + push)
       └─ TaskRun: update-gitops → Pod K8s con 1 container
                                     │
                                     ▼
@@ -121,6 +122,7 @@ Task git-clone  ──result: commit────► Task build-push (param: imag
 
 ```bash
 # Installa Tekton Pipelines (CRD + controller)
+# In produzione: sostituire "latest" con una versione pinnata (es. .../previous/v1.x.y/release.yaml)
 kubectl apply --filename https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
 
 # Installa Tekton Triggers (EventListener, TriggerTemplate, ecc.)
@@ -145,13 +147,9 @@ tkn version
 ```
 
 ```bash
-# Installa Tekton via Helm (alternativa)
-helm repo add tekton https://charts.openshift.io/
-helm install tekton-pipeline tekton/tekton-pipeline \
-  --namespace tekton-pipelines \
-  --create-namespace
-
-# Oppure via OpenShift Pipelines Operator (Red Hat)
+# Alternativa: Tekton Operator (gestisce install/upgrade di Pipelines, Triggers, Dashboard
+# via CR TektonConfig; progetto tektoncd/operator)
+# Su OpenShift: OpenShift Pipelines Operator (Red Hat)
 # → installa automaticamente Pipelines + Triggers + Dashboard
 ```
 
@@ -159,6 +157,9 @@ helm install tekton-pipeline tekton/tekton-pipeline \
 
 ```yaml
 # Task: build e push di un container image con kaniko (no Docker daemon)
+# NB: il repo GoogleContainerTools/kaniko è stato archiviato da Google (2025); l'immagine
+# gcr.io/kaniko-project/* non riceve più aggiornamenti. Per nuovi progetti valutare fork
+# mantenuti (Chainguard) o Buildah/BuildKit rootless dal catalog.
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
@@ -184,7 +185,7 @@ spec:
     - name: source
       description: "Workspace con il codice sorgente"
     - name: dockerconfig
-      description: "Secret con credenziali registry (~/.docker/config.json)"
+      description: "Secret con chiave config.json (credenziali registry)"
       optional: true
 
   results:
@@ -203,17 +204,12 @@ spec:
         - "--cache-ttl=24h"
         - "--snapshot-mode=redo"   # più veloce di full per layer grandi
       env:
+        # kaniko cerca config.json in questa directory. Il Secret montato come workspace
+        # deve avere la chiave "config.json" (un Secret kubernetes.io/dockerconfigjson ha
+        # la chiave ".dockerconfigjson" e NON funziona direttamente):
+        # kubectl create secret generic ghcr-credentials --from-file=config.json=$HOME/.docker/config.json
         - name: DOCKER_CONFIG
-          value: /kaniko/.docker
-      volumeMounts:
-        - name: docker-config
-          mountPath: /kaniko/.docker
-
-  volumes:
-    - name: docker-config
-      secret:
-        secretName: registry-credentials   # Secret con .dockerconfigjson
-        optional: true
+          value: $(workspaces.dockerconfig.path)
 ```
 
 ```yaml
@@ -244,6 +240,7 @@ spec:
       image: node:$(params.node-version)-alpine
       workingDir: $(workspaces.source.path)
       script: |
+        # per cache persistente tra run: dichiarare un workspace npm-cache e usare `npm ci --cache <path>`
         npm ci --prefer-offline
       resources:
         requests:
@@ -342,8 +339,13 @@ spec:
       taskRef:
         resolver: hub
         params:
+          - {name: catalog, value: tekton-catalog-tasks}
+          - {name: type, value: artifact}
+          - {name: kind, value: task}
           - {name: name, value: git-cli}
           - {name: version, value: "0.4"}
+      workspaces:
+        - {name: source, workspace: source}   # git-cli richiede il workspace "source"
       params:
         - name: GIT_USER_NAME
           value: "tekton-bot"
@@ -351,11 +353,13 @@ spec:
           value: "tekton@company.com"
         - name: GIT_SCRIPT
           value: |
-            git clone https://github.com/myorg/gitops-manifests /workspace/gitops
-            cd /workspace/gitops
-            # Aggiorna il tag dell'immagine con yq
-            yq e ".image.tag = \"$(tasks.git-clone.results.commit)\"" \
-              -i apps/$(params.image-name)/values.staging.yaml
+            # workingDir dello step = workspace "source"; le credenziali di push
+            # vanno fornite (ssh-directory / basic-auth workspace del task git-cli)
+            git clone https://github.com/myorg/gitops-manifests gitops
+            cd gitops
+            # Aggiorna il tag dell'immagine (sed: l'immagine git-cli non include yq)
+            sed -i "s/^\( *tag:\).*/\1 $(tasks.git-clone.results.commit)/" \
+              apps/$(params.image-name)/values.staging.yaml
             git add -A
             git commit -m "chore(ci): update $(params.image-name) to $(tasks.git-clone.results.commit)"
             git push
@@ -412,9 +416,9 @@ spec:
   taskRunTemplate:
     serviceAccountName: tekton-pipeline-sa
     podTemplate:
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 65532
+      # NB: kaniko richiede root nel container; runAsNonRoot a livello pod lo
+      # farebbe fallire. Con builder rootless (buildah/buildkit) impostare
+      # runAsNonRoot: true + runAsUser: 65532.
       nodeSelector:
         workload-type: ci       # runner dedicati al CI
 ```
@@ -437,8 +441,8 @@ tkn pipelinerun list --namespace ci
 # Log di un TaskRun specifico
 tkn taskrun logs ci-pipeline-run-xyz-build-push-1 --namespace ci
 
-# Cancellare tutti i PipelineRun completati (pulizia)
-tkn pipelinerun delete --all --keep 5 --namespace ci
+# Pulizia: elimina i PipelineRun più vecchi (per retention automatica: Tekton Pruner)
+tkn pipelinerun delete --keep 5 --namespace ci   # tiene i 5 più recenti
 ```
 
 ### 5. Tekton Triggers — Automazione da Webhook
@@ -460,6 +464,20 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: tekton-triggers-eventlistener-roles
+subjects:
+  - kind: ServiceAccount
+    name: tekton-triggers-sa
+    namespace: ci
+---
+# Gli Interceptor sono ClusterInterceptor (risorse cluster-scoped): servono anche i ruoli cluster
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tekton-triggers-clusterbinding-ci
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tekton-triggers-eventlistener-clusterroles
 subjects:
   - kind: ServiceAccount
     name: tekton-triggers-sa
@@ -601,6 +619,9 @@ rules:
   - apiGroups: [""]
     resources: ["secrets", "configmaps"]
     verbs: ["get", "list"]
+# NB: i pod degli step NON hanno bisogno di accesso all'API Kubernetes per girare;
+# questo Role serve solo a task che chiamano kubectl/tkn. Per le pipeline standard
+# il ServiceAccount può restare senza Role (solo imagePullSecrets).
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -619,8 +640,8 @@ subjects:
 
 ## Best Practices
 
-!!! tip "Usa il Tekton Hub per task standard"
-    Non scrivere task per operazioni comuni. Il [Tekton Hub](https://hub.tekton.dev/) offre task certificate per git-clone, buildah, kaniko, helm-upgrade-from-repo, sonarqube-scanner, trivy, cosign. Usare task dal Hub riduce il codice da mantenere e garantisce versioning esplicito.
+!!! tip "Usa il catalog per task standard"
+    Non scrivere task per operazioni comuni. Il catalog Tekton (consultabile via [Artifact Hub](https://artifacthub.io/); il vecchio Tekton Hub è deprecato <!-- REVIEW: verificare stato di hub.tekton.dev -->) offre task certificate per git-clone, buildah, kaniko, helm-upgrade-from-repo, sonarqube-scanner, trivy, cosign. Usare task dal Hub riduce il codice da mantenere e garantisce versioning esplicito.
 
 ### Task Design
 
@@ -628,7 +649,7 @@ subjects:
 
 **2. Parametri con default sensati.** Ogni param dovrebbe avere un default che funziona per il caso d'uso più comune, così le Pipeline sono più concise.
 
-**3. Security contexts espliciti.** Specificare sempre `runAsNonRoot: true` e `readOnlyRootFilesystem: true` dove possibile negli step. Kaniko e Buildah funzionano rootless.
+**3. Security contexts espliciti.** Specificare sempre `runAsNonRoot: true` e `readOnlyRootFilesystem: true` dove possibile negli step. Buildah (e BuildKit) possono girare rootless; kaniko invece richiede root nel container.
 
 ```yaml
 # Step con security context restrittivo
@@ -693,10 +714,13 @@ Tekton Chains è un controller che firma automaticamente i TaskRun/PipelineRun c
 # Installazione Tekton Chains
 kubectl apply --filename https://storage.googleapis.com/tekton-releases/chains/latest/release.yaml
 
-# Configurazione: firma con cosign keyless (OIDC)
+# Configurazione: attestazioni SLSA per i TaskRun, firma immagini OCI,
+# x509 keyless via Fulcio (identità OIDC del ServiceAccount) + log Rekor
 kubectl patch configmap chains-config -n tekton-chains \
   --type=merge \
-  -p='{"data":{"artifacts.oci.format":"sigstore","artifacts.oci.signer":"x509","transparency.enabled":"true"}}'
+  -p='{"data":{"artifacts.taskrun.format":"slsa/v1","artifacts.taskrun.storage":"oci","artifacts.oci.storage":"oci","artifacts.oci.signer":"x509","signers.x509.fulcio.enabled":"true","transparency.enabled":"true"}}'
+# Alternativa key-based: Secret signing-secrets in tekton-chains (cosign generate-key-pair k8s://tekton-chains/signing-secrets)
+# Chains firma solo immagini riconosciute: il Task deve esporre i result IMAGE_URL e IMAGE_DIGEST (type hinting)
 ```
 
 ## Troubleshooting
@@ -812,12 +836,12 @@ echo -n "$(git rev-parse HEAD)" > $(results.commit.path)
 echo -n "$(git rev-parse HEAD)" > /tmp/commit.txt
 ```
 
-**Causa 2:** Il result contiene newline — Tekton non supporta result multi-riga (troncati a 4096 byte).
+**Causa 2:** Result troppo grande o con newline indesiderato. Un result è limitato a 4096 byte (limite totale per TaskRun ~12 KB, termination message del pod): oltre viene troncato/fallisce. Per dati più grandi usare un workspace.
 
 ```bash
 # Usare sempre echo -n (senza newline finale)
 echo -n "abc123" > $(results.commit.path)
-# NON: echo "abc123" > ... (aggiunge \n che può causare problemi)
+# echo senza -n aggiunge \n: confronti e tag immagine (es. 'abc123\n') risultano invalidi
 ```
 
 ---
@@ -840,7 +864,7 @@ workspaces:
             storage: 1Gi
   - name: npm-cache
     persistentVolumeClaim:        # persistente — cache condivisa tra run
-      claimName: npm-cache-pvc    # creato separatamente, ReadWriteMany o ReadWriteOnce
+      claimName: npm-cache-pvc    # creato separatamente; con RWO, run concorrenti su nodi diversi restano Pending (usare RWX o serializzare)
 ```
 
 ```bash
