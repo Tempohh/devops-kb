@@ -7,9 +7,10 @@ search_keywords: [AWS VPC, Virtual Private Cloud, subnet, public subnet, private
 parent: cloud/aws/networking/_index
 related: [cloud/aws/networking/vpc-avanzato, cloud/aws/security/network-security, cloud/aws/compute/ec2]
 official_docs: https://docs.aws.amazon.com/vpc/latest/userguide/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # VPC — Virtual Private Cloud
@@ -48,7 +49,7 @@ NAT Gateway (1+ per AZ, in subnet pubblica)
 
 ## Progettare un VPC — CIDR Planning
 
-Prima di creare qualsiasi risorsa, è fondamentale pianificare con attenzione il **CIDR block** (Classless Inter-Domain Routing — notazione `IP/prefisso` per definire blocchi di indirizzi, es. `10.0.0.0/16`) del VPC. Una volta creato, il CIDR principale non può essere ridotto e aggiungere CIDR secondari ha limitazioni. La regola più importante: **non sovrapporre mai i CIDR** tra VPC che potrebbero dover comunicare in futuro tramite VPC Peering o Transit Gateway.
+Prima di creare qualsiasi risorsa, è fondamentale pianificare con attenzione il **CIDR block** (Classless Inter-Domain Routing — notazione `IP/prefisso` per definire blocchi di indirizzi, es. `10.0.0.0/16`) del VPC. Una volta creato, il CIDR principale **non può essere modificato né rimosso**; si possono solo aggiungere CIDR secondari (con limitazioni sui range ammessi e sulle sovrapposizioni con route esistenti). Per pianificare gli spazi su molti VPC/account esiste **VPC IPAM** (IP Address Manager), che alloca CIDR da pool senza sovrapposizioni. La regola più importante: **non sovrapporre mai i CIDR** tra VPC che potrebbero dover comunicare in futuro tramite VPC Peering o Transit Gateway.
 
 Il VPC può avere un CIDR da `/16` (65.536 IP) fino a `/28` (16 IP). Per produzione, `/16` è la scelta standard: offre spazio sufficiente per molte subnet senza essere sprecone.
 
@@ -203,8 +204,10 @@ Il **NAT Gateway** permette alle istanze in subnet private di accedere a Interne
 - Deve risiedere in una **subnet pubblica**
 - Richiede un **Elastic IP** associato
 - Bandwidth: da 5 Gbps fino a 100 Gbps (scaling automatico)
-- **Non supporta** IPv6 (per IPv6 usare Egress-only IGW)
-- **Costo:** $0.045/hr + $0.045/GB processato → significativo per alti volumi
+- **Non fa NAT per il traffico IPv6 nativo** (per uscire in IPv6 senza essere raggiungibili usare Egress-only IGW; per raggiungere servizi solo-IPv4 da subnet IPv6-only supporta NAT64 + DNS64)
+- Esiste anche il tipo **private** (senza EIP): serve per connettività verso altre VPC/on-prem via TGW o VPN, non per Internet
+- **Costo (us-east-1):** $0.045/hr + $0.045/GB processato; in altre Region (es. eu-central-1) i prezzi sono leggermente superiori → verificare la pricing page. Significativo per alti volumi
+- Per evitare il single-AZ design esiste anche la modalità **regional** (un solo NAT GW che si estende su più AZ, introdotta a fine 2025): verificare disponibilità e prezzi nella documentazione ufficiale prima di adottarla
 
 !!! warning "NAT Gateway per AZ"
     Per alta disponibilità, creare **un NAT Gateway per AZ** e configurare route table private separate per AZ. Un singolo NAT GW è SPOF (Single Point of Failure) per le subnet private delle altre AZ.
@@ -212,7 +215,8 @@ Il **NAT Gateway** permette alle istanze in subnet private di accedere a Interne
 ```bash
 # Costo NAT Gateway (approssimativo)
 # $0.045/hr × 24 × 30 = ~$32/mese + data processing
-# Per workload con molto traffico outbound → considerare NAT Instance (EC2) come alternativa più economica
+# Per ridurre il costo: VPC Gateway Endpoint per S3/DynamoDB (gratuiti) per togliere traffico dal NAT.
+# NAT Instance (EC2) è un'alternativa solo per dev/test o volumi molto bassi: va gestita, patchata, non scala.
 ```
 
 ---
@@ -241,9 +245,9 @@ aws ec2 release-address --allocation-id $EIP_ID
 ```
 
 **Note:**
-- **Gratuito** se associato a un'istanza running
-- **$0.005/hr** se non associato (AWS disincentiva EIP "parcheggiati")
+- Da febbraio 2024 AWS addebita **$0.005/hr per ogni indirizzo IPv4 pubblico** (~$3.6/mese), sia EIP che IP pubblici auto-assegnati, **anche se associati e in uso** (free tier: 750 ore/mese per 12 mesi su EC2). Un EIP non associato costa quindi lo stesso: il costo non è più un disincentivo specifico ai "parcheggiati"
 - Rimane nel tuo account fino a rilascio esplicito
+- Per ridurre i costi: preferire IPv6 / subnet IPv6-only dove possibile, ALB davanti alle istanze invece di un IP pubblico per istanza, SSM Session Manager invece di SSH su IP pubblico
 
 ---
 
@@ -256,7 +260,7 @@ I **Security Groups** sono firewall **stateful** applicati a livello di singola 
 **Caratteristiche:**
 - **Solo regole Allow** — le regole `Deny` non esistono nei Security Group. Il traffico che non corrisponde a nessuna regola Allow viene automaticamente bloccato (deny implicito).
 - Si applicano a: EC2, RDS, ALB/NLB, Lambda in VPC, ECS tasks, ElastiCache, e altri
-- Un'istanza può avere più Security Group associati (fino a 5 per interfaccia), e i loro permessi si sommano
+- Un'istanza può avere più Security Group associati (quota di default 5 per interfaccia, aumentabile fino a 16), e i loro permessi si sommano. Di default un nuovo SG permette **tutto l'outbound** e nessun inbound
 - Le regole possono referenziare IP/CIDR oppure **altri Security Group ID** — questa è la caratteristica più potente: permette di dire "accetta traffico solo da risorse che hanno il Security Group X associato", senza dover conoscere i loro IP
 
 ```bash
@@ -359,10 +363,11 @@ Nella maggior parte delle architetture i **Security Group** sono sufficienti. Le
 # 120: Allow TCP 1024-65535 to 0.0.0.0/0    (ephemeral ports)
 # *:   Deny All
 
+# --protocol 6 = TCP
 aws ec2 create-network-acl-entry \
     --network-acl-id acl-xxxx \
     --rule-number 100 \
-    --protocol 6 \     # 6=TCP
+    --protocol 6 \
     --port-range From=80,To=80 \
     --cidr-block 0.0.0.0/0 \
     --ingress \
@@ -396,13 +401,17 @@ aws ec2 create-vpc-endpoint \
     --route-table-ids $PRIVATE_RT
 
 # Interface Endpoint per Secrets Manager
+# --private-dns-enabled: usa il DNS standard (secretsmanager.eu-central-1.amazonaws.com);
+#   richiede enableDnsSupport + enableDnsHostnames sul VPC
+# $SG_ENDPOINT deve permettere inbound 443 dalle subnet/SG dei client
+# Per HA: una subnet per AZ (ogni subnet = una ENI e un costo orario)
 aws ec2 create-vpc-endpoint \
     --vpc-id $VPC_ID \
     --service-name com.amazonaws.eu-central-1.secretsmanager \
     --vpc-endpoint-type Interface \
     --subnet-ids $PRIVATE_SUBNET_A \
     --security-group-ids $SG_ENDPOINT \
-    --private-dns-enabled    # usa il DNS standard (*.secretsmanager.eu-central-1.amazonaws.com)
+    --private-dns-enabled
 ```
 
 ---
@@ -417,19 +426,20 @@ I log possono essere inviati a CloudWatch Logs (per query in tempo quasi reale c
 
 ```bash
 # Abilitare Flow Logs su VPC (verso CloudWatch Logs)
+# --traffic-type: ALL | ACCEPT | REJECT
 aws ec2 create-flow-logs \
     --resource-type VPC \
     --resource-ids $VPC_ID \
-    --traffic-type ALL \           # ALL | ACCEPT | REJECT
+    --traffic-type ALL \
     --log-destination-type cloud-watch-logs \
     --log-group-name /aws/vpc/flowlogs \
     --deliver-logs-permission-arn arn:aws:iam::123456789012:role/VPCFlowLogsRole
 
-# Verso S3 (più economico per retention lunga)
+# Verso S3 (più economico per retention lunga); solo REJECT per analisi security
 aws ec2 create-flow-logs \
     --resource-type VPC \
     --resource-ids $VPC_ID \
-    --traffic-type REJECT \        # Solo REJECT per analisi security
+    --traffic-type REJECT \
     --log-destination-type s3 \
     --log-destination arn:aws:s3:::my-flowlogs-bucket \
     --log-format '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}'
@@ -446,6 +456,13 @@ GROUP BY srcaddr, dstaddr
 ORDER BY total_bytes DESC
 LIMIT 20;
 ```
+
+---
+
+## IPv6 e VPC Block Public Access
+
+- **IPv6 / dual-stack:** si può associare al VPC un blocco IPv6 (`/56`, da Amazon o BYOIP/IPAM) e assegnare `/64` alle subnet. Gli indirizzi IPv6 sono globalmente univoci: l'uscita verso Internet passa dall'IGW (route `::/0`), oppure da un **Egress-only IGW** se le istanze non devono essere raggiungibili dall'esterno. Esistono anche subnet **IPv6-only**. Perché conta: evita NAT GW e riduce il costo degli IPv4 pubblici.
+- **VPC Block Public Access (BPA):** guardrail a livello di Region/account (introdotto a fine 2024) che blocca il traffico da/verso gli IGW e gli Egress-only IGW di tutti i VPC, con eccezioni per VPC/subnet specifici. Utile per garantire che, in account non destinati a esporsi, nessun errore di route table apra l'accesso a Internet.
 
 ---
 
