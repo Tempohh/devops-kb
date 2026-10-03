@@ -7,16 +7,17 @@ search_keywords: [GPU per LLM, NVIDIA H100, A100 GPU, VRAM planning, CUDA, tenso
 parent: ai/mlops/_index
 related: [ai/mlops/_index, ai/mlops/model-serving, ai/fondamentali/deep-learning, ai/modelli/modelli-open-source]
 official_docs: https://docs.nvidia.com/cuda/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-27
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Infrastruttura GPU per LLM
 
 ## Panoramica
 
-Le GPU sono il substrate computazionale degli LLM. La differenza fondamentale rispetto alle CPU è il parallelismo massiccio: una A100 ha 6912 CUDA core contro i 32-64 core di una CPU top-of-line. Per le operazioni di algebra lineare che dominano i calcoli negli LLM (moltiplicazioni di matrici enormi), questa differenza di parallelismo si traduce in 100-1000× di speedup. Comprendere le GPU, la VRAM, e le strategie di distribuzione multi-GPU è indispensabile per deployare LLM in produzione.
+Le GPU sono il substrate computazionale degli LLM. La differenza fondamentale rispetto alle CPU è il parallelismo massiccio: una A100 ha 6912 CUDA core contro i 32-64 core di una CPU top-of-line. Per le operazioni di algebra lineare che dominano i calcoli negli LLM (moltiplicazioni di matrici enormi), questa differenza di parallelismo si traduce in speedup di uno o due ordini di grandezza. Comprendere le GPU, la VRAM, e le strategie di distribuzione multi-GPU è indispensabile per deployare LLM in produzione.
 
 Questo documento copre il lineage hardware NVIDIA per LLM, il calcolo della VRAM necessaria, le strategie multi-GPU, il deployment su Kubernetes, e il confronto cloud vs on-premise.
 
@@ -26,6 +27,7 @@ Questo documento copre il lineage hardware NVIDIA per LLM, il calcolo della VRAM
 
 | GPU | Architettura | VRAM | Bandwidth | TFLOPs (FP16) | Use Case LLM |
 |-----|-------------|------|-----------|---------------|-------------|
+| **B200** | Blackwell | 192 GB HBM3e | 8 TB/s | ~2.250 | Training e inferenza frontier, FP4/FP8 nativi |
 | **H200** | Hopper | 141 GB HBM3e | 4.8 TB/s | 989 | Training frontier model, inference 70B+ |
 | **H100 SXM5** | Hopper | 80 GB HBM3 | 3.35 TB/s | 989 | Training, inferenza multi-modello |
 | **H100 PCIe** | Hopper | 80 GB HBM2e | 2.0 TB/s | 756 | Server standard, meno interconnect |
@@ -35,17 +37,21 @@ Questo documento copre il lineage hardware NVIDIA per LLM, il calcolo della VRAM
 | **L4** | Ada Lovelace | 24 GB GDDR6 | 300 GB/s | 120 | Inferenza modelli piccoli (7-13B) |
 | **A10G** | Ampere | 24 GB GDDR6 | 600 GB/s | 125 | Inferenza, AWS G5 instances |
 
+!!! note "Come leggere la tabella"
+    **VRAM** = memoria della GPU; **HBM** (High Bandwidth Memory) = memoria impilata sul package delle GPU data center, molto più veloce della GDDR delle schede consumer. I TFLOPs sono FP16/BF16 *dense* (senza sparsity) e valori di picco nominali; i valori Blackwell sono indicativi per HGX B200 (verificare sulla scheda tecnica NVIDIA). Il GB200/GB300 (Grace + Blackwell, rack NVL72) è l'evoluzione per cluster di training/inferenza su larga scala.
+
 ### GPU Consumer (Sviluppo e Small Inference)
 
 | GPU | VRAM | Bandwidth | Use Case LLM |
 |-----|------|-----------|-------------|
+| **RTX 5090** | 32 GB GDDR7 | 1.79 TB/s | Dev, QLoRA fine-tuning, inferenza fino a ~30B quantizzati |
 | **RTX 4090** | 24 GB GDDR6X | 1 TB/s | Dev, QLoRA fine-tuning 7-13B, inferenza |
 | **RTX 4080** | 16 GB GDDR6X | 716 GB/s | Dev, inferenza 7B |
 | **RTX 3090** | 24 GB GDDR6X | 936 GB/s | Dev, inferenza — più economico del 4090 |
 | **RTX 3080 Ti** | 12 GB GDDR6X | 912 GB/s | Inferenza 7B Q4 |
 
 !!! note "Memory Bandwidth > TFLOPS per Inferenza"
-    Per l'inferenza LLM, il **memory bandwidth** (velocità di lettura della VRAM) è spesso il collo di bottiglia, non il compute TFLOPS. L'inferenza è *memory-bound*: il bottleneck è quanto velocemente si possono leggere i pesi del modello. Ecco perché la H100 è molto più veloce della A100 per token/secondo nonostante abbiano TFLOPs simili: la H100 ha HBM3 con bandwidth quasi doppia.
+    Per l'inferenza LLM, il **memory bandwidth** (velocità di lettura della VRAM) è spesso il collo di bottiglia, non il compute TFLOPS. L'inferenza è *memory-bound*: il bottleneck è quanto velocemente si possono leggere i pesi del modello. Ecco perché la H200 (stessi TFLOPs della H100, ma 4.8 vs 3.35 TB/s) genera più token/secondo della H100 a parità di compute: a batch piccoli, il throughput in decode scala grossomodo con la bandwidth. Il compute torna a pesare con batch grandi e nella fase di *prefill*.
 
 ### NVIDIA Hopper — Innovazioni Chiave
 
@@ -53,7 +59,7 @@ Questo documento copre il lineage hardware NVIDIA per LLM, il calcolo della VRAM
 H100 Innovations:
 ├── HBM3: 3.35 TB/s bandwidth (vs 2.0 TB/s HBM2e di A100)
 ├── FP8 Tensor Cores: training e inferenza in FP8 (2× throughput vs FP16)
-├── Transformer Engine: accelerazione hardware per multi-head attention
+├── Transformer Engine: gestione dinamica della precisione mista FP8/FP16 per layer (hardware + libreria)
 ├── NVLink 4.0: 900 GB/s tra GPU (vs 600 GB/s NVLink 3.0)
 └── DGX H100: 8× H100 con 640 GB VRAM totali e NVLink switch
 ```
@@ -86,14 +92,17 @@ KV cache (vedi context-window.md per formula dettagliata):
 |---------|-----------|-------------|------------|------------|----------------|---------------|
 | Llama 3.2 3B | 3B | ~6 GB | ~3 GB | ~1.5 GB | 1× L4 | 1× RTX 3080 |
 | Llama 3.1 8B | 8B | ~16 GB | ~8 GB | ~4 GB | 1× A100 40GB | 1× RTX 4090 |
-| Llama 3.1 13B | 13B | ~26 GB | ~13 GB | ~7 GB | 1× A100 40GB | 1× RTX 4090 |
-| Llama 3.1 70B | 70B | ~140 GB | ~70 GB | ~35 GB | 2× A100 80GB | 2× A100 40GB |
-| Llama 3.1 405B | 405B | ~810 GB | ~405 GB | ~202 GB | 10× A100 80GB | 3× H100 80GB |
+| Llama 2 13B | 13B | ~26 GB | ~13 GB | ~7 GB | 1× A100 40GB | 1× RTX 4090 |
+| Llama 3.1 70B | 70B | ~140 GB | ~70 GB | ~35 GB | 4× A100 80GB (2× solo pesi, nessun margine per KV) | 1× A100 80GB |
+| Llama 3.1 405B | 405B | ~810 GB | ~405 GB | ~202 GB | 16× A100 80GB (2 nodi) | 4× H100 80GB (3× solo pesi) |
 | Mistral 7B | 7B | ~14 GB | ~7 GB | ~3.5 GB | 1× A100 40GB | 1× RTX 4090 |
-| Mixtral 8×7B | 46.7B (att: 12.9B) | ~94 GB | ~47 GB | ~23 GB | 2× A100 40GB | 1× A100 40GB |
+| Mixtral 8×7B | 46.7B (att: 12.9B) | ~94 GB | ~47 GB | ~23 GB | 2× A100 80GB | 1× A100 40GB |
 
 !!! warning "VRAM + KV Cache"
-    La tabella sopra mostra solo la VRAM per i pesi. In produzione, aggiungere 20-40% per KV cache e overhead. Una regola pratica: per inferenza confortevole, servono circa 1.3-1.5× la dimensione dei pesi.
+    La tabella sopra mostra solo la VRAM per i pesi. In produzione, aggiungere 20-40% per KV cache e overhead. Una regola pratica: per inferenza confortevole, servono circa 1.3-1.5× la dimensione dei pesi. Con contesti lunghi e molte request concorrenti la KV cache può superare i pesi stessi (vedi esempio sotto). In un modello MoE come Mixtral **tutti** gli expert devono stare in VRAM: i parametri "attivi" riducono il compute, non la memoria.
+
+!!! tip "FP8 su 8× H100"
+    Llama 3.1 405B in FP8 (~405 GB) entra in un singolo nodo 8× H100 80GB (640 GB), lasciando ~200 GB per KV cache: è la configurazione di serving più comune per questo modello.
 
 ### Calcolo Batch-Aware
 
@@ -124,7 +133,7 @@ def calculate_vram_requirement(
     )
     kv_cache_gb = kv_cache_bytes / 1e9
 
-    overhead_gb = 2.0  # CUDA runtime, activations, gradients (inference only)
+    overhead_gb = 2.0  # CUDA runtime + activations (inferenza: niente gradienti/optimizer state)
 
     total_gb = weights_gb + kv_cache_gb + overhead_gb
 
@@ -147,7 +156,8 @@ result = calculate_vram_requirement(
     head_dim=128
 )
 print(result)
-# {'weights_gb': 16.0, 'kv_cache_gb': 16.8, 'overhead_gb': 2.0, 'total_gb': 34.8, 'recommended_vram_gb': 41.8}
+# {'weights_gb': 16.0, 'kv_cache_gb': 4.3, 'overhead_gb': 2.0, 'total_gb': 22.3, 'recommended_vram_gb': 26.8}
+# (KV cache = 2×32×8×128×4096×8×2 B ≈ 4.3 GB: ~0.5 MB per token per request; GQA con 8 KV head la tiene contenuta)
 ```
 
 ## 3. Multi-GPU Setup
@@ -194,10 +204,11 @@ Use case: quando NVLink non è disponibile, multi-nodo
 
 ### Data Parallelism
 
-Ogni GPU ha una copia completa del modello e processa batch diversi. Solo per training, non per serving.
+Ogni GPU ha una copia completa del modello e processa batch diversi. In training i gradienti vengono sincronizzati (all-reduce) a ogni step. In serving non c'è sincronizzazione: sono semplici **repliche** indipendenti dietro un load balancer (es. più pod vLLM), ed è il modo normale di scalare il throughput quando il modello entra in una GPU (o in un gruppo TP).
 
 ```python
 # PyTorch DistributedDataParallel
+import os
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
@@ -249,9 +260,10 @@ import torch
 print(f"CUDA disponibile: {torch.cuda.is_available()}")
 print(f"GPU: {torch.cuda.get_device_name(0)}")
 print(f"VRAM totale: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
-print(f"VRAM disponibile: {torch.cuda.memory_reserved(0) / 1e9:.1f} GB riservata")
+free, total = torch.cuda.mem_get_info(0)
+print(f"VRAM libera: {free / 1e9:.1f} GB su {total / 1e9:.1f} GB")
 print(f"Compute capability: {torch.cuda.get_device_capability(0)}")
-# (8, 0) = Ampere (A100), (9, 0) = Hopper (H100)
+# (8, 0) = Ampere (A100), (9, 0) = Hopper (H100), (10, 0) = Blackwell data center (B200)
 
 # Monitora VRAM durante il runtime
 print(f"VRAM allocata: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
@@ -279,11 +291,16 @@ nvidia-smi topo -m                 # visualizza connettività NVLink/PCIe
 
 ### Device Plugin NVIDIA
 
-Per schedulare workload GPU su Kubernetes, serve il NVIDIA device plugin che espone le GPU come risorse Kubernetes.
+Per schedulare workload GPU su Kubernetes, serve il NVIDIA device plugin che espone le GPU come risorsa estesa `nvidia.com/gpu`. Richiede driver NVIDIA e NVIDIA Container Toolkit sul nodo. In produzione si preferisce il **NVIDIA GPU Operator**, che installa e aggiorna driver, toolkit, device plugin, GPU Feature Discovery (label come `nvidia.com/gpu.product`) e DCGM exporter (metriche).
 
 ```bash
-# Installa il NVIDIA device plugin
-kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.14.0/nvidia-device-plugin.yml
+# Consigliato: GPU Operator via Helm
+helm repo add nvidia https://helm.ngc.nvidia.com/nvidia && helm repo update
+helm install gpu-operator nvidia/gpu-operator -n gpu-operator --create-namespace
+
+# Alternativa minimale: solo device plugin (driver/toolkit già sul nodo).
+# Sostituire <versione> con l'ultima release di NVIDIA/k8s-device-plugin
+kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/<versione>/deployments/static/nvidia-device-plugin.yml
 
 # Verifica che le GPU siano visibili
 kubectl get nodes -o json | jq '.items[].status.allocatable | select(."nvidia.com/gpu")'
@@ -310,7 +327,7 @@ spec:
     spec:
       containers:
         - name: vllm
-          image: vllm/vllm-openai:latest
+          image: vllm/vllm-openai:latest   # in produzione: pinnare una versione precisa
           command:
             - python
             - -m
@@ -345,7 +362,7 @@ spec:
           operator: "Exists"
           effect: "NoSchedule"
       nodeSelector:
-        nvidia.com/gpu.product: "NVIDIA-A100-SXM4-80GB"
+        nvidia.com/gpu.product: "NVIDIA-A100-SXM4-80GB"   # label da GPU Feature Discovery (incluso nel GPU Operator)
 ```
 
 ### GPU Time-Slicing (Condivisione GPU)
@@ -370,20 +387,25 @@ data:
             replicas: 4  # 1 GPU fisica = 4 GPU virtuali (time-shared)
 ```
 
+La ConfigMap va referenziata dalla `ClusterPolicy` del GPU Operator (`devicePlugin.config.name: time-slicing-config`, `default: any`).
+
+!!! warning "Time-slicing non isola"
+    I pod condividono VRAM e compute **senza isolamento di memoria né QoS**: un pod che consuma tutta la VRAM manda in OOM gli altri. Per isolamento hardware usare MIG.
+
 ### MIG — Multi-Instance GPU
 
 ```bash
-# H100 e A100 supportano MIG: divide la GPU in istanze fisiche isolate
-# Ogni istanza ha la propria VRAM e motori compute dedicati
+# A100, A30, H100, H200 e Blackwell data center supportano MIG: divide la GPU in
+# istanze isolate. Ogni istanza ha la propria VRAM, cache e SM dedicati (7 "slice" di compute)
 
-# Abilita MIG
+# Abilita MIG (può richiedere un GPU reset / nessun processo attivo sulla GPU)
 sudo nvidia-smi -i 0 -mig 1
 
-# Crea istanze MIG (A100 80GB)
-# 7× 1g.10gb: 7 istanze da ~10GB ciascuna
-# 4× 2g.20gb: 4 istanze da ~20GB ciascuna
-# 1× 7g.80gb: 1 istanza full-size
-sudo nvidia-smi mig -i 0 -cgi 19,19,19,19 -C  # 4× 2g.20gb
+# Profili MIG (A100 80GB; gli ID cambiano per modello: nvidia-smi mig -lgip)
+# ID 19 = 1g.10gb: fino a 7 istanze da ~10GB
+# ID 14 = 2g.20gb: fino a 3 istanze da ~20GB
+# ID 0  = 7g.80gb: 1 istanza full-size
+sudo nvidia-smi mig -i 0 -cgi 14,14,14 -C  # 3× 2g.20gb
 
 # Verifica istanze create
 nvidia-smi -L
@@ -400,11 +422,17 @@ nvidia-smi -L
 |----------|-----|------|-----------|-----|-----|------------------|
 | g4dn.xlarge | T4 | 16 GB | 1 | 4 vCPU | 16 GB | ~$0.53 |
 | g5.xlarge | A10G | 24 GB | 1 | 4 vCPU | 16 GB | ~$1.01 |
-| g5.12xlarge | A10G | 4×24 GB | 4 | 48 vCPU | 192 GB | ~$16.29 |
+| g5.12xlarge | A10G | 4×24 GB | 4 | 48 vCPU | 192 GB | ~$5.67 |
 | p3.2xlarge | V100 | 16 GB | 1 | 8 vCPU | 61 GB | ~$3.06 |
-| p4d.24xlarge | A100 | 8×40 GB | 8 | 96 vCPU | 1.1 TB | ~$32.77 |
-| p4de.24xlarge | A100 | 8×80 GB | 8 | 96 vCPU | 1.1 TB | ~$40.96 |
-| p5.48xlarge | H100 | 8×80 GB | 8 | 192 vCPU | 2 TB | ~$98.32 |
+| p4d.24xlarge | A100 | 8×40 GB | 8 | 96 vCPU | 1.1 TB | ~$22 |
+| p4de.24xlarge | A100 | 8×80 GB | 8 | 96 vCPU | 1.1 TB | ~$27 |
+| p5.48xlarge | H100 | 8×80 GB | 8 | 192 vCPU | 2 TB | ~$55 |
+| p5en.48xlarge | H200 | 8×141 GB | 8 | 192 vCPU | 2 TB | su richiesta / listino |
+| p6-b200.48xlarge | B200 | 8×192 GB | 8 | 192 vCPU | 2 TB | su richiesta / listino |
+
+<!-- REVIEW: verificare prezzi on-demand p4d/p4de/p5 (ridotti fino al ~45% da AWS a giugno 2025) e us-east-1 attuali sulla pricing page; i prezzi cambiano spesso -->
+!!! note "Prezzi indicativi"
+    Prezzi on-demand us-east-1 approssimativi; variano per regione e cambiano spesso (AWS ha tagliato P4/P5 a metà 2025). Per i p5/p6 la disponibilità passa spesso da Capacity Blocks / savings plan. Controllare sempre la pricing page.
 
 ### Azure GPU VMs
 
@@ -414,6 +442,7 @@ nvidia-smi -L
 | NC24ads A100 v4 | A100 | 80 GB | Training/inference |
 | ND96amsr A100 v4 | A100 | 8×80 GB | Multi-GPU |
 | ND96isr H100 v5 | H100 | 8×80 GB | Frontier |
+| ND96isr H200 v5 | H200 | 8×141 GB | Frontier, modelli grandi / contesti lunghi |
 
 ### GCP GPU VMs
 
@@ -422,7 +451,9 @@ nvidia-smi -L
 | a2-highgpu-1g | A100 40GB | 40 GB |
 | a2-ultragpu-1g | A100 80GB | 80 GB |
 | a3-highgpu-8g | H100 | 8×80 GB |
-| a3-megagpu-8g | H100 Mega | 8×141 GB |
+| a3-megagpu-8g | H100 80GB (rete più veloce, "Mega") | 8×80 GB |
+| a3-ultragpu-8g | H200 | 8×141 GB |
+| a4-highgpu-8g | B200 | 8×180 GB |
 
 ### Cloud vs On-Premise
 
@@ -430,7 +461,7 @@ nvidia-smi -L
 |---------|-------|------------|
 | **Capex** | Zero | Alto (GPU server = $10K-500K) |
 | **Opex** | Alto ($/ora) | Medio (datacenter, manutenzione) |
-| **Break-even** | < 2.000 ore/mese | > 2.000 ore/mese |
+| **Break-even** | Carico intermittente (utilizzo basso) | Carico continuo: tipicamente oltre ~50-60% di utilizzo sostenuto su 1-3 anni (indicativo, dipende da prezzi e TCO) |
 | **Scaling** | Immediato, elastico | Lento (settimane per procurement) |
 | **Latenza** | Network overhead | Locale, minimo |
 | **Controllo** | Limitato | Totale |
@@ -450,10 +481,12 @@ nvidia-smi dmon -s pucvmet -d 1  # monitoring dettagliato ogni secondo
 # NVTX profiling con Nsight Systems
 nsys profile \
     --trace=cuda,nvtx,osrt \
-    --output=profile.qdrep \
-    python serve_model.py
+    --output=profile \
+    python serve_model.py        # produce profile.nsys-rep
+```
 
-# Pytorch Profiler
+```python
+# PyTorch Profiler
 import torch.profiler as profiler
 
 with profiler.profile(
@@ -497,16 +530,15 @@ print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
 # Verifica VRAM disponibile prima del lancio
 nvidia-smi --query-gpu=memory.total,memory.free --format=csv
 
-# vLLM: riduci context window per liberare KV cache
+# vLLM: riduci il context window (max-model-len era 32768) e lascia margine di VRAM
+# (--gpu-memory-utilization = frazione di VRAM che vLLM può usare, pesi + KV cache)
 vllm serve meta-llama/Llama-3.1-8B-Instruct \
-    --max-model-len 8192 \           # era 32768
-    --gpu-memory-utilization 0.85    # lascia 15% di margine
+    --max-model-len 8192 \
+    --gpu-memory-utilization 0.85
 
-# Svuota cache PyTorch manualmente
-python -c "import torch; torch.cuda.empty_cache(); print('Cache svuotata')"
-
-# Controlla allocazione dettagliata
-python -c "import torch; print(torch.cuda.memory_summary())"
+# Dentro il TUO processo PyTorch (non da un `python -c` separato, che vedrebbe un'altra GPU-context):
+#   torch.cuda.empty_cache()        # rilascia la cache dell'allocator
+#   print(torch.cuda.memory_summary())   # allocazione dettagliata
 ```
 
 ---
@@ -552,7 +584,7 @@ print(f'All-reduce OK: {t.item()}')
 
 **Causa:** L'inferenza è memory-bound e la GPU aspetta i dati dalla VRAM (bandwidth saturation), oppure il batch size è troppo piccolo (GPU sotto-utilizzata), oppure bottleneck sulla CPU nel preprocessing.
 
-**Soluzione:** Aumentare il batch size, abilitare continuous batching, verificare che il collo di bottiglia non sia CPU/I/O.
+**Soluzione:** Aumentare il batch size, abilitare continuous batching, verificare che il collo di bottiglia non sia CPU/I/O. Nota: il campo `utilization.gpu` di `nvidia-smi` indica solo la % di tempo in cui *almeno un kernel* è in esecuzione, non quanto sono saturati gli SM; per una misura reale usare le metriche DCGM (es. `DCGM_FI_PROF_SM_ACTIVE`).
 
 ```bash
 # Profila per capire dove il tempo è speso
@@ -562,10 +594,11 @@ nvidia-smi dmon -s pucvmet -d 1 -c 30   # 30 campioni, 1/sec
 # Se memory bandwidth è saturo (mem util ~100%): è normale per LLM (memory-bound)
 # Se compute util è basso e mem util è basso: batch troppo piccolo
 
-# vLLM: aumenta concorrenza massima
+# vLLM: aumenta concorrenza massima (più sequenze in parallelo).
+# Il chunked prefill è abilitato di default nelle versioni recenti (engine V1);
+# nelle più vecchie va attivato con --enable-chunked-prefill.
 vllm serve meta-llama/Llama-3.1-8B-Instruct \
-    --max-num-seqs 256 \             # più sequenze in parallelo
-    --enable-chunked-prefill         # migliora throughput su batch misti
+    --max-num-seqs 256
 
 # Profila con Nsight Systems per identificare idle time
 nsys profile --trace=cuda,nvtx --output=profile python serve.py
@@ -598,9 +631,12 @@ kubectl describe pod <pod-name> | grep -A20 Events
 # Verifica che il pod abbia toleration e nodeSelector corretti
 kubectl get pod <pod-name> -o yaml | grep -A10 tolerations
 
-# Reinstalla device plugin se necessario
+# Con GPU Operator: controlla lo stato dei componenti (driver, toolkit, device plugin)
+kubectl get pods -n gpu-operator
+
+# Reinstalla device plugin standalone se necessario (usare la release corrente)
 kubectl delete -f nvidia-device-plugin.yml
-kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.14.0/nvidia-device-plugin.yml
+kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/<versione>/deployments/static/nvidia-device-plugin.yml
 ```
 
 ## Riferimenti
