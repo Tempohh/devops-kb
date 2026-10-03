@@ -5201,7 +5201,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7170,7 +7170,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -7195,7 +7195,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -7291,10 +7291,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#virtual-network-interface-vif" class="md-nav__link">
+  <a href="#peering-expressroute" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Virtual Network Interface (VIF)
+        Peering ExpressRoute
       
     </span>
   </a>
@@ -7390,6 +7390,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#lacune-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lacune note
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#riferimenti" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -7433,7 +7444,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24554,10 +24565,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#virtual-network-interface-vif" class="md-nav__link">
+  <a href="#peering-expressroute" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Virtual Network Interface (VIF)
+        Peering ExpressRoute
       
     </span>
   </a>
@@ -24649,6 +24660,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lacune-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lacune note
+      
+    </span>
+  </a>
   
 </li>
       
@@ -24847,14 +24869,14 @@
 <td>50 Mbps - 100 Gbps</td>
 <td>bassa, prevedibile</td>
 <td>99.95%</td>
-<td>No (layer 3)</td>
+<td>Non di default (MACsec su ExpressRoute Direct, o IPsec sopra ER)</td>
 <td>Enterprise, dati sensibili</td>
 </tr>
 <tr>
 <td><strong>ExpressRoute + VPN</strong></td>
 <td>-</td>
 <td>ExpressRoute + fallback</td>
-<td>99.99%+</td>
+<td>dipende dalla topologia <!-- REVIEW: verificare SLA 99.99% (richiede topologia Maximum Resiliency) --></td>
 <td>IPSec</td>
 <td>Mission critical + DR</td>
 </tr>
@@ -24870,45 +24892,58 @@
 </table>
 <hr />
 <h2 id="vpn-gateway">VPN Gateway<a class="headerlink" href="#vpn-gateway" title="Permanent link">&para;</a></h2>
+<div class="admonition note">
+<p class="admonition-title">Termini usati in questa sezione</p>
+<p><strong>GatewaySubnet</strong>: subnet riservata (nome obbligatorio, consigliato almeno /27) dove Azure inietta le VM del gateway. <strong>Local Network Gateway (LNG)</strong>: oggetto Azure che descrive il router on-premises (IP pubblico + prefissi). <strong>IKE/IPsec</strong>: protocolli di negoziazione chiavi e cifratura del tunnel. <strong>BGP/ASN</strong>: protocollo di routing dinamico e numero di sistema autonomo; con BGP le route si propagano senza prefissi statici, abilitando failover automatico e multi-sito.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">SKU legacy in dismissione</p>
+<p>Lo SKU <code>Basic</code> e gli SKU non-AZ <code>VpnGw1-5</code> sono deprecati: per nuovi gateway usare <code>VpnGw1AZ-5AZ</code> (zone-redundant) con IP pubblici <strong>Standard</strong> statici. <!-- REVIEW: verificare date esatte di retirement SKU Basic/non-AZ e percorsi di migrazione --></p>
+</div>
 <h3 id="site-to-site-vpn">Site-to-Site VPN<a class="headerlink" href="#site-to-site-vpn" title="Permanent link">&para;</a></h3>
 <p>Connette la rete on-premises ad Azure tramite tunnel IPSec/IKE su Internet:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># 1. Creare VPN Gateway (richiede GatewaySubnet nella VNet)</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>az<span class="w"> </span>network<span class="w"> </span>vnet-gateway<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span>--name<span class="w"> </span>production-vpngw<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span>--vnet<span class="w"> </span>production-vnet<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span>--gateway-type<span class="w"> </span>Vpn<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span>--sku<span class="w"> </span>VpnGw2<span class="w"> </span><span class="se">\ </span><span class="w">                    </span><span class="c1"># Basic, VpnGw1-5, VpnGw1AZ-5AZ</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span>--vpn-gateway-generation<span class="w"> </span>Generation2<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span>--vpn-type<span class="w"> </span>RouteBased<span class="w"> </span><span class="se">\ </span><span class="w">           </span><span class="c1"># RouteBased (BGP, multi-site) o PolicyBased (legacy)</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span>--public-ip-address<span class="w"> </span>vpngw-pip1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span>--public-ip-address-2<span class="w"> </span>vpngw-pip2<span class="w">   </span><span class="c1"># Active-Active per HA (due IP pubblici)</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># 2. Creare Local Network Gateway (rappresenta la rete on-premises)</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>az<span class="w"> </span>network<span class="w"> </span>local-gateway<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span>--name<span class="w"> </span>on-premises-lgw<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span>--gateway-ip-address<span class="w"> </span><span class="m">203</span>.0.113.1<span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># IP pubblico del router on-premises</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">    </span>--local-address-prefixes<span class="w"> </span><span class="m">192</span>.168.0.0/16<span class="w"> </span><span class="m">10</span>.0.0.0/8<span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># subnet on-premises</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">    </span>--asn<span class="w"> </span><span class="m">65001</span><span class="w"> </span><span class="se">\ </span><span class="w">                         </span><span class="c1"># BGP ASN (se BGP abilitato)</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">    </span>--bgp-peering-address<span class="w"> </span><span class="m">169</span>.254.21.1<span class="w">     </span><span class="c1"># BGP peer IP on-premises</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="c1"># 3. Creare VPN Connection</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>az<span class="w"> </span>network<span class="w"> </span>vpn-connection<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">    </span>--name<span class="w"> </span>on-premises-connection<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">    </span>--vnet-gateway1<span class="w"> </span>production-vpngw<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">    </span>--local-gateway2<span class="w"> </span>on-premises-lgw<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">    </span>--shared-key<span class="w"> </span><span class="s2">"your-pre-shared-key-here"</span><span class="w"> </span><span class="se">\ </span><span class="w">   </span><span class="c1"># PSK — usare stringa lunga e casuale</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">    </span>--connection-type<span class="w"> </span>IPSec<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">    </span>--enable-bgp<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">    </span>--routing-weight<span class="w"> </span><span class="m">10</span>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="c1"># Verificare stato connessione</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>az<span class="w"> </span>network<span class="w"> </span>vpn-connection<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">    </span>--name<span class="w"> </span>on-premises-connection<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">    </span>--query<span class="w"> </span>connectionStatus
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Nota: commenti sopra i comandi; un commento dopo "\" rompe la continuazione di riga.</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># 1. Creare VPN Gateway (richiede GatewaySubnet nella VNet)</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1">#    --sku: usare VpnGw1AZ-VpnGw5AZ (SKU non-AZ e Basic sono legacy)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1">#    --vpn-type: RouteBased (BGP, multi-site, IKEv2); PolicyBased solo su Basic (legacy)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1">#    --public-ip-addresses: due IP Standard = active-active (HA, due tunnel per sito)</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>az<span class="w"> </span>network<span class="w"> </span>vnet-gateway<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">    </span>--name<span class="w"> </span>production-vpngw<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span>--vnet<span class="w"> </span>production-vnet<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span>--gateway-type<span class="w"> </span>Vpn<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span>--sku<span class="w"> </span>VpnGw2AZ<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">    </span>--vpn-gateway-generation<span class="w"> </span>Generation2<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span>--vpn-type<span class="w"> </span>RouteBased<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span>--asn<span class="w"> </span><span class="m">65515</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span>--public-ip-addresses<span class="w"> </span>vpngw-pip1<span class="w"> </span>vpngw-pip2
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="c1"># 2. Creare Local Network Gateway (rappresenta la rete on-premises)</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>az<span class="w"> </span>network<span class="w"> </span>local-gateway<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">    </span>--name<span class="w"> </span>on-premises-lgw<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">    </span>--gateway-ip-address<span class="w"> </span><span class="m">203</span>.0.113.1<span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># IP pubblico del router on-premises</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">    </span>--local-address-prefixes<span class="w"> </span><span class="m">192</span>.168.0.0/16<span class="w"> </span><span class="m">10</span>.0.0.0/8<span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># subnet on-premises</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">    </span>--asn<span class="w"> </span><span class="m">65001</span><span class="w"> </span><span class="se">\ </span><span class="w">                         </span><span class="c1"># BGP ASN (se BGP abilitato)</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">    </span>--bgp-peering-address<span class="w"> </span><span class="m">169</span>.254.21.1<span class="w">     </span><span class="c1"># BGP peer IP on-premises</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="c1"># 3. Creare VPN Connection</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>az<span class="w"> </span>network<span class="w"> </span>vpn-connection<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">    </span>--name<span class="w"> </span>on-premises-connection<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="w">    </span>--vnet-gateway1<span class="w"> </span>production-vpngw<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="w">    </span>--local-gateway2<span class="w"> </span>on-premises-lgw<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">    </span>--shared-key<span class="w"> </span><span class="s2">"your-pre-shared-key-here"</span><span class="w"> </span><span class="se">\ </span><span class="w">   </span><span class="c1"># PSK — usare stringa lunga e casuale</span>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">    </span>--connection-type<span class="w"> </span>IPSec<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">    </span>--enable-bgp<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">    </span>--routing-weight<span class="w"> </span><span class="m">10</span>
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>
+</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="c1"># Verificare stato connessione</span>
+</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a>az<span class="w"> </span>network<span class="w"> </span>vpn-connection<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="w">    </span>--name<span class="w"> </span>on-premises-connection<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="w">    </span>--query<span class="w"> </span>connectionStatus
 </span></code></pre></div>
 <p><strong>SKU VPN Gateway:</strong></p>
 <table>
@@ -24922,19 +24957,19 @@
 </thead>
 <tbody>
 <tr>
-<td>VpnGw1</td>
+<td>VpnGw1 (legacy)</td>
 <td>650 Mbps</td>
 <td>30</td>
 <td>No</td>
 </tr>
 <tr>
-<td>VpnGw2</td>
+<td>VpnGw2 (legacy)</td>
 <td>1 Gbps</td>
 <td>30</td>
 <td>No</td>
 </tr>
 <tr>
-<td>VpnGw3</td>
+<td>VpnGw3 (legacy)</td>
 <td>1.25 Gbps</td>
 <td>30</td>
 <td>No</td>
@@ -24968,14 +25003,18 @@
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span>--address-prefixes<span class="w"> </span><span class="m">172</span>.16.0.0/24<span class="w"> </span><span class="se">\ </span><span class="w">   </span><span class="c1"># pool IP per client VPN</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>--client-protocol<span class="w"> </span>OpenVPN<span class="w"> </span>IkeV2<span class="w">        </span><span class="c1"># OpenVPN (cross-platform), IkeV2 (Windows/Mac nativo)</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="c1"># Autenticazione con Azure AD (Entra ID) — più comoda per Azure AD joined devices</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>az<span class="w"> </span>network<span class="w"> </span>vnet-gateway<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span>--name<span class="w"> </span>production-vpngw<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span>--aad-tenant<span class="w"> </span><span class="s2">"https://login.microsoftonline.com/</span><span class="nv">$TENANT_ID</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span>--aad-audience<span class="w"> </span><span class="s2">"41b23e61-6c1e-4545-b367-cd054e0ed4b4"</span><span class="w"> </span><span class="se">\ </span><span class="w">   </span><span class="c1"># Azure VPN App ID fisso</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span>--aad-issuer<span class="w"> </span><span class="s2">"https://sts.windows.net/</span><span class="nv">$TENANT_ID</span><span class="s2">/"</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="c1"># Autenticazione con Microsoft Entra ID (ex Azure AD): solo OpenVPN, nessun</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># certificato da distribuire, supporta Conditional Access/MFA.</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># --aad-audience = App ID dell'app "Azure VPN Client" (varia per cloud/versione app)</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>az<span class="w"> </span>network<span class="w"> </span>vnet-gateway<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span>--name<span class="w"> </span>production-vpngw<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span>--aad-tenant<span class="w"> </span><span class="s2">"https://login.microsoftonline.com/</span><span class="nv">$TENANT_ID</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span>--aad-audience<span class="w"> </span><span class="s2">"41b23e61-6c1e-4545-b367-cd054e0ed4b4"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span>--aad-issuer<span class="w"> </span><span class="s2">"https://sts.windows.net/</span><span class="nv">$TENANT_ID</span><span class="s2">/"</span>
 </span></code></pre></div>
+<!-- REVIEW: verificare App ID audience Entra ID corrente (esiste anche l'app "Microsoft-registered") e se serve --vpn-auth-type -->
+
 <hr />
 <h2 id="expressroute">ExpressRoute<a class="headerlink" href="#expressroute" title="Permanent link">&para;</a></h2>
 <p><strong>ExpressRoute</strong> connette la rete on-premises ad Azure tramite connessione privata dedicata (non su Internet pubblica) attraverso un provider di connettività:</p>
@@ -25006,11 +25045,12 @@
 </tr>
 </tbody>
 </table>
-<h3 id="virtual-network-interface-vif">Virtual Network Interface (VIF)<a class="headerlink" href="#virtual-network-interface-vif" title="Permanent link">&para;</a></h3>
+<h3 id="peering-expressroute">Peering ExpressRoute<a class="headerlink" href="#peering-expressroute" title="Permanent link">&para;</a></h3>
+<p>Ogni circuito trasporta uno o più <em>peering</em> (sessioni BGP separate; l'equivalente AWS è la VIF):</p>
 <table>
 <thead>
 <tr>
-<th>VIF</th>
+<th>Peering</th>
 <th>Descrizione</th>
 </tr>
 </thead>
@@ -25021,7 +25061,7 @@
 </tr>
 <tr>
 <td><strong>Microsoft Peering</strong></td>
-<td>Accesso a Microsoft 365, Azure Public Services (Storage, SQL) — IP pubblici</td>
+<td>Accesso a Microsoft 365 e endpoint pubblici dei servizi PaaS Azure (Storage, SQL) — IP pubblici, richiede NAT con prefissi pubblici del cliente. L'ex <em>Azure Public Peering</em> è deprecato</td>
 </tr>
 </tbody>
 </table>
@@ -25033,7 +25073,7 @@
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span>--peering-location<span class="w"> </span><span class="s2">"Milan"</span><span class="w"> </span><span class="se">\ </span><span class="w">             </span><span class="c1"># location del provider</span>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span>--provider<span class="w"> </span><span class="s2">"Equinix"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span>--sku-family<span class="w"> </span>MeteredData<span class="w"> </span><span class="se">\ </span><span class="w">               </span><span class="c1"># MeteredData o UnlimitedData</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span>--sku-tier<span class="w"> </span>Standard<span class="w"> </span><span class="se">\ </span><span class="w">                    </span><span class="c1"># Standard o Premium (Global Reach, più prefissi)</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span>--sku-tier<span class="w"> </span>Standard<span class="w"> </span><span class="se">\ </span><span class="w">                    </span><span class="c1"># Standard o Premium (Premium: cross-geopolitical region, più route/VNet)</span>
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span>--query<span class="w"> </span>serviceKey
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="c1"># Fornire il serviceKey al provider per provisioning fisico del circuito</span>
@@ -25101,7 +25141,7 @@
 </span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="c1"># Virtual WAN gestisce automaticamente:</span>
 </span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="c1"># - Routing tra spoke VNet</span>
 </span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="c1"># - Routing tra branch e VNet</span>
-</span><span id="__span-5-32"><a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="c1"># - Routing tra branch e Internet (via Azure Firewall nell'hub)</span>
+</span><span id="__span-5-32"><a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="c1"># - Routing tra branch e Internet solo se l'hub è "secured" (Azure Firewall Manager + routing intent)</span>
 </span></code></pre></div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -25113,23 +25153,24 @@
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>az<span class="w"> </span>network<span class="w"> </span>vpn-connection<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span>--name<span class="w"> </span>on-premises-connection<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"{status:connectionStatus, errorMessage:ingressBytesTransferred}"</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"{status:connectionStatus, ingress:ingressBytesTransferred, egress:egressBytesTransferred}"</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Ottenere log diagnostici della connessione</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>az<span class="w"> </span>network<span class="w"> </span>vpn-connection<span class="w"> </span>show-device-config-script<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span>--name<span class="w"> </span>on-premises-connection<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span>--vendor<span class="w"> </span>Cisco<span class="w"> </span>--device-family<span class="w"> </span>ISR<span class="w"> </span>--firmware-version<span class="w"> </span>IOS-12.x
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Avviare packet capture sul VPN Gateway per debug IKE</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>az<span class="w"> </span>network<span class="w"> </span>vnet-gateway<span class="w"> </span>start-packet-capture<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">    </span>--name<span class="w"> </span>production-vpngw
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>
-</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="c1"># Controllare BGP peers (se BGP abilitato)</span>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>az<span class="w"> </span>network<span class="w"> </span>vnet-gateway<span class="w"> </span>list-bgp-peer-status<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">    </span>--name<span class="w"> </span>production-vpngw
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Generare lo script di configurazione del dispositivo on-premises</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># (confrontare parametri IKE/IPsec con quelli effettivi del device)</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>az<span class="w"> </span>network<span class="w"> </span>vpn-connection<span class="w"> </span>show-device-config-script<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span>--name<span class="w"> </span>on-premises-connection<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span>--vendor<span class="w"> </span>Cisco<span class="w"> </span>--device-family<span class="w"> </span>ISR<span class="w"> </span>--firmware-version<span class="w"> </span>IOS-12.x
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1"># Avviare packet capture sul VPN Gateway per debug IKE (poi stop-packet-capture con SAS URL)</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>az<span class="w"> </span>network<span class="w"> </span>vnet-gateway<span class="w"> </span>start-packet-capture<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">    </span>--name<span class="w"> </span>production-vpngw
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="c1"># Controllare BGP peers (se BGP abilitato)</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>az<span class="w"> </span>network<span class="w"> </span>vnet-gateway<span class="w"> </span>list-bgp-peer-status<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">    </span>--name<span class="w"> </span>production-vpngw
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-circuito-expressroute-in-stato-not-provisioned">Scenario 2 — Circuito ExpressRoute in stato "Not Provisioned"<a class="headerlink" href="#scenario-2-circuito-expressroute-in-stato-not-provisioned" title="Permanent link">&para;</a></h3>
@@ -25161,7 +25202,7 @@
 <hr />
 <h3 id="scenario-3-route-bgp-non-propagate-alle-vnet-spoke">Scenario 3 — Route BGP non propagate alle VNet spoke<a class="headerlink" href="#scenario-3-route-bgp-non-propagate-alle-vnet-spoke" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Le VM nelle VNet spoke non raggiungono la rete on-premises nonostante il tunnel VPN o ExpressRoute sia attivo e il BGP mostri peers connessi.</p>
-<p><strong>Causa:</strong> Route mancanti nella route table del gateway, policy BGP che filtrano i prefissi, oppure la VNet non ha la propagazione delle route del gateway abilitata.</p>
+<p><strong>Causa:</strong> Route mancanti nella route table del gateway, policy BGP che filtrano i prefissi, propagazione delle route del gateway disabilitata, oppure (hub-spoke) peering VNet senza <em>Allow gateway transit</em> sull'hub e <em>Use remote gateways</em> sullo spoke: senza questi flag lo spoke non apprende le route del gateway dell'hub.</p>
 <p><strong>Soluzione:</strong></p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Verificare route effettive propagate al gateway</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>az<span class="w"> </span>network<span class="w"> </span>vnet-gateway<span class="w"> </span>list-advertised-routes<span class="w"> </span><span class="se">\</span>
@@ -25218,6 +25259,9 @@
 </span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="w">    </span>--query<span class="w"> </span>vpnClientConfiguration
 </span></code></pre></div>
 <hr />
+<h2 id="lacune-note">Lacune note<a class="headerlink" href="#lacune-note" title="Permanent link">&para;</a></h2>
+<!-- REVIEW: manca spiegazione di ExpressRoute FastPath e ExpressRoute Direct/MACsec (citati in search_keywords ma non trattati); manca guida di scelta VPN vs ExpressRoute vs vWAN e coesistenza ER+VPN per failover -->
+
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://learn.microsoft.com/azure/vpn-gateway/">VPN Gateway Documentation</a></li>
