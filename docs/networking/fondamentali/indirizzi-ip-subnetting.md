@@ -7,9 +7,10 @@ search_keywords: [indirizzi ip, ipv4 classi, subnetting cidr, subnet mask calcol
 parent: networking/fondamentali
 related: [networking/fondamentali/tcpip, networking/fondamentali/http-https, cloud/aws/networking/vpc, cloud/aws/networking/vpc-avanzato, cloud/azure/networking/vnet, containers/kubernetes/architettura]
 official_docs: https://www.rfc-editor.org/rfc/rfc4632
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Indirizzi IP e Subnetting
@@ -76,8 +77,13 @@ Questi range non sono instradabili su internet e sono riservati per usi interni 
 | 0.0.0.0/0 | Default route ("tutto il traffico") |
 | 169.254.0.0/16 | Link-local (APIPA — assegnato automaticamente se DHCP non disponibile) |
 | 255.255.255.255 | Broadcast limitato |
-| x.x.x.255 | Broadcast diretto della subnet (ultimo indirizzo usabile) |
-| x.x.x.0 | Indirizzo di rete (primo indirizzo, non assegnabile a host) |
+| x.x.x.255 | Broadcast diretto di una /24 (ultimo indirizzo della subnet, **non** assegnabile a host) |
+| x.x.x.0 | Indirizzo di rete di una /24 (primo indirizzo, non assegnabile a host) |
+| 100.64.0.0/10 | Shared Address Space / CGNAT (RFC 6598): non è RFC 1918 né pubblico. Usato dagli ISP per il carrier-grade NAT e, nel cloud, come range secondario per pod/nodi quando 10/8 è esaurito (es. AWS EKS custom networking) |
+| 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24 | Riservati alla documentazione (RFC 5737): sicuri da usare in esempi |
+
+!!! note "Nota"
+    Network e broadcast address dipendono dalla prefix length, non dall'ultimo ottetto: in `10.0.0.64/26` l'indirizzo di rete è `.64` e il broadcast è `.127`.
 
 ## Come Funziona
 
@@ -102,12 +108,27 @@ Host utilizzabili: 64 - 2 = **62 host** (si sottraggono network address e broadc
 | 3 | 192.168.1.128 | 192.168.1.129 – 192.168.1.190 | 192.168.1.191 | 192.168.1.128/26 |
 | 4 | 192.168.1.192 | 192.168.1.193 – 192.168.1.254 | 192.168.1.255 | 192.168.1.192/26 |
 
+### VLSM (Variable Length Subnet Mask)
+
+Con CIDR le sottoreti **non devono avere tutte la stessa dimensione**: il VLSM permette di scegliere una prefix length diversa per ciascuna, evitando di sprecare indirizzi. Procedura: ordina i requisiti dal più grande al più piccolo, assegna a ciascuno la potenza di 2 minima che lo contiene (host + 2), e allocali in sequenza partendo dall'inizio del blocco, allineati ai multipli della propria dimensione.
+
+```
+Blocco 192.168.1.0/24, requisiti: 100 host, 50 host, 20 host, link p2p
+  100 host → /25 (126)  192.168.1.0/25     (.0   – .127)
+   50 host → /26 (62)   192.168.1.128/26   (.128 – .191)
+   20 host → /27 (30)   192.168.1.192/27   (.192 – .223)
+  link p2p → /30 (2)    192.168.1.224/30   (.224 – .227)
+  Libero: 192.168.1.228 – .255 (riutilizzabile)
+```
+
+Perché partire dal più grande: un blocco allineato a un multiplo della propria dimensione evita buchi non utilizzabili; allocare prima i piccoli frammenta lo spazio e impedisce di ricavare i blocchi grandi.
+
 ### Tabella CIDR di Riferimento
 
 | CIDR | Subnet Mask | Indirizzi Totali | Host Utilizzabili | Uso Tipico |
 |---|---|---|---|---|
-| /8 | 255.0.0.0 | 16.777.216 | 16.777.214 | Grandi VPC, Class A |
-| /16 | 255.255.0.0 | 65.536 | 65.534 | VPC aziendali, AWS VPC default |
+| /8 | 255.0.0.0 | 16.777.216 | 16.777.214 | Intero spazio 10.0.0.0/8 (pianificazione aziendale; i VPC AWS arrivano al massimo a /16) |
+| /16 | 255.255.0.0 | 65.536 | 65.534 | VPC (massimo in AWS; es. default VPC 172.31.0.0/16) |
 | /20 | 255.255.240.0 | 4.096 | 4.094 | Subnet per AZ in cloud |
 | /22 | 255.255.252.0 | 1.024 | 1.022 | Subnet medie |
 | /24 | 255.255.255.0 | 256 | 254 | Subnet standard LAN |
@@ -141,11 +162,15 @@ IPv6 usa indirizzi a 128 bit scritti in notazione esadecimale (8 gruppi da 16 bi
 |---|---|---|
 | Loopback | ::1/128 | Equivalente di 127.0.0.1 |
 | Link-local | fe80::/10 | Assegnato automaticamente, non instradabile |
-| Unique Local | fc00::/7 | Equivalente di RFC 1918 (privato) |
+| Unique Local | fc00::/7 (in pratica `fd00::/8`) | Equivalente di RFC 1918 (privato, RFC 4193) |
 | Global Unicast | 2000::/3 | Indirizzi pubblici internet |
-| Multicast | ff00::/8 | Multicast |
+| Multicast | ff00::/8 | Multicast (IPv6 non ha broadcast) |
+| Documentazione | 2001:db8::/32 | Riservato per esempi (RFC 3849) |
 
-La lunghezza del prefisso tipica per un host IPv6 è /128, per una subnet /64 (i 64 bit inferiori sono l'interface ID).
+Un singolo host è un `/128`; una subnet è quasi sempre un `/64` (i 64 bit inferiori sono l'interface ID): SLAAC (Stateless Address Autoconfiguration) richiede `/64`, quindi non si "risparmiano" indirizzi con subnet più piccole. Un sito riceve tipicamente un `/48` o `/56`, cioè 65.536 o 256 subnet `/64`.
+
+!!! note "IPv6 nel cloud e in Kubernetes"
+    Kubernetes supporta il **dual-stack** (IPv4+IPv6, stabile dalla 1.23). I provider cloud assegnano ai VPC blocchi IPv6 pubblici (es. AWS: `/56` per VPC, `/64` per subnet). Non esiste il NAT IPv4-style: l'isolamento si ottiene con firewall/security group o gateway egress-only.
 
 ## Configurazione & Pratica
 
@@ -167,6 +192,9 @@ VPC: 10.0.0.0/16  (65.534 indirizzi)
 ├── Pod CIDR:              10.1.0.0/16   (65.534 pod) → overlay network
 └── Service CIDR:          10.2.0.0/16   (65.534 service IP) → kube-proxy
 ```
+
+!!! note "Nota"
+    Il design sopra assume un CNI con overlay (es. Calico/Flannel/Cilium in modalità overlay): Pod e Service CIDR sono **virtuali**, fuori dal VPC. Con l'AWS VPC CNI (default su EKS) i pod ricevono invece IP **dalle subnet del VPC**: le subnet dei worker devono quindi essere dimensionate per nodi + pod (o si usa un CIDR secondario, es. `100.64.0.0/10`, con custom networking). Su AWS, in ogni subnet 5 indirizzi sono riservati (non 2): una /22 offre 1.019 host utili.
 
 !!! warning "Attenzione"
     I CIDR per Pod e Service Kubernetes NON devono sovrapporsi con il CIDR del VPC o con range di reti on-premise raggiungibili tramite VPN/Direct Connect. La sovrapposizione causa problemi di routing impossibili da risolvere senza riconfigurare la rete del cluster.
@@ -209,8 +237,8 @@ python3 -c "import ipaddress; [print(s) for s in ipaddress.ip_network('10.0.0.0/
 
 ## Best Practices
 
-- **Pianifica prima di deployare**: una volta assegnato un CIDR a un VPC cloud, non è possibile cambiarlo senza ricreare la rete. Usa una spreadsheet o uno strumento IPAM (IP Address Management) come NetBox o phpIPAM.
-- **Usa spazi privati grandi per i VPC cloud**: preferire 10.0.0.0/16 o /8 piuttosto che 192.168.0.0/24. La crescita futura è difficile da prevedere.
+- **Pianifica prima di deployare**: il CIDR primario di un VPC cloud non è modificabile senza ricreare la rete (si possono solo aggiungere CIDR secondari, con vincoli di non sovrapposizione). Usa una spreadsheet o uno strumento IPAM (IP Address Management) come NetBox o phpIPAM.
+- **Usa spazi privati grandi per i VPC cloud**: preferire un /16 ricavato da 10.0.0.0/8 piuttosto che 192.168.0.0/24 (192.168.x è anche il default di molte reti domestiche e VPN client: collisione quasi garantita). La crescita futura è difficile da prevedere.
 - **Evita la sovrapposizione**: documenta tutti i range usati (VPC, on-premise, VPN, Kubernetes) in un IPAM. La sovrapposizione tra reti connesse causa un routing non deterministico che è notoriamente difficile da diagnosticare.
 - **Lascia spazio per la crescita**: non riempire subito tutto lo spazio. Riserva range per future AZ, ambienti aggiuntivi, peering con altri VPC.
 - **Documentazione come codice**: gestisci gli indirizzi IP come infrastruttura (Terraform, Ansible). Evita modifiche manuali non tracciate.
@@ -225,7 +253,8 @@ python3 -c "import ipaddress; [print(s) for s in ipaddress.ip_network('10.0.0.0/
 
 # Host A: ip 192.168.1.10/24 → crede che la rete sia 192.168.1.0
 # Host B: ip 192.168.1.200/25 → crede che la rete sia 192.168.1.128
-# Risultato: A e B non condividono lo stesso network, ARP fallisce
+# Risultato: comunicazione asimmetrica. A vede B come locale (ARP diretto), B vede A
+# come remoto (.10 è fuori da .128/25) e risponde al default gateway: ping parziali o falliti
 
 # Diagnosi:
 ip addr show   # Verificare la subnet mask su entrambi gli host
@@ -253,12 +282,14 @@ ip route get <ip_destinazione>
 # Sintomo: connettività intermittente dopo aver aggiunto un nuovo host
 # Causa: due host con lo stesso IP nella stessa subnet
 
-# Diagnosi con arping:
+# Diagnosi con arping (Duplicate Address Detection, exit code 1 se qualcuno risponde):
+arping -D -I eth0 -c 3 192.168.1.10
+# Oppure senza -D: se ricevi risposte da MAC diversi, c'è un conflitto
 arping -I eth0 -c 3 192.168.1.10
-# Se ricevi risposte da MAC diversi, c'è un conflitto
 
-# Su Linux, il kernel logga i conflitti:
-dmesg | grep "duplicate address"
+# Cache ARP: lo stesso IP associato a MAC che cambiano è indizio di conflitto
+ip neigh show 192.168.1.10
+# (per IPv6 il kernel logga "duplicate address detected" in dmesg; per IPv4 no)
 ```
 
 ## Riferimenti
