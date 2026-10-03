@@ -7,9 +7,10 @@ search_keywords: [nat network address translation, pat port address translation,
 parent: networking/fondamentali
 related: [networking/fondamentali/indirizzi-ip-subnetting, networking/fondamentali/tcpip, networking/sicurezza/vpn-ipsec, networking/sicurezza/firewall-waf, networking/kubernetes/cni, networking/fondamentali/network-troubleshooting]
 official_docs: https://www.rfc-editor.org/rfc/rfc3022
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-09-27
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # NAT — Network Address Translation
@@ -30,8 +31,10 @@ NAT **non** è una tecnologia di sicurezza — è una tecnologia di traduzione d
 | **DNAT** (Destination NAT) | Port Forwarding, Port Mapping | IP destinazione (+ porta destinazione) | Ingresso: Internet → LAN | Esporre un server interno su Internet |
 | **Static NAT** | One-to-one NAT | IP sorgente (fisso) | Bidirezionale | Traduzione fissa 1:1 tra IP pubblico e privato |
 | **Dynamic NAT** | NAT Pool | IP sorgente (da pool) | Uscita | Pool di IP pubblici condivisi (raro oggi) |
-| **Full Cone NAT** | — | IP sorgente | Uscita | Tutti i pacchetti esterni verso IP:porta tradotta arrivano all'host |
 | **Hairpin NAT** | NAT Loopback, NAT Reflection | Sorgente e destinazione | Interna | Client sulla LAN accede al server LAN tramite IP pubblico |
+
+!!! note "Full Cone, Restricted, Symmetric: comportamento, non tipo"
+    Full Cone / Restricted Cone / Port-Restricted Cone / Symmetric (classificazione RFC 3489, superata da RFC 4787) descrivono come un NAT **assegna le mappature** e **filtra il traffico entrante**, non una configurazione diversa. In Full Cone ogni host esterno può inviare pacchetti all'`IP:porta` pubblico già mappato; in Symmetric ogni destinazione diversa ottiene una porta pubblica diversa (e accetta risposte solo da quella destinazione). Conta per NAT traversal di P2P/VoIP/WebRTC: con NAT Symmetric lo STUN non basta e serve un relay TURN. Il NAT Linux (conntrack) si comporta in pratica come "port-restricted/symmetric" verso peer sconosciuti.
 
 ### PAT — Port Address Translation
 
@@ -74,8 +77,11 @@ NAT esiste perché gli indirizzi privati non sono routable su internet pubblico.
 | `172.16.0.0` – `172.31.255.255` | `/12` | ~1 milione | Reti medie, Docker default bridge |
 | `192.168.0.0` – `192.168.255.255` | `/16` | ~65.000 | LAN domestiche, reti piccole |
 
-!!! warning "Doppio NAT"
-    Se una rete usa indirizzi privati che si sovrappongono con la rete remota (es. entrambi usano `192.168.1.0/24`), le connessioni VPN o site-to-site falliscono silenziosamente. Pianificare spazi di indirizzamento non sovrapposti è fondamentale prima di estendere la rete.
+!!! warning "Indirizzi sovrapposti"
+    Se una rete usa indirizzi privati che si sovrappongono con la rete remota (es. entrambi usano `192.168.1.0/24`), le connessioni VPN o site-to-site falliscono silenziosamente: il routing non sa se `192.168.1.5` sia locale o remoto. Pianificare spazi di indirizzamento non sovrapposti prima di estendere la rete; se impossibile, si ricorre a NAT 1:1 tra i due lati (static NAT di un prefisso su uno non sovrapposto).
+
+!!! note "CGNAT e IPv6"
+    **CGNAT** (Carrier-Grade NAT): l'ISP stesso fa NAT44 davanti ai clienti, usando lo spazio condiviso `100.64.0.0/10` (RFC 6598). Conseguenza: l'IP "WAN" del router di casa non è pubblico e il port forwarding verso l'esterno non funziona (serve VPN/tunnel in uscita o IPv6). **IPv6** nasce per eliminare la necessità di NAT: ogni host ha indirizzi globali e la protezione passa da un firewall stateful, non dalla traduzione. NAT66/NPTv6 (RFC 6296) esistono ma sono rari; NAT64 + DNS64 serve invece a far raggiungere servizi IPv4 da reti IPv6-only.
 
 ## Architettura / Come Funziona
 
@@ -120,8 +126,8 @@ sequenceDiagram
 
 In Kubernetes, NAT è ovunque:
 
-- **kube-proxy (iptables mode)**: usa DNAT per redirigere il traffico verso un Service IP (ClusterIP) ai Pod effettivi. Ogni `ClusterIP:porta` viene tradotta in `PodIP:porta` tramite regole iptables DNAT nella chain `KUBE-SERVICES`.
-- **NodePort**: DNAT da `NodeIP:NodePort` al Pod. SNAT opzionale per garantire che la risposta torni attraverso lo stesso nodo.
+- **kube-proxy (iptables mode)**: usa DNAT per redirigere il traffico verso un Service IP (ClusterIP) ai Pod effettivi. Ogni `ClusterIP:porta` viene tradotta in `PodIP:porta` tramite regole iptables DNAT nella chain `KUBE-SERVICES`. Esistono anche la modalità `nftables` (GA da Kubernetes 1.33, stesso principio con nftables) e CNI come Cilium che sostituiscono kube-proxy con eBPF, facendo la traduzione Service→Pod nel datapath eBPF senza regole iptables.
+- **NodePort**: DNAT da `NodeIP:NodePort` al Pod. Con `externalTrafficPolicy: Cluster` (default) viene fatto anche SNAT, così la risposta torna attraverso lo stesso nodo ma il Pod perde l'IP client originale; con `Local` l'IP sorgente è preservato (e il traffico va solo a Pod sul nodo).
 - **LoadBalancer**: DNAT dall'IP esterno del load balancer al ClusterIP, poi al Pod.
 - **CNI Plugin (Masquerade)**: il traffico uscente dai Pod verso Internet è soggetto a SNAT/masquerade (IP sorgente del Pod → IP del nodo).
 
@@ -147,11 +153,14 @@ iptables -t nat -A POSTROUTING \
   -j MASQUERADE
 
 # ===== Abilitare il forwarding IP (obbligatorio per NAT) =====
-echo 1 > /proc/sys/net/ipv4/ip_forward
-# Persistente (sysctl.conf):
-echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
-sysctl -p
+sysctl -w net.ipv4.ip_forward=1
+# Persistente (drop-in dedicato, preferibile a modificare sysctl.conf):
+echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-ip-forward.conf
+sysctl --system
 ```
+
+!!! note "iptables oggi è spesso iptables-nft"
+    Sulle distro recenti (Debian 10+, RHEL 8+, Ubuntu 20.10+) il comando `iptables` è `iptables-nft`: stessa sintassi, ma le regole vivono in nftables (`nft list ruleset` le mostra). Non mescolare regole `iptables` e `nft` sugli stessi hook senza sapere cosa si fa, e se c'è firewalld/ufw/Docker/kube-proxy che gestisce le tabelle, le regole manuali possono essere sovrascritte.
 
 ### iptables — DNAT (Port Forwarding)
 
@@ -165,8 +174,10 @@ iptables -t nat -A PREROUTING \
 # Consenti il traffico forwardato verso il server interno
 iptables -A FORWARD \
   -p tcp -d 192.168.1.20 --dport 8080 \
-  -m state --state NEW,ESTABLISHED,RELATED \
+  -m conntrack --ctstate NEW,ESTABLISHED,RELATED \
   -j ACCEPT
+# (il modulo `state` è legacy: `conntrack --ctstate` è il sostituto)
+# La risposta server→client è coperta da una regola ESTABLISHED,RELATED generica in FORWARD
 
 # ===== Port Forwarding multiplo (porta 443) =====
 iptables -t nat -A PREROUTING \
@@ -177,7 +188,14 @@ iptables -t nat -A PREROUTING \
 iptables -t nat -L -n -v --line-numbers
 
 # ===== Hairpin NAT (accesso da LAN tramite IP pubblico) =====
-# Senza questa regola, gli host interni non raggiungono 203.0.113.1:80
+# Servono DUE regole. 1) DNAT anche per il traffico che arriva dalla LAN
+# (la regola sopra con `-i eth0` vale solo per l'interfaccia esterna):
+iptables -t nat -A PREROUTING \
+  -i br-lan -d 203.0.113.1 -p tcp --dport 80 \
+  -j DNAT --to-destination 192.168.1.20:8080
+# 2) MASQUERADE: senza, il server risponderebbe direttamente al client LAN
+# (stessa subnet) con IP sorgente 192.168.1.20 invece di 203.0.113.1,
+# e il client scarterebbe la risposta (mismatch con la connessione attesa)
 iptables -t nat -A POSTROUTING \
   -s 192.168.1.0/24 \
   -d 192.168.1.20 \
@@ -256,7 +274,11 @@ aws ec2 create-route \
   --destination-cidr-block 0.0.0.0/0 \
   --nat-gateway-id nat-0abc123
 
-# NAT Instance (alternativa economica, deprecata ma ancora usata):
+# Prerequisito: la subnet che ospita il NAT Gateway deve essere "pubblica"
+# (route 0.0.0.0/0 → Internet Gateway). Per alta disponibilità: un NAT Gateway per AZ.
+
+# NAT Instance (alternativa economica, sconsigliata): l'AMI NAT gestita da AWS
+# è fuori supporto dal dicembre 2023, quindi serve un'AMI/script propri.
 # Richiede di disabilitare il source/destination check sull'istanza EC2
 aws ec2 modify-instance-attribute \
   --instance-id i-0abc123 \
@@ -273,7 +295,7 @@ aws ec2 modify-instance-attribute \
 
 - **Conntrack table size**: in sistemi ad alto traffico, la tabella conntrack può esaurirsi (`nf_conntrack: table full, dropping packet`). Aumenta il limite con `sysctl net.netfilter.nf_conntrack_max=524288` e monitora con `conntrack -S`.
 - **NAT e VPN**: il traffico IPsec tradizionale non attraversa NAT perché i protocolli AH/ESP non hanno porte. Usa sempre **NAT-T** (NAT Traversal, UDP 4500) per VPN IPsec attraverso NAT.
-- **Porte ephemeral**: il range di porte usato per PAT è di default 32768–60999 su Linux. Per SNAT con molte connessioni concorrenti, configura un pool di IP pubblici oppure espandi il range con `net.ipv4.ip_local_port_range`.
+- **Esaurimento porte PAT**: netfilter cerca di mantenere la porta sorgente originale; se è già in uso per quella stessa tupla, ne sceglie un'altra (porte ≥1024 → range 1024–65535; `ip_local_port_range` governa solo le connessioni *locali* dell'host, non il PAT). L'unicità è per tupla completa, quindi il limite (~64k) vale per ogni coppia `IP dst:porta dst`; verso una singola destinazione molto popolare (es. un API gateway) con migliaia di connessioni al secondo si finisce le porte. Rimedi: pool di IP pubblici (`-j SNAT --to-source 203.0.113.1-203.0.113.4`), più NAT Gateway/IP, connessioni persistenti (keep-alive).
 - **Simmetria del routing**: con SNAT/DNAT, il pacchetto di ritorno deve passare attraverso lo stesso firewall che ha fatto la traduzione originale. Architetture asimmetriche (active-active senza sincronizzazione conntrack) causano connessioni interrotte.
 - **Non esporre servizi con DNAT senza firewall**: il port forwarding da solo non è sicuro. Aggiungi sempre regole `FORWARD` che limitino le sorgenti autorizzate.
 
@@ -341,9 +363,13 @@ cat /proc/sys/net/netfilter/nf_conntrack_count
 sysctl -w net.netfilter.nf_conntrack_max=524288
 
 # Persistente
-echo "net.netfilter.nf_conntrack_max = 524288" >> /etc/sysctl.conf
-echo "net.netfilter.nf_conntrack_hashsize = 131072" >> /etc/sysctl.conf
-sysctl -p
+echo "net.netfilter.nf_conntrack_max = 524288" > /etc/sysctl.d/99-conntrack.conf
+sysctl --system
+
+# Hash table: NON è un sysctl scrivibile (nf_conntrack_buckets è read-only);
+# si imposta come parametro del modulo (regola pratica: buckets ≈ max / 4)
+echo 131072 > /sys/module/nf_conntrack/parameters/hashsize
+# Persistente: /etc/modprobe.d/nf_conntrack.conf → options nf_conntrack hashsize=131072
 
 # Ridurre i timeout per connessioni in stato TIME_WAIT
 sysctl -w net.netfilter.nf_conntrack_tcp_timeout_time_wait=30
@@ -355,24 +381,23 @@ conntrack -L | awk '{print $4}' | sort | uniq -c | sort -rn
 
 ### VPN IPsec Non Funziona Attraverso NAT
 
-**Sintomo**: la VPN IPsec fallisce con errore `NO_PROPOSAL_CHOSEN` oppure i pacchetti non arrivano al peer.
+**Sintomo**: il tunnel IPsec si stabilisce (IKE ok) ma il traffico ESP non passa, o l'IKE non completa dietro NAT, con timeout o pacchetti che non arrivano al peer. (`NO_PROPOSAL_CHOSEN` indica invece un mismatch di algoritmi/proposal, non un problema di NAT.)
 
 ```bash
-# IPsec IKE usa UDP 500 (phase 1) e UDP 4500 con NAT-T (phase 2)
+# IKE parte su UDP 500; se rileva NAT (payload NAT-D) si sposta su UDP 4500
+# e incapsula l'ESP in UDP 4500 (NAT-T, RFC 3947/3948).
 # Verificare che le porte siano aperte sul firewall
 
-# Abilitare NAT-T nel config StrongSwan
-# /etc/ipsec.conf
-# conn myvpn
-#   ...
-#   forceencaps=yes    # Forza NAT-T anche se non rilevato
-#   nat_traversal=yes
+# strongSwan: NAT-T è sempre attivo (il vecchio `nat_traversal=yes` non esiste più).
+# Per forzare l'encapsulation anche se il NAT non viene rilevato:
+# /etc/ipsec.conf          →  forceencaps=yes
+# /etc/swanctl/swanctl.conf →  encap = yes   (dentro la connection)
 
 # Verificare che il firewall permetta UDP 4500 (NAT-T)
 iptables -L INPUT -n -v | grep 4500
-# Se non c'è: aggiungere
-iptables -A INPUT -p udp --dport 4500 -j ACCEPT
-iptables -A INPUT -p udp --dport 500  -j ACCEPT
+# Se non c'è: aggiungere (-I per metterle prima di eventuali DROP)
+iptables -I INPUT -p udp --dport 4500 -j ACCEPT
+iptables -I INPUT -p udp --dport 500  -j ACCEPT
 
 # Catturare il traffico IKE
 tcpdump -i eth0 -n 'udp port 500 or udp port 4500'
@@ -383,10 +408,11 @@ tcpdump -i eth0 -n 'udp port 500 or udp port 4500'
 **Sintomo**: dall'interno della LAN, accedere al server tramite IP pubblico fallisce (timeout), ma funziona dall'esterno.
 
 ```bash
-# Verificare se c'è una regola di hairpin NAT
+# Verificare se ci sono sia il DNAT dalla LAN (PREROUTING) sia la MASQUERADE
+iptables -t nat -L PREROUTING -n -v
 iptables -t nat -L POSTROUTING -n -v | grep MASQUERADE
 
-# Se non c'è, aggiungere:
+# Se manca la MASQUERADE, aggiungere (il DNAT dalla LAN: vedi sezione iptables sopra):
 iptables -t nat -A POSTROUTING \
   -s 192.168.1.0/24 \
   -d 192.168.1.20 \
@@ -407,7 +433,7 @@ NAT si integra con molti altri argomenti della KB:
     **Approfondimento completo →** [Indirizzi IP e Subnetting](indirizzi-ip-subnetting.md)
 
 ??? info "VPN IPsec — NAT Traversal"
-    IPsec non attraversa NAT nativamente. Il protocollo AH non è compatibile con NAT; ESP può funzionare solo con NAT-T (UDP encapsulation). La configurazione VPN deve tenere conto del NAT tra i peer.
+    IPsec non attraversa bene il NAT: AH non è compatibile (autentica anche l'header IP, che il NAT modifica); ESP non ha porte, quindi il PAT non può distinguere più tunnel e in pratica serve NAT-T (ESP incapsulato in UDP 4500). La configurazione VPN deve tenere conto del NAT tra i peer.
 
     **Approfondimento completo →** [VPN e IPsec](../sicurezza/vpn-ipsec.md)
 
