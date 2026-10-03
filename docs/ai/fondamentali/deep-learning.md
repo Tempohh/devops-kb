@@ -7,9 +7,10 @@ search_keywords: [reti neurali, neural network, deep learning, convolutional neu
 parent: ai/fondamentali/_index
 related: [ai/fondamentali/machine-learning, ai/modelli/_index, ai/training/fine-tuning, ai/mlops/infrastruttura-gpu]
 official_docs: https://pytorch.org/docs/stable/index.html
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-27
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Deep Learning — Reti Neurali e Architetture
@@ -18,7 +19,7 @@ last_updated: 2026-03-27
 
 Il Deep Learning è un sottoinsieme del Machine Learning basato su reti neurali artificiali con molti strati (layer). A differenza del ML classico che richiede feature engineering manuale, le reti neurali profonde imparano automaticamente rappresentazioni gerarchiche dai dati grezzi. Il termine "deep" si riferisce alla profondità della rete (numero di layer), non a una qualità filosofica. Reti con 2-3 layer nascosti sono già "deep" rispetto ai perceptron a singolo strato.
 
-Le reti neurali sono il fondamento degli LLM moderni: l'architettura Transformer che alimenta Claude, GPT-4 e Llama è costruita su principi di deep learning. Comprendere MLP, attention, normalizzazione e ottimizzatori è essenziale per capire come funzionano e perché si comportano in un certo modo. In questo documento si copre il deep learning "classico" — per i Transformer, vedi la sezione Modelli.
+Le reti neurali sono il fondamento degli LLM moderni: l'architettura Transformer che alimenta Claude, GPT e Llama è costruita su principi di deep learning. Comprendere MLP, attention, normalizzazione e ottimizzatori è essenziale per capire come funzionano e perché si comportano in un certo modo. In questo documento si copre il deep learning "classico" — per i Transformer, vedi la sezione Modelli.
 
 ## 1. Il Neurone Artificiale e l'MLP
 
@@ -41,7 +42,7 @@ Le attivazioni introducono non-linearità, senza le quali impilare layer sarebbe
 |----------|---------|-------|---------------|
 | **ReLU** | max(0, x) | [0, +∞) | Layer nascosti nelle CNN e MLP. Semplice, efficiente |
 | **Leaky ReLU** | max(0.01x, x) | (-∞, +∞) | Evita il "dying ReLU problem" |
-| **GELU** | x·Φ(x) | (-∞, +∞) | LLM e Transformer (BERT, GPT). Più smooth di ReLU |
+| **GELU** | x·Φ(x) | (-∞, +∞) | Transformer (BERT, GPT-2). Più smooth di ReLU. Gli LLM recenti (Llama e simili) usano varianti gated come **SwiGLU** |
 | **Sigmoid** | 1/(1+e^(-x)) | (0, 1) | Output layer classificazione binaria |
 | **Tanh** | (e^x - e^(-x))/(e^x + e^(-x)) | (-1, 1) | RNN, gate nelle LSTM |
 | **Softmax** | e^(xᵢ)/Σe^(xⱼ) | (0, 1), somma=1 | Output layer classificazione multi-classe |
@@ -127,7 +128,7 @@ class SimpleCNN(nn.Module):
 | VGG-16/19 | 2014 | 138M | Layer piccoli (3×3), profondità |
 | ResNet-50 | 2015 | 25M | Skip connections, reti molto profonde |
 | EfficientNet | 2019 | 5-66M | Scaling bilanciato (profondità/larghezza/risoluzione) |
-| ConvNeXt | 2022 | 28-350M | CNN modernizzata, competitive con ViT |
+| ConvNeXt | 2022 | 28-350M | CNN modernizzata, competitive con ViT (Vision Transformer, Transformer applicato a patch di immagine) |
 
 **ResNet e skip connections** — la svolta che ha permesso reti con 100+ layer:
 
@@ -250,6 +251,9 @@ nn.Sequential(
 nn.LayerNorm(normalized_shape=512)
 ```
 
+!!! note "RMSNorm"
+    Gli LLM recenti (Llama, Mistral e simili) usano spesso **RMSNorm** (`nn.RMSNorm`, PyTorch ≥ 2.4): come LayerNorm ma senza sottrazione della media. Meno operazioni, qualità equivalente.
+
 ## 6. Optimizer e Learning Rate Scheduling
 
 ### Optimizer
@@ -303,9 +307,9 @@ scheduler = torch.optim.lr_scheduler.OneCycleLR(
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast  # torch.cuda.amp.* è deprecato
 
-def train_epoch(model, loader, optimizer, scheduler, scaler, device):
+def train_epoch(model, loader, optimizer, scheduler, device):
     model.train()
     total_loss = 0.0
     correct = 0
@@ -315,21 +319,19 @@ def train_epoch(model, loader, optimizer, scheduler, scaler, device):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
 
-        # Mixed precision: forward pass in FP16/BF16
-        with autocast(dtype=torch.bfloat16):
+        # Mixed precision: forward in BF16 (pesi master restano FP32).
+        # BF16 ha lo stesso range di FP32 → nessun GradScaler necessario
+        with autocast("cuda", dtype=torch.bfloat16):
             outputs = model(inputs)
             loss = criterion(outputs, targets)
 
-        # Backward in FP32 via scaler per evitare underflow
-        scaler.scale(loss).backward()
+        loss.backward()
 
         # Gradient clipping: evita gradient explosion
-        scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
-        scaler.step(optimizer)
-        scaler.update()
-        scheduler.step()
+        optimizer.step()
+        scheduler.step()  # scheduler per-batch: T_max va espresso in step, non epoch
 
         total_loss += loss.item()
         _, predicted = outputs.max(1)
@@ -363,16 +365,18 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = MyModel().to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.01)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30)
-scaler = GradScaler()  # per mixed precision
+num_epochs = 100
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer, T_max=num_epochs * len(train_loader)  # scheduler.step() è chiamato a ogni batch
+)
 
 # Training loop
 best_val_acc = 0.0
 patience = 10
 no_improve = 0
 
-for epoch in range(100):
-    train_loss, train_acc = train_epoch(model, train_loader, optimizer, scheduler, scaler, device)
+for epoch in range(num_epochs):
+    train_loss, train_acc = train_epoch(model, train_loader, optimizer, scheduler, device)
     val_loss, val_acc = evaluate(model, val_loader, device)
 
     print(f"Epoch {epoch+1:3d} | Train Loss: {train_loss:.4f} Acc: {train_acc:.3f} | "
@@ -409,7 +413,10 @@ model = model.to(device)
 ```python
 # Più efficiente: ogni processo gestisce una GPU
 # Avvio: torchrun --nproc_per_node=4 train.py
+# Per modelli che non entrano in una GPU: FSDP (FSDP2 / fully_shard),
+# che shard-a parametri, gradienti e stato dell'optimizer tra le GPU
 
+import os
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
@@ -430,28 +437,38 @@ train_loader = DataLoader(train_dataset, sampler=train_sampler, batch_size=64)
 La mixed precision training usa FP16 o BF16 per il forward/backward pass, riducendo l'utilizzo di VRAM fino al 50% e accelerando il training su hardware moderno (Ampere, Hopper).
 
 ```python
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 
-scaler = GradScaler()  # scala automaticamente la loss per evitare underflow FP16
-
-with autocast(dtype=torch.float16):  # FP16 per Volta/Turing
+# FP16 (Volta/Turing): range ridotto (max 65504) → i gradienti piccoli vanno
+# in underflow a 0. GradScaler moltiplica la loss per un fattore e lo rimuove prima dello step
+scaler = GradScaler("cuda")
+with autocast("cuda", dtype=torch.float16):
     output = model(input)
     loss = criterion(output, target)
+scaler.scale(loss).backward()
+scaler.unscale_(optimizer)  # necessario prima del clipping
+torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+scaler.step(optimizer)
+scaler.update()
+optimizer.zero_grad()
 
 # BF16 (Brain Float 16) — preferibile su Ampere+ (A100, H100)
-# Stesso range di FP32 ma meno precisione. Non richiede GradScaler
-with autocast(dtype=torch.bfloat16):
+# Stesso range di FP32 ma meno precisione mantissa → nessun GradScaler
+with autocast("cuda", dtype=torch.bfloat16):
     output = model(input)
     loss = criterion(output, target)
-loss.backward()  # backward in BF16, nessun underflow
+loss.backward()  # backward fuori da autocast; i pesi restano FP32
 ```
+
+!!! tip "torch.compile"
+    `model = torch.compile(model)` (PyTorch 2.x) fonde operazioni e genera kernel ottimizzati: spesso 1.3-2× di speedup in training/inference con una riga. Il primo step è lento (compilazione).
 
 | Formato | Bit | Range | Precisione | Hardware |
 |---------|-----|-------|------------|---------|
 | FP32 | 32 | ±3.4×10³⁸ | Alta | Tutti |
 | FP16 | 16 | ±65504 | Bassa | Volta+ |
 | BF16 | 16 | ±3.4×10³⁸ | Media | Ampere+ |
-| FP8 | 8 | Limitato | Molto bassa | Hopper (H100) |
+| FP8 | 8 | Limitato | Molto bassa | Hopper (H100), Ada, Blackwell |
 
 ## Best Practices
 
