@@ -9,7 +9,7 @@ related: [ci-cd/testing/contract-testing, ci-cd/github-actions/workflow-avanzati
 official_docs: https://testcontainers.com/
 status: complete
 difficulty: intermediate
-last_updated: 2026-04-04
+last_updated: 2026-10-03
 ---
 
 # Test Strategy per Microservizi
@@ -533,8 +533,8 @@ go-mutesting ./internal/domain/...
 mutation-testing:
   runs-on: ubuntu-latest
   needs: [unit-tests]
-  # Solo se ci sono modifiche nelle classi di dominio
-  if: contains(github.event.pull_request.changed_files, 'src/main/java/com/example/domain')
+  # Solo su PR: il filtro sui path del dominio va nel trigger on.pull_request.paths
+  if: github.event_name == 'pull_request'
   steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-java@v4
@@ -579,21 +579,29 @@ mutation-testing:
 
 ## Troubleshooting
 
-**I Testcontainers falliscono in CI con "Cannot connect to the Docker daemon"**
+### Scenario 1 — Testcontainers fallisce in CI con "Cannot connect to the Docker daemon"
 
-: Causa: il runner CI non ha il Docker daemon disponibile o il socket è in una posizione non standard.
-Soluzione: su GitHub Actions, usare `ubuntu-latest` (Docker incluso). Aggiungere `DOCKER_HOST: unix:///var/run/docker.sock` come env variable. Se si usa Kubernetes runner, abilitare Docker-in-Docker o Testcontainers Cloud.
+**Sintomo**: `Could not find a valid Docker environment` o `Cannot connect to the Docker daemon` all'avvio dei test di integrazione.
+
+**Causa**: il runner CI non ha il Docker daemon, oppure il socket è in una posizione non standard (runner Kubernetes, rootless Docker).
+
+**Soluzione**: su GitHub Actions usare `ubuntu-latest` (Docker incluso) e impostare `DOCKER_HOST`. Su runner Kubernetes abilitare Docker-in-Docker o usare Testcontainers Cloud.
 
 ```bash
 # Verifica che Docker sia disponibile nel runner
 docker info
 # Se fallisce: il runner non ha Docker abilitato
+ls -l /var/run/docker.sock
+export DOCKER_HOST=unix:///var/run/docker.sock
 ```
 
-**I test con Testcontainers sono lenti anche in CI**
+### Scenario 2 — Test con Testcontainers lenti anche in CI
 
-: Causa: il container viene avviato e fermato per ogni test class invece di essere riusato.
-Soluzione: dichiarare il container come `static` in Java (lifecycle legato alla classe, non al singolo test). Usare `scope="session"` per le fixture pytest. Abilitare `withReuse(true)` in sviluppo locale.
+**Sintomo**: ogni test class impiega 5-10 secondi extra di startup; la suite di integrazione supera il timeout del job.
+
+**Causa**: il container viene avviato e fermato per ogni test invece di essere condiviso (campo di istanza non `static`, fixture pytest con scope `function`).
+
+**Soluzione**: dichiarare il container `static` in Java (lifecycle legato alla classe), usare `scope="session"` per le fixture pytest, abilitare `withReuse(true)` in locale.
 
 ```java
 // SBAGLIATO: un container per test
@@ -605,35 +613,67 @@ PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
 static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
 ```
 
-**I test falliscono in modo non deterministico (flaky)**
+### Scenario 3 — Test flaky (falliscono in modo non deterministico)
 
-: Causa più comune: stato condiviso tra test, ordine di esecuzione non garantito, o attese temporali fisse.
-Diagnosi: eseguire i test in ordine casuale (`mvn test -Dsurefire.runOrder=random`). Identificare quale test "inquina" lo stato per il successivo.
+**Sintomo**: lo stesso commit passa al secondo rerun; il fallimento dipende dal runner o dall'ordine.
+
+**Causa**: stato condiviso tra test, dipendenza dall'ordine di esecuzione, attese temporali fisse, race condition in codice asincrono.
+
+**Soluzione**: eseguire in ordine casuale per far emergere il test che "inquina" lo stato, poi isolare i dati (rollback, reset esplicito) e sostituire gli sleep con polling.
 
 ```bash
-# JUnit 5: esegui in ordine casuale per trovare dipendenze implicite
+# JUnit 5: ordine casuale per trovare dipendenze implicite + rerun per quantificare la flakiness
 mvn test -Dsurefire.runOrder=random -Dsurefire.rerunFailingTestsCount=3
 
-# pytest: esegui in ordine casuale
+# pytest: ordine casuale riproducibile via seed
 pip install pytest-randomly
 pytest --randomly-seed=12345
 ```
 
-**Mutation score basso nonostante coverage alta**
+### Scenario 4 — Mutation score basso nonostante coverage alta
 
-: Causa: i test non contengono asserzioni significative, o testano casi che non stressano i boundary.
-Diagnosi: esaminare il report HTML di PIT e trovare i mutanti sopravvissuti. Di solito si concentrano nei branch (`if/else`), boundary conditions (`>` vs `>=`), e loop.
-Soluzione: aggiungere test che verificano esplicitamente i casi limite: valori zero, negativi, valori al boundary esatto.
+**Sintomo**: coverage 85%+ ma PIT/mutmut riportano molti mutanti sopravvissuti; il build fallisce su `mutationThreshold`.
 
-**Awaitility timeout scaduto nonostante l'evento sia arrivato**
+**Causa**: i test eseguono il codice senza asserzioni significative, o non stressano i boundary (`>` vs `>=`, zero, negativi).
 
-: Causa: l'offset Kafka del consumer è impostato su `latest` invece di `earliest` nei test, quindi non vede i messaggi prodotti prima della sottoscrizione.
-Soluzione: impostare `auto.offset.reset=earliest` nelle properties del consumer di test.
+**Soluzione**: aprire il report HTML, individuare i mutanti sopravvissuti (di solito in `if/else`, boundary e loop) e aggiungere test sui casi limite esatti.
+
+```bash
+# Java: report in target/pit-reports/
+mvn org.pitest:pitest-maven:mutationCoverage
+
+# Python: elenca e ispeziona un mutante sopravvissuto
+mutmut results
+mutmut show 5
+```
+
+### Scenario 5 — Awaitility va in timeout nonostante l'evento sia stato pubblicato
+
+**Sintomo**: `ConditionTimeoutException` nel test del consumer Kafka; il producer risulta aver inviato il messaggio.
+
+**Causa**: `auto.offset.reset` è `latest` (default): il consumer non vede i messaggi prodotti prima dell'assegnazione delle partizioni. Un `group-id` fisso può inoltre riusare offset di run precedenti.
+
+**Soluzione**: impostare `earliest` e un `group-id` unico per run.
 
 ```yaml
-# application-test.properties / Spring
+# application-test.yml / Spring
 spring.kafka.consumer.auto-offset-reset: earliest
 spring.kafka.consumer.group-id: test-group-${random.uuid} # gruppo unico per evitare conflitti
+```
+
+### Scenario 6 — Job di mutation testing non parte mai sulle PR
+
+**Sintomo**: il job `mutation-testing` risulta sempre *skipped*.
+
+**Causa**: `github.event.pull_request.changed_files` è un **numero** (conteggio file), non una lista: `contains(..., 'src/main/...')` è sempre falso.
+
+**Soluzione**: filtrare con `paths:` sul trigger, oppure con un'action come `dorny/paths-filter`.
+
+```yaml
+on:
+  pull_request:
+    paths:
+      - "src/main/java/com/example/domain/**"
 ```
 
 ---
