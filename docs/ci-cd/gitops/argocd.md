@@ -7,9 +7,10 @@ search_keywords: [argocd, argocd application, argocd app of apps, argocd applica
 parent: ci-cd/gitops/_index
 related: [ci-cd/gitops/_index, ci-cd/gitops/flux, containers/kubernetes/_index, containers/helm/_index, containers/kustomize/_index]
 official_docs: https://argo-cd.readthedocs.io/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # ArgoCD
@@ -57,29 +58,35 @@ ArgoCD è uno strumento GitOps dichiarativo per Kubernetes che si installa come 
 | **Dex** | Identity provider OIDC (OpenID Connect) per SSO (Single Sign-On) con GitHub, Okta, LDAP (Lightweight Directory Access Protocol), SAML (Security Assertion Markup Language) |
 | **Redis** | Cache per rendering repository e stato applicazioni |
 | **ApplicationSet Controller** | Genera Application CRD da generator (Git, Cluster, List, Matrix) |
+| **Notifications Controller** | Invia notifiche (Slack, email, webhook) su eventi di sync/health tramite trigger e template |
+
+!!! note "Argo CD 3.x — cambiamenti da conoscere"
+    Dalla 3.0 (2025) il tracking delle risorse di default usa **annotation** (non più label), l'RBAC sui `logs` è applicato di default (serve `logs, get` esplicito) e le policy `update`/`delete` su un'Application non si estendono più automaticamente alle sue sub-risorse. Prima di aggiornare da 2.x leggere la guida di upgrade ufficiale.
 
 ### Installazione
 
 ```bash
-# Installazione con kubectl
+# Installazione con kubectl (sostituire <versione> con una release 3.x reale, es. v3.1.0:
+# fissare SEMPRE la versione, "stable" si muove e rende l'installazione non riproducibile)
 kubectl create namespace argocd
 kubectl apply -n argocd -f \
-  https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.0/manifests/install.yaml
+  https://raw.githubusercontent.com/argoproj/argo-cd/<versione>/manifests/install.yaml
 
 # Installazione con Helm (raccomandato per produzione)
 helm repo add argo https://argoproj.github.io/argo-helm
 helm repo update
+helm search repo argo/argo-cd --versions | head   # scegliere e fissare una chart version
 
 helm install argocd argo/argo-cd \
   --namespace argocd \
   --create-namespace \
-  --version 6.7.0 \
+  --version <chart-version> \
   -f argocd-values.yaml
 
 # Accedere alla UI (port-forward per setup iniziale)
 kubectl port-forward svc/argocd-server -n argocd 8080:443
 
-# Login iniziale (password iniziale: nome pod argocd-server)
+# Login iniziale (password generata in argocd-initial-admin-secret; da eliminare dopo il primo setup)
 argocd login localhost:8080 \
   --username admin \
   --password $(kubectl -n argocd get secret argocd-initial-admin-secret \
@@ -163,7 +170,7 @@ spec:
       jsonPointers:
         - /data
 
-  # Override informazioni di revisione per display
+  # Quante revisioni di sync mantenere in status.history (per rollback)
   revisionHistoryLimit: 10
 
   info:
@@ -402,14 +409,14 @@ spec:
   # Finestre di sync (manutenzione programmatica)
   syncWindows:
     - kind: allow
-      schedule: '* 9-17 * * 1-5'              # Solo deploy in orario lavorativo
-      duration: 8h
+      schedule: '0 9 * * 1-5'                 # Inizio finestra: 09:00 lun-ven (cron; "*" nei minuti aprirebbe una finestra ogni minuto)
+      duration: 8h                            # Finestra 09:00-17:00
       applications:
         - '*'
       manualSync: true                          # Permetti sync manuale anche fuori finestra
     - kind: deny
-      schedule: '0 0 * * 5'                   # No deploy venerdì sera
-      duration: 72h
+      schedule: '0 18 * * 5'                  # Da venerdì 18:00...
+      duration: 60h                           # ...fino a lunedì 06:00 (deny prevale su allow)
       applications:
         - '*payments*'
 ```
@@ -470,9 +477,10 @@ metadata:
   namespace: argocd
 data:
   # Policy format: p, <subject>, <resource>, <action>, <object>, <effect>
-  # Subjects: user:<email>, group:<group>
-  # Resources: applications, applicationsets, clusters, repositories, ...
+  # Subject: ruolo (role:x), utente/gruppo SSO (claim in `scopes`) o account locale
+  # Resources: applications, applicationsets, clusters, repositories, logs, exec, ...
   # Actions: get, create, update, delete, sync, override, action
+  # Object: <project>/<application> (per applications), con wildcard
   policy.csv: |
     # Admins: accesso completo
     g, my-org:platform-team, role:admin
@@ -483,24 +491,21 @@ data:
     p, role:developer, logs, get, */*, allow
     g, my-org:developers, role:developer
 
-    # CI/CD service account: gestione applicazioni
+    # CI/CD: account locale "ci-deployer" (dichiarato in argocd-cm: accounts.ci-deployer: apiKey)
+    # e autenticato con token generato via `argocd account generate-token`
     p, role:ci-deployer, applications, get, */*, allow
     p, role:ci-deployer, applications, sync, */*, allow
     p, role:ci-deployer, applications, update, */*, allow
-    g, serviceaccount:argocd:ci-deployer, role:ci-deployer
+    g, ci-deployer, role:ci-deployer
 
-    # Read-only per tutti gli autenticati
-    p, role:readonly, applications, get, */*, allow
-    p, role:readonly, clusters, get, *, allow
-    g, *, role:readonly
-
+  # Ruolo assegnato a ogni utente autenticato senza altre policy (read-only built-in)
   policy.default: role:readonly
   scopes: '[groups, email]'
 ```
 
 ## Sync Hooks e Waves
 
-Gli hook permettono di eseguire azioni prima/durante/dopo la sincronizzazione. Le waves controllano l'ordine di applicazione.
+Gli hook permettono di eseguire azioni prima/durante/dopo la sincronizzazione. Le waves controllano l'ordine di applicazione: ArgoCD applica le risorse per wave crescente (default 0, valori negativi ammessi) e passa alla wave successiva solo quando tutte le risorse della precedente sono `Healthy`. Per questo il Namespace sta a `-10` e la migration a `-5`.
 
 ```yaml
 # Pre-sync hook: database migration prima del deploy
@@ -564,10 +569,12 @@ spec:
 
 ArgoCD Image Updater monitora i registry Docker e aggiorna automaticamente il tag dell'immagine nel repository Git.
 
+<!-- REVIEW: verificare Image Updater 1.x (configurazione via CRD ImageUpdater invece delle annotation) e la versione corrente; le annotation sotto sono il modello 0.x/legacy -->
+
 ```yaml
-# Installazione
+# Installazione (fissare una release reale, <versione> = tag della release 0.x o 1.x)
 kubectl apply -n argocd -f \
-  https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/v0.12.2/manifests/install.yaml
+  https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/<versione>/manifests/install.yaml
 
 # Annotazioni sull'Application per configurare l'aggiornamento
 apiVersion: argoproj.io/v1alpha1
@@ -680,6 +687,17 @@ spec:
             /
             sum(rate(http_requests_total{service="{{args.service-name}}"}[2m]))
 
+---
+# Secondo AnalysisTemplate, referenziato dai step del canary come "latency-check"
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: latency-check
+  namespace: myapp-production
+spec:
+  args:
+    - name: service-name
+  metrics:
     - name: latency-p99
       interval: 1m
       successCondition: result[0] <= 0.5    # Max 500ms al p99
@@ -730,7 +748,9 @@ spec:
 argocd app get myapp-staging --refresh
 
 # Visualizza i diff dettagliati tra desired state e live state
-argocd app diff myapp-staging --local
+argocd app diff myapp-staging
+# Hard refresh: invalida anche la cache di rendering del repo-server
+argocd app get myapp-staging --hard-refresh
 
 # Ispeziona errori di rendering nel repo-server
 kubectl logs -n argocd -l app.kubernetes.io/name=argocd-repo-server --tail=100
