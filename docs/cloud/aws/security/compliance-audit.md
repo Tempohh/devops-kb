@@ -7,10 +7,10 @@ search_keywords: [guardduty, threat detection, ml security, inspector, vulnerabi
 parent: cloud/aws/security/_index
 related: [cloud/aws/security/kms-secrets, cloud/aws/security/network-security, cloud/aws/monitoring/cloudwatch, cloud/aws/monitoring/observability]
 official_docs: https://docs.aws.amazon.com/guardduty/
-status: needs-review
-last_verified: 2026-10-03
+status: reviewed
+last_verified: 2026-10-04
 difficulty: advanced
-last_updated: 2026-10-03
+last_updated: 2026-10-04
 ---
 
 # GuardDuty, Inspector, Macie, Security Hub, Config e CloudTrail
@@ -341,8 +341,7 @@ aws macie2 update-organization-configuration \
 Security Hub è il pannello di controllo centrale per la sicurezza AWS. Aggrega, organizza e priorizza i finding di sicurezza da GuardDuty, Inspector, Macie, Config, Firewall Manager, IAM Access Analyzer, e altri.
 
 !!! note "Security Hub CSPM vs nuovo Security Hub"
-    Il servizio descritto qui (controlli di compliance + formato ASFF) è oggi chiamato **Security Hub CSPM** (Cloud Security Posture Management). AWS ha introdotto un nuovo Security Hub (fine 2025) che aggiunge correlazione e prioritizzazione del rischio e adotta il formato OCSF; CSPM resta disponibile come componente. I comandi `aws securityhub` sotto restano validi per CSPM.
-    <!-- REVIEW: verificare nomenclatura/API del nuovo Security Hub (OCSF) e impatto sui comandi CLI -->
+    Il servizio descritto qui (controlli di compliance + formato ASFF) è oggi chiamato **Security Hub CSPM** (Cloud Security Posture Management). AWS ha introdotto un nuovo Security Hub (fine 2025) che aggiunge correlazione e prioritizzazione del rischio e adotta il formato OCSF; CSPM resta disponibile come componente. I comandi `aws securityhub` sotto restano validi per CSPM. Il nuovo Security Hub (v2) usa lo stesso namespace CLI `aws securityhub` ma con comandi dedicati suffissati `-v2` (es. `aws securityhub enable-security-hub-v2`) e findings in formato OCSF; `enable-security-hub` (senza suffisso) abilita solo CSPM.
 
 **Compliance Standards supportati (CSPM):**
 - AWS Foundational Security Best Practices (FSBP)
@@ -713,8 +712,10 @@ aws cloudtrail lookup-events \
 
 ### CloudTrail Lake
 
-CloudTrail Lake permette di eseguire query SQL direttamente sui log CloudTrail senza doverli esportare. Retention fino a 3653 giorni (~10 anni) con pricing a retention estesa.
-<!-- REVIEW: verificare se CloudTrail Lake è ancora disponibile ai nuovi clienti (possibile restrizione di disponibilità 2026) e, in caso, indicare alternativa trail → S3 + Athena -->
+CloudTrail Lake permette di eseguire query SQL direttamente sui log CloudTrail senza doverli esportare. Retention fino a 3653 giorni (~10 anni) con pricing *One-year extendable retention*, o fino a 2557 giorni (~7 anni) con *Seven-year retention*.
+
+!!! warning "Disponibilità: chiuso ai nuovi clienti dal 31 maggio 2026"
+    Secondo la documentazione AWS, CloudTrail Lake **non è più aperto ai nuovi clienti dal 31 maggio 2026**; i clienti esistenti continuano a usarlo normalmente. Per i nuovi account l'alternativa è un **trail → S3 + Athena** (query SQL sui log in S3, eventualmente con partition projection).
 
 Lo `start-query` richiede nel `FROM` l'**ID** dell'Event Data Store (non il nome).
 
