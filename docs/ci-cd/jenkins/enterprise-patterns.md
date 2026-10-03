@@ -3,13 +3,14 @@ title: "Jenkins Enterprise Patterns"
 slug: enterprise-patterns
 category: ci-cd
 tags: [jenkins, enterprise, multibranch, monorepo, pipeline-as-code, promotion, governance]
-search_keywords: [jenkins enterprise, multibranch pipeline, branch strategy, pipeline governance, build promotion, monorepo pipeline, jenkinsfile, shared library governance, parameterized builds, matrix builds enterprise, blue ocean, pipeline templates, trunk-based development, gitflow jenkins]
+search_keywords: [jenkins enterprise, multibranch pipeline, branch strategy, pipeline governance, build promotion, monorepo pipeline, jenkinsfile, shared library governance, parameterized builds, matrix builds enterprise, pipeline templates, trunk-based development, gitflow jenkins]
 parent: ci-cd/jenkins/_index
 related: [ci-cd/jenkins/pipeline-fundamentals, ci-cd/jenkins/shared-libraries, ci-cd/jenkins/agent-infrastructure, ci-cd/jenkins/security-governance, ci-cd/gitops/argocd]
 official_docs: https://www.jenkins.io/doc/book/pipeline/multibranch/
-status: complete
+status: reviewed
 difficulty: expert
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Jenkins Enterprise Patterns
@@ -38,10 +39,12 @@ jobs:
             credentialsId('github-app-credentials')
             traits {
               gitHubBranchDiscovery {
-                strategyId(1)  // 1=Exclude forks, 2=Only forks, 3=All
+                // 1=Escludi i branch che sono anche PR (evita build duplicate), 2=Solo branch con PR, 3=Tutti
+                strategyId(1)
               }
               gitHubPullRequestDiscovery {
-                strategyId(2)  // 2=Merge con target branch
+                // 1=Merge della PR con il target branch corrente, 2=Solo head della PR, 3=Entrambi
+                strategyId(1)
               }
               headWildcardFilter {
                 includes('main release/* feature/* hotfix/*')
@@ -117,7 +120,7 @@ pipeline {
                 }
                 stage('Static Analysis') {
                     agent { label 'sonar' }
-                    when { not { changeRequest() } }  // skip su PR draft
+                    when { not { changeRequest() } }  // skip su tutte le PR (analisi solo su branch)
                     steps {
                         unstash 'source'
                         withSonarQubeEnv('sonarqube') {
@@ -176,18 +179,25 @@ pipeline {
             agent { label 'helm' }
             when { branch 'main' }
             steps {
-                input(
-                    message: "Deploy ${env.SEMVER} in produzione?",
-                    submitter: 'release-managers',
-                    parameters: [
-                        choice(
-                            name: 'STRATEGY',
-                            choices: ['canary', 'blue-green', 'rolling'],
-                            description: 'Strategia di deployment'
+                script {
+                    // Con un solo parametro input() restituisce direttamente il valore (non una Map);
+                    // il valore NON finisce in `params`.
+                    // Il timeout evita di tenere occupato l'executor 'helm' all'infinito.
+                    def strategy = timeout(time: 1, unit: 'HOURS') {
+                        input(
+                            message: "Deploy ${env.SEMVER} in produzione?",
+                            submitter: 'release-managers',
+                            parameters: [
+                                choice(
+                                    name: 'STRATEGY',
+                                    choices: ['canary', 'blue-green', 'rolling'],
+                                    description: 'Strategia di deployment'
+                                )
+                            ]
                         )
-                    ]
-                )
-                deployToProduction(version: env.SEMVER, strategy: params.STRATEGY)
+                    }
+                    deployToProduction(version: env.SEMVER, strategy: strategy)
+                }
             }
         }
     }
@@ -203,8 +213,12 @@ pipeline {
             )
         }
         success {
-            when { branch 'main' }
-            tagGitRelease(version: env.SEMVER)
+            // `when` non è ammesso dentro post: condizione via script
+            script {
+                if (env.BRANCH_NAME == 'main') {
+                    tagGitRelease(version: env.SEMVER)
+                }
+            }
         }
     }
 }
@@ -282,7 +296,7 @@ teams.each { team ->
                             string {
                                 scope('GLOBAL')
                                 id("${team.name}-api-key")
-                                secret('')  // placeholder — impostare manualmente
+                                secret('')  // placeholder: ogni run del seed lo riazzera!
                                 description("API Key team ${team.name}")
                             }
                         }
@@ -301,8 +315,8 @@ teams.each { team ->
                     repository(repo)
                     credentialsId('github-app-global')
                     traits {
-                        gitHubBranchDiscovery { strategyId(1) }
-                        gitHubPullRequestDiscovery { strategyId(2) }
+                        gitHubBranchDiscovery { strategyId(1) }        // branch senza PR aperta
+                        gitHubPullRequestDiscovery { strategyId(1) }   // merge con target branch
                     }
                 }
             }
@@ -321,7 +335,7 @@ teams.each { team ->
 
 ### Immutable Artifact Pattern
 
-Il pattern corretto è: **build once, promote many times**. Un artifact viene buildato una sola volta e promosso tra gli ambienti tramite aggiornamento dei metadati/tags, mai ribuildata.
+Il pattern corretto è: **build once, promote many times**. Un artifact viene buildato una sola volta e promosso tra gli ambienti tramite aggiornamento dei metadati/tags, mai ribuildato.
 
 ```groovy
 // vars/promoteArtifact.groovy
@@ -355,23 +369,28 @@ def call(Map config) {
         usernameVariable: 'REG_USER',
         passwordVariable: 'REG_PASS'
     )]) {
+        // password via stdin: non compare nella command line (ps, log)
         sh """
-            crane auth login ${registryBase} -u \$REG_USER -p \$REG_PASS
+            echo "\$REG_PASS" | crane auth login ${registryBase} -u "\$REG_USER" --password-stdin
             crane copy ${sourceImage} ${targetImage}
             crane tag ${targetImage} latest-${config.targetEnv}
         """
     }
 
-    // Firma il manifest promosso (Cosign)
-    withCredentials([string(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY')]) {
+    // Firma il manifest promosso (Cosign) per digest, non per tag (i tag sono mutabili)
+    // `--key env://COSIGN_KEY` legge la chiave dalla variabile: niente file su disco.
+    // COSIGN_PASSWORD serve se la chiave privata è cifrata.
+    withCredentials([
+        string(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
+        string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
+    ]) {
         sh """
-            echo "\$COSIGN_KEY" > /tmp/cosign.key
-            cosign sign --key /tmp/cosign.key \
-                --annotations env=${config.targetEnv} \
-                --annotations promoted-by=${config.approver} \
-                --annotations promoted-at=\$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-                ${targetImage}
-            rm /tmp/cosign.key
+            DIGEST=\$(crane digest ${targetImage})
+            cosign sign --yes --key env://COSIGN_KEY \
+                -a env=${config.targetEnv} \
+                -a promoted-by=${config.approver} \
+                -a promoted-at=\$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+                ${registryBase}/${config.image}@\$DIGEST
         """
     }
 
@@ -402,7 +421,7 @@ def call(Map config = [:]) {
                     image: "my-org/${service}",
                     sourceTag: "${version}",
                     targetEnv: targetEnv,
-                    approver: env.BUILD_USER_ID
+                    approver: env.BUILD_USER_ID   // richiede il plugin "Build User Vars"
                 )
                 // Aggiorna Helm values nel GitOps repo
                 updateGitOpsManifest(
@@ -454,6 +473,9 @@ List<String> call() {
 }
 ```
 
+!!! warning "Limiti di `currentBuild.changeSets`"
+    `changeSets` contiene solo i commit **dall'ultimo build** di quel branch: al primo build di un branch/PR è vuoto (nessun servizio buildato) e se il build precedente è fallito i suoi commit non vengono più considerati. Per risultati deterministici confrontare con il branch di base: `git diff --name-only origin/main...HEAD` (con checkout non shallow, o `git fetch --depth` sufficiente) e usare l'output al posto di `changeSets`.
+
 ```groovy
 // vars/monorepoMatrix.groovy — determina quali servizi buildare
 def call(Map config = [:]) {
@@ -467,7 +489,8 @@ def call(Map config = [:]) {
     }
 
     def servicesToBuild = services.findAll { service ->
-        def serviceDir = config.serviceDir ?: service
+        // config.serviceDir è una Map nome -> directory
+        def serviceDir = config.serviceDir?.get(service) ?: service
         def relevantChange = changedFiles.any { file ->
             file.startsWith("${serviceDir}/") ||
             file.startsWith("shared-libs/") ||      // dipendenza condivisa
@@ -554,7 +577,7 @@ pipeline {
             when { expression { currentBuild.result != 'NOT_BUILT' } }
             steps {
                 script {
-                    def services = groovy.json.JsonParser.parseText(env.SERVICES_TO_BUILD)
+                    def services = readJSON(text: env.SERVICES_TO_BUILD)   // Pipeline Utility Steps
                     def buildStages = SERVICES
                         .findAll { it.name in services }
                         .collectEntries { service ->
@@ -584,7 +607,7 @@ pipeline {
             }
             steps {
                 script {
-                    def services = groovy.json.JsonParser.parseText(env.SERVICES_TO_BUILD)
+                    def services = readJSON(text: env.SERVICES_TO_BUILD)
                     def scanStages = services.collectEntries { name ->
                         ["Scan ${name}" : {
                             node('kaniko') {
@@ -624,11 +647,13 @@ void runBuildForType(Map service) {
             break
     }
 
-    // Build e push image
-    withCredentials([usernamePassword(credentialsId: 'registry-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+    // Build e push image: eseguito nel container sidecar `kaniko` del Pod template.
+    // Le credenziali del registry NON passano da USER/PASS: kaniko legge
+    // /kaniko/.docker/config.json, montato da un Secret docker-registry nel Pod template.
+    container('kaniko') {
         sh """
             /kaniko/executor \
-                --context=. \
+                --context=\$PWD \
                 --dockerfile=Dockerfile \
                 --destination=registry.my-org.internal/my-org/${service.name}:${env.VERSION}-ci \
                 --cache=true \
@@ -637,6 +662,9 @@ void runBuildForType(Map service) {
     }
 }
 ```
+
+!!! warning "Kaniko: progetto upstream archiviato"
+    Il repository `GoogleContainerTools/kaniko` è stato archiviato da Google (2025); esiste un fork mantenuto da Chainguard. Per nuove installazioni valutare BuildKit rootless, Buildah o Podman. Kaniko inoltre non produce immagini multi-arch in un singolo run: serve un build per architettura più un merge del manifest (es. `crane index append`), per questo l'esempio `platforms: ['linux/amd64', 'linux/arm64']` più sopra richiede che lo step `buildDockerImage` della shared library gestisca questa orchestrazione.
 
 ## Parameterized Build Patterns
 
@@ -663,18 +691,21 @@ properties([
                     classpath: [],
                     sandbox: true,
                     script: '''
-                        // Script eseguito dinamicamente nel browser
+                        // Eseguito lato server (controller) a ogni cambio di TARGET_ENV, non nel browser.
+                        // In sandbox new URL(...) richiede approvazione degli script (o usare uno script non-sandbox
+                        // approvato da un admin); su errore scatta fallbackScript.
                         def env = TARGET_ENV ?: 'dev'
                         def apiUrl = "https://registry-api.my-org.internal/v2/myapp/tags/list"
                         def conn = new URL(apiUrl).openConnection()
                         conn.setRequestProperty("Accept", "application/json")
                         def json = new groovy.json.JsonSlurper().parse(conn.inputStream)
                         return json.tags.findAll {
-                            env == 'production' ? it.matches('\\d+\\.\\d+\\.\\d+') : true
-                        }.sort().reverse().take(20)
-                    ''',
-                    fallbackScript: [classpath: [], sandbox: true, script: 'return ["latest"]']
-                ]
+                            env == 'production' ? (it ==~ /[0-9]+[.][0-9]+[.][0-9]+/) : true
+                        }.sort().reverse().take(20)   // ordinamento lessicografico, non semver
+                    '''
+                ],
+                // fallbackScript è un campo di GroovyScript, fratello di `script`
+                fallbackScript: [classpath: [], sandbox: true, script: 'return ["latest"]']
             ]
         ],
         booleanParam(
@@ -696,16 +727,18 @@ properties([
 ```groovy
 // vars/deployWithApproval.groovy
 def call(Map config) {
-    def env         = config.env
+    // NB: non chiamare la variabile locale `env`: oscurerebbe la variabile globale `env`
+    // (env.GIT_URL, env.BRANCH_NAME...) usata più sotto.
+    def targetEnv   = config.env
     def version     = config.version
-    def approvers   = getApproversForEnv(env)
-    def timeoutMins = getTimeoutForEnv(env)
+    def approvers   = getApproversForEnv(targetEnv)
+    def timeoutMins = getTimeoutForEnv(targetEnv)
 
     // Gate di approvazione
     timeout(time: timeoutMins, unit: 'MINUTES') {
         def approval = input(
             message: """
-🚀 Deploy ${version} → **${env.toUpperCase()}**
+Deploy ${version} → ${targetEnv.toUpperCase()}
 
 Repository: ${env.GIT_URL}
 Branch: ${env.GIT_BRANCH}
@@ -723,18 +756,18 @@ Commit: ${env.GIT_COMMIT_SHORT}
             error "Deploy annullato dall'approvatore ${approval.APPROVER}"
         }
 
-        if (env == 'production' && !approval.REASON?.trim()) {
+        if (targetEnv.startsWith('production') && !approval.REASON?.trim()) {
             error "Motivo obbligatorio per deploy in produzione"
         }
 
         // Audit log
-        auditLog(action: 'deploy', env: env, version: version, approver: approval.APPROVER, reason: approval.REASON)
+        auditLog(action: 'deploy', env: targetEnv, version: version, approver: approval.APPROVER, reason: approval.REASON)
     }
 
     // Deploy effettivo
     sh """
         helm upgrade --install myapp ./helm/myapp \
-            --namespace ${env} \
+            --namespace ${targetEnv} \
             --set image.tag=${version} \
             ${config.dryRun ? '--dry-run' : ''} \
             --atomic \
@@ -786,22 +819,27 @@ pipeline {
                     def jenkinsfiles = findResult.split('\n')
                     def failures = []
 
-                    jenkinsfiles.each { jf ->
-                        def status = sh(
-                            script: """
-                                curl -s --fail \
-                                    -X POST \
-                                    -F "jenkinsfile=<${jf}" \
-                                    ${env.JENKINS_URL}pipeline-model-converter/validate
-                            """,
-                            returnStatus: true
-                        )
+                    // L'endpoint risponde HTTP 200 anche con Jenkinsfile invalido: l'esito è nel body,
+                    // quindi `curl --fail` non basta. Serve autenticazione (user + API token).
+                    withCredentials([usernamePassword(credentialsId: 'jenkins-api-token',
+                                                      usernameVariable: 'J_USER', passwordVariable: 'J_TOKEN')]) {
+                        jenkinsfiles.each { jf ->
+                            def output = sh(
+                                script: """
+                                    curl -s -u "\$J_USER:\$J_TOKEN" \
+                                        -X POST \
+                                        -F "jenkinsfile=<${jf}" \
+                                        ${env.JENKINS_URL}pipeline-model-converter/validate
+                                """,
+                                returnStdout: true
+                            )
 
-                        if (status != 0) {
-                            failures << jf
-                            echo "❌ Invalido: ${jf}"
-                        } else {
-                            echo "✅ Valido: ${jf}"
+                            if (!output.contains('successfully validated')) {
+                                failures << jf
+                                echo "Invalido: ${jf}\n${output}"
+                            } else {
+                                echo "Valido: ${jf}"
+                            }
                         }
                     }
 
@@ -818,7 +856,8 @@ pipeline {
                     def requiredSections = ['agent', 'stages', 'post']
                     def violations = []
 
-                    sh("find . -name 'Jenkinsfile' -not -path './.git/*'").split('\n').each { jf ->
+                    sh(script: "find . -name 'Jenkinsfile' -not -path './.git/*'", returnStdout: true)
+                        .trim().split('\n').each { jf ->
                         def content = readFile(jf)
                         requiredSections.each { section ->
                             if (!content.contains(section)) {
@@ -826,7 +865,7 @@ pipeline {
                             }
                         }
                         // Verifica che non usino password in chiaro
-                        if (content =~ /password\s*=\s*['"][^'"]+['"]/) {
+                        if (content ==~ /(?s).*password\s*=\s*['"][^'"]+['"].*/) {
                             violations << "${jf}: possibile password in chiaro"
                         }
                     }
@@ -891,38 +930,33 @@ catalogPipeline(
 
 ```groovy
 // vars/analyzeBuildTiming.groovy — analizza colli di bottiglia
-@NonCPS
+// `currentBuild` NON espone gli stage: si usa la REST API di Pipeline Stage View
+// (`<build>/wfapi/describe`, plugin pipeline-stage-view). Gli step (echo, sh, readJSON)
+// non possono stare in un metodo @NonCPS, quindi qui niente @NonCPS.
 def call() {
-    def build = currentBuild
-    def stageTimings = []
-
-    build.stages.each { stage ->
-        stageTimings << [
-            name:     stage.name,
-            duration: stage.durationMillis,
-            status:   stage.status
-        ]
+    def json = withCredentials([usernamePassword(credentialsId: 'jenkins-api-token',
+                                                 usernameVariable: 'J_USER', passwordVariable: 'J_TOKEN')]) {
+        sh(script: "curl -s --fail -u \"\$J_USER:\$J_TOKEN\" '${env.BUILD_URL}wfapi/describe'",
+           returnStdout: true)
     }
+    def stages = readJSON(text: json).stages   // Pipeline Utility Steps
 
-    // Identifica stage più lenti
-    def sorted = stageTimings.sort { -it.duration }
+    // Identifica stage più lenti (gli stage ancora in corso, es. post, non sono inclusi)
+    def sorted = stages.sort { -it.durationMillis }
     def report = "=== Build Timing Report ===\n"
     sorted.each { s ->
-        def minutes = s.duration / 60000
-        report += sprintf("%-30s %5.1f min [%s]\n", s.name, minutes, s.status)
+        report += String.format("%-30s %5.1f min [%s]%n", s.name, s.durationMillis / 60000.0, s.status)
     }
-
     echo report
 
-    // Invia a Prometheus Pushgateway per dashboard Grafana
-    def metricsPayload = stageTimings.collect { s ->
-        "jenkins_stage_duration_ms{job=\"${env.JOB_NAME}\",stage=\"${s.name}\"} ${s.duration}"
-    }.join('\n')
-
-    sh """
-        echo '${metricsPayload}' | curl --data-binary @- \
-            http://pushgateway.monitoring:9091/metrics/job/jenkins/instance/${env.JOB_NAME}
-    """
+    // Invia a Prometheus Pushgateway per dashboard Grafana.
+    // JOB_NAME in multibranch contiene '/', non valido nel path del Pushgateway: lo normalizziamo.
+    def jobLabel = env.JOB_NAME.replace('/', '_')
+    def payload = stages.collect { s ->
+        "jenkins_stage_duration_ms{stage=\"${s.name}\"} ${s.durationMillis}\n"
+    }.join('')
+    writeFile file: 'stage-metrics.prom', text: payload
+    sh "curl -s --data-binary @stage-metrics.prom http://pushgateway.monitoring:9091/metrics/job/jenkins/instance/${jobLabel}"
 }
 ```
 
@@ -949,9 +983,9 @@ def call() {
 pipeline {
     agent { label 'standard' }
 
-    triggers {
-        githubPush()  // webhook su ogni push
-    }
+    // Nessun `triggers { githubPush() }`: in un Multibranch i build partono dal webhook
+    // che innesca lo scan del branch. I tag richiedono il trait "Discover tags"
+    // (`gitHubTagDiscovery()` nel Job DSL), altrimenti `tag pattern` non scatta mai.
 
     stages {
         stage('Fast Check') {
@@ -1022,15 +1056,15 @@ pipeline {
 
 ```bash
 # Verificare pod Jenkins agent su Kubernetes
-kubectl get pods -n jenkins -l jenkins=agent
+kubectl get pods -n jenkins -l jenkins=slave   # label di default del Kubernetes plugin
 kubectl describe quota -n jenkins          # controlla ResourceQuota
 
-# Aumentare max agent nel JCasC (jenkins-casc.yaml)
-# kubernetes.maxRequestsPerHostStr: "32"
+# Aumentare il limite di pod concorrenti nel JCasC (jenkins-casc.yaml):
+#   jenkins.clouds[].kubernetes.containerCapStr: "32"   (Concurrency Limit del cloud)
 # oppure ridurre parallelism nel Pod Template
 
-# Verificare executor occupati via API
-curl -s "$JENKINS_URL/computer/api/json?pretty=true" | \
+# Verificare executor occupati via API (richiede autenticazione)
+curl -s -u "$J_USER:$J_TOKEN" "$JENKINS_URL/computer/api/json?pretty=true" | \
   jq '.computer[] | {name: .displayName, busy: .countBusyExecutors, total: .countTotalExecutors}'
 ```
 
@@ -1040,27 +1074,19 @@ curl -s "$JENKINS_URL/computer/api/json?pretty=true" | \
 
 **Sintomo:** Build fallisce con `org.jenkinsci.plugins.scriptsecurity.sandbox.RejectedAccessException: Scripts not permitted to use method...`
 
-**Causa:** Il codice nella shared library o nel Jenkinsfile usa API Java/Groovy non incluse nella whitelist della Groovy Sandbox. È una misura di sicurezza Jenkins.
+**Causa:** Il Jenkinsfile (o una shared library non *trusted*) usa API Java/Groovy non incluse nella whitelist della Groovy Sandbox. È una misura di sicurezza: `@NonCPS` **non** la aggira (riguarda solo la serializzazione CPS, non i permessi).
 
-**Soluzione:** Approvare il metodo in *Manage Jenkins → In-process Script Approval* oppure refactoring del codice:
+**Soluzione:** In ordine di preferenza: usare uno step di plugin al posto dell'API raw; spostare la logica in una shared library *trusted* (le Global Pipeline Libraries configurate dall'admin girano fuori sandbox); solo come ultima scelta far approvare la firma in *Manage Jenkins → In-process Script Approval* (un admin deve valutare il rischio, specie per metodi come `Jenkins.instance`).
 
 ```groovy
-// PRIMA (causa l'errore): iterazione diretta su tipo non approvato
-def result = someList.collectEntries { ... }
+// PRIMA (causa l'errore): chiamata di rete raw nel Jenkinsfile
+def body = new URL('https://api.my-org.internal/status').text
 
-// DOPO opzione 1: annotare con @NonCPS i metodi che usano API Groovy native
-@NonCPS
-def myHelper(List items) {
-    return items.collectEntries { [it.name, it.value] }
-}
+// DOPO opzione 1: step di plugin (HTTP Request plugin), nessuna approvazione necessaria
+def body = httpRequest(url: 'https://api.my-org.internal/status').content
 
-// DOPO opzione 2: spostare in classe src/ (fuori dalla sandbox)
-// src/com/myorg/Utils.groovy — eseguito fuori sandbox
-```
-
-```bash
-# Vedere tutti i metodi in attesa di approvazione
-curl -s "$JENKINS_URL/scriptApproval/api/json" | jq '.pendingScripts[].script'
+// DOPO opzione 2: classe in una Global Library trusted
+// src/com/myorg/Http.groovy — eseguita fuori sandbox, quindi da revisionare con cura
 ```
 
 ---
@@ -1110,8 +1136,8 @@ kubectl exec -n jenkins <agent-pod> -- du -sh /root/.m2/repository
 # Events: Push + Pull Requests
 
 # Verificare log scanning in Jenkins
-# Manage Jenkins → System Log → filtro "com.cloudbees.jenkins.plugins.bitbucket"
-# o "org.jenkinsci.plugins.github_branch_source"
+# Manage Jenkins → System Log → nuovo logger "org.jenkinsci.plugins.github_branch_source" (livello FINE)
+# Il log dello scan è anche nel job: Multibranch → "Scan Repository Log"
 
 # Testare manualmente la connessione con curl
 curl -I -H "Authorization: Bearer <github-app-token>" \
@@ -1134,9 +1160,9 @@ headWildcardFilter {
 
 **Sintomo:** Build fallisce con `java.util.ConcurrentModificationException` durante iterazione su liste o mappe in codice pipeline.
 
-**Causa:** Pattern tipico del CPS (Continuation-Passing Style) transformation di Jenkins: alcune operazioni Groovy su collezioni non sono thread-safe nel contesto CPS serializzabile.
+**Causa:** Si modifica (`remove`, `add`) una collezione mentre la si sta iterando: errore Java classico, non specifico di Jenkins. In pipeline si manifesta più spesso perché le closure CPS (`each`, `collect`) e i blocchi `parallel` rendono meno evidente chi sta iterando e chi modifica la stessa lista.
 
-**Soluzione:** Usare `.toList()` / `.clone()` per creare copie prima di iterare, oppure isolare il codice con `@NonCPS`:
+**Soluzione:** Iterare su una copia (`.toList()` / `.clone()`), non modificare collezioni condivise tra branch `parallel`, oppure isolare la logica pura (senza step) in un metodo `@NonCPS`:
 
 ```groovy
 // PROBLEMATICO: iterazione diretta su lista condivisa
