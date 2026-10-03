@@ -7,9 +7,10 @@ search_keywords: [tcp/ip stack, internet protocol suite, tcp ip layers, network 
 parent: networking/fondamentali
 related: [networking/fondamentali/modello-osi, networking/fondamentali/indirizzi-ip-subnetting]
 official_docs: https://www.ietf.org/
-status: complete
+status: reviewed
 difficulty: beginner
-last_updated: 2026-03-29
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Stack TCP/IP
@@ -25,9 +26,9 @@ Lo stack TCP/IP (Internet Protocol Suite) è la suite di protocolli su cui è co
 | Livello | Nome | Funzione | Protocolli Principali |
 |---|---|---|---|
 | **4** | **Applicazione** | Fornisce servizi di rete alle applicazioni; gestisce encoding, sessioni, business logic | HTTP/S, DNS, SSH, SMTP, FTP, DHCP, SNMP, LDAP |
-| **3** | **Trasporto** | Comunicazione end-to-end tra processi; affidabilità (TCP) o velocità (UDP) | TCP, UDP, SCTP, QUIC |
-| **2** | **Internet** | Instradamento dei pacchetti tra reti; indirizzamento logico globale | IP (IPv4/IPv6), ICMP, IGMP, ARP, OSPF, BGP |
-| **1** | **Accesso alla Rete (Link)** | Trasmissione fisica dei dati sul segmento di rete locale | Ethernet, Wi-Fi (802.11), PPP, ATM |
+| **3** | **Trasporto** | Comunicazione end-to-end tra processi; affidabilità (TCP) o velocità (UDP) | TCP, UDP, SCTP, QUIC (QUIC viaggia sopra UDP, base di HTTP/3) |
+| **2** | **Internet** | Instradamento dei pacchetti tra reti; indirizzamento logico globale | IP (IPv4/IPv6), ICMP, IGMP; routing OSPF (direttamente su IP) e BGP (su TCP, formalmente applicativo) |
+| **1** | **Accesso alla Rete (Link)** | Trasmissione fisica dei dati sul segmento di rete locale | Ethernet, Wi-Fi (802.11), PPP; ARP/NDP (mappatura IP→MAC) |
 
 ### TCP vs UDP
 
@@ -43,13 +44,16 @@ Lo stack TCP/IP (Internet Protocol Suite) è la suite di protocolli su cui è co
 
 ### Il Three-Way Handshake TCP
 
-L'instaurazione di una connessione TCP richiede 3 scambi:
+L'instaurazione di una connessione TCP richiede 3 scambi (servono a sincronizzare i numeri di sequenza di entrambe le direzioni e a verificare che entrambi gli host siano raggiungibili):
 
 1. **SYN**: il client invia un segmento con flag SYN e numero di sequenza iniziale (ISN) casuale
 2. **SYN-ACK**: il server risponde con SYN+ACK, confermando l'ISN del client e inviando il proprio
 3. **ACK**: il client conferma l'ISN del server
 
-La chiusura richiede un four-way handshake (FIN, ACK, FIN, ACK) per chiudere entrambe le direzioni indipendentemente (half-close).
+La chiusura richiede un four-way handshake (FIN, ACK, FIN, ACK) per chiudere entrambe le direzioni indipendentemente (half-close). Chi invia il primo FIN (active close) finisce in `TIME_WAIT`.
+
+!!! note "Controllo di congestione"
+    Oltre al controllo di flusso (finestra annunciata dal ricevente), TCP limita l'invio con una *congestion window* stimata dal mittente (slow start, poi algoritmi come CUBIC o BBR). Su Linux: `sysctl net.ipv4.tcp_congestion_control`. È spesso la vera causa di throughput basso su link con alta latenza o perdita.
 
 ## Come Funziona
 
@@ -57,11 +61,11 @@ La chiusura richiede un four-way handshake (FIN, ACK, FIN, ACK) per chiudere ent
 
 ```mermaid
 flowchart TD
-    App["Applicazione\n(HTTP Request: GET /index.html)"]
-    Trans["Livello Trasporto\nSegmento TCP\nHeader: Porta src=54321, dst=443, SEQ, ACK, Flags"]
-    Net["Livello Internet\nPacchetto IP\nHeader: IP src=192.168.1.10, dst=93.184.216.34, TTL=64, Protocol=6"]
-    Link["Accesso alla Rete\nFrame Ethernet\nHeader: MAC src, MAC dst | Trailer: FCS"]
-    Bits["Bit sul mezzo fisico\n(cavo, fibra, RF)"]
+    App["Applicazione<br/>(HTTP Request: GET /index.html)"]
+    Trans["Livello Trasporto<br/>Segmento TCP<br/>Header: Porta src=54321, dst=443, SEQ, ACK, Flags"]
+    Net["Livello Internet<br/>Pacchetto IP<br/>Header: IP src=192.168.1.10, dst=93.184.216.34, TTL=64, Protocol=6"]
+    Link["Accesso alla Rete<br/>Frame Ethernet<br/>Header: MAC src, MAC dst | Trailer: FCS"]
+    Bits["Bit sul mezzo fisico<br/>(cavo, fibra, RF)"]
 
     App -->|"incapsula in segmento"| Trans
     Trans -->|"incapsula in pacchetto"| Net
@@ -87,8 +91,8 @@ sequenceDiagram
     C->>S: ACK (ACK=y+1)
 
     Note over C,S: Fase 3 — Scambio HTTP
-    C->>S: GET /index.html HTTP/1.1\nHost: example.com
-    S-->>C: HTTP/1.1 200 OK\nContent-Type: text/html\n\n<html>...</html>
+    C->>S: GET /index.html HTTP/1.1 (Host: example.com)
+    S-->>C: HTTP/1.1 200 OK (Content-Type: text/html, body HTML)
 
     Note over C,S: Fase 4 — Chiusura connessione TCP
     C->>S: FIN
@@ -148,7 +152,7 @@ tcpdump -i eth0 'tcp[tcpflags] & tcp-syn != 0'  # Solo SYN (nuove connessioni)
 
 # Testare connettività TCP a una porta specifica
 nc -zv 8.8.8.8 443     # Connessione TCP a Google DNS su porta 443
-nc -zv -u 8.8.8.8 53   # Connessione UDP a Google DNS su porta 53
+nc -zv -u 8.8.8.8 53   # Probe UDP: inaffidabile, "succeeded" non prova che il servizio risponda (UDP non ha handshake)
 
 # ARP — mappatura IP → MAC
 arp -n                  # Tabella ARP corrente
@@ -173,7 +177,7 @@ tcpdump -i eth0 'host example.com and port 80' -n
 - **Comprendi i numeri di porta**: porte < 1024 sono privilegiate (richiedono root). Le porte 1024-49151 sono registrate (IANA — Internet Assigned Numbers Authority, l'ente che gestisce l'assegnazione globale di indirizzi IP, numeri AS e numeri di porta). Le porte 49152-65535 sono ephemeral (usate dai client per le connessioni uscenti).
 - **Monitora lo stato TCP**: `ss -s` mostra il conteggio delle connessioni per stato (ESTABLISHED, TIME_WAIT, CLOSE_WAIT). **TIME_WAIT** è lo stato post-chiusura in cui il sistema attende che eventuali pacchetti in ritardo vengano ricevuti (dura 2×MSL, tipicamente 60s). **CLOSE_WAIT** indica che il lato remoto ha chiuso ma la connessione locale non è ancora stata chiusa dall'applicazione. Un accumulo anomalo di entrambi indica problemi nell'applicazione.
 - **Attenzione al TTL**: il TTL IP serve anche per diagnosticare. Un TTL di 64 suggerisce Linux, 128 Windows, 255 dispositivi di rete. Il numero di hop si calcola come `TTL_iniziale - TTL_ricevuto`.
-- **MTU e frammentazione**: la MTU (Maximum Transmission Unit — dimensione massima del frame trasmissibile sul mezzo) standard Ethernet è 1500 byte. VPN e tunneling riducono l'MTU effettiva. Usa `ping -M do -s 1472` per verificare la MTU path (1472 + 28 header IP/ICMP = 1500).
+- **MTU e frammentazione**: la MTU (Maximum Transmission Unit — dimensione massima del payload IP trasmissibile in un frame) standard Ethernet è 1500 byte. VPN e tunneling riducono l'MTU effettiva. Usa `ping -M do -s 1472` per verificare la MTU path (1472 + 28 header IP/ICMP = 1500; `-M do` imposta Don't Fragment, quindi un pacchetto troppo grande fallisce invece di essere frammentato). Se l'ICMP è filtrato la Path MTU Discovery si rompe ("black hole": connessioni che si bloccano sui pacchetti grandi); mitigazione: MSS clamping sul gateway.
 
 ## Troubleshooting
 
@@ -225,16 +229,17 @@ ip -s link show eth0
 # Contare connessioni in TIME_WAIT
 ss -tan | grep TIME-WAIT | wc -l
 
-# Se eccessivo (> 10k), abilitare TCP reuse
-sysctl net.ipv4.tcp_tw_reuse=1
-# Oppure ridurre fin_timeout
-sysctl net.ipv4.tcp_fin_timeout=15
+# TIME_WAIT dura fisso 60s su Linux (non configurabile) ed è normale sul lato che chiude per primo.
+# Se eccessivo (> 10k) e un client/proxy esaurisce le porte effimere:
+sysctl net.ipv4.tcp_tw_reuse=1   # riusa socket TIME_WAIT solo per connessioni in USCITA (richiede timestamps TCP)
+# Meglio: keep-alive / connection pooling e ampliare net.ipv4.ip_local_port_range
+# Nota: tcp_fin_timeout NON riguarda TIME_WAIT (agisce su FIN_WAIT_2)
 ```
 
 ## Riferimenti
 
 - [RFC 791 — Internet Protocol (IPv4)](https://www.rfc-editor.org/rfc/rfc791)
-- [RFC 793 — Transmission Control Protocol](https://www.rfc-editor.org/rfc/rfc793)
+- [RFC 9293 — Transmission Control Protocol (sostituisce RFC 793)](https://www.rfc-editor.org/rfc/rfc9293)
 - [RFC 768 — User Datagram Protocol](https://www.rfc-editor.org/rfc/rfc768)
 - [RFC 1122 — Requirements for Internet Hosts](https://www.rfc-editor.org/rfc/rfc1122)
 - [TCP/IP Guide — Charles M. Kozierok](http://www.tcpipguide.com/)
