@@ -24385,6 +24385,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-probe_success-0-ma-il-sito-funziona-da-browser" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — probe_success == 0 ma il sito funziona da browser
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-probe-https-fallisce-con-errore-certificato-il-browser-no" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Probe HTTPS fallisce con errore certificato, il browser no
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-probe_duration_seconds-alto-ma-lapp-non-e-lenta" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — probe_duration_seconds alto ma l'app non è lenta
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-alert-di-scadenza-certificato-non-scatta-mai" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Alert di scadenza certificato non scatta mai
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-script-playwright-sintetico-fallisce-in-ci-ma-non-in-locale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Script Playwright sintetico fallisce in CI ma non in locale
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24745,42 +24806,47 @@
 <p>Script di login sintetici richiedono credenziali dedicate (utente "synthetic" con permessi minimi, mai un account reale). Ruotare periodicamente le credenziali e non loggare mai payload di richiesta/risposta che le contengano.</p>
 </div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Sintomo</th>
-<th>Causa probabile</th>
-<th>Soluzione</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>probe_success == 0</code> ma il sito è raggiungibile da browser</td>
-<td>Probe da regione/rete con problemi propri (firewall, routing, DNS locale al probe)</td>
-<td>Verificare lo stesso probe da un'altra region; richiedere quorum multi-region prima di alertare</td>
-</tr>
-<tr>
-<td>Probe HTTPS fallisce con errore certificato, ma il browser non mostra warning</td>
-<td>Blackbox Exporter non ha la CA custom nel trust store, o <code>insecure_skip_verify</code> disattivato su certificati self-signed interni</td>
-<td>Montare la CA interna nel container dell'exporter o usare un modulo dedicato con <code>tls_config.ca_file</code></td>
-</tr>
-<tr>
-<td><code>probe_duration_seconds</code> alto ma l'app non è lenta internamente</td>
-<td>Exporter sotto carico, troppi probe concorrenti sulla stessa istanza</td>
-<td>Scalare orizzontalmente il Blackbox Exporter o aumentare <code>scrape_interval</code> per target non critici</td>
-</tr>
-<tr>
-<td>Alert di scadenza certificato non scatta mai</td>
-<td>Modulo configurato con <code>fail_if_not_ssl: false</code> o target non valida correttamente la catena</td>
-<td>Verificare <code>probe_ssl_earliest_cert_expiry</code> con query diretta su Prometheus; controllare che il modulo HTTPS sia quello effettivamente usato dal job</td>
-</tr>
-<tr>
-<td>Script Playwright sintetico fallisce in CI ma funziona in locale</td>
-<td>Timeout troppo stretti, differenze di rendering headless, selettori instabili</td>
-<td>Aumentare timeout di <code>waitForSelector</code>, usare selettori basati su <code>data-testid</code> invece di classi CSS fragili</td>
-</tr>
-</tbody>
-</table>
+<h3 id="scenario-1-probe_success-0-ma-il-sito-funziona-da-browser">Scenario 1 — <code>probe_success == 0</code> ma il sito funziona da browser<a class="headerlink" href="#scenario-1-probe_success-0-ma-il-sito-funziona-da-browser" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: alert <code>EndpointDown</code> attivo, ma l'endpoint risponde correttamente da un browser esterno.</p>
+<p><strong>Causa</strong>: il probe gira da una region/rete con problemi propri (firewall, routing, DNS locale al probe), non del target. Con una sola location il falso positivo è inevitabile.</p>
+<p><strong>Soluzione</strong>: ripetere il probe da un'altra region e richiedere quorum multi-region prima di alertare. Il debug mostra in quale fase fallisce.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Debug del probe con output dettagliato (fasi DNS/connect/TLS/processing)</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">"http://blackbox-exporter:9115/probe?target=https://api.example.com/health&amp;module=http_2xx&amp;debug=true"</span>
+</span></code></pre></div>
+<h3 id="scenario-2-probe-https-fallisce-con-errore-certificato-il-browser-no">Scenario 2 — Probe HTTPS fallisce con errore certificato, il browser no<a class="headerlink" href="#scenario-2-probe-https-fallisce-con-errore-certificato-il-browser-no" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>probe_success == 0</code> e nel debug compare <code>x509: certificate signed by unknown authority</code>.</p>
+<p><strong>Causa</strong>: l'exporter ha un trust store minimale e non conosce la CA interna, oppure il target usa un certificato self-signed e <code>insecure_skip_verify</code> è disattivato (corretto di default).</p>
+<p><strong>Soluzione</strong>: montare la CA interna nel container e indicarla in un modulo dedicato, invece di disabilitare la verifica.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">modules</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">http_2xx_internal_ca</span><span class="p">:</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">prober</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">http</span><span class="p">:</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">      </span><span class="nt">tls_config</span><span class="p">:</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">        </span><span class="nt">ca_file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/etc/blackbox/internal-ca.pem</span>
+</span></code></pre></div>
+<h3 id="scenario-3-probe_duration_seconds-alto-ma-lapp-non-e-lenta">Scenario 3 — <code>probe_duration_seconds</code> alto ma l'app non è lenta<a class="headerlink" href="#scenario-3-probe_duration_seconds-alto-ma-lapp-non-e-lenta" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: latenza del probe elevata e irregolare, mentre le metriche applicative interne sono normali.</p>
+<p><strong>Causa</strong>: Blackbox Exporter sotto carico (troppi probe concorrenti su una sola istanza), oppure rallentano le fasi DNS/connect/TLS e non l'applicazione.</p>
+<p><strong>Soluzione</strong>: scomporre la durata per fase, poi scalare l'exporter o aumentare <code>scrape_interval</code> per target non critici.</p>
+<div class="language-promql highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Durata per fase (resolve, connect, tls, processing, transfer)</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nv">probe_http_duration_seconds</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">"</span><span class="s">https://api.example.com/health</span><span class="p">"}</span>
+</span></code></pre></div>
+<h3 id="scenario-4-alert-di-scadenza-certificato-non-scatta-mai">Scenario 4 — Alert di scadenza certificato non scatta mai<a class="headerlink" href="#scenario-4-alert-di-scadenza-certificato-non-scatta-mai" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: certificato scaduto o vicino alla scadenza, ma <code>TLSCertExpiringSoon</code> non si attiva.</p>
+<p><strong>Causa</strong>: la serie <code>probe_ssl_earliest_cert_expiry</code> è assente (modulo non HTTPS o target in HTTP con <code>fail_if_not_ssl: false</code>); un'espressione su serie mancante non produce mai risultati.</p>
+<p><strong>Soluzione</strong>: verificare che la serie esista e che il job usi il modulo giusto.</p>
+<div class="language-promql highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Deve restituire una serie per ogni target HTTPS</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nv">probe_ssl_earliest_cert_expiry</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Giorni residui</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="o">(</span><span class="nv">probe_ssl_earliest_cert_expiry</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="kr">time</span><span class="o">())</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">86400</span>
+</span></code></pre></div>
+<h3 id="scenario-5-script-playwright-sintetico-fallisce-in-ci-ma-non-in-locale">Scenario 5 — Script Playwright sintetico fallisce in CI ma non in locale<a class="headerlink" href="#scenario-5-script-playwright-sintetico-fallisce-in-ci-ma-non-in-locale" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>TimeoutError: page.waitForSelector</code> solo nella pipeline.</p>
+<p><strong>Causa</strong>: timeout troppo stretti su runner più lenti, differenze di rendering headless, selettori basati su classi CSS instabili.</p>
+<p><strong>Soluzione</strong>: aumentare i timeout, usare selettori <code>data-testid</code> e raccogliere una trace per l'analisi.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>npx<span class="w"> </span>playwright<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--trace<span class="w"> </span>on
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>npx<span class="w"> </span>playwright<span class="w"> </span>show-trace<span class="w"> </span>test-results/*/trace.zip
+</span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
 <summary>Prometheus — Scraping del Blackbox Exporter</summary>

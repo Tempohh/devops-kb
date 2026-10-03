@@ -24457,6 +24457,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-tracce-non-visibili-in-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Tracce non visibili in UI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-trace-id-non-correla-log-e-tracce" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Trace ID non correla log e tracce
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-query-lente-o-trace-not-found" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Query lente o "trace not found"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-span-orfani-e-memory-spike-nel-collector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Span orfani e memory spike nel Collector
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24960,47 +25010,61 @@
 <p>Le tracce hanno valore decrescente nel tempo. Configurare retention breve (1-7 giorni) per ridurre i costi di storage. Per analisi storiche usare le <strong>Span Metrics</strong> di Tempo (metriche aggregate in Prometheus che durano più a lungo).</p>
 </div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Problema</th>
-<th>Causa Probabile</th>
-<th>Soluzione</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Tracce non visibili in UI</td>
-<td>Sampling troppo basso, errore export</td>
-<td>Verificare log OTel Collector, testare con <code>AlwaysOn</code> temporaneamente</td>
-</tr>
-<tr>
-<td>Trace ID non correla log e tracce</td>
-<td><code>trace_id</code> non propagato nei log</td>
-<td>Configurare OTel SDK per iniettare <code>trace_id</code> nei log strutturati</td>
-</tr>
-<tr>
-<td>Alta latenza query Jaeger</td>
-<td>Elasticsearch non ottimizzato</td>
-<td>Aumentare shards, usare indici ILM, ottimizzare query per range temporale</td>
-</tr>
-<tr>
-<td>Tempo: "trace not found"</td>
-<td>Block non ancora compattato</td>
-<td>Attendere ciclo di compaction (default 5m), verificare configurazione WAL</td>
-</tr>
-<tr>
-<td>Span orfani (senza trace parent)</td>
-<td>Context propagation mancante</td>
-<td>Verificare header W3C TraceContext nelle chiamate HTTP/gRPC</td>
-</tr>
-<tr>
-<td>Memory spike nel Collector</td>
-<td>Buffer tail-based sampling pieno</td>
-<td>Aumentare <code>num_traces</code> o ridurre <code>decision_wait</code> nella config tail sampling</td>
-</tr>
-</tbody>
-</table>
+<h3 id="scenario-1-tracce-non-visibili-in-ui">Scenario 1 — Tracce non visibili in UI<a class="headerlink" href="#scenario-1-tracce-non-visibili-in-ui" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: l'applicazione è instrumentata ma Jaeger UI / Grafana Explore non mostra tracce.</p>
+<p><strong>Causa</strong>: sampling troppo aggressivo (la richiesta non viene campionata), errore di export verso il Collector, oppure porta/protocollo OTLP errato (gRPC <code>4317</code> vs HTTP <code>4318</code>).</p>
+<p><strong>Soluzione</strong>: controllare i log del Collector e gli endpoint; abilitare temporaneamente <code>AlwaysOn</code> per escludere il sampling come causa. Il <code>debug</code> exporter stampa gli span ricevuti e conferma che il tratto app → Collector funziona.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Log del Collector: cercare errori di export / connection refused</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>docker<span class="w"> </span>logs<span class="w"> </span>otel-collector<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-iE<span class="w"> </span><span class="s2">"error|refused|dropped"</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Verificare che le porte OTLP siano raggiungibili</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>nc<span class="w"> </span>-zv<span class="w"> </span>jaeger<span class="w"> </span><span class="m">4317</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://tempo:3200/ready
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Sampling temporaneo al 100% lato SDK</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="nb">export</span><span class="w"> </span><span class="nv">OTEL_TRACES_SAMPLER</span><span class="o">=</span>always_on
+</span></code></pre></div>
+<h3 id="scenario-2-trace-id-non-correla-log-e-tracce">Scenario 2 — Trace ID non correla log e tracce<a class="headerlink" href="#scenario-2-trace-id-non-correla-log-e-tracce" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: da una traccia in Grafana il link "Logs" non trova nulla; i log non contengono <code>trace_id</code>.</p>
+<p><strong>Causa</strong>: l'applicazione non inietta <code>trace_id</code>/<code>span_id</code> nei log strutturati, oppure <code>tracesToLogsV2</code> usa tag o time shift che non corrispondono alle label di Loki.</p>
+<p><strong>Soluzione</strong>: abilitare l'integrazione log-tracing nell'SDK (es. logging instrumentation) e allineare i <code>tags</code> del datasource con le label reali in Loki.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Verificare che i log contengano il trace_id</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>deploy/checkout<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-n<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>trace_id
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Verificare le label disponibili in Loki</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>logcli<span class="w"> </span>labels
+</span></code></pre></div>
+<h3 id="scenario-3-query-lente-o-trace-not-found">Scenario 3 — Query lente o "trace not found"<a class="headerlink" href="#scenario-3-query-lente-o-trace-not-found" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: Jaeger risponde lentamente alla ricerca; su Tempo una traccia appena generata dà "trace not found".</p>
+<p><strong>Causa</strong>: su Jaeger, Elasticsearch con pochi shard e indici non ruotati rende lente le query su range ampi. Su Tempo, i dati recenti stanno ancora nell'ingester (WAL) e non sono stati ancora scritti come block interrogabile dal querier.</p>
+<p><strong>Soluzione</strong>: su Jaeger restringere il range temporale, usare indici giornalieri con ILM e più shard. Su Tempo attendere il flush dell'ingester (<code>max_block_duration</code>, qui 5m) e verificare che WAL e storage siano scrivibili.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Jaeger: dimensione e numero indici</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">"http://elasticsearch:9200/_cat/indices/jaeger-span-*?v&amp;s=index"</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Tempo: recuperare la traccia per ID e controllare le metriche ingester</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://tempo:3200/api/traces/&lt;trace_id&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-c<span class="w"> </span><span class="m">300</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://tempo:3200/metrics<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>tempo_ingester_blocks_flushed_total
+</span></code></pre></div>
+<h3 id="scenario-4-span-orfani-e-memory-spike-nel-collector">Scenario 4 — Span orfani e memory spike nel Collector<a class="headerlink" href="#scenario-4-span-orfani-e-memory-spike-nel-collector" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: nella UI compaiono span senza parent (trace spezzate); il Collector consuma sempre più memoria o viene ucciso (OOMKilled).</p>
+<p><strong>Causa</strong>: gli span orfani nascono quando un servizio non propaga il context (header W3C <code>traceparent</code> perso da proxy/client HTTP non instrumentati). Il memory spike deriva dal buffer del <code>tail_sampling</code>: il Collector tiene in memoria tutti gli span di una traccia fino a <code>decision_wait</code>.</p>
+<p><strong>Soluzione</strong>: verificare la propagazione degli header lungo tutta la catena; limitare il buffer con <code>num_traces</code> e ridurre <code>decision_wait</code>, aggiungendo il <code>memory_limiter</code> processor per evitare l'OOM.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">processors</span><span class="p">:</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">memory_limiter</span><span class="p">:</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">check_interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1s</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">limit_mib</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1500</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="nt">tail_sampling</span><span class="p">:</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">decision_wait</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span><span class="w">     </span><span class="c1"># meno attesa = meno span in memoria</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">num_traces</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50000</span><span class="w">      </span><span class="c1"># tetto di tracce bufferizzate</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="nt">policies</span><span class="p">:</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">errors</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">status_code</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">        </span><span class="nt">status_code</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> status_codes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ERROR</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+</span></code></pre></div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Controllare che l'header traceparent arrivi al servizio a valle</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">"traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span>http://service-b:8080/health<span class="w"> </span>-v<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>traceparent
+</span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
 <summary>OpenTelemetry — Standard di Instrumentazione</summary>

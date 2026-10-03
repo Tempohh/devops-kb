@@ -11245,6 +11245,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-cluster-non-raggiungibile-da-argo-cd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Cluster non raggiungibile da Argo CD
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-capi-machine-bloccata-in-provisioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — CAPI Machine bloccata in Provisioning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-fleet-bundledeployment-in-errore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Fleet BundleDeployment in errore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-latenza-elevata-cross-cluster-con-cluster-mesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Latenza elevata cross-cluster con Cluster Mesh
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-servizi-cross-cluster-non-raggiungibili-cidr-sovrapposti" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Servizi cross-cluster non raggiungibili (CIDR sovrapposti)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24804,6 +24865,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-cluster-non-raggiungibile-da-argo-cd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Cluster non raggiungibile da Argo CD
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-capi-machine-bloccata-in-provisioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — CAPI Machine bloccata in Provisioning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-fleet-bundledeployment-in-errore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Fleet BundleDeployment in errore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-latenza-elevata-cross-cluster-con-cluster-mesh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Latenza elevata cross-cluster con Cluster Mesh
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-5-servizi-cross-cluster-non-raggiungibili-cidr-sovrapposti" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 5 — Servizi cross-cluster non raggiungibili (CIDR sovrapposti)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -25450,59 +25572,64 @@
 </span></code></pre></div></p>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<p><strong>1. Cluster non raggiungibile da Argo CD</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Sintomo: cluster in "Unknown" o "Error" state in Argo CD</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Causa: certificato scaduto o kubeconfig non aggiornato</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Verifica connettività diretta</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>kubectl<span class="w"> </span>cluster-info<span class="w"> </span>--kubeconfig<span class="w"> </span>~/.kube/prod-eu.kubeconfig
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># Rigenera e re-registra il cluster secret in Argo CD</span>
-</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>argocd<span class="w"> </span>cluster<span class="w"> </span>rm<span class="w"> </span>prod-eu-west-1
-</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>argocd<span class="w"> </span>cluster<span class="w"> </span>add<span class="w"> </span>prod-eu-west-1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">  </span>--kubeconfig<span class="w"> </span>~/.kube/prod-eu-west-1.kubeconfig
+<h3 id="scenario-1-cluster-non-raggiungibile-da-argo-cd">Scenario 1 — Cluster non raggiungibile da Argo CD<a class="headerlink" href="#scenario-1-cluster-non-raggiungibile-da-argo-cd" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: cluster in stato <code>Unknown</code> o <code>Error</code> in Argo CD; le Application non si sincronizzano.</p>
+<p><strong>Causa</strong>: certificato client scaduto o kubeconfig non aggiornato. Argo CD salva le credenziali in un Secret e non le rinnova da solo.</p>
+<p><strong>Soluzione</strong>: verificare la connettività diretta, poi rimuovere e re-registrare il cluster per rigenerare il Secret.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>kubectl<span class="w"> </span>cluster-info<span class="w"> </span>--kubeconfig<span class="w"> </span>~/.kube/prod-eu.kubeconfig
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>argocd<span class="w"> </span>cluster<span class="w"> </span>rm<span class="w"> </span>prod-eu-west-1
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>argocd<span class="w"> </span>cluster<span class="w"> </span>add<span class="w"> </span>prod-eu-west-1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">  </span>--kubeconfig<span class="w"> </span>~/.kube/prod-eu-west-1.kubeconfig
 </span></code></pre></div>
-<p><strong>2. CAPI Machine stuck in Provisioning</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Sintomo: kubectl get machine mostra Phase: Provisioning per &gt;15 minuti</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># Causa: quota cloud, security group, AMI non trovata</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># Leggi gli eventi della Machine</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>machine<span class="w"> </span>&lt;machine-name&gt;<span class="w"> </span>-n<span class="w"> </span>default
+<h3 id="scenario-2-capi-machine-bloccata-in-provisioning">Scenario 2 — CAPI Machine bloccata in Provisioning<a class="headerlink" href="#scenario-2-capi-machine-bloccata-in-provisioning" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>kubectl get machine</code> mostra <code>Phase: Provisioning</code> da oltre 15 minuti.</p>
+<p><strong>Causa</strong>: quota cloud esaurita, security group errato o AMI (immagine macchina) non trovata. L'errore compare negli eventi e nei log del provider, non nella Machine.</p>
+<p><strong>Soluzione</strong>: leggere eventi e log del provider, poi verificare le quote.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>machine<span class="w"> </span>&lt;machine-name&gt;<span class="w"> </span>-n<span class="w"> </span>default
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># Leggi i log del provider controller</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>capi-system<span class="w"> </span>deployment/capi-controller-manager
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>capa-system<span class="w"> </span>deployment/capa-controller-manager<span class="w">  </span><span class="c1"># per AWS</span>
 </span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="c1"># Leggi i log del provider controller</span>
-</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>capi-system<span class="w"> </span>deployment/capi-controller-manager
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>capa-system<span class="w"> </span>deployment/capa-controller-manager<span class="w">  </span><span class="c1"># per AWS</span>
-</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>
-</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="c1"># Verifica quota AWS</span>
-</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>aws<span class="w"> </span>service-quotas<span class="w"> </span>list-service-quotas<span class="w"> </span>--service-code<span class="w"> </span>ec2<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.Quotas[] | select(.QuotaName | contains("Running"))'</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="c1"># Verifica quota AWS</span>
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>aws<span class="w"> </span>service-quotas<span class="w"> </span>list-service-quotas<span class="w"> </span>--service-code<span class="w"> </span>ec2<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.Quotas[] | select(.QuotaName | contains("Running"))'</span>
 </span></code></pre></div>
-<p><strong>3. Fleet BundleDeployment in error state</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Sintomo: bundle non si propaga su alcuni cluster</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1"># Verifica lo stato per cluster</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>bundledeployment<span class="w"> </span>-A<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>Ready
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="c1"># Dettaglio dell'errore</span>
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>bundledeployment<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>fleet-default
-</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>
-</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="c1"># Forza re-sincronizzazione del GitRepo</span>
-</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>kubectl<span class="w"> </span>annotate<span class="w"> </span>gitrepo<span class="w"> </span>my-app<span class="w"> </span>-n<span class="w"> </span>fleet-default<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="w">  </span>fleet.cattle.io/force-sync<span class="o">=</span><span class="s2">"</span><span class="k">$(</span>date<span class="k">)</span><span class="s2">"</span>
+<h3 id="scenario-3-fleet-bundledeployment-in-errore">Scenario 3 — Fleet BundleDeployment in errore<a class="headerlink" href="#scenario-3-fleet-bundledeployment-in-errore" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: il bundle non si propaga su alcuni cluster; <code>BUNDLEDEPLOYMENTS-READY</code> mostra meno cluster del previsto.</p>
+<p><strong>Causa</strong>: manifest non applicabile su quel cluster (es. CRD mancante, values Helm incompatibili) oppure agent Fleet downstream disconnesso.</p>
+<p><strong>Soluzione</strong>: individuare i bundle non Ready, leggere l'errore e forzare il resync.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>bundledeployment<span class="w"> </span>-A<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>Ready
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="c1"># Dettaglio dell'errore</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>bundledeployment<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>fleet-default
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="c1"># Forza re-sincronizzazione del GitRepo</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>kubectl<span class="w"> </span>annotate<span class="w"> </span>gitrepo<span class="w"> </span>my-app<span class="w"> </span>-n<span class="w"> </span>fleet-default<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="w">  </span>fleet.cattle.io/force-sync<span class="o">=</span><span class="s2">"</span><span class="k">$(</span>date<span class="k">)</span><span class="s2">"</span>
 </span></code></pre></div>
-<p><strong>4. Latenza elevata cross-cluster con Cluster Mesh</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Sintomo: latenza &gt;50ms tra pod di cluster diversi</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># Causa: routing subottimale o MTU mismatch</span>
+<h3 id="scenario-4-latenza-elevata-cross-cluster-con-cluster-mesh">Scenario 4 — Latenza elevata cross-cluster con Cluster Mesh<a class="headerlink" href="#scenario-4-latenza-elevata-cross-cluster-con-cluster-mesh" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: latenza &gt;50 ms tra pod di cluster diversi.</p>
+<p><strong>Causa</strong>: traffico incapsulato in overlay (VXLAN/Geneve) o MTU (Maximum Transmission Unit) incoerente, che causa frammentazione dei pacchetti.</p>
+<p><strong>Soluzione</strong>: verificare stato mesh e MTU; abilitare direct routing per evitare l'incapsulamento quando i nodi sono raggiungibili a L3.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Verifica stato cluster mesh Cilium</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>cilium<span class="w"> </span>clustermesh<span class="w"> </span>status<span class="w"> </span>--wait
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># Verifica stato cluster mesh Cilium</span>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>cilium<span class="w"> </span>clustermesh<span class="w"> </span>status<span class="w"> </span>--wait
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># Controlla MTU configurato</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>ds/cilium<span class="w"> </span>--<span class="w"> </span>cilium<span class="w"> </span>config<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>mtu
 </span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="c1"># Controlla MTU configurato</span>
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>ds/cilium<span class="w"> </span>--<span class="w"> </span>cilium<span class="w"> </span>config<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>mtu
-</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>
-</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="c1"># Abilita direct routing (bypassa overlay quando possibile)</span>
-</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a><span class="c1"># In cilium values.yaml:</span>
-</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a><span class="c1"># tunnel: disabled</span>
-</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a><span class="c1"># autoDirectNodeRoutes: true</span>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="c1"># Abilita direct routing (bypassa overlay quando possibile)</span>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="c1"># In cilium values.yaml:</span>
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="c1"># tunnel: disabled</span>
+</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="c1"># autoDirectNodeRoutes: true</span>
+</span></code></pre></div>
+<h3 id="scenario-5-servizi-cross-cluster-non-raggiungibili-cidr-sovrapposti">Scenario 5 — Servizi cross-cluster non raggiungibili (CIDR sovrapposti)<a class="headerlink" href="#scenario-5-servizi-cross-cluster-non-raggiungibili-cidr-sovrapposti" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: i pod di un cluster non raggiungono pod/servizi dell'altro; traffico instradato verso il cluster sbagliato.</p>
+<p><strong>Causa</strong>: i cluster usano pod/service CIDR identici (default comuni, es. <code>10.244.0.0/16</code>): il routing tra cluster diventa ambiguo e Cluster Mesh/Submariner lo rifiutano.</p>
+<p><strong>Soluzione</strong>: pianificare CIDR univoci per cluster prima della creazione (in CAPI: <code>clusterNetwork</code>); un cluster esistente va ricreato o rinumerato.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>kubectl<span class="w"> </span>cluster-info<span class="w"> </span>dump<span class="w"> </span>--context<span class="w"> </span>cluster-eu<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-m1<span class="w"> </span>-E<span class="w"> </span><span class="s2">"cluster-cidr|service-cluster-ip-range"</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>kubectl<span class="w"> </span>cluster-info<span class="w"> </span>dump<span class="w"> </span>--context<span class="w"> </span>cluster-us<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-m1<span class="w"> </span>-E<span class="w"> </span><span class="s2">"cluster-cidr|service-cluster-ip-range"</span>
 </span></code></pre></div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>

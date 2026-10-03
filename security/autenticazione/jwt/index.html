@@ -23095,6 +23095,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-signature-verification-failed-dopo-key-rotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Signature verification failed dopo key rotation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-token-scaduto-nbf-non-valido-con-token-appena-emesso" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Token scaduto / nbf non valido con token appena emesso
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-invalidaudienceerror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — InvalidAudienceError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-invalid-token-incorrect-padding-token-malformato" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Invalid token: Incorrect padding / token malformato
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#riferimenti" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -24697,6 +24758,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-signature-verification-failed-dopo-key-rotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — Signature verification failed dopo key rotation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-token-scaduto-nbf-non-valido-con-token-appena-emesso" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Token scaduto / nbf non valido con token appena emesso
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-invalidaudienceerror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — InvalidAudienceError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-invalid-token-incorrect-padding-token-malformato" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Invalid token: Incorrect padding / token malformato
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#riferimenti" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -25148,6 +25270,38 @@
 <li><strong>Non mettere segreti nel payload</strong>: il JWT è firmato, non cifrato</li>
 <li><strong>Key rotation regolare</strong>: RS256/ES256 keys devono essere ruotate almeno ogni 6-12 mesi con <code>kid</code> tracking</li>
 </ul>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="scenario-1-signature-verification-failed-dopo-key-rotation">Scenario 1 — <code>Signature verification failed</code> dopo key rotation<a class="headerlink" href="#scenario-1-signature-verification-failed-dopo-key-rotation" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: dopo la rotazione chiavi dell'IdP, token validi vengono rifiutati con <code>InvalidSignatureError</code> o <code>Unable to find a signing key that matches: "kid"</code>.</p>
+<p><strong>Causa</strong>: il resource server ha in cache un JWKS vecchio che non contiene il nuovo <code>kid</code>. Il client JWKS non rifà il fetch finché la cache non scade.</p>
+<p><strong>Soluzione</strong>: forzare il refresh del JWKS quando il <code>kid</code> è sconosciuto (con rate limit per evitare DoS verso l'IdP) e verificare che l'IdP pubblichi vecchia e nuova chiave in parallelo durante la rotazione.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Confronta i kid pubblicati con quello del token</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>https://idp.example.com/.well-known/jwks.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.keys[].kid'</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"</span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d.<span class="w"> </span>-f1<span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.kid
+</span></code></pre></div>
+<h3 id="scenario-2-token-scaduto-nbf-non-valido-con-token-appena-emesso">Scenario 2 — <code>Token scaduto</code> / <code>nbf</code> non valido con token appena emesso<a class="headerlink" href="#scenario-2-token-scaduto-nbf-non-valido-con-token-appena-emesso" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: token appena emesso rifiutato con <code>ExpiredSignatureError</code> o <code>ImmatureSignatureError</code> (<code>The token is not yet valid (iat/nbf)</code>).</p>
+<p><strong>Causa</strong>: clock skew tra IdP e resource server. <code>exp</code>, <code>nbf</code> e <code>iat</code> sono confrontati con l'orologio locale; pochi secondi di deriva bastano.</p>
+<p><strong>Soluzione</strong>: sincronizzare NTP su tutti i nodi e impostare un <code>leeway</code> piccolo (5-30 s). Non alzarlo oltre: estende la finestra di validità dei token rubati.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>chronyc<span class="w"> </span>tracking<span class="w">            </span><span class="c1"># offset rispetto a NTP</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>date<span class="w"> </span>-u<span class="w"> </span>+%s<span class="w">                 </span><span class="c1"># confronta con exp/iat del token</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"</span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d.<span class="w"> </span>-f2<span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'{iat,nbf,exp}'</span>
+</span></code></pre></div>
+<h3 id="scenario-3-invalidaudienceerror">Scenario 3 — <code>InvalidAudienceError</code><a class="headerlink" href="#scenario-3-invalidaudienceerror" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: firma valida ma la richiesta fallisce con <code>Invalid audience</code>, tipico dopo l'aggiunta di un nuovo servizio.</p>
+<p><strong>Causa</strong>: il client ha richiesto il token senza <code>audience</code>/<code>resource</code> corretti, oppure <code>aud</code> è un array e il verifier confronta con una stringa diversa. L'IdP emette <code>aud</code> solo per le API registrate.</p>
+<p><strong>Soluzione</strong>: ispezionare <code>aud</code> e allineare configurazione IdP (audience/resource indicator) e <code>EXPECTED_AUDIENCE</code> del servizio.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"</span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d.<span class="w"> </span>-f2<span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'{iss,aud,azp,scope}'</span>
+</span></code></pre></div>
+<h3 id="scenario-4-invalid-token-incorrect-padding-token-malformato">Scenario 4 — <code>Invalid token: Incorrect padding</code> / token malformato<a class="headerlink" href="#scenario-4-invalid-token-incorrect-padding-token-malformato" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: <code>DecodeError: Not enough segments</code> o <code>Incorrect padding</code> sul token ricevuto.</p>
+<p><strong>Causa</strong>: token troncato (header HTTP oltre il limite del proxy, es. nginx <code>large_client_header_buffers</code>), prefisso <code>Bearer</code> incluso nella decodifica, o Base64URL decodificato come Base64 standard (JWT non usa padding <code>=</code> e usa <code>-</code>/<code>_</code>).</p>
+<p><strong>Soluzione</strong>: estrarre solo il token dopo <code>Bearer</code>, verificare 3 segmenti e alzare il limite header se i claims sono troppi (ridurre il payload è preferibile).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"</span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span>-F.<span class="w"> </span><span class="s1">'{print NF" segmenti, "length($0)" byte"}'</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1"># nginx: aumentare solo se necessario</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># large_client_header_buffers 4 16k;</span>
+</span></code></pre></div>
+<hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://www.rfc-editor.org/rfc/rfc7519">RFC 7519 — JSON Web Token (JWT)</a></li>
