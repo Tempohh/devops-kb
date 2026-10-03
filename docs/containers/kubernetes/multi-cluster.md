@@ -9,7 +9,7 @@ related: [containers/kubernetes/architettura, containers/kubernetes/networking, 
 official_docs: https://kubernetes.io/docs/concepts/cluster-administration/
 status: complete
 difficulty: expert
-last_updated: 2026-03-26
+last_updated: 2026-10-03
 ---
 
 # Multi-Cluster Kubernetes
@@ -543,28 +543,31 @@ infra-repo/
 
 ## Troubleshooting
 
-**1. Cluster non raggiungibile da Argo CD**
+### Scenario 1 — Cluster non raggiungibile da Argo CD
+
+**Sintomo**: cluster in stato `Unknown` o `Error` in Argo CD; le Application non si sincronizzano.
+
+**Causa**: certificato client scaduto o kubeconfig non aggiornato. Argo CD salva le credenziali in un Secret e non le rinnova da solo.
+
+**Soluzione**: verificare la connettività diretta, poi rimuovere e re-registrare il cluster per rigenerare il Secret.
 
 ```bash
-# Sintomo: cluster in "Unknown" o "Error" state in Argo CD
-# Causa: certificato scaduto o kubeconfig non aggiornato
-
-# Verifica connettività diretta
 kubectl cluster-info --kubeconfig ~/.kube/prod-eu.kubeconfig
 
-# Rigenera e re-registra il cluster secret in Argo CD
 argocd cluster rm prod-eu-west-1
 argocd cluster add prod-eu-west-1 \
   --kubeconfig ~/.kube/prod-eu-west-1.kubeconfig
 ```
 
-**2. CAPI Machine stuck in Provisioning**
+### Scenario 2 — CAPI Machine bloccata in Provisioning
+
+**Sintomo**: `kubectl get machine` mostra `Phase: Provisioning` da oltre 15 minuti.
+
+**Causa**: quota cloud esaurita, security group errato o AMI (immagine macchina) non trovata. L'errore compare negli eventi e nei log del provider, non nella Machine.
+
+**Soluzione**: leggere eventi e log del provider, poi verificare le quote.
 
 ```bash
-# Sintomo: kubectl get machine mostra Phase: Provisioning per >15 minuti
-# Causa: quota cloud, security group, AMI non trovata
-
-# Leggi gli eventi della Machine
 kubectl describe machine <machine-name> -n default
 
 # Leggi i log del provider controller
@@ -576,11 +579,15 @@ aws service-quotas list-service-quotas --service-code ec2 \
   | jq '.Quotas[] | select(.QuotaName | contains("Running"))'
 ```
 
-**3. Fleet BundleDeployment in error state**
+### Scenario 3 — Fleet BundleDeployment in errore
+
+**Sintomo**: il bundle non si propaga su alcuni cluster; `BUNDLEDEPLOYMENTS-READY` mostra meno cluster del previsto.
+
+**Causa**: manifest non applicabile su quel cluster (es. CRD mancante, values Helm incompatibili) oppure agent Fleet downstream disconnesso.
+
+**Soluzione**: individuare i bundle non Ready, leggere l'errore e forzare il resync.
 
 ```bash
-# Sintomo: bundle non si propaga su alcuni cluster
-# Verifica lo stato per cluster
 kubectl get bundledeployment -A | grep -v Ready
 
 # Dettaglio dell'errore
@@ -591,12 +598,15 @@ kubectl annotate gitrepo my-app -n fleet-default \
   fleet.cattle.io/force-sync="$(date)"
 ```
 
-**4. Latenza elevata cross-cluster con Cluster Mesh**
+### Scenario 4 — Latenza elevata cross-cluster con Cluster Mesh
+
+**Sintomo**: latenza >50 ms tra pod di cluster diversi.
+
+**Causa**: traffico incapsulato in overlay (VXLAN/Geneve) o MTU (Maximum Transmission Unit) incoerente, che causa frammentazione dei pacchetti.
+
+**Soluzione**: verificare stato mesh e MTU; abilitare direct routing per evitare l'incapsulamento quando i nodi sono raggiungibili a L3.
 
 ```bash
-# Sintomo: latenza >50ms tra pod di cluster diversi
-# Causa: routing subottimale o MTU mismatch
-
 # Verifica stato cluster mesh Cilium
 cilium clustermesh status --wait
 
@@ -607,6 +617,19 @@ kubectl exec -n kube-system ds/cilium -- cilium config | grep mtu
 # In cilium values.yaml:
 # tunnel: disabled
 # autoDirectNodeRoutes: true
+```
+
+### Scenario 5 — Servizi cross-cluster non raggiungibili (CIDR sovrapposti)
+
+**Sintomo**: i pod di un cluster non raggiungono pod/servizi dell'altro; traffico instradato verso il cluster sbagliato.
+
+**Causa**: i cluster usano pod/service CIDR identici (default comuni, es. `10.244.0.0/16`): il routing tra cluster diventa ambiguo e Cluster Mesh/Submariner lo rifiutano.
+
+**Soluzione**: pianificare CIDR univoci per cluster prima della creazione (in CAPI: `clusterNetwork`); un cluster esistente va ricreato o rinumerato.
+
+```bash
+kubectl cluster-info dump --context cluster-eu | grep -m1 -E "cluster-cidr|service-cluster-ip-range"
+kubectl cluster-info dump --context cluster-us | grep -m1 -E "cluster-cidr|service-cluster-ip-range"
 ```
 
 ---
