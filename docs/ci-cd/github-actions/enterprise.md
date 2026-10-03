@@ -3,13 +3,14 @@ title: "GitHub Actions — Enterprise & Self-Hosted Runners"
 slug: enterprise
 category: ci-cd
 tags: [github-actions, enterprise, self-hosted-runners, security, arc, github-enterprise]
-search_keywords: [github actions self hosted runner, ARC actions runner controller, github enterprise server, runner groups, github actions security hardening, github actions audit log, github advanced security, codeql, dependabot, secret scanning, push protection]
+search_keywords: [github actions self hosted runner, GHAS, github secret protection, github code security, repository rulesets, required workflows, ARC actions runner controller, github enterprise server, runner groups, github actions security hardening, github actions audit log, github advanced security, codeql, dependabot, secret scanning, push protection]
 parent: ci-cd/github-actions/_index
-related: [ci-cd/github-actions/workflow-avanzati, ci-cd/jenkins/agent-infrastructure, security/supply-chain]
+related: [ci-cd/github-actions/workflow-avanzati, ci-cd/jenkins/agent-infrastructure, security/supply-chain/sbom-cosign]
 official_docs: https://docs.github.com/en/actions/hosting-your-own-runners
-status: complete
+status: reviewed
 difficulty: expert
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # GitHub Actions — Enterprise & Self-Hosted Runners
@@ -35,10 +36,13 @@ In contesti enterprise, i GitHub-hosted runner spesso non sono sufficienti: le o
 
 ```bash
 # 1. Scaricare il runner (esempio Linux x64)
+#    Usare l'ultima release: https://github.com/actions/runner/releases
+#    (GitHub rifiuta runner troppo vecchi: tenerlo aggiornato)
+RUNNER_VERSION=<VERSIONE>   # sostituire con la release corrente
 mkdir actions-runner && cd actions-runner
-curl -o actions-runner-linux-x64-2.311.0.tar.gz -L \
-  https://github.com/actions/runner/releases/download/v2.311.0/actions-runner-linux-x64-2.311.0.tar.gz
-tar xzf ./actions-runner-linux-x64-2.311.0.tar.gz
+curl -o actions-runner.tar.gz -L \
+  https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz
+tar xzf ./actions-runner.tar.gz
 
 # 2. Configurare il runner (token generato in Settings > Actions > Runners)
 ./config.sh \
@@ -50,10 +54,11 @@ tar xzf ./actions-runner-linux-x64-2.311.0.tar.gz
   --runnergroup "Production Runners"
 
 # 3. Runner ephemerali (best practice sicurezza): si registra e poi viene rimosso
+# --ephemeral: il runner si deregistra dopo aver completato 1 job
 ./config.sh \
   --url https://github.com/my-org \
   --token AABBCCDDEE... \
-  --ephemeral \   # Il runner si deregistra dopo aver completato 1 job
+  --ephemeral \
   --name ephemeral-runner-$RANDOM
 
 # 4. Avviare come servizio (Linux)
@@ -67,12 +72,15 @@ sudo ./svc.sh start
 !!! warning "Runner Ephemeral — Sicurezza"
     I runner ephemerali (`--ephemeral`) sono fondamentali per ambienti multi-tenant. Un runner persistente che esegue job di repository diversi rischia contaminazione tra job (file temporanei, variabili d'ambiente, credenziali in cache). Con `--ephemeral`, il runner termina dopo 1 job e viene ricreato pulito.
 
+!!! danger "Self-hosted runner e repository pubblici"
+    Non collegare mai runner self-hosted persistenti a repository pubblici: una PR da fork può eseguire codice arbitrario sul runner (e quindi nella tua rete). Usare solo repository privati, oppure runner ephemeral isolati (VM/Pod usa-e-getta) con runner group ristretto a repo/workflow noti.
+
 ### Dockerfile per Runner Containerizzato
 
 ```dockerfile
 FROM ubuntu:22.04
 
-ARG RUNNER_VERSION=2.311.0
+ARG RUNNER_VERSION=<VERSIONE>   # release corrente del runner
 ARG TARGETPLATFORM
 
 RUN apt-get update && apt-get install -y \
@@ -81,11 +89,11 @@ RUN apt-get update && apt-get install -y \
     jq \
     libicu70 \
     openssl \
-    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Utente non-root per il runner
-RUN useradd -m runner && echo "runner ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+# (niente sudo NOPASSWD: equivale a dare root ai workflow, concederlo solo se indispensabile)
+RUN useradd -m runner
 
 WORKDIR /home/runner
 
@@ -110,59 +118,51 @@ ENTRYPOINT ["/home/runner/entrypoint.sh"]
 
 ## Actions Runner Controller (ARC)
 
-ARC è un operatore Kubernetes che gestisce runner GitHub Actions scalabili automaticamente. I runner vengono creati come Pod Kubernetes in risposta ai job in coda.
+ARC è un operatore Kubernetes che gestisce runner GitHub Actions scalabili automaticamente. I runner vengono creati come Pod **ephemeral** in risposta ai job in coda: un *listener* per ogni scale set interroga GitHub (long-poll in uscita, nessun webhook in ingresso) e chiede al controller di creare/rimuovere `EphemeralRunner` in base alla coda.
+
+!!! note "ARC ufficiale vs legacy"
+    Questa sezione usa l'ARC mantenuto da GitHub (modalità *runner scale set*, chart `gha-runner-scale-set*`). Il vecchio ARC della community (`summerwind`, CRD `RunnerDeployment`/`HorizontalRunnerAutoscaler`, repo Helm `actions-runner-controller.github.io`) è un progetto distinto e non va mischiato con questo.
 
 ### Installazione con Helm
 
 ```bash
-# Aggiungere il Helm repository di ARC
-helm repo add actions-runner-controller \
-  https://actions-runner-controller.github.io/actions-runner-controller
-helm repo update
-
-# Installare ARC con GitHub App authentication (raccomandato)
+# Controller ARC (chart OCI ufficiale GitHub, nessun `helm repo add` necessario).
+# Pinnare sempre --version all'ultima release: https://github.com/actions/actions-runner-controller/releases
 helm install arc \
   --namespace arc-systems \
   --create-namespace \
   oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller \
-  --version 0.9.3
+  --version <VERSIONE>
 ```
 
 ### RunnerScaleSet — Runner Autoscalanti
 
 ```yaml
 # arc-runner-scale-set.yml
-# Installa con: helm install arc-runner-set \
-#   --namespace arc-runners \
-#   --create-namespace \
-#   oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
-#   --values arc-runner-scale-set.yml
-githubConfigUrl: "https://github.com/my-org/my-repo"
-githubConfigSecret: "arc-github-secret"  # Secret con GitHub App credentials
+# Installa con (il nome della release = nome da usare in `runs-on`):
+#   helm install arc-runner-k8s \
+#     --namespace arc-runners \
+#     --create-namespace \
+#     oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+#     --version <VERSIONE> \
+#     --values arc-runner-scale-set.yml
+githubConfigUrl: "https://github.com/my-org"   # org (consigliato) o repo
+githubConfigSecret: arc-github-secret          # Secret con GitHub App credentials
 
 minRunners: 0       # Scale to zero quando non ci sono job
 maxRunners: 20      # Massimo 20 runner concorrenti
 
-runnerScaleSetName: "arc-runner-k8s"
+# Docker-in-Docker gestito dal chart: aggiunge il sidecar dind (privileged)
+# e i volumi necessari. Non serve scrivere a mano initContainer/sidecar.
+containerMode:
+  type: "dind"      # alternativa: "kubernetes" (no privileged, job eseguiti come Pod)
 
-# Configurazione del Pod runner
 template:
   spec:
-    serviceAccountName: arc-runner
-    initContainers:
-      - name: init-dind-externals
-        image: ghcr.io/actions/actions-runner:latest
-        command: ["cp", "-r", "-v", "/home/runner/externals/.", "/home/runner/tmpDir/"]
-        volumeMounts:
-          - name: dind-externals
-            mountPath: /home/runner/tmpDir
     containers:
       - name: runner
-        image: ghcr.io/actions/actions-runner:latest
+        image: ghcr.io/actions/actions-runner:<VERSIONE>   # pin, evitare :latest
         command: ["/home/runner/run.sh"]
-        env:
-          - name: DOCKER_HOST
-            value: unix:///var/run/docker.sock
         resources:
           requests:
             cpu: "500m"
@@ -170,41 +170,18 @@ template:
           limits:
             cpu: "2"
             memory: "4Gi"
-        volumeMounts:
-          - name: work
-            mountPath: /home/runner/_work
-          - name: dind-sock
-            mountPath: /var/run
-      - name: dind
-        image: docker:24-dind
-        args:
-          - dockerd
-          - --host=unix:///var/run/docker.sock
-          - --group=$(DOCKER_GROUP_GID)
-        env:
-          - name: DOCKER_GROUP_GID
-            value: "123"
-        securityContext:
-          privileged: true
-        volumeMounts:
-          - name: work
-            mountPath: /home/runner/_work
-          - name: dind-sock
-            mountPath: /var/run
-          - name: dind-externals
-            mountPath: /home/runner/externals
-    volumes:
-      - name: work
-        emptyDir: {}
-      - name: dind-sock
-        emptyDir: {}
-      - name: dind-externals
-        emptyDir: {}
-
-# Configurazione autoscaling
-containerMode:
-  type: dind
 ```
+
+Nel workflow, il nome della release Helm diventa il label di `runs-on`:
+
+```yaml
+jobs:
+  build:
+    runs-on: arc-runner-k8s
+```
+
+!!! warning "dind = container privileged"
+    Il sidecar `dind` gira `privileged`: un job compromesso può uscire verso il nodo. Per carichi non fidati preferire `containerMode: kubernetes` (senza privileged), o nodi dedicati con taint/toleration e isolamento di rete.
 
 ### Secret per Autenticazione GitHub App
 
@@ -290,18 +267,21 @@ jobs:
 ### SHA Pinning delle Actions
 
 ```yaml
-# ❌ Vulnerabile: tag può essere modificato (tag hijacking)
+# ❌ Vulnerabile: tag mutabile, può essere spostato su un commit malevolo
+#    (es. compromissione di tj-actions/changed-files, marzo 2025)
 - uses: actions/checkout@v4
 
 # ✅ Sicuro: SHA immutabile, impossibile cambiare il codice senza modificare il workflow
 - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
-- uses: actions/setup-java@99b8673ff64fbf99d8d7b505bd5d0459996d8ad  # v4.2.1
+- uses: actions/setup-java@<SHA-40-hex>  # v4.x (SHA completo di 40 caratteri esadecimali, copiato dal commit del tag)
 - uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502  # v4.0.2
 
 # Tool per aggiornare automaticamente i SHA:
 # - Dependabot (nativo GitHub)
 # - Renovate (più configurabile)
 # - pin-github-action CLI (github.com/mheap/pin-github-action)
+# Enforcement: la policy org/enterprise "Require actions to be pinned to a full-length commit SHA"
+# (Settings > Actions > General) rifiuta i workflow che usano tag o branch.
 ```
 
 ### Rischi di `pull_request_target`
@@ -346,7 +326,9 @@ jobs:
 ### Dependency Review Action
 
 ```yaml
-# Blocca PR che introducono dipendenze con vulnerabilità note
+# Blocca PR che introducono dipendenze con vulnerabilità note o licenze non ammesse.
+# Su repository privati richiede GitHub Code Security (o GHAS).
+# `deny-licenses` è deprecato in favore di `allow-licenses` (non usarli insieme).
 name: Dependency Review
 
 on: pull_request
@@ -364,13 +346,13 @@ jobs:
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: moderate
-          deny-licenses: LGPL-2.0, BSD-2-Clause
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC
           comment-summary-in-pr: always
 ```
 
 ## GitHub Advanced Security (GHAS)
 
-GHAS è disponibile per repository pubblici (gratis) e per organizzazioni GitHub Enterprise/Team (a pagamento). Include Code scanning, Secret scanning e Dependency review.
+Le funzionalità di sicurezza sono gratuite sui repository pubblici. Sui repository privati sono a pagamento: da aprile 2025 GHAS è offerta come due prodotti acquistabili anche separatamente, **GitHub Secret Protection** (secret scanning, push protection) e **GitHub Code Security** (code scanning/CodeQL, dependency review, Copilot Autofix), fatturati per *active committer*. Su GHES la licenza GHAS resta unica.
 
 ### Code Scanning con CodeQL
 
@@ -399,20 +381,21 @@ jobs:
       fail-fast: false
       matrix:
         language: [java-kotlin, javascript-typescript, python]
-        # Linguaggi supportati: c-cpp, csharp, go, java-kotlin,
-        # javascript-typescript, python, ruby, swift
+        # Linguaggi supportati: actions (analizza i workflow stessi), c-cpp, csharp,
+        # go, java-kotlin, javascript-typescript, python, ruby, rust, swift
+        # (elenco in evoluzione: vedi docs CodeQL)
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-          # Configurazione query suite
-          queries: security-extended  # security-and-quality | security-extended | default
-          # Query custom aggiuntive
+          # Query suite aggiuntiva a quella di default
+          queries: security-extended  # security-and-quality | security-extended
+          # Config inline: filtri sulle query
           config: |
             query-filters:
               - exclude:
@@ -424,16 +407,15 @@ jobs:
         run: mvn --batch-mode clean package -DskipTests
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
-          upload: true   # Upload a GitHub Code Scanning
-          output: sarif-results
+          # Per default i risultati sono caricati su Code Scanning
 ```
 
 ### Secret Scanning e Push Protection
 
-Secret scanning è attivo automaticamente su tutti i repository GitHub (push protection deve essere abilitato separatamente).
+Sui repository pubblici secret scanning è attivo di default e la push protection è abilitata di default per gli utenti. Sui repository privati servono GitHub Secret Protection e l'abilitazione esplicita (consigliato: a livello org/enterprise tramite *security configurations*). La push protection **blocca il push** prima che il segreto entri nella storia; lo scanning classico segnala solo a posteriori.
 
 **Configurazione push protection personalizzata:**
 
@@ -448,16 +430,15 @@ paths-ignore:
 # Non inclusi in questo file: configurati nelle org settings
 ```
 
-**Bypassare un falso positivo (con audit log):**
+**Bypass della push protection:** quando un push è bloccato, il messaggio di errore contiene un URL: da lì lo sviluppatore sceglie un motivo (`used in tests`, `false positive`, `I'll fix it later`) e rifà il push. Il bypass è tracciato nell'audit log e può richiedere l'approvazione di un reviewer (*delegated bypass*, configurabile a livello org).
+
+**Chiudere un alert già aperto** (REST API, `PATCH`):
 
 ```bash
-# Quando push protection blocca un push che è un falso positivo,
-# il developer può bypassare con giustificazione tramite UI GitHub
-# oppure usando l'API:
-curl -X POST \
+curl -X PATCH \
   -H "Authorization: Bearer $TOKEN" \
-  https://api.github.com/repos/my-org/my-repo/secret-scanning/alerts/42/resolution \
-  -d '{"resolution": "false_positive", "resolution_comment": "Test fixture, not a real secret"}'
+  https://api.github.com/repos/my-org/my-repo/secret-scanning/alerts/42 \
+  -d '{"state": "resolved", "resolution": "false_positive", "resolution_comment": "Test fixture, not a real secret"}'
 ```
 
 ### Dependabot — Security e Version Updates
@@ -466,7 +447,8 @@ curl -X POST \
 # .github/dependabot.yml
 version: 2
 updates:
-  # Aggiornamenti di sicurezza per npm
+  # Version updates per npm (i security updates sono un meccanismo separato,
+  # attivato nelle impostazioni del repo, indipendente da questo file)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -475,8 +457,7 @@ updates:
       time: "09:00"
       timezone: "Europe/Rome"
     open-pull-requests-limit: 10
-    reviewers:
-      - "my-org/security-team"
+    # `reviewers` è stato rimosso da Dependabot: usare CODEOWNERS per l'assegnazione
     labels:
       - "dependencies"
       - "security"
@@ -525,11 +506,11 @@ GHES è l'istanza self-hosted di GitHub per organizzazioni che non possono usare
 | Feature | GitHub.com | GHES |
 |---------|-----------|------|
 | GitHub-hosted runner | Disponibili | NON disponibili — solo self-hosted |
-| GitHub Marketplace | Completo | Limitato (solo actions con sync) |
+| GitHub Marketplace | Completo | Solo via GitHub Connect o `actions-sync` (mirror manuale) |
 | GitHub Advanced Security | Disponibile (a pagamento) | Disponibile (licenza separata) |
 | Actions version | Sempre aggiornata | Dipende dalla versione GHES installata |
-| OIDC | Disponibile | Disponibile dalla v3.8+ |
-| Copilot | Disponibile | Non disponibile (cloud only) |
+| OIDC | Disponibile | Disponibile nelle versioni recenti (verificare la propria versione) |
+| Nuove feature | Rilascio continuo | Arrivano con ritardo, nelle release GHES |
 
 **Configurazione runner self-hosted per GHES:**
 
@@ -541,8 +522,8 @@ GHES è l'istanza self-hosted di GitHub per organizzazioni che non possono usare
   --name ghes-runner-001
 
 # Per ambienti air-gapped: scaricare le action runner tools manualmente
-# e configurare ACTIONS_RUNNER_TOOL_CACHE
-export ACTIONS_RUNNER_TOOL_CACHE=/opt/runner-tool-cache
+# e puntare il runner alla tool cache locale (usata da setup-node, setup-java, ...)
+export AGENT_TOOLSDIRECTORY=/opt/runner-tool-cache
 ```
 
 **Proxy per GHES in rete privata:**
@@ -567,63 +548,49 @@ Le policy di organizzazione si configurano in `Settings > Actions > General` del
   → es. actions/*, aws-actions/*, docker/*
 ```
 
-**Required Workflows (GitHub Enterprise):**
+**Required workflows → Repository rulesets.** La vecchia feature "required workflows" (beta) è stata dismessa. Oggi si usa una **repository ruleset** a livello org con la regola *Require workflows to pass before merging*: si scelgono repository e branch target e il file di workflow (da un repo centrale, a un ref fissato). Il workflow gira sulle PR e il merge è bloccato finché non passa.
 
 ```yaml
-# I required workflows si configurano a livello organizzazione via API
-# e vengono eseguiti SEMPRE su tutti i repository dell'org
-
-# Esempio: workflow di compliance che deve passare su ogni PR
-# Configurato in: .github/workflows/required-security-scan.yml
-# Nel repository .github dell'organizzazione
-name: Required Security Scan (Org-wide)
-
+# Nel repo centrale: workflow richiesto dalla ruleset.
+# Deve avere il trigger pull_request (e merge_group se si usa la merge queue)
+name: Required Security Scan
 on:
   pull_request:
-    branches: ['**']
+  merge_group:
+
+permissions:
+  contents: read
 
 jobs:
   security-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check secrets baseline
-        uses: gitleaks/gitleaks-action@v2
+        with:
+          fetch-depth: 0   # gitleaks scansiona la storia
+      - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}  # richiesta per le org
       - name: License compliance check
         run: ./scripts/check-licenses.sh
 ```
 
 ### Audit Log Streaming
 
-GitHub Enterprise supporta lo streaming del audit log verso sistemi SIEM esterni:
+GitHub Enterprise Cloud supporta lo streaming dell'audit log verso sistemi esterni (Splunk, Datadog, Azure Event Hubs, Amazon S3, Google Cloud Storage, endpoint HTTPS generico). Si configura in *Enterprise settings > Audit log > Log streaming*: registrazioni di runner e modifiche alle policy arrivano al SIEM per correlazione e alerting. Per interrogazioni puntuali esiste la REST API `GET /orgs/{org}/audit-log?phrase=...`.
 
-```bash
-# Configurare audit log streaming via API (GitHub Enterprise)
-curl -X PUT \
-  -H "Authorization: Bearer $ENTERPRISE_TOKEN" \
-  -H "Accept: application/vnd.github.v3+json" \
-  https://api.github.com/enterprises/my-enterprise/audit-log/streaming \
-  -d '{
-    "enabled": true,
-    "vendor_name": "splunk",
-    "url": "https://splunk.mycompany.internal:8088/services/collector",
-    "token": "SPLUNK_HEC_TOKEN",
-    "content_type": "application/x-ndjson"
-  }'
-```
-
-**Eventi chiave da monitorare nel audit log:**
+**Eventi chiave da monitorare** (nomi indicativi, verificare nella [documentazione degli eventi](https://docs.github.com/en/organizations/keeping-your-organization-secure/managing-security-settings-for-your-organization/audit-log-events-for-your-organization)):
 
 ```
-org.actions_runner_registration      # Registrazione di un nuovo runner
-org.actions_runner_group_created     # Creazione di un runner group
+org.register_self_hosted_runner      # Registrazione di un nuovo runner
+org.remove_self_hosted_runner        # Rimozione di un runner
+org.runner_group_created             # Creazione di un runner group
+org.runner_group_runners_added       # Runner aggiunti a un gruppo
+org.update_actions_secret            # Modifica di un secret di org
 org.disable_two_factor_requirement   # Modifica requisiti 2FA
-repo.actions_allow_force_pushes      # Cambio policy di force push
-workflow_job.in_progress             # Job avviato (con runner info)
-workflow_run.completed               # Workflow completato (con status)
-secret.access                        # Secret acceduto (GHES Enterprise)
+protected_branch.policy_override     # Bypass di una branch protection
+workflows.completed_workflow_run     # Workflow completato
 ```
 
 ## Troubleshooting
@@ -639,7 +606,7 @@ secret.access                        # Secret acceduto (GHES Enterprise)
 ```bash
 # Verificare connettività agli endpoint GitHub richiesti
 curl -v https://api.github.com
-curl -v https://pipelines.actions.githubusercontent.com
+curl -v https://pipelines.actions.githubusercontent.com   # lista host: docs 'Communicating with self-hosted runners'
 
 # Controllare il processo runner e i log
 sudo ./svc.sh status
@@ -650,7 +617,7 @@ tail -f _diag/Runner_*.log
 ./config.sh --url https://github.com/my-org/my-repo --token <NEW_TOKEN> --name my-runner
 
 # Per ambienti con proxy, assicurarsi che le variabili siano esposte al servizio
-sudo systemctl edit actions.runner.my-org.my-runner.service
+sudo systemctl edit actions.runner.<scope>.<nome-runner>.service   # es. actions.runner.my-org-my-repo.my-runner.service
 # Aggiungere nel file di override:
 # [Service]
 # Environment="https_proxy=http://proxy.internal:8080"
@@ -670,14 +637,19 @@ sudo systemctl edit actions.runner.my-org.my-runner.service
 ```bash
 # Verificare lo stato del controller ARC
 kubectl -n arc-systems get pods
-kubectl -n arc-systems logs deploy/arc-gha-runner-scale-set-controller
+kubectl -n arc-systems logs deploy/arc-gha-rs-controller   # nome = <release>-gha-rs-controller
 
-# Verificare la RunnerScaleSet
-kubectl -n arc-runners get runnerscaleset
-kubectl -n arc-runners describe runnerscaleset arc-runner-k8s
+# Il listener (un Pod per scale set) mostra se parla correttamente con GitHub
+kubectl -n arc-systems get pods   # cercare il pod *-listener
+kubectl -n arc-systems logs <pod-listener>
 
-# Controllare che il Secret con le credenziali GitHub App sia corretto
-kubectl -n arc-runners get secret arc-github-secret -o jsonpath='{.data}' | base64 -d
+# Risorse ARC (CRD): AutoscalingRunnerSet, EphemeralRunnerSet, EphemeralRunner
+kubectl -n arc-runners get autoscalingrunnerset
+kubectl -n arc-runners describe autoscalingrunnerset
+kubectl -n arc-runners get ephemeralrunners
+
+# Il Secret esiste e ha le chiavi attese? (senza stampare la private key)
+kubectl -n arc-runners get secret arc-github-secret -o json | jq '.data | keys'
 
 # Verificare gli eventi Kubernetes per errori
 kubectl -n arc-runners get events --sort-by='.lastTimestamp' | tail -20
@@ -697,18 +669,15 @@ helm upgrade arc-runner-set \
 
 **Causa:** Il pattern di secret scanning di GitHub ha rilevato una corrispondenza su un valore che non è un segreto reale (es. fixture di test, documentazione, chiavi di esempio).
 
-**Soluzione:** Bypassare il blocco tramite UI GitHub con giustificazione, oppure via API, e aggiungere il percorso ai path-ignore.
+**Soluzione:** Bypassare il blocco tramite l'URL riportato nell'errore di push (con giustificazione) e, se il file è ricorrente, aggiungere il percorso a `paths-ignore`.
 
 ```bash
-# Bypass via API con giustificazione (registrato nell'audit log)
-curl -X PATCH \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
-  -H "Accept: application/vnd.github.v3+json" \
-  https://api.github.com/repos/my-org/my-repo/secret-scanning/alerts/42 \
-  -d '{"state": "dismissed", "resolution": "false_positive", "resolution_comment": "Test fixture - not a real credential"}'
+# Il push è rifiutato con un URL di bypass: aprirlo, scegliere il motivo, rifare `git push`
+# (il bypass è registrato nell'audit log)
 
-# Prevenire future segnalazioni: aggiungere il path a .github/secret_scanning.yml
-cat >> .github/secret_scanning.yml << 'EOF'
+# Prevenire future segnalazioni: creare .github/secret_scanning.yml
+# (se esiste già, modificarlo: `paths-ignore` va definito una sola volta)
+cat > .github/secret_scanning.yml << 'EOF'
 paths-ignore:
   - "tests/fixtures/**"
   - "**/*.example"
@@ -782,4 +751,4 @@ curl -X POST \
 - [CodeQL documentation](https://codeql.github.com/docs/)
 - [Dependabot configuration](https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file)
 - [GitHub Enterprise Server docs](https://docs.github.com/en/enterprise-server)
-- [Required workflows (Enterprise)](https://docs.github.com/en/actions/using-workflows/required-workflows)
+- [Repository rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
