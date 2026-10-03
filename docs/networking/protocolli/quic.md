@@ -5,11 +5,11 @@ category: networking
 tags: [quic, udp, http3, performance, protocolli, google, latenza]
 search_keywords: [quick udp internet connections, quic protocol, http/3, udp, 0-rtt, head of line blocking, multiplexing, connection migration, packet loss recovery, google chrome, cloudflare]
 parent: networking/protocolli/_index
-related: [networking/protocolli/http2-http3, networking/protocolli/tcp-udp, networking/fondamentali/tcpip]
+related: [networking/protocolli/http2-http3, networking/protocolli/tcp-udp, networking/fondamentali/tcpip, networking/fondamentali/tls-ssl-basics]
 official_docs: https://www.rfc-editor.org/rfc/rfc9000
 status: complete
 difficulty: intermediate
-last_updated: 2026-02-24
+last_updated: 2026-10-03
 ---
 
 # QUIC
@@ -26,8 +26,8 @@ QUIC è già ampiamente deployato: Google (YouTube, Search, Gmail), Cloudflare e
 
 | Problema TCP | Soluzione QUIC |
 |-------------|----------------|
-| 3-way handshake (1.5 RTT) + TLS handshake (1-2 RTT) | Connessione + TLS in 1-RTT (0-RTT per sessioni note) |
-| HOL blocking: un pacchetto perso blocca tutti gli stream | Stream indipendenti: perdita su uno stream non blocca gli altri |
+| 3-way handshake (1.5 RTT, round-trip time = andata e ritorno) + TLS handshake (1-2 RTT) | Connessione + TLS in 1-RTT (0-RTT per sessioni note) |
+| HOL (head-of-line) blocking: un pacchetto perso blocca tutti gli stream | Stream indipendenti: perdita su uno stream non blocca gli altri |
 | Connection migration impossibile (basata su IP:porta) | Connection ID: cambia IP/rete senza riconnettersi |
 | Implementazione nel kernel OS | Implementazione in user space: aggiornabile indipendentemente |
 | Nessuna crittografia nativa | TLS 1.3 integrato e obbligatorio |
@@ -190,12 +190,66 @@ backend app_servers
 
 ## Troubleshooting
 
-| Sintomo | Causa | Soluzione |
-|---------|-------|-----------|
-| QUIC non negoziato | Firewall blocca UDP 443 | Aprire porta 443/UDP |
-| 0-RTT non funziona | Server non supporta early data | Abilitare `ssl_early_data on` |
-| Prestazioni peggiori del previsto | Rete con alto packet loss e no QUIC tuning | Verificare configurazione BBR e buffer UDP |
-| Client non upgrada a HTTP/3 | Alt-Svc header mancante | Aggiungere `Alt-Svc: h3=":443"; ma=86400` |
+### Scenario 1 — QUIC non negoziato, traffico sempre su TCP
+
+**Sintomo**: DevTools mostra `h2` invece di `h3`; `curl --http3` va in timeout.
+
+**Causa**: firewall/security group blocca UDP 443. QUIC viaggia su UDP, ma molte regole aprono solo TCP 443.
+
+**Soluzione**: aprire 443/UDP e verificare che arrivi al server.
+
+```bash
+# Server: il listener UDP esiste?
+ss -ulnp | grep :443
+
+# Cattura pacchetti QUIC in ingresso
+sudo tcpdump -ni any udp port 443 -c 10
+
+# Security group AWS: aggiungere regola UDP 443
+aws ec2 authorize-security-group-ingress --group-id sg-0123 --protocol udp --port 443 --cidr 0.0.0.0/0
+```
+
+### Scenario 2 — Il client non passa mai a HTTP/3
+
+**Sintomo**: la prima richiesta e le successive restano su HTTP/2, pur con QUIC attivo.
+
+**Causa**: il browser scopre HTTP/3 solo tramite header `Alt-Svc` ricevuto su HTTP/1.1 o HTTP/2; se manca (o un proxy lo rimuove) non tenta QUIC.
+
+**Soluzione**: aggiungere l'header e verificare che arrivi al client.
+
+```bash
+curl -sI https://example.com | grep -i alt-svc
+# atteso: alt-svc: h3=":443"; ma=86400
+```
+
+### Scenario 3 — 0-RTT non funziona
+
+**Sintomo**: ogni riconnessione richiede 1-RTT completo, nessun early data.
+
+**Causa**: il server non accetta early data, oppure il client non ha un session ticket valido (scaduto o mai ricevuto).
+
+**Soluzione**: abilitare early data lato server e, se dietro proxy, inoltrare l'header `Early-Data` al backend.
+
+```nginx
+ssl_early_data on;
+proxy_set_header Early-Data $ssl_early_data;
+```
+
+### Scenario 4 — Prestazioni peggiori di TCP
+
+**Sintomo**: throughput più basso o CPU alta rispetto a HTTP/2.
+
+**Causa**: QUIC gira in user space (costo CPU per pacchetto più alto, niente offload del kernel) e i buffer UDP di default sono piccoli, causando drop.
+
+**Soluzione**: aumentare i buffer socket UDP, valutare GSO/offload UDP e controllare i drop.
+
+```bash
+# Buffer UDP (valori in byte)
+sudo sysctl -w net.core.rmem_max=7500000 net.core.wmem_max=7500000
+
+# Drop UDP per buffer pieno
+nstat -az UdpRcvbufErrors
+```
 
 ## Relazioni
 
