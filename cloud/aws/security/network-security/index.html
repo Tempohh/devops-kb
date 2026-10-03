@@ -5811,7 +5811,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -5836,7 +5836,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -25428,8 +25428,8 @@
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="s1">        "ManagedRuleGroupStatement": {</span>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="s1">          "VendorName": "AWS",</span>
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="s1">          "Name": "AWSManagedRulesCommonRuleSet",</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="s1">          "ExcludedRules": [</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="s1">            {"Name": "SizeRestrictions_BODY"}</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="s1">          "RuleActionOverrides": [</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="s1">            {"Name": "SizeRestrictions_BODY", "ActionToUse": {"Count": {}}}</span>
 </span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="s1">          ]</span>
 </span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="s1">        }</span>
 </span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="s1">      },</span>
@@ -25486,6 +25486,14 @@
 </span><span id="__span-1-70"><a id="__codelineno-1-70" name="__codelineno-1-70" href="#__codelineno-1-70"></a><span class="w">  </span>--web-acl-arn<span class="w"> </span>arn:aws:wafv2:us-east-1:123456789012:regional/webacl/MyAppWebACL/abc123<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-71"><a id="__codelineno-1-71" name="__codelineno-1-71" href="#__codelineno-1-71"></a><span class="w">  </span>--resource-arn<span class="w"> </span>arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-alb/abc123
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Scope CLOUDFRONT, WCU e override in Count</p>
+<ul>
+<li>Per proteggere CloudFront la Web ACL va creata con <code>--scope CLOUDFRONT</code> <strong>sempre in <code>us-east-1</code></strong>; l'associazione avviene dalla distribution (<code>WebACLId</code>), non con <code>associate-web-acl</code>.</li>
+<li>Ogni regola consuma <strong>WCU</strong> (Web ACL Capacity Units); una Web ACL ha un limite di default di 1.500 WCU, quindi i managed rule group più pesanti vanno dimensionati.</li>
+<li>Sui rule group gestiti l'azione "Count" si imposta con <code>OverrideAction: {"Count": {}}</code> sull'intero gruppo, o con <code>RuleActionOverrides</code> sulla singola regola (che sostituisce il vecchio <code>ExcludedRules</code>, deprecato).</li>
+</ul>
+</div>
 <h3 id="regole-custom">Regole Custom<a class="headerlink" href="#regole-custom" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># IP Set — lista IP da bloccare</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>aws<span class="w"> </span>wafv2<span class="w"> </span>create-ip-set<span class="w"> </span><span class="se">\</span>
@@ -25528,35 +25536,37 @@
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">"Statement"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="nt">"RateBasedStatement"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">      </span><span class="nt">"Limit"</span><span class="p">:</span><span class="w"> </span><span class="mi">50</span><span class="p">,</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">      </span><span class="nt">"AggregateKeyType"</span><span class="p">:</span><span class="w"> </span><span class="s2">"IP"</span><span class="p">,</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">      </span><span class="nt">"ScopeDownStatement"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">        </span><span class="nt">"ByteMatchStatement"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">          </span><span class="nt">"FieldToMatch"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"UriPath"</span><span class="p">:</span><span class="w"> </span><span class="p">{}},</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">          </span><span class="nt">"PositionalConstraint"</span><span class="p">:</span><span class="w"> </span><span class="s2">"STARTS_WITH"</span><span class="p">,</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">          </span><span class="nt">"SearchString"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/api/auth/login"</span><span class="p">,</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">          </span><span class="nt">"TextTransformations"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"Priority"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">"Type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"LOWERCASE"</span><span class="p">}]</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">      </span><span class="p">}</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">  </span><span class="p">},</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">  </span><span class="nt">"Action"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"Block"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"CustomResponse"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">    </span><span class="nt">"ResponseCode"</span><span class="p">:</span><span class="w"> </span><span class="mi">429</span><span class="p">,</span>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">    </span><span class="nt">"CustomResponseBodyKey"</span><span class="p">:</span><span class="w"> </span><span class="s2">"rate-limit-body"</span>
-</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">  </span><span class="p">}}},</span>
-</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">  </span><span class="nt">"VisibilityConfig"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">    </span><span class="nt">"SampledRequestsEnabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">    </span><span class="nt">"CloudWatchMetricsEnabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
-</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">    </span><span class="nt">"MetricName"</span><span class="p">:</span><span class="w"> </span><span class="s2">"RateLimitLogin"</span>
-</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="p">}</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">      </span><span class="nt">"EvaluationWindowSec"</span><span class="p">:</span><span class="w"> </span><span class="mi">300</span><span class="p">,</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">      </span><span class="nt">"AggregateKeyType"</span><span class="p">:</span><span class="w"> </span><span class="s2">"IP"</span><span class="p">,</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">      </span><span class="nt">"ScopeDownStatement"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">        </span><span class="nt">"ByteMatchStatement"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">          </span><span class="nt">"FieldToMatch"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"UriPath"</span><span class="p">:</span><span class="w"> </span><span class="p">{}},</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">          </span><span class="nt">"PositionalConstraint"</span><span class="p">:</span><span class="w"> </span><span class="s2">"STARTS_WITH"</span><span class="p">,</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">          </span><span class="nt">"SearchString"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/api/auth/login"</span><span class="p">,</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">          </span><span class="nt">"TextTransformations"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"Priority"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">"Type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"LOWERCASE"</span><span class="p">}]</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">      </span><span class="p">}</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">  </span><span class="p">},</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">  </span><span class="nt">"Action"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"Block"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"CustomResponse"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">    </span><span class="nt">"ResponseCode"</span><span class="p">:</span><span class="w"> </span><span class="mi">429</span><span class="p">,</span>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">    </span><span class="nt">"CustomResponseBodyKey"</span><span class="p">:</span><span class="w"> </span><span class="s2">"rate-limit-body"</span>
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">  </span><span class="p">}}},</span>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">  </span><span class="nt">"VisibilityConfig"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">    </span><span class="nt">"SampledRequestsEnabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">    </span><span class="nt">"CloudWatchMetricsEnabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">    </span><span class="nt">"MetricName"</span><span class="p">:</span><span class="w"> </span><span class="s2">"RateLimitLogin"</span>
+</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="p">}</span>
 </span></code></pre></div>
+<p><code>EvaluationWindowSec</code> (60, 120, 300 o 600 s) definisce la finestra in cui si contano le richieste; il default è 300 s. <code>rate-limit-body</code> deve essere dichiarato in <code>CustomResponseBodies</code> a livello di Web ACL, altrimenti la creazione fallisce.</p>
 <h3 id="logging-waf">Logging WAF<a class="headerlink" href="#logging-waf" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Configurare logging verso S3</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Configurare logging verso S3 (il nome del bucket DEVE iniziare con "aws-waf-logs-")</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>aws<span class="w"> </span>wafv2<span class="w"> </span>put-logging-configuration<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--logging-configuration<span class="w"> </span><span class="s1">'{</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="s1">    "ResourceArn": "arn:aws:wafv2:us-east-1:123456789012:regional/webacl/MyAppWebACL/abc123",</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="s1">    "LogDestinationConfigs": [</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="s1">      "arn:aws:s3:::my-waf-logs"</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="s1">      "arn:aws:s3:::aws-waf-logs-myapp"</span>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="s1">    ],</span>
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="s1">    "RedactedFields": [</span>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="s1">      {"SingleHeader": {"Name": "authorization"}},</span>
@@ -25578,9 +25588,12 @@
 <li><strong>$5.00/Web ACL/mese</strong></li>
 <li><strong>$1.00/regola/mese</strong> (regole custom)</li>
 <li><strong>$0.60 per 1 milione di richieste</strong> ispezionate</li>
-<li><strong>Bot Control:</strong> $10/Web ACL/mese (Common) + $30 (Targeted)</li>
-<li><strong>Fraud Control ATP/ACFP:</strong> $30/Web ACL/mese + $1 per 1.000 richieste login</li>
+<li><strong>Bot Control:</strong> canone mensile per Web ACL + costo per milione di richieste, diverso tra livello Common e Targeted</li>
+<li><strong>Fraud Control ATP/ACFP:</strong> canone mensile per Web ACL + costo per 1.000 richieste di login analizzate</li>
 </ul>
+<!-- REVIEW: verificare su https://aws.amazon.com/waf/pricing/ i prezzi esatti di Bot Control (Common/Targeted) e ATP/ACFP: le cifre precedenti ($30 Targeted, $30 ATP) erano probabilmente errate; verificare anche i piani flat-rate con CloudFront -->
+
+<p>I prezzi cambiano nel tempo: verificare sempre la pagina ufficiale.</p>
 <hr />
 <h2 id="aws-shield">AWS Shield<a class="headerlink" href="#aws-shield" title="Permanent link">&para;</a></h2>
 <h3 id="shield-standard-gratuito">Shield Standard (gratuito)<a class="headerlink" href="#shield-standard-gratuito" title="Permanent link">&para;</a></h3>
@@ -25590,7 +25603,7 @@
 - Layer 3 e Layer 4 DDoS comuni
 - Supporta: EC2, Elastic IP, ALB, NLB, CloudFront, Route 53, Global Accelerator</p>
 <h3 id="shield-advanced-3000meseorganizzazione">Shield Advanced ($3.000/mese/organizzazione)<a class="headerlink" href="#shield-advanced-3000meseorganizzazione" title="Permanent link">&para;</a></h3>
-<p>Shield Advanced offre:
+<p>Richiede un impegno di sottoscrizione di 1 anno, più le tariffe di data transfer out sulle risorse protette. Shield Advanced offre:
 - <strong>Protezione DDoS Layer 7</strong> (in combinazione con WAF)
 - <strong>SRT (Shield Response Team):</strong> team di esperti AWS disponibili 24/7 per supporto durante attacchi
 - <strong>Cost Protection:</strong> rimborso dei costi AWS (EC2, ELB, CloudFront, Route 53) causati da un attacco DDoS
@@ -25651,73 +25664,82 @@
 <h3 id="configurare-network-firewall">Configurare Network Firewall<a class="headerlink" href="#configurare-network-firewall" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Creare regole Suricata per IPS</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>cat<span class="w"> </span>&gt;<span class="w"> </span>suricata-rules.rules<span class="w"> </span><span class="s">&lt;&lt; 'EOF'</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="s"># Blocca SQL injection</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="s">alert http any any -&gt; $HOME_NET any (msg:"SQL Injection Attempt"; content:"UNION SELECT"; nocase; http_uri; sid:1000001; rev:1;)</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="s"># SQL injection: con "drop" il pacchetto è scartato (IPS); con "alert" solo loggato (IDS)</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="s">drop http any any -&gt; $HOME_NET any (msg:"SQL Injection Attempt"; http.uri; content:"UNION SELECT"; nocase; sid:1000001; rev:1;)</span>
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="s"># Blocca port scanning</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="s"># Port scanning: solo alert (rileva SYN ripetuti da una stessa sorgente)</span>
 </span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="s">alert tcp any any -&gt; $HOME_NET any (msg:"Port Scan Detected"; flags:S; threshold:type threshold,track by_src,count 10,seconds 60; sid:1000002; rev:1;)</span>
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="s"># Blocca traffico verso domini noti malware</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="s"># Traffico verso domini noti malware</span>
 </span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="s">drop dns any any -&gt; any any (msg:"Known Malware Domain"; dns.query; content:"malware-c2.evil.com"; sid:1000003; rev:1;)</span>
 </span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="s">EOF</span>
 </span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1"># Creare Rule Group con regole Suricata</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>aws<span class="w"> </span>network-firewall<span class="w"> </span>create-rule-group<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">  </span>--rule-group-name<span class="w"> </span><span class="s2">"SuricataRules"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">  </span>--type<span class="w"> </span>STATEFUL<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">  </span>--capacity<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">  </span>--rule-group<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="s1">    "RulesSource": {</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="s1">      "RulesString": "'</span><span class="s2">"</span><span class="k">$(</span>cat<span class="w"> </span>suricata-rules.rules<span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span><span class="s1">'\n'</span><span class="w"> </span><span class="s1">';'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span><span class="s1">'s/;$//'</span><span class="k">)</span><span class="s2">"</span><span class="s1">'"</span>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="s1">    },</span>
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="s1">    "StatefulRuleOptions": {</span>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="s1">      "RuleOrder": "STRICT_ORDER"</span>
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="s1">    }</span>
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="s1">  }'</span>
-</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>
-</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="c1"># Creare Rule Group per domain filtering</span>
-</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>aws<span class="w"> </span>network-firewall<span class="w"> </span>create-rule-group<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="w">  </span>--rule-group-name<span class="w"> </span><span class="s2">"BlockedDomains"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a><span class="w">  </span>--type<span class="w"> </span>STATEFUL<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="w">  </span>--capacity<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a><span class="w">  </span>--rule-group<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-8-33"><a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a><span class="s1">    "RulesSource": {</span>
-</span><span id="__span-8-34"><a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a><span class="s1">      "RulesSourceList": {</span>
-</span><span id="__span-8-35"><a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a><span class="s1">        "Targets": ["malware.example.com", "c2server.evil.net"],</span>
-</span><span id="__span-8-36"><a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a><span class="s1">        "TargetTypes": ["HTTP_HOST", "TLS_SNI"],</span>
-</span><span id="__span-8-37"><a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a><span class="s1">        "GeneratedRulesType": "DENYLIST"</span>
-</span><span id="__span-8-38"><a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a><span class="s1">      }</span>
-</span><span id="__span-8-39"><a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a><span class="s1">    }</span>
-</span><span id="__span-8-40"><a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a><span class="s1">  }'</span>
-</span><span id="__span-8-41"><a id="__codelineno-8-41" name="__codelineno-8-41" href="#__codelineno-8-41"></a>
-</span><span id="__span-8-42"><a id="__codelineno-8-42" name="__codelineno-8-42" href="#__codelineno-8-42"></a><span class="c1"># Creare la Firewall Policy</span>
-</span><span id="__span-8-43"><a id="__codelineno-8-43" name="__codelineno-8-43" href="#__codelineno-8-43"></a>aws<span class="w"> </span>network-firewall<span class="w"> </span>create-firewall-policy<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-44"><a id="__codelineno-8-44" name="__codelineno-8-44" href="#__codelineno-8-44"></a><span class="w">  </span>--firewall-policy-name<span class="w"> </span><span class="s2">"MyFirewallPolicy"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-45"><a id="__codelineno-8-45" name="__codelineno-8-45" href="#__codelineno-8-45"></a><span class="w">  </span>--firewall-policy<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-8-46"><a id="__codelineno-8-46" name="__codelineno-8-46" href="#__codelineno-8-46"></a><span class="s1">    "StatelessDefaultActions": ["aws:forward_to_sfe"],</span>
-</span><span id="__span-8-47"><a id="__codelineno-8-47" name="__codelineno-8-47" href="#__codelineno-8-47"></a><span class="s1">    "StatelessFragmentDefaultActions": ["aws:drop"],</span>
-</span><span id="__span-8-48"><a id="__codelineno-8-48" name="__codelineno-8-48" href="#__codelineno-8-48"></a><span class="s1">    "StatefulRuleGroupReferences": [</span>
-</span><span id="__span-8-49"><a id="__codelineno-8-49" name="__codelineno-8-49" href="#__codelineno-8-49"></a><span class="s1">      {"ResourceArn": "arn:aws:network-firewall:us-east-1:123456789012:stateful-rulegroup/SuricataRules"},</span>
-</span><span id="__span-8-50"><a id="__codelineno-8-50" name="__codelineno-8-50" href="#__codelineno-8-50"></a><span class="s1">      {"ResourceArn": "arn:aws:network-firewall:us-east-1:123456789012:stateful-rulegroup/BlockedDomains"}</span>
-</span><span id="__span-8-51"><a id="__codelineno-8-51" name="__codelineno-8-51" href="#__codelineno-8-51"></a><span class="s1">    ],</span>
-</span><span id="__span-8-52"><a id="__codelineno-8-52" name="__codelineno-8-52" href="#__codelineno-8-52"></a><span class="s1">    "StatefulDefaultActions": ["aws:drop_established"],</span>
-</span><span id="__span-8-53"><a id="__codelineno-8-53" name="__codelineno-8-53" href="#__codelineno-8-53"></a><span class="s1">    "StatefulEngineOptions": {</span>
-</span><span id="__span-8-54"><a id="__codelineno-8-54" name="__codelineno-8-54" href="#__codelineno-8-54"></a><span class="s1">      "RuleOrder": "STRICT_ORDER",</span>
-</span><span id="__span-8-55"><a id="__codelineno-8-55" name="__codelineno-8-55" href="#__codelineno-8-55"></a><span class="s1">      "StreamExceptionPolicy": "DROP"</span>
-</span><span id="__span-8-56"><a id="__codelineno-8-56" name="__codelineno-8-56" href="#__codelineno-8-56"></a><span class="s1">    }</span>
-</span><span id="__span-8-57"><a id="__codelineno-8-57" name="__codelineno-8-57" href="#__codelineno-8-57"></a><span class="s1">  }'</span>
-</span><span id="__span-8-58"><a id="__codelineno-8-58" name="__codelineno-8-58" href="#__codelineno-8-58"></a>
-</span><span id="__span-8-59"><a id="__codelineno-8-59" name="__codelineno-8-59" href="#__codelineno-8-59"></a><span class="c1"># Creare il Firewall</span>
-</span><span id="__span-8-60"><a id="__codelineno-8-60" name="__codelineno-8-60" href="#__codelineno-8-60"></a>aws<span class="w"> </span>network-firewall<span class="w"> </span>create-firewall<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-61"><a id="__codelineno-8-61" name="__codelineno-8-61" href="#__codelineno-8-61"></a><span class="w">  </span>--firewall-name<span class="w"> </span><span class="s2">"MyVPCFirewall"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-62"><a id="__codelineno-8-62" name="__codelineno-8-62" href="#__codelineno-8-62"></a><span class="w">  </span>--firewall-policy-arn<span class="w"> </span>arn:aws:network-firewall:us-east-1:123456789012:firewall-policy/MyFirewallPolicy<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-63"><a id="__codelineno-8-63" name="__codelineno-8-63" href="#__codelineno-8-63"></a><span class="w">  </span>--vpc-id<span class="w"> </span>vpc-1234567890<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-64"><a id="__codelineno-8-64" name="__codelineno-8-64" href="#__codelineno-8-64"></a><span class="w">  </span>--subnet-mappings<span class="w"> </span><span class="s1">'[</span>
-</span><span id="__span-8-65"><a id="__codelineno-8-65" name="__codelineno-8-65" href="#__codelineno-8-65"></a><span class="s1">    {"SubnetId": "subnet-fw-az1"},</span>
-</span><span id="__span-8-66"><a id="__codelineno-8-66" name="__codelineno-8-66" href="#__codelineno-8-66"></a><span class="s1">    {"SubnetId": "subnet-fw-az2"}</span>
-</span><span id="__span-8-67"><a id="__codelineno-8-67" name="__codelineno-8-67" href="#__codelineno-8-67"></a><span class="s1">  ]'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-68"><a id="__codelineno-8-68" name="__codelineno-8-68" href="#__codelineno-8-68"></a><span class="w">  </span>--description<span class="w"> </span><span class="s2">"Network Firewall for production VPC"</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1"># Creare Rule Group con regole Suricata: RulesString vuole le regole separate da newline,</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># quindi si lascia a jq il compito di serializzare il file in una stringa JSON</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>jq<span class="w"> </span>-Rs<span class="w"> </span><span class="s1">'{RulesSource: {RulesString: .}, StatefulRuleOptions: {RuleOrder: "STRICT_ORDER"}}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">  </span>suricata-rules.rules<span class="w"> </span>&gt;<span class="w"> </span>suricata-rulegroup.json
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>aws<span class="w"> </span>network-firewall<span class="w"> </span>create-rule-group<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">  </span>--rule-group-name<span class="w"> </span><span class="s2">"SuricataRules"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">  </span>--type<span class="w"> </span>STATEFUL<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">  </span>--capacity<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">  </span>--rule-group<span class="w"> </span>file://suricata-rulegroup.json
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="c1"># Creare Rule Group per domain filtering</span>
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="c1"># (con una policy STRICT_ORDER anche questo gruppo deve essere STRICT_ORDER)</span>
+</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>aws<span class="w"> </span>network-firewall<span class="w"> </span>create-rule-group<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="w">  </span>--rule-group-name<span class="w"> </span><span class="s2">"BlockedDomains"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="w">  </span>--type<span class="w"> </span>STATEFUL<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="w">  </span>--capacity<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a><span class="w">  </span>--rule-group<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="s1">    "RulesSource": {</span>
+</span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a><span class="s1">      "RulesSourceList": {</span>
+</span><span id="__span-8-33"><a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a><span class="s1">        "Targets": ["malware.example.com", "c2server.evil.net"],</span>
+</span><span id="__span-8-34"><a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a><span class="s1">        "TargetTypes": ["HTTP_HOST", "TLS_SNI"],</span>
+</span><span id="__span-8-35"><a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a><span class="s1">        "GeneratedRulesType": "DENYLIST"</span>
+</span><span id="__span-8-36"><a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a><span class="s1">      }</span>
+</span><span id="__span-8-37"><a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a><span class="s1">    },</span>
+</span><span id="__span-8-38"><a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a><span class="s1">    "StatefulRuleOptions": {</span>
+</span><span id="__span-8-39"><a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a><span class="s1">      "RuleOrder": "STRICT_ORDER"</span>
+</span><span id="__span-8-40"><a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a><span class="s1">    }</span>
+</span><span id="__span-8-41"><a id="__codelineno-8-41" name="__codelineno-8-41" href="#__codelineno-8-41"></a><span class="s1">  }'</span>
+</span><span id="__span-8-42"><a id="__codelineno-8-42" name="__codelineno-8-42" href="#__codelineno-8-42"></a>
+</span><span id="__span-8-43"><a id="__codelineno-8-43" name="__codelineno-8-43" href="#__codelineno-8-43"></a><span class="c1"># Creare la Firewall Policy</span>
+</span><span id="__span-8-44"><a id="__codelineno-8-44" name="__codelineno-8-44" href="#__codelineno-8-44"></a>aws<span class="w"> </span>network-firewall<span class="w"> </span>create-firewall-policy<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-45"><a id="__codelineno-8-45" name="__codelineno-8-45" href="#__codelineno-8-45"></a><span class="w">  </span>--firewall-policy-name<span class="w"> </span><span class="s2">"MyFirewallPolicy"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-46"><a id="__codelineno-8-46" name="__codelineno-8-46" href="#__codelineno-8-46"></a><span class="w">  </span>--firewall-policy<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-8-47"><a id="__codelineno-8-47" name="__codelineno-8-47" href="#__codelineno-8-47"></a><span class="s1">    "StatelessDefaultActions": ["aws:forward_to_sfe"],</span>
+</span><span id="__span-8-48"><a id="__codelineno-8-48" name="__codelineno-8-48" href="#__codelineno-8-48"></a><span class="s1">    "StatelessFragmentDefaultActions": ["aws:drop"],</span>
+</span><span id="__span-8-49"><a id="__codelineno-8-49" name="__codelineno-8-49" href="#__codelineno-8-49"></a><span class="s1">    "StatefulRuleGroupReferences": [</span>
+</span><span id="__span-8-50"><a id="__codelineno-8-50" name="__codelineno-8-50" href="#__codelineno-8-50"></a><span class="s1">      {"ResourceArn": "arn:aws:network-firewall:us-east-1:123456789012:stateful-rulegroup/SuricataRules", "Priority": 1},</span>
+</span><span id="__span-8-51"><a id="__codelineno-8-51" name="__codelineno-8-51" href="#__codelineno-8-51"></a><span class="s1">      {"ResourceArn": "arn:aws:network-firewall:us-east-1:123456789012:stateful-rulegroup/BlockedDomains", "Priority": 2}</span>
+</span><span id="__span-8-52"><a id="__codelineno-8-52" name="__codelineno-8-52" href="#__codelineno-8-52"></a><span class="s1">    ],</span>
+</span><span id="__span-8-53"><a id="__codelineno-8-53" name="__codelineno-8-53" href="#__codelineno-8-53"></a><span class="s1">    "StatefulDefaultActions": ["aws:drop_established"],</span>
+</span><span id="__span-8-54"><a id="__codelineno-8-54" name="__codelineno-8-54" href="#__codelineno-8-54"></a><span class="s1">    "StatefulEngineOptions": {</span>
+</span><span id="__span-8-55"><a id="__codelineno-8-55" name="__codelineno-8-55" href="#__codelineno-8-55"></a><span class="s1">      "RuleOrder": "STRICT_ORDER",</span>
+</span><span id="__span-8-56"><a id="__codelineno-8-56" name="__codelineno-8-56" href="#__codelineno-8-56"></a><span class="s1">      "StreamExceptionPolicy": "DROP"</span>
+</span><span id="__span-8-57"><a id="__codelineno-8-57" name="__codelineno-8-57" href="#__codelineno-8-57"></a><span class="s1">    }</span>
+</span><span id="__span-8-58"><a id="__codelineno-8-58" name="__codelineno-8-58" href="#__codelineno-8-58"></a><span class="s1">  }'</span>
+</span><span id="__span-8-59"><a id="__codelineno-8-59" name="__codelineno-8-59" href="#__codelineno-8-59"></a>
+</span><span id="__span-8-60"><a id="__codelineno-8-60" name="__codelineno-8-60" href="#__codelineno-8-60"></a><span class="c1"># Creare il Firewall</span>
+</span><span id="__span-8-61"><a id="__codelineno-8-61" name="__codelineno-8-61" href="#__codelineno-8-61"></a>aws<span class="w"> </span>network-firewall<span class="w"> </span>create-firewall<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-62"><a id="__codelineno-8-62" name="__codelineno-8-62" href="#__codelineno-8-62"></a><span class="w">  </span>--firewall-name<span class="w"> </span><span class="s2">"MyVPCFirewall"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-63"><a id="__codelineno-8-63" name="__codelineno-8-63" href="#__codelineno-8-63"></a><span class="w">  </span>--firewall-policy-arn<span class="w"> </span>arn:aws:network-firewall:us-east-1:123456789012:firewall-policy/MyFirewallPolicy<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-64"><a id="__codelineno-8-64" name="__codelineno-8-64" href="#__codelineno-8-64"></a><span class="w">  </span>--vpc-id<span class="w"> </span>vpc-1234567890<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-65"><a id="__codelineno-8-65" name="__codelineno-8-65" href="#__codelineno-8-65"></a><span class="w">  </span>--subnet-mappings<span class="w"> </span><span class="s1">'[</span>
+</span><span id="__span-8-66"><a id="__codelineno-8-66" name="__codelineno-8-66" href="#__codelineno-8-66"></a><span class="s1">    {"SubnetId": "subnet-fw-az1"},</span>
+</span><span id="__span-8-67"><a id="__codelineno-8-67" name="__codelineno-8-67" href="#__codelineno-8-67"></a><span class="s1">    {"SubnetId": "subnet-fw-az2"}</span>
+</span><span id="__span-8-68"><a id="__codelineno-8-68" name="__codelineno-8-68" href="#__codelineno-8-68"></a><span class="s1">  ]'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-69"><a id="__codelineno-8-69" name="__codelineno-8-69" href="#__codelineno-8-69"></a><span class="w">  </span>--description<span class="w"> </span><span class="s2">"Network Firewall for production VPC"</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">STRICT_ORDER e priorità</p>
+<p>Con <code>RuleOrder: STRICT_ORDER</code> le regole sono valutate nell'ordine esatto dei gruppi (campo <code>Priority</code>, più basso = prima) e <code>StatefulDefaultActions</code> si applica solo al traffico che nessuna regola ha catturato. Il default <code>DEFAULT_ACTION_ORDER</code> invece valuta per tipo di azione (pass → drop → reject → alert) e non ammette default action. Tutti i rule group referenziati devono usare lo stesso ordinamento della policy.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Novità</p>
+<p>Network Firewall supporta anche l'attachment diretto a un <strong>Transit Gateway</strong> (ispezione centralizzata senza VPC di ispezione dedicato) e rule group gestiti da AWS (es. Active Threat Defense). Verificare disponibilità regionale nella documentazione ufficiale.</p>
+</div>
 <h3 id="tls-inspection">TLS Inspection<a class="headerlink" href="#tls-inspection" title="Permanent link">&para;</a></h3>
 <p>Network Firewall può decriptare, ispezionare, e ri-cifrare il traffico HTTPS (SSL/TLS inspection) per rilevare minacce nascoste nel traffico cifrato.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Creare TLS inspection configuration</span>
@@ -25730,7 +25752,7 @@
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="s1">      }],</span>
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="s1">      "Scopes": [{</span>
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="s1">        "Sources": [{"AddressDefinition": "0.0.0.0/0"}],</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="s1">        "Destinations": [{"AddressDefinition": "$HOME_NET"}],</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="s1">        "Destinations": [{"AddressDefinition": "10.0.0.0/16"}],</span>
 </span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="s1">        "SourcePorts": [{"FromPort": 0, "ToPort": 65535}],</span>
 </span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="s1">        "DestinationPorts": [{"FromPort": 443, "ToPort": 443}],</span>
 </span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="s1">        "Protocols": [6]</span>
@@ -25738,8 +25760,10 @@
 </span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="s1">    }]</span>
 </span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="s1">  }'</span>
 </span></code></pre></div>
+<p><code>AddressDefinition</code> accetta solo CIDR, non variabili Suricata come <code>$HOME_NET</code>: qui il CIDR del VPC. La configurazione TLS va poi referenziata nella firewall policy (<code>TLSInspectionConfigurationArn</code>). Il certificato ACM qui è quello <strong>server</strong> per l'ispezione del traffico inbound; per il traffico outbound serve invece una CA (<code>CertificateAuthorityArn</code>) con cui il firewall ri-firma i certificati, da distribuire come trusted ai client.</p>
 <h3 id="logging-network-firewall">Logging Network Firewall<a class="headerlink" href="#logging-network-firewall" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Configurare logging verso S3 e CloudWatch</span>
+<p><code>update-logging-configuration</code> aggiunge o rimuove <strong>una sola destinazione per chiamata</strong>: per configurarne due servono due chiamate successive, ognuna con la configurazione completa risultante.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># 1) Destinazione FLOW su S3</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>aws<span class="w"> </span>network-firewall<span class="w"> </span>update-logging-configuration<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--firewall-name<span class="w"> </span><span class="s2">"MyVPCFirewall"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>--logging-configuration<span class="w"> </span><span class="s1">'{</span>
@@ -25748,14 +25772,27 @@
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="s1">        "LogType": "FLOW",</span>
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="s1">        "LogDestinationType": "S3",</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="s1">        "LogDestination": {"bucketName": "my-nfw-logs", "prefix": "flow/"}</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="s1">      },</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="s1">      {</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="s1">        "LogType": "ALERT",</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="s1">        "LogDestinationType": "CloudWatchLogs",</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="s1">        "LogDestination": {"logGroup": "/aws/network-firewall/alerts"}</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="s1">      }</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="s1">    ]</span>
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="s1">  }'</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="s1">      }</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="s1">    ]</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="s1">  }'</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="c1"># 2) Aggiungere la destinazione ALERT su CloudWatch Logs (ripetendo la precedente)</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>aws<span class="w"> </span>network-firewall<span class="w"> </span>update-logging-configuration<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">  </span>--firewall-name<span class="w"> </span><span class="s2">"MyVPCFirewall"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">  </span>--logging-configuration<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="s1">    "LogDestinationConfigs": [</span>
+</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="s1">      {</span>
+</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="s1">        "LogType": "FLOW",</span>
+</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="s1">        "LogDestinationType": "S3",</span>
+</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="s1">        "LogDestination": {"bucketName": "my-nfw-logs", "prefix": "flow/"}</span>
+</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="s1">      },</span>
+</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a><span class="s1">      {</span>
+</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="s1">        "LogType": "ALERT",</span>
+</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="s1">        "LogDestinationType": "CloudWatchLogs",</span>
+</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="s1">        "LogDestination": {"logGroup": "/aws/network-firewall/alerts"}</span>
+</span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="s1">      }</span>
+</span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a><span class="s1">    ]</span>
+</span><span id="__span-10-30"><a id="__codelineno-10-30" name="__codelineno-10-30" href="#__codelineno-10-30"></a><span class="s1">  }'</span>
 </span></code></pre></div>
 <hr />
 <h2 id="security-groups-concetti-avanzati">Security Groups — Concetti Avanzati<a class="headerlink" href="#security-groups-concetti-avanzati" title="Permanent link">&para;</a></h2>
@@ -25764,7 +25801,7 @@
 <ul>
 <li><strong>Stateful:</strong> se una connessione inbound è permessa, la risposta outbound è automaticamente permessa (e viceversa)</li>
 <li><strong>Allow only:</strong> si possono solo aggiungere regole Allow (non Deny)</li>
-<li><strong>Applicati a risorse:</strong> ogni risorsa (EC2, RDS, Lambda in VPC, ECS container) può avere fino a 5 SG</li>
+<li><strong>Applicati a risorse:</strong> ogni ENI (quindi EC2, RDS, Lambda in VPC, task ECS) può avere fino a 5 SG di default (quota aumentabile, con vincolo sul totale regole per ENI)</li>
 <li><strong>Default:</strong> tutto inbound bloccato, tutto outbound permesso</li>
 </ul>
 <h3 id="referenziare-altri-security-groups">Referenziare Altri Security Groups<a class="headerlink" href="#referenziare-altri-security-groups" title="Permanent link">&para;</a></h3>
@@ -25783,13 +25820,15 @@
 </span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">  </span>--port<span class="w"> </span><span class="m">3306</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span>--source-group<span class="w"> </span>sg-app-servers
 </span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="c1"># Referenziare SG cross-account (VPC Sharing)</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="c1"># Referenziare SG di un altro account (richiede VPC peering o VPC condiviso)</span>
 </span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>aws<span class="w"> </span>ec2<span class="w"> </span>authorize-security-group-ingress<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">  </span>--group-id<span class="w"> </span>sg-local<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">  </span>--protocol<span class="w"> </span>tcp<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">  </span>--port<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">  </span>--source-group<span class="w"> </span>sg-remote-account<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">  </span>--source-group-owner-id<span class="w"> </span><span class="m">999888777666</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">  </span>--ip-permissions<span class="w"> </span><span class="s1">'[{</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="s1">    "IpProtocol": "tcp",</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="s1">    "FromPort": 80,</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="s1">    "ToPort": 80,</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="s1">    "UserIdGroupPairs": [{"GroupId": "sg-remote-account", "UserId": "999888777666"}]</span>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="s1">  }]'</span>
 </span></code></pre></div>
 <h3 id="managed-prefix-lists">Managed Prefix Lists<a class="headerlink" href="#managed-prefix-lists" title="Permanent link">&para;</a></h3>
 <p>Le Managed Prefix Lists sono liste di CIDR gestite centralmente, usabili nelle regole dei Security Groups. AWS mantiene prefix lists aggiornate per i propri servizi.</p>
@@ -25814,20 +25853,23 @@
 </span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a><span class="s1">    "PrefixListIds": [{"PrefixListId": "'</span><span class="s2">"</span><span class="nv">$CF_PREFIX_LIST_ID</span><span class="s2">"</span><span class="s1">'"}]</span>
 </span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="s1">  }]'</span>
 </span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a>
-</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a><span class="c1"># Creare una Managed Prefix List custom</span>
-</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-managed-prefix-list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a><span class="w">  </span>--prefix-list-name<span class="w"> </span><span class="s2">"OfficeIPs"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="w">  </span>--max-entries<span class="w"> </span><span class="m">20</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a><span class="w">  </span>--address-family<span class="w"> </span>IPv4
-</span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a>
-</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="c1"># Aggiungere CIDR alla lista</span>
-</span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a>aws<span class="w"> </span>ec2<span class="w"> </span>modify-managed-prefix-list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a><span class="w">  </span>--prefix-list-id<span class="w"> </span>pl-1234567890<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a><span class="w">  </span>--current-version<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-32"><a id="__codelineno-12-32" name="__codelineno-12-32" href="#__codelineno-12-32"></a><span class="w">  </span>--add-entries<span class="w"> </span><span class="s1">'[</span>
-</span><span id="__span-12-33"><a id="__codelineno-12-33" name="__codelineno-12-33" href="#__codelineno-12-33"></a><span class="s1">    {"Cidr": "203.0.113.0/24", "Description": "Ufficio Milano"},</span>
-</span><span id="__span-12-34"><a id="__codelineno-12-34" name="__codelineno-12-34" href="#__codelineno-12-34"></a><span class="s1">    {"Cidr": "198.51.100.10/32", "Description": "VPN aziendale"}</span>
-</span><span id="__span-12-35"><a id="__codelineno-12-35" name="__codelineno-12-35" href="#__codelineno-12-35"></a><span class="s1">  ]'</span>
+</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a><span class="c1"># Attenzione: la prefix list di CloudFront conta come ~55 regole nella quota</span>
+</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a><span class="c1"># "regole per security group" (default 60): spesso serve alzare la quota.</span>
+</span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a>
+</span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="c1"># Creare una Managed Prefix List custom</span>
+</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-managed-prefix-list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a><span class="w">  </span>--prefix-list-name<span class="w"> </span><span class="s2">"OfficeIPs"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="w">  </span>--max-entries<span class="w"> </span><span class="m">20</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a><span class="w">  </span>--address-family<span class="w"> </span>IPv4
+</span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a>
+</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a><span class="c1"># Aggiungere CIDR alla lista</span>
+</span><span id="__span-12-32"><a id="__codelineno-12-32" name="__codelineno-12-32" href="#__codelineno-12-32"></a>aws<span class="w"> </span>ec2<span class="w"> </span>modify-managed-prefix-list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-33"><a id="__codelineno-12-33" name="__codelineno-12-33" href="#__codelineno-12-33"></a><span class="w">  </span>--prefix-list-id<span class="w"> </span>pl-1234567890<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-34"><a id="__codelineno-12-34" name="__codelineno-12-34" href="#__codelineno-12-34"></a><span class="w">  </span>--current-version<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-35"><a id="__codelineno-12-35" name="__codelineno-12-35" href="#__codelineno-12-35"></a><span class="w">  </span>--add-entries<span class="w"> </span><span class="s1">'[</span>
+</span><span id="__span-12-36"><a id="__codelineno-12-36" name="__codelineno-12-36" href="#__codelineno-12-36"></a><span class="s1">    {"Cidr": "203.0.113.0/24", "Description": "Ufficio Milano"},</span>
+</span><span id="__span-12-37"><a id="__codelineno-12-37" name="__codelineno-12-37" href="#__codelineno-12-37"></a><span class="s1">    {"Cidr": "198.51.100.10/32", "Description": "VPN aziendale"}</span>
+</span><span id="__span-12-38"><a id="__codelineno-12-38" name="__codelineno-12-38" href="#__codelineno-12-38"></a><span class="s1">  ]'</span>
 </span></code></pre></div>
 <hr />
 <h2 id="network-acls-nacls-avanzate">Network ACLs (NACLs) — Avanzate<a class="headerlink" href="#network-acls-nacls-avanzate" title="Permanent link">&para;</a></h2>
@@ -25897,7 +25939,7 @@
 </span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="w">  </span>--rule-action<span class="w"> </span>allow<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a><span class="w">  </span>--ingress
 </span><span id="__span-13-28"><a id="__codelineno-13-28" name="__codelineno-13-28" href="#__codelineno-13-28"></a>
-</span><span id="__span-13-29"><a id="__codelineno-13-29" name="__codelineno-13-29" href="#__codelineno-13-29"></a><span class="c1"># Allow ephemeral ports per risposte outbound (stateless!)</span>
+</span><span id="__span-13-29"><a id="__codelineno-13-29" name="__codelineno-13-29" href="#__codelineno-13-29"></a><span class="c1"># Allow ephemeral ports inbound per le risposte alle connessioni avviate dalla subnet (stateless!)</span>
 </span><span id="__span-13-30"><a id="__codelineno-13-30" name="__codelineno-13-30" href="#__codelineno-13-30"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-network-acl-entry<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-31"><a id="__codelineno-13-31" name="__codelineno-13-31" href="#__codelineno-13-31"></a><span class="w">  </span>--network-acl-id<span class="w"> </span><span class="nv">$NACL_ID</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-32"><a id="__codelineno-13-32" name="__codelineno-13-32" href="#__codelineno-13-32"></a><span class="w">  </span>--rule-number<span class="w"> </span><span class="m">900</span><span class="w"> </span><span class="se">\</span>
@@ -25907,19 +25949,30 @@
 </span><span id="__span-13-36"><a id="__codelineno-13-36" name="__codelineno-13-36" href="#__codelineno-13-36"></a><span class="w">  </span>--rule-action<span class="w"> </span>allow<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-37"><a id="__codelineno-13-37" name="__codelineno-13-37" href="#__codelineno-13-37"></a><span class="w">  </span>--ingress
 </span><span id="__span-13-38"><a id="__codelineno-13-38" name="__codelineno-13-38" href="#__codelineno-13-38"></a>
-</span><span id="__span-13-39"><a id="__codelineno-13-39" name="__codelineno-13-39" href="#__codelineno-13-39"></a><span class="c1"># Deny all inbound (rule number 1000 = catch-all)</span>
-</span><span id="__span-13-40"><a id="__codelineno-13-40" name="__codelineno-13-40" href="#__codelineno-13-40"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-network-acl-entry<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-41"><a id="__codelineno-13-41" name="__codelineno-13-41" href="#__codelineno-13-41"></a><span class="w">  </span>--network-acl-id<span class="w"> </span><span class="nv">$NACL_ID</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-42"><a id="__codelineno-13-42" name="__codelineno-13-42" href="#__codelineno-13-42"></a><span class="w">  </span>--rule-number<span class="w"> </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-43"><a id="__codelineno-13-43" name="__codelineno-13-43" href="#__codelineno-13-43"></a><span class="w">  </span>--protocol<span class="w"> </span>-1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-44"><a id="__codelineno-13-44" name="__codelineno-13-44" href="#__codelineno-13-44"></a><span class="w">  </span>--cidr-block<span class="w"> </span><span class="m">0</span>.0.0.0/0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-45"><a id="__codelineno-13-45" name="__codelineno-13-45" href="#__codelineno-13-45"></a><span class="w">  </span>--rule-action<span class="w"> </span>deny<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-46"><a id="__codelineno-13-46" name="__codelineno-13-46" href="#__codelineno-13-46"></a><span class="w">  </span>--ingress
-</span><span id="__span-13-47"><a id="__codelineno-13-47" name="__codelineno-13-47" href="#__codelineno-13-47"></a>
-</span><span id="__span-13-48"><a id="__codelineno-13-48" name="__codelineno-13-48" href="#__codelineno-13-48"></a><span class="c1"># Associare la NACL a una subnet</span>
-</span><span id="__span-13-49"><a id="__codelineno-13-49" name="__codelineno-13-49" href="#__codelineno-13-49"></a>aws<span class="w"> </span>ec2<span class="w"> </span>replace-network-acl-association<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-50"><a id="__codelineno-13-50" name="__codelineno-13-50" href="#__codelineno-13-50"></a><span class="w">  </span>--association-id<span class="w"> </span>aclassoc-1234567890<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-51"><a id="__codelineno-13-51" name="__codelineno-13-51" href="#__codelineno-13-51"></a><span class="w">  </span>--network-acl-id<span class="w"> </span><span class="nv">$NACL_ID</span>
+</span><span id="__span-13-39"><a id="__codelineno-13-39" name="__codelineno-13-39" href="#__codelineno-13-39"></a><span class="c1"># Una NACL custom nega TUTTO l'outbound di default: servono regole egress esplicite,</span>
+</span><span id="__span-13-40"><a id="__codelineno-13-40" name="__codelineno-13-40" href="#__codelineno-13-40"></a><span class="c1"># altrimenti le risposte a HTTP/HTTPS (porte effimere del client) non escono</span>
+</span><span id="__span-13-41"><a id="__codelineno-13-41" name="__codelineno-13-41" href="#__codelineno-13-41"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-network-acl-entry<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-42"><a id="__codelineno-13-42" name="__codelineno-13-42" href="#__codelineno-13-42"></a><span class="w">  </span>--network-acl-id<span class="w"> </span><span class="nv">$NACL_ID</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-43"><a id="__codelineno-13-43" name="__codelineno-13-43" href="#__codelineno-13-43"></a><span class="w">  </span>--rule-number<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-44"><a id="__codelineno-13-44" name="__codelineno-13-44" href="#__codelineno-13-44"></a><span class="w">  </span>--protocol<span class="w"> </span>tcp<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-45"><a id="__codelineno-13-45" name="__codelineno-13-45" href="#__codelineno-13-45"></a><span class="w">  </span>--port-range<span class="w"> </span><span class="nv">From</span><span class="o">=</span><span class="m">1024</span>,To<span class="o">=</span><span class="m">65535</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-46"><a id="__codelineno-13-46" name="__codelineno-13-46" href="#__codelineno-13-46"></a><span class="w">  </span>--cidr-block<span class="w"> </span><span class="m">0</span>.0.0.0/0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-47"><a id="__codelineno-13-47" name="__codelineno-13-47" href="#__codelineno-13-47"></a><span class="w">  </span>--rule-action<span class="w"> </span>allow<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-48"><a id="__codelineno-13-48" name="__codelineno-13-48" href="#__codelineno-13-48"></a><span class="w">  </span>--egress
+</span><span id="__span-13-49"><a id="__codelineno-13-49" name="__codelineno-13-49" href="#__codelineno-13-49"></a>
+</span><span id="__span-13-50"><a id="__codelineno-13-50" name="__codelineno-13-50" href="#__codelineno-13-50"></a><span class="c1"># Deny all inbound (rule number 1000 = catch-all)</span>
+</span><span id="__span-13-51"><a id="__codelineno-13-51" name="__codelineno-13-51" href="#__codelineno-13-51"></a>aws<span class="w"> </span>ec2<span class="w"> </span>create-network-acl-entry<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-52"><a id="__codelineno-13-52" name="__codelineno-13-52" href="#__codelineno-13-52"></a><span class="w">  </span>--network-acl-id<span class="w"> </span><span class="nv">$NACL_ID</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-53"><a id="__codelineno-13-53" name="__codelineno-13-53" href="#__codelineno-13-53"></a><span class="w">  </span>--rule-number<span class="w"> </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-54"><a id="__codelineno-13-54" name="__codelineno-13-54" href="#__codelineno-13-54"></a><span class="w">  </span>--protocol<span class="w"> </span>-1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-55"><a id="__codelineno-13-55" name="__codelineno-13-55" href="#__codelineno-13-55"></a><span class="w">  </span>--cidr-block<span class="w"> </span><span class="m">0</span>.0.0.0/0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-56"><a id="__codelineno-13-56" name="__codelineno-13-56" href="#__codelineno-13-56"></a><span class="w">  </span>--rule-action<span class="w"> </span>deny<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-57"><a id="__codelineno-13-57" name="__codelineno-13-57" href="#__codelineno-13-57"></a><span class="w">  </span>--ingress
+</span><span id="__span-13-58"><a id="__codelineno-13-58" name="__codelineno-13-58" href="#__codelineno-13-58"></a>
+</span><span id="__span-13-59"><a id="__codelineno-13-59" name="__codelineno-13-59" href="#__codelineno-13-59"></a><span class="c1"># Associare la NACL a una subnet</span>
+</span><span id="__span-13-60"><a id="__codelineno-13-60" name="__codelineno-13-60" href="#__codelineno-13-60"></a>aws<span class="w"> </span>ec2<span class="w"> </span>replace-network-acl-association<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-61"><a id="__codelineno-13-61" name="__codelineno-13-61" href="#__codelineno-13-61"></a><span class="w">  </span>--association-id<span class="w"> </span>aclassoc-1234567890<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-62"><a id="__codelineno-13-62" name="__codelineno-13-62" href="#__codelineno-13-62"></a><span class="w">  </span>--network-acl-id<span class="w"> </span><span class="nv">$NACL_ID</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">NACLs e porte effimere</p>
@@ -25952,7 +26005,7 @@
 </span></code></pre></div>
 <h3 id="waf-best-practices">WAF Best Practices<a class="headerlink" href="#waf-best-practices" title="Permanent link">&para;</a></h3>
 <ol>
-<li><strong>Iniziare in COUNT mode</strong> — monitora senza bloccare per verificare falsi positivi</li>
+<li><strong>Iniziare in COUNT mode</strong> — monitora senza bloccare per verificare falsi positivi (sui managed rule group: <code>OverrideAction: Count</code>)</li>
 <li><strong>AWS Managed Rules</strong> sono il punto di partenza, poi aggiungere regole custom</li>
 <li><strong>Rate limiting</strong> su tutti gli endpoint sensibili (login, registrazione, API)</li>
 <li><strong>Logging sempre attivo</strong> — essenziale per analisi e forensics</li>
@@ -25980,7 +26033,7 @@
 </span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="w">  </span>--query<span class="w"> </span><span class="s1">'WebACL.Rules[*].[Name,Priority,OverrideAction,Action]'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="w">  </span>--output<span class="w"> </span>table
 </span></code></pre></div>
-<p>Dopo aver identificato la regola: impostare <code>ExcludedRules</code> nel <code>ManagedRuleGroupStatement</code> per escluderla, oppure aggiungere una regola Allow con priorità più bassa che fa match sul traffico legittimo prima che arrivi alle Managed Rules.</p>
+<p>Dopo aver identificato la regola: impostare <code>RuleActionOverrides</code> (azione <code>Count</code>) nel <code>ManagedRuleGroupStatement</code> per neutralizzarla, oppure aggiungere una regola Allow con un numero di priorità inferiore a quello del managed rule group, che fa match sul traffico legittimo prima che arrivi alle Managed Rules.</p>
 <h3 id="scenario-2-connettivita-ec2-bloccata-security-group-nacl">Scenario 2 — Connettività EC2 Bloccata (Security Group / NACL)<a class="headerlink" href="#scenario-2-connettivita-ec2-bloccata-security-group-nacl" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Un'istanza EC2 non è raggiungibile su una porta specifica nonostante il Security Group sembri corretto; <code>telnet</code> / <code>curl</code> timeout.</p>
 <p><strong>Causa:</strong> NACL della subnet blocca il traffico (statefulness diversa rispetto ai SG), oppure il Security Group di destinazione non referenzia correttamente la sorgente, oppure mancano le porte effimere nel NACL outbound.</p>
@@ -26010,7 +26063,7 @@
 </span></code></pre></div>
 <h3 id="scenario-3-network-firewall-scarta-traffico-inatteso">Scenario 3 — Network Firewall Scarta Traffico Inatteso<a class="headerlink" href="#scenario-3-network-firewall-scarta-traffico-inatteso" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Dopo il deployment del Network Firewall il traffico verso/da alcune destinazioni viene droppato silenziosamente; la connettività era funzionante prima.</p>
-<p><strong>Causa:</strong> Le route tables del VPC non sono state aggiornate correttamente per dirigere il traffico attraverso il Firewall Endpoint, oppure le stateful rules hanno <code>StatefulDefaultActions: aws:drop_established</code> che scarta connessioni non esplicitamente permesse.</p>
+<p><strong>Causa:</strong> Le route tables del VPC non sono state aggiornate correttamente per dirigere il traffico attraverso il Firewall Endpoint, oppure le stateful rules hanno <code>StatefulDefaultActions: aws:drop_established</code> che scarta connessioni non esplicitamente permesse. Un'altra causa tipica è il <strong>routing asimmetrico</strong>: il firewall è stateful, quindi andata e ritorno devono passare dallo stesso endpoint (stessa AZ).</p>
 <p><strong>Soluzione:</strong> Verificare che le route tables usino il Firewall Endpoint come next-hop, e controllare i log ALERT/FLOW per identificare i pacchetti droppati.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Verificare lo stato del Firewall e gli endpoint per ogni AZ</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>aws<span class="w"> </span>network-firewall<span class="w"> </span>describe-firewall<span class="w"> </span><span class="se">\</span>
@@ -26028,7 +26081,7 @@
 </span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>aws<span class="w"> </span>logs<span class="w"> </span>filter-log-events<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="w">  </span>--log-group-name<span class="w"> </span><span class="s2">"/aws/network-firewall/alerts"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="w">  </span>--start-time<span class="w"> </span><span class="k">$(</span>date<span class="w"> </span>-d<span class="w"> </span><span class="s1">'30 minutes ago'</span><span class="w"> </span>+%s000<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="w">  </span>--filter-pattern<span class="w"> </span><span class="s2">"{ </span>$<span class="s2">.event.action = \"blocked\" }"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="w">  </span>--filter-pattern<span class="w"> </span><span class="s1">'{ $.event.alert.action = "blocked" }'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a><span class="w">  </span>--limit<span class="w"> </span><span class="m">50</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="w">  </span>--query<span class="w"> </span><span class="s1">'events[*].message'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-18-20"><a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a><span class="w">  </span>--output<span class="w"> </span>text
