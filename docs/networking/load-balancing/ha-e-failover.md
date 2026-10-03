@@ -7,9 +7,10 @@ search_keywords: [high availability, failover, keepalived, vrrp, virtual ip, act
 parent: networking/load-balancing/_index
 related: [networking/load-balancing/layer4-vs-layer7, networking/load-balancing/algoritmi, networking/kubernetes/ingress]
 official_docs: https://www.keepalived.org/manpage.html
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Alta Disponibilità e Failover
@@ -35,19 +36,23 @@ Il pattern più comune per HA del load balancer: due istanze Nginx/HAProxy, un *
 
 ```
                      VIP: 10.0.0.100
+                (posseduto dal MASTER)
                           │
               ┌───────────┴───────────┐
-              ▼
+              ▼                       ┆ (standby)
      LB-Primary (MASTER)         LB-Secondary (BACKUP)
       10.0.0.1                    10.0.0.2
-      [ACTIVE]                   [Standby]
+      [ACTIVE]                    [Standby]
               │
      ┌────────┼────────┐
      ▼        ▼        ▼
   Backend1  Backend2  Backend3
 ```
 
-**VRRP (Virtual Router Redundancy Protocol)** è il protocollo che gestisce il VIP. Keepalived è la sua implementazione Linux più diffusa.
+**VRRP (Virtual Router Redundancy Protocol)** è il protocollo che gestisce il VIP: il MASTER invia advertisement periodici (IP protocol 112, multicast `224.0.0.18`); se i BACKUP non ne ricevono per ~3×`advert_int` assumono il ruolo di MASTER e annunciano il VIP con *gratuitous ARP* (così gli switch aggiornano la tabella MAC). Keepalived è la sua implementazione Linux più diffusa.
+
+!!! warning "Cloud pubblico"
+    VRRP/gratuitous ARP spesso non funzionano nelle VPC dei cloud provider (niente multicast, il VIP non è un IP L2 spostabile). Lì l'HA del LB si ottiene con servizi gestiti (ALB/NLB, Azure LB, GCP LB) o con spostamento di IP via API; Keepalived resta tipico per on-premise/bare metal.
 
 ### Active-Active
 
@@ -63,6 +68,9 @@ Client B → 10.0.0.2 (LB-2) → Backend pool
 **Vantaggi:** doppia capacità, nessun failover lento.
 **Svantaggi:** più complesso; sessioni sticky difficili; entrambi devono condividere la stessa configurazione.
 
+!!! note "DNS round-robin non è health-aware"
+    Il DNS restituisce comunque l'IP di un LB caduto finché il TTL non scade. Per failover rapido combinare con health check DNS (Route 53, ecc.), oppure usare Anycast/BGP ECMP (il router smette di annunciare la route quando il LB cade). Con ECMP/active-active mantenere ciascun LB dimensionato per reggere l'intero carico (N+1), altrimenti la caduta di uno satura l'altro.
+
 ### Health Check: Passive vs Active
 
 | Tipo | Come funziona | Velocità rilevamento | Overhead |
@@ -70,7 +78,7 @@ Client B → 10.0.0.2 (LB-2) → Backend pool
 | **Passive** | Monitora errori sulle richieste reali | Lento (dipende dal traffico) | Zero |
 | **Active** | Sonda periodica al backend (HTTP GET /health) | Veloce (configurabile) | Minimo |
 
-Usare entrambi: passive per rilevamento immediato in produzione, active per rilevare backend degr adati prima che ricevano traffico.
+Usare entrambi: passive per rilevamento immediato in produzione, active per rilevare backend degradati prima che ricevano traffico.
 
 ## Architettura / Come Funziona
 
@@ -145,9 +153,11 @@ vrrp_instance VI_1 {
     priority 110            # Priorità più alta sul primary (secondary: 100)
     advert_int 1            # Advertisement VRRP ogni 1 secondo
 
+    # PASS: solo i primi 8 caratteri contano e non è vera sicurezza (testo in chiaro);
+    # serve a evitare collisioni accidentali. Proteggere il segmento L2 / usare unicast_peer.
     authentication {
         auth_type PASS
-        auth_pass MySecretPass123
+        auth_pass K3epAl1v
     }
 
     virtual_ipaddress {
@@ -160,8 +170,12 @@ vrrp_instance VI_1 {
 }
 ```
 
+Con `weight -20` il fallimento dello script porta la priorità del primary a 90 (< 100 del secondary) e innesca il failover. Il peso negativo deve superare la differenza di priorità tra i nodi, altrimenti il failover non avviene.
+
 ```
 # /etc/keepalived/keepalived.conf — LB-Secondary (BACKUP)
+# Servono anche qui global_defs e il blocco vrrp_script check_nginx (identici al primary):
+# senza la definizione, track_script check_nginx rende la configurazione non valida.
 vrrp_instance VI_1 {
     state  BACKUP           # BACKUP sul secondary
     interface eth0
@@ -188,15 +202,12 @@ vrrp_instance VI_1 {
 
 ```nginx
 upstream backend_pool {
-    server 10.0.0.1:8080;
-    server 10.0.0.2:8080;
-    server 10.0.0.3:8080 backup;  # Usato solo se tutti gli altri sono down
-
     # Health check passivo (Nginx open source)
     # max_fails: errori consecutivi prima di marcare come down
-    # fail_timeout: quanto tempo restare in stato "down" + finestra per contare i fail
+    # fail_timeout: finestra per contare i fail + tempo in stato "down"
     server 10.0.0.1:8080 max_fails=3 fail_timeout=30s;
     server 10.0.0.2:8080 max_fails=3 fail_timeout=30s;
+    server 10.0.0.3:8080 backup;  # Usato solo se tutti gli altri sono down
 }
 
 server {
@@ -236,8 +247,9 @@ backend app_pool
     timeout server  30s
     timeout tunnel  3600s  # Per WebSocket
 
-    # Graceful draining con connessioni in corso
-    option redispatch  # Se un backend cade durante una richiesta, ritenta su altro backend
+    # Se la connessione al server fallisce (o il server sticky è down), ritenta su un altro backend
+    option redispatch
+    retries 3
 ```
 
 ### Zero-Downtime Deployment con Draining
@@ -245,13 +257,15 @@ backend app_pool
 ```bash
 # Script per deploy zero-downtime con HAProxy
 
-# 1. Segnala al LB di smettere di inviare traffico al backend da aggiornare
-echo "disable server app_pool/s1" | socat stdio /run/haproxy/admin.sock
+# 1. Drain: nessuna NUOVA connessione (le esistenti proseguono)
+#    Richiede "stats socket ... level admin" in global
+echo "set server app_pool/s1 state drain" | socat stdio /run/haproxy/admin.sock
 
 # 2. Aspetta che le connessioni esistenti terminino (max 60s)
+#    Campo CSV 5 = scur (sessioni correnti); il campo 18 è lo status
 for i in {1..30}; do
     CONNS=$(echo "show stat" | socat stdio /run/haproxy/admin.sock \
-            | awk -F',' '/app_pool,s1/{print $18}')
+            | awk -F',' '/^app_pool,s1,/{print $5}')
     echo "Connessioni attive s1: $CONNS"
     [ "$CONNS" -eq "0" ] && break
     sleep 2
@@ -266,8 +280,8 @@ docker run -d --name myapp-s1 -p 8080:8080 myapp:v2
 sleep 5
 curl -f http://10.0.0.1:8080/health
 
-# 5. Reintegra nel pool
-echo "enable server app_pool/s1" | socat stdio /run/haproxy/admin.sock
+# 5. Reintegra nel pool (torna in stato ready, rispettando slowstart)
+echo "set server app_pool/s1 state ready" | socat stdio /run/haproxy/admin.sock
 ```
 
 ## Best Practices
@@ -278,6 +292,9 @@ echo "enable server app_pool/s1" | socat stdio /run/haproxy/admin.sock
 - **Backup server (sorry page)**: avere sempre un backend di fallback che risponde con un messaggio di manutenzione invece che un timeout
 - **Connection draining**: sempre drenare prima di spegnere un backend — non terminarlo bruscamente
 - **Monitorare lo stato di Keepalived**: loggare i failover VRRP per capire la frequenza e le cause
+- **Preemption**: di default il nodo a priorità maggiore riprende il VIP appena torna su, causando un secondo failover. Se il nodo è instabile usare `nopreempt` (con `state BACKUP` su entrambi) e riprendere il ruolo in modo controllato
+- **Split-brain**: se il traffico VRRP tra i nodi si interrompe (firewall, partizione di rete) entrambi si dichiarano MASTER e il VIP è duplicato. Mantenere i nodi sullo stesso segmento L2 o usare `unicast_peer`, e allertare su VIP presente su più nodi
+- **Sincronizzare la config**: i due LB devono avere config identica (config management, es. Ansible); stato sticky/stick-table non migra col VIP, salvo `peers` in HAProxy
 
 ## Troubleshooting
 
@@ -297,9 +314,9 @@ journalctl -u keepalived -n 50
 # Verifica che il VIP sia presente sul nodo attivo
 ip addr show eth0 | grep 10.0.0.100
 
-# Test: simula failure manuale (abbassa priorità)
-# Sul primary, abbassa la priorità temporaneamente
-kill -STOP $(pgrep keepalived)   # oppure systemctl stop keepalived
+# Test: simula failure manuale del primary
+# (NON usare kill -STOP: il processo congelato non rilascia il VIP -> rischio split-brain)
+systemctl stop keepalived
 # Controlla se il VIP migra al secondary entro 3s
 ssh secondary "ip addr show eth0 | grep 10.0.0.100"
 
@@ -320,7 +337,7 @@ tcpdump -i eth0 -n proto vrrp
 ```bash
 # HAProxy: mostra stato backend in tempo reale
 watch -n1 'echo "show stat" | socat stdio /run/haproxy/admin.sock \
-  | awk -F"," "NR==1 || /app_pool/" | cut -d, -f1,2,18,19,43'
+  | awk -F"," "NR==1 || /app_pool/" | cut -d, -f1,2,18,19,37'   # status, weight, check_status
 
 # HAProxy: log degli ultimi state change
 grep "Server app_pool" /var/log/haproxy.log | tail -30
@@ -340,15 +357,15 @@ tail -f /var/log/nginx/error.log | grep "upstream"
 
 **Causa:** Il backend viene spento prima che le connessioni attive vengano drenate, oppure il nuovo container risponde al health check prima di essere pronto a gestire traffico reale.
 
-**Soluzione:** Implementare graceful drain prima dello spegnimento, aggiungere `slow_start` per la reintegrazione, e assicurarsi che l'health check verifichi la readiness applicativa completa (non solo che il processo sia up).
+**Soluzione:** Implementare graceful drain prima dello spegnimento, aggiungere `slowstart` (HAProxy) per la reintegrazione, e assicurarsi che l'health check verifichi la readiness applicativa completa (non solo che il processo sia up).
 
 ```bash
 # HAProxy: drain manuale prima dello spegnimento
-echo "disable server app_pool/s1" | socat stdio /run/haproxy/admin.sock
+echo "set server app_pool/s1 state drain" | socat stdio /run/haproxy/admin.sock
 
-# Attendi connessioni a zero
+# Attendi connessioni a zero (campo 5 = scur)
 until [ "$(echo 'show stat' | socat stdio /run/haproxy/admin.sock \
-  | awk -F',' '/app_pool,s1/{print $18}')" = "0" ]; do
+  | awk -F',' '/^app_pool,s1,/{print $5}')" = "0" ]; do
   echo "Waiting for connections to drain..."; sleep 2
 done
 
@@ -357,7 +374,7 @@ ss -tnp | grep 8080 | wc -l
 
 # Dopo il deploy: riabilita gradualmente (HAProxy slowstart)
 # Aggiungere nel config: server s1 10.0.0.1:8080 check slowstart 60s
-echo "enable server app_pool/s1" | socat stdio /run/haproxy/admin.sock
+echo "set server app_pool/s1 state ready" | socat stdio /run/haproxy/admin.sock
 ```
 
 ---
@@ -374,10 +391,9 @@ echo "enable server app_pool/s1" | socat stdio /run/haproxy/admin.sock
 # HAProxy: verifica stato dettagliato del backend
 echo "show stat" | socat stdio /run/haproxy/admin.sock \
   | awk -F',' 'NR==1{print} /app_pool,s1/{print}' \
-  | cut -d, -f1,2,17,18,19,43
+  | cut -d, -f1,2,18,19,37,38   # status, weight, check_status, check_code
 
-# HAProxy: forza reintegrazione manuale
-echo "enable server app_pool/s1" | socat stdio /run/haproxy/admin.sock
+# HAProxy: forza reintegrazione manuale (esce da maint/drain)
 echo "set server app_pool/s1 state ready" | socat stdio /run/haproxy/admin.sock
 
 # Nginx Plus: verifica stato upstream (richiede API)
@@ -402,5 +418,5 @@ curl http://localhost/api/6/http/upstreams/backend_pool/servers
 ## Riferimenti
 
 - [Keepalived User Guide](https://www.keepalived.org/manpage.html)
-- [HAProxy Configuration Manual](https://www.haproxy.org/download/2.8/doc/configuration.txt)
+- [HAProxy Configuration Manual](https://docs.haproxy.org/3.2/configuration.html)
 - [Nginx Active Health Checks](https://docs.nginx.com/nginx/admin-guide/load-balancer/http-health-check/)
