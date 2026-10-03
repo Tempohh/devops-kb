@@ -7,9 +7,10 @@ search_keywords: [gitlab dag pipeline, gitlab needs keyword, gitlab multi projec
 parent: ci-cd/gitlab-ci/_index
 related: [ci-cd/gitlab-ci/_index, ci-cd/gitops/argocd, security/supply-chain]
 official_docs: https://docs.gitlab.com/ee/ci/directed_acyclic_graph/
-status: complete
+status: reviewed
 difficulty: expert
-last_updated: 2026-03-28
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # GitLab CI — Pipeline Avanzate
@@ -39,7 +40,7 @@ compile-backend:
 
 compile-frontend:
   stage: build
-  image: node:20-alpine
+  image: node:22-alpine
   script: npm ci && npm run build
   artifacts:
     paths: [dist/]
@@ -61,7 +62,7 @@ unit-tests-backend:
 # Inizia subito dopo compile-frontend, NON aspetta compile-backend
 unit-tests-frontend:
   stage: test
-  image: node:20-alpine
+  image: node:22-alpine
   needs:
     - job: compile-frontend
       artifacts: true
@@ -87,12 +88,12 @@ integration-tests:
 build-docker:
   stage: package
   needs: [unit-tests-backend]
-  image: docker:24
-  services: [docker:24-dind]
+  image: docker:27
+  services: [docker:27-dind]
   variables:
     DOCKER_TLS_CERTDIR: "/certs"
   script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - docker build -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" .
     - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
 
@@ -193,7 +194,6 @@ run-terraform:
 # ─── Variabili dinamiche nelle rules ──────────────
 build-experimental:
   stage: build
-  script: ./build.sh
   rules:
     - if: '$ENABLE_EXPERIMENTAL == "true"'
       variables:
@@ -201,7 +201,7 @@ build-experimental:
       when: on_success
     - when: never
   script:
-    - ./build.sh $BUILD_FLAGS
+    - ./build.sh $BUILD_FLAGS   # BUILD_FLAGS esiste solo se la rule `if` ha matchato
 ```
 
 ## Multi-Project Pipelines
@@ -209,8 +209,8 @@ build-experimental:
 Le multi-project pipeline permettono di triggerare pipeline in altri progetti GitLab, coordinando deployment di microservizi o infrastrutture correlate.
 
 ```yaml
-# Progetto A: my-org/api-service
-# Triggera il deploy dell'API quando il progetto frontend si aggiorna
+# Progetto upstream: my-org/frontend
+# Dopo build e test, triggera la pipeline del progetto my-org/api-service
 
 stages: [build, test, trigger-downstream]
 
@@ -234,6 +234,7 @@ trigger-api-deploy:
     project: my-org/api-service
     branch: main
     strategy: depend   # Aspetta il completamento della pipeline downstream
+                       # (`mirror` = come depend, ma lo stato downstream è replicato 1:1)
   variables:
     FRONTEND_BUILD_SHA: "$CI_COMMIT_SHORT_SHA"
     DEPLOY_TRIGGERED_BY: "$GITLAB_USER_EMAIL"
@@ -241,7 +242,19 @@ trigger-api-deploy:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
 # ─── Cross-project artifacts ──────────────────────
-# Nel progetto downstream (api-service), accedere agli artifacts del progetto upstream:
+# Nel progetto downstream (api-service), accedere agli artifacts del progetto upstream.
+# Metodo preferito: `needs:project` (nessun curl, il token è gestito da GitLab)
+fetch-frontend-dist:
+  stage: build
+  needs:
+    - project: my-org/frontend
+      job: build-frontend
+      ref: main
+      artifacts: true
+  script: ls dist/
+
+# Alternativa via API. CI_JOB_TOKEN funziona solo se il progetto upstream
+# ha api-service nella propria allowlist (Settings > CI/CD > Job token permissions)
 download-frontend-artifacts:
   stage: build
   script:
@@ -289,6 +302,12 @@ trigger-generated:
         job: generate-child-pipelines
     strategy: depend
 ```
+
+!!! tip "Alternativa senza script"
+    Per monorepo semplici basta un `trigger:include` statico per servizio con `rules:changes`: niente generazione, stesso effetto. La generazione dinamica serve quando i job dipendono da logica non esprimibile in YAML.
+
+!!! warning "Profondità del clone"
+    `git diff HEAD~1` richiede `GIT_DEPTH` ≥ 2 e confronta solo l'ultimo commit: in una MR con più commit perde i servizi modificati prima. Per le MR confrontare con `origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME`.
 
 Script Python per generare la pipeline dinamicamente:
 
@@ -350,73 +369,68 @@ for service in changed_services:
 print(yaml.dump(pipeline, default_flow_style=False))
 ```
 
-## Compliance Pipelines (GitLab Ultimate)
+## Compliance: Pipeline Execution Policies (GitLab Ultimate)
 
-I compliance framework permettono di forzare l'inclusione di job di sicurezza su tutti i progetti di un gruppo, indipendentemente dalla configurazione del singolo progetto.
+Per forzare job di sicurezza su tutti i progetti di un gruppo, indipendentemente dal `.gitlab-ci.yml` del singolo progetto, si usano le **pipeline execution policies** (security policy). Le *compliance pipelines* legate ai compliance framework sono **deprecate dalla 17.3** (rimozione prevista in 19.0): per i nuovi setup usare le policy. Il perché: una policy vive in un *security policy project* con accesso controllato, quindi i developer non possono alterarla né aggirarla, e l'ambito (gruppo, framework, progetti) è dichiarativo.
 
 ```yaml
-# File nel repository di compliance: compliance-pipeline.yml
-# Configurato in: Group Settings > Compliance frameworks
+# Security policy project: .gitlab/security-policies/policy.yml
+pipeline_execution_policy:
+  - name: Mandatory secret detection and SBOM
+    description: Job obbligatori su ogni progetto del gruppo
+    enabled: true
+    pipeline_config_strategy: inject_policy   # nelle versioni precedenti: inject_ci
+    content:
+      include:
+        - project: my-org/compliance-ci
+          file: mandatory-jobs.yml
+          ref: main
+```
 
-# Questo file viene INCLUSO automaticamente in ogni pipeline del gruppo
-# I developer del progetto NON possono sovrascrivere questi job
+```yaml
+# my-org/compliance-ci: mandatory-jobs.yml
+include:
+  - template: Security/Secret-Detection.gitlab-ci.yml
 
-stages:
-  - .pre    # Si esegue prima di tutti gli stage del progetto
-  - .post   # Si esegue dopo tutti gli stage del progetto
+secret_detection:
+  stage: .pre          # Prima di tutti gli stage del progetto
+  allow_failure: false # Blocca la pipeline se trova secrets
 
-# Job obbligatorio: secret detection
-mandatory-secret-detection:
-  stage: .pre
-  image: registry.gitlab.com/security-products/secrets-detection:latest
-  variables:
-    SECRET_DETECTION_HISTORIC_SCAN: "false"
-  script:
-    - /analyzer run
-  artifacts:
-    reports:
-      secret_detection: gl-secret-detection-report.json
-    when: always
-  allow_failure: false  # Blocca la pipeline se troviamo secrets
-
-# Job obbligatorio: license compliance
-mandatory-license-check:
+mandatory-sbom-scan:
   stage: .post
-  image: registry.gitlab.com/security-products/license-finder:latest
+  image:
+    name: anchore/grype:latest
+    entrypoint: [""]
   script:
-    - /run.sh analyze .
+    - grype dir:. --fail-on high -o cyclonedx-json > sbom-vulns.json
   artifacts:
-    reports:
-      license_scanning: gl-license-scanning-report.json
-  allow_failure: true  # Warning ma non blocca
-
-# Job obbligatorio: validazione SBOM
-mandatory-sbom-generation:
-  stage: .post
-  image: anchore/syft:latest
-  script:
-    - syft . -o cyclonedx-json > sbom.json
-    - grype sbom:./sbom.json --fail-on high
-  artifacts:
-    paths: [sbom.json]
+    paths: [sbom-vulns.json]
     expire_in: 90 days
 ```
+
+!!! note "License scanning"
+    Il vecchio template `License-Scanning` (analyzer `license-finder`) è stato rimosso. La license compliance ora si basa sui dati SBOM del Dependency Scanning (Dependency List) e sulle scan result policy.
 
 ## Protected Environments
 
 I protected environment aggiungono controlli di accesso ai deployment, richiedendo approvazione esplicita prima che un job di deploy venga eseguito.
 
-```yaml
-# Configurazione in GitLab UI: Settings > CI/CD > Environments
-# O via API:
+```bash
+# Configurazione in GitLab UI: Settings > CI/CD > Protected environments
+# O via API (le approval rules richiedono Premium/Ultimate).
+# deploy_access_levels[][group_id]=42    -> solo questo gruppo può fare deploy
+# approval_rules[][group_id]=100         -> questo gruppo approva
+# approval_rules[][required_approvals]=2 -> minimo 2 approvazioni
 curl -X POST \
   --header "PRIVATE-TOKEN: $ADMIN_TOKEN" \
   "https://gitlab.com/api/v4/projects/$PROJECT_ID/protected_environments" \
   --form "name=production" \
-  --form "deploy_access_levels[][group_id]=42" \    # Solo questo gruppo può fare deploy
-  --form "approval_rules[][group_id]=100" \         # Questo gruppo deve approvare
-  --form "approval_rules[][required_approvals]=2"   # Minimo 2 approvazioni
+  --form "deploy_access_levels[][group_id]=42" \
+  --form "approval_rules[][group_id]=100" \
+  --form "approval_rules[][required_approvals]=2"
+```
 
+```yaml
 # Nel .gitlab-ci.yml, il job aspetterà l'approvazione automaticamente
 deploy-production:
   stage: deploy
@@ -431,19 +445,7 @@ deploy-production:
       when: on_success
 ```
 
-**Tier degli ambienti e visualizzazione:**
-
-```yaml
-# GitLab usa il deployment_tier per visualizzare gli ambienti
-# nel dashboard di monitoraggio
-environments:
-  - name: production
-    tier: production
-  - name: staging
-    tier: staging
-  - name: review/feature-xyz
-    tier: development
-```
+Il `deployment_tier` classifica l'ambiente (`production`, `staging`, ...) per dashboard e protezioni; se omesso GitLab lo deduce dal nome. Con approvazioni pendenti il job di deploy resta bloccato finché le `required_approvals` non sono raggiunte.
 
 ## GitLab Security Scanning
 
@@ -467,12 +469,11 @@ include:
   - template: Security/Secret-Detection.gitlab-ci.yml
 
   # IaC Scanning (Terraform, Kubernetes, CloudFormation)
-  - template: Security/KICS.gitlab-ci.yml
+  - template: Security/SAST-IaC.gitlab-ci.yml
 
 variables:
   # SAST: configurazione
   SAST_EXCLUDED_PATHS: "spec,test,tests,tmp,.git"
-  SAST_ANALYZER_IMAGE_TAG: "4"
 
   # DAST: target da scansionare (deploy staging prima)
   DAST_WEBSITE: "https://staging.myapp.example.com"
@@ -487,12 +488,15 @@ variables:
 
 stages:
   - build
-  - test
-  - security    # Security jobs girano in parallelo
+  - test        # I template SAST/Dependency/Container/Secret girano di default in `test`
+  - security    # Solo per job custom (es. SonarQube): per spostare i job dei template usare `stage:` nell'override
   - deploy-staging
   - dast        # DAST richiede un ambiente running
   - deploy-production
 ```
+
+!!! note "Dependency Scanning"
+    Nelle versioni recenti il Dependency Scanning è migrato a un'analisi basata su SBOM (template `Jobs/Dependency-Scanning.latest.gitlab-ci.yml`); il template `Security/Dependency-Scanning.gitlab-ci.yml` resta per compatibilità. Verificare nella documentazione della versione in uso quale sia supportato.
 
 **Pipeline completa con security gate:**
 
@@ -504,7 +508,7 @@ dast:
     - job: deploy-staging
   variables:
     DAST_WEBSITE: "https://staging.myapp.example.com"
-    DAST_ZAP_CLI_OPTIONS: "-config scanner.strength=MEDIUM"
+    DAST_FULL_SCAN_ENABLED: "false"
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -514,7 +518,7 @@ dast:
 sonarqube-check:
   stage: security
   image:
-    name: sonarsource/sonar-scanner-cli:latest
+    name: sonarsource/sonar-scanner-cli:11
     entrypoint: [""]
   variables:
     SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
@@ -557,28 +561,28 @@ Train:  [A] → [A+B] → [A+B+C]
 ```yaml
 # Abilitare in: Project Settings > Merge Requests > Merge Trains
 
-# Nel .gitlab-ci.yml, i job che supportano merge train devono essere idempotenti
-# e usare la variabile CI_MERGE_TRAIN_BRANCH se disponibile
+# Prerequisiti: merge request pipelines abilitate nel .gitlab-ci.yml
+# (rules con merge_request_event, oppure workflow:rules) e merged results pipelines.
+# Una pipeline di merge train ha CI_PIPELINE_SOURCE == "merge_request_event"
+# e CI_MERGE_REQUEST_EVENT_TYPE == "merge_train".
 
 test-for-merge-train:
   stage: test
   script:
-    - echo "Testing on branch: ${CI_MERGE_TRAIN_BRANCH:-$CI_COMMIT_BRANCH}"
+    - echo "Event type: $CI_MERGE_REQUEST_EVENT_TYPE"
     - mvn test
-  interruptible: true  # FONDAMENTALE: permite cancellazione se train viene riorganizzato
+  interruptible: true  # Permette la cancellazione automatica delle pipeline superate
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_train"'
-      when: on_success
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: on_success
 ```
 
 !!! warning "Costo dei Merge Trains"
-    I merge train aumentano significativamente il numero di pipeline eseguite (O(n²) nel caso peggiore con N MR in coda). Sono appropriati per team con alta frequenza di merge e branch protetti strict. Per team piccoli, le merged result pipeline (senza train) offrono un buon compromesso.
+    I merge train aumentano significativamente il numero di pipeline eseguite (ogni MR in coda ha una pipeline sul risultato combinato con tutte le precedenti; se una MR a monte fallisce, quelle successive ripartono). Sono appropriati per team con alta frequenza di merge e branch protetti strict. Per team piccoli, le merged result pipeline (senza train) offrono un buon compromesso.
 
 ## GitLab Components
 
-I GitLab CI/CD Components (disponibili da GitLab 16.0+) sono la nuova unità di riutilizzo raccomandata, più granulare degli include e più flessibile dei template.
+I GitLab CI/CD Components (introdotti in 16.0, GA dalla 17.0 con il CI/CD Catalog) sono la nuova unità di riutilizzo raccomandata, più granulare degli include e più flessibile dei template.
 
 ```yaml
 # Repository: my-org/ci-components
@@ -588,21 +592,18 @@ spec:
   inputs:
     stage:
       default: test
-    scan-type:
-      description: 'Tipo di scan SAST'
-      options: [semgrep, bandit, gosec]
-      default: semgrep
-    fail-on-severity:
-      default: 'high'
+    excluded-paths:
+      description: 'Path esclusi dalla scansione'
+      default: 'spec,test,tests,tmp'
 
 ---
-"$[[ inputs.scan-type ]]-scan":
-  stage: "$[[ inputs.stage ]]"
-  image: "registry.gitlab.com/security-products/$[[ inputs.scan-type ]]:latest"
+semgrep-scan:
+  stage: $[[ inputs.stage ]]
+  image: registry.gitlab.com/security-products/semgrep:5
   script:
     - /analyzer run
   variables:
-    SAST_FAIL_ON_SEVERITY: "$[[ inputs.fail-on-severity ]]"
+    SAST_EXCLUDED_PATHS: $[[ inputs.excluded-paths ]]
   artifacts:
     reports:
       sast: gl-sast-report.json
@@ -617,8 +618,7 @@ include:
   - component: gitlab.com/my-org/ci-components/sast@1.2.0
     inputs:
       stage: security
-      scan-type: semgrep
-      fail-on-severity: critical
+      excluded-paths: 'spec,test,docs'
 
   - component: gitlab.com/my-org/ci-components/deploy-kubernetes@2.0.0
     inputs:
@@ -631,9 +631,9 @@ include:
 
 ### Scenario 1 — Job con `needs` non trova gli artifacts
 
-**Sintomo:** Il job fallisce con `ERROR: Job '...' is not in any dependency chain` oppure gli artifacts del job upstream non sono disponibili nonostante `artifacts: true` in `needs`.
+**Sintomo:** Il job fallisce con `'job-a' job needs 'job-b' job, but 'job-b' does not exist in the pipeline. This might be because of the only, except, or rules keywords` oppure gli artifacts del job upstream non sono disponibili nonostante `artifacts: true` in `needs`.
 
-**Causa:** Il job upstream è configurato con `artifacts: expire_in` molto breve, oppure manca `artifacts.paths` (solo `reports` non vengono scaricati automaticamente via `needs`), oppure il job upstream non è nello stesso pipeline DAG.
+**Causa:** Se compare l'errore, il job upstream è escluso da `rules`/`only`/`except` in quella pipeline. Per gli artifacts mancanti: il job upstream è configurato con `artifacts: expire_in` molto breve, oppure manca `artifacts.paths` (solo `reports` non vengono scaricati automaticamente via `needs`), oppure il job upstream non è nello stesso pipeline DAG.
 
 **Soluzione:** Verificare che il job upstream abbia `artifacts.paths` espliciti e che `expire_in` sia sufficiente per tutta la durata della pipeline. Per i report JUnit/coverage usare `artifacts.reports` in aggiunta a `artifacts.paths`.
 
@@ -659,23 +659,24 @@ compile-backend:
 
 **Sintomo:** Il job `trigger` rimane nello stato "running" per ore e non completa. La pipeline downstream è visibile ma non viene attenduta correttamente.
 
-**Causa:** La pipeline downstream contiene job con `when: manual` non eseguiti oppure protected environments con approvazioni pendenti. Con `strategy: depend`, GitLab aspetta il completamento totale inclusi job manuali.
+**Causa:** La pipeline downstream contiene job manuali bloccanti (`allow_failure: false`, oppure `when: manual` dentro `rules`, dove `allow_failure` vale `false` di default) non eseguiti oppure protected environments con approvazioni pendenti. Con `strategy: depend`, GitLab aspetta il completamento totale inclusi job manuali.
 
 **Soluzione:** Nella pipeline downstream, assicurarsi che i job manuali bloccanti abbiano `allow_failure: true` se non devono bloccare il flusso, oppure usare `strategy: depend` solo sulle pipeline che si completano automaticamente.
 
 ```yaml
-# Nel progetto upstream: imposta timeout esplicito
+# Nel progetto upstream: `timeout` NON è supportato nei job con `trigger`;
+# la durata si limita nel progetto downstream (timeout dei job / policy del runner)
 trigger-api-deploy:
   trigger:
     project: my-org/api-service
     branch: main
     strategy: depend
-  timeout: 30m   # Evita attese infinite
 
 # Nel progetto downstream: job manuali non bloccanti
 deploy-canary:
-  when: manual
-  allow_failure: true   # Non blocca la pipeline padre
+  rules:
+    - when: manual
+      allow_failure: true   # Non blocca la pipeline padre
   environment:
     name: production
 ```
@@ -686,33 +687,28 @@ deploy-canary:
 
 **Sintomo:** Nuovi progetti creati nel gruppo non eseguono i job di compliance (`mandatory-secret-detection`, ecc.) nonostante il compliance framework sia configurato sul gruppo.
 
-**Causa:** Il compliance framework deve essere assegnato esplicitamente ad ogni progetto (o ai subgroup) — non viene ereditato automaticamente dai nuovi progetti creati dopo la configurazione.
+**Causa:** Il compliance framework (o la policy con ambito per framework) si applica solo ai progetti a cui è assegnato; i progetti creati dopo non lo ereditano, salvo si imposti un *default compliance framework* nel gruppo. Le compliance pipelines sono deprecate: preferire pipeline execution policies con ambito sull'intero gruppo.
 
-**Soluzione:** Usare l'API GitLab per assegnare il compliance framework a tutti i progetti del gruppo, inclusi quelli futuri tramite webhook o automazione.
+**Soluzione:** Impostare il framework di default del gruppo, oppure assegnarlo via GraphQL (`projectSetComplianceFramework`) con uno script periodico.
 
 ```bash
-# Lista tutti i progetti del gruppo senza compliance framework
+# Lista i progetti del gruppo senza compliance framework
 curl --header "PRIVATE-TOKEN: $ADMIN_TOKEN" \
   "https://gitlab.com/api/v4/groups/$GROUP_ID/projects?per_page=100" \
   | jq '.[] | select(.compliance_frameworks == []) | .id, .name'
 
-# Assegna il compliance framework a un progetto specifico
-curl -X PUT \
-  --header "PRIVATE-TOKEN: $ADMIN_TOKEN" \
-  --header "Content-Type: application/json" \
-  --data '{"compliance_framework_id": 1}' \
-  "https://gitlab.com/api/v4/projects/$PROJECT_ID"
-
-# Verifica la configurazione del compliance framework
+# Assegna il framework a un progetto (GraphQL)
 curl --header "PRIVATE-TOKEN: $ADMIN_TOKEN" \
-  "https://gitlab.com/api/v4/groups/$GROUP_ID/compliance_frameworks"
+  --header "Content-Type: application/json" \
+  --data '{"query":"mutation { projectSetComplianceFramework(input: {projectId: \"gid://gitlab/Project/123\", complianceFrameworkId: \"gid://gitlab/ComplianceManagement::Framework/1\"}) { errors } }"}' \
+  "https://gitlab.com/api/graphql"
 ```
 
 ---
 
 ### Scenario 4 — Dynamic child pipeline genera YAML invalido
 
-**Sintomo:** Lo stage `trigger` fallisce con `Error: could not parse YAML file generated-pipeline.yml` oppure `jobs config should contain at least one visible job`.
+**Sintomo:** Lo stage `trigger` fallisce con un errore di YAML invalido sulla child pipeline oppure `jobs config should contain at least one visible job`.
 
 **Causa:** Lo script di generazione produce YAML malformato (indentazione errata, caratteri speciali non escaped), oppure nessun servizio ha subito modifiche e il file generato contiene solo `stages` senza job.
 
@@ -764,12 +760,12 @@ print(output)
 python scripts/generate_pipeline.py > /tmp/test-pipeline.yml
 python -c "import yaml; yaml.safe_load(open('/tmp/test-pipeline.yml'))" && echo "YAML valido"
 
-# Oppure usa il GitLab CI Lint API
-curl -X POST \
-  --header "PRIVATE-TOKEN: $CI_JOB_TOKEN" \
+# Oppure usa la CI Lint API del progetto (token personale/project token con scope api)
+jq -Rs '{content: .}' /tmp/test-pipeline.yml | curl -X POST \
+  --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
   --header "Content-Type: application/json" \
-  --data "{\"content\": \"$(cat /tmp/test-pipeline.yml | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')\"}" \
-  "https://gitlab.com/api/v4/ci/lint"
+  --data @- \
+  "https://gitlab.com/api/v4/projects/$PROJECT_ID/ci/lint"
 ```
 
 ## Relazioni
