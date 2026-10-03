@@ -7,9 +7,10 @@ search_keywords: [Azure RBAC, Role Based Access Control Azure, ruoli Azure, buil
 parent: cloud/azure/identita/_index
 related: [cloud/azure/identita/entra-id, cloud/azure/identita/governance, cloud/azure/security/key-vault]
 official_docs: https://learn.microsoft.com/azure/role-based-access-control/
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-03-29
+last_verified: 2026-10-04
 ---
 
 # Azure RBAC & Managed Identity
@@ -43,6 +44,12 @@ I permessi si ereditano verso il basso (padre → figlio).
 Un assignment su Subscription vale per tutti i Resource Group e risorse figli.
 Un Deny assignment blocca anche i permessi ereditati.
 ```
+
+!!! note "Azure RBAC ≠ ruoli Entra ID"
+    Azure RBAC governa le **risorse Azure** (ARM, data plane dei servizi). I ruoli Entra ID (es. Global Administrator, User Administrator) governano il **tenant** (utenti, gruppi, app registration). Sono sistemi separati con role definition e assignment distinti; l'unico ponte è l'elevazione di accesso del Global Administrator (*elevate access*) verso User Access Administrator alla root.
+
+!!! info "Deny assignment"
+    I deny assignment **non** sono creabili direttamente dall'utente: li generano servizi Azure come Deployment Stacks, Managed Applications e Blueprints (deprecato) per proteggere risorse gestite. Hanno precedenza sugli allow assignment.
 
 ---
 
@@ -223,6 +230,9 @@ from azure.storage.blob import BlobServiceClient
 # 3. ManagedIdentityCredential (VM, App Service, Functions)
 # 4. AzureCliCredential (sviluppo locale)
 # 5. AzurePowerShellCredential (sviluppo locale)
+# (la catena reale include anche altre credential di sviluppo, es. Azure Developer CLI e VS Code)
+# In produzione preferire una credential esplicita (ManagedIdentityCredential): la catena
+# aggiunge latenza e può autenticarsi con un'identità inattesa.
 credential = DefaultAzureCredential()
 
 # Key Vault
@@ -265,12 +275,15 @@ az functionapp identity assign \
     --resource-group myapp-rg \
     --name myfunctionapp
 
-# AKS — nodo pool con User-Assigned MI
+# AKS — User-Assigned MI per il control plane (il cluster gestisce risorse Azure: LB, dischi, rete)
+# La kubelet identity (usata dai nodi, es. per AcrPull) è separata: --assign-kubelet-identity
 az aks create \
     --resource-group myapp-rg \
     --name myaks \
     --enable-managed-identity \
-    --assign-identity /subscriptions/$SUBSCRIPTION_ID/.../myapp-identity
+    --assign-identity /subscriptions/$SUBSCRIPTION_ID/.../myapp-identity \
+    --enable-oidc-issuer \
+    --enable-workload-identity   # per i pod: federa un ServiceAccount K8s con una User-Assigned MI
 
 # Container Instances
 az container create \
@@ -284,7 +297,12 @@ az container create \
 
 ## Workload Identity Federation (GitHub Actions / GCP / AWS)
 
-**Workload Identity Federation** permette a identity esterne (GitHub Actions, Kubernetes SA, GCP, AWS) di ottenere token Entra ID senza client secret:
+**Workload Identity Federation** permette a identity esterne (GitHub Actions, Kubernetes SA, GCP, AWS) di ottenere token Entra ID senza client secret. Meccanismo: il workload presenta il token OIDC firmato dal proprio IdP; Entra ID verifica `issuer`, `subject` e `audience` contro il *federated credential* configurato e, se corrispondono, scambia il token con un access token Entra ID. Nessun segreto da ruotare o da rubare: il token OIDC è di breve durata e legato al contesto di esecuzione.
+
+!!! tip "Alternativa: federated credential su User-Assigned MI"
+    I federated credential si possono creare anche su una **User-Assigned Managed Identity** (`az identity federated-credential create`) invece che su una App Registration. Utile per evitare di gestire app registration/service principal e restare nel perimetro RBAC delle risorse Azure.
+
+Esempio su App Registration per GitHub Actions:
 
 ```bash
 # Creare federated credential su App Registration per GitHub Actions
@@ -347,7 +365,7 @@ jobs:
 
 **Causa:** I role assignment richiedono fino a 5-10 minuti per propagarsi. In alternativa, il principal usa un token emesso *prima* dell'assignment (cache del token).
 
-**Soluzione:** Attendere la propagazione e riacquisire un nuovo token. Verificare che l'assignment esista davvero e sullo scope corretto.
+**Soluzione:** Attendere la propagazione e riacquisire un nuovo token. Per le **Managed Identity** i token sono cacheati dal backend Azure (fino a 24 ore): modifiche a ruoli o appartenenza a gruppi possono non essere visibili subito, e il token non si può forzare a rinnovarsi prima della scadenza. Per questo, per ruoli di accesso ai dati, si assegna il ruolo alla MI direttamente prima del primo utilizzo. Verificare che l'assignment esista davvero e sullo scope corretto.
 
 ```bash
 # Verificare che l'assignment esista e sia sullo scope giusto
@@ -373,7 +391,7 @@ az role assignment list \
 
 **Causa:** L'endpoint IMDS (Instance Metadata Service) non è raggiungibile: tipico in ambienti container senza networking corretto, o se il servizio MI non è abilitato sulla risorsa.
 
-**Soluzione:** Verificare che la Managed Identity sia abilitata sulla risorsa e che l'endpoint IMDS sia accessibile.
+**Soluzione:** Verificare che la Managed Identity sia abilitata sulla risorsa e che l'endpoint IMDS sia accessibile. Nota: App Service, Functions e Container Apps non usano IMDS ma un endpoint locale esposto dalle variabili d'ambiente `IDENTITY_ENDPOINT` e `IDENTITY_HEADER`; l'SDK `azure-identity` lo gestisce in automatico. Con più identità User-Assigned va indicato il `client_id` (`ManagedIdentityCredential(client_id=...)`).
 
 ```bash
 # Verificare che la MI sia abilitata sulla VM
@@ -422,11 +440,11 @@ az ad app federated-credential update \
 
 ---
 
-### Scenario 4 — Role assignment raggiunge il limite (2000 per subscription)
+### Scenario 4 — Role assignment raggiunge il limite per subscription
 
 **Sintomo:** Errore `RoleAssignmentLimitExceeded: The limit on the number of role assignments has been reached`.
 
-**Causa:** Azure impone un limite di 2000 role assignment per subscription. Assegnazioni granulari per-utente per-risorsa esauriscono rapidamente il limite.
+**Causa:** Azure impone un limite di role assignment per subscription (4000 al 2026; era 2000 in passato, verificare in [Azure limits](https://learn.microsoft.com/azure/azure-resource-manager/management/azure-subscription-service-limits)). Assegnazioni granulari per-utente per-risorsa esauriscono rapidamente il limite.
 
 **Soluzione:** Consolidare assignment usando gruppi Entra ID invece di singoli utenti, e assegnare su scope più ampi (Resource Group invece di singola risorsa).
 
