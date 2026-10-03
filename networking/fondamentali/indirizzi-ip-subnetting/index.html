@@ -20749,7 +20749,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -20774,7 +20774,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -20896,6 +20896,17 @@
     <span class="md-ellipsis">
       
         Calcolo del Subnetting — Step by Step
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vlsm-variable-length-subnet-mask" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VLSM (Variable Length Subnet Mask)
       
     </span>
   </a>
@@ -21073,7 +21084,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21108,7 +21119,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21213,7 +21224,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24657,6 +24668,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#vlsm-variable-length-subnet-mask" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VLSM (Variable Length Subnet Mask)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#tabella-cidr-di-riferimento" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -25057,14 +25079,26 @@
 </tr>
 <tr>
 <td>x.x.x.255</td>
-<td>Broadcast diretto della subnet (ultimo indirizzo usabile)</td>
+<td>Broadcast diretto di una /24 (ultimo indirizzo della subnet, <strong>non</strong> assegnabile a host)</td>
 </tr>
 <tr>
 <td>x.x.x.0</td>
-<td>Indirizzo di rete (primo indirizzo, non assegnabile a host)</td>
+<td>Indirizzo di rete di una /24 (primo indirizzo, non assegnabile a host)</td>
+</tr>
+<tr>
+<td>100.64.0.0/10</td>
+<td>Shared Address Space / CGNAT (RFC 6598): non è RFC 1918 né pubblico. Usato dagli ISP per il carrier-grade NAT e, nel cloud, come range secondario per pod/nodi quando 10/8 è esaurito (es. AWS EKS custom networking)</td>
+</tr>
+<tr>
+<td>192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24</td>
+<td>Riservati alla documentazione (RFC 5737): sicuri da usare in esempi</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Nota</p>
+<p>Network e broadcast address dipendono dalla prefix length, non dall'ultimo ottetto: in <code>10.0.0.64/26</code> l'indirizzo di rete è <code>.64</code> e il broadcast è <code>.127</code>.</p>
+</div>
 <h2 id="come-funziona">Come Funziona<a class="headerlink" href="#come-funziona" title="Permanent link">&para;</a></h2>
 <h3 id="calcolo-del-subnetting-step-by-step">Calcolo del Subnetting — Step by Step<a class="headerlink" href="#calcolo-del-subnetting-step-by-step" title="Permanent link">&para;</a></h3>
 <p><strong>Esempio: Dividere 192.168.1.0/24 in 4 sottoreti di uguale dimensione</strong></p>
@@ -25116,6 +25150,16 @@ Host utilizzabili: 64 - 2 = <strong>62 host</strong> (si sottraggono network add
 </tr>
 </tbody>
 </table>
+<h3 id="vlsm-variable-length-subnet-mask">VLSM (Variable Length Subnet Mask)<a class="headerlink" href="#vlsm-variable-length-subnet-mask" title="Permanent link">&para;</a></h3>
+<p>Con CIDR le sottoreti <strong>non devono avere tutte la stessa dimensione</strong>: il VLSM permette di scegliere una prefix length diversa per ciascuna, evitando di sprecare indirizzi. Procedura: ordina i requisiti dal più grande al più piccolo, assegna a ciascuno la potenza di 2 minima che lo contiene (host + 2), e allocali in sequenza partendo dall'inizio del blocco, allineati ai multipli della propria dimensione.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Blocco 192.168.1.0/24, requisiti: 100 host, 50 host, 20 host, link p2p
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  100 host → /25 (126)  192.168.1.0/25     (.0   – .127)
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>   50 host → /26 (62)   192.168.1.128/26   (.128 – .191)
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>   20 host → /27 (30)   192.168.1.192/27   (.192 – .223)
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  link p2p → /30 (2)    192.168.1.224/30   (.224 – .227)
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>  Libero: 192.168.1.228 – .255 (riutilizzabile)
+</span></code></pre></div>
+<p>Perché partire dal più grande: un blocco allineato a un multiplo della propria dimensione evita buchi non utilizzabili; allocare prima i piccoli frammenta lo spazio e impedisce di ricavare i blocchi grandi.</p>
 <h3 id="tabella-cidr-di-riferimento">Tabella CIDR di Riferimento<a class="headerlink" href="#tabella-cidr-di-riferimento" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -25133,14 +25177,14 @@ Host utilizzabili: 64 - 2 = <strong>62 host</strong> (si sottraggono network add
 <td>255.0.0.0</td>
 <td>16.777.216</td>
 <td>16.777.214</td>
-<td>Grandi VPC, Class A</td>
+<td>Intero spazio 10.0.0.0/8 (pianificazione aziendale; i VPC AWS arrivano al massimo a /16)</td>
 </tr>
 <tr>
 <td>/16</td>
 <td>255.255.0.0</td>
 <td>65.536</td>
 <td>65.534</td>
-<td>VPC aziendali, AWS VPC default</td>
+<td>VPC (massimo in AWS; es. default VPC 172.31.0.0/16)</td>
 </tr>
 <tr>
 <td>/20</td>
@@ -25224,14 +25268,14 @@ Host utilizzabili: 64 - 2 = <strong>62 host</strong> (si sottraggono network add
 <p>*Per /31 non esistono network e broadcast address (RFC 3021).</p>
 <h3 id="ipv6-panoramica">IPv6 — Panoramica<a class="headerlink" href="#ipv6-panoramica" title="Permanent link">&para;</a></h3>
 <p>IPv6 usa indirizzi a 128 bit scritti in notazione esadecimale (8 gruppi da 16 bit separati da <code>:</code>):</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>2001:0db8:85a3:0000:0000:8a2e:0370:7334
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a># Regole di abbreviazione:
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a># 1. Omettere gli zeri iniziali in ogni gruppo
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>2001:db8:85a3:0:0:8a2e:370:7334
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a># 2. Sostituire una sequenza contigua di gruppi tutti-zero con ::
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>2001:db8:85a3::8a2e:370:7334
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>2001:0db8:85a3:0000:0000:8a2e:0370:7334
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a># Regole di abbreviazione:
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a># 1. Omettere gli zeri iniziali in ogni gruppo
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>2001:db8:85a3:0:0:8a2e:370:7334
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a># 2. Sostituire una sequenza contigua di gruppi tutti-zero con ::
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>2001:db8:85a3::8a2e:370:7334
 </span></code></pre></div>
 <table>
 <thead>
@@ -25254,8 +25298,8 @@ Host utilizzabili: 64 - 2 = <strong>62 host</strong> (si sottraggono network add
 </tr>
 <tr>
 <td>Unique Local</td>
-<td>fc00::/7</td>
-<td>Equivalente di RFC 1918 (privato)</td>
+<td>fc00::/7 (in pratica <code>fd00::/8</code>)</td>
+<td>Equivalente di RFC 1918 (privato, RFC 4193)</td>
 </tr>
 <tr>
 <td>Global Unicast</td>
@@ -25265,107 +25309,123 @@ Host utilizzabili: 64 - 2 = <strong>62 host</strong> (si sottraggono network add
 <tr>
 <td>Multicast</td>
 <td>ff00::/8</td>
-<td>Multicast</td>
+<td>Multicast (IPv6 non ha broadcast)</td>
+</tr>
+<tr>
+<td>Documentazione</td>
+<td>2001:db8::/32</td>
+<td>Riservato per esempi (RFC 3849)</td>
 </tr>
 </tbody>
 </table>
-<p>La lunghezza del prefisso tipica per un host IPv6 è /128, per una subnet /64 (i 64 bit inferiori sono l'interface ID).</p>
+<p>Un singolo host è un <code>/128</code>; una subnet è quasi sempre un <code>/64</code> (i 64 bit inferiori sono l'interface ID): SLAAC (Stateless Address Autoconfiguration) richiede <code>/64</code>, quindi non si "risparmiano" indirizzi con subnet più piccole. Un sito riceve tipicamente un <code>/48</code> o <code>/56</code>, cioè 65.536 o 256 subnet <code>/64</code>.</p>
+<div class="admonition note">
+<p class="admonition-title">IPv6 nel cloud e in Kubernetes</p>
+<p>Kubernetes supporta il <strong>dual-stack</strong> (IPv4+IPv6, stabile dalla 1.23). I provider cloud assegnano ai VPC blocchi IPv6 pubblici (es. AWS: <code>/56</code> per VPC, <code>/64</code> per subnet). Non esiste il NAT IPv4-style: l'isolamento si ottiene con firewall/security group o gateway egress-only.</p>
+</div>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="design-vpc-per-un-cluster-kubernetes-su-aws">Design VPC per un Cluster Kubernetes su AWS<a class="headerlink" href="#design-vpc-per-un-cluster-kubernetes-su-aws" title="Permanent link">&para;</a></h3>
 <p>Un design tipico per un VPC Kubernetes che usa 10.0.0.0/16:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>VPC: 10.0.0.0/16  (65.534 indirizzi)
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>│
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>├── Subnet Pubblica AZ-A:  10.0.0.0/22   (1.022 host) → Load Balancer, Bastion
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>├── Subnet Pubblica AZ-B:  10.0.4.0/22   (1.022 host) → Load Balancer, Bastion
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>├── Subnet Pubblica AZ-C:  10.0.8.0/22   (1.022 host) → Load Balancer, Bastion
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>│
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>├── Subnet Privata AZ-A:   10.0.16.0/20  (4.094 host) → Worker Nodes
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>├── Subnet Privata AZ-B:   10.0.32.0/20  (4.094 host) → Worker Nodes
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>├── Subnet Privata AZ-C:   10.0.48.0/20  (4.094 host) → Worker Nodes
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>│
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>├── Pod CIDR:              10.1.0.0/16   (65.534 pod) → overlay network
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>└── Service CIDR:          10.2.0.0/16   (65.534 service IP) → kube-proxy
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>VPC: 10.0.0.0/16  (65.534 indirizzi)
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>│
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>├── Subnet Pubblica AZ-A:  10.0.0.0/22   (1.022 host) → Load Balancer, Bastion
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>├── Subnet Pubblica AZ-B:  10.0.4.0/22   (1.022 host) → Load Balancer, Bastion
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>├── Subnet Pubblica AZ-C:  10.0.8.0/22   (1.022 host) → Load Balancer, Bastion
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>│
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>├── Subnet Privata AZ-A:   10.0.16.0/20  (4.094 host) → Worker Nodes
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>├── Subnet Privata AZ-B:   10.0.32.0/20  (4.094 host) → Worker Nodes
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>├── Subnet Privata AZ-C:   10.0.48.0/20  (4.094 host) → Worker Nodes
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>│
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>├── Pod CIDR:              10.1.0.0/16   (65.534 pod) → overlay network
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>└── Service CIDR:          10.2.0.0/16   (65.534 service IP) → kube-proxy
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Nota</p>
+<p>Il design sopra assume un CNI con overlay (es. Calico/Flannel/Cilium in modalità overlay): Pod e Service CIDR sono <strong>virtuali</strong>, fuori dal VPC. Con l'AWS VPC CNI (default su EKS) i pod ricevono invece IP <strong>dalle subnet del VPC</strong>: le subnet dei worker devono quindi essere dimensionate per nodi + pod (o si usa un CIDR secondario, es. <code>100.64.0.0/10</code>, con custom networking). Su AWS, in ogni subnet 5 indirizzi sono riservati (non 2): una /22 offre 1.019 host utili.</p>
+</div>
 <div class="admonition warning">
 <p class="admonition-title">Attenzione</p>
 <p>I CIDR per Pod e Service Kubernetes NON devono sovrapporsi con il CIDR del VPC o con range di reti on-premise raggiungibili tramite VPN/Direct Connect. La sovrapposizione causa problemi di routing impossibili da risolvere senza riconfigurare la rete del cluster.</p>
 </div>
 <h3 id="comandi-pratici">Comandi Pratici<a class="headerlink" href="#comandi-pratici" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Visualizzare e gestire indirizzi IP con iproute2</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>ip<span class="w"> </span>addr<span class="w"> </span>show<span class="w">                          </span><span class="c1"># Tutte le interfacce</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>ip<span class="w"> </span>addr<span class="w"> </span>add<span class="w"> </span><span class="m">192</span>.168.1.100/24<span class="w"> </span>dev<span class="w"> </span>eth0<span class="w">  </span><span class="c1"># Aggiungere IP (temporaneo)</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>ip<span class="w"> </span>addr<span class="w"> </span>del<span class="w"> </span><span class="m">192</span>.168.1.100/24<span class="w"> </span>dev<span class="w"> </span>eth0<span class="w">  </span><span class="c1"># Rimuovere IP</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># Routing</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>ip<span class="w"> </span>route<span class="w"> </span>show<span class="w">                         </span><span class="c1"># Tabella di routing</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>ip<span class="w"> </span>route<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.0.0.0/8<span class="w"> </span>via<span class="w"> </span><span class="m">192</span>.168.1.1<span class="w">   </span><span class="c1"># Aggiungere route statica</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>ip<span class="w"> </span>route<span class="w"> </span>del<span class="w"> </span><span class="m">10</span>.0.0.0/8<span class="w">                    </span><span class="c1"># Rimuovere route</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># Calcolo subnetting con ipcalc</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>ipcalc<span class="w"> </span><span class="m">192</span>.168.1.0/24
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="c1"># Output:</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="c1"># Address:   192.168.1.0         11000000.10101000.00000001. 00000000</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="c1"># Netmask:   255.255.255.0 = 24  11111111.11111111.11111111. 00000000</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="c1"># Network:   192.168.1.0/24      ...</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="c1"># HostMin:   192.168.1.1         ...</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="c1"># HostMax:   192.168.1.254       ...</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="c1"># Broadcast: 192.168.1.255       ...</span>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="c1"># Hosts/Net: 254</span>
-</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>
-</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="c1"># Verifica se un IP appartiene a una subnet (con ipcalc o Python)</span>
-</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import ipaddress; print(ipaddress.ip_address('10.0.1.5') in ipaddress.ip_network('10.0.0.0/16'))"</span>
-</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="c1"># True</span>
-</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>
-</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="c1"># Elencare tutte le subnet di una rete padre con Python</span>
-</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import ipaddress; [print(s) for s in ipaddress.ip_network('10.0.0.0/24').subnets(new_prefix=26)]"</span>
-</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="c1"># 10.0.0.0/26</span>
-</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="c1"># 10.0.0.64/26</span>
-</span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="c1"># 10.0.0.128/26</span>
-</span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a><span class="c1"># 10.0.0.192/26</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Visualizzare e gestire indirizzi IP con iproute2</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>ip<span class="w"> </span>addr<span class="w"> </span>show<span class="w">                          </span><span class="c1"># Tutte le interfacce</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>ip<span class="w"> </span>addr<span class="w"> </span>add<span class="w"> </span><span class="m">192</span>.168.1.100/24<span class="w"> </span>dev<span class="w"> </span>eth0<span class="w">  </span><span class="c1"># Aggiungere IP (temporaneo)</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>ip<span class="w"> </span>addr<span class="w"> </span>del<span class="w"> </span><span class="m">192</span>.168.1.100/24<span class="w"> </span>dev<span class="w"> </span>eth0<span class="w">  </span><span class="c1"># Rimuovere IP</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># Routing</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>ip<span class="w"> </span>route<span class="w"> </span>show<span class="w">                         </span><span class="c1"># Tabella di routing</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>ip<span class="w"> </span>route<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.0.0.0/8<span class="w"> </span>via<span class="w"> </span><span class="m">192</span>.168.1.1<span class="w">   </span><span class="c1"># Aggiungere route statica</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>ip<span class="w"> </span>route<span class="w"> </span>del<span class="w"> </span><span class="m">10</span>.0.0.0/8<span class="w">                    </span><span class="c1"># Rimuovere route</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1"># Calcolo subnetting con ipcalc</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>ipcalc<span class="w"> </span><span class="m">192</span>.168.1.0/24
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># Output:</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="c1"># Address:   192.168.1.0         11000000.10101000.00000001. 00000000</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="c1"># Netmask:   255.255.255.0 = 24  11111111.11111111.11111111. 00000000</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1"># Network:   192.168.1.0/24      ...</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="c1"># HostMin:   192.168.1.1         ...</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="c1"># HostMax:   192.168.1.254       ...</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="c1"># Broadcast: 192.168.1.255       ...</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="c1"># Hosts/Net: 254</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="c1"># Verifica se un IP appartiene a una subnet (con ipcalc o Python)</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import ipaddress; print(ipaddress.ip_address('10.0.1.5') in ipaddress.ip_network('10.0.0.0/16'))"</span>
+</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="c1"># True</span>
+</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>
+</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="c1"># Elencare tutte le subnet di una rete padre con Python</span>
+</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import ipaddress; [print(s) for s in ipaddress.ip_network('10.0.0.0/24').subnets(new_prefix=26)]"</span>
+</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="c1"># 10.0.0.0/26</span>
+</span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="c1"># 10.0.0.64/26</span>
+</span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="c1"># 10.0.0.128/26</span>
+</span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="c1"># 10.0.0.192/26</span>
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Pianifica prima di deployare</strong>: una volta assegnato un CIDR a un VPC cloud, non è possibile cambiarlo senza ricreare la rete. Usa una spreadsheet o uno strumento IPAM (IP Address Management) come NetBox o phpIPAM.</li>
-<li><strong>Usa spazi privati grandi per i VPC cloud</strong>: preferire 10.0.0.0/16 o /8 piuttosto che 192.168.0.0/24. La crescita futura è difficile da prevedere.</li>
+<li><strong>Pianifica prima di deployare</strong>: il CIDR primario di un VPC cloud non è modificabile senza ricreare la rete (si possono solo aggiungere CIDR secondari, con vincoli di non sovrapposizione). Usa una spreadsheet o uno strumento IPAM (IP Address Management) come NetBox o phpIPAM.</li>
+<li><strong>Usa spazi privati grandi per i VPC cloud</strong>: preferire un /16 ricavato da 10.0.0.0/8 piuttosto che 192.168.0.0/24 (192.168.x è anche il default di molte reti domestiche e VPN client: collisione quasi garantita). La crescita futura è difficile da prevedere.</li>
 <li><strong>Evita la sovrapposizione</strong>: documenta tutti i range usati (VPC, on-premise, VPN, Kubernetes) in un IPAM. La sovrapposizione tra reti connesse causa un routing non deterministico che è notoriamente difficile da diagnosticare.</li>
 <li><strong>Lascia spazio per la crescita</strong>: non riempire subito tutto lo spazio. Riserva range per future AZ, ambienti aggiuntivi, peering con altri VPC.</li>
 <li><strong>Documentazione come codice</strong>: gestisci gli indirizzi IP come infrastruttura (Terraform, Ansible). Evita modifiche manuali non tracciate.</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="subnet-mask-errata">Subnet Mask Errata<a class="headerlink" href="#subnet-mask-errata" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Sintomo: host nella stessa subnet non si raggiungono</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Causa tipica: subnet mask diversa tra i due host</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Host A: ip 192.168.1.10/24 → crede che la rete sia 192.168.1.0</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># Host B: ip 192.168.1.200/25 → crede che la rete sia 192.168.1.128</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># Risultato: A e B non condividono lo stesso network, ARP fallisce</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Diagnosi:</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>ip<span class="w"> </span>addr<span class="w"> </span>show<span class="w">   </span><span class="c1"># Verificare la subnet mask su entrambi gli host</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Correzione: assegnare la stessa subnet mask</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Sintomo: host nella stessa subnet non si raggiungono</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Causa tipica: subnet mask diversa tra i due host</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Host A: ip 192.168.1.10/24 → crede che la rete sia 192.168.1.0</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Host B: ip 192.168.1.200/25 → crede che la rete sia 192.168.1.128</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Risultato: comunicazione asimmetrica. A vede B come locale (ARP diretto), B vede A</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># come remoto (.10 è fuori da .128/25) e risponde al default gateway: ping parziali o falliti</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># Diagnosi:</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>ip<span class="w"> </span>addr<span class="w"> </span>show<span class="w">   </span><span class="c1"># Verificare la subnet mask su entrambi gli host</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="c1"># Correzione: assegnare la stessa subnet mask</span>
 </span></code></pre></div>
 <h3 id="subnet-sovrapposte">Subnet Sovrapposte<a class="headerlink" href="#subnet-sovrapposte" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Sintomo: traffico destinato a rete A finisce su rete B (o viceversa)</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Causa: due reti con CIDR sovrapposti (es. 10.0.0.0/8 e 10.0.0.0/16)</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Diagnosi: il kernel usa la route più specifica (longest prefix match)</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>ip<span class="w"> </span>route<span class="w"> </span>show
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Se vedi due route per range sovrapposti, il traffico va sulla più lunga (es. /16 batte /8)</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># Verifica con:</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>ip<span class="w"> </span>route<span class="w"> </span>get<span class="w"> </span>&lt;ip_destinazione&gt;
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Mostra esattamente quale route viene usata per quell'IP</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Sintomo: traffico destinato a rete A finisce su rete B (o viceversa)</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># Causa: due reti con CIDR sovrapposti (es. 10.0.0.0/8 e 10.0.0.0/16)</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Diagnosi: il kernel usa la route più specifica (longest prefix match)</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>ip<span class="w"> </span>route<span class="w"> </span>show
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># Se vedi due route per range sovrapposti, il traffico va sulla più lunga (es. /16 batte /8)</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1"># Verifica con:</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>ip<span class="w"> </span>route<span class="w"> </span>get<span class="w"> </span>&lt;ip_destinazione&gt;
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Mostra esattamente quale route viene usata per quell'IP</span>
 </span></code></pre></div>
 <h3 id="indirizzo-ip-in-conflitto-duplicate-ip">Indirizzo IP in Conflitto (Duplicate IP)<a class="headerlink" href="#indirizzo-ip-in-conflitto-duplicate-ip" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Sintomo: connettività intermittente dopo aver aggiunto un nuovo host</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># Causa: due host con lo stesso IP nella stessa subnet</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Diagnosi con arping:</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>arping<span class="w"> </span>-I<span class="w"> </span>eth0<span class="w"> </span>-c<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="m">192</span>.168.1.10
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># Se ricevi risposte da MAC diversi, c'è un conflitto</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1"># Su Linux, il kernel logga i conflitti:</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>dmesg<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"duplicate address"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Sintomo: connettività intermittente dopo aver aggiunto un nuovo host</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Causa: due host con lo stesso IP nella stessa subnet</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Diagnosi con arping (Duplicate Address Detection, exit code 1 se qualcuno risponde):</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>arping<span class="w"> </span>-D<span class="w"> </span>-I<span class="w"> </span>eth0<span class="w"> </span>-c<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="m">192</span>.168.1.10
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># Oppure senza -D: se ricevi risposte da MAC diversi, c'è un conflitto</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>arping<span class="w"> </span>-I<span class="w"> </span>eth0<span class="w"> </span>-c<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="m">192</span>.168.1.10
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># Cache ARP: lo stesso IP associato a MAC che cambiano è indizio di conflitto</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>ip<span class="w"> </span>neigh<span class="w"> </span>show<span class="w"> </span><span class="m">192</span>.168.1.10
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># (per IPv6 il kernel logga "duplicate address detected" in dmesg; per IPv4 no)</span>
 </span></code></pre></div>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>

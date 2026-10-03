@@ -20740,7 +20740,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -20784,7 +20784,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -20809,7 +20809,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21214,7 +21214,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21319,7 +21319,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25345,6 +25345,11 @@
 <td><em>(vedi zone file sopra)</em></td>
 </tr>
 <tr>
+<td><strong>SVCB / HTTPS</strong></td>
+<td>Service Binding (RFC 9460): pubblicano parametri del servizio (ALPN, HTTP/3, ECH, porta) già nella risposta DNS, e permettono l'alias anche all'apex</td>
+<td><code>example.com. IN HTTPS 1 . alpn="h3,h2"</code></td>
+</tr>
+<tr>
 <td><strong>CAA</strong></td>
 <td>Certification Authority Authorization — quale CA può emettere certificati per il dominio</td>
 <td><code>example.com. IN CAA 0 issue "letsencrypt.org"</code></td>
@@ -25389,8 +25394,12 @@
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">svc.cluster.local</span>
 </span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="nt">options</span><span class="p">:</span>
 </span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ndots</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"2"</span><span class="w">  </span><span class="c1"># Numero di dots prima di considerare il nome assoluto</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"2"</span><span class="w">  </span><span class="c1"># Un nome con &gt;= 2 dot viene tentato prima "as-is"; con meno dot, prima la search list</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">ndots:5 di default in Kubernetes</p>
+<p>Kubernetes imposta <code>ndots:5</code> nel <code>/etc/resolv.conf</code> dei pod. Un nome esterno come <code>api.example.com</code> (2 dot &lt; 5) viene prima provato con ogni suffisso della search list (<code>.default.svc.cluster.local</code>, <code>.svc.cluster.local</code>, <code>.cluster.local</code>…), generando più query NXDOMAIN prima di quella corretta: latenza e carico extra su CoreDNS. Mitigazioni: FQDN con punto finale (<code>api.example.com.</code>), <code>ndots</code> più basso via <code>dnsConfig</code>, o NodeLocal DNSCache.</p>
+</div>
 <h3 id="configmap-coredns">ConfigMap CoreDNS<a class="headerlink" href="#configmap-coredns" title="Permanent link">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
@@ -25426,6 +25435,7 @@
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Chain of Trust: Root Zone → TLD → Authoritative Server
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>Ogni livello firma i record del livello inferiore con chiavi crittografiche.
 </span></code></pre></div>
+<p>Meccanismo: ogni zona pubblica la propria chiave in un record <strong>DNSKEY</strong> e firma ogni RRset con un record <strong>RRSIG</strong>. La zona genitore pubblica un record <strong>DS</strong> (hash della DNSKEY del figlio), che lega le due zone; la catena parte dal trust anchor della root, già nota ai resolver validanti. Se la validazione fallisce il resolver risponde <code>SERVFAIL</code> (flag <code>ad</code> assente): errori di rotazione chiavi o DS non aggiornato al registrar rendono il dominio irraggiungibile.</p>
 <div class="admonition warning">
 <p class="admonition-title">Limitazione DNSSEC</p>
 <p>DNSSEC protegge l'integrità dei record DNS ma NON cifra il traffico DNS. Le query DNS rimangono visibili in chiaro sulla rete. Per la privacy, usare DoH o DoT.</p>
@@ -25462,6 +25472,13 @@
 <td>TLS via HTTPS</td>
 <td>Cifratura, difficile da bloccare</td>
 <td>Mescola con traffico web, più latenza</td>
+</tr>
+<tr>
+<td><strong>DoQ</strong> (RFC 9250)</td>
+<td>853 UDP</td>
+<td>QUIC</td>
+<td>Cifratura, meno head-of-line blocking</td>
+<td>Supporto ancora limitato</td>
 </tr>
 </tbody>
 </table>
@@ -25500,8 +25517,8 @@
 </span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>dig<span class="w"> </span>@8.8.8.8<span class="w"> </span>www.example.com
 </span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>dig<span class="w"> </span>@1.1.1.1<span class="w"> </span>www.example.com
 </span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>
-</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="c1"># Verificare il TTL rimanente in cache</span>
-</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>dig<span class="w"> </span>+ttlunits<span class="w"> </span>www.example.com
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="c1"># TTL rimanente in cache (secondo campo della risposta); +ttlunits lo mostra in formato leggibile (es. 47m27s)</span>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>dig<span class="w"> </span>+noall<span class="w"> </span>+answer<span class="w"> </span>+ttlunits<span class="w"> </span>www.example.com
 </span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>
 </span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a><span class="c1"># Query DNSSEC</span>
 </span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>dig<span class="w"> </span>+dnssec<span class="w"> </span>www.cloudflare.com
@@ -25574,7 +25591,7 @@
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># Forzare una nuova risoluzione bypassando la cache locale</span>
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># (Non funziona con cache del resolver remoto, solo cache locale)</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>systemd-resolve<span class="w"> </span>--flush-caches<span class="w">  </span><span class="c1"># systemd-resolved</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>resolvectl<span class="w"> </span>flush-caches<span class="w">         </span><span class="c1"># systemd-resolved (sostituisce il deprecato systemd-resolve)</span>
 </span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>sudo<span class="w"> </span>killall<span class="w"> </span>-HUP<span class="w"> </span>dnsmasq<span class="w">       </span><span class="c1"># dnsmasq</span>
 </span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>
 </span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># Verificare il valore direttamente sull'authoritative server</span>
