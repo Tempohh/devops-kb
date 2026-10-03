@@ -7,9 +7,10 @@ search_keywords: [dns resolution, recursive resolver, authoritative dns server, 
 parent: networking/fondamentali
 related: [networking/fondamentali/http-https, networking/fondamentali/tls-ssl-basics]
 official_docs: https://www.rfc-editor.org/rfc/rfc1034
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-03-03
+last_verified: 2026-10-03
 ---
 
 # DNS — Domain Name System
@@ -146,6 +147,7 @@ sequenceDiagram
 | **PTR** | Reverse DNS — mappa un IP a un hostname. Usato in `in-addr.arpa` | `34.216.184.93.in-addr.arpa. IN PTR www.example.com.` |
 | **NS** | Name Server — i server autoritativi per il dominio | `example.com. IN NS ns1.example.com.` |
 | **SOA** | Start of Authority — parametri della zona (serial, refresh, retry, expire, negative TTL) | *(vedi zone file sopra)* |
+| **SVCB / HTTPS** | Service Binding (RFC 9460): pubblicano parametri del servizio (ALPN, HTTP/3, ECH, porta) già nella risposta DNS, e permettono l'alias anche all'apex | `example.com. IN HTTPS 1 . alpn="h3,h2"` |
 | **CAA** | Certification Authority Authorization — quale CA può emettere certificati per il dominio | `example.com. IN CAA 0 issue "letsencrypt.org"` |
 
 !!! note "CNAME vs A Record"
@@ -195,8 +197,11 @@ spec:
       - svc.cluster.local
     options:
       - name: ndots
-        value: "2"  # Numero di dots prima di considerare il nome assoluto
+        value: "2"  # Un nome con >= 2 dot viene tentato prima "as-is"; con meno dot, prima la search list
 ```
+
+!!! warning "ndots:5 di default in Kubernetes"
+    Kubernetes imposta `ndots:5` nel `/etc/resolv.conf` dei pod. Un nome esterno come `api.example.com` (2 dot < 5) viene prima provato con ogni suffisso della search list (`.default.svc.cluster.local`, `.svc.cluster.local`, `.cluster.local`…), generando più query NXDOMAIN prima di quella corretta: latenza e carico extra su CoreDNS. Mitigazioni: FQDN con punto finale (`api.example.com.`), `ndots` più basso via `dnsConfig`, o NodeLocal DNSCache.
 
 ### ConfigMap CoreDNS
 
@@ -241,6 +246,8 @@ Chain of Trust: Root Zone → TLD → Authoritative Server
 Ogni livello firma i record del livello inferiore con chiavi crittografiche.
 ```
 
+Meccanismo: ogni zona pubblica la propria chiave in un record **DNSKEY** e firma ogni RRset con un record **RRSIG**. La zona genitore pubblica un record **DS** (hash della DNSKEY del figlio), che lega le due zone; la catena parte dal trust anchor della root, già nota ai resolver validanti. Se la validazione fallisce il resolver risponde `SERVFAIL` (flag `ad` assente): errori di rotazione chiavi o DS non aggiornato al registrar rendono il dominio irraggiungibile.
+
 !!! warning "Limitazione DNSSEC"
     DNSSEC protegge l'integrità dei record DNS ma NON cifra il traffico DNS. Le query DNS rimangono visibili in chiaro sulla rete. Per la privacy, usare DoH o DoT.
 
@@ -251,6 +258,7 @@ Ogni livello firma i record del livello inferiore con chiavi crittografiche.
 | **DNS tradizionale** | 53 UDP/TCP | Nessuna | Veloce, universale | Query visibili, intercettabili |
 | **DoT** (RFC 7858) | 853 TCP | TLS | Cifratura, firewall riconoscibile | Porta dedicata facile da bloccare |
 | **DoH** (RFC 8484) | 443 TCP | TLS via HTTPS | Cifratura, difficile da bloccare | Mescola con traffico web, più latenza |
+| **DoQ** (RFC 9250) | 853 UDP | QUIC | Cifratura, meno head-of-line blocking | Supporto ancora limitato |
 
 ### DNS Cache Poisoning
 
@@ -291,8 +299,8 @@ dig +short www.example.com
 dig @8.8.8.8 www.example.com
 dig @1.1.1.1 www.example.com
 
-# Verificare il TTL rimanente in cache
-dig +ttlunits www.example.com
+# TTL rimanente in cache (secondo campo della risposta); +ttlunits lo mostra in formato leggibile (es. 47m27s)
+dig +noall +answer +ttlunits www.example.com
 
 # Query DNSSEC
 dig +dnssec www.cloudflare.com
@@ -378,7 +386,7 @@ dig www.example.com +noall +answer
 
 # Forzare una nuova risoluzione bypassando la cache locale
 # (Non funziona con cache del resolver remoto, solo cache locale)
-systemd-resolve --flush-caches  # systemd-resolved
+resolvectl flush-caches         # systemd-resolved (sostituisce il deprecato systemd-resolve)
 sudo killall -HUP dnsmasq       # dnsmasq
 
 # Verificare il valore direttamente sull'authoritative server
