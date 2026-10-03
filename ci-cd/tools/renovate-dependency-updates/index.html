@@ -3409,7 +3409,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -3798,7 +3798,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24864,7 +24864,7 @@
 </tr>
 </tbody>
 </table>
-<p>La differenza chiave: la <strong>config di repository</strong> (<code>renovate.json</code>) definisce <em>cosa</em> aggiornare; la <strong>config globale self-hosted</strong> (variabili <code>RENOVATE_*</code> o <code>config.js</code>) definisce <em>dove</em> girare (piattaforma, token, autodiscover, <code>allowedPostUpgradeCommands</code>, ecc.). Alcune opzioni (es. <code>allowedPostUpgradeCommands</code>, <code>hostRules</code> con credenziali) sono accettate solo nella config globale per ragioni di sicurezza.</p>
+<p>La differenza chiave: la <strong>config di repository</strong> (<code>renovate.json</code>) definisce <em>cosa</em> aggiornare; la <strong>config globale self-hosted</strong> (variabili <code>RENOVATE_*</code> o <code>config.js</code>) definisce <em>dove</em> girare (piattaforma, token, autodiscover, <code>allowedPostUpgradeCommands</code>, ecc.). Alcune opzioni (es. <code>allowedPostUpgradeCommands</code>, <code>autodiscover</code>, <code>token</code>) sono accettate solo nella config globale per ragioni di sicurezza; le credenziali (<code>hostRules</code>) vanno fornite lì o come secret cifrati, mai in chiaro in <code>renovate.json</code>.</p>
 <div class="admonition warning">
 <p class="admonition-title">Renovate esegue codice del repository</p>
 <p>Con certi manager (<code>postUpgradeTasks</code>, <code>gradle</code>, <code>npm</code> con script di postinstall nei lockfile maintenance) Renovate lancia comandi sul contenuto dei repository. In self-hosted usa un token con il minimo privilegio, limita <code>allowedPostUpgradeCommands</code> e non eseguirlo su repository non attendibili con credenziali ampie.</p>
@@ -24887,6 +24887,10 @@
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="p">}</span>
 </span></code></pre></div>
 <p><code>config:recommended</code> (nome attuale; in versioni precedenti <code>config:base</code>) abilita il set di preset consigliati: dependency dashboard, raggruppamento dei monorepo noti, regole sensate per le immagini Docker, ecc. Parti da qui e aggiungi regole solo quando serve.</p>
+<div class="admonition tip">
+<p class="admonition-title"><code>config:best-practices</code></p>
+<p>Esiste anche <code>config:best-practices</code>: estende <code>config:recommended</code> aggiungendo, tra l'altro, il pinning dei digest Docker e delle GitHub Actions e la migrazione automatica della config. Per un nuovo repository è spesso il punto di partenza migliore; in tal caso <code>docker:pinDigests</code> e <code>helpers:pinGitHubActionDigests</code> (sotto) sono già inclusi.</p>
+</div>
 <div class="admonition tip">
 <p class="admonition-title">Preset condivisi per l'organizzazione</p>
 <p>Metti la config comune in un repo <code>renovate-config</code> (file <code>default.json</code>) e usala con <code>"extends": ["github&gt;mia-org/renovate-config"]</code>. Ogni repository diventa un <code>renovate.json</code> di poche righe e le policy si cambiano in un punto solo.</p>
@@ -24912,20 +24916,24 @@
 </span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">      </span><span class="nt">"dependencyDashboardApproval"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
 </span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">    </span><span class="p">},</span>
 </span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="p">{</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">      </span><span class="nt">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Aggiornamenti di sicurezza non seguono lo schedule"</span><span class="p">,</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">      </span><span class="nt">"matchCategories"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"security"</span><span class="p">],</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">      </span><span class="nt">"schedule"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"at any time"</span><span class="p">]</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">    </span><span class="p">{</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">      </span><span class="nt">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Bloccare un package noto problematico"</span><span class="p">,</span>
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">      </span><span class="nt">"matchPackageNames"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"node"</span><span class="p">],</span>
-</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">      </span><span class="nt">"allowedVersions"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;23"</span>
-</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">  </span><span class="p">]</span>
-</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="p">}</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">      </span><span class="nt">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Bloccare un package noto problematico"</span><span class="p">,</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">      </span><span class="nt">"matchPackageNames"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"node"</span><span class="p">],</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">      </span><span class="nt">"allowedVersions"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;23"</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">  </span><span class="p">],</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">  </span><span class="nt">"vulnerabilityAlerts"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">    </span><span class="nt">"labels"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"security"</span><span class="p">],</span>
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">    </span><span class="nt">"schedule"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"at any time"</span><span class="p">]</span>
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="p">}</span>
 </span></code></pre></div>
 <ul>
-<li><code>dependencyDashboardApproval: true</code> fa sì che la PR major venga creata <strong>solo</strong> dopo che qualcuno spunta la checkbox nella dashboard.</li>
+<li>
+<p><code>vulnerabilityAlerts</code> governa le PR di sicurezza (alimentate dai GitHub Security Advisories / Dependabot alerts del repository): per default ignorano lo <code>schedule</code>, qui sono anche etichettate. Non esiste un <code>matchCategories: ["security"]</code>: <code>matchCategories</code> filtra per linguaggio/ecosistema (<code>js</code>, <code>docker</code>, ...).</p>
+</li>
+<li>
+<p><code>dependencyDashboardApproval: true</code> fa sì che la PR major venga creata <strong>solo</strong> dopo che qualcuno spunta la checkbox nella dashboard.</p>
+</li>
 <li><code>platformAutomerge: true</code> delega il merge alla piattaforma (GitHub auto-merge): richiede che nel repository sia abilitato l'auto-merge e che la branch protection definisca i check obbligatori.</li>
 </ul>
 <div class="admonition warning">
@@ -25094,7 +25102,7 @@
 </span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
 </span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
 </span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
-</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">renovatebot/github-action@v41.0.0</span><span class="w">   </span><span class="c1"># pinnare a SHA in produzione</span>
+</span><span id="__span-15-21"><a id="__codelineno-15-21" name="__codelineno-15-21" href="#__codelineno-15-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">renovatebot/github-action@v41.0.0</span><span class="w">   </span><span class="c1"># esempio: usa l'ultima release e pinna a SHA in produzione</span>
 </span><span id="__span-15-22"><a id="__codelineno-15-22" name="__codelineno-15-22" href="#__codelineno-15-22"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
 </span><span id="__span-15-23"><a id="__codelineno-15-23" name="__codelineno-15-23" href="#__codelineno-15-23"></a><span class="w">          </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ secrets.RENOVATE_TOKEN }}</span><span class="w">     </span><span class="c1"># PAT fine-grained o GitHub App token</span>
 </span><span id="__span-15-24"><a id="__codelineno-15-24" name="__codelineno-15-24" href="#__codelineno-15-24"></a><span class="w">        </span><span class="nt">env</span><span class="p">:</span>
@@ -25125,7 +25133,7 @@
 </span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="w">          </span><span class="nt">restartPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span>
 </span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="w">          </span><span class="nt">containers</span><span class="p">:</span>
 </span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">renovate</span>
-</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="w">              </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/renovatebot/renovate:39</span><span class="w">   </span><span class="c1"># pinnare a digest</span>
+</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="w">              </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/renovatebot/renovate:39</span><span class="w">   </span><span class="c1"># esempio: usa l'ultima major e pinna a digest</span>
 </span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="w">              </span><span class="nt">env</span><span class="p">:</span>
 </span><span id="__span-16-22"><a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a><span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RENOVATE_PLATFORM</span>
 </span><span id="__span-16-23"><a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="w">                  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">github</span>
