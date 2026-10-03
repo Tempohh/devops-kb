@@ -7,9 +7,9 @@ search_keywords: [renovate, renovatebot, renovate bot, mend renovate, renovate a
 parent: ci-cd/tools/_index
 related: [ci-cd/github-actions/enterprise, security/supply-chain/_index, ci-cd/gitops/argocd, ci-cd/gitops/flux, iac/terraform/fondamentali, ci-cd/strategie/pipeline-security]
 official_docs: https://docs.renovatebot.com/
-status: draft
+status: complete
 difficulty: intermediate
-last_updated: 2026-10-02
+last_updated: 2026-10-03
 ---
 
 # Renovate — Aggiornamento Automatico delle Dipendenze
@@ -491,7 +491,7 @@ Chiudi le PR non volute: con `dependencyDashboardApproval: true` per i major non
 
 **Causa:** troppi repository con un solo token, `autodiscover` su un'intera organizzazione, run troppo frequenti.
 
-**Soluzione:** usa una **GitHub App** (limite per installazione, molto più alto del PAT), distribuisci i repository su più run con `RENOVATE_AUTODISCOVER_FILTER`, riduci la frequenza dello schedule e imposta un token per accedere a `github.com` (`RENOVATE_GITHUB_COM_TOKEN`) per le release note, che altrimenti consumano la quota anonima:
+**Soluzione:** usa una **GitHub App** (limite per installazione, molto più alto del PAT), distribuisci i repository su più run con `RENOVATE_AUTODISCOVER_FILTER`, riduci la frequenza dello schedule e imposta un token per accedere a `github.com` (`RENOVATE_GITHUB_COM_TOKEN`) per le release note, che altrimenti consumano la quota anonima (Renovate le scarica da `github.com` per allegarle alle PR):
 
 ```bash
 # Verifica quota residua del token usato
