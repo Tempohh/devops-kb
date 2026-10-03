@@ -7,9 +7,10 @@ search_keywords: [Azure SQL Database, SQL Managed Instance, Azure SQL Database H
 parent: cloud/azure/database/_index
 related: [cloud/azure/security/key-vault, cloud/azure/networking/vnet, cloud/azure/monitoring/monitor-log-analytics]
 official_docs: https://learn.microsoft.com/azure/azure-sql/database/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Azure SQL
@@ -53,11 +54,14 @@ Il modello DTU (Database Transaction Unit) combina CPU, memoria e I/O in un'unit
 
 Il modello vCore separa CPU, memoria e storage, con più flessibilità e Azure Hybrid Benefit.
 
-| Tier | IOPS | SLA | HA | In-Memory OLTP | Replica Lettura |
+| Tier | Storage / IOPS | SLA | HA | In-Memory OLTP | Replica Lettura |
 |---|---|---|---|---|---|
-| **General Purpose** | 7000 IOPS/file | 99.99% | Remote storage | No | No (a pagamento) |
-| **Business Critical** | Local SSD, 200K IOPS | 99.99% | Local SSD HA | Sì | 1 gratuita |
-| **Hyperscale** | Scalabile | 99.99% | Multi-layer | No | Fino a 30 named replicas |
+| **General Purpose** | Remote storage (Premium); IOPS crescono con vCore e dimensione file | 99.99% | Compute stateless + remote storage | No | Solo geo-replica (a pagamento) |
+| **Business Critical** | Local SSD, fino a ~200K IOPS (crescono con vCore) | 99.99% | Always On con 3+ repliche su local SSD | Sì | 1 inclusa (read scale-out) |
+| **Hyperscale** | Architettura multi-layer (page server), storage fino a 128 TB | 99.95–99.99% (dipende da repliche/zone) | Fino a 4 HA replica | No | Fino a 30 named replicas |
+
+!!! note "Perché i tier differiscono"
+    In General Purpose il compute è separato dallo storage remoto: dopo un failover un nuovo nodo si riaggancia ai file (latenza I/O più alta, ma costo minore). In Business Critical i dati stanno su SSD locale replicato tra nodi (stile Availability Group): I/O a bassa latenza e failover rapido, a costo maggiore.
 
 ```bash
 RG="rg-database-prod"
@@ -114,7 +118,7 @@ az sql db create \
   --name myapp-serverless \
   --edition GeneralPurpose \
   --family Gen5 \
-  --capacity 2 \
+  --capacity 4 \
   --compute-model Serverless \
   --auto-pause-delay 60 \
   --min-capacity 0.5 \
@@ -129,12 +133,15 @@ az sql db update \
   --min-capacity 1
 ```
 
+!!! note "Capacity in Serverless"
+    Con `--compute-model Serverless`, `--capacity` è il massimo di vCore e deve coincidere con `--max-capacity`; `--min-capacity` è il minimo. `--auto-pause-delay` è in minuti (minimo 15, `-1` disabilita la pausa).
+
 !!! tip "Serverless: Quando Usarlo"
     Serverless è ideale per database di dev/test, applicazioni con picchi imprevedibili, o SaaS con molti tenant piccoli. Non usarlo per workload con latency critica: il resume dopo auto-pause può richiedere qualche secondo.
 
 ## Hyperscale
 
-Hyperscale è l'opzione di scalabilità estrema di Azure SQL Database: storage fino a 100 TB, scaling quasi istantaneo, named replicas per read-scaling, rapid restore.
+Hyperscale è l'opzione di scalabilità estrema di Azure SQL Database: storage fino a 128 TB, scaling quasi istantaneo, named replicas per read-scaling, rapid restore.
 
 ```bash
 # Creare database Hyperscale
@@ -161,7 +168,7 @@ az sql db replica create \
 ```
 
 !!! note "Hyperscale vs Business Critical"
-    Hyperscale scala storage illimitato e ha rapid restore, ma non ha in-memory OLTP. Business Critical ha local SSD per massima performance I/O e una read replica gratuita. Scegli in base al bottleneck: storage/scale (Hyperscale) vs latency I/O (Business Critical).
+    Hyperscale scala storage fino a 128 TB e ha rapid restore (snapshot su storage, tempi quasi indipendenti dalla dimensione), ma non ha in-memory OLTP. Business Critical ha local SSD per massima performance I/O e una read replica gratuita. Scegli in base al bottleneck: storage/scale (Hyperscale) vs latency I/O (Business Critical).
 
 ## Elastic Pool
 
@@ -249,7 +256,7 @@ az sql failover-group set-primary \
 ```
 
 !!! warning "Grace Period"
-    `--grace-period 1` significa: Azure aspetta 1 ora prima di eseguire il failover automatico dopo aver perso il contatto con la primaria. Valori bassi riducono RTO ma aumentano il rischio di split-brain. In produzione, valuta almeno 1 ora.
+    `--grace-period 1` (in ore) significa: Azure aspetta 1 ora prima di eseguire il failover automatico *con possibile perdita di dati* dopo aver perso il contatto con la primaria. Il failover è asincrono: transazioni non ancora replicate vanno perse. Valori bassi riducono l'RTO ma aumentano il rischio di perdita dati per outage transitori; 1 ora è il minimo. Per perdita dati zero, usa failover manuale (`set-primary`) con sincronizzazione completa.
 
 ## Backup
 
@@ -264,8 +271,14 @@ az sql db update \
   --resource-group $RG \
   --server $SERVER_NAME \
   --name $DB_NAME \
-  --backup-storage-redundancy Geo \
-  --retention 35
+  --backup-storage-redundancy Geo
+
+# Retention PITR (1-35 giorni; default 7)
+az sql db str-policy set \
+  --resource-group $RG \
+  --server $SERVER_NAME \
+  --name $DB_NAME \
+  --retention-days 35
 
 # Long-Term Retention (LTR) — fino a 10 anni
 az sql db ltr-policy set \
@@ -299,21 +312,15 @@ az sql server audit-policy update \
   --log-analytics-workspace-resource-id $(az monitor log-analytics workspace show --resource-group rg-monitoring --workspace-name law-prod --query id -o tsv) \
   --log-analytics-target-state Enabled
 
-# Abilitare Defender for SQL (rileva SQL injection, anomalie accesso)
+# Abilitare Advanced Threat Protection (rileva SQL injection, anomalie accesso)
 az sql server advanced-threat-protection-setting update \
   --resource-group $RG \
   --server $SERVER_NAME \
   --state Enabled
-
-# Abilitare Vulnerability Assessment
-az sql server vulnerability-assessment setting update \
-  --resource-group $RG \
-  --server $SERVER_NAME \
-  --storage-account mystorageaccount2026 \
-  --storage-key $(az storage account keys list --resource-group $RG --account-name mystorageaccount2026 --query "[0].value" -o tsv) \
-  --recurr-scans-day-of-week Sunday \
-  --recurr-scans-time 00:00
 ```
+
+!!! note "Defender for SQL e Vulnerability Assessment"
+    Il modo consigliato di attivare Defender for SQL è a livello subscription tramite il piano *Defender for Databases / SQL* in Microsoft Defender for Cloud, che copre anche Vulnerability Assessment. Il VA usa la configurazione *express* (nessun storage account da gestire): evita la vecchia configurazione *classic* con storage account e chiave.
 
 ## Autenticazione
 
@@ -342,13 +349,6 @@ az account get-access-token --resource https://database.windows.net --query acce
 ## Private Endpoint per Azure SQL
 
 ```bash
-# Disabilitare accesso pubblico
-az sql server update \
-  --resource-group $RG \
-  --name $SERVER_NAME \
-  --restrict-outbound-network-access false \
-  --public-network-access Disabled
-
 # Creare Private Endpoint
 az network private-endpoint create \
   --resource-group $RG \
@@ -363,9 +363,36 @@ az network private-endpoint create \
 az network private-dns zone create \
   --resource-group $RG \
   --name "privatelink.database.windows.net"
+
+# Collegare la zona DNS alla VNet
+az network private-dns link vnet create \
+  --resource-group $RG \
+  --zone-name "privatelink.database.windows.net" \
+  --name link-vnet-prod \
+  --virtual-network vnet-prod \
+  --registration-enabled false
+
+# Registrare automaticamente il record A del PE nella zona
+az network private-endpoint dns-zone-group create \
+  --resource-group $RG \
+  --endpoint-name pep-sql-prod \
+  --name default \
+  --private-dns-zone "privatelink.database.windows.net" \
+  --zone-name sql
+
+# Solo dopo aver verificato la risoluzione DNS privata: disabilitare accesso pubblico
+az sql server update \
+  --resource-group $RG \
+  --name $SERVER_NAME \
+  --enable-public-network false
 ```
 
+!!! warning "Ordine delle operazioni"
+    Disabilitare l'accesso pubblico prima che PE e DNS privato funzionino interrompe tutti i client. Senza il record nella zona `privatelink`, il nome del server risolve all'IP pubblico e la connessione fallisce.
+
 ## Transparent Data Encryption (TDE) con CMK
+
+TDE è attivo di default con una chiave gestita da Microsoft (service-managed). La CMK serve solo per requisiti di compliance/controllo della chiave. Il server deve avere una **managed identity** (user-assigned consigliata) con permessi `get`, `wrapKey`, `unwrapKey` sulla chiave (o ruolo RBAC *Key Vault Crypto Service Encryption User*); se la chiave è revocata o cancellata, il database diventa inaccessibile.
 
 ```bash
 # Abilitare TDE con Customer-managed Key (CMK)
@@ -395,7 +422,8 @@ az network vnet subnet create \
   --address-prefixes 10.0.20.0/24 \
   --delegations Microsoft.Sql/managedInstances
 
-# Creare SQL Managed Instance (operazione richiede 4-6 ore)
+# Creare SQL Managed Instance (operazione lunga: da decine di minuti a diverse ore;
+# la prima istanza in una subnet vuota è la più lenta. Usare --no-wait e monitorare)
 az sql mi create \
   --resource-group $RG \
   --name sqlmi-prod-2026 \
@@ -408,17 +436,11 @@ az sql mi create \
   --storage-size-in-gb 256 \
   --license-type BasePrice \
   --zone-redundant true
-
-# Link Feature: replica asincrona da SQL Server on-premises a SQL MI
-# (per migrazione zero-downtime e disaster recovery)
-az sql mi link create \
-  --resource-group $RG \
-  --instance-name sqlmi-prod-2026 \
-  --name my-link \
-  --primary-availability-group-name AGPrimary \
-  --target-database myapp \
-  --source-endpoint "192.168.1.100:5022"
 ```
+
+`--license-type BasePrice` applica Azure Hybrid Benefit (licenza SQL Server già posseduta); il default `LicenseIncluded` include il costo della licenza.
+
+**Managed Instance link**: replica asincrona (tecnologia Distributed Availability Group) da SQL Server on-premises/VM a SQL MI, utile per migrazione con downtime minimo e DR. Si configura dalla procedura guidata in SSMS o con `az sql mi link create`; i requisiti (versione SQL Server, connettività porta 5022, certificati) sono nella documentazione ufficiale.
 
 ## Best Practices
 
@@ -428,13 +450,13 @@ az sql mi link create \
 - Usa **Entra ID authentication** e disabilita la SQL authentication dove possibile
 - Configura **Private Endpoint** e disabilita l'accesso pubblico per sicurezza
 - Per Elastic Pool, monitora `eDTU_used` / vCore: se un tenant usa sempre >50%, spostarlo fuori dal pool
-- Usa **Azure SQL Analytics** workbook in Azure Monitor per visibilità performantica
+- Per monitoring delle performance usa **Query Store / Query Performance Insight** e **Database Watcher** (monitoring gestito per Azure SQL); verifica lo stato di *Azure SQL Analytics*, in dismissione a favore di Database Watcher
 
 ## Troubleshooting
 
 ### Scenario 1 — Connessione rifiutata / timeout dal client
 
-**Sintomo:** L'applicazione riceve `Cannot open server 'X' requested by the login` o timeout di connessione anche con credenziali corrette.
+**Sintomo:** L'applicazione riceve `Cannot open server 'X' requested by the login. Client with IP address 'Y' is not allowed to access the server` o timeout di connessione anche con credenziali corrette.
 
 **Causa:** Firewall del server SQL non include l'IP del client, oppure l'accesso pubblico è disabilitato senza Private Endpoint raggiungibile dalla rete del client.
 
@@ -466,7 +488,7 @@ az sql server show \
 
 **Sintomo:** Errori `The database has reached its size quota` o `INSERT failed: database is full`. Il database smette di accettare scritture.
 
-**Causa:** Il database ha raggiunto il valore `--max-size` configurato. Comune in database con crescita rapida o log transaction non purgati.
+**Causa:** Il database ha raggiunto il valore `--max-size` configurato. Comune in database con crescita rapida (errore 40544). Il transaction log non conta nel `--max-size`: il limite riguarda i dati.
 
 **Soluzione:** Aumentare la dimensione massima o liberare spazio eliminando dati/indici obsoleti.
 
@@ -496,7 +518,7 @@ az sql db update \
 
 ### Scenario 3 — Failover Group in stato degradato o CATCH_UP lento
 
-**Sintomo:** `az sql failover-group show` riporta `replicationState: CATCH_UP` da molto tempo o `SUSPENDED`. Il failover automatico non avviene come previsto.
+**Sintomo:** il link di replica mostra `replication_state_desc` = `CATCH_UP` da molto tempo o `SUSPENDED`. Il failover automatico non avviene come previsto.
 
 **Causa:** Lag di replica elevato tra primaria e secondaria (workload pesante, rete degradata, o secondaria sottodimensionata). In stato `SUSPENDED` la replica è ferma.
 
@@ -508,15 +530,19 @@ az sql failover-group show \
   --resource-group $RG \
   --server $SERVER_NAME \
   --name fg-myapp-prod \
-  --query "{state:replicationState, role:role, partnerServers:partnerServers}" \
+  --query "{policy:readWriteEndpoint.failoverPolicy, graceMin:readWriteEndpoint.failoverWithDataLossGracePeriodMinutes, partners:partnerServers}" \
   --output json
 
-# Controllare metriche di replica dal portale (replication_lag_sec)
-az monitor metrics list \
-  --resource $(az sql db show --resource-group $RG --server $SERVER_NAME --name $DB_NAME --query id -o tsv) \
-  --metric "replication_lag_sec" \
-  --interval PT1M \
+# Stato dei link di replica per database
+az sql db replica list-links \
+  --resource-group $RG \
+  --server $SERVER_NAME \
+  --name $DB_NAME \
   --output table
+
+# Lag di replica: eseguire in T-SQL sulla primaria
+# SELECT partner_server, replication_state_desc, replication_lag_sec
+# FROM sys.dm_geo_replication_link_status;
 
 # Verificare service tier della secondaria (deve essere uguale alla primaria)
 az sql db show \
@@ -541,14 +567,9 @@ az monitor metrics list \
   --metric "cpu_percent,dtu_consumption_percent,deadlock" \
   --interval PT5M \
   --output table
-
-# Ottenere suggerimenti automatici di performance (Index Advisor)
-az sql db op list \
-  --resource-group $RG \
-  --server $SERVER_NAME \
-  --database $DB_NAME \
-  --output table
 ```
+
+`dtu_consumption_percent` esiste solo nel modello DTU; in vCore usa `cpu_percent`. Per suggerimenti automatici attiva **Automatic Tuning** (create/drop index, force last good plan) e consulta le raccomandazioni con `SELECT * FROM sys.dm_db_tuning_recommendations;`.
 
 ```sql
 -- Top 5 query per CPU (eseguire su database target)
