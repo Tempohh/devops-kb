@@ -9,7 +9,7 @@ related: [security/autenticazione/oauth2-oidc, security/pki-certificati/pki-inte
 official_docs: https://jwt.io/
 status: complete
 difficulty: advanced
-last_updated: 2026-03-03
+last_updated: 2026-10-03
 ---
 
 # JWT — JSON Web Token
@@ -354,6 +354,64 @@ JWE = header . encrypted_key . iv . ciphertext . tag
 - **`jti` per audit trail**: ogni token ha un ID univoco → rintraccibilità in caso di incidente
 - **Non mettere segreti nel payload**: il JWT è firmato, non cifrato
 - **Key rotation regolare**: RS256/ES256 keys devono essere ruotate almeno ogni 6-12 mesi con `kid` tracking
+
+## Troubleshooting
+
+### Scenario 1 — `Signature verification failed` dopo key rotation
+
+**Sintomo**: dopo la rotazione chiavi dell'IdP, token validi vengono rifiutati con `InvalidSignatureError` o `Unable to find a signing key that matches: "kid"`.
+
+**Causa**: il resource server ha in cache un JWKS vecchio che non contiene il nuovo `kid`. Il client JWKS non rifà il fetch finché la cache non scade.
+
+**Soluzione**: forzare il refresh del JWKS quando il `kid` è sconosciuto (con rate limit per evitare DoS verso l'IdP) e verificare che l'IdP pubblichi vecchia e nuova chiave in parallelo durante la rotazione.
+
+```bash
+# Confronta i kid pubblicati con quello del token
+curl -s https://idp.example.com/.well-known/jwks.json | jq '.keys[].kid'
+echo "$TOKEN" | cut -d. -f1 | base64 -d 2>/dev/null | jq .kid
+```
+
+### Scenario 2 — `Token scaduto` / `nbf` non valido con token appena emesso
+
+**Sintomo**: token appena emesso rifiutato con `ExpiredSignatureError` o `ImmatureSignatureError` (`The token is not yet valid (iat/nbf)`).
+
+**Causa**: clock skew tra IdP e resource server. `exp`, `nbf` e `iat` sono confrontati con l'orologio locale; pochi secondi di deriva bastano.
+
+**Soluzione**: sincronizzare NTP su tutti i nodi e impostare un `leeway` piccolo (5-30 s). Non alzarlo oltre: estende la finestra di validità dei token rubati.
+
+```bash
+chronyc tracking            # offset rispetto a NTP
+date -u +%s                 # confronta con exp/iat del token
+echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{iat,nbf,exp}'
+```
+
+### Scenario 3 — `InvalidAudienceError`
+
+**Sintomo**: firma valida ma la richiesta fallisce con `Invalid audience`, tipico dopo l'aggiunta di un nuovo servizio.
+
+**Causa**: il client ha richiesto il token senza `audience`/`resource` corretti, oppure `aud` è un array e il verifier confronta con una stringa diversa. L'IdP emette `aud` solo per le API registrate.
+
+**Soluzione**: ispezionare `aud` e allineare configurazione IdP (audience/resource indicator) e `EXPECTED_AUDIENCE` del servizio.
+
+```bash
+echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{iss,aud,azp,scope}'
+```
+
+### Scenario 4 — `Invalid token: Incorrect padding` / token malformato
+
+**Sintomo**: `DecodeError: Not enough segments` o `Incorrect padding` sul token ricevuto.
+
+**Causa**: token troncato (header HTTP oltre il limite del proxy, es. nginx `large_client_header_buffers`), prefisso `Bearer ` incluso nella decodifica, o Base64URL decodificato come Base64 standard (JWT non usa padding `=` e usa `-`/`_`).
+
+**Soluzione**: estrarre solo il token dopo `Bearer `, verificare 3 segmenti e alzare il limite header se i claims sono troppi (ridurre il payload è preferibile).
+
+```bash
+echo "$TOKEN" | awk -F. '{print NF" segmenti, "length($0)" byte"}'
+# nginx: aumentare solo se necessario
+# large_client_header_buffers 4 16k;
+```
+
+---
 
 ## Riferimenti
 
