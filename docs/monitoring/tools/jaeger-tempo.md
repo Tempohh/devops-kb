@@ -9,7 +9,7 @@ related: [monitoring/fondamentali/opentelemetry, monitoring/tools/prometheus, mo
 official_docs: https://www.jaegertracing.io/docs/
 status: complete
 difficulty: intermediate
-last_updated: 2026-09-28
+last_updated: 2026-10-03
 ---
 
 # Jaeger & Grafana Tempo
@@ -316,14 +316,86 @@ exporters:
 
 ## Troubleshooting
 
-| Problema | Causa Probabile | Soluzione |
-|---|---|---|
-| Tracce non visibili in UI | Sampling troppo basso, errore export | Verificare log OTel Collector, testare con `AlwaysOn` temporaneamente |
-| Trace ID non correla log e tracce | `trace_id` non propagato nei log | Configurare OTel SDK per iniettare `trace_id` nei log strutturati |
-| Alta latenza query Jaeger | Elasticsearch non ottimizzato | Aumentare shards, usare indici ILM, ottimizzare query per range temporale |
-| Tempo: "trace not found" | Block non ancora compattato | Attendere ciclo di compaction (default 5m), verificare configurazione WAL |
-| Span orfani (senza trace parent) | Context propagation mancante | Verificare header W3C TraceContext nelle chiamate HTTP/gRPC |
-| Memory spike nel Collector | Buffer tail-based sampling pieno | Aumentare `num_traces` o ridurre `decision_wait` nella config tail sampling |
+### Scenario 1 — Tracce non visibili in UI
+
+**Sintomo**: l'applicazione è instrumentata ma Jaeger UI / Grafana Explore non mostra tracce.
+
+**Causa**: sampling troppo aggressivo (la richiesta non viene campionata), errore di export verso il Collector, oppure porta/protocollo OTLP errato (gRPC `4317` vs HTTP `4318`).
+
+**Soluzione**: controllare i log del Collector e gli endpoint; abilitare temporaneamente `AlwaysOn` per escludere il sampling come causa. Il `debug` exporter stampa gli span ricevuti e conferma che il tratto app → Collector funziona.
+
+```bash
+# Log del Collector: cercare errori di export / connection refused
+docker logs otel-collector 2>&1 | grep -iE "error|refused|dropped"
+
+# Verificare che le porte OTLP siano raggiungibili
+nc -zv jaeger 4317
+curl -s http://tempo:3200/ready
+
+# Sampling temporaneo al 100% lato SDK
+export OTEL_TRACES_SAMPLER=always_on
+```
+
+### Scenario 2 — Trace ID non correla log e tracce
+
+**Sintomo**: da una traccia in Grafana il link "Logs" non trova nulla; i log non contengono `trace_id`.
+
+**Causa**: l'applicazione non inietta `trace_id`/`span_id` nei log strutturati, oppure `tracesToLogsV2` usa tag o time shift che non corrispondono alle label di Loki.
+
+**Soluzione**: abilitare l'integrazione log-tracing nell'SDK (es. logging instrumentation) e allineare i `tags` del datasource con le label reali in Loki.
+
+```bash
+# Verificare che i log contengano il trace_id
+kubectl logs deploy/checkout | head -n 3 | grep -i trace_id
+
+# Verificare le label disponibili in Loki
+logcli labels
+```
+
+### Scenario 3 — Query lente o "trace not found"
+
+**Sintomo**: Jaeger risponde lentamente alla ricerca; su Tempo una traccia appena generata dà "trace not found".
+
+**Causa**: su Jaeger, Elasticsearch con pochi shard e indici non ruotati rende lente le query su range ampi. Su Tempo, i dati recenti stanno ancora nell'ingester (WAL) e non sono stati ancora scritti come block interrogabile dal querier.
+
+**Soluzione**: su Jaeger restringere il range temporale, usare indici giornalieri con ILM e più shard. Su Tempo attendere il flush dell'ingester (`max_block_duration`, qui 5m) e verificare che WAL e storage siano scrivibili.
+
+```bash
+# Jaeger: dimensione e numero indici
+curl -s "http://elasticsearch:9200/_cat/indices/jaeger-span-*?v&s=index"
+
+# Tempo: recuperare la traccia per ID e controllare le metriche ingester
+curl -s http://tempo:3200/api/traces/<trace_id> | head -c 300
+curl -s http://tempo:3200/metrics | grep tempo_ingester_blocks_flushed_total
+```
+
+### Scenario 4 — Span orfani e memory spike nel Collector
+
+**Sintomo**: nella UI compaiono span senza parent (trace spezzate); il Collector consuma sempre più memoria o viene ucciso (OOMKilled).
+
+**Causa**: gli span orfani nascono quando un servizio non propaga il context (header W3C `traceparent` perso da proxy/client HTTP non instrumentati). Il memory spike deriva dal buffer del `tail_sampling`: il Collector tiene in memoria tutti gli span di una traccia fino a `decision_wait`.
+
+**Soluzione**: verificare la propagazione degli header lungo tutta la catena; limitare il buffer con `num_traces` e ridurre `decision_wait`, aggiungendo il `memory_limiter` processor per evitare l'OOM.
+
+```yaml
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 1500
+  tail_sampling:
+    decision_wait: 10s     # meno attesa = meno span in memoria
+    num_traces: 50000      # tetto di tracce bufferizzate
+    policies:
+      - name: errors
+        type: status_code
+        status_code: { status_codes: [ERROR] }
+```
+
+```bash
+# Controllare che l'header traceparent arrivi al servizio a valle
+curl -s -H "traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" \
+  http://service-b:8080/health -v 2>&1 | grep -i traceparent
+```
 
 ## Relazioni
 
