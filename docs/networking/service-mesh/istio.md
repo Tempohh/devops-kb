@@ -3,7 +3,7 @@ title: "Istio"
 slug: istio
 category: networking
 tags: [istio, envoy, kubernetes, service-mesh, mtls, virtualservice, destinationrule]
-search_keywords: [istio installation istioctl, istio virtual service, istio destination rule, istio gateway crd, istio peer authentication mtls, istio authorization policy, istio traffic management, istiod control plane, istio observability kiali jaeger prometheus, istio canary deployment, istio fault injection, istio circuit breaker, istio ingress gateway, istio 1.20, istio 1.21, ambient mesh, istio ambient mode, EnvoyFilter, WasmPlugin, WorkloadEntry, ServiceEntry istio, istio-prometheus integration, kiali graph, jaeger tracing istio, istio vs linkerd, istio vs cilium, 503 upstream reset istio, pilot-discovery, istiod crashloopbackoff, istio sidecar injection, istio outlier detection, istio traffic splitting]
+search_keywords: [istio installation istioctl, istio virtual service, istio destination rule, istio gateway crd, istio peer authentication mtls, istio authorization policy, istio traffic management, istiod control plane, istio observability kiali jaeger prometheus, istio canary deployment, istio fault injection, istio circuit breaker, istio ingress gateway, istio gateway api, ztunnel, waypoint proxy, istio 1.24, ambient mesh, istio ambient mode, EnvoyFilter, WasmPlugin, WorkloadEntry, ServiceEntry istio, istio-prometheus integration, kiali graph, jaeger tracing istio, istio vs linkerd, istio vs cilium, 503 upstream reset istio, pilot-discovery, istiod crashloopbackoff, istio sidecar injection, istio outlier detection, istio traffic splitting]
 parent: networking/service-mesh/_index
 related:
   - networking/service-mesh/concetti-base
@@ -12,9 +12,10 @@ related:
   - networking/kubernetes/network-policies
   - dev/resilienza/circuit-breaker
 official_docs: https://istio.io/latest/docs/
-status: complete
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Istio
@@ -86,16 +87,19 @@ graph TB
 | **Galley** | Validazione e normalizzazione della configurazione |
 
 !!! note "Nota storica"
-    Prima di Istio 1.5 (2020), Pilot, Citadel e Galley erano processi separati. Da 1.5 sono stati unificati in un unico processo `istiod` per semplicità operativa.
+    Prima di Istio 1.5 (2020), Pilot, Citadel e Galley erano processi separati. Da 1.5 sono stati unificati in un unico processo `istiod` per semplicità operativa. I nomi sopravvivono solo come funzioni logiche (es. metriche `pilot_*`, binario `pilot-discovery`); Galley come componente non esiste più, la validazione è affidata al validating webhook di istiod.
 
 ## CRD Principali
+
+!!! note "Versioni API"
+    Gli esempi usano `networking.istio.io/v1` e `security.istio.io/v1`, GA da Istio 1.22. Su versioni precedenti usare `v1alpha3`/`v1beta1` (ancora accettate). Per l'ingresso, Istio raccomanda ormai la **Kubernetes Gateway API** (`gateway.networking.k8s.io`: `Gateway` + `HTTPRoute`) al posto di `Gateway`/`VirtualService` Istio; le CRD Istio restano supportate e sono ancora la scelta più diffusa nei mesh esistenti.
 
 ### VirtualService
 
 Definisce le **regole di routing** per il traffico verso un servizio. Permette routing basato su header, peso percentuale, fault injection, retry e timeout.
 
 ```yaml
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: checkout-vs
@@ -136,7 +140,7 @@ spec:
 Definisce le **politiche applicate al traffico verso un host** dopo il routing: load balancing, circuit breaker, mTLS mode, subset (versioni).
 
 ```yaml
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: DestinationRule
 metadata:
   name: checkout-dr
@@ -178,7 +182,7 @@ spec:
 Configura il **load balancer all'edge del mesh** per gestire traffico in ingresso/uscita. Abbinato a un VirtualService per il routing interno.
 
 ```yaml
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: Gateway
 metadata:
   name: main-gateway
@@ -206,7 +210,7 @@ spec:
         httpsRedirect: true
 ---
 # VirtualService per collegare Gateway al servizio interno
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: api-external-vs
@@ -229,7 +233,7 @@ spec:
 Registra **servizi esterni al mesh** (database SaaS, API terze parti) rendendoli visibili e gestibili come fossero servizi interni.
 
 ```yaml
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: ServiceEntry
 metadata:
   name: external-payments-api
@@ -250,7 +254,7 @@ Definisce la **politica mTLS** per il traffico in ingresso ai workload nel names
 
 ```yaml
 # Abilitare mTLS STRICT per tutto il namespace production
-apiVersion: security.istio.io/v1beta1
+apiVersion: security.istio.io/v1
 kind: PeerAuthentication
 metadata:
   name: default
@@ -260,7 +264,7 @@ spec:
     mode: STRICT
 ---
 # Eccezione per un deployment specifico (es. health check da un sistema legacy)
-apiVersion: security.istio.io/v1beta1
+apiVersion: security.istio.io/v1
 kind: PeerAuthentication
 metadata:
   name: legacy-allow
@@ -279,7 +283,7 @@ Definisce le **regole allow/deny** per il traffico: quale sorgente può raggiung
 
 ```yaml
 # Permettere solo al checkout di chiamare il payment service
-apiVersion: security.istio.io/v1beta1
+apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
   name: payment-authz
@@ -300,7 +304,7 @@ spec:
             paths: ["/api/v1/charge", "/api/v1/refund"]
 ---
 # Deny-all di default (best practice: iniziare negando tutto, poi aprire)
-apiVersion: security.istio.io/v1beta1
+apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
   name: deny-all
@@ -315,7 +319,7 @@ spec:
 
 ```yaml
 # DestinationRule: definire i subset v1 e v2
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: DestinationRule
 metadata:
   name: api-service-dr
@@ -330,7 +334,7 @@ spec:
         version: "2.0"
 ---
 # VirtualService: 10% al v2, 90% al v1
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: api-service-vs
@@ -352,7 +356,7 @@ spec:
 ### Fault Injection per Chaos Testing
 
 ```yaml
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: payment-fault-test
@@ -379,7 +383,7 @@ spec:
 ### Circuit Breaker (via DestinationRule)
 
 ```yaml
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: DestinationRule
 metadata:
   name: inventory-circuit-breaker
@@ -401,14 +405,16 @@ spec:
       baseEjectionTime: 30s
       # Max 100% degli host ejectabili
       maxEjectionPercent: 100
-      # Considerare anche HTTP 5xx
+      # Contare separatamente errori locali (connect failure, timeout)
+      # da quelli restituiti dall'upstream (es. 5xx)
       splitExternalLocalOriginErrors: true
+      consecutiveLocalOriginFailures: 5
 ```
 
 ### Retry Policy
 
 ```yaml
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: catalog-vs
@@ -433,15 +439,19 @@ spec:
 Kiali fornisce una visualizzazione grafica del service mesh: traffico tra servizi in real-time, errori, latenza, configurazione mTLS. Si installa come addon Istio.
 
 ```bash
-# Installare gli addon ufficiali (Kiali, Prometheus, Grafana, Jaeger)
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/kiali.yaml
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/prometheus.yaml
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/grafana.yaml
-kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/jaeger.yaml
+# Installare gli addon di esempio (Kiali, Prometheus, Grafana, Jaeger)
+# dalla directory del release scaricato (versione allineata a istiod)
+kubectl apply -f samples/addons/kiali.yaml
+kubectl apply -f samples/addons/prometheus.yaml
+kubectl apply -f samples/addons/grafana.yaml
+kubectl apply -f samples/addons/jaeger.yaml
 
 # Aprire dashboard Kiali
 istioctl dashboard kiali
 ```
+
+!!! warning "Addon solo per demo"
+    I manifest in `samples/addons` sono pensati per test: Prometheus senza persistenza né HA, Jaeger in-memory. In produzione usare uno stack dedicato (kube-prometheus-stack, Tempo/Jaeger con storage) e configurare lo scraping delle metriche Envoy. Il tracing si configura con la **Telemetry API** (`telemetry.istio.io`) e un `extensionProviders` in `meshConfig`.
 
 ### Prometheus + Grafana
 
@@ -477,7 +487,8 @@ def forward_trace_headers(incoming_request, outgoing_request):
 ```bash
 # 1. Scaricare istioctl
 curl -L https://istio.io/downloadIstio | sh -
-export PATH=$PWD/istio-1.20.0/bin:$PATH
+# (ISTIO_VERSION=<versione supportata> per fissare la release; vedi istio.io/latest/docs/releases/supported-releases)
+export PATH=$PWD/istio-<versione>/bin:$PATH
 
 # 2. Verificare prerequisiti del cluster
 istioctl x precheck
@@ -501,8 +512,11 @@ kubectl rollout restart deployment -n production
 |---------|-----|------------|
 | `minimal` | Sviluppo, risorse limitate | Solo istiod |
 | `default` | Produzione standard | istiod + ingress gateway |
-| `demo` | Demo, test, tutorial | Tutti i componenti + addons |
-| `ambient` | Nuova modalità senza sidecar (alpha/beta) | istiod + ztunnel + waypoint proxy |
+| `demo` | Demo, test, tutorial | istiod + ingress/egress gateway, tracing/logging verbosi (gli addon si installano a parte) |
+| `ambient` | Modalità senza sidecar (GA dal 1.24) | istiod + istio-cni + ztunnel (waypoint proxy opzionali, creati via Gateway API) |
+
+!!! info "Ambient mode"
+    In **ambient** il L4 (mTLS, identità, policy L4) è gestito da `ztunnel`, un proxy per nodo scritto in Rust; il L7 (VirtualService/HTTPRoute, policy HTTP) solo dove serve, tramite **waypoint proxy** (Envoy) per namespace o servizio. Si abilita con `kubectl label namespace production istio.io/dataplane-mode=ambient`, senza riavviare i Pod. Vantaggio: niente sidecar da iniettare né da dimensionare; costo: due livelli da capire in troubleshooting. Sidecar e ambient possono coesistere nello stesso mesh.
 
 ## Best Practices
 
@@ -513,33 +527,23 @@ kubectl rollout restart deployment -n production
     Usare PERMISSIVE solo durante la fase di migrazione. In produzione impostare STRICT a livello mesh o namespace con PeerAuthentication.
 
 !!! tip "Resource limits per il sidecar"
-    Il sidecar Envoy consuma risorse. Impostare sempre request/limit per evitare starvation:
+    Il sidecar Envoy consuma risorse. Impostare sempre request/limit per evitare starvation. Non modificare a mano il ConfigMap `istio-sidecar-injector` (gestito da istiod/operator, sovrascritto agli upgrade): usare le annotation sul Pod, oppure il default globale in fase di install.
 
 ```yaml
-# Impostare resource limits per tutti i sidecar di un namespace
-apiVersion: v1
-kind: ConfigMap
+# Per singolo workload: annotation nel Pod template
 metadata:
-  name: istio-sidecar-injector
-  namespace: istio-system
-data:
-  config: |
-    defaultTemplates: [sidecar]
-    policy: enabled
-    alwaysInjectSelector: []
-    neverInjectSelector: []
-    injectedAnnotations: {}
-    template: |
-      spec:
-        containers:
-        - name: istio-proxy
-          resources:
-            requests:
-              cpu: 10m
-              memory: 40Mi
-            limits:
-              cpu: 200m
-              memory: 256Mi
+  annotations:
+    sidecar.istio.io/proxyCPU: "10m"
+    sidecar.istio.io/proxyMemory: "40Mi"
+    sidecar.istio.io/proxyCPULimit: "200m"
+    sidecar.istio.io/proxyMemoryLimit: "256Mi"
+```
+
+```bash
+# Default per tutto il mesh, a install time
+istioctl install --set profile=default \
+  --set values.global.proxy.resources.requests.cpu=10m \
+  --set values.global.proxy.resources.limits.memory=256Mi -y
 ```
 
 !!! tip "GitOps con Istio CRDs"
