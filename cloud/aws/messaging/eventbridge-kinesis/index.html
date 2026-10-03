@@ -6371,7 +6371,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -6396,7 +6396,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25089,6 +25089,14 @@
 
 
 <h1 id="eventbridge-kinesis-msk">EventBridge, Kinesis &amp; MSK<a class="headerlink" href="#eventbridge-kinesis-msk" title="Permanent link">&para;</a></h1>
+<div class="admonition note">
+<p class="admonition-title">Snippet didattici</p>
+<p>Nei blocchi <code>bash</code> i commenti inline dopo il <code>\</code> di continuazione riga (es. <code>--shard-count 4  # ...</code>) servono a spiegare i parametri: rimuoverli prima di copiare il comando, altrimenti la shell interrompe la continuazione.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Rinomine di servizio</p>
+<p><strong>Kinesis Data Firehose</strong> si chiama oggi <strong>Amazon Data Firehose</strong> (namespace CLI <code>aws firehose</code> invariato). <strong>Kinesis Data Analytics</strong> è ora <strong>Amazon Managed Service for Apache Flink</strong>.</p>
+</div>
 <h2 id="amazon-eventbridge">Amazon EventBridge<a class="headerlink" href="#amazon-eventbridge" title="Permanent link">&para;</a></h2>
 <p><strong>EventBridge</strong> è un <strong>serverless event bus</strong> che connette applicazioni tramite eventi. Supporta routing, filtraggio, trasformazione e delivery a oltre 20 target AWS.</p>
 <h3 id="architettura-eventbridge">Architettura EventBridge<a class="headerlink" href="#architettura-eventbridge" title="Permanent link">&para;</a></h3>
@@ -25201,7 +25209,7 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Python — inviare eventi da applicazione</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">boto3</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">events_client</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">'events'</span><span class="p">,</span> <span class="n">region_name</span><span class="o">=</span><span class="s1">'eu-central-1'</span><span class="p">)</span>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
@@ -25213,7 +25221,7 @@
 </span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>                <span class="s1">'Source'</span><span class="p">:</span> <span class="n">source</span><span class="p">,</span>
 </span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>                <span class="s1">'DetailType'</span><span class="p">:</span> <span class="n">event_type</span><span class="p">,</span>
 </span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>                <span class="s1">'Detail'</span><span class="p">:</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">detail</span><span class="p">),</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>                <span class="s1">'Time'</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>                <span class="s1">'Time'</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
 </span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>            <span class="p">}</span>
 </span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>        <span class="p">]</span>
 </span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    <span class="p">)</span>
@@ -25256,7 +25264,9 @@
 - <code>[{"anything-but": ["a", "b"]}]</code> — tutto tranne questi valori
 - <code>[{"numeric": ["&gt;=", 10, "&lt;", 100]}]</code> — range numerico
 - <code>[{"exists": false}]</code> — campo assente
-- <code>[{"cidr": "10.0.0.0/8"}]</code> — IP in range CIDR</p>
+- <code>[{"cidr": "10.0.0.0/8"}]</code> — IP in range CIDR
+- <code>[{"wildcard": "*.prod.example.com"}]</code> — match con <code>*</code> (utile per ARN/path)
+- <code>[{"equals-ignore-case": "pending"}]</code> — exact match case-insensitive</p>
 <hr />
 <h3 id="cross-account-event-bus">Cross-Account Event Bus<a class="headerlink" href="#cross-account-event-bus" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Account A: permettere a Account B di inviare eventi</span>
@@ -25277,7 +25287,7 @@
 </span></code></pre></div>
 <hr />
 <h3 id="eventbridge-pipes">EventBridge Pipes<a class="headerlink" href="#eventbridge-pipes" title="Permanent link">&para;</a></h3>
-<p><strong>EventBridge Pipes</strong> connette source e target con filtraggio e trasformazione senza codice intermedio (Lambda opzionale solo per enrichment).</p>
+<p><strong>EventBridge Pipes</strong> connette source e target con filtraggio e trasformazione senza codice intermedio. Lo step di <strong>enrichment</strong> è opzionale (Lambda, Step Functions, API Gateway o API Destination) e arricchisce l'evento prima del target.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Pipe: SQS → filtraggio → (Lambda enrichment opzionale) → Kinesis Firehose</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>aws<span class="w"> </span>pipes<span class="w"> </span>create-pipe<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span>--name<span class="w"> </span>sqs-to-firehose<span class="w"> </span><span class="se">\</span>
@@ -25296,33 +25306,29 @@
 </span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">    </span>--enrichment<span class="w"> </span>arn:aws:lambda:eu-central-1:123456789012:function:EnrichOrder<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">    </span>--target<span class="w"> </span>arn:aws:firehose:eu-central-1:123456789012:deliverystream/orders-stream<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">    </span>--target-parameters<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="s1">        "KinesisStreamParameters": {</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="s1">            "PartitionKey": "$.body.customerId"</span>
-</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="s1">        }</span>
-</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="w">    </span>--log-configuration<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="s1">        "Level": "ERROR",</span>
-</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="s1">        "CloudwatchLogsLogDestination": {</span>
-</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="s1">            "LogGroupArn": "arn:aws:logs:...:log-group:/pipes/sqs-to-firehose"</span>
-</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="s1">        }</span>
-</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="s1">    }'</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">    </span>--log-configuration<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="s1">        "Level": "ERROR",</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="s1">        "CloudwatchLogsLogDestination": {</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="s1">            "LogGroupArn": "arn:aws:logs:...:log-group:/pipes/sqs-to-firehose"</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="s1">        }</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="s1">    }'</span>
 </span></code></pre></div>
-<p><strong>Pipe source supportati:</strong> SQS, Kinesis Streams, DynamoDB Streams, MSK, MQ
+<p>Il target Firehose non richiede <code>--target-parameters</code>; per un target Kinesis Streams si usa <code>KinesisStreamParameters.PartitionKey</code> (es. <code>$.body.customerId</code>).</p>
+<p><strong>Pipe source supportati:</strong> SQS, Kinesis Streams, DynamoDB Streams, MSK, self-managed Kafka, Amazon MQ
 <strong>Pipe target:</strong> Lambda, ECS, Step Functions, EventBridge Bus, Kinesis, Firehose, SQS, SNS, API Gateway, API Destination</p>
 <hr />
 <h3 id="eventbridge-scheduler">EventBridge Scheduler<a class="headerlink" href="#eventbridge-scheduler" title="Permanent link">&para;</a></h3>
 <p><strong>Scheduler</strong> gestisce task programmati (cron e rate) con delivery garantita, retry e timezone.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Task one-time (esempio: processo batch tra 1 ora)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Task one-time (esempio: report mensile a una data futura precisa)</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>aws<span class="w"> </span>scheduler<span class="w"> </span>create-schedule<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span>--name<span class="w"> </span>process-monthly-report<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span>--schedule-expression<span class="w"> </span><span class="s2">"at(2026-03-01T00:00:00)"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span>--schedule-expression<span class="w"> </span><span class="s2">"at(2026-12-01T00:00:00)"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span>--schedule-expression-timezone<span class="w"> </span><span class="s2">"Europe/Rome"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span>--flexible-time-window<span class="w"> </span><span class="s1">'{"Mode": "OFF"}'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span>--target<span class="w"> </span><span class="s1">'{</span>
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="s1">        "Arn": "arn:aws:lambda:eu-central-1:123456789012:function:MonthlyReport",</span>
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="s1">        "RoleArn": "arn:aws:iam::123456789012:role/SchedulerRole",</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="s1">        "Input": "{\"reportType\": \"monthly\", \"month\": \"2026-02\"}"</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="s1">        "Input": "{\"reportType\": \"monthly\", \"month\": \"2026-11\"}"</span>
 </span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span>--action-after-completion<span class="w"> </span>DELETE<span class="w">    </span><span class="c1"># elimina lo schedule dopo l'esecuzione</span>
 </span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>
@@ -25335,19 +25341,20 @@
 </span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">    </span>--target<span class="w"> </span><span class="s1">'{</span>
 </span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="s1">        "Arn": "arn:aws:sqs:eu-central-1:123456789012:sync-queue",</span>
 </span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="s1">        "RoleArn": "arn:aws:iam::123456789012:role/SchedulerRole",</span>
-</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="s1">        "Input": "{\"action\": \"sync\"}"</span>
-</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="w">    </span>--retry-policy<span class="w"> </span><span class="s1">'{"MaximumRetryAttempts": 3, "MaximumEventAgeInSeconds": 3600}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="w">    </span>--dead-letter-config<span class="w"> </span><span class="s1">'{"Arn": "arn:aws:sqs:...:scheduler-dlq"}'</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="s1">        "Input": "{\"action\": \"sync\"}",</span>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="s1">        "RetryPolicy": {"MaximumRetryAttempts": 3, "MaximumEventAgeInSeconds": 3600},</span>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="s1">        "DeadLetterConfig": {"Arn": "arn:aws:sqs:...:scheduler-dlq"}</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="s1">    }'</span>
 </span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>
-</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="c1"># Task rate expression</span>
+</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="c1"># Task rate expression (--flexible-time-window è obbligatorio)</span>
 </span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>aws<span class="w"> </span>scheduler<span class="w"> </span>create-schedule<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="w">    </span>--name<span class="w"> </span>heartbeat<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="w">    </span>--schedule-expression<span class="w"> </span><span class="s2">"rate(5 minutes)"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a><span class="w">    </span>--target<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-7-33"><a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a><span class="s1">        "Arn": "arn:aws:lambda:...:function:HealthCheck",</span>
-</span><span id="__span-7-34"><a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a><span class="s1">        "RoleArn": "arn:aws:iam::123456789012:role/SchedulerRole"</span>
-</span><span id="__span-7-35"><a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a><span class="s1">    }'</span>
+</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a><span class="w">    </span>--flexible-time-window<span class="w"> </span><span class="s1">'{"Mode": "OFF"}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-33"><a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a><span class="w">    </span>--target<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-7-34"><a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a><span class="s1">        "Arn": "arn:aws:lambda:...:function:HealthCheck",</span>
+</span><span id="__span-7-35"><a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a><span class="s1">        "RoleArn": "arn:aws:iam::123456789012:role/SchedulerRole"</span>
+</span><span id="__span-7-36"><a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a><span class="s1">    }'</span>
 </span></code></pre></div>
 <hr />
 <h2 id="amazon-kinesis">Amazon Kinesis<a class="headerlink" href="#amazon-kinesis" title="Permanent link">&para;</a></h2>
@@ -25410,13 +25417,14 @@
 </span><span id="__span-9-42"><a id="__codelineno-9-42" name="__codelineno-9-42" href="#__codelineno-9-42"></a>aws<span class="w"> </span>kinesis<span class="w"> </span>split-shard<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-43"><a id="__codelineno-9-43" name="__codelineno-9-43" href="#__codelineno-9-43"></a><span class="w">    </span>--stream-name<span class="w"> </span>app-events<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-44"><a id="__codelineno-9-44" name="__codelineno-9-44" href="#__codelineno-9-44"></a><span class="w">    </span>--shard-to-split<span class="w"> </span>shardId-000000000000<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-45"><a id="__codelineno-9-45" name="__codelineno-9-45" href="#__codelineno-9-45"></a><span class="w">    </span>--new-starting-hash-key<span class="w"> </span><span class="s2">"170141183460469231731687303715884105728"</span>
-</span><span id="__span-9-46"><a id="__codelineno-9-46" name="__codelineno-9-46" href="#__codelineno-9-46"></a><span class="w">    </span><span class="c1"># splitting un shard al centro del range di hash</span>
-</span><span id="__span-9-47"><a id="__codelineno-9-47" name="__codelineno-9-47" href="#__codelineno-9-47"></a>
-</span><span id="__span-9-48"><a id="__codelineno-9-48" name="__codelineno-9-48" href="#__codelineno-9-48"></a>aws<span class="w"> </span>kinesis<span class="w"> </span>merge-shards<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-49"><a id="__codelineno-9-49" name="__codelineno-9-49" href="#__codelineno-9-49"></a><span class="w">    </span>--stream-name<span class="w"> </span>app-events<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-50"><a id="__codelineno-9-50" name="__codelineno-9-50" href="#__codelineno-9-50"></a><span class="w">    </span>--shard-to-merge<span class="w"> </span>shardId-000000000001<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-51"><a id="__codelineno-9-51" name="__codelineno-9-51" href="#__codelineno-9-51"></a><span class="w">    </span>--adjacent-shard-to-merge<span class="w"> </span>shardId-000000000002
+</span><span id="__span-9-45"><a id="__codelineno-9-45" name="__codelineno-9-45" href="#__codelineno-9-45"></a><span class="w">    </span>--new-starting-hash-key<span class="w"> </span><span class="s2">"42535295865117307932921825928971026432"</span>
+</span><span id="__span-9-46"><a id="__codelineno-9-46" name="__codelineno-9-46" href="#__codelineno-9-46"></a><span class="w">    </span><span class="c1"># la hash key deve cadere DENTRO il range dello shard: con 4 shard uniformi lo shard 0</span>
+</span><span id="__span-9-47"><a id="__codelineno-9-47" name="__codelineno-9-47" href="#__codelineno-9-47"></a><span class="w">    </span><span class="c1"># copre 0..2^126-1, quindi il punto medio è 2^125. Leggere il range con list-shards</span>
+</span><span id="__span-9-48"><a id="__codelineno-9-48" name="__codelineno-9-48" href="#__codelineno-9-48"></a>
+</span><span id="__span-9-49"><a id="__codelineno-9-49" name="__codelineno-9-49" href="#__codelineno-9-49"></a>aws<span class="w"> </span>kinesis<span class="w"> </span>merge-shards<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-50"><a id="__codelineno-9-50" name="__codelineno-9-50" href="#__codelineno-9-50"></a><span class="w">    </span>--stream-name<span class="w"> </span>app-events<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-51"><a id="__codelineno-9-51" name="__codelineno-9-51" href="#__codelineno-9-51"></a><span class="w">    </span>--shard-to-merge<span class="w"> </span>shardId-000000000001<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-52"><a id="__codelineno-9-52" name="__codelineno-9-52" href="#__codelineno-9-52"></a><span class="w">    </span>--adjacent-shard-to-merge<span class="w"> </span>shardId-000000000002
 </span></code></pre></div>
 <hr />
 <h3 id="lambda-come-consumer-kinesis">Lambda come Consumer Kinesis<a class="headerlink" href="#lambda-come-consumer-kinesis" title="Permanent link">&para;</a></h3>
@@ -25428,16 +25436,17 @@
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span>--batch-size<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span>--maximum-batching-window-in-seconds<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span>--parallelization-factor<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\ </span><span class="w">           </span><span class="c1"># 2 concurrent Lambda per shard</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span>--bisect-batch-on-function-error<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\ </span><span class="w"> </span><span class="c1"># divide batch su errore</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span>--maximum-retry-attempts<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">    </span>--destination-config<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="s1">        "OnFailure": {"Destination": "arn:aws:sqs:...:kinesis-failures-dlq"}</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">    </span>--filter-criteria<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="s1">        "Filters": [{</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="s1">            "Pattern": "{\"data\":{\"eventType\":[\"click\",\"purchase\"]}}"</span>
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="s1">        }]</span>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="s1">    }'</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span>--function-response-types<span class="w"> </span>ReportBatchItemFailures<span class="w"> </span><span class="se">\ </span><span class="w"> </span><span class="c1"># abilita il ritorno di batchItemFailures dall'handler</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span>--bisect-batch-on-function-error<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\ </span><span class="w"> </span><span class="c1"># divide batch su errore</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">    </span>--maximum-retry-attempts<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">    </span>--destination-config<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="s1">        "OnFailure": {"Destination": "arn:aws:sqs:...:kinesis-failures-dlq"}</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">    </span>--filter-criteria<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="s1">        "Filters": [{</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="s1">            "Pattern": "{\"data\":{\"eventType\":[\"click\",\"purchase\"]}}"</span>
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="s1">        }]</span>
+</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="s1">    }'</span>
 </span></code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Lambda handler per Kinesis</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
@@ -25501,7 +25510,7 @@
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="s1">        "ErrorOutputPrefix": "errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/",</span>
 </span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="s1">        "BufferingHints": {</span>
 </span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="s1">            "SizeInMBs": 128,              # flush ogni 128 MB (max)</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="s1">            "IntervalInSeconds": 300        # flush ogni 5 minuti (max)</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="s1">            "IntervalInSeconds": 300        # flush ogni 5 minuti (default; max 900)</span>
 </span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="s1">        },</span>
 </span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="s1">        "CompressionFormat": "GZIP",       # UNCOMPRESSED, GZIP, ZIP, Snappy, HADOOP_SNAPPY</span>
 </span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="s1">        "CloudWatchLoggingOptions": {</span>
@@ -25661,6 +25670,14 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">MSK Express brokers</p>
+<p>Per cluster Provisioned esistono anche i broker <strong>Express</strong> (<code>express.m7g.*</code>): storage gestito e illimitato, scaling e recovery più rapidi rispetto ai broker Standard (<code>kafka.m5.*</code>). Valutarli per nuovi cluster.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">IAM auth e Kafka CLI</p>
+<p>Con autenticazione IAM (porta <strong>9098</strong>) i tool Kafka richiedono <code>--command-config client.properties</code> con <code>security.protocol=SASL_SSL</code>, <code>sasl.mechanism=AWS_MSK_IAM</code>, <code>sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;</code> e <code>sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler</code> (JAR <code>aws-msk-iam-auth</code> nel classpath). Negli esempi sotto è omesso per brevità.</p>
+</div>
 <h3 id="creare-cluster-msk">Creare Cluster MSK<a class="headerlink" href="#creare-cluster-msk" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Creare cluster MSK Provisioned</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>aws<span class="w"> </span>kafka<span class="w"> </span>create-cluster<span class="w"> </span><span class="se">\</span>
@@ -25754,29 +25771,31 @@
 </span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">aws_msk_iam_sasl_signer</span><span class="w"> </span><span class="kn">import</span> <span class="n">MSKAuthTokenProvider</span>
 </span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 </span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_token</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>    <span class="n">token</span><span class="p">,</span> <span class="n">expiry_ms</span> <span class="o">=</span> <span class="n">MSKAuthTokenProvider</span><span class="o">.</span><span class="n">generate_auth_token</span><span class="p">(</span><span class="s1">'eu-central-1'</span><span class="p">)</span>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>    <span class="k">return</span> <span class="n">token</span><span class="p">,</span> <span class="n">expiry_ms</span>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>
-</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="n">consumer</span> <span class="o">=</span> <span class="n">KafkaConsumer</span><span class="p">(</span>
-</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>    <span class="s1">'order-events'</span><span class="p">,</span>
-</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>    <span class="n">bootstrap_servers</span><span class="o">=</span><span class="p">[</span><span class="s1">'broker1:9098'</span><span class="p">,</span> <span class="s1">'broker2:9098'</span><span class="p">,</span> <span class="s1">'broker3:9098'</span><span class="p">],</span>
-</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>    <span class="n">security_protocol</span><span class="o">=</span><span class="s1">'SASL_SSL'</span><span class="p">,</span>
-</span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>    <span class="n">sasl_mechanism</span><span class="o">=</span><span class="s1">'OAUTHBEARER'</span><span class="p">,</span>
-</span><span id="__span-17-17"><a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a>    <span class="n">sasl_oauth_token_provider</span><span class="o">=</span><span class="n">get_token</span><span class="p">,</span>
-</span><span id="__span-17-18"><a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>    <span class="n">group_id</span><span class="o">=</span><span class="s1">'order-processor'</span><span class="p">,</span>
-</span><span id="__span-17-19"><a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a>    <span class="n">auto_offset_reset</span><span class="o">=</span><span class="s1">'latest'</span><span class="p">,</span>
-</span><span id="__span-17-20"><a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a>    <span class="n">enable_auto_commit</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>        <span class="c1"># commit manuale per exactly-once processing</span>
-</span><span id="__span-17-21"><a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a>    <span class="n">value_deserializer</span><span class="o">=</span><span class="k">lambda</span> <span class="n">m</span><span class="p">:</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">'utf-8'</span><span class="p">))</span>
-</span><span id="__span-17-22"><a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a><span class="p">)</span>
-</span><span id="__span-17-23"><a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a>
-</span><span id="__span-17-24"><a id="__codelineno-17-24" name="__codelineno-17-24" href="#__codelineno-17-24"></a><span class="k">for</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">consumer</span><span class="p">:</span>
-</span><span id="__span-17-25"><a id="__codelineno-17-25" name="__codelineno-17-25" href="#__codelineno-17-25"></a>    <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-17-26"><a id="__codelineno-17-26" name="__codelineno-17-26" href="#__codelineno-17-26"></a>        <span class="n">process_order</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
-</span><span id="__span-17-27"><a id="__codelineno-17-27" name="__codelineno-17-27" href="#__codelineno-17-27"></a>        <span class="n">consumer</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>            <span class="c1"># commit dopo elaborazione</span>
-</span><span id="__span-17-28"><a id="__codelineno-17-28" name="__codelineno-17-28" href="#__codelineno-17-28"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-</span><span id="__span-17-29"><a id="__codelineno-17-29" name="__codelineno-17-29" href="#__codelineno-17-29"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Failed to process message: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-</span><span id="__span-17-30"><a id="__codelineno-17-30" name="__codelineno-17-30" href="#__codelineno-17-30"></a>        <span class="c1"># Non commita → messaggio riprocessato alla prossima iterazione</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">MSKTokenProvider</span><span class="p">:</span>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>    <span class="c1"># kafka-python richiede un oggetto con metodo token()</span>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">token</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>        <span class="n">token</span><span class="p">,</span> <span class="n">_expiry_ms</span> <span class="o">=</span> <span class="n">MSKAuthTokenProvider</span><span class="o">.</span><span class="n">generate_auth_token</span><span class="p">(</span><span class="s1">'eu-central-1'</span><span class="p">)</span>
+</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>        <span class="k">return</span> <span class="n">token</span>
+</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>
+</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="n">consumer</span> <span class="o">=</span> <span class="n">KafkaConsumer</span><span class="p">(</span>
+</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>    <span class="s1">'order-events'</span><span class="p">,</span>
+</span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>    <span class="n">bootstrap_servers</span><span class="o">=</span><span class="p">[</span><span class="s1">'broker1:9098'</span><span class="p">,</span> <span class="s1">'broker2:9098'</span><span class="p">,</span> <span class="s1">'broker3:9098'</span><span class="p">],</span>
+</span><span id="__span-17-17"><a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a>    <span class="n">security_protocol</span><span class="o">=</span><span class="s1">'SASL_SSL'</span><span class="p">,</span>
+</span><span id="__span-17-18"><a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>    <span class="n">sasl_mechanism</span><span class="o">=</span><span class="s1">'OAUTHBEARER'</span><span class="p">,</span>
+</span><span id="__span-17-19"><a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a>    <span class="n">sasl_oauth_token_provider</span><span class="o">=</span><span class="n">MSKTokenProvider</span><span class="p">(),</span>
+</span><span id="__span-17-20"><a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a>    <span class="n">group_id</span><span class="o">=</span><span class="s1">'order-processor'</span><span class="p">,</span>
+</span><span id="__span-17-21"><a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a>    <span class="n">auto_offset_reset</span><span class="o">=</span><span class="s1">'latest'</span><span class="p">,</span>
+</span><span id="__span-17-22"><a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a>    <span class="n">enable_auto_commit</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>        <span class="c1"># commit manuale dopo l'elaborazione → at-least-once (consumer idempotenti)</span>
+</span><span id="__span-17-23"><a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a>    <span class="n">value_deserializer</span><span class="o">=</span><span class="k">lambda</span> <span class="n">m</span><span class="p">:</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">'utf-8'</span><span class="p">))</span>
+</span><span id="__span-17-24"><a id="__codelineno-17-24" name="__codelineno-17-24" href="#__codelineno-17-24"></a><span class="p">)</span>
+</span><span id="__span-17-25"><a id="__codelineno-17-25" name="__codelineno-17-25" href="#__codelineno-17-25"></a>
+</span><span id="__span-17-26"><a id="__codelineno-17-26" name="__codelineno-17-26" href="#__codelineno-17-26"></a><span class="k">for</span> <span class="n">message</span> <span class="ow">in</span> <span class="n">consumer</span><span class="p">:</span>
+</span><span id="__span-17-27"><a id="__codelineno-17-27" name="__codelineno-17-27" href="#__codelineno-17-27"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-17-28"><a id="__codelineno-17-28" name="__codelineno-17-28" href="#__codelineno-17-28"></a>        <span class="n">process_order</span><span class="p">(</span><span class="n">message</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+</span><span id="__span-17-29"><a id="__codelineno-17-29" name="__codelineno-17-29" href="#__codelineno-17-29"></a>        <span class="n">consumer</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>            <span class="c1"># commit dopo elaborazione</span>
+</span><span id="__span-17-30"><a id="__codelineno-17-30" name="__codelineno-17-30" href="#__codelineno-17-30"></a>    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-17-31"><a id="__codelineno-17-31" name="__codelineno-17-31" href="#__codelineno-17-31"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Failed to process message: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-17-32"><a id="__codelineno-17-32" name="__codelineno-17-32" href="#__codelineno-17-32"></a>        <span class="c1"># Non commita → messaggio riprocessato alla prossima iterazione</span>
 </span></code></pre></div>
 <h3 id="msk-connect">MSK Connect<a class="headerlink" href="#msk-connect" title="Permanent link">&para;</a></h3>
 <p><strong>MSK Connect</strong> esegue <strong>Kafka Connect</strong> managed — integra Kafka con sistemi esterni (S3, RDS, OpenSearch, ecc.):</p>
@@ -25807,33 +25826,31 @@
 </span><span id="__span-18-25"><a id="__codelineno-18-25" name="__codelineno-18-25" href="#__codelineno-18-25"></a><span class="s1">        "s3.part.size": "67108864",</span>
 </span><span id="__span-18-26"><a id="__codelineno-18-26" name="__codelineno-18-26" href="#__codelineno-18-26"></a><span class="s1">        "flush.size": "10000",</span>
 </span><span id="__span-18-27"><a id="__codelineno-18-27" name="__codelineno-18-27" href="#__codelineno-18-27"></a><span class="s1">        "storage.class": "io.confluent.connect.s3.storage.S3Storage",</span>
-</span><span id="__span-18-28"><a id="__codelineno-18-28" name="__codelineno-18-28" href="#__codelineno-18-28"></a><span class="s1">        "format.class": "io.confluent.connect.s3.format.json.JsonFormat",</span>
-</span><span id="__span-18-29"><a id="__codelineno-18-29" name="__codelineno-18-29" href="#__codelineno-18-29"></a><span class="s1">        "locale": "it_IT",</span>
-</span><span id="__span-18-30"><a id="__codelineno-18-30" name="__codelineno-18-30" href="#__codelineno-18-30"></a><span class="s1">        "timezone": "Europe/Rome",</span>
-</span><span id="__span-18-31"><a id="__codelineno-18-31" name="__codelineno-18-31" href="#__codelineno-18-31"></a><span class="s1">        "timestamp.extractor": "RecordField",</span>
-</span><span id="__span-18-32"><a id="__codelineno-18-32" name="__codelineno-18-32" href="#__codelineno-18-32"></a><span class="s1">        "timestamp.field": "timestamp"</span>
-</span><span id="__span-18-33"><a id="__codelineno-18-33" name="__codelineno-18-33" href="#__codelineno-18-33"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-34"><a id="__codelineno-18-34" name="__codelineno-18-34" href="#__codelineno-18-34"></a><span class="w">    </span>--kafka-cluster<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-18-35"><a id="__codelineno-18-35" name="__codelineno-18-35" href="#__codelineno-18-35"></a><span class="s1">        "apacheKafkaCluster": {</span>
-</span><span id="__span-18-36"><a id="__codelineno-18-36" name="__codelineno-18-36" href="#__codelineno-18-36"></a><span class="s1">            "bootstrapServers": "broker1:9098",</span>
-</span><span id="__span-18-37"><a id="__codelineno-18-37" name="__codelineno-18-37" href="#__codelineno-18-37"></a><span class="s1">            "vpc": {</span>
-</span><span id="__span-18-38"><a id="__codelineno-18-38" name="__codelineno-18-38" href="#__codelineno-18-38"></a><span class="s1">                "subnets": ["subnet-a", "subnet-b", "subnet-c"],</span>
-</span><span id="__span-18-39"><a id="__codelineno-18-39" name="__codelineno-18-39" href="#__codelineno-18-39"></a><span class="s1">                "securityGroups": ["sg-kafka"]</span>
-</span><span id="__span-18-40"><a id="__codelineno-18-40" name="__codelineno-18-40" href="#__codelineno-18-40"></a><span class="s1">            }</span>
-</span><span id="__span-18-41"><a id="__codelineno-18-41" name="__codelineno-18-41" href="#__codelineno-18-41"></a><span class="s1">        }</span>
-</span><span id="__span-18-42"><a id="__codelineno-18-42" name="__codelineno-18-42" href="#__codelineno-18-42"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-43"><a id="__codelineno-18-43" name="__codelineno-18-43" href="#__codelineno-18-43"></a><span class="w">    </span>--kafka-cluster-client-authentication<span class="w"> </span><span class="s1">'{"authenticationType": "IAM"}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-44"><a id="__codelineno-18-44" name="__codelineno-18-44" href="#__codelineno-18-44"></a><span class="w">    </span>--kafka-cluster-encryption-in-transit<span class="w"> </span><span class="s1">'{"encryptionType": "TLS"}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-45"><a id="__codelineno-18-45" name="__codelineno-18-45" href="#__codelineno-18-45"></a><span class="w">    </span>--capacity<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-18-46"><a id="__codelineno-18-46" name="__codelineno-18-46" href="#__codelineno-18-46"></a><span class="s1">        "autoScaling": {</span>
-</span><span id="__span-18-47"><a id="__codelineno-18-47" name="__codelineno-18-47" href="#__codelineno-18-47"></a><span class="s1">            "minWorkerCount": 1,</span>
-</span><span id="__span-18-48"><a id="__codelineno-18-48" name="__codelineno-18-48" href="#__codelineno-18-48"></a><span class="s1">            "maxWorkerCount": 4,</span>
-</span><span id="__span-18-49"><a id="__codelineno-18-49" name="__codelineno-18-49" href="#__codelineno-18-49"></a><span class="s1">            "scaleInPolicy": {"cpuUtilizationPercentage": 20},</span>
-</span><span id="__span-18-50"><a id="__codelineno-18-50" name="__codelineno-18-50" href="#__codelineno-18-50"></a><span class="s1">            "scaleOutPolicy": {"cpuUtilizationPercentage": 80}</span>
-</span><span id="__span-18-51"><a id="__codelineno-18-51" name="__codelineno-18-51" href="#__codelineno-18-51"></a><span class="s1">        }</span>
-</span><span id="__span-18-52"><a id="__codelineno-18-52" name="__codelineno-18-52" href="#__codelineno-18-52"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-53"><a id="__codelineno-18-53" name="__codelineno-18-53" href="#__codelineno-18-53"></a><span class="w">    </span>--plugins<span class="w"> </span><span class="s1">'[{"customPlugin": {"customPluginArn": "arn:aws:kafkaconnect:...:custom-plugin/s3-sink-plugin/..."}}]'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-54"><a id="__codelineno-18-54" name="__codelineno-18-54" href="#__codelineno-18-54"></a><span class="w">    </span>--service-execution-role-arn<span class="w"> </span>arn:aws:iam::123456789012:role/MSKConnectRole
+</span><span id="__span-18-28"><a id="__codelineno-18-28" name="__codelineno-18-28" href="#__codelineno-18-28"></a><span class="s1">        "format.class": "io.confluent.connect.s3.format.json.JsonFormat"</span>
+</span><span id="__span-18-29"><a id="__codelineno-18-29" name="__codelineno-18-29" href="#__codelineno-18-29"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-30"><a id="__codelineno-18-30" name="__codelineno-18-30" href="#__codelineno-18-30"></a><span class="w">    </span>--kafka-connect-version<span class="w"> </span><span class="s2">"2.7.1"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-31"><a id="__codelineno-18-31" name="__codelineno-18-31" href="#__codelineno-18-31"></a><span class="w">    </span>--kafka-cluster<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-18-32"><a id="__codelineno-18-32" name="__codelineno-18-32" href="#__codelineno-18-32"></a><span class="s1">        "apacheKafkaCluster": {</span>
+</span><span id="__span-18-33"><a id="__codelineno-18-33" name="__codelineno-18-33" href="#__codelineno-18-33"></a><span class="s1">            "bootstrapServers": "broker1:9098",</span>
+</span><span id="__span-18-34"><a id="__codelineno-18-34" name="__codelineno-18-34" href="#__codelineno-18-34"></a><span class="s1">            "vpc": {</span>
+</span><span id="__span-18-35"><a id="__codelineno-18-35" name="__codelineno-18-35" href="#__codelineno-18-35"></a><span class="s1">                "subnets": ["subnet-a", "subnet-b", "subnet-c"],</span>
+</span><span id="__span-18-36"><a id="__codelineno-18-36" name="__codelineno-18-36" href="#__codelineno-18-36"></a><span class="s1">                "securityGroups": ["sg-kafka"]</span>
+</span><span id="__span-18-37"><a id="__codelineno-18-37" name="__codelineno-18-37" href="#__codelineno-18-37"></a><span class="s1">            }</span>
+</span><span id="__span-18-38"><a id="__codelineno-18-38" name="__codelineno-18-38" href="#__codelineno-18-38"></a><span class="s1">        }</span>
+</span><span id="__span-18-39"><a id="__codelineno-18-39" name="__codelineno-18-39" href="#__codelineno-18-39"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-40"><a id="__codelineno-18-40" name="__codelineno-18-40" href="#__codelineno-18-40"></a><span class="w">    </span>--kafka-cluster-client-authentication<span class="w"> </span><span class="s1">'{"authenticationType": "IAM"}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-41"><a id="__codelineno-18-41" name="__codelineno-18-41" href="#__codelineno-18-41"></a><span class="w">    </span>--kafka-cluster-encryption-in-transit<span class="w"> </span><span class="s1">'{"encryptionType": "TLS"}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-42"><a id="__codelineno-18-42" name="__codelineno-18-42" href="#__codelineno-18-42"></a><span class="w">    </span>--capacity<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-18-43"><a id="__codelineno-18-43" name="__codelineno-18-43" href="#__codelineno-18-43"></a><span class="s1">        "autoScaling": {</span>
+</span><span id="__span-18-44"><a id="__codelineno-18-44" name="__codelineno-18-44" href="#__codelineno-18-44"></a><span class="s1">            "mcuCount": 1,</span>
+</span><span id="__span-18-45"><a id="__codelineno-18-45" name="__codelineno-18-45" href="#__codelineno-18-45"></a><span class="s1">            "minWorkerCount": 1,</span>
+</span><span id="__span-18-46"><a id="__codelineno-18-46" name="__codelineno-18-46" href="#__codelineno-18-46"></a><span class="s1">            "maxWorkerCount": 4,</span>
+</span><span id="__span-18-47"><a id="__codelineno-18-47" name="__codelineno-18-47" href="#__codelineno-18-47"></a><span class="s1">            "scaleInPolicy": {"cpuUtilizationPercentage": 20},</span>
+</span><span id="__span-18-48"><a id="__codelineno-18-48" name="__codelineno-18-48" href="#__codelineno-18-48"></a><span class="s1">            "scaleOutPolicy": {"cpuUtilizationPercentage": 80}</span>
+</span><span id="__span-18-49"><a id="__codelineno-18-49" name="__codelineno-18-49" href="#__codelineno-18-49"></a><span class="s1">        }</span>
+</span><span id="__span-18-50"><a id="__codelineno-18-50" name="__codelineno-18-50" href="#__codelineno-18-50"></a><span class="s1">    }'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-51"><a id="__codelineno-18-51" name="__codelineno-18-51" href="#__codelineno-18-51"></a><span class="w">    </span>--plugins<span class="w"> </span><span class="s1">'[{"customPlugin": {"customPluginArn": "arn:aws:kafkaconnect:...:custom-plugin/s3-sink-plugin/..."}}]'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-52"><a id="__codelineno-18-52" name="__codelineno-18-52" href="#__codelineno-18-52"></a><span class="w">    </span>--service-execution-role-arn<span class="w"> </span>arn:aws:iam::123456789012:role/MSKConnectRole
 </span></code></pre></div>
 <hr />
 <h2 id="confronto-finale-quale-usare">Confronto Finale: Quale Usare?<a class="headerlink" href="#confronto-finale-quale-usare" title="Permanent link">&para;</a></h2>
@@ -25917,7 +25934,7 @@
 </span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>aws<span class="w"> </span>kinesis<span class="w"> </span>split-shard<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a><span class="w">    </span>--stream-name<span class="w"> </span>app-events<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-21-13"><a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a><span class="w">    </span>--shard-to-split<span class="w"> </span>shardId-000000000000<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-14"><a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a><span class="w">    </span>--new-starting-hash-key<span class="w"> </span><span class="s2">"170141183460469231731687303715884105728"</span>
+</span><span id="__span-21-14"><a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a><span class="w">    </span>--new-starting-hash-key<span class="w"> </span><span class="s2">"42535295865117307932921825928971026432"</span><span class="w">   </span><span class="c1"># punto medio dello shard 0 (stream a 4 shard)</span>
 </span><span id="__span-21-15"><a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a>
 </span><span id="__span-21-16"><a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a><span class="c1"># Passare a modalità ON_DEMAND per auto-scaling</span>
 </span><span id="__span-21-17"><a id="__codelineno-21-17" name="__codelineno-21-17" href="#__codelineno-21-17"></a>aws<span class="w"> </span>kinesis<span class="w"> </span>update-stream-mode<span class="w"> </span><span class="se">\</span>
@@ -25974,18 +25991,19 @@
 </span><span id="__span-23-13"><a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a><span class="w">    </span>--max-messages<span class="w"> </span><span class="m">1</span>
 </span><span id="__span-23-14"><a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a>
 </span><span id="__span-23-15"><a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a><span class="c1"># Saltare il messaggio velenoso (spostare offset avanti di 1)</span>
-</span><span id="__span-23-16"><a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a>kafka-consumer-groups.sh<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-17"><a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a><span class="w">    </span>--bootstrap-server<span class="w"> </span>broker1:9098<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-18"><a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a><span class="w">    </span>--group<span class="w"> </span>order-processor<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-19"><a id="__codelineno-23-19" name="__codelineno-23-19" href="#__codelineno-23-19"></a><span class="w">    </span>--topic<span class="w"> </span>order-events:3<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-20"><a id="__codelineno-23-20" name="__codelineno-23-20" href="#__codelineno-23-20"></a><span class="w">    </span>--reset-offsets<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-21"><a id="__codelineno-23-21" name="__codelineno-23-21" href="#__codelineno-23-21"></a><span class="w">    </span>--to-offset<span class="w"> </span><span class="m">12346</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-22"><a id="__codelineno-23-22" name="__codelineno-23-22" href="#__codelineno-23-22"></a><span class="w">    </span>--execute
-</span><span id="__span-23-23"><a id="__codelineno-23-23" name="__codelineno-23-23" href="#__codelineno-23-23"></a>
-</span><span id="__span-23-24"><a id="__codelineno-23-24" name="__codelineno-23-24" href="#__codelineno-23-24"></a><span class="c1"># Aumentare max.poll.interval.ms nel consumer (se il problema è il rebalance)</span>
-</span><span id="__span-23-25"><a id="__codelineno-23-25" name="__codelineno-23-25" href="#__codelineno-23-25"></a><span class="c1"># Nel codice Python kafka-python:</span>
-</span><span id="__span-23-26"><a id="__codelineno-23-26" name="__codelineno-23-26" href="#__codelineno-23-26"></a><span class="c1"># max_poll_interval_ms=600000,   # 10 minuti</span>
-</span><span id="__span-23-27"><a id="__codelineno-23-27" name="__codelineno-23-27" href="#__codelineno-23-27"></a><span class="c1"># max_poll_records=50            # ridurre batch size</span>
+</span><span id="__span-23-16"><a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a><span class="c1"># NB: il consumer group deve essere inattivo (consumer fermi), altrimenti il reset fallisce</span>
+</span><span id="__span-23-17"><a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a>kafka-consumer-groups.sh<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-23-18"><a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a><span class="w">    </span>--bootstrap-server<span class="w"> </span>broker1:9098<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-23-19"><a id="__codelineno-23-19" name="__codelineno-23-19" href="#__codelineno-23-19"></a><span class="w">    </span>--group<span class="w"> </span>order-processor<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-23-20"><a id="__codelineno-23-20" name="__codelineno-23-20" href="#__codelineno-23-20"></a><span class="w">    </span>--topic<span class="w"> </span>order-events:3<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-23-21"><a id="__codelineno-23-21" name="__codelineno-23-21" href="#__codelineno-23-21"></a><span class="w">    </span>--reset-offsets<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-23-22"><a id="__codelineno-23-22" name="__codelineno-23-22" href="#__codelineno-23-22"></a><span class="w">    </span>--to-offset<span class="w"> </span><span class="m">12346</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-23-23"><a id="__codelineno-23-23" name="__codelineno-23-23" href="#__codelineno-23-23"></a><span class="w">    </span>--execute
+</span><span id="__span-23-24"><a id="__codelineno-23-24" name="__codelineno-23-24" href="#__codelineno-23-24"></a>
+</span><span id="__span-23-25"><a id="__codelineno-23-25" name="__codelineno-23-25" href="#__codelineno-23-25"></a><span class="c1"># Aumentare max.poll.interval.ms nel consumer (se il problema è il rebalance)</span>
+</span><span id="__span-23-26"><a id="__codelineno-23-26" name="__codelineno-23-26" href="#__codelineno-23-26"></a><span class="c1"># Nel codice Python kafka-python:</span>
+</span><span id="__span-23-27"><a id="__codelineno-23-27" name="__codelineno-23-27" href="#__codelineno-23-27"></a><span class="c1"># max_poll_interval_ms=600000,   # 10 minuti</span>
+</span><span id="__span-23-28"><a id="__codelineno-23-28" name="__codelineno-23-28" href="#__codelineno-23-28"></a><span class="c1"># max_poll_records=50            # ridurre batch size</span>
 </span></code></pre></div>
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
