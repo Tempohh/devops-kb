@@ -4718,7 +4718,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -4743,7 +4743,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -4864,6 +4864,28 @@
     <span class="md-ellipsis">
       
         Route 53 DNS Firewall
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dnssec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DNSSEC
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
       
     </span>
   </a>
@@ -24580,6 +24602,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#dnssec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DNSSEC
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -24959,7 +25003,8 @@
 </table>
 <p><strong>Alias Record</strong> (specifico AWS):
 - Funziona come CNAME ma può essere usato su root domain (<code>@</code>)
-- Punta a endpoint AWS (ALB, CloudFront, S3 static, API Gateway, ELB)
+- Punta a endpoint AWS (ALB/NLB/CLB, CloudFront, S3 static website, API Gateway, Global Accelerator, VPC endpoint, Elastic Beanstalk) o a un altro record nella stessa hosted zone — non a DNS name di istanze EC2
+- L'<code>HostedZoneId</code> in <code>AliasTarget</code> è quello <strong>del target</strong> (es. dell'ALB per Region, di CloudFront sempre <code>Z2FDTNDATAQYW2</code>), non della tua zona
 - <strong>Gratuito</strong> (nessun costo per query a alias records AWS)
 - Supporta health checks sulla risorsa target</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Creare record A (indirizzo IP)</span>
@@ -25189,7 +25234,11 @@
 - <strong>Endpoint</strong> — HTTP/HTTPS/TCP verso IP o hostname
 - <strong>Calculated</strong> — aggregazione di più health check (AND/OR)
 - <strong>CloudWatch Alarm</strong> — basato su allarme CloudWatch (per risorse private)</p>
-<p><strong>Route 53 Health Checkers</strong> si trovano in 15 Region globali — il target deve essere accessibile da tutte per passare.</p>
+<p><strong>Route 53 Health Checkers</strong> sono distribuiti in 8 Region AWS pubbliche (circa 15 checker per health check): l'endpoint è considerato healthy se almeno ~18% dei checker lo vede sano. Il target deve quindi accettare traffico dagli IP dei checker (range pubblicati in <code>ip-ranges.json</code>, servizio <code>ROUTE53_HEALTHCHECKS</code>) — security group e WAF non devono bloccarli.</p>
+<div class="admonition warning">
+<p class="admonition-title">Risorse private</p>
+<p>I checker stanno su Internet: non raggiungono IP privati di un VPC. Per endpoint privati crea un <strong>CloudWatch Alarm</strong> sulla metrica (es. <code>UnHealthyHostCount</code>) e un health check di tipo CloudWatch Alarm che lo segue.</p>
+</div>
 <hr />
 <h2 id="route-53-resolver">Route 53 Resolver<a class="headerlink" href="#route-53-resolver" title="Permanent link">&para;</a></h2>
 <p><strong>Route 53 Resolver</strong> gestisce la risoluzione DNS ibrida tra VPC e on-premises.</p>
@@ -25216,7 +25265,16 @@
 </span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="w">    </span>--domain-name<span class="w"> </span><span class="s2">"corp.local"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="w">    </span>--resolver-endpoint-id<span class="w"> </span>rslvr-out-xxxx<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="w">    </span>--target-ips<span class="w"> </span><span class="nv">Ip</span><span class="o">=</span><span class="m">192</span>.168.1.53,Port<span class="o">=</span><span class="m">53</span><span class="w"> </span><span class="nv">Ip</span><span class="o">=</span><span class="m">192</span>.168.1.54,Port<span class="o">=</span><span class="m">53</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="c1"># La regola NON ha effetto finché non è associata al VPC</span>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>aws<span class="w"> </span>route53resolver<span class="w"> </span>associate-resolver-rule<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="w">    </span>--resolver-rule-id<span class="w"> </span>rslvr-rr-xxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="w">    </span>--vpc-id<span class="w"> </span><span class="nv">$VPC_ID</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Requisiti endpoint</p>
+<p>Ogni endpoint richiede almeno 2 IP in subnet (AZ) diverse per alta disponibilità. Il security group deve consentire DNS (TCP+UDP 53): in ingresso dai server on-prem per l'INBOUND, in uscita verso i DNS on-prem per l'OUTBOUND. On-prem deve raggiungere gli IP dell'endpoint via VPN/Direct Connect. Le regole di forwarding sono condivisibili tra account con AWS RAM.</p>
+</div>
 <hr />
 <h2 id="route-53-dns-firewall">Route 53 DNS Firewall<a class="headerlink" href="#route-53-dns-firewall" title="Permanent link">&para;</a></h2>
 <p>Blocca query DNS verso domini malevoli dal VPC:</p>
@@ -25242,87 +25300,131 @@
 </span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">    </span>--vpc-id<span class="w"> </span><span class="nv">$VPC_ID</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">    </span>--priority<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"association"</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="c1"># Senza almeno una regola il rule group non fa nulla: collegare la domain list</span>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>aws<span class="w"> </span>route53resolver<span class="w"> </span>create-firewall-rule<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="w">    </span>--firewall-rule-group-id<span class="w"> </span>rslvr-frg-xxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="w">    </span>--firewall-domain-list-id<span class="w"> </span>fdl-xxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="w">    </span>--priority<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a><span class="w">    </span>--action<span class="w"> </span>BLOCK<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="w">    </span>--block-response<span class="w"> </span>NXDOMAIN<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="w">    </span>--name<span class="w"> </span><span class="s2">"block-malware"</span>
 </span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Managed lists e Advanced</p>
+<p>Oltre alle liste citate esistono <code>AWSManagedDomainsAggregateThreatList</code> e <code>AWSManagedDomainsAmazonGuardDutyThreatList</code>. <strong>DNS Firewall Advanced</strong> aggiunge rilevamento di DGA (Domain Generation Algorithm) e DNS tunneling. Il firewall filtra solo le query che passano dal Resolver del VPC (<code>.2</code>): client che usano DNS esterni lo aggirano, quindi blocca anche l'egress 53/853 verso Internet.</p>
+</div>
+<hr />
+<h2 id="dnssec">DNSSEC<a class="headerlink" href="#dnssec" title="Permanent link">&para;</a></h2>
+<p><strong>DNSSEC</strong> (DNS Security Extensions) firma i record con crittografia a chiave pubblica, così i resolver validanti rilevano risposte falsificate (cache poisoning). Route 53 supporta il <strong>signing</strong> delle public hosted zone: la KSK (Key Signing Key) è una chiave asimmetrica ECC_NIST_P256 in <strong>AWS KMS</strong> (deve stare in <code>us-east-1</code>); le ZSK sono gestite da Route 53. Dopo <code>enable-hosted-zone-dnssec</code> bisogna pubblicare il record <strong>DS</strong> nel registrar/zona parent, altrimenti la catena di fiducia non si chiude.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>aws<span class="w"> </span>route53<span class="w"> </span>create-key-signing-key<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">    </span>--hosted-zone-id<span class="w"> </span>Z1234567890<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>--key-management-service-arn<span class="w"> </span>arn:aws:kms:us-east-1:111122223333:key/xxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>--name<span class="w"> </span>company-ksk<span class="w"> </span>--status<span class="w"> </span>ACTIVE<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span>--caller-reference<span class="w"> </span><span class="s2">"</span><span class="k">$(</span>date<span class="w"> </span>+%s<span class="k">)</span><span class="s2">"</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>aws<span class="w"> </span>route53<span class="w"> </span>enable-hosted-zone-dnssec<span class="w"> </span>--hosted-zone-id<span class="w"> </span>Z1234567890
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>aws<span class="w"> </span>route53<span class="w"> </span>get-dnssec<span class="w"> </span>--hosted-zone-id<span class="w"> </span>Z1234567890<span class="w">   </span><span class="c1"># contiene il DS da pubblicare</span>
+</span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Rischio outage</p>
+<p>Un DS errato o una KSK KMS disabilitata/eliminata rende il dominio non risolvibile per i resolver validanti. Prima di abilitare riduci il TTL e imposta un allarme CloudWatch su <code>DNSSECInternalFailure</code> e <code>DNSSECKeySigningKeysNeedingAction</code>.</p>
+</div>
+<hr />
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Alias invece di CNAME</strong> verso risorse AWS: gratuito, supportato all'apex, segue gli IP del target. Il TTL dell'alias è quello del target.</li>
+<li><strong>TTL basso prima di un cambio</strong> (es. 60s, 24-48h prima): il failover DNS dura health check (<code>RequestInterval</code> × <code>FailureThreshold</code>) + TTL cache dei client. Con <code>RequestInterval: 10</code> (fast, costo extra) ~30s + TTL.</li>
+<li><strong>Failover</strong>: preferisci <code>EvaluateTargetHealth: true</code> su alias verso ALB/NLB, health check esplicito per IP/endpoint non-alias.</li>
+<li><strong>Health check profondo ma leggero</strong>: <code>/health</code> che verifica dipendenze critiche, senza sovraccaricare il backend (15 checker × ogni 30s).</li>
+<li><strong>Infrastructure as Code</strong>: gestisci le zone con Terraform/CloudFormation, non a mano; proteggi le zone critiche con policy IAM e SCP.</li>
+<li><strong>Private Hosted Zone</strong> per DNS interno (split-horizon): stesso nome in zona pubblica e privata, il VPC vede solo la privata.</li>
+<li><strong>Weighted per canary</strong>: Weight 0 = nessun traffico (tranne se tutti i record sono 0, allora equiparti). Il DNS non è un load balancer preciso: i resolver cachano.</li>
+</ul>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-il-dns-non-risolve-dopo-la-creazione-della-hosted-zone">Scenario 1 — Il DNS non risolve dopo la creazione della Hosted Zone<a class="headerlink" href="#scenario-1-il-dns-non-risolve-dopo-la-creazione-della-hosted-zone" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Query DNS verso il dominio restituisce <code>NXDOMAIN</code> o timeout anche dopo aver creato record nella hosted zone.</p>
 <p><strong>Causa:</strong> Il domain registrar punta ancora ai vecchi nameserver, non ai 4 NS assegnati da Route 53.</p>
 <p><strong>Soluzione:</strong> Copiare i 4 nameserver della hosted zone nel registrar del dominio (può richiedere fino a 48h di propagazione).</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Verificare i nameserver assegnati alla hosted zone</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>aws<span class="w"> </span>route53<span class="w"> </span>get-hosted-zone<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>--id<span class="w"> </span>Z1234567890<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'DelegationSet.NameServers'</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># Verificare la propagazione DNS (da CLI)</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>dig<span class="w"> </span>NS<span class="w"> </span>company.com<span class="w"> </span>@8.8.8.8
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>nslookup<span class="w"> </span>company.com<span class="w"> </span><span class="m">1</span>.1.1.1
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Verificare i nameserver assegnati alla hosted zone</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>aws<span class="w"> </span>route53<span class="w"> </span>get-hosted-zone<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span>--id<span class="w"> </span>Z1234567890<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'DelegationSet.NameServers'</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Verificare la propagazione DNS (da CLI)</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>dig<span class="w"> </span>NS<span class="w"> </span>company.com<span class="w"> </span>@8.8.8.8
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>nslookup<span class="w"> </span>company.com<span class="w"> </span><span class="m">1</span>.1.1.1
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-il-failover-non-scatta-nonostante-lendpoint-sia-down">Scenario 2 — Il failover non scatta nonostante l'endpoint sia down<a class="headerlink" href="#scenario-2-il-failover-non-scatta-nonostante-lendpoint-sia-down" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il Primary è irraggiungibile, ma Route 53 continua a rispondere con il record Primary invece di switchare al Secondary.</p>
 <p><strong>Causa:</strong> L'health check non è associato al record Primary, oppure <code>EvaluateTargetHealth</code> è <code>false</code> sull'Alias Target, oppure la soglia di failure (<code>FailureThreshold</code>) non è ancora stata superata (default: 3 check consecutivi).</p>
 <p><strong>Soluzione:</strong> Verificare l'associazione health check e controllare lo stato corrente.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Verificare stato health check</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>aws<span class="w"> </span>route53<span class="w"> </span>get-health-check-status<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span>--health-check-id<span class="w"> </span>hc-primary-id<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'HealthCheckObservations[*].{Region:IPAddress,Status:StatusReport.Status}'</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Verificare che il record Primary abbia HealthCheckId configurato</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>aws<span class="w"> </span>route53<span class="w"> </span>list-resource-record-sets<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span>--hosted-zone-id<span class="w"> </span>Z1234567890<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"ResourceRecordSets[?Failover=='PRIMARY']"</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># Testare l'health check manualmente (HTTP)</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>curl<span class="w"> </span>-v<span class="w"> </span>https://api.company.com/health
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Verificare stato health check</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>aws<span class="w"> </span>route53<span class="w"> </span>get-health-check-status<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span>--health-check-id<span class="w"> </span>hc-primary-id<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span>--query<span class="w"> </span><span class="s1">'HealthCheckObservations[*].{Region:IPAddress,Status:StatusReport.Status}'</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Verificare che il record Primary abbia HealthCheckId configurato</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>aws<span class="w"> </span>route53<span class="w"> </span>list-resource-record-sets<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span>--hosted-zone-id<span class="w"> </span>Z1234567890<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"ResourceRecordSets[?Failover=='PRIMARY']"</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># Testare l'health check manualmente (HTTP)</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>curl<span class="w"> </span>-v<span class="w"> </span>https://api.company.com/health
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-private-hosted-zone-non-risolta-allinterno-del-vpc">Scenario 3 — Private Hosted Zone non risolta all'interno del VPC<a class="headerlink" href="#scenario-3-private-hosted-zone-non-risolta-allinterno-del-vpc" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Le istanze EC2 nel VPC non riescono a risolvere hostname nella private hosted zone (es. <code>db.internal.company.com</code>).</p>
 <p><strong>Causa:</strong> La private hosted zone non è associata al VPC corretto, oppure i DNS attributes del VPC (<code>enableDnsHostnames</code>, <code>enableDnsSupport</code>) non sono abilitati.</p>
 <p><strong>Soluzione:</strong> Verificare associazione VPC e DNS attributes.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Verificare VPC associati alla hosted zone</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>aws<span class="w"> </span>route53<span class="w"> </span>list-vpc-association-authorizations<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span>--hosted-zone-id<span class="w"> </span>Z1234567890
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># Verificare DNS attributes del VPC</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-vpc-attribute<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span>--vpc-id<span class="w"> </span>vpc-xxxxx<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span>--attribute<span class="w"> </span>enableDnsSupport
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-vpc-attribute<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span>--vpc-id<span class="w"> </span>vpc-xxxxx<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">    </span>--attribute<span class="w"> </span>enableDnsHostnames
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="c1"># Abilitare DNS support se disabilitato</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>aws<span class="w"> </span>ec2<span class="w"> </span>modify-vpc-attribute<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">    </span>--vpc-id<span class="w"> </span>vpc-xxxxx<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">    </span>--enable-dns-support
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="c1"># Associare VPC alla private hosted zone</span>
-</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a>aws<span class="w"> </span>route53<span class="w"> </span>associate-vpc-with-hosted-zone<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="w">    </span>--hosted-zone-id<span class="w"> </span>Z1234567890<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="w">    </span>--vpc<span class="w"> </span><span class="nv">VPCRegion</span><span class="o">=</span>eu-central-1,VPCId<span class="o">=</span>vpc-xxxxx
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Verificare VPC associati alla hosted zone (sezione VPCs)</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>aws<span class="w"> </span>route53<span class="w"> </span>get-hosted-zone<span class="w"> </span>--id<span class="w"> </span>Z1234567890<span class="w"> </span>--query<span class="w"> </span><span class="s1">'VPCs'</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Solo per VPC in un ALTRO account: prima autorizzare dall'account della zona...</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>aws<span class="w"> </span>route53<span class="w"> </span>create-vpc-association-authorization<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span>--hosted-zone-id<span class="w"> </span>Z1234567890<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">    </span>--vpc<span class="w"> </span><span class="nv">VPCRegion</span><span class="o">=</span>eu-central-1,VPCId<span class="o">=</span>vpc-xxxxx
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># ...poi eseguire associate-vpc-with-hosted-zone dall'account del VPC</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># Verificare DNS attributes del VPC</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-vpc-attribute<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">    </span>--vpc-id<span class="w"> </span>vpc-xxxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">    </span>--attribute<span class="w"> </span>enableDnsSupport
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-vpc-attribute<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">    </span>--vpc-id<span class="w"> </span>vpc-xxxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">    </span>--attribute<span class="w"> </span>enableDnsHostnames
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="c1"># Abilitare DNS support se disabilitato</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>aws<span class="w"> </span>ec2<span class="w"> </span>modify-vpc-attribute<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">    </span>--vpc-id<span class="w"> </span>vpc-xxxxx<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">    </span>--enable-dns-support
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="c1"># Associare VPC alla private hosted zone</span>
+</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a>aws<span class="w"> </span>route53<span class="w"> </span>associate-vpc-with-hosted-zone<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="w">    </span>--hosted-zone-id<span class="w"> </span>Z1234567890<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a><span class="w">    </span>--vpc<span class="w"> </span><span class="nv">VPCRegion</span><span class="o">=</span>eu-central-1,VPCId<span class="o">=</span>vpc-xxxxx
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-geolocation-routing-risponde-con-record-default-invece-del-record-atteso">Scenario 4 — Geolocation routing risponde con record Default invece del record atteso<a class="headerlink" href="#scenario-4-geolocation-routing-risponde-con-record-default-invece-del-record-atteso" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Un client in una location specifica (es. Italia) riceve il record <code>Default</code> invece del record configurato per <code>Europe</code>.</p>
-<p><strong>Causa:</strong> Route 53 geolocation usa la posizione rilevata dall'IP del resolver DNS del client, non dell'IP del client stesso. Se il resolver è un DNS pubblico (8.8.8.8) geolocalizzato diversamente, la policy fallisce. In alternativa, il record per la location specifica non è stato creato.</p>
+<p><strong>Causa:</strong> Route 53 geolocation usa la posizione rilevata dall'IP del resolver DNS del client, non dell'IP del client stesso, salvo che il resolver invii EDNS0 Client Subnet (ECS, es. 8.8.8.8 lo fa, altri no). Se il resolver è anycast/geolocalizzato diversamente, la policy fallisce. In alternativa, il record per la location specifica non è stato creato.</p>
 <p><strong>Soluzione:</strong> Verificare i record esistenti e testare con un resolver specifico.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Elencare tutti i record geolocation per verificare la copertura</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>aws<span class="w"> </span>route53<span class="w"> </span>list-resource-record-sets<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span>--hosted-zone-id<span class="w"> </span>Z1234567890<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"ResourceRecordSets[?GeoLocation!=null].{Name:Name,Geo:GeoLocation}"</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># Testare con resolver specifico per geolocation</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>dig<span class="w"> </span>api.company.com<span class="w"> </span>@1.1.1.1
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="c1"># Usare Route 53 Test DNS response (console) o CLI</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>aws<span class="w"> </span>route53<span class="w"> </span>test-dns-answer<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">    </span>--hosted-zone-id<span class="w"> </span>Z1234567890<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">    </span>--record-name<span class="w"> </span>api.company.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">    </span>--record-type<span class="w"> </span>A<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">    </span>--resolver-ip<span class="w"> </span><span class="m">8</span>.8.8.8<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">    </span>--edns0-client-subnet-ip<span class="w"> </span><span class="m">151</span>.0.0.0<span class="w">  </span><span class="c1"># IP italiano per simulare client IT</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Elencare tutti i record geolocation per verificare la copertura</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>aws<span class="w"> </span>route53<span class="w"> </span>list-resource-record-sets<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span>--hosted-zone-id<span class="w"> </span>Z1234567890<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span>--query<span class="w"> </span><span class="s2">"ResourceRecordSets[?GeoLocation!=null].{Name:Name,Geo:GeoLocation}"</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># Testare con resolver specifico per geolocation</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>dig<span class="w"> </span>api.company.com<span class="w"> </span>@1.1.1.1
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># Usare Route 53 Test DNS response (console) o CLI</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>aws<span class="w"> </span>route53<span class="w"> </span>test-dns-answer<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">    </span>--hosted-zone-id<span class="w"> </span>Z1234567890<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">    </span>--record-name<span class="w"> </span>api.company.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">    </span>--record-type<span class="w"> </span>A<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="w">    </span>--resolver-ip<span class="w"> </span><span class="m">8</span>.8.8.8<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="w">    </span>--edns0-client-subnet-ip<span class="w"> </span><span class="m">151</span>.0.0.0<span class="w">  </span><span class="c1"># IP italiano per simulare client IT</span>
 </span></code></pre></div>
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
