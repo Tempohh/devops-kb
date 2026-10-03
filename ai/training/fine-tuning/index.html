@@ -1927,7 +1927,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -1952,7 +1952,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -2485,7 +2485,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -3410,7 +3410,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -21608,7 +21608,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -22925,7 +22925,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25131,8 +25131,7 @@
 </div>
 <div class="admonition warning">
 <p class="admonition-title">API TRL/Transformers in evoluzione</p>
-<p><code>trl</code> cambia API spesso. Gli esempi seguono le versioni recenti: <code>processing_class</code> al posto di <code>tokenizer</code>, <code>eval_strategy</code> al posto di <code>evaluation_strategy</code>. Se vedi <code>TypeError: unexpected keyword argument</code>, controlla la versione installata (<code>pip show trl transformers</code>) e il changelog.
-<!-- REVIEW: verificare nomi parametri SFTConfig (max_length vs max_seq_length), DPOConfig (max_prompt_length) sulla versione TRL corrente --></p>
+<p><code>trl</code> cambia API spesso. Gli esempi seguono le versioni recenti (TRL 1.x, verificato su v1.14.1): <code>processing_class</code> al posto di <code>tokenizer</code>, <code>eval_strategy</code> al posto di <code>evaluation_strategy</code>, <code>max_length</code> in <code>SFTConfig</code> (non più <code>max_seq_length</code>), e <code>DPOConfig</code> senza <code>max_prompt_length</code> (resta solo <code>max_length</code>). Se vedi <code>TypeError: unexpected keyword argument</code>, controlla la versione installata (<code>pip show trl transformers</code>) e il changelog.</p>
 </div>
 <details class="info">
 <summary>Quando NON fare fine-tuning</summary>
@@ -25536,20 +25535,19 @@
 </span><span id="__span-13-33"><a id="__codelineno-13-33" name="__codelineno-13-33" href="#__codelineno-13-33"></a>    <span class="n">learning_rate</span><span class="o">=</span><span class="mf">5e-7</span><span class="p">,</span>    <span class="c1"># DPO usa LR molto più basso di SFT (full FT); con LoRA ~5e-6</span>
 </span><span id="__span-13-34"><a id="__codelineno-13-34" name="__codelineno-13-34" href="#__codelineno-13-34"></a>    <span class="n">beta</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>              <span class="c1"># temperatura KL — più alto = più conservativo</span>
 </span><span id="__span-13-35"><a id="__codelineno-13-35" name="__codelineno-13-35" href="#__codelineno-13-35"></a>    <span class="n">bf16</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-13-36"><a id="__codelineno-13-36" name="__codelineno-13-36" href="#__codelineno-13-36"></a>    <span class="n">max_prompt_length</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
-</span><span id="__span-13-37"><a id="__codelineno-13-37" name="__codelineno-13-37" href="#__codelineno-13-37"></a>    <span class="n">max_length</span><span class="o">=</span><span class="mi">2048</span><span class="p">,</span>
-</span><span id="__span-13-38"><a id="__codelineno-13-38" name="__codelineno-13-38" href="#__codelineno-13-38"></a><span class="p">)</span>
-</span><span id="__span-13-39"><a id="__codelineno-13-39" name="__codelineno-13-39" href="#__codelineno-13-39"></a>
-</span><span id="__span-13-40"><a id="__codelineno-13-40" name="__codelineno-13-40" href="#__codelineno-13-40"></a><span class="n">dpo_trainer</span> <span class="o">=</span> <span class="n">DPOTrainer</span><span class="p">(</span>
-</span><span id="__span-13-41"><a id="__codelineno-13-41" name="__codelineno-13-41" href="#__codelineno-13-41"></a>    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>           <span class="c1"># SFT model da allineare</span>
-</span><span id="__span-13-42"><a id="__codelineno-13-42" name="__codelineno-13-42" href="#__codelineno-13-42"></a>    <span class="n">ref_model</span><span class="o">=</span><span class="n">ref_model</span><span class="p">,</span>   <span class="c1"># copia frozen del SFT model (None se model ha adapter PEFT:</span>
-</span><span id="__span-13-43"><a id="__codelineno-13-43" name="__codelineno-13-43" href="#__codelineno-13-43"></a>                           <span class="c1"># il reference è il modello con adapter disattivato → risparmia VRAM)</span>
-</span><span id="__span-13-44"><a id="__codelineno-13-44" name="__codelineno-13-44" href="#__codelineno-13-44"></a>    <span class="n">args</span><span class="o">=</span><span class="n">dpo_config</span><span class="p">,</span>
-</span><span id="__span-13-45"><a id="__codelineno-13-45" name="__codelineno-13-45" href="#__codelineno-13-45"></a>    <span class="n">train_dataset</span><span class="o">=</span><span class="n">Dataset</span><span class="o">.</span><span class="n">from_list</span><span class="p">(</span><span class="n">dpo_dataset</span><span class="p">),</span>
-</span><span id="__span-13-46"><a id="__codelineno-13-46" name="__codelineno-13-46" href="#__codelineno-13-46"></a>    <span class="n">processing_class</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
-</span><span id="__span-13-47"><a id="__codelineno-13-47" name="__codelineno-13-47" href="#__codelineno-13-47"></a><span class="p">)</span>
-</span><span id="__span-13-48"><a id="__codelineno-13-48" name="__codelineno-13-48" href="#__codelineno-13-48"></a>
-</span><span id="__span-13-49"><a id="__codelineno-13-49" name="__codelineno-13-49" href="#__codelineno-13-49"></a><span class="n">dpo_trainer</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+</span><span id="__span-13-36"><a id="__codelineno-13-36" name="__codelineno-13-36" href="#__codelineno-13-36"></a>    <span class="n">max_length</span><span class="o">=</span><span class="mi">2048</span><span class="p">,</span>       <span class="c1"># prompt + risposta; max_prompt_length rimosso nelle versioni recenti di TRL</span>
+</span><span id="__span-13-37"><a id="__codelineno-13-37" name="__codelineno-13-37" href="#__codelineno-13-37"></a><span class="p">)</span>
+</span><span id="__span-13-38"><a id="__codelineno-13-38" name="__codelineno-13-38" href="#__codelineno-13-38"></a>
+</span><span id="__span-13-39"><a id="__codelineno-13-39" name="__codelineno-13-39" href="#__codelineno-13-39"></a><span class="n">dpo_trainer</span> <span class="o">=</span> <span class="n">DPOTrainer</span><span class="p">(</span>
+</span><span id="__span-13-40"><a id="__codelineno-13-40" name="__codelineno-13-40" href="#__codelineno-13-40"></a>    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>           <span class="c1"># SFT model da allineare</span>
+</span><span id="__span-13-41"><a id="__codelineno-13-41" name="__codelineno-13-41" href="#__codelineno-13-41"></a>    <span class="n">ref_model</span><span class="o">=</span><span class="n">ref_model</span><span class="p">,</span>   <span class="c1"># copia frozen del SFT model (None se model ha adapter PEFT:</span>
+</span><span id="__span-13-42"><a id="__codelineno-13-42" name="__codelineno-13-42" href="#__codelineno-13-42"></a>                           <span class="c1"># il reference è il modello con adapter disattivato → risparmia VRAM)</span>
+</span><span id="__span-13-43"><a id="__codelineno-13-43" name="__codelineno-13-43" href="#__codelineno-13-43"></a>    <span class="n">args</span><span class="o">=</span><span class="n">dpo_config</span><span class="p">,</span>
+</span><span id="__span-13-44"><a id="__codelineno-13-44" name="__codelineno-13-44" href="#__codelineno-13-44"></a>    <span class="n">train_dataset</span><span class="o">=</span><span class="n">Dataset</span><span class="o">.</span><span class="n">from_list</span><span class="p">(</span><span class="n">dpo_dataset</span><span class="p">),</span>
+</span><span id="__span-13-45"><a id="__codelineno-13-45" name="__codelineno-13-45" href="#__codelineno-13-45"></a>    <span class="n">processing_class</span><span class="o">=</span><span class="n">tokenizer</span><span class="p">,</span>
+</span><span id="__span-13-46"><a id="__codelineno-13-46" name="__codelineno-13-46" href="#__codelineno-13-46"></a><span class="p">)</span>
+</span><span id="__span-13-47"><a id="__codelineno-13-47" name="__codelineno-13-47" href="#__codelineno-13-47"></a>
+</span><span id="__span-13-48"><a id="__codelineno-13-48" name="__codelineno-13-48" href="#__codelineno-13-48"></a><span class="n">dpo_trainer</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
 </span></code></pre></div>
 <h3 id="dpo-vs-rlhf">DPO vs RLHF<a class="headerlink" href="#dpo-vs-rlhf" title="Permanent link">&para;</a></h3>
 <table>
@@ -25717,8 +25715,8 @@
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">per_device_train_batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>         <span class="c1"># da 2 a 1</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">gradient_accumulation_steps</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>         <span class="c1"># da 4 a 8 (effective batch invariato)</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1"># Leva 2: riduci max_seq_length</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="n">max_seq_length</span><span class="o">=</span><span class="mi">2048</span><span class="p">,</span>                   <span class="c1"># da 4096 a 2048</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1"># Leva 2: riduci la lunghezza di sequenza</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="n">max_length</span><span class="o">=</span><span class="mi">2048</span><span class="p">,</span>                       <span class="c1"># SFTConfig/DPOConfig (da 4096 a 2048); con Unsloth: max_seq_length</span>
 </span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>
 </span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="c1"># Leva 3: riduci rank LoRA (meno parametri addestrabili)</span>
 </span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="n">r</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>                                   <span class="c1"># da 16 a 8</span>
@@ -25760,18 +25758,17 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Aumenta beta per penalizzare di più la divergenza dal ref model</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">dpo_config</span> <span class="o">=</span> <span class="n">DPOConfig</span><span class="p">(</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>    <span class="n">beta</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>                  <span class="c1"># da 0.1 a 0.3 (più conservativo)</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    <span class="n">max_prompt_length</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span>     <span class="c1"># riduci se i prompt sono molto lunghi</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="n">max_length</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>    <span class="n">loss_type</span><span class="o">=</span><span class="s2">"sigmoid"</span><span class="p">,</span>       <span class="c1"># default, più stabile di "hinge"</span>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="p">)</span>
-</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>
-</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="c1"># Verifica qualità del dataset: chosen e rejected devono essere chiaramente diversi</span>
-</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="c1"># Scarta coppie dove la differenza è minima (es. solo punteggiatura)</span>
-</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">filter_preference_pairs</span><span class="p">(</span><span class="n">dataset</span><span class="p">):</span>
-</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>    <span class="k">return</span> <span class="p">[</span><span class="n">ex</span> <span class="k">for</span> <span class="n">ex</span> <span class="ow">in</span> <span class="n">dataset</span>
-</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a>            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ex</span><span class="p">[</span><span class="s2">"chosen"</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">50</span>
-</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a>            <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">ex</span><span class="p">[</span><span class="s2">"rejected"</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">20</span>
-</span><span id="__span-19-15"><a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a>            <span class="ow">and</span> <span class="n">ex</span><span class="p">[</span><span class="s2">"chosen"</span><span class="p">]</span> <span class="o">!=</span> <span class="n">ex</span><span class="p">[</span><span class="s2">"rejected"</span><span class="p">]]</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    <span class="n">max_length</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>           <span class="c1"># riduci se prompt+risposte sono molto lunghi</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="n">loss_type</span><span class="o">=</span><span class="s2">"sigmoid"</span><span class="p">,</span>       <span class="c1"># default, più stabile di "hinge"</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="p">)</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="c1"># Verifica qualità del dataset: chosen e rejected devono essere chiaramente diversi</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="c1"># Scarta coppie dove la differenza è minima (es. solo punteggiatura)</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">filter_preference_pairs</span><span class="p">(</span><span class="n">dataset</span><span class="p">):</span>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>    <span class="k">return</span> <span class="p">[</span><span class="n">ex</span> <span class="k">for</span> <span class="n">ex</span> <span class="ow">in</span> <span class="n">dataset</span>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ex</span><span class="p">[</span><span class="s2">"chosen"</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">50</span>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a>            <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">ex</span><span class="p">[</span><span class="s2">"rejected"</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">20</span>
+</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a>            <span class="ow">and</span> <span class="n">ex</span><span class="p">[</span><span class="s2">"chosen"</span><span class="p">]</span> <span class="o">!=</span> <span class="n">ex</span><span class="p">[</span><span class="s2">"rejected"</span><span class="p">]]</span>
 </span></code></pre></div>
 <h3 id="scenario-4-merge-delladapter-lora-produce-artefatti-o-qualita-degradata">Scenario 4 — Merge dell'adapter LoRA produce artefatti o qualità degradata<a class="headerlink" href="#scenario-4-merge-delladapter-lora-produce-artefatti-o-qualita-degradata" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Dopo <code>merge_and_unload()</code>, il modello merged produce output molto peggiori del modello con adapter caricato separatamente.</p>
