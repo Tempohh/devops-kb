@@ -7,9 +7,10 @@ search_keywords: [contract testing, pact, consumer driven contract, CDC, schema 
 parent: ci-cd/testing/_index
 related: [ci-cd/strategie/pipeline-security, ci-cd/github-actions/workflow-avanzati, ci-cd/gitlab-ci/pipeline-avanzato]
 official_docs: https://docs.pact.io/
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Contract Testing
@@ -111,10 +112,16 @@ Il framework più diffuso è **Pact**, che implementa il pattern Consumer-Driven
     }
   ],
   "metadata": {
-    "pactSpecification": { "version": "2.0.0" }
+    "pactSpecification": { "version": "3.0.0" }
   }
 }
 ```
+
+!!! note "Versioni della specifica"
+    Pact Specification v3 aggiunge matcher e provider state con parametri; **v4** (oggi standard nelle librerie recenti) aggiunge interazioni multi-protocollo (HTTP, messaggi, gRPC/plugin). Il broker e i verifier recenti leggono tutte le versioni.
+
+!!! tip "Bi-directional contract testing (PactFlow)"
+    Alternativa a CDC puro: il consumer pubblica il contratto generato dai propri test (o da mock), il provider pubblica la propria spec OpenAPI + risultati dei test; PactFlow confronta i due **senza** replay delle interazioni sul provider. Meno intrusivo per provider già documentati con OpenAPI, ma verifica meno a fondo (nessuna esecuzione reale delle richieste).
 
 ### Matchers (Pact v3+)
 
@@ -142,6 +149,9 @@ Questo permette al provider di cambiare valori (es. il prezzo) senza rompere il 
 ## Configurazione & Pratica
 
 ### Setup Pact — Consumer (Python)
+
+!!! warning "Versione di pact-python"
+    Gli esempi Python usano l'API classica di **pact-python 2.x** (`Consumer(...).has_pact_with`, `Verifier.verify_with_broker`). pact-python 3.x è una riscrittura sul core Rust condiviso con le altre librerie, con API diverse (`Pact`, builder fluente, `Verifier` a builder): se parti da zero consulta la documentazione della 3.x e pinna la versione in `requirements.txt`.
 
 ```python
 # tests/test_product_consumer.py
@@ -201,11 +211,12 @@ def test_get_product(pact):
 
 ```python
 # tests/test_product_provider.py
+import os
 import pytest
 from pact import Verifier
 
 PROVIDER_BASE_URL = "http://localhost:8000"
-PACT_BROKER_URL = "http://pact-broker:9292"
+PACT_BROKER_URL = os.environ["PACT_BROKER_URL"]
 
 def test_provider_verification():
     verifier = Verifier(
@@ -215,11 +226,12 @@ def test_provider_verification():
 
     output, _ = verifier.verify_with_broker(
         broker_url=PACT_BROKER_URL,
-        broker_username="pactbroker",
-        broker_password="pactbroker",
-        publish_verification_results=True,
-        provider_version="1.2.3",           # versione corrente del provider
-        provider_version_branch="main",
+        broker_username=os.environ["PACT_BROKER_USER"],
+        broker_password=os.environ["PACT_BROKER_PASSWORD"],
+        # pubblicare i risultati solo da CI, non da run locali
+        publish_verification_results=bool(os.environ.get("CI")),
+        provider_version=os.environ["GIT_SHA"],      # SHA del commit, mai un valore fisso
+        provider_version_branch=os.environ.get("GIT_BRANCH", "main"),
         enable_pending=True,                # non blocca per contratti non verificati
         include_wip_pacts_since="2026-01-01",
     )
@@ -231,49 +243,46 @@ def test_provider_verification():
 
 ```typescript
 // src/__tests__/product.consumer.test.ts
-import { Pact, Matchers } from "@pact-foundation/pact";
+// API moderna di pact-js (>= 10): PactV3 + MatchersV3, mock server gestito da executeTest
+import { PactV3, MatchersV3 } from "@pact-foundation/pact";
 import { ProductClient } from "../clients/productClient";
 
-const { like, integer } = Matchers;
+const { like, integer, decimal } = MatchersV3;
 
-const provider = new Pact({
+const provider = new PactV3({
   consumer: "OrderService",
   provider: "ProductService",
-  port: 1234,
-  log: process.env.LOG_LEVEL ?? "warn",
   dir: "./pacts",
 });
 
 describe("ProductService consumer", () => {
-  beforeAll(() => provider.setup());
-  afterAll(() => provider.finalize());
-  afterEach(() => provider.verify());
-
-  it("retrieves product details", async () => {
-    await provider.addInteraction({
-      state: "product 123 exists",
-      uponReceiving: "a request for product 123",
-      withRequest: {
+  it("retrieves product details", () => {
+    provider
+      .given("product 123 exists")
+      .uponReceiving("a request for product 123")
+      .withRequest({
         method: "GET",
         path: "/products/123",
         headers: { Accept: "application/json" },
-      },
-      willRespondWith: {
+      })
+      .willRespondWith({
         status: 200,
         headers: { "Content-Type": "application/json" },
         body: {
           id: integer(123),
           name: like("Widget Pro"),
-          price: like(29.99),
+          price: decimal(29.99),
         },
-      },
+      });
+
+    // il mock server parte su una porta libera; il pact file è scritto se il test passa
+    return provider.executeTest(async (mockServer) => {
+      const client = new ProductClient(mockServer.url);
+      const product = await client.getProduct(123);
+
+      expect(product.id).toBeDefined();
+      expect(product.name).toBeDefined();
     });
-
-    const client = new ProductClient("http://localhost:1234");
-    const product = await client.getProduct(123);
-
-    expect(product.id).toBeDefined();
-    expect(product.name).toBeDefined();
   });
 });
 ```
@@ -282,11 +291,9 @@ describe("ProductService consumer", () => {
 
 ```yaml
 # docker-compose.yml
-version: "3.8"
-
 services:
   pact-broker:
-    image: pactfoundation/pact-broker:latest
+    image: pactfoundation/pact-broker:latest   # in produzione: pinna un tag/digest specifico
     ports:
       - "9292:9292"
     environment:
@@ -311,6 +318,8 @@ volumes:
 ```
 
 ### Pubblicare un contratto sul Broker
+
+La CLI `pact-broker` **non** è inclusa in `pact-python`: si usa l'immagine Docker `pactfoundation/pact-cli` (sottocomando `broker`, es. `docker run --rm -v "$PWD/pacts:/pacts" pactfoundation/pact-cli broker publish /pacts ...`) oppure l'eseguibile standalone. Il comando seguente è nella forma abbreviata `pact-broker`.
 
 ```bash
 # Con pact-broker CLI
@@ -377,23 +386,29 @@ jobs:
 
       - name: Publish pact to broker
         run: |
-          pip install pact-python
-          pact-broker publish ./pacts \
-            --broker-base-url ${{ vars.PACT_BROKER_URL }} \
-            --broker-username ${{ secrets.PACT_BROKER_USER }} \
-            --broker-password ${{ secrets.PACT_BROKER_PASSWORD }} \
+          docker run --rm -v "$PWD/pacts:/pacts" \
+            -e PACT_BROKER_BASE_URL=${{ vars.PACT_BROKER_URL }} \
+            -e PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USER }} \
+            -e PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }} \
+            pactfoundation/pact-cli broker publish /pacts \
             --consumer-app-version ${{ github.sha }} \
             --branch ${{ github.ref_name }}
 
       - name: Can I deploy?
         run: |
-          pact-broker can-i-deploy \
+          docker run --rm \
+            -e PACT_BROKER_BASE_URL=${{ vars.PACT_BROKER_URL }} \
+            -e PACT_BROKER_USERNAME=${{ secrets.PACT_BROKER_USER }} \
+            -e PACT_BROKER_PASSWORD=${{ secrets.PACT_BROKER_PASSWORD }} \
+            pactfoundation/pact-cli broker can-i-deploy \
             --pacticipant OrderService \
             --version ${{ github.sha }} \
-            --to-environment production \
-            --broker-base-url ${{ vars.PACT_BROKER_URL }} \
-            --broker-username ${{ secrets.PACT_BROKER_USER }} \
-            --broker-password ${{ secrets.PACT_BROKER_PASSWORD }}
+            --to-environment production
+
+      # Nel job di DEPLOY (solo da main, dopo il rilascio reale) registrare la versione:
+      #   broker record-deployment --pacticipant OrderService \
+      #     --version ${{ github.sha }} --environment production
+      # Senza questo, can-i-deploy non sa cosa gira in production.
 ```
 
 ### GitHub Actions — Provider Pipeline
@@ -432,25 +447,22 @@ jobs:
       - name: Start provider service
         run: |
           uvicorn myapp.main:app --host 0.0.0.0 --port 8000 &
-          sleep 3  # attendi avvio
+          # attendi che risponda (più affidabile di uno sleep fisso)
+          curl --retry 15 --retry-delay 1 --retry-connrefused -s -o /dev/null http://localhost:8000/health
 
       - name: Run provider verification
         env:
+          CI: "true"
+          GIT_SHA: ${{ github.sha }}
+          GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
           PACT_BROKER_URL: ${{ vars.PACT_BROKER_URL }}
           PACT_BROKER_USER: ${{ secrets.PACT_BROKER_USER }}
           PACT_BROKER_PASSWORD: ${{ secrets.PACT_BROKER_PASSWORD }}
         run: pytest tests/test_product_provider.py -v
-
-      - name: Record provider deployment
-        run: |
-          pact-broker record-deployment \
-            --pacticipant ProductService \
-            --version ${{ github.sha }} \
-            --environment production \
-            --broker-base-url ${{ vars.PACT_BROKER_URL }} \
-            --broker-username ${{ secrets.PACT_BROKER_USER }} \
-            --broker-password ${{ secrets.PACT_BROKER_PASSWORD }}
 ```
+
+!!! warning "`record-deployment` solo dopo un deploy reale"
+    `record-deployment` dichiara al broker quale versione **gira davvero** in un ambiente. Va eseguito nel job di deploy (da `main`, a rilascio avvenuto), mai su ogni push/PR: altrimenti branch non rilasciati risultano "in production" e `can-i-deploy` dà risposte false.
 
 ---
 
@@ -488,13 +500,17 @@ def test_order_created_event():
         .with_metadata({"contentType": "application/json"})
     )
 
+    from myapp.handlers import handle_order_created
+
+    def handler(message):
+        # Pact passa il messaggio generato dal contratto: il consumer reale lo processa
+        handle_order_created(message)
+
     with pact:
-        # Simula il processing del messaggio
-        from myapp.handlers import handle_order_created
-        handle_order_created({"orderId": "order-123", "customerId": "cust-456",
-                               "items": [{"productId": "prod-789", "quantity": 2}],
-                               "totalAmount": 59.98})
+        pact.verify(handler)
 ```
+
+Lato provider (chi pubblica l'evento) la verifica usa un endpoint/funzione che produce il messaggio per ogni descrizione, così il contratto copre anche la struttura dell'evento su Kafka/RabbitMQ senza broker reale. Per schemi Avro/Protobuf, uno **schema registry** con regole di compatibilità (BACKWARD/FORWARD) è il complemento naturale.
 
 ---
 
@@ -503,20 +519,17 @@ def test_order_created_event():
 Un approccio alternativo al Pact per team che già usano OpenAPI è la validazione dello schema:
 
 ```bash
-# openapi-diff: confronta due versioni di spec OpenAPI
-npx @openapitools/openapi-diff \
-  openapi-v1.yaml \
-  openapi-v2.yaml
-
 # schemathesis: genera test da spec OpenAPI e li esegue sul provider reale
+# (property-based: trova input che violano la spec)
 pip install schemathesis
 schemathesis run http://localhost:8000/openapi.json \
   --checks all \
-  --hypothesis-max-examples 50
+  --max-examples 50          # in schemathesis 3.x l'opzione è --hypothesis-max-examples
 
-# oasdiff: tool Go per breaking changes detection
+# oasdiff: tool Go per breaking changes detection tra due versioni della spec
 oasdiff breaking openapi-v1.yaml openapi-v2.yaml
-# Output: ERROR: api-path-removed /products/{id}
+# Output (formato indicativo): error [api-path-removed-without-deprecation] at openapi-v2.yaml
+#   in API GET /products/{id} — api path removed without deprecation
 ```
 
 ### Workflow OpenAPI-driven nel CI
@@ -528,8 +541,11 @@ oasdiff breaking openapi-v1.yaml openapi-v2.yaml
     oasdiff breaking \
       https://raw.githubusercontent.com/org/repo/main/openapi.yaml \
       ./openapi.yaml \
-      --fail-on-diff
+      --fail-on ERR    # exit code != 0 se ci sono breaking changes di livello ERR
 ```
+
+!!! note "Limite dello schema-driven"
+    Confrontare spec rileva modifiche *dichiarate*, non il comportamento reale né l'uso effettivo dei campi da parte dei consumer: una rimozione "breaking" per la spec può non toccare nessun consumer, e viceversa. Per questo si affianca a Pact (o al bi-directional testing).
 
 ---
 
@@ -663,5 +679,5 @@ curl -si -H "Accept: application/json" http://localhost:8000/products/123 | head
 - [PactFlow](https://pactflow.io/how-pact-works/) — Pact Broker SaaS con funzionalità avanzate
 - [Pact Specification](https://github.com/pact-foundation/pact-specification) — specifica del formato contratto
 - [schemathesis](https://schemathesis.readthedocs.io/) — property-based testing da OpenAPI spec
-- [oasdiff](https://github.com/Tufin/oasdiff) — breaking changes detection per OpenAPI
+- [oasdiff](https://github.com/oasdiff/oasdiff) — breaking changes detection per OpenAPI
 - [Martin Fowler — Contract Test](https://martinfowler.com/bliki/ContractTest.html) — articolo fondante del pattern
