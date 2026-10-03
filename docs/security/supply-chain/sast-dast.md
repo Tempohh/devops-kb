@@ -9,7 +9,7 @@ related: [security/supply-chain/image-scanning, security/supply-chain/sbom-cosig
 official_docs: https://owasp.org/www-community/Source_Code_Analysis_Tools
 status: complete
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-03
 ---
 
 # SAST e DAST — Application Security Testing
@@ -478,51 +478,99 @@ Finding rilevato
 
 ## Troubleshooting
 
-**Semgrep — troppi falsi positivi:**
+### Scenario 1 — Semgrep: troppi falsi positivi
+
+**Sintomo**: la PR si riempie di finding irrilevanti, il team inizia a ignorare i commenti del bot.
+
+**Causa**: `--config auto` carica regole generiche (anche `audit`, a bassa precisione) che non conoscono le sanitizzazioni custom del progetto.
+
+**Soluzione**: individuare le regole più rumorose, escluderle con `--exclude-rule` o `.semgrepignore` (per path) e restringere la severity.
 
 ```bash
-# Identifica le regole con più falsi positivi
+# Regole con più finding
 semgrep --config auto --json . | \
-  jq '[.results[] | {rule: .check_id}] | group_by(.rule) | map({rule: .[0].rule, count: length}) | sort_by(-.count)'
+  jq '[.results[].check_id] | group_by(.) | map({rule: .[0], count: length}) | sort_by(-.count)'
 
-# Disabilita una regola specifica nel file di config
-# .semgrep.yml
-rules:
-  - id: exclude-rules
-    options:
-      exclude:
-        - javascript.express.security.audit.xss.mustache.missing-escaping
+# Escludi una regola rumorosa e tieni solo severity ERROR
+semgrep --config p/owasp-top-ten \
+  --exclude-rule javascript.express.security.audit.xss.mustache.missing-escaping \
+  --severity ERROR .
+
+# Escludi path non rilevanti (test, vendor)
+printf 'tests/\nvendor/\nnode_modules/\n' > .semgrepignore
 ```
 
-**ZAP — scan troppo lento / timeout:**
+### Scenario 2 — ZAP: scan troppo lento o in timeout
+
+**Sintomo**: il job DAST supera il timeout della CI o l'applicazione staging risponde 5xx durante lo scan.
+
+**Causa**: spider e active scan generano migliaia di richieste con troppi thread paralleli per host, saturando un ambiente di test piccolo.
+
+**Soluzione**: limitare la durata dello spider (`-m`) e dello scan (`-T`), ridurre i thread per host; usare `zap-baseline.py` (passivo) sulle PR e il full scan solo in schedule notturno. I commenti non possono stare dopo il `\` di continuazione riga (rompono il comando).
 
 ```bash
-# Aumentare il timeout e ridurre il numero di thread
+# -m: minuti max spider | -T: minuti max totali | -z: opzioni ZAP interne
 zap-full-scan.py \
   -t https://staging.myapp.example.com \
-  -m 10 \        # max 10 minuti
-  -T 60 \        # timeout per request 60s
+  -m 5 \
+  -T 30 \
   -z "-config scanner.threadPerHost=2"
 ```
 
-**SonarQube — Quality Gate bloccato su codice legacy:**
+### Scenario 3 — SonarQube: Quality Gate rosso su codice legacy
 
-```bash
-# Configurare New Code Period (analizza solo il codice nuovo)
-# In sonar-project.properties
+**Sintomo**: ogni PR fallisce il Quality Gate per problemi che non ha introdotto.
+
+**Causa**: il "New Code Period" copre tutta la storia, quindi il debito pregresso viene contato come codice nuovo.
+
+**Soluzione**: definire il New Code relativo a un branch di riferimento (o alla versione precedente), così il gate valuta solo le modifiche della PR.
+
+```properties
+# sonar-project.properties
 sonar.newCode.referenceBranch=main
-# Oppure: analizza solo le ultime N commits
-# Settings > General > New Code > Previous version
 ```
 
-**Nuclei — falsi positivi su endpoint autenticati:**
+```bash
+# Verifica lo stato del gate via API
+curl -s -u "$SONAR_TOKEN:" \
+  "https://sonar.example.com/api/qualitygates/project_status?projectKey=my-org_my-project" | jq '.projectStatus'
+```
+
+### Scenario 4 — Nuclei: falsi positivi o scan vuoto su endpoint autenticati
+
+**Sintomo**: Nuclei segnala "exposure" su pagine di login/redirect (HTTP 302/401) oppure non trova nulla sulle API protette.
+
+**Causa**: senza credenziali il template vede solo redirect o errori, che alcuni matcher interpretano male; le API protette non vengono mai raggiunte.
+
+**Soluzione**: passare l'header di autenticazione, limitare ai tag pertinenti e fare debug sul singolo template con `-debug`.
 
 ```bash
-# Usare header di autenticazione negli scan
 nuclei -u https://staging.myapp.example.com \
        -H "Authorization: Bearer $TOKEN" \
        -tags api \
        -severity high,critical
+
+# Debug di un singolo template
+nuclei -u https://staging.myapp.example.com -t templates/security-headers.yaml -debug
+```
+
+### Scenario 5 — Upload SARIF fallisce su GitHub Code Scanning
+
+**Sintomo**: lo step `upload-sarif` termina con `Resource not accessible by integration` oppure il file non viene trovato.
+
+**Causa**: mancano i permessi `security-events: write` (es. PR da fork, dove il token è read-only) oppure il nome del file SARIF non coincide con quello prodotto dal tool.
+
+**Soluzione**: dichiarare i permessi nel job, saltare l'upload per le PR da fork e verificare il path del SARIF prima dell'upload.
+
+```bash
+# Verifica che il SARIF esista e sia JSON valido
+ls -l semgrep.sarif && jq '.runs[0].results | length' semgrep.sarif
+```
+
+```yaml
+permissions:
+  security-events: write
+  contents: read
 ```
 
 ## Relazioni
