@@ -5387,7 +5387,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -5412,7 +5412,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -5841,10 +5841,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#upload-fallisce-con-signaturedoesnotmatch" class="md-nav__link">
+  <a href="#gethead-fallisce-su-oggetto-sse-c" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Upload Fallisce con "SignatureDoesNotMatch"
+        GET/HEAD Fallisce su Oggetto SSE-C
       
     </span>
   </a>
@@ -25159,10 +25159,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#upload-fallisce-con-signaturedoesnotmatch" class="md-nav__link">
+  <a href="#gethead-fallisce-su-oggetto-sse-c" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Upload Fallisce con "SignatureDoesNotMatch"
+        GET/HEAD Fallisce su Oggetto SSE-C
       
     </span>
   </a>
@@ -25412,7 +25412,7 @@
 <p>Queste funzionalità sono frequentemente oggetto di domande nell'esame AWS SAA-C03 e DOP-C02.</p>
 <hr />
 <h2 id="concetti-chiave-block-public-access">Concetti Chiave: Block Public Access<a class="headerlink" href="#concetti-chiave-block-public-access" title="Permanent link">&para;</a></h2>
-<p>Block Public Access è la prima linea di difesa contro l'esposizione accidentale di dati pubblici. Può essere configurato a livello di <strong>account</strong> (sovrascrive tutto) o a livello di <strong>singolo bucket</strong>.</p>
+<p>Block Public Access è la prima linea di difesa contro l'esposizione accidentale di dati pubblici. Può essere configurato a livello di <strong>account</strong> o di <strong>singolo bucket</strong>: se entrambi sono impostati, per ogni setting vince la configurazione più restrittiva.</p>
 <h3 id="le-4-impostazioni">Le 4 Impostazioni<a class="headerlink" href="#le-4-impostazioni" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -25534,6 +25534,10 @@
 </span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">  </span><span class="p">}]</span>
 </span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="p">}</span>
 </span></code></pre></div></p>
+<div class="admonition warning">
+<p class="admonition-title">Deny su header SSE e default encryption</p>
+<p>La condition <code>StringNotEquals</code> sull'header <code>x-amz-server-side-encryption</code> valuta la <strong>richiesta</strong>, non la default encryption del bucket: un <code>PutObject</code> senza header viene negato anche se il bucket cifra già di default con KMS. Va bene solo se tutti i client inviano l'header esplicitamente; altrimenti usare la default encryption SSE-KMS del bucket (sezione sotto) e riservare la Deny a bloccare cifrature <em>diverse</em> da quella attesa.</p>
+</div>
 <p><strong>4. Restrict accesso a VPC specifico (VPC Endpoint):</strong>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">"Version"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2012-10-17"</span><span class="p">,</span>
@@ -25554,6 +25558,14 @@
 </span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">  </span><span class="p">}]</span>
 </span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="p">}</span>
 </span></code></pre></div></p>
+<div class="admonition warning">
+<p class="admonition-title">Lockout con <code>aws:SourceVpce</code></p>
+<p>Una Deny basata su <code>aws:SourceVpce</code> blocca <strong>tutto</strong> il traffico che non passa dall'endpoint: console, CI/CD, amministratori e utenti esterni al VPC, inclusi quelli che dovrebbero poter correggere la policy. Prevedere una eccezione (es. <code>ArnNotLike</code> su un ruolo admin) prima di applicarla.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">TLS minimo</p>
+<p>Oltre a <code>aws:SecureTransport</code>, la condition <code>NumericLessThan: {"s3:TlsVersion": 1.2}</code> con <code>Deny</code> impone TLS ≥ 1.2.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Applicare una bucket policy</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>aws<span class="w"> </span>s3api<span class="w"> </span>put-bucket-policy<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span><span class="se">\</span>
@@ -25563,7 +25575,7 @@
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>aws<span class="w"> </span>s3api<span class="w"> </span>get-bucket-policy<span class="w"> </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span>--query<span class="w"> </span>Policy<span class="w"> </span>--output<span class="w"> </span>text<span class="w"> </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-m<span class="w"> </span>json.tool
 </span></code></pre></div>
 <h3 id="acl-access-control-lists">ACL (Access Control Lists)<a class="headerlink" href="#acl-access-control-lists" title="Permanent link">&para;</a></h3>
-<p>Le ACL sono un meccanismo legacy, AWS raccomanda di usare le bucket policy. L'impostazione "Object Ownership" a <strong>Bucket owner enforced</strong> disabilita le ACL (raccomandato).</p>
+<p>Le ACL sono un meccanismo legacy, AWS raccomanda di usare le bucket policy. L'impostazione "Object Ownership" a <strong>Bucket owner enforced</strong> disabilita le ACL (raccomandato) ed è il default per i bucket creati da aprile 2023; i bucket più vecchi vanno migrati esplicitamente.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Disabilitare ACL (Object Ownership → Bucket owner enforced)</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>aws<span class="w"> </span>s3api<span class="w"> </span>put-bucket-ownership-controls<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span><span class="se">\</span>
@@ -25657,22 +25669,30 @@
 </div>
 <h3 id="sse-c-customer-provided-keys">SSE-C (Customer-Provided Keys)<a class="headerlink" href="#sse-c-customer-provided-keys" title="Permanent link">&para;</a></h3>
 <p>Il cliente gestisce e trasmette la chiave in ogni richiesta. AWS non memorizza mai la chiave. Se si perde la chiave, i dati sono irrecuperabili.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Caricare con SSE-C (la chiave deve essere passata come header)</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># Generare una chiave AES-256 (32 bytes)</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nv">KEY</span><span class="o">=</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-base64<span class="w"> </span><span class="m">32</span><span class="k">)</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="nv">KEY_MD5</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$KEY</span><span class="s2">"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>openssl<span class="w"> </span>md5<span class="w"> </span>-binary<span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="k">)</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>aws<span class="w"> </span>s3api<span class="w"> </span>put-object<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span>--key<span class="w"> </span>file.txt<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span>--body<span class="w"> </span>file.txt<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">  </span>--sse-customer-algorithm<span class="w"> </span>AES256<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">  </span>--sse-customer-key<span class="w"> </span><span class="s2">"</span><span class="nv">$KEY</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">  </span>--sse-customer-key-md5<span class="w"> </span><span class="s2">"</span><span class="nv">$KEY_MD5</span><span class="s2">"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Generare una chiave AES-256 (32 byte raw) e tenerla in un file</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>openssl<span class="w"> </span>rand<span class="w"> </span><span class="m">32</span><span class="w"> </span>&gt;<span class="w"> </span>sse-c.key
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># La AWS CLI codifica in base64 la chiave e calcola da sola l'MD5</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>aws<span class="w"> </span>s3api<span class="w"> </span>put-object<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span>--key<span class="w"> </span>file.txt<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span>--body<span class="w"> </span>file.txt<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span>--sse-customer-algorithm<span class="w"> </span>AES256<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">  </span>--sse-customer-key<span class="w"> </span>fileb://sse-c.key
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># Lo stesso parametro va fornito anche per GetObject/HeadObject</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>aws<span class="w"> </span>s3api<span class="w"> </span>get-object<span class="w"> </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span>--key<span class="w"> </span>file.txt<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">  </span>--sse-customer-algorithm<span class="w"> </span>AES256<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">  </span>--sse-customer-key<span class="w"> </span>fileb://sse-c.key<span class="w"> </span>out.txt
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">SSE-C e HTTPS</p>
 <p>SSE-C richiede HTTPS obbligatoriamente. Il trasferimento della chiave via HTTP non è permesso.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">SSE-C disabilitato di default sui nuovi bucket</p>
+<p>AWS ha annunciato che, a partire da aprile 2026, SSE-C è disabilitato di default sui nuovi bucket e va riabilitato esplicitamente via <code>PutBucketEncryption</code> (blocco dei tipi di cifratura). Preferire SSE-KMS salvo requisiti specifici di custodia esterna della chiave.
+<!-- REVIEW: verificare data e dettagli esatti del cambio di default SSE-C su docs.aws.amazon.com --></p>
 </div>
 <h3 id="dsse-kms-dual-layer-server-side-encryption">DSSE-KMS (Dual-Layer Server-Side Encryption)<a class="headerlink" href="#dsse-kms-dual-layer-server-side-encryption" title="Permanent link">&para;</a></h3>
 <p>Doppio layer di cifratura KMS (due data key separate). Richiesto da alcuni framework di compliance governativi. Non è necessario per la maggior parte dei workload.</p>
@@ -25742,7 +25762,11 @@
 </span></code></pre></div>
 <hr />
 <h2 id="s3-select">S3 Select<a class="headerlink" href="#s3-select" title="Permanent link">&para;</a></h2>
-<p>S3 Select permette di eseguire query SQL direttamente su oggetti S3 (CSV, JSON, Parquet, Parquet compresso con GZIP/BZIP2) <strong>senza scaricare l'intero oggetto</strong>. S3 filtra i dati lato server e restituisce solo il subset richiesto.</p>
+<div class="admonition warning">
+<p class="admonition-title">Non disponibile per nuovi clienti</p>
+<p>Da luglio 2024 AWS ha chiuso S3 Select ai nuovi clienti (i clienti esistenti possono continuare a usarlo). Per nuovi workload usare <strong>Amazon Athena</strong> (query SQL su dataset S3), oppure filtrare lato applicazione con byte-range fetch. La sezione resta come riferimento per sistemi esistenti e per l'esame.</p>
+</div>
+<p>S3 Select permette di eseguire query SQL direttamente su oggetti S3 (CSV, JSON, Parquet; CSV e JSON anche compressi GZIP/BZIP2 — per Parquet è supportata solo la compressione columnar interna GZIP/Snappy) <strong>senza scaricare l'intero oggetto</strong>. S3 filtra i dati lato server e restituisce solo il subset richiesto.</p>
 <p><strong>Vantaggi:</strong>
 - Riduzione trasferimento dati fino all'80%
 - Riduzione costi di trasferimento dati e latenza
@@ -25778,7 +25802,7 @@
 </span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="w">  </span>--output-serialization<span class="w"> </span><span class="s1">'{"JSON": {"RecordDelimiter": "\n"}}'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a><span class="w">  </span>/dev/stdout
 </span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a>
-</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="c1"># Query su Parquet (senza specificare tipo file, S3 lo rileva)</span>
+</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="c1"># Query su Parquet (output JSON; l'input Parquet non ha opzioni di delimitatore)</span>
 </span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a>aws<span class="w"> </span>s3api<span class="w"> </span>select-object-content<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a><span class="w">  </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a><span class="w">  </span>--key<span class="w"> </span>data/users.parquet<span class="w"> </span><span class="se">\</span>
@@ -25794,7 +25818,12 @@
 </div>
 <hr />
 <h2 id="s3-object-lambda">S3 Object Lambda<a class="headerlink" href="#s3-object-lambda" title="Permanent link">&para;</a></h2>
-<p>S3 Object Lambda permette di trasformare l'output di <code>GetObject</code> con una funzione Lambda prima che venga restituito al richiedente. Non modifica l'oggetto originale.</p>
+<div class="admonition warning">
+<p class="admonition-title">Non disponibile per nuovi clienti</p>
+<p>Dal 7 novembre 2025 S3 Object Lambda è in modalità manutenzione: non è più disponibile per nuovi clienti (gli esistenti continuano a usarlo). Alternative: trasformare in una Lambda/API dietro CloudFront o API Gateway, oppure produrre copie derivate (es. dataset senza PII) con una pipeline event-driven e servirle da un bucket/Access Point dedicato.
+<!-- REVIEW: verificare lo stato attuale dell'annuncio AWS di availability change per Object Lambda --></p>
+</div>
+<p>S3 Object Lambda permette di trasformare l'output di <code>GetObject</code> (e <code>HeadObject</code>/<code>ListObjects</code>) con una funzione Lambda prima che venga restituito al richiedente. Non modifica l'oggetto originale.</p>
 <p><strong>Use case:</strong>
 - Rimuovere PII (Personally Identifiable Information) prima di consegnare dati a team analytics
 - Aggiungere watermark a immagini/PDF
@@ -25948,9 +25977,12 @@
 </span><span id="__span-16-31"><a id="__codelineno-16-31" name="__codelineno-16-31" href="#__codelineno-16-31"></a><span class="w">  </span>--notification-configuration<span class="w"> </span>file://notification-config.json
 </span><span id="__span-16-32"><a id="__codelineno-16-32" name="__codelineno-16-32" href="#__codelineno-16-32"></a>
 </span><span id="__span-16-33"><a id="__codelineno-16-33" name="__codelineno-16-33" href="#__codelineno-16-33"></a><span class="c1"># Notifiche verso EventBridge (abilitare la funzione)</span>
-</span><span id="__span-16-34"><a id="__codelineno-16-34" name="__codelineno-16-34" href="#__codelineno-16-34"></a>aws<span class="w"> </span>s3api<span class="w"> </span>put-bucket-notification-configuration<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-35"><a id="__codelineno-16-35" name="__codelineno-16-35" href="#__codelineno-16-35"></a><span class="w">  </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-36"><a id="__codelineno-16-36" name="__codelineno-16-36" href="#__codelineno-16-36"></a><span class="w">  </span>--notification-configuration<span class="w"> </span><span class="s1">'{"EventBridgeConfiguration": {}}'</span>
+</span><span id="__span-16-34"><a id="__codelineno-16-34" name="__codelineno-16-34" href="#__codelineno-16-34"></a><span class="c1"># ATTENZIONE: put-bucket-notification-configuration SOSTITUISCE l'intera</span>
+</span><span id="__span-16-35"><a id="__codelineno-16-35" name="__codelineno-16-35" href="#__codelineno-16-35"></a><span class="c1"># configurazione. Questo comando cancella le Lambda/SQS configurate sopra:</span>
+</span><span id="__span-16-36"><a id="__codelineno-16-36" name="__codelineno-16-36" href="#__codelineno-16-36"></a><span class="c1"># per combinarle, includere "EventBridgeConfiguration": {} nello stesso JSON.</span>
+</span><span id="__span-16-37"><a id="__codelineno-16-37" name="__codelineno-16-37" href="#__codelineno-16-37"></a>aws<span class="w"> </span>s3api<span class="w"> </span>put-bucket-notification-configuration<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-38"><a id="__codelineno-16-38" name="__codelineno-16-38" href="#__codelineno-16-38"></a><span class="w">  </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-39"><a id="__codelineno-16-39" name="__codelineno-16-39" href="#__codelineno-16-39"></a><span class="w">  </span>--notification-configuration<span class="w"> </span><span class="s1">'{"EventBridgeConfiguration": {}}'</span>
 </span></code></pre></div>
 <hr />
 <h2 id="s3-inventory">S3 Inventory<a class="headerlink" href="#s3-inventory" title="Permanent link">&para;</a></h2>
@@ -25992,6 +26024,11 @@
 - Analizzare distribuzione storage class per ottimizzare costi
 - Generare report di compliance (quali oggetti hanno Object Lock)
 - Input per S3 Batch Operations</p>
+<div class="admonition tip">
+<p class="admonition-title">S3 Metadata</p>
+<p>Per inventari quasi in tempo reale, AWS offre anche <strong>S3 Metadata</strong>, che mantiene i metadati degli oggetti in tabelle Apache Iceberg interrogabili con Athena. Inventory resta la scelta più semplice ed economica per report periodici.
+<!-- REVIEW: verificare stato GA e tipi di tabella (journal / live inventory) di S3 Metadata --></p>
+</div>
 <hr />
 <h2 id="s3-batch-operations">S3 Batch Operations<a class="headerlink" href="#s3-batch-operations" title="Permanent link">&para;</a></h2>
 <p>S3 Batch Operations permette di eseguire operazioni su <strong>miliardi di oggetti</strong> con una singola richiesta. Usa S3 Inventory o un file manifest CSV come input.</p>
@@ -26119,66 +26156,70 @@
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">  </span>--key<span class="w"> </span>large-file.bin<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="w">  </span>--range<span class="w"> </span><span class="s2">"bytes=0-1023"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="w">  </span>part1.bin
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="c1"># Implementazione Python: download parallelo</span>
-</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>import<span class="w"> </span>boto3
-</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>import<span class="w"> </span>concurrent.futures
-</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>import<span class="w"> </span>os
-</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>
-</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a>def<span class="w"> </span>download_part<span class="o">(</span>s3_client,<span class="w"> </span>bucket,<span class="w"> </span>key,<span class="w"> </span>start,<span class="w"> </span>end,<span class="w"> </span>part_num,<span class="w"> </span>output_path<span class="o">)</span>:
-</span><span id="__span-22-14"><a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a><span class="w">    </span><span class="nv">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>s3_client.get_object<span class="o">(</span>
-</span><span id="__span-22-15"><a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a><span class="w">        </span><span class="nv">Bucket</span><span class="o">=</span>bucket,
-</span><span id="__span-22-16"><a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a><span class="w">        </span><span class="nv">Key</span><span class="o">=</span>key,
-</span><span id="__span-22-17"><a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a><span class="w">        </span><span class="nv">Range</span><span class="o">=</span>f<span class="s2">"bytes={start}-{end}"</span>
-</span><span id="__span-22-18"><a id="__codelineno-22-18" name="__codelineno-22-18" href="#__codelineno-22-18"></a><span class="w">    </span><span class="o">)</span>
-</span><span id="__span-22-19"><a id="__codelineno-22-19" name="__codelineno-22-19" href="#__codelineno-22-19"></a><span class="w">    </span>with<span class="w"> </span>open<span class="o">(</span>f<span class="s2">"{output_path}.part{part_num}"</span>,<span class="w"> </span><span class="s1">'wb'</span><span class="o">)</span><span class="w"> </span>as<span class="w"> </span>f:
-</span><span id="__span-22-20"><a id="__codelineno-22-20" name="__codelineno-22-20" href="#__codelineno-22-20"></a><span class="w">        </span>f.write<span class="o">(</span>response<span class="o">[</span><span class="s1">'Body'</span><span class="o">]</span>.read<span class="o">())</span>
-</span><span id="__span-22-21"><a id="__codelineno-22-21" name="__codelineno-22-21" href="#__codelineno-22-21"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span>part_num
-</span><span id="__span-22-22"><a id="__codelineno-22-22" name="__codelineno-22-22" href="#__codelineno-22-22"></a>
-</span><span id="__span-22-23"><a id="__codelineno-22-23" name="__codelineno-22-23" href="#__codelineno-22-23"></a>def<span class="w"> </span>parallel_download<span class="o">(</span>bucket,<span class="w"> </span>key,<span class="w"> </span>output_path,<span class="w"> </span><span class="nv">num_threads</span><span class="o">=</span><span class="m">10</span><span class="o">)</span>:
-</span><span id="__span-22-24"><a id="__codelineno-22-24" name="__codelineno-22-24" href="#__codelineno-22-24"></a><span class="w">    </span><span class="nv">s3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>boto3.client<span class="o">(</span><span class="s1">'s3'</span><span class="o">)</span>
-</span><span id="__span-22-25"><a id="__codelineno-22-25" name="__codelineno-22-25" href="#__codelineno-22-25"></a><span class="w">    </span><span class="nv">head</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>s3.head_object<span class="o">(</span><span class="nv">Bucket</span><span class="o">=</span>bucket,<span class="w"> </span><span class="nv">Key</span><span class="o">=</span>key<span class="o">)</span>
-</span><span id="__span-22-26"><a id="__codelineno-22-26" name="__codelineno-22-26" href="#__codelineno-22-26"></a><span class="w">    </span><span class="nv">file_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>head<span class="o">[</span><span class="s1">'ContentLength'</span><span class="o">]</span>
-</span><span id="__span-22-27"><a id="__codelineno-22-27" name="__codelineno-22-27" href="#__codelineno-22-27"></a>
-</span><span id="__span-22-28"><a id="__codelineno-22-28" name="__codelineno-22-28" href="#__codelineno-22-28"></a><span class="w">    </span><span class="nv">part_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>file_size<span class="w"> </span>//<span class="w"> </span>num_threads
-</span><span id="__span-22-29"><a id="__codelineno-22-29" name="__codelineno-22-29" href="#__codelineno-22-29"></a><span class="w">    </span><span class="nv">futures</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">[]</span>
-</span><span id="__span-22-30"><a id="__codelineno-22-30" name="__codelineno-22-30" href="#__codelineno-22-30"></a>
-</span><span id="__span-22-31"><a id="__codelineno-22-31" name="__codelineno-22-31" href="#__codelineno-22-31"></a><span class="w">    </span>with<span class="w"> </span>concurrent.futures.ThreadPoolExecutor<span class="o">(</span><span class="nv">max_workers</span><span class="o">=</span>num_threads<span class="o">)</span><span class="w"> </span>as<span class="w"> </span>executor:
-</span><span id="__span-22-32"><a id="__codelineno-22-32" name="__codelineno-22-32" href="#__codelineno-22-32"></a><span class="w">        </span><span class="k">for</span><span class="w"> </span>i<span class="w"> </span><span class="k">in</span><span class="w"> </span>range<span class="o">(</span>num_threads<span class="o">)</span>:
-</span><span id="__span-22-33"><a id="__codelineno-22-33" name="__codelineno-22-33" href="#__codelineno-22-33"></a><span class="w">            </span><span class="nv">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>i<span class="w"> </span>*<span class="w"> </span>part_size
-</span><span id="__span-22-34"><a id="__codelineno-22-34" name="__codelineno-22-34" href="#__codelineno-22-34"></a><span class="w">            </span><span class="nv">end</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>start<span class="w"> </span>+<span class="w"> </span>part_size<span class="w"> </span>-<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="k">if</span><span class="w"> </span>i<span class="w"> </span>&lt;<span class="w"> </span>num_threads<span class="w"> </span>-<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="k">else</span><span class="w"> </span>file_size<span class="w"> </span>-<span class="w"> </span><span class="m">1</span>
-</span><span id="__span-22-35"><a id="__codelineno-22-35" name="__codelineno-22-35" href="#__codelineno-22-35"></a><span class="w">            </span>futures.append<span class="o">(</span>executor.submit<span class="o">(</span>
-</span><span id="__span-22-36"><a id="__codelineno-22-36" name="__codelineno-22-36" href="#__codelineno-22-36"></a><span class="w">                </span>download_part,<span class="w"> </span>s3,<span class="w"> </span>bucket,<span class="w"> </span>key,<span class="w"> </span>start,<span class="w"> </span>end,<span class="w"> </span>i,<span class="w"> </span>output_path
-</span><span id="__span-22-37"><a id="__codelineno-22-37" name="__codelineno-22-37" href="#__codelineno-22-37"></a><span class="w">            </span><span class="o">))</span>
-</span><span id="__span-22-38"><a id="__codelineno-22-38" name="__codelineno-22-38" href="#__codelineno-22-38"></a>
-</span><span id="__span-22-39"><a id="__codelineno-22-39" name="__codelineno-22-39" href="#__codelineno-22-39"></a><span class="w">    </span><span class="c1"># Assemblare le parti</span>
-</span><span id="__span-22-40"><a id="__codelineno-22-40" name="__codelineno-22-40" href="#__codelineno-22-40"></a><span class="w">    </span>with<span class="w"> </span>open<span class="o">(</span>output_path,<span class="w"> </span><span class="s1">'wb'</span><span class="o">)</span><span class="w"> </span>as<span class="w"> </span>output_file:
-</span><span id="__span-22-41"><a id="__codelineno-22-41" name="__codelineno-22-41" href="#__codelineno-22-41"></a><span class="w">        </span><span class="k">for</span><span class="w"> </span>i<span class="w"> </span><span class="k">in</span><span class="w"> </span>range<span class="o">(</span>num_threads<span class="o">)</span>:
-</span><span id="__span-22-42"><a id="__codelineno-22-42" name="__codelineno-22-42" href="#__codelineno-22-42"></a><span class="w">            </span>with<span class="w"> </span>open<span class="o">(</span>f<span class="s2">"{output_path}.part{i}"</span>,<span class="w"> </span><span class="s1">'rb'</span><span class="o">)</span><span class="w"> </span>as<span class="w"> </span>part:
-</span><span id="__span-22-43"><a id="__codelineno-22-43" name="__codelineno-22-43" href="#__codelineno-22-43"></a><span class="w">                </span>output_file.write<span class="o">(</span>part.read<span class="o">())</span>
-</span><span id="__span-22-44"><a id="__codelineno-22-44" name="__codelineno-22-44" href="#__codelineno-22-44"></a><span class="w">            </span>os.remove<span class="o">(</span>f<span class="s2">"{output_path}.part{i}"</span><span class="o">)</span>
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Già automatico in CLI e SDK</p>
+<p><code>aws s3 cp</code> e <code>boto3.s3.transfer</code> (<code>download_file</code>) eseguono già download multipart paralleli con byte-range. L'implementazione manuale sotto serve solo a capire il meccanismo o per casi custom (es. leggere solo il footer di un Parquet).</p>
+</div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Implementazione Python: download parallelo</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">boto3</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">concurrent.futures</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>
+</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">download_part</span><span class="p">(</span><span class="n">s3_client</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">part_num</span><span class="p">,</span> <span class="n">output_path</span><span class="p">):</span>
+</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>    <span class="n">response</span> <span class="o">=</span> <span class="n">s3_client</span><span class="o">.</span><span class="n">get_object</span><span class="p">(</span>
+</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>        <span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">,</span>
+</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a>        <span class="n">Key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span>
+</span><span id="__span-23-10"><a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>        <span class="n">Range</span><span class="o">=</span><span class="sa">f</span><span class="s2">"bytes=</span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">end</span><span class="si">}</span><span class="s2">"</span>
+</span><span id="__span-23-11"><a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a>    <span class="p">)</span>
+</span><span id="__span-23-12"><a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a>    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">output_path</span><span class="si">}</span><span class="s2">.part</span><span class="si">{</span><span class="n">part_num</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="s1">'wb'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+</span><span id="__span-23-13"><a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a>        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">response</span><span class="p">[</span><span class="s1">'Body'</span><span class="p">]</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+</span><span id="__span-23-14"><a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a>    <span class="k">return</span> <span class="n">part_num</span>
+</span><span id="__span-23-15"><a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a>
+</span><span id="__span-23-16"><a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a><span class="k">def</span><span class="w"> </span><span class="nf">parallel_download</span><span class="p">(</span><span class="n">bucket</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">output_path</span><span class="p">,</span> <span class="n">num_threads</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+</span><span id="__span-23-17"><a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a>    <span class="n">s3</span> <span class="o">=</span> <span class="n">boto3</span><span class="o">.</span><span class="n">client</span><span class="p">(</span><span class="s1">'s3'</span><span class="p">)</span>
+</span><span id="__span-23-18"><a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a>    <span class="n">head</span> <span class="o">=</span> <span class="n">s3</span><span class="o">.</span><span class="n">head_object</span><span class="p">(</span><span class="n">Bucket</span><span class="o">=</span><span class="n">bucket</span><span class="p">,</span> <span class="n">Key</span><span class="o">=</span><span class="n">key</span><span class="p">)</span>
+</span><span id="__span-23-19"><a id="__codelineno-23-19" name="__codelineno-23-19" href="#__codelineno-23-19"></a>    <span class="n">file_size</span> <span class="o">=</span> <span class="n">head</span><span class="p">[</span><span class="s1">'ContentLength'</span><span class="p">]</span>
+</span><span id="__span-23-20"><a id="__codelineno-23-20" name="__codelineno-23-20" href="#__codelineno-23-20"></a>
+</span><span id="__span-23-21"><a id="__codelineno-23-21" name="__codelineno-23-21" href="#__codelineno-23-21"></a>    <span class="n">part_size</span> <span class="o">=</span> <span class="n">file_size</span> <span class="o">//</span> <span class="n">num_threads</span>
+</span><span id="__span-23-22"><a id="__codelineno-23-22" name="__codelineno-23-22" href="#__codelineno-23-22"></a>    <span class="n">futures</span> <span class="o">=</span> <span class="p">[]</span>
+</span><span id="__span-23-23"><a id="__codelineno-23-23" name="__codelineno-23-23" href="#__codelineno-23-23"></a>
+</span><span id="__span-23-24"><a id="__codelineno-23-24" name="__codelineno-23-24" href="#__codelineno-23-24"></a>    <span class="k">with</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">futures</span><span class="o">.</span><span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">num_threads</span><span class="p">)</span> <span class="k">as</span> <span class="n">executor</span><span class="p">:</span>
+</span><span id="__span-23-25"><a id="__codelineno-23-25" name="__codelineno-23-25" href="#__codelineno-23-25"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_threads</span><span class="p">):</span>
+</span><span id="__span-23-26"><a id="__codelineno-23-26" name="__codelineno-23-26" href="#__codelineno-23-26"></a>            <span class="n">start</span> <span class="o">=</span> <span class="n">i</span> <span class="o">*</span> <span class="n">part_size</span>
+</span><span id="__span-23-27"><a id="__codelineno-23-27" name="__codelineno-23-27" href="#__codelineno-23-27"></a>            <span class="n">end</span> <span class="o">=</span> <span class="n">start</span> <span class="o">+</span> <span class="n">part_size</span> <span class="o">-</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">num_threads</span> <span class="o">-</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">file_size</span> <span class="o">-</span> <span class="mi">1</span>
+</span><span id="__span-23-28"><a id="__codelineno-23-28" name="__codelineno-23-28" href="#__codelineno-23-28"></a>            <span class="n">futures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">executor</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span>
+</span><span id="__span-23-29"><a id="__codelineno-23-29" name="__codelineno-23-29" href="#__codelineno-23-29"></a>                <span class="n">download_part</span><span class="p">,</span> <span class="n">s3</span><span class="p">,</span> <span class="n">bucket</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">output_path</span>
+</span><span id="__span-23-30"><a id="__codelineno-23-30" name="__codelineno-23-30" href="#__codelineno-23-30"></a>            <span class="p">))</span>
+</span><span id="__span-23-31"><a id="__codelineno-23-31" name="__codelineno-23-31" href="#__codelineno-23-31"></a>
+</span><span id="__span-23-32"><a id="__codelineno-23-32" name="__codelineno-23-32" href="#__codelineno-23-32"></a>    <span class="c1"># Assemblare le parti</span>
+</span><span id="__span-23-33"><a id="__codelineno-23-33" name="__codelineno-23-33" href="#__codelineno-23-33"></a>    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">output_path</span><span class="p">,</span> <span class="s1">'wb'</span><span class="p">)</span> <span class="k">as</span> <span class="n">output_file</span><span class="p">:</span>
+</span><span id="__span-23-34"><a id="__codelineno-23-34" name="__codelineno-23-34" href="#__codelineno-23-34"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_threads</span><span class="p">):</span>
+</span><span id="__span-23-35"><a id="__codelineno-23-35" name="__codelineno-23-35" href="#__codelineno-23-35"></a>            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">output_path</span><span class="si">}</span><span class="s2">.part</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="s1">'rb'</span><span class="p">)</span> <span class="k">as</span> <span class="n">part</span><span class="p">:</span>
+</span><span id="__span-23-36"><a id="__codelineno-23-36" name="__codelineno-23-36" href="#__codelineno-23-36"></a>                <span class="n">output_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">part</span><span class="o">.</span><span class="n">read</span><span class="p">())</span>
+</span><span id="__span-23-37"><a id="__codelineno-23-37" name="__codelineno-23-37" href="#__codelineno-23-37"></a>            <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">output_path</span><span class="si">}</span><span class="s2">.part</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </span></code></pre></div>
 <hr />
 <h2 id="cors-configuration">CORS Configuration<a class="headerlink" href="#cors-configuration" title="Permanent link">&para;</a></h2>
 <p>Il Cross-Origin Resource Sharing (CORS) è necessario quando il browser di un utente carica risorse S3 da un dominio diverso da quello dell'applicazione web.</p>
 <p><strong>Use case:</strong> un'app web su <code>https://myapp.com</code> che carica immagini direttamente da <code>https://my-bucket.s3.amazonaws.com</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Configurare CORS su un bucket S3</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>aws<span class="w"> </span>s3api<span class="w"> </span>put-bucket-cors<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">  </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="w">  </span>--cors-configuration<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="s1">    "CORSRules": [</span>
-</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="s1">      {</span>
-</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="s1">        "AllowedHeaders": ["Authorization", "Content-Type"],</span>
-</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a><span class="s1">        "AllowedMethods": ["GET", "PUT", "POST"],</span>
-</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="s1">        "AllowedOrigins": ["https://myapp.com", "https://www.myapp.com"],</span>
-</span><span id="__span-23-10"><a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a><span class="s1">        "ExposeHeaders": ["ETag", "x-amz-server-side-encryption"],</span>
-</span><span id="__span-23-11"><a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a><span class="s1">        "MaxAgeSeconds": 3000</span>
-</span><span id="__span-23-12"><a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a><span class="s1">      }</span>
-</span><span id="__span-23-13"><a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a><span class="s1">    ]</span>
-</span><span id="__span-23-14"><a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a><span class="s1">  }'</span>
-</span><span id="__span-23-15"><a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a>
-</span><span id="__span-23-16"><a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a><span class="c1"># Verificare la configurazione CORS</span>
-</span><span id="__span-23-17"><a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a>aws<span class="w"> </span>s3api<span class="w"> </span>get-bucket-cors<span class="w"> </span>--bucket<span class="w"> </span>my-bucket
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Configurare CORS su un bucket S3</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>aws<span class="w"> </span>s3api<span class="w"> </span>put-bucket-cors<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">  </span>--bucket<span class="w"> </span>my-bucket<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">  </span>--cors-configuration<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="s1">    "CORSRules": [</span>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="s1">      {</span>
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="s1">        "AllowedHeaders": ["Authorization", "Content-Type"],</span>
+</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="s1">        "AllowedMethods": ["GET", "PUT", "POST"],</span>
+</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="s1">        "AllowedOrigins": ["https://myapp.com", "https://www.myapp.com"],</span>
+</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="s1">        "ExposeHeaders": ["ETag", "x-amz-server-side-encryption"],</span>
+</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="s1">        "MaxAgeSeconds": 3000</span>
+</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a><span class="s1">      }</span>
+</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="s1">    ]</span>
+</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a><span class="s1">  }'</span>
+</span><span id="__span-24-15"><a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a>
+</span><span id="__span-24-16"><a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a><span class="c1"># Verificare la configurazione CORS</span>
+</span><span id="__span-24-17"><a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a>aws<span class="w"> </span>s3api<span class="w"> </span>get-bucket-cors<span class="w"> </span>--bucket<span class="w"> </span>my-bucket
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">CORS non è sicurezza</p>
@@ -26196,14 +26237,14 @@
 <li><strong>S3 Access Analyzer</strong> per identificare bucket con accesso pubblico o cross-account</li>
 <li><strong>CloudTrail Data Events</strong> abilitati per audit di accesso agli oggetti</li>
 </ol>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Abilitare S3 Access Analyzer</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>aws<span class="w"> </span>accessanalyzer<span class="w"> </span>create-analyzer<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">  </span>--analyzer-name<span class="w"> </span>my-s3-analyzer<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">  </span>--type<span class="w"> </span>ACCOUNT
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="c1"># Listare i finding (bucket esposti)</span>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>aws<span class="w"> </span>accessanalyzer<span class="w"> </span>list-findings<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="w">  </span>--analyzer-arn<span class="w"> </span>arn:aws:access-analyzer:us-east-1:123456789012:analyzer/my-s3-analyzer
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Abilitare S3 Access Analyzer</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>aws<span class="w"> </span>accessanalyzer<span class="w"> </span>create-analyzer<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">  </span>--analyzer-name<span class="w"> </span>my-s3-analyzer<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">  </span>--type<span class="w"> </span>ACCOUNT
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="c1"># Listare i finding (bucket esposti)</span>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>aws<span class="w"> </span>accessanalyzer<span class="w"> </span>list-findings<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">  </span>--analyzer-arn<span class="w"> </span>arn:aws:access-analyzer:us-east-1:123456789012:analyzer/my-s3-analyzer
 </span></code></pre></div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -26214,8 +26255,8 @@
 <li>Verificare condizioni nella policy (es. <code>aws:SourceVpc</code>)</li>
 <li>Usare IAM Policy Simulator</li>
 </ol>
-<h3 id="upload-fallisce-con-signaturedoesnotmatch">Upload Fallisce con "SignatureDoesNotMatch"<a class="headerlink" href="#upload-fallisce-con-signaturedoesnotmatch" title="Permanent link">&para;</a></h3>
-<p>Con SSE-C: verificare che la chiave passata corrisponda a quella usata per il primo upload.</p>
+<h3 id="gethead-fallisce-su-oggetto-sse-c">GET/HEAD Fallisce su Oggetto SSE-C<a class="headerlink" href="#gethead-fallisce-su-oggetto-sse-c" title="Permanent link">&para;</a></h3>
+<p>Con SSE-C ogni richiesta (anche <code>GetObject</code> e <code>HeadObject</code>) deve ripresentare algoritmo e chiave usati in upload; una chiave diversa o mancante produce <code>400 Bad Request</code> / <code>403 Forbidden</code>. Se la chiave è persa, l'oggetto è irrecuperabile.</p>
 <h3 id="event-notifications-non-arrivano">Event Notifications Non Arrivano<a class="headerlink" href="#event-notifications-non-arrivano" title="Permanent link">&para;</a></h3>
 <ol>
 <li>Verificare la resource policy della coda SQS/topic SNS/Lambda che permette a S3 di invocarli</li>
