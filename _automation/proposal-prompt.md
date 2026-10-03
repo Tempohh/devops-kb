@@ -1,6 +1,6 @@
-# Sessione di Analisi Strategica — Generazione Proposte KB
+# Sessione di Esplorazione — Proposte per una Sottocategoria KB
 
-Sei un agente CLI con accesso completo al filesystem tramite strumenti Read, Write, Glob.
+Sei un agente CLI con accesso completo al filesystem tramite strumenti Read, Write, Glob, Grep.
 **Devi USARE gli strumenti — non descrivere cosa faresti, FALLO adesso.**
 **Non scrivere output testuale prima di aver completato le fasi operative.**
 
@@ -9,53 +9,52 @@ Regola fondamentale: una proposta vale solo se risponde a
 
 ---
 
-## PASSO 0 — Freno di saturazione (AZIONE IMMEDIATA)
+## PASSO 0 — Scope (AZIONE IMMEDIATA)
 
-Esegui **subito**:
-```
-python _automation/manage-state.py saturation-gate
-```
-e leggi anche `_automation/proposals/kb-saturation-report.md` (se esiste).
+Leggi `_automation/current-task.json`. Il campo `scope` (es. `networking/protocolli`)
+è la **sottocategoria da esplorare**: lavori SOLO su `docs/<scope>/`.
+Se `scope` manca (task legacy/manuale), scegli tu la sottocategoria con meno file
+e dichiaralo nel summary.
 
-Regole che ne derivano:
-- Se `over_target` è `true` **o** una categoria è ≥ `category_saturated_pct` nel
-  report: NON proporre `new-file` per quella categoria salvo `score: high` con un
-  gap operativo esplicito e non banale. Preferisci proposte
-  `currency` / `consolidate` / `extend-section` / `review`.
-- **È ammesso restituire ZERO proposte** se nulla supera il test di utilità.
-  In quel caso scrivi comunque il report di saturazione e un summary che spiega
-  perché la KB è considerata satura in questo ciclo. Non inventare proposte per
-  "riempire".
+Questa sessione decide se la sottocategoria è **esaurita**. Il sistema lo registra
+in modo deterministico dal numero di proposte che scrivi:
+- **≥1 proposta** → la sottocategoria resta aperta e verrà riesplorata dopo
+  che le proposte saranno implementate.
+- **0 proposte** → la sottocategoria viene marcata *exhausted* e non verrà più
+  esplorata finché non cambia l'insieme dei suoi file (o per 90 giorni).
 
----
-
-## PASSO 1 — Censimento strutturale (AZIONE IMMEDIATA)
-
-**Chiama subito Glob con `docs/**/*.md`** per ottenere tutti i file KB.
-
-Poi per ogni categoria principale (cloud, containers, networking, ci-cd, databases,
-messaging, security, monitoring, ai, dev), conta i file esistenti leggendo solo
-le prime 15 righe (frontmatter) di un campione.
+Quindi: zero è una risposta legittima e utile **solo se è vera**. Non inventare
+proposte per riempire, ma non dichiarare esaurita una sottocategoria con gap reali.
 
 ---
 
-## PASSO 2 — Analisi approfondita (AZIONE IMMEDIATA)
+## PASSO 1 — Censimento della sottocategoria
 
-**Leggi esattamente 10 file** scelti tra:
-1. File in categorie con pochi file (priorità a categorie sottosviluppate)
-2. File con `status: needs-review` o `status: draft`
-3. File che sembrano hub di navigazione (frontmatter con molti `related`)
-
-Per ogni file valuta:
-- **Utilità pratica**: risolve un problema operativo reale?
-- **Completezza**: un DevOps potrebbe usarlo come guida autonoma?
-- **Connettività**: ha `related` ricchi o è un'isola?
+1. **Glob `docs/<scope>/**/*.md`**: elenco degli argomenti esistenti.
+2. Per ogni file leggi frontmatter e **titoli H2/H3** (Grep `^#{2,3} ` sul file):
+   ti serve sapere cosa è coperto e a che profondità, non leggere tutto.
+3. Leggi per intero **al massimo 3 file**: quelli centrali (hub) o i più corti.
+4. Leggi la voce della categoria in `docs/_metadata/taxonomy.yml` (descrizione).
 
 ---
 
-## PASSO 3 — Identificazione gap (ANALISI MENTALE)
+## PASSO 2 — Gap analysis
 
-Per ogni gap identificato, applica il test:
+Ragiona come un DevOps mid-senior che usa questa sottocategoria come riferimento
+operativo. Elenca mentalmente cosa *dovrebbe* coprire una sezione completa su
+`<scope>` (strumenti principali, concetti fondamentali, operazioni day-2,
+troubleshooting, sicurezza, integrazione con il resto dello stack) e confrontalo
+con quanto già esiste.
+
+Prima di proporre un argomento verifica che non esista già altrove nella KB:
+**Grep del termine chiave su `docs/`**. Se è già coperto in un'altra
+sottocategoria, NON proporre un file nuovo (al massimo `fix-relation`).
+
+Controlla anche `_automation/proposals/approved/` e `_automation/proposals/rejected/`
+(Grep sul `target_file`/titolo): non riproporre ciò che è già stato approvato o
+rifiutato.
+
+Per ogni gap candidato applica il test:
 
 ```
 Reader: [chi è — ruolo, contesto]
@@ -66,35 +65,21 @@ Score: high | medium | low
 ```
 
 **Scarta** se: il lettore troverebbe la stessa info nella documentazione ufficiale
-in 2 click. Scarta se è solo simmetria formale tra provider cloud senza gap reale.
+in 2 click; è solo simmetria formale (es. "manca l'equivalente Azure"); è un
+dettaglio che sta meglio come sezione di un file esistente (allora proponi
+`extend-section`, non `new-file`).
 
-**Tieni** se: colma un gap trasversale, aggiunge connettività mancante,
-risolve un problema operativo documentato e non banale.
-
-**Focus tematico — auto-rotante, NON hardcodato.** Leggi la sezione "Raccomandazione
-operativa" / "Categorie con gap reali" dell'ultimo `kb-saturation-report.md` (se
-esiste): se segnala un'area satura da 2+ sessioni consecutive senza proposte, sposta
-il focus sull'area con gap reale che il report indica come mai esplorata. Se il
-report non esiste o è la prima sessione, focus di default: `docs/iac/`,
-`docs/monitoring/`, `docs/databases/` (coverage più bassa, mai state in focus finora).
-A parità di score, dai la precedenza ai gap nell'area di focus corrente e dedica loro
-la maggior parte delle proposte; le altre categorie restano ammesse solo con
-`score: high`. Il freno di saturazione (PASSO 0) resta vincolante: il focus non lo
-scavalca. Riporta nel PASSO 5 quale focus hai usato e perché, così la sessione
-successiva può leggerlo.
+**Tieni** se: colma un gap operativo reale, non banale, che un professionista
+incontra davvero.
 
 ---
 
-## PASSO 4 — Generazione proposte (AZIONE: SCRIVI FILE YAML)
+## PASSO 3 — Scrivi le proposte
 
-**Crea i file YAML in `_automation/proposals/pending/`.**
+**Crea i file YAML in `_automation/proposals/pending/`.** Prima trova l'ultimo
+numero progressivo usato in `pending/`, `approved/`, `rejected/`.
 
-Prima leggi i file esistenti in `_automation/proposals/pending/` e
-`_automation/proposals/approved/` per trovare l'ultimo numero progressivo usato.
-
-**Genera da 0 a 6 proposte.** Qualità sopra quantità: una proposta debole è un
-costo (genera lavoro a basso valore), non un guadagno. Se il PASSO 0 indica
-saturazione e non trovi gap reali, va bene **zero** — spiega il perché nel summary.
+**Da 0 a 4 proposte**, tutte con `target_file` dentro `docs/<scope>/`.
 
 Formato file `prop-NNN.yaml`:
 
@@ -105,6 +90,7 @@ type: new-file         # new-file | extend-section | fix-relation | consolidate 
 priority: high         # high | medium | low
 target_file: docs/categoria/sottocategoria/file.md
 effort: small          # small (<2h) | medium (2-4h) | large (>4h)
+scope: categoria/sottocategoria
 description: |
   Cosa aggiungere: struttura suggerita, esempi concreti, sezioni specifiche.
   Minimo 5 righe. Include: comandi reali, strumenti, versioni, pattern specifici.
@@ -117,50 +103,20 @@ utility_test:
   without_kb: "Senza questo file dovrebbe [alternativa più complessa/lenta]"
   score: high | medium | low
 tags: [tag1, tag2, tag3]
-last_analyzed: 2026-03-30
+last_analyzed: AAAA-MM-GG
 ```
 
----
-
-## PASSO 5 — Report di saturazione (AZIONE: SCRIVI FILE)
-
-**Scrivi `_automation/proposals/kb-saturation-report.md`** con questo contenuto:
-
-```markdown
-# KB Saturation Report — 2026-03-30
-
-## Copertura stimata per categoria
-
-| Categoria | Files | Coverage % | Depth | Note |
-|-----------|-------|------------|-------|------|
-| ...       | ...   | ...        | ...   | ...  |
-
-## Categorie vicine alla saturazione
-[elenco con motivazione]
-
-## Categorie con gap reali
-[elenco con motivazione]
-
-## Focus usato in questa sessione
-[area/e + perché: default, o rotazione da raccomandazione sessione precedente]
-
-## Prossima sessione consigliata
-[data + focus tematico]
-```
+**Non scrivere** `kb-saturation-report.md` e **non toccare** `state.yaml` né
+`coverage.yaml`: l'esito viene registrato automaticamente.
 
 ---
 
 ## Output finale (breve)
 
-Dopo aver scritto tutti i file, produci questo summary:
-
 ```
-PROPOSAL SESSION
-File analizzati: [N]
-Proposte generate: [N] in _automation/proposals/pending/
-
+EXPLORATION SESSION — <scope>
+File esistenti: [N]
+Proposte generate: [N]
   - [prop-NNN] [priority] [type] — [titolo]
-
-Saturazione KB: [breve valutazione]
-Report: _automation/proposals/kb-saturation-report.md
+Esito: [aperta | esaurita] — [1-2 frasi: perché]
 ```

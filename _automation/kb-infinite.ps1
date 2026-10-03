@@ -172,28 +172,16 @@ function Start-Countdown {
 # -- Loop principale ---------------------------------------------------------
 
 try {
-    # Contatore run consecutive con coda vuota.
-    # Governa due soglie:
-    #   EmptyBeforeProposal  : dopo N run senza task e senza proposte → genera proposte
-    #   EmptyBeforeAutoApprove: dopo N run con proposte pendenti non approvate → auto-approva
+    # Run consecutive con proposte pendenti: finestra per decidere a mano prima
+    # dell'auto-approvazione. Tutto il resto del lavoro a coda vuota lo decide
+    # la cascata `manage-state.py next-work` (vedi AUTOMATION.md).
     $emptyRuns               = 0
-    $EmptyBeforeProposal     = 1    # 1 run vuota → genera subito proposte (~30s)
     $EmptyBeforeAutoApprove  = 3    # 3 run con proposte pending → auto-approva (~90s finestra utente)
-
-    # Throttle di sessione (in memoria, non persistito in state.yaml): senza
-    # questo, con EmptyBeforeProposal=1 e RunInterval=30s, una coda che resta
-    # vuota tra una proposta e l'altra farebbe ripartire una sessione Opus/high
-    # di scansione KB ogni ~30-60s (criticita' #5). Limite solo per questa
-    # sessione locale: run_once.py (CI) non inietta piu' proposal a coda vuota.
-    $lastProposalInjectAt        = [datetime]::MinValue
-    $ProposalBaseIntervalSeconds = 600   # intervallo base tra due iniezioni proposal
-    $ProposalMaxIntervalSeconds  = 21600 # tetto backoff: 6 ore
-    $ProposalMinIntervalSeconds  = $ProposalBaseIntervalSeconds  # raddoppia a ogni proposal vuota (SKIP)
-    $throttleNotified            = $false # evita di ristampare il messaggio di throttle a ogni tick da 30s
+    $idleNotified            = $false # stampa il messaggio IDLE una volta sola per periodo di inattivita'
 
     function Show-RunHeader {
         # Stampata solo quando c'e' davvero qualcosa da riportare — durante
-        # l'attesa silenziosa del throttle non va chiamata, altrimenti si torna
+        # l'attesa silenziosa in IDLE non va chiamata, altrimenti si torna
         # a un "Run #N" vuoto ogni 30s senza nessuna informazione utile.
         Write-Host ""
         Write-Host "  [$(Get-Date -Format 'HH:mm:ss')] Run #$sessionRuns" -ForegroundColor Cyan
@@ -243,56 +231,52 @@ try {
 
         if ($taskJson -eq "null" -or [string]::IsNullOrWhiteSpace($taskJson)) {
 
-            $emptyRuns++
+            # ── Coda vuota: cascata next-work (manage-state.py) ───────────
+            # Le fonti di lavoro sono misurate in Python (0 token). Qui resta solo
+            # la finestra interattiva sulle proposte pendenti; tutto il resto
+            # (lifecycle, gate, review, currency, esplorazione per sottocategoria)
+            # lo decide next-work. Se non c'e' nulla da fare risponde 'idle' con
+            # l'orario in cui qualcosa tornera' disponibile: si dorme fino ad allora.
+            $workRaw = & $pythonBin $StatePy next-work --no-approve 2>&1
+            $workLine = (($workRaw | Out-String) -split "`n" | ForEach-Object { $_.Trim() } |
+                         Where-Object { $_ -match '^\{' } | Select-Object -Last 1)
+            try { $work = $workLine | ConvertFrom-Json } catch { $work = $null }
 
-            # ── 1. Analisi periodica KB (ogni 7 giorni) ───────────────────
-            $analysisJson = & $pythonBin $StatePy analysis-status 2>&1
-            try   { $analysisObj = $analysisJson | ConvertFrom-Json }
-            catch { $analysisObj = $null }
-
-            if ($analysisObj -and $analysisObj.needs_analysis) {
+            if (-not $work) {
                 Show-RunHeader
-                Write-Host "  [ANALISI] $($analysisObj.reason) - avvio scansione KB..." -ForegroundColor Cyan
-                $initJson = & $pythonBin $StatePy init-analysis 2>&1
-                try { $initObj = $initJson | ConvertFrom-Json } catch { $initObj = $null }
-                if ($initObj -and $initObj.status -eq "ok") {
-                    Write-Host "  [ANALISI] $($initObj.tasks_created) task creati su $($initObj.total_kb_files) file" -ForegroundColor Cyan
-                    Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] ANALYSIS_INIT tasks=$($initObj.tasks_created) files=$($initObj.total_kb_files)" -Encoding UTF8
-                } else {
-                    Write-Host "  [!] init-analysis fallito: $initJson" -ForegroundColor Red
-                }
-                $emptyRuns = 0
+                Write-Host "  [!] next-work illeggibile: $workRaw" -ForegroundColor Red
+                Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [ERR] NEXT_WORK_FAIL raw=[$workRaw]" -Encoding UTF8
+                $sessionErrors++
+                Start-Sleep -Seconds $ErrorWait
                 continue
             }
 
-            # ── 2. Controlla proposte pendenti ────────────────────────────
-            $rawProposals  = & $pythonBin $StatePy list-proposals 2>&1
-            # Rimuovi righe di warning Python prima del JSON (es. DeprecationWarning da stderr)
-            $allLines      = ($rawProposals | Out-String) -split "`n"
-            $jsonStart     = -1
-            for ($i = 0; $i -lt $allLines.Count; $i++) {
-                if ($allLines[$i].Trim() -match '^\{') { $jsonStart = $i; break }
-            }
-            $proposalsJson = if ($jsonStart -ge 0) { ($allLines[$jsonStart..($allLines.Count-1)] -join "`n").Trim() } `
-                             else { ($rawProposals | Out-String).Trim() }
-            try { $proposalsObj = $proposalsJson | ConvertFrom-Json } catch { $proposalsObj = $null }
-            $pendingCount = if ($proposalsObj -and $proposalsObj.count) { [int]$proposalsObj.count } else { 0 }
-
-            if ($pendingCount -gt 0) {
-
+            if ($work.action -eq "proposals_pending") {
+                # Finestra utente: EmptyBeforeAutoApprove run prima dell'auto-approvazione
+                $emptyRuns++
+                $idleNotified = $false
                 $runsLeft = $EmptyBeforeAutoApprove - $emptyRuns
+                $rawProposals  = & $pythonBin $StatePy list-proposals 2>&1
+                $allLines      = ($rawProposals | Out-String) -split "`n"
+                $jsonStart     = -1
+                for ($i = 0; $i -lt $allLines.Count; $i++) {
+                    if ($allLines[$i].Trim() -match '^\{') { $jsonStart = $i; break }
+                }
+                $proposalsJson = if ($jsonStart -ge 0) { ($allLines[$jsonStart..($allLines.Count-1)] -join "`n").Trim() } else { "" }
+                try { $proposalsObj = $proposalsJson | ConvertFrom-Json } catch { $proposalsObj = $null }
 
                 Show-RunHeader
                 Write-Host ""
-                Write-Host "  ===== $pendingCount PROPOSTE IN ATTESA =====" -ForegroundColor Yellow
-                foreach ($prop in $proposalsObj.proposals) {
-                    Write-Host "  >> $($prop.title)" -ForegroundColor White
-                    Write-Host "     $($prop.priority)  $($prop.type)  $($prop.target_file)" -ForegroundColor DarkGray
+                Write-Host "  ===== $($work.count) PROPOSTE IN ATTESA =====" -ForegroundColor Yellow
+                if ($proposalsObj) {
+                    foreach ($prop in $proposalsObj.proposals) {
+                        Write-Host "  >> $($prop.title)" -ForegroundColor White
+                        Write-Host "     $($prop.priority)  $($prop.type)  $($prop.target_file)" -ForegroundColor DarkGray
+                    }
                 }
                 Write-Host ""
 
                 if ($runsLeft -le 0) {
-                    # Tempo scaduto: auto-approva tutte le proposte pending
                     Write-Host "  [AUTO-APPROVA] Approvazione automatica in corso..." -ForegroundColor Magenta
                     $autoResult = & $pythonBin $StatePy auto-approve-proposals 2>&1
                     try { $autoObj = $autoResult | ConvertFrom-Json } catch { $autoObj = $null }
@@ -302,66 +286,40 @@ try {
                     Invoke-KbCommit "kb: auto-approve $approved proposte (bookkeeping)"
                     $emptyRuns = 0
                     continue
-                } else {
-                    Write-Host "  Auto-approvazione tra $runsLeft run (~$($runsLeft * $RunInterval)s) — review-proposals.bat per decidere ora." -ForegroundColor DarkGray
-                    Write-Host "  =============================================" -ForegroundColor Yellow
                 }
-
-            } elseif ($emptyRuns -ge $EmptyBeforeProposal) {
-                # ── 3. Nessuna proposta e coda vuota: genera proposte (con throttle di sessione)
-                $secsSinceLastProposal = ((Get-Date) - $lastProposalInjectAt).TotalSeconds
-                if ($secsSinceLastProposal -lt $ProposalMinIntervalSeconds) {
-                    $waitLeft = [int]($ProposalMinIntervalSeconds - $secsSinceLastProposal)
-                    if (-not $throttleNotified) {
-                        Show-RunHeader
-                        Write-Host "  [PROPOSTE] Throttle sessione attivo — prossima proposta tra ${waitLeft}s (silenzio fino ad allora)" -ForegroundColor DarkGray
-                        $throttleNotified = $true
-                    }
-                    $emptyRuns = 0
-                    if ($waitLeft -gt 30) {
-                        # Grosso del tempo: nessun output, un solo Start-Sleep
-                        # bounded a 30s per volta cosi' il loop resta reattivo
-                        # (nuovo task/proposta manuale) senza fare polling a
-                        # raffica (era il bug: nessun sleep -> centinaia di
-                        # iterazioni/sec durante il throttle).
-                        Start-Sleep -Seconds ([Math]::Min(30, $waitLeft - 5))
-                    } else {
-                        # Countdown finale silenzioso salvo qualche promemoria.
-                        foreach ($mark in 30, 10, 5, 3, 2, 1) {
-                            if ($waitLeft -eq $mark) {
-                                Write-Host "  [PROPOSTE] ...${mark}s" -ForegroundColor DarkGray
-                            }
-                        }
-                        Start-Sleep -Seconds 1
-                    }
-                    continue
-                } else {
-                    $throttleNotified = $false
-                    Show-RunHeader
-                    Write-Host "  [PROPOSTE] Coda vuota — avvio sessione proposte strategica..." -ForegroundColor Magenta
-                    $injectResult = & $pythonBin $StatePy inject-proposal-task 2>&1
-                    try { $injectObj = $injectResult | ConvertFrom-Json } catch { $injectObj = $null }
-                    if ($injectObj -and $injectObj.status -eq "ok") {
-                        Write-Host "  [PROPOSTE] Task $($injectObj.task_id) iniettato — Claude analizzera' la KB" -ForegroundColor Magenta
-                        Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] PROPOSAL_INJECT task=$($injectObj.task_id)" -Encoding UTF8
-                        $lastProposalInjectAt = Get-Date
-                    } elseif ($injectObj -and $injectObj.status -eq "skipped") {
-                        # Proposta gia' in coda (pending), non aggiungere duplicati
-                        Write-Host "  [PROPOSTE] Task proposal gia' in coda." -ForegroundColor DarkGray
-                    } else {
-                        Write-Host "  [!] inject-proposal-task: $injectResult" -ForegroundColor Red
-                    }
-                }
-                $emptyRuns = 0
+                Write-Host "  Auto-approvazione tra $runsLeft run (~$($runsLeft * $RunInterval)s) — review-proposals.bat per decidere ora." -ForegroundColor DarkGray
+                Start-Sleep -Seconds $RunInterval
                 continue
-            } else {
-                Show-RunHeader
-                Write-Host "  [WAIT] Queue vuota — prossima run tra ${RunInterval}s" -ForegroundColor DarkGray
-                Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] QUEUE_EMPTY" -Encoding UTF8
             }
 
-            Write-Host "  Attendo ${RunInterval}s..." -ForegroundColor DarkGray
-            Start-Sleep -Seconds $RunInterval
+            $emptyRuns = 0
+
+            if ($work.action -eq "injected") {
+                $idleNotified = $false
+                Show-RunHeader
+                $ids = ($work.tasks | ForEach-Object { if ($_.scope) { "$($_.id):$($_.scope)" } else { "$($_.id):$($_.type)" } }) -join " "
+                Write-Host "  [CASCATA] $($work.source): $($work.count) task iniettati ($($work.remaining_in_source) restanti nella fonte)" -ForegroundColor Magenta
+                Write-Host "            $ids" -ForegroundColor DarkGray
+                Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] CASCADE source=$($work.source) count=$($work.count)" -Encoding UTF8
+                continue
+            }
+
+            if ($work.action -eq "idle") {
+                # KB completa per lo scope attuale: nessuna chiamata al modello, nessun
+                # commit. Sonno a blocchi da max 10 min (poi si rivaluta: costa ~1s).
+                if (-not $idleNotified) {
+                    Show-RunHeader
+                    Write-Host "  [IDLE] $($work.reason)" -ForegroundColor Green
+                    Write-Host "  [IDLE] Prossimo lavoro previsto: $($work.next_check_at) — silenzio fino ad allora" -ForegroundColor DarkGray
+                    Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] KB_IDLE next=$($work.next_check_at)" -Encoding UTF8
+                    $idleNotified = $true
+                }
+                Start-Sleep -Seconds ([Math]::Min(600, [Math]::Max(60, [int]$work.wait_seconds)))
+                continue
+            }
+
+            # queue_not_empty (race con un'altra scrittura): riprova subito
+            Start-Sleep -Seconds 5
             continue
         }
 
@@ -619,11 +577,6 @@ try {
                 $pendingCount = "($($sn.total_pending) task rimasti)"
             } catch {}
 
-            if ($task.type -eq "proposal") {
-                # Backoff: proposal vuota -> raddoppia l'attesa (max 6h); con proposte -> reset
-                if ($fileWasCreated) { $ProposalMinIntervalSeconds = $ProposalBaseIntervalSeconds }
-                else { $ProposalMinIntervalSeconds = [Math]::Min($ProposalMaxIntervalSeconds, $ProposalMinIntervalSeconds * 2) }
-            }
             $logVerb    = if ($fileWasCreated) { "CREATED" } else { "SKIP" }
             $tokenCount = if ($tokens) { $tokens.total_tokens } else { 0 }
             Add-Content -Path $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [INF #$sessionRuns] $logVerb task=$($task.id) elapsed=${elapsed}s tokens=$tokenCount lines=$fileLines" -Encoding UTF8

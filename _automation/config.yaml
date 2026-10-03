@@ -23,12 +23,28 @@ models:
   default:     { model: claude-sonnet-5,  effort: medium }
 
 # ---------------------------------------------------------------------------
-# Freno di saturazione — impedisce la crescita indefinita del numero di argomenti.
+# Freno di saturazione. Il criterio reale di "KB completa" NON e' piu' un numero
+# di file: e' l'esaurimento per sottocategoria (coverage.yaml, vedi cascade).
+# max_file_count resta solo come tetto di budget opzionale: null = nessun tetto;
+# se impostato e raggiunto, la fonte 'exploration' si sospende.
 # ---------------------------------------------------------------------------
 saturation:
-  target_file_count: 330       # oltre: solo proposte score=high con gap esplicito nel report
-  category_saturated_pct: 85   # categoria >= questa % coverage: niente proposte di espansione
+  max_file_count: null
   allow_zero_proposals: true   # proposal-prompt puo' restituire lista vuota con motivazione
+
+# ---------------------------------------------------------------------------
+# Cascata next-work (manage-state.py next-work): a coda vuota inietta un batch
+# dalla prima fonte non vuota: proposals > lifecycle > gate > review > currency >
+# exploration. Batch piccoli = la cascata si rivaluta spesso, cosi' il lavoro
+# generato da un batch (es. review -> needs-review) passa davanti al successivo.
+# ---------------------------------------------------------------------------
+cascade:
+  batch_audit: 10              # audit (Haiku): economici, batch piu' grande
+  batch_review: 5              # review/lifecycle (Opus): ~5 task tra due rivalutazioni
+  batch_currency: 5
+  retry_cooldown_days: 30      # stesso (tipo, file) non ritentato prima di N giorni
+  max_attempts: 3              # oltre: il file richiede intervento umano, la cascata lo salta
+  exhausted_reopen_days: 90    # sottocategoria esaurita riesplorata dopo N giorni (nuove tecnologie)
 
 # ---------------------------------------------------------------------------
 # Cadenze (giorni) e dimensioni campione.
@@ -36,7 +52,7 @@ saturation:
 cadence:
   analysis_interval_days: 7
   currency_interval_days: 30
-  review_sample_size: 3
+  review_sample_size: 3        # solo init-analysis (manuale); i loop usano cascade.batch_review
 
 # ---------------------------------------------------------------------------
 # Focus tematico: i file sotto questi prefissi (relativi a docs/) passano davanti

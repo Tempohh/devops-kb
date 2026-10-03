@@ -272,36 +272,30 @@ def run_task(task: dict, cfg: dict, claude_bin: str, args) -> str:
 # ── queue-empty handling ──────────────────────────────────────────────────
 
 def handle_empty_queue(cfg: dict, args) -> bool:
-    """Ritorna True se ha modificato lo stato (creato task) e conviene rifare next-task."""
-    analysis = state_json("analysis-status")
-    if analysis and analysis.get("needs_analysis"):
-        log(f"[ANALISI] {analysis.get('reason')} — init-analysis")
-        if not args.dry_run:
-            r = state_json("init-analysis")
-            if r:
-                log(f"[ANALISI] {r.get('tasks_created')} task su {r.get('total_kb_files')} file")
-        return True
+    """Ritorna True se ha modificato lo stato (creato task) e conviene rifare next-task.
 
-    props = state_json("list-proposals")
-    pending = int((props or {}).get("count", 0) or 0)
-    if pending > 0:
-        loop_cfg = cfg.get("loop") or {}
-        if loop_cfg.get("auto_approve_proposals", True):
-            log(f"[PROPOSTE] {pending} pendenti — auto-approvazione (CI: nessun umano)")
-            if not args.dry_run:
-                state("auto-approve-proposals")
-            return True
-        log(f"[PROPOSTE] {pending} pendenti — lasciate per review manuale")
+    Delega alla cascata `manage-state.py next-work` (stessa logica di
+    kb-infinite.ps1): proposte pendenti -> lifecycle -> gate -> review ->
+    currency -> esplorazione per sottocategoria. Nessuna proposal "alla cieca":
+    il modello lavora solo su lavoro gia' identificato (criticita' #5 e #7).
+    """
+    work = state_json("next-work", *(["--dry-run"] if args.dry_run else []))
+    if not work:
+        log("[CASCATA] next-work illeggibile")
         return False
-
-    # Coda vuota, nessuna proposta pendente: nessuna iniezione standalone qui.
-    # La generazione di proposte e' gia' schedulata dentro init-analysis (1 task
-    # proposal ogni analysis_interval_days, vedi ramo sopra). Iniettarne un'altra
-    # a ogni tick vuoto (fino a 4/giorno) produceva solo sessioni Opus/high
-    # ripetute a vuoto quando la KB non cambia tra un tick e l'altro (criticita' #5).
-    # L'iniezione rapida standalone resta disponibile solo in kb-infinite.ps1,
-    # che ha un proprio throttle per l'uso interattivo locale.
-    log("[PROPOSTE] coda vuota — nessuna proposta pendente, in attesa del prossimo init-analysis")
+    action = work.get("action")
+    if action == "approved":
+        log(f"[CASCATA] {work.get('count')} proposte auto-approvate")
+        return True
+    if action == "proposals_pending":
+        log(f"[CASCATA] {work.get('count')} proposte pendenti — lasciate per review manuale")
+        return False
+    if action == "injected":
+        log(f"[CASCATA] {work.get('source')}: {work.get('count')} task iniettati "
+            f"({work.get('remaining_in_source')} restanti)")
+        return not args.dry_run
+    if action == "idle":
+        log(f"[CASCATA] idle — {work.get('reason')}; prossimo lavoro {work.get('next_check_at')}")
     return False
 
 

@@ -133,6 +133,14 @@ def cmd_force_complete(task_id):
     Solo attivo se il task e' ancora pending/in_progress — se gia' aggiornato dall'agente, no-op.
     """
     state = load_state()
+
+    # Proposal limitata a una sottocategoria: registra l'esito in coverage.yaml
+    # (idempotente, vale anche se l'agente ha gia' aggiornato lo state).
+    for item in state.get("queue", []):
+        if item.get("id") == task_id and item.get("type") == "proposal" and item.get("scope"):
+            _record_exploration(item["scope"], task_id)
+            break
+
     for item in state.get("queue", []):
         if item.get("id") == task_id and item.get("status") in ("pending", "in_progress"):
             file_path = item.get("path", "")
@@ -641,6 +649,11 @@ def cmd_audit_preflight(file_path):
         print(json.dumps({"pass": False, "issues": [str(e)]}))
         return
 
+    print(json.dumps(_preflight(content), ensure_ascii=False))
+
+
+def _preflight(content: str) -> dict:
+    """Gate meccanico su un file KB (0 token). Condiviso da audit-preflight e next-work."""
     issues = []
 
     # Conta righe di contenuto (non frontmatter)
@@ -691,17 +704,18 @@ def cmd_audit_preflight(file_path):
             fm_text = content[4:end]
 
     if fm_text:
-        kw_match = re.search(r"search_keywords:\s*\[([^\]]*)\]", fm_text)
-        if kw_match:
-            kw_count = len([k for k in kw_match.group(1).split(",") if k.strip()])
-            if kw_count < 10:
-                issues.append(f"pochi_keywords:{kw_count}")
+        # YAML parsato: accetta sia liste inline [a, b] sia liste a blocchi "- a"
+        # (le regex sulla sola forma inline davano no_related/no_keywords falsi).
+        fm = _read_frontmatter(content)
+        kws = fm.get("search_keywords")
+        if isinstance(kws, list):
+            if len(kws) < 10:
+                issues.append(f"pochi_keywords:{len(kws)}")
         else:
             issues.append("no_keywords")
 
-        rel_match = re.search(r"related:\s*\[([^\]]*)\]", fm_text)
-        if rel_match:
-            rel_items = [r.strip() for r in rel_match.group(1).split(",") if r.strip()]
+        rel_items = fm.get("related")
+        if isinstance(rel_items, list):
             if len(rel_items) < 2:
                 issues.append(f"pochi_related:{len(rel_items)}")
         else:
@@ -711,13 +725,12 @@ def cmd_audit_preflight(file_path):
         if status_match and status_match.group(1) in ("draft", "needs-review"):
             issues.append(f"status:{status_match.group(1)}")
 
-    passed = len(issues) == 0
-    print(json.dumps({
-        "pass": passed,
+    return {
+        "pass": len(issues) == 0,
         "lines": content_lines,
         "code_blocks": code_block_count,
         "issues": issues
-    }, ensure_ascii=False))
+    }
 
 
 # ── Proposte ──────────────────────────────────────────────────────────────────
@@ -950,9 +963,9 @@ def cmd_auto_approve_proposals():
 
 def cmd_inject_proposal_task():
     """
-    Inietta un task di tipo 'proposal' nella coda.
-    Usato SOLO da kb-infinite.ps1 (uso interattivo locale) quando la coda e'
-    vuota da troppo tempo e non ci sono proposte pendenti. Evita duplicati:
+    Inietta un task di tipo 'proposal' (globale, senza scope) nella coda.
+    Solo uso manuale: i loop usano la cascata `next-work`, che inietta proposal
+    limitate a una sottocategoria (criticita' #7). Evita duplicati:
     non aggiunge se esiste già un task proposal pending.
 
     run_once.py (CI + KB_Aggiorna_Sicuro.bat) NON chiama piu' questo comando a
@@ -1124,21 +1137,20 @@ def cmd_saturation_gate():
     """
     cfg    = _load_automation_config()
     sat    = cfg.get("saturation") or {}
-    target = int(sat.get("target_file_count", 330))
+    target = sat.get("max_file_count")   # null = nessun tetto (criterio reale: coverage.yaml)
     files  = find_kb_content_files()
     n      = len(files)
+    over   = bool(target) and n >= int(target)
     print(json.dumps({
         "file_count": n,
         "target": target,
-        "over_target": n >= target,
-        "headroom": target - n,
-        "category_saturated_pct": sat.get("category_saturated_pct", 85),
+        "over_target": over,
+        "headroom": (int(target) - n) if target else None,
         "allow_zero_proposals": bool(sat.get("allow_zero_proposals", True)),
         "guidance": (
-            "Oltre il target: proponi SOLO new-file con score=high e gap esplicito. "
-            "Preferisci proposte currency/consolidate/review."
-            if n >= target else
-            "Sotto il target: proposte di espansione ammesse se superano il test di utilita'."
+            "Tetto di budget raggiunto: niente new-file."
+            if over else
+            "Nessun tetto attivo: proposte ammesse se superano il test di utilita'."
         ),
     }, ensure_ascii=False))
 
@@ -1320,6 +1332,344 @@ def cmd_stats_doc(write_mode=False):
     print(json.dumps({"status": "ok", "files": total_files, "lines": total_lines}, ensure_ascii=False))
 
 
+# ── Cascata next-work: lavoro deterministico a coda vuota ────────────────────
+#
+# A coda vuota i loop (kb-infinite.ps1, run_once.py) chiamano `next-work`, che
+# scorre fonti di lavoro in ordine fisso e inietta un batch dalla prima non vuota.
+# Ogni fonte e' misurata qui (0 token) ed e' finita: il modello viene chiamato solo
+# su lavoro gia' identificato. Se tutte le fonti sono vuote ritorna `idle` con
+# l'istante in cui qualcosa tornera' disponibile (currency in scadenza, riapertura
+# di una sottocategoria esaurita). Vedi AUTOMATION.md §"Cascata next-work".
+#
+#   1 proposals    proposte pendenti            -> auto-approve
+#   2 lifecycle    status draft / needs-review  -> audit / review
+#   3 gate         complete che falliscono il gate meccanico o con related rotti -> audit
+#   4 review       complete mai revisionati     -> review
+#   5 currency     reviewed con last_verified scaduto -> currency
+#   6 exploration  sottocategoria non esaurita  -> proposal limitata (scope)
+
+COVERAGE_FILE = Path(__file__).parent / "coverage.yaml"
+
+
+def _cascade_cfg() -> dict:
+    cfg = _load_automation_config()
+    cas = cfg.get("cascade") or {}
+    cad = cfg.get("cadence") or {}
+    sat = cfg.get("saturation") or {}
+    return {
+        "batch_audit":    int(cas.get("batch_audit", 10)),
+        "batch_review":   int(cas.get("batch_review", 5)),
+        "batch_currency": int(cas.get("batch_currency", 5)),
+        "cooldown_days":  int(cas.get("retry_cooldown_days", 30)),
+        "max_attempts":   int(cas.get("max_attempts", 3)),
+        "reopen_days":    int(cas.get("exhausted_reopen_days", 90)),
+        "currency_days":  int(cad.get("currency_interval_days", 30)),
+        "max_files":      sat.get("max_file_count"),
+        "auto_approve":   bool((cfg.get("loop") or {}).get("auto_approve_proposals", True)),
+    }
+
+
+def _parse_dt(value):
+    """ISO datetime o data YYYY-MM-DD -> datetime UTC aware (None se assente/illeggibile)."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except Exception:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _load_coverage() -> dict:
+    try:
+        with open(COVERAGE_FILE, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        data = {}
+    data.setdefault("subcategories", {})
+    return data
+
+
+def _save_coverage(data: dict):
+    with open(COVERAGE_FILE, "w", encoding="utf-8") as f:
+        f.write("# Esplorazione per sottocategoria — scritto da manage-state.py (force-complete).\n")
+        f.write("# 'exhausted' = l'ultima proposal limitata a quella sottocategoria ha prodotto zero\n")
+        f.write("# proposte. Si riapre solo se cambia l'insieme dei file o dopo exhausted_reopen_days.\n\n")
+        yaml.dump(data, f, allow_unicode=True, default_flow_style=False, sort_keys=True, width=120)
+
+
+def _subcategories() -> dict:
+    """{'cat/sub': [file, ...]} dalle cartelle reali + taxonomy.yml (anche se ancora vuote)."""
+    subs = {}
+    for rel in find_kb_content_files():
+        parts = rel.split("/")              # docs/cat/sub/.../file.md
+        if len(parts) >= 4:
+            subs.setdefault(f"{parts[1]}/{parts[2]}", []).append(rel)
+    try:
+        with open(DOCS_ROOT / "_metadata" / "taxonomy.yml", encoding="utf-8") as f:
+            tax = yaml.safe_load(f) or {}
+        for cat, info in (tax.get("categories") or {}).items():
+            for sub in (info or {}).get("subcategories") or []:
+                subs.setdefault(f"{cat}/{sub}", [])
+    except Exception:
+        pass
+    return subs
+
+
+def _fingerprint(files) -> str:
+    """Impronta dell'insieme degli argomenti (path), non del contenuto: una review che
+    ritocca un file non deve riaprire l'esplorazione, un argomento aggiunto/rimosso si'."""
+    import hashlib
+    return hashlib.sha1("\n".join(sorted(files)).encode("utf-8")).hexdigest()[:12]
+
+
+def _record_exploration(scope: str, task_id: str):
+    """Esito di una proposal limitata: le proposte pendenti ora sono quelle appena
+    prodotte (la cascata inietta l'esplorazione solo con pending/ vuota)."""
+    cov = _load_coverage()
+    entry = cov["subcategories"].setdefault(scope, {})
+    if entry.get("last_task") == str(task_id):
+        return
+    pending_dir = PROPOSALS_DIR / "pending"
+    produced = len(list(pending_dir.glob("*.yaml"))) if pending_dir.exists() else 0
+    files = _subcategories().get(scope, [])
+    entry.update({
+        "last_task":     str(task_id),
+        "last_explored": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "explorations":  int(entry.get("explorations", 0)) + 1,
+        "proposals":     produced,
+        "exhausted":     produced == 0,
+        "fingerprint":   _fingerprint(files),
+        "file_count":    len(files),
+    })
+    _save_coverage(cov)
+    _write_log(f"[CASCADE] exploration {scope}: {produced} proposte -> "
+               f"{'exhausted' if produced == 0 else 'aperta'}")
+
+
+def _broken_related(fm: dict) -> list:
+    rel = fm.get("related") or []
+    if not isinstance(rel, list):
+        return []
+    broken = []
+    for r in rel:
+        r = str(r).strip().strip("/")
+        if r.startswith("docs/"):
+            r = r[5:]
+        if not r:
+            continue
+        p = DOCS_ROOT / r
+        if (p.suffix == ".md" and p.exists()) or Path(str(p) + ".md").exists() or p.is_dir():
+            continue
+        broken.append(r)
+    return broken
+
+
+def _cascade_candidates(state: dict, c: dict, now: datetime) -> dict:
+    """Calcola TUTTE le fonti (liste complete, ordinate). Nessuna scrittura."""
+    from datetime import timedelta
+
+    # Storico tentativi per (tipo, path): cooldown + tetto ai retry, cosi' un file
+    # che l'agente non riesce a sistemare non torna in coda all'infinito.
+    hist = {}
+    for item in state.get("queue", []):
+        hist.setdefault((item.get("type"), item.get("path")), []).append(_parse_dt(item.get("created_at")))
+
+    def blocked(ttype, rel, cooldown_days, capped=True):
+        h = hist.get((ttype, rel), [])
+        if capped and len(h) >= c["max_attempts"]:
+            return True
+        limit = now - timedelta(days=cooldown_days)
+        return any(dt and dt > limit for dt in h)
+
+    files = []
+    for rel in find_kb_content_files():
+        if len(rel.split("/")) < 3:          # docs/index.md, docs/tags.md: non sono argomenti
+            continue
+        try:
+            txt = (DOCS_ROOT.parent / rel).read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        files.append((rel, txt, _read_frontmatter(txt)))
+
+    cd = c["cooldown_days"]
+    out = {k: [] for k in ("lifecycle", "gate", "review", "currency", "exploration")}
+    next_due = []
+
+    for rel, txt, fm in files:
+        st = str(fm.get("status") or "complete")
+        if st == "draft":
+            if not blocked("audit", rel, cd):
+                out["lifecycle"].append(("audit", rel, "status:draft — porta il file al gate "
+                                         "(sezioni template, Troubleshooting, keyword, related)"))
+        elif st == "needs-review":
+            if not blocked("review", rel, cd):
+                out["lifecycle"].append(("review", rel, "status:needs-review — risolvi i marker "
+                                         "<!-- REVIEW/CURRENCY --> e rivaluta il file"))
+        elif st == "complete":
+            issues = [i for i in _preflight(txt)["issues"] if not i.startswith("status:")]
+            broken = _broken_related(fm)
+            if broken:
+                issues.append("related_rotti:" + ",".join(broken))
+            if issues and not blocked("audit", rel, cd):
+                out["gate"].append(("audit", rel, "Issue identificati: " + ", ".join(issues)))
+            elif not issues and not blocked("review", rel, cd):
+                out["review"].append(("review", rel, "Prima review: correttezza, attualita', valore. "
+                                      "Imposta status reviewed/needs-review e last_verified."))
+        elif st == "reviewed":
+            lv = _parse_dt(fm.get("last_verified"))
+            due = (lv + timedelta(days=c["currency_days"])) if lv else now
+            if due > now:
+                next_due.append(due)
+            elif not blocked("currency", rel, c["currency_days"], capped=False):
+                stale = len(STALE_MODEL_RE.findall(txt))
+                out["currency"].append(("currency", rel, f"Currency: last_verified "
+                                        f"{lv.date() if lv else 'assente'} oltre {c['currency_days']}g"
+                                        + (f", {stale} riferimenti modello/API datati" if stale else ""),
+                                        stale, lv or now))
+
+    def lv_key(rel, fm):
+        return str(fm.get("last_verified") or "0000-00-00")
+
+    fmmap = {rel: fm for rel, _, fm in files}
+    out["lifecycle"].sort(key=lambda t: (_focus_rank(t[1]), t[1]))
+    out["gate"].sort(key=lambda t: (_focus_rank(t[1]), t[1]))
+    out["review"].sort(key=lambda t: (_focus_rank(t[1]), lv_key(t[1], fmmap[t[1]]), t[1]))
+    out["currency"].sort(key=lambda t: (_focus_rank(t[1]), -t[3], t[4], t[1]))
+    out["currency"] = [t[:3] for t in out["currency"]]
+
+    # Esplorazione: mai esplorate (prima le piu' piccole), poi aperte (piu' vecchie
+    # prima), poi esaurite da riaprire (insieme file cambiato o reopen scaduto).
+    subs = _subcategories()
+    cov = _load_coverage()["subcategories"]
+    over_budget = bool(c["max_files"]) and len(files) >= int(c["max_files"])
+    ranked = []
+    for scope, sfiles in subs.items():
+        e = cov.get(scope) or {}
+        last = _parse_dt(e.get("last_explored"))
+        if not last:
+            ranked.append((0, len(sfiles), "", scope))
+        elif not e.get("exhausted"):
+            ranked.append((1, 0, last.isoformat(), scope))
+        else:
+            reopen = last + timedelta(days=c["reopen_days"])
+            if e.get("fingerprint") != _fingerprint(sfiles) or reopen <= now:
+                ranked.append((2, 0, last.isoformat(), scope))
+            else:
+                next_due.append(reopen)
+    ranked.sort()
+    if not over_budget:
+        for _, _, _, scope in ranked:
+            n = len(subs[scope])
+            out["exploration"].append(("proposal", scope,
+                f"Esplorazione sottocategoria {scope} ({n} file): proponi solo gap reali "
+                f"oppure zero proposte (zero = sottocategoria esaurita)."))
+
+    return {"sources": out, "next_due": next_due, "over_budget": over_budget,
+            "files": len(files), "subcategories": len(subs),
+            "exhausted": sum(1 for s in subs if (cov.get(s) or {}).get("exhausted"))}
+
+
+def cmd_next_work(dry_run=False, no_approve=False):
+    """Inietta il prossimo batch di lavoro (o ritorna idle). Da chiamare a coda vuota."""
+    from datetime import timedelta
+    c = _cascade_cfg()
+    now = datetime.now(timezone.utc)
+    state = load_state()
+    queue = state.setdefault("queue", [])
+
+    if any(i.get("status") == "pending" for i in queue):
+        print(json.dumps({"action": "queue_not_empty"}))
+        return
+
+    # 1 — proposte pendenti
+    pending_dir = PROPOSALS_DIR / "pending"
+    n_pending = len(list(pending_dir.glob("*.yaml"))) if pending_dir.exists() else 0
+    if n_pending:
+        if no_approve or dry_run or not c["auto_approve"]:
+            print(json.dumps({"action": "proposals_pending", "source": "proposals", "count": n_pending}))
+            return
+        from contextlib import redirect_stdout
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cmd_auto_approve_proposals()
+        try:
+            approved = json.loads(buf.getvalue().strip().splitlines()[-1]).get("approved", 0)
+        except Exception:
+            approved = 0
+        print(json.dumps({"action": "approved", "source": "proposals", "count": approved}))
+        return
+
+    cand = _cascade_candidates(state, c, now)
+    batches = {"lifecycle": c["batch_review"], "gate": c["batch_audit"],
+               "review": c["batch_review"], "currency": c["batch_currency"], "exploration": 1}
+
+    for source in ("lifecycle", "gate", "review", "currency", "exploration"):
+        picked = cand["sources"][source][:batches[source]]
+        if not picked:
+            continue
+        max_id = 0
+        for item in queue:
+            digits = "".join(ch for ch in str(item.get("id", "0")) if ch.isdigit())
+            if digits:
+                max_id = max(max_id, int(digits))
+        tasks = []
+        for ttype, target, reason in picked:
+            max_id += 1
+            task = {"id": str(max_id), "type": ttype, "status": "pending",
+                    "created_at": now.isoformat(timespec="seconds"), "source": source,
+                    "reason": reason}
+            if ttype == "proposal":
+                task.update({"path": "_automation/proposals", "scope": target,
+                             "category": target.split("/")[0], "priority": "P3"})
+            else:
+                parts = target.split("/")
+                task.update({"path": target, "category": parts[1] if len(parts) > 1 else "unknown",
+                             "priority": _focus_priority(target)})
+            tasks.append(task)
+        if not dry_run:
+            queue.extend(tasks)
+            state["total_ops"] = state.get("total_ops", 0) + len(tasks)
+            save_state(state)
+            _write_log(f"[CASCADE] {source}: {len(tasks)} task "
+                       f"({len(cand['sources'][source])} candidati) ids={tasks[0]['id']}..{tasks[-1]['id']}")
+        print(json.dumps({"action": "injected", "source": source, "count": len(tasks),
+                          "remaining_in_source": len(cand["sources"][source]) - len(tasks),
+                          "dry_run": dry_run,
+                          "tasks": [{k: t[k] for k in ("id", "type", "path", "scope") if k in t} for t in tasks]},
+                         ensure_ascii=False))
+        return
+
+    # Tutte le fonti vuote: KB completa per lo scope attuale.
+    nxt = min(cand["next_due"]) if cand["next_due"] else now + timedelta(days=1)
+    wait = max(60, int((nxt - now).total_seconds()))
+    reason = (f"tutte le fonti vuote: {cand['exhausted']}/{cand['subcategories']} sottocategorie "
+              f"esaurite, file non reviewed in cooldown o al tetto tentativi")
+    if cand["over_budget"]:
+        reason += f"; esplorazione sospesa (max_file_count={c['max_files']} raggiunto)"
+    if not dry_run:
+        _write_log(f"[CASCADE] idle — {reason}; prossimo controllo {nxt.isoformat(timespec='minutes')}")
+    print(json.dumps({"action": "idle", "reason": reason,
+                      "next_check_at": nxt.isoformat(timespec="seconds"), "wait_seconds": wait},
+                     ensure_ascii=False))
+
+
+def cmd_cascade_status():
+    """Conteggio candidati per fonte (nessuna scrittura) — diagnostica della cascata."""
+    c = _cascade_cfg()
+    cand = _cascade_candidates(load_state(), c, datetime.now(timezone.utc))
+    pending_dir = PROPOSALS_DIR / "pending"
+    print(json.dumps({
+        "proposals_pending": len(list(pending_dir.glob("*.yaml"))) if pending_dir.exists() else 0,
+        **{k: len(v) for k, v in cand["sources"].items()},
+        "files": cand["files"],
+        "subcategories": cand["subcategories"],
+        "exhausted": cand["exhausted"],
+        "over_budget": cand["over_budget"],
+        "next_due": min(cand["next_due"]).isoformat(timespec="seconds") if cand["next_due"] else None,
+    }, ensure_ascii=False))
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -1375,6 +1725,10 @@ if __name__ == "__main__":
         cmd_inject_review_tasks(sys.argv[2] if len(sys.argv) >= 3 else 3)
     elif cmd == "inject-currency-tasks":
         cmd_inject_currency_tasks(sys.argv[2] if len(sys.argv) >= 3 else 20)
+    elif cmd == "next-work":
+        cmd_next_work(dry_run="--dry-run" in sys.argv, no_approve="--no-approve" in sys.argv)
+    elif cmd == "cascade-status":
+        cmd_cascade_status()
     elif cmd == "stats-doc":
         cmd_stats_doc(write_mode=(len(sys.argv) >= 3 and sys.argv[2] == "write"))
     else:

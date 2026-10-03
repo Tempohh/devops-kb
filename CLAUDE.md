@@ -286,12 +286,18 @@ Sintesi:
   `consolidate`→`consolidate-prompt.md`, `proposal`→`proposal-prompt.md`.
 - **Policy modello** (`_automation/config.yaml`): audit→Haiku/low, new_topic·expand→
   Sonnet, review·proposal→Opus/high. `run_once.py` passa `--model` di conseguenza.
-- **Freno di saturazione**: `manage-state.py saturation-gate` + `kb-saturation-report.md`.
-  Oltre `target_file_count` niente nuovi argomenti salvo gap `score: high`. Le
-  sessioni proposal possono restituire **zero** proposte.
-- **Quality revisioning**: ogni ciclo di analisi (7g) inietta N task `review` sui
-  file con `last_verified` più vecchio; `review`/`currency` possono retrocedere lo
-  `status` o aprire una proposta di follow-up.
+- **Cascata `next-work`** (coda vuota, entrambi i loop): proposte pendenti →
+  lifecycle (`draft`/`needs-review`) → gate meccanico → review dei `complete` →
+  currency dei `reviewed` scaduti → esplorazione di **una sottocategoria** alla volta.
+  Fonti misurate in Python (0 token), cooldown + tetto tentativi anti-loop.
+- **Criterio di completezza**: non un numero di file, ma `coverage.yaml` — una
+  sottocategoria è `exhausted` quando la sua proposal limitata restituisce zero
+  proposte; si riapre se cambia l'insieme dei suoi file o dopo 90 giorni. Tutte le
+  fonti vuote ⇒ `idle` (nessuna chiamata al modello) fino alla prossima scadenza.
+  `saturation.max_file_count` è solo un tetto di budget opzionale (default `null`).
+- **Quality revisioning**: `review`/`currency` possono retrocedere lo `status` o
+  aprire una proposta di follow-up; i `needs-review` risultanti rientrano dalla
+  fonte lifecycle.
 
 **Quando lavori come agente di contenuto** (protocolli 1–5): il task è in
 `_automation/current-task.json`; segui il prompt indicato; **non leggere né
@@ -314,6 +320,7 @@ scrivere `_automation/state.yaml`**; fermati dopo un task.
 | 4 | 2026-09-09 | Il cron nativo di GitHub Actions per `kb-maintenance` partiva con 1–4 h di ritardo (o veniva droppato): lo step *Gate* con finestra oraria di 1 h scartava **ogni** run schedulato (`ora di Roma fuori da 00/06/12/18`). Da quando lo schedule fu ancorato: zero iterazioni reali dell'automazione via cron. | Rimosso `schedule:` dal workflow (trigger solo `workflow_dispatch`); scheduling puntuale 00/06/12/18 ora di Roma delegato a scheduler esterno (cron-job.org, timezone Europe/Rome, PAT fine-grained con permesso *Actions: RW*) che chiama l'endpoint `dispatches`; gate ridotto a pausa + secret; runbook in `AUTOMATION.md` §2 | `.github/workflows/kb-maintenance.yml`, `_automation/AUTOMATION.md`, CLAUDE.md | ✅ Chiuso |
 | 5 | 2026-09-27 | `run_once.py::handle_empty_queue` iniettava un nuovo task `proposal` (Opus/high, scansione intera KB) a ogni tick con coda vuota, senza alcun cooldown — fino a 4 sessioni/giorno via CI, tutte concluse a "zero proposte" perché nulla era cambiato dall'ultima (5 commit auto #552-556 di fila identici). `kb-infinite.ps1` aveva lo stesso problema ma piggiore: loop ogni 30s, `EmptyBeforeProposal=1` → re-iniettava dopo una sola run vuota (~30-60s); inoltre il branch throttle faceva `continue` senza `Start-Sleep`, quindi durante l'attesa girava senza pausa (centinaia di iterazioni/sec, solo I/O locale, nessun costo Opus ma spreco CPU/disco). | `run_once.py`: rimossa l'iniezione standalone a coda vuota — la generazione proposte per CI/`.bat` resta solo dentro `init-analysis` (1/settimana, `analysis_interval_days`). `kb-infinite.ps1`: mantenuta l'iniezione rapida (uso interattivo) ma con throttle di sessione in memoria (`ProposalMinIntervalSeconds=600`, non persistito in `state.yaml`), `Start-Sleep` esplicito nel branch throttle, e output silenzioso durante l'attesa (countdown solo a 30/10/5/3/2/1s) invece di un header vuoto ogni 30s. | `_automation/run_once.py`, `_automation/manage-state.py`, `_automation/kb-infinite.ps1`, `_automation/AUTOMATION.md`, CLAUDE.md | ✅ Chiuso |
 | 6 | 2026-09-27 | `kb-maintenance.yml` (CI) chiamava `mkdocs gh-deploy --force --strict` manualmente dopo ogni push, ma quello stesso push (quando toccava `docs/**`) faceva scattare *anche* `deploy.yml` in automatico (trigger su `push`+`paths`) — doppio build/deploy per ogni task CI che tocca contenuti. Inoltre `deploy-pages` aveva `cancel-in-progress: false`: push ravvicinati da `kb-infinite.ps1` (che pusha dopo ogni singolo task, non in batch) accodavano build ridondanti invece di cancellare quelle superate. | Rimossa la chiamata `mkdocs gh-deploy` da `kb-maintenance.yml` (resta solo `git push`, il deploy lo fa `deploy.yml` via trigger); `deploy-pages` → `cancel-in-progress: true`. | `.github/workflows/kb-maintenance.yml`, `.github/workflows/deploy.yml`, `_automation/AUTOMATION.md`, CLAUDE.md | ✅ Chiuso |
+| 7 | 2026-10-03 | `kb-infinite.ps1` a coda vuota aveva un'unica mossa: proposal globale Opus su tutta la KB, ogni 10 min (throttle #5). Con KB ferma e tetto fisso `target_file_count: 330` (scelto a mano, 328 file) ogni sessione concludeva "zero proposte": 20+ commit `proposal` consecutivi con solo `state.yaml` (#750–#772). Nel frattempo 261 file `complete` mai revisionati (30 `reviewed`): le review arrivavano solo da `init-analysis`, 3/settimana; `inject-review-tasks` esisteva ma nessun loop lo chiamava. Gate meccanico con falsi `no_related`/`no_keywords` su liste YAML a blocchi. | Cascata deterministica `manage-state.py next-work` usata da ps1 e `run_once.py` (proposte → lifecycle → gate → review → currency → esplorazione per sottocategoria), cooldown + `max_attempts` anti-loop; `coverage.yaml` con esaurimento per sottocategoria al posto del tetto fisso (`max_file_count` opzionale, default null); `proposal-prompt.md` limitato a uno `scope`; stato `idle` senza chiamate al modello; no commit per proposal vuote; gate su frontmatter parsato; 17 test su copie temporanee. | `_automation/manage-state.py`, `_automation/kb-infinite.ps1`, `_automation/run_once.py`, `_automation/proposal-prompt.md`, `_automation/config.yaml`, `_automation/AUTOMATION.md`, CLAUDE.md | ✅ Chiuso |
 
 ### Pattern da Evitare
 
@@ -337,6 +344,9 @@ scrivere `_automation/state.yaml`**; fermati dopo un task.
   1/settimana; sessioni Opus/high ripetute a vuoto (criticità #5). Aggiunto
   throttle di sessione (10 min, in memoria) in `kb-infinite.ps1`, unico
   percorso che mantiene l'iniezione rapida per uso interattivo. → applicata
+- **2026-10-03**: Throttle/backoff delle proposal sostituiti dalla cascata
+  `next-work`; freno di saturazione da tetto globale a esaurimento per
+  sottocategoria (`coverage.yaml`) (criticità #7). → applicata
 
 ---
 

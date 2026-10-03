@@ -109,10 +109,10 @@ next-task ─► pre-flight (0 token) ─► modello per tipo ─► claude -p -
    │             └─ audit: skip se audit-preflight passa         │
    ▼                                                             ▼
 coda vuota?                                              rate limit? ─► stop soft (task pending)
-  ├─ analisi > 7g?  ─► init-analysis                     errore?     ─► force-complete, stop
-  ├─ proposte pending? ─► auto-approve (CI) / lascia      ok?         ─► force-complete
-  └─ altrimenti ─► nessuna azione, stop (attende            │             ├─ validate-all
-                   il prossimo init-analysis)                            ├─ prune
+  └─ next-work (cascata, §6) ─► injected ─► next-task    errore?     ─► force-complete, stop
+                              ─► idle ─► stop pulito      ok?         ─► force-complete
+                                                                        ├─ validate-all
+                                                                        ├─ prune
 fine giro: check-mkdocs (broken link ─► P0) + maintain                  └─ git commit
 ```
 
@@ -131,7 +131,7 @@ fine giro: check-mkdocs (broken link ─► P0) + maintain                  └�
 | `review` | `review-prompt.md` | opus-5 / high | **giudizio** su correttezza / attualità / valore |
 | `currency` | `currency-prompt.md` | sonnet-5 / high | ricontrollo dei soli fatti datati vs `official_docs` |
 | `consolidate` | `consolidate-prompt.md` | sonnet-5 / high | merge di file ridondanti / retire con fix dei link |
-| `proposal` | `proposal-prompt.md` | opus-5 / high | analisi strategica → proposte in `proposals/pending/` |
+| `proposal` | `proposal-prompt.md` | opus-5 / high | esplorazione di **una** sottocategoria (`scope`) → 0–4 proposte in `proposals/pending/` |
 
 Cambia la policy modificando `_automation/config.yaml` → `models:`.
 
@@ -150,20 +150,53 @@ draft ──► (audit meccanico) ──► complete ──► (review critica) 
 - `needs-review` = modifica significativa o review non conclusa; ha priorità nei giri di review.
 - `last_verified` è il segnale di freschezza affidabile. `last_updated` cambia **solo** su modifica sostanziale del contenuto.
 
-`review-candidates` / `inject-review-tasks` selezionano i file con `last_verified`
-più vecchio. `init-analysis` inietta `review_sample_size` review per ciclo.
+Le review le inietta la cascata (§6, fonti `lifecycle` e `review`) a batch di
+`cascade.batch_review`. `review-candidates` / `inject-review-tasks` / `init-analysis`
+restano come comandi manuali.
 
 ---
 
-## 6. Freno di saturazione
+## 6. Cascata `next-work` e criterio di completezza
 
-`python _automation/manage-state.py saturation-gate` → JSON con `file_count`,
-`target` (`config.yaml` → `saturation.target_file_count`), `over_target`.
+A coda vuota **entrambi i loop** (`kb-infinite.ps1`, `run_once.py`) chiamano
+`manage-state.py next-work`, che scorre fonti di lavoro in ordine fisso e inietta
+un batch dalla **prima non vuota**. Ogni fonte è misurata in Python (0 token) ed è
+finita: il modello lavora solo su lavoro già identificato.
 
-`proposal-prompt.md` lo consulta al PASSO 0:
-- oltre il target o categoria satura (≥ `category_saturated_pct` nel
-  `kb-saturation-report.md`) → niente `new-file` salvo `score: high` con gap esplicito;
-- **è ammesso restituire zero proposte** con motivazione.
+| # | Fonte | Rilevazione | Task | Batch |
+|---|---|---|---|---|
+| 1 | `proposals` | `proposals/pending/` non vuota | auto-approve (ps1: dopo la finestra utente) | — |
+| 2 | `lifecycle` | `status: draft` / `needs-review` | `audit` / `review` | `batch_review` |
+| 3 | `gate` | `complete` che fallisce `audit-preflight` o ha `related` rotti | `audit` | `batch_audit` |
+| 4 | `review` | `complete` che passa il gate, mai revisionato | `review` | `batch_review` |
+| 5 | `currency` | `reviewed` con `last_verified` più vecchio di `currency_interval_days` | `currency` | `batch_currency` |
+| 6 | `exploration` | sottocategoria non esaurita (`coverage.yaml`) | `proposal` con `scope` | 1 |
+
+**Anti-loop**: stesso (tipo, file) non ritentato prima di `retry_cooldown_days`;
+oltre `max_attempts` tentativi il file è saltato (serve un umano). I task iniettati
+portano `created_at` e `source`.
+
+**Esplorazione per sottocategoria** (sostituisce la vecchia proposal globale e il
+tetto fisso `target_file_count`): ogni sottocategoria (cartelle reali +
+`taxonomy.yml`) viene esplorata da una proposal limitata al suo `scope`.
+`force-complete` registra l'esito in `coverage.yaml`: 0 proposte ⇒ `exhausted`,
+con l'impronta dell'insieme dei suoi file. Ordine: mai esplorate (prima le più
+piccole) → aperte (più vecchie prima) → esaurite da riaprire. Un'esaurita si riapre
+solo se cambia l'insieme dei suoi file o dopo `exhausted_reopen_days` (90).
+
+**Stato terminale**: tutte le fonti vuote ⇒ `idle` con `next_check_at` (prossima
+scadenza currency o riapertura). `kb-infinite.ps1` dorme senza chiamare il modello
+né committare, rivalutando ogni ≤10 min (~1 s di Python). È l'unico stop oltre al
+rate limit, e significa: tutte le sottocategorie implementate sono esaurite e ogni
+file è revisionato e fresco.
+
+`saturation.max_file_count` (default `null`) è solo un tetto di budget opzionale:
+se raggiunto sospende la fonte `exploration`.
+
+```bash
+python _automation/manage-state.py cascade-status          # candidati per fonte (sola lettura)
+python _automation/manage-state.py next-work --dry-run     # cosa verrebbe iniettato
+```
 
 ---
 
@@ -175,7 +208,8 @@ più vecchio. `init-analysis` inietta `review_sample_size` review per ciclo.
 | `runs.log` | log diagnostico locale | **non versionato**; rotazione a 512 KB × 2 (`maintain`) |
 | `current-task.json` | task passato all'agente nel run corrente | **non versionato** |
 | `proposals/pending|approved|rejected/` | proposte | `approved`/`rejected` limitate a 50 file (`maintain`) |
-| `config.yaml` | policy modello, target, cadenze | versionato |
+| `coverage.yaml` | esito esplorazione per sottocategoria (`exhausted`, impronta) | versionato; scritto solo da `force-complete` |
+| `config.yaml` | policy modello, cascata, cadenze | versionato |
 
 ---
 
@@ -187,9 +221,11 @@ check-mkdocs | validate-all <json> | audit-preflight <path>
 estimate-tokens <path> <in> <out> | update-run | prune | maintain | stats
 analysis-status | init-analysis
 list-proposals | approve-proposal <id> | reject-proposal <id>
-auto-approve-proposals | inject-proposal-task (solo kb-infinite.ps1, non da run_once.py)
+auto-approve-proposals | inject-proposal-task (manuale)
+next-work [--dry-run] [--no-approve]   # cascata a coda vuota (§6)
+cascade-status                 # candidati per fonte, sola lettura
 resolve-interrupted            # pulisce un interrupted_task stale
-saturation-gate                # stato saturazione vs target
+saturation-gate                # file vs max_file_count (tetto opzionale)
 review-candidates [n]          # n file verificati meno di recente
 inject-review-tasks [n]        # crea n task review
 stats-doc [write]              # (ri)genera la tabella in docs/index.md
