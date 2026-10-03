@@ -22843,6 +22843,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-syn-flood-connessioni-legittime-rifiutate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — SYN flood: connessioni legittime rifiutate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-slowloris-worker-esauriti-con-cpu-e-banda-basse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Slowloris: worker esauriti con CPU e banda basse
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-attacco-bypassa-la-cdn-colpendo-lip-origine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Attacco bypassa la CDN colpendo l'IP origine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-rate-limiting-blocca-utenti-legittimi-falsi-positivi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Rate limiting blocca utenti legittimi (falsi positivi)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24758,6 +24808,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-syn-flood-connessioni-legittime-rifiutate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1 — SYN flood: connessioni legittime rifiutate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-slowloris-worker-esauriti-con-cpu-e-banda-basse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2 — Slowloris: worker esauriti con CPU e banda basse
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-attacco-bypassa-la-cdn-colpendo-lip-origine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3 — Attacco bypassa la CDN colpendo l'IP origine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-4-rate-limiting-blocca-utenti-legittimi-falsi-positivi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 4 — Rate limiting blocca utenti legittimi (falsi positivi)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -25291,6 +25391,53 @@
 </tr>
 </tbody>
 </table>
+<h3 id="scenario-1-syn-flood-connessioni-legittime-rifiutate">Scenario 1 — SYN flood: connessioni legittime rifiutate<a class="headerlink" href="#scenario-1-syn-flood-connessioni-legittime-rifiutate" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: i client ricevono timeout o <code>ECONNREFUSED</code>; <code>ss</code> mostra migliaia di socket in <code>SYN_RECV</code>.</p>
+<p><strong>Causa</strong>: il SYN backlog (coda delle connessioni half-open) è saturo di SYN con IP spoofato che non completeranno mai l'handshake.</p>
+<p><strong>Soluzione</strong>: attivare i SYN cookies (il kernel non alloca stato finché l'ACK finale non arriva), ridurre i retry SYN-ACK e aumentare il backlog.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>ss<span class="w"> </span>-n<span class="w"> </span>state<span class="w"> </span>syn-recv<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>sysctl<span class="w"> </span>net.ipv4.tcp_syncookies
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.tcp_syncookies<span class="o">=</span><span class="m">1</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.tcp_synack_retries<span class="o">=</span><span class="m">2</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>sysctl<span class="w"> </span>-w<span class="w"> </span>net.ipv4.tcp_max_syn_backlog<span class="o">=</span><span class="m">4096</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># Verifica drop del backlog</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>nstat<span class="w"> </span>-az<span class="w"> </span>TcpExtListenOverflows<span class="w"> </span>TcpExtTCPReqQFullDrop
+</span></code></pre></div>
+<h3 id="scenario-2-slowloris-worker-esauriti-con-cpu-e-banda-basse">Scenario 2 — Slowloris: worker esauriti con CPU e banda basse<a class="headerlink" href="#scenario-2-slowloris-worker-esauriti-con-cpu-e-banda-basse" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: il sito non risponde ma traffico e CPU sono normali; molte connessioni <code>ESTABLISHED</code> da pochi IP, con richieste mai complete.</p>
+<p><strong>Causa</strong>: header HTTP inviati goccia a goccia tengono occupati i worker/connessioni del server fino all'esaurimento del pool.</p>
+<p><strong>Soluzione</strong>: timeout stretti su header/body, limite di connessioni per IP e reverse proxy (Nginx/CDN) davanti ai worker, che bufferizza le richieste complete prima di inoltrarle.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Top IP per connessioni sulla porta 443</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>ss<span class="w"> </span>-Htn<span class="w"> </span>state<span class="w"> </span>established<span class="w"> </span><span class="s1">'( sport = :443 )'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">'{print $4}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d:<span class="w"> </span>-f1<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn<span class="w"> </span><span class="p">|</span><span class="w"> </span>head
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># Blocco temporaneo di un offender</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>iptables<span class="w"> </span>-A<span class="w"> </span>INPUT<span class="w"> </span>-s<span class="w"> </span><span class="m">198</span>.51.100.7<span class="w"> </span>-j<span class="w"> </span>DROP
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># Verifica timeout Nginx attivi</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>nginx<span class="w"> </span>-T<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'client_(header|body)_timeout|limit_conn'</span>
+</span></code></pre></div>
+<h3 id="scenario-3-attacco-bypassa-la-cdn-colpendo-lip-origine">Scenario 3 — Attacco bypassa la CDN colpendo l'IP origine<a class="headerlink" href="#scenario-3-attacco-bypassa-la-cdn-colpendo-lip-origine" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: la CDN mostra traffico normale ma l'origin è saturo; i log origin riportano richieste con <code>Host</code> corretto da IP non CDN.</p>
+<p><strong>Causa</strong>: l'IP origine è noto (record DNS storici, certificati in Certificate Transparency, email header) e raggiungibile direttamente, quindi la protezione CDN viene aggirata.</p>
+<p><strong>Soluzione</strong>: accettare traffico sull'origin solo dai range della CDN (o via tunnel/mTLS) e, se l'IP è esposto, cambiarlo.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Consenti solo i range Cloudflare (lista ufficiale)</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">for</span><span class="w"> </span>ip<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>curl<span class="w"> </span>-s<span class="w"> </span>https://www.cloudflare.com/ips-v4<span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>ufw<span class="w"> </span>allow<span class="w"> </span>from<span class="w"> </span><span class="s2">"</span><span class="nv">$ip</span><span class="s2">"</span><span class="w"> </span>to<span class="w"> </span>any<span class="w"> </span>port<span class="w"> </span><span class="m">443</span><span class="w"> </span>proto<span class="w"> </span>tcp
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="k">done</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>ufw<span class="w"> </span>deny<span class="w"> </span><span class="m">443</span>/tcp
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1"># Controlla se l'origin risponde direttamente</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>curl<span class="w"> </span>-sk<span class="w"> </span>--resolve<span class="w"> </span>example.com:443:203.0.113.10<span class="w"> </span>https://example.com<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span>-w<span class="w"> </span><span class="s1">'%{http_code}\n'</span>
+</span></code></pre></div>
+<h3 id="scenario-4-rate-limiting-blocca-utenti-legittimi-falsi-positivi">Scenario 4 — Rate limiting blocca utenti legittimi (falsi positivi)<a class="headerlink" href="#scenario-4-rate-limiting-blocca-utenti-legittimi-falsi-positivi" title="Permanent link">&para;</a></h3>
+<p><strong>Sintomo</strong>: utenti dietro NAT aziendale o carrier-grade NAT ricevono <code>429</code>/<code>503</code>; picchi di traffico lecito (campagne, release) vengono bloccati.</p>
+<p><strong>Causa</strong>: il limite per IP raggruppa molti utenti dietro lo stesso indirizzo pubblico; le soglie fisse non tengono conto dei picchi legittimi.</p>
+<p><strong>Soluzione</strong>: aumentare <code>burst</code>, chiavare il limite su identità (API key, cookie di sessione) invece che sul solo IP, mettere in allowlist i range noti e partire in modalità <em>count/log</em> prima di bloccare.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Quante richieste sono state rifiutate da Nginx</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">' 503 '</span><span class="w"> </span>/var/log/nginx/access.log
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>grep<span class="w"> </span><span class="s1">'limiting requests'</span><span class="w"> </span>/var/log/nginx/error.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-20
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># AWS WAF: regola rate-based in modalità Count per tarare la soglia</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>aws<span class="w"> </span>wafv2<span class="w"> </span>get-sampled-requests<span class="w"> </span>--web-acl-arn<span class="w"> </span><span class="s2">"</span><span class="nv">$ACL_ARN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span>--rule-metric-name<span class="w"> </span>IPRateLimit<span class="w"> </span>--scope<span class="w"> </span>CLOUDFRONT<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">  </span>--time-window<span class="w"> </span><span class="nv">StartTime</span><span class="o">=</span><span class="m">2026</span>-10-03T08:00:00Z,EndTime<span class="o">=</span><span class="m">2026</span>-10-03T09:00:00Z<span class="w"> </span>--max-items<span class="w"> </span><span class="m">50</span>
+</span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
 <summary>Firewall e WAF — Protezione L3-L7</summary>
