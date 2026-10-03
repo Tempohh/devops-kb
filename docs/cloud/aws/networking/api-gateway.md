@@ -7,9 +7,10 @@ search_keywords: [AWS API Gateway, Amazon API Gateway, REST API, HTTP API, WebSo
 parent: cloud/aws/networking/_index
 related: [cloud/aws/compute/lambda, cloud/aws/networking/route53, cloud/aws/security/network-security, cloud/aws/iam/policies-avanzate, networking/api-gateway/pattern-base]
 official_docs: https://docs.aws.amazon.com/apigateway/latest/developerguide/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-09-27
+last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # API Gateway
@@ -38,14 +39,14 @@ Le tre famiglie di API non sono intercambiabili: HTTP API è pensata per il caso
     | Latenza | Baseline | ~50-60% più bassa di REST | N/A (connessione persistente) |
     | Lambda proxy integration | Sì | Sì | Sì |
     | HTTP proxy integration | Sì | Sì | No |
-    | Mapping template (VTL) | Sì | No (solo trasformazioni semplici) | Sì |
+    | Mapping template (VTL, Velocity Template Language) | Sì | No (solo parameter mapping semplice) | Sì |
     | Usage plans / API keys | Sì | No | No |
-    | Private API (VPC endpoint) | Sì | No | No |
-    | JWT authorizer nativo | No (serve Lambda authorizer) | Sì | No |
-    | Request validation | Sì (schema JSON) | Limitata | No |
+    | Private API (VPC endpoint) | Sì | No (solo integration private via VPC Link) | No |
+    | JWT authorizer nativo | No (serve Lambda authorizer o Cognito authorizer) | Sì | No |
+    | Request validation | Sì (schema JSON) | No (validare nel backend) | No |
     | Caching risposta | Sì | No | No |
-    | WAF integration | Sì | Sì | No |
-    | Canary deployment | Sì | Sì | No |
+    | WAF (Web Application Firewall) integration | Sì | No (mettere CloudFront+WAF davanti) | No |
+    | Canary deployment | Sì | No | No |
 
 **Regola pratica:** default su HTTP API per nuovi progetti (costo e latenza migliori); passa a REST API solo se servono API keys/usage plans, private API, caching o mapping template VTL avanzati.
 
@@ -57,8 +58,8 @@ Le tre famiglie di API non sono intercambiabili: HTTP API è pensata per il caso
 - **Stage** — ambiente deployato (es. `dev`, `prod`), con variabili proprie e throttling indipendente
 - **Deployment** — snapshot immutabile della configurazione API, associato a uno stage
 
-!!! warning "Timeout hard limit"
-    Ogni integration ha un **timeout massimo di 29 secondi**, non configurabile e non aumentabile via support ticket. Backend che superano questo limite (elaborazioni lunghe, batch job) devono passare a pattern asincroni (API Gateway → SQS → worker, con polling o WebSocket per il risultato).
+!!! warning "Timeout di integrazione"
+    Il default (e, per HTTP API, il massimo) è **29-30 secondi**. Dal 2024 sulle **REST API Regional e private** il limite può essere alzato oltre 29s tramite richiesta di quota (Service Quotas); il costo è una **riduzione della quota di throttling a livello account** per la regione. Le REST API edge-optimized e le HTTP API restano vincolate a ~30s. Per elaborazioni lunghe o batch il pattern robusto resta asincrono (API Gateway → SQS/Step Functions → worker, con polling o WebSocket per il risultato).
 
 ---
 
@@ -158,7 +159,7 @@ def lambda_handler(event, context):
 
 | Metodo | REST API | HTTP API | Uso tipico |
 |---|---|---|---|
-| **IAM** | Sì | Sì | Chiamate service-to-service con SigV4 |
+| **IAM** | Sì | Sì | Chiamate service-to-service con SigV4 (Signature Version 4, firma delle richieste AWS) |
 | **Lambda authorizer (TOKEN)** | Sì | No | Token opaco/JWT custom, logica arbitraria |
 | **Lambda authorizer (REQUEST)** | Sì | Sì | Valutazione su header multipli/query/context |
 | **Cognito authorizer** | Sì | No (usa JWT authorizer) | User pool Cognito diretto |
@@ -190,7 +191,7 @@ aws apigateway create-usage-plan-key \
 aws apigateway update-stage \
     --rest-api-id abc123 \
     --stage-name prod \
-    --patch-operations op=replace,path=/~1users~1GET/throttling/rateLimit,value=10
+    --patch-operations op=replace,path=/~1users/GET/throttling/rateLimit,value=10
 ```
 
 Il throttling è gerarchico: **account** (default 10.000 rps/regione, aumentabile via ticket) → **stage** (default dello stage) → **method** (override per singolo endpoint) → **usage plan/API key** (limite per singolo cliente).
@@ -225,7 +226,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.12
+      Runtime: python3.13
       Events:
         GetUsers:
           Type: Api
@@ -277,7 +278,7 @@ aws apigateway create-deployment \
 - Impostare **throttling a livello di usage plan per tenant**, non solo a livello account, per evitare che un client "rumoroso" saturi la quota di tutti
 - Abilitare **execution log** solo in `INFO` o `ERROR` (mai `DEBUG` in produzione: costo CloudWatch e rischio di loggare dati sensibili nel body)
 - Validare il payload con **request validation** (JSON Schema) lato API Gateway per respingere richieste malformate prima che raggiungano Lambda (risparmio di invocazioni)
-- Per API private, combinare **VPC endpoint + resource policy** — il solo VPC endpoint non basta, senza resource policy l'API resta raggiungibile pubblicamente
+- Per API private, combinare **VPC endpoint + resource policy**: una private API non è raggiungibile da Internet, ma serve una resource policy che consenta l'accesso (di solito con condizione `aws:SourceVpce`) — senza, ogni chiamata riceve 403. Restringere anche con una *endpoint policy* sul VPC endpoint, altrimenti qualunque API del VPC è invocabile tramite quell'endpoint
 - Versionare l'API nel path (`/v1/users`) o via custom domain + base path mapping, mai solo nello stage name (lo stage è per l'ambiente, non per la versione semantica)
 
 !!! warning "CORS non è un'opzione lato client"
@@ -307,10 +308,10 @@ aws apigateway get-stage --rest-api-id abc123 --stage-name prod --query 'deploym
 
 **Sintomo:** HTTP 403 ma il path/method esistono e sono corretti.
 
-**Causa:** Tre sorgenti possibili di 403, con messaggi diversi:
-- `{"Message":"User: arn:... is not authorized to perform: execute-api:Invoke"}` → policy IAM del chiamante non concede `execute-api:Invoke`
-- `{"message":"Forbidden"}` senza altro dettaglio → **resource policy** dell'API nega l'accesso (es. private API chiamata da fuori il VPC endpoint consentito)
-- `{"message":"User is not authorized"}` dal Lambda authorizer → la `policyDocument` restituita ha `Effect: Deny`
+**Causa:** Diverse sorgenti possibili di 403, con messaggi diversi (il testo esatto varia: leggere la parte finale):
+- `User: arn:... is not authorized to perform: execute-api:Invoke ...` → la policy IAM del chiamante non concede `execute-api:Invoke`; se termina con `with an explicit deny in a resource-based policy` è la **resource policy** dell'API a negare (es. private API chiamata da fuori il VPC endpoint consentito)
+- `{"Message":"User is not authorized to access this resource with an explicit deny"}` → la `policyDocument` restituita dal Lambda authorizer ha `Effect: Deny`
+- `{"message":"Forbidden"}` → tipicamente **AWS WAF** che blocca la richiesta, o API key mancante/non valida/non associata allo usage plan
 
 **Soluzione:**
 ```bash
@@ -359,7 +360,7 @@ return {
 
 **Sintomo:** Richieste verso un'elaborazione lunga (report, export, batch) falliscono sistematicamente a ~29s con `{"message":"Endpoint request timed out"}`.
 
-**Causa:** Il timeout massimo di integrazione API Gateway (29s) è raggiunto — non è configurabile, indipendentemente dal timeout impostato su Lambda (che può arrivare a 15 minuti) o sul backend HTTP.
+**Causa:** Il timeout di integrazione di API Gateway (default 29s) è raggiunto, indipendentemente dal timeout impostato su Lambda (fino a 15 minuti) o sul backend HTTP. Su REST API Regional/private si può chiedere un aumento di quota (con riduzione del throttling account); altrove il limite è fisso.
 
 **Soluzione:** Passare a pattern asincrono — API Gateway avvia il lavoro e ritorna subito un job ID, il client fa polling o riceve il risultato via WebSocket/webhook.
 ```bash
