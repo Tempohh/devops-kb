@@ -7,9 +7,10 @@ search_keywords: [l4 load balancer, l7 load balancer, tcp load balancing, http l
 parent: networking/load-balancing/_index
 related: [networking/load-balancing/algoritmi, networking/load-balancing/ha-e-failover, networking/fondamentali/modello-osi, networking/api-gateway/pattern-base]
 official_docs: https://nginx.org/en/docs/stream/ngx_stream_core_module.html
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-03
+last_verified: 2026-10-03
 ---
 
 # Layer 4 vs Layer 7 Load Balancing
@@ -27,8 +28,8 @@ I load balancer operano a livelli diversi dello stack OSI, con implicazioni fond
 | Livello OSI | 4 (Transport) | 7 (Application) |
 | Criteri di routing | IP, porta | Host, path, header, cookie, body |
 | TLS | Passthrough o terminazione | Terminazione obbligatoria (per leggere HTTP) |
-| Performance | Altissima (~1M+ conn/s) | Alta (limiti sul parsing HTTP) |
-| Latenza aggiuntiva | Minima (<0.1ms) | Bassa (1-5ms) |
+| Performance | Altissima (nessun parsing, poco stato per connessione) | Alta (costo del parsing HTTP e, se presente, della TLS) |
+| Latenza aggiuntiva (ordine di grandezza) | Sub-millisecondo | Pochi ms |
 | Visibilità del contenuto | Nessuna | Completa |
 | Sticky session | IP Hash (approssimativo) | Cookie preciso |
 | Casi d'uso | Qualsiasi TCP/UDP | HTTP, HTTPS, gRPC, WebSocket |
@@ -37,7 +38,7 @@ I load balancer operano a livelli diversi dello stack OSI, con implicazioni fond
 
 - **Protocolli non-HTTP**: database (MySQL, PostgreSQL, Redis), DNS, SMTP, protocolli proprietari
 - **Massima performance**: gaming servers, streaming media, financial trading
-- **Trasparenza totale**: quando il server backend deve vedere l'IP del client originale
+- **Trasparenza**: quando il backend deve vedere l'IP del client originale — con L4 a packet forwarding (NLB, IPVS) è nativo; con L4 proxy serve il PROXY protocol
 - **TLS Passthrough**: quando il backend deve fare mTLS end-to-end senza terminazione al LB
 
 ### Quando usare Layer 7
@@ -65,6 +66,10 @@ Client                    LB L4                   Backend
 ```
 
 Il LB L4 crea due connessioni TCP indipendenti ma proxy-forwarda i byte in modo trasparente. Non "vede" il protocollo applicativo — che sia HTTP, MySQL o FTP è irrilevante.
+
+!!! note "Due modalità di L4: proxy vs packet forwarding"
+    Il diagramma sopra descrive un **L4 proxy** (Nginx `stream`, HAProxy `mode tcp`): termina la connessione TCP del client e ne apre una nuova verso il backend, quindi il backend vede l'**IP del LB** (serve PROXY protocol per recuperare quello del client).
+    Altri L4 (AWS NLB con target di tipo `instance`, IPVS/LVS in NAT o DSR, Maglev/eBPF) fanno **packet forwarding**: inoltrano i pacchetti riscrivendo/incapsulando solo gli indirizzi, senza terminare TCP. In questo caso il backend vede l'IP originale del client ("trasparenza"), ma il percorso di ritorno deve passare dal LB (NAT) o essere gestito esplicitamente (DSR).
 
 ### Layer 7 — HTTP Proxy
 
@@ -119,7 +124,8 @@ upstream websocket_backends {
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;  # nginx >= 1.25.1; la forma "listen ... http2" è deprecata
     server_name api.example.com;
 
     # TLS termination al LB
@@ -144,6 +150,7 @@ server {
 
     location /static/ {
         # Backend dedicato per contenuto statico
+        # (upstream static_cdn e proxy_cache_path static_cache definiti altrove)
         proxy_pass http://static_cdn;
         proxy_cache static_cache;
         proxy_cache_valid 200 1d;
@@ -174,7 +181,9 @@ stream {
         proxy_connect_timeout 1s;
         proxy_timeout 3600s;
 
-        # Preserva IP del client al backend
+        # Preserva IP del client al backend: il backend DEVE supportare il
+        # PROXY protocol (es. MariaDB con proxy_protocol_networks, HAProxy,
+        # Nginx). MySQL community NON lo supporta: rimuovere la direttiva.
         proxy_protocol on;
     }
 
@@ -250,6 +259,7 @@ aws elbv2 create-load-balancer \
 # Regola di routing ALB basata su path
 aws elbv2 create-rule \
   --listener-arn arn:aws:elasticloadbalancing:... \
+  --priority 10 \
   --conditions Field=path-pattern,Values='/api/*' \
   --actions Type=forward,TargetGroupArn=arn:aws:...
 ```
@@ -311,7 +321,7 @@ haproxy -c -f /etc/haproxy/haproxy.cfg
 
 **Sintomo**: la connessione si chiude esattamente dopo ~60s di inattività (`1006 abnormal closure`, `504`).
 
-**Causa**: timeout di idle del LB (`proxy_read_timeout` Nginx = 60s di default; ALB idle timeout = 60s) più basso dell'intervallo tra i messaggi.
+**Causa**: timeout di idle del LB (`proxy_read_timeout` Nginx = 60s di default; ALB idle timeout = 60s; NLB chiude i flussi TCP inattivi dopo 350s) più basso dell'intervallo tra i messaggi.
 
 **Soluzione**: alzare il timeout e/o inviare ping/keepalive applicativi più frequenti del timeout.
 
