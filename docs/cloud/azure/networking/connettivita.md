@@ -7,7 +7,7 @@ search_keywords: [Azure VPN Gateway, Site-to-Site VPN, Point-to-Site VPN P2S, Ex
 parent: cloud/azure/networking/_index
 related: [cloud/azure/networking/vnet, cloud/azure/networking/load-balancing]
 official_docs: https://learn.microsoft.com/azure/vpn-gateway/
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -20,8 +20,8 @@ last_verified: 2026-10-04
 | Soluzione | Throughput | Latenza | SLA | Crittografia | Use Case |
 |-----------|-----------|---------|-----|--------------|---------|
 | **VPN Gateway S2S** | fino a 10 Gbps | variabile (Internet) | 99.95% | IPSec/IKE | Uffici, branch office |
-| **ExpressRoute** | 50 Mbps - 100 Gbps | bassa, prevedibile | 99.95% | Non di default (MACsec su ExpressRoute Direct, o IPsec sopra ER) | Enterprise, dati sensibili |
-| **ExpressRoute + VPN** | - | ExpressRoute + fallback | dipende dalla topologia <!-- REVIEW: verificare SLA 99.99% (richiede topologia Maximum Resiliency) --> | IPSec | Mission critical + DR |
+| **ExpressRoute** | 50 Mbps - 100 Gbps | bassa, prevedibile | 99.95% (circuito singolo); 99.99% con Maximum Resiliency (due circuiti in due peering location) | Non di default (MACsec su ExpressRoute Direct, o IPsec sopra ER) | Enterprise, dati sensibili |
+| **ExpressRoute + VPN** | - | ExpressRoute + fallback | dipende dalla topologia (VPN come backup sconsigliato per carichi mission-critical/latency-sensitive: preferire Maximum Resiliency) | IPSec | Mission critical + DR |
 | **Virtual WAN** | fino a 20 Gbps/branch | ottimizzato | 99.95% | IPSec/SD-WAN | Multi-branch, SDWAN |
 
 ---
@@ -31,8 +31,8 @@ last_verified: 2026-10-04
 !!! note "Termini usati in questa sezione"
     **GatewaySubnet**: subnet riservata (nome obbligatorio, consigliato almeno /27) dove Azure inietta le VM del gateway. **Local Network Gateway (LNG)**: oggetto Azure che descrive il router on-premises (IP pubblico + prefissi). **IKE/IPsec**: protocolli di negoziazione chiavi e cifratura del tunnel. **BGP/ASN**: protocollo di routing dinamico e numero di sistema autonomo; con BGP le route si propagano senza prefissi statici, abilitando failover automatico e multi-sito.
 
-!!! warning "SKU legacy in dismissione"
-    Lo SKU `Basic` e gli SKU non-AZ `VpnGw1-5` sono deprecati: per nuovi gateway usare `VpnGw1AZ-5AZ` (zone-redundant) con IP pubblici **Standard** statici. <!-- REVIEW: verificare date esatte di retirement SKU Basic/non-AZ e percorsi di migrazione -->
+!!! warning "SKU non-AZ in dismissione"
+    Gli SKU non-AZ `VpnGw1-5` sono **ritirati dal 30 settembre 2026**: dal 1 novembre 2025 non si creano più nuovi gateway, e i gateway esistenti non-AZ non accettano più modifiche di configurazione finché non vengono migrati al corrispondente `VpnGw1AZ-5AZ` (upgrade manuale da portale/PowerShell/CLI, nessun downtime nella stessa famiglia con IP Standard). Usare sempre IP pubblici **Standard**: i Basic public IP vanno migrati con il migration tool (che porta il gateway a Generation 2). Lo SKU VPN Gateway `Basic` **non** è in ritiro, ma non supporta BGP né Entra ID P2S; gli SKU legacy Standard/High Performance sono ritirati (30 settembre 2025).
 
 ### Site-to-Site VPN
 
@@ -108,16 +108,20 @@ az network vnet-gateway update \
 
 # Autenticazione con Microsoft Entra ID (ex Azure AD): solo OpenVPN, nessun
 # certificato da distribuire, supporta Conditional Access/MFA.
-# --aad-audience = App ID dell'app "Azure VPN Client" (varia per cloud/versione app)
+# --aad-audience = App ID Microsoft-registered dell'Azure VPN Client (raccomandato,
+#   stesso valore per tutti i cloud, nessuna registrazione/admin consent nel tenant)
+# L'issuer richiede lo slash finale; un gateway supporta un solo valore di audience.
 az network vnet-gateway update \
     --resource-group myapp-rg \
     --name production-vpngw \
+    --vpn-auth-type AAD \
     --aad-tenant "https://login.microsoftonline.com/$TENANT_ID" \
-    --aad-audience "41b23e61-6c1e-4545-b367-cd054e0ed4b4" \
+    --aad-audience "c632b3df-fb67-4d84-bdcf-b95ad541b5c8" \
     --aad-issuer "https://sts.windows.net/$TENANT_ID/"
 ```
 
-<!-- REVIEW: verificare App ID audience Entra ID corrente (esiste anche l'app "Microsoft-registered") e se serve --vpn-auth-type -->
+!!! warning "App ID registrata manualmente in ritiro"
+    L'audience legacy `41b23e61-6c1e-4545-b367-cd054e0ed4b4` (app registrata a mano, Azure Public) smette di funzionare il **31 marzo 2028** (31 marzo 2029 per Azure Government e 21Vianet): migrare a quella Microsoft-registered. Il client Azure VPN per Linux (preview) è stato ritirato il 31 agosto 2026; client supportati: Windows e macOS.
 
 
 ---
@@ -383,9 +387,26 @@ az network vnet-gateway show \
 
 ---
 
-## Lacune note
+## ExpressRoute: FastPath, Direct e MACsec
 
-<!-- REVIEW: manca spiegazione di ExpressRoute FastPath e ExpressRoute Direct/MACsec (citati in search_keywords ma non trattati); manca guida di scelta VPN vs ExpressRoute vs vWAN e coesistenza ER+VPN per failover -->
+- **FastPath**: il traffico on-premises → VM bypassa il gateway ExpressRoute (meno hop, più throughput). Richiede gateway `UltraPerformance`, `ErGw3AZ` o `ErGwScale` (≥10 scale unit). Solo su **ExpressRoute Direct**: VNet peering (stessa region, no global peering), UDR, IPv6, Private Link (limited GA con enrollment). Non copre ILB/PaaS/Azure Firewall/DNS Private Resolver nelle spoke: il traffico passa dal gateway. Limiti IP: 25.000 (provider ≤10 Gbps), 100.000 (Direct 10 Gbps), 200.000 (Direct 100/400 Gbps).
+- **ExpressRoute Direct**: porte fisiche dirette sul backbone Microsoft (due porte per risorsa), 10/100 Gbps (taglie superiori su alcune location).
+- **MACsec** (solo Direct): cifratura L2 tra i tuoi router e gli MSEE. CAK/CKN in Key Vault (soft-delete attivo, **non** dietro private endpoint) + user-assigned managed identity. Cifrari: `GcmAes128/256` (10 Gbps); su ≥40 Gbps preferire `GcmAesXpn128/256`. Con router Cisco abilitare SCI.
+
+```powershell
+$erDirect.Links[0].MacSecConfig.Cipher = "GcmAes256"   # poi Set-AzExpressRoutePort
+```
+
+## Scegliere: VPN vs ExpressRoute vs Virtual WAN
+
+| Esigenza | Scelta |
+|----------|--------|
+| Pochi siti/sviluppatori, costo basso, Internet accettabile | VPN Gateway S2S/P2S |
+| Latenza prevedibile, banda alta, dati sensibili | ExpressRoute (Maximum Resiliency per SLA 99.99%) |
+| Molti branch/SD-WAN, routing transit automatico | Virtual WAN |
+| Backup di un circuito ER | Secondo circuito in altra location (preferito); VPN S2S coesistente solo per carichi non critici |
+
+Coesistenza ER + VPN: stessa VNet, due gateway nella `GatewaySubnet` (ER gateway + VPN gateway con BGP); le route ER hanno precedenza sulle VPN a parità di prefisso, la VPN subentra in caso di failure.
 
 ## Riferimenti
 
