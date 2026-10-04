@@ -7,9 +7,10 @@ search_keywords: [crossguard, pulumi crossguard, policy as code, policy pack, pu
 parent: iac/pulumi/_index
 related: [iac/pulumi/fondamentali, iac/pulumi/stacks-ambienti, iac/terraform/testing]
 official_docs: https://www.pulumi.com/docs/using-pulumi/crossguard/
-status: complete
+status: needs-review
 difficulty: intermediate
 last_updated: 2026-09-27
+last_verified: 2026-10-04
 ---
 
 # Pulumi — Policy as Code (CrossGuard)
@@ -76,7 +77,13 @@ Ogni policy dichiara uno dei tre livelli, indipendentemente dalle altre regole n
 
 ### Policy Pack vs Scanning Statico
 
-CrossGuard valuta il piano **durante** `preview`/`up`, con accesso allo stato completo delle risorse (inclusi valori calcolati a runtime). Uno scanner come checkov/tfsec legge solo il codice sorgente staticamente, prima di qualunque `plan`. Pulumi supporta comunque l'integrazione con tool di scanning esterni: via `pulumi convert` è possibile esportare la configurazione verso un formato compatibile con provider Terraform-based e farla passare da checkov/tfsec, utile come ulteriore livello difensivo o per riusare policy già scritte in Rego/HCL altrove nell'organizzazione.
+CrossGuard valuta il piano **durante** `preview`/`up`, con accesso allo stato completo delle risorse (inclusi valori calcolati a runtime). Uno scanner come checkov/tfsec legge solo il codice sorgente staticamente, prima di qualunque `plan`. I due approcci sono complementari: uno scanner esterno resta utile come ulteriore livello difensivo o per riusare policy già scritte in Rego altrove, ma checkov/tfsec non leggono nativamente programmi Pulumi.
+
+!!! note "`pulumi convert` non è un export verso Terraform"
+    `pulumi convert` converte programmi **verso** Pulumi (da Terraform HCL, YAML, o tra linguaggi Pulumi): non produce HCL scansionabile da checkov/tfsec.
+
+<!-- REVIEW: verificare se Pulumi Insights / audit policy groups (valutazione di risorse già esistenti, anche non gestite da Pulumi) siano ora disponibili e vadano citati nella sezione "Quando NON usare" -->
+
 
 ## Architettura / Come Funziona
 
@@ -210,6 +217,8 @@ pulumi preview --policy-pack ./my-org-security
 pulumi up --policy-pack ./my-org-security --policy-pack-config ./policy-config.json
 ```
 
+La policy deve dichiarare uno `config` schema (campo `config` della policy, es. `requiredTags: { type: "array" }`) e leggerlo con `getConfig()`; gli esempi sopra usano valori fissi, quindi il file seguente è uno schema illustrativo.
+
 ```json
 // policy-config.json — override runtime dei parametri di una policy
 {
@@ -230,36 +239,42 @@ name: Pulumi Deploy
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
 
 jobs:
   preview-with-policy:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pulumi/actions@v5
+      - uses: pulumi/actions@v6
         with:
           command: preview
           stack-name: prod
-          # Se un aws_instance mandatory viene violato, questo step fallisce
-          # e il job GitHub Actions termina in errore (nessun apply successivo)
-          policyPacks: ./my-org-security
+          # Il pack si passa come argomento CLI; se una policy mandatory
+          # è violata lo step fallisce (exit ≠ 0) e il job termina in errore
+          extra-args: --policy-pack ./my-org-security
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
   deploy:
-    needs: preview-with-policy
+    # L'apply gira solo dopo il merge su main, non sulle PR
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pulumi/actions@v5
+      - uses: pulumi/actions@v6
         with:
           command: up
           stack-name: prod
-          policyPacks: ./my-org-security
+          extra-args: --policy-pack ./my-org-security
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 ```
+
+<!-- REVIEW: verificare input `extra-args` di pulumi/actions@v6 (credenziali cloud e install dipendenze omesse per brevità) -->
 
 ```bash
 # Verifica manuale dell'exit code (utile fuori da action dedicate)
@@ -269,14 +284,11 @@ echo "Exit code: $?"   # 0 = ok, diverso da 0 = almeno una mandatory violata
 
 ### Policy Group organization-wide (Pulumi Cloud)
 
+La creazione di un policy group e l'assegnazione degli stack si fanno dalla console Pulumi Cloud (o via REST API): il gruppo `default` copre tutti gli stack dell'org, i gruppi aggiuntivi un sottoinsieme. Funzionalità di governance org-wide legata al tier di Pulumi Cloud.
+
+<!-- REVIEW: verificare che esistano sottocomandi CLI `pulumi policy group create/update --add-stack` (non confermati: la CLI documenta `pulumi policy group ls`) -->
+
 ```bash
-# Creare un nuovo policy group (default: si applica a tutti gli stack dell'org)
-pulumi policy group create my-org security-baseline
-
-# Assegnare stack specifici al gruppo (invece che org-wide)
-pulumi policy group update my-org security-baseline --add-stack my-org/networking/prod
-pulumi policy group update my-org security-baseline --add-stack my-org/app/prod
-
 # Pubblicare e abilitare la versione più recente sul gruppo
 pulumi policy publish my-org
 pulumi policy enable my-org/my-org-security latest --policy-group security-baseline
@@ -321,7 +333,7 @@ cd my-org-security && pip install -r requirements.txt
 ```bash
 # Elencare le policy attualmente assegnate all'organizzazione/stack
 pulumi policy group ls
-pulumi policy group get security-baseline
+# dettaglio del gruppo e dei pack assegnati: console Pulumi Cloud
 
 # Se la regola org-wide è quella che blocca, va gestita centralmente
 # (richiedere eccezione al team platform, non aggirarla in locale)
@@ -383,4 +395,4 @@ pulumi preview   # senza --policy-pack
 - [Policy as Code — Guida ai Policy Pack](https://www.pulumi.com/docs/using-pulumi/crossguard/get-started/)
 - [Pulumi Cloud — Organization Policy Groups](https://www.pulumi.com/docs/pulumi-cloud/organizations/policy-groups/)
 - [pulumi policy CLI reference](https://www.pulumi.com/docs/cli/commands/pulumi_policy/)
-- [pulumi convert — Migrazione da/verso altri tool IaC](https://www.pulumi.com/docs/using-pulumi/pulumi-converter/)
+- [pulumi convert — Conversione di programmi verso Pulumi](https://www.pulumi.com/docs/using-pulumi/pulumi-converter/)
