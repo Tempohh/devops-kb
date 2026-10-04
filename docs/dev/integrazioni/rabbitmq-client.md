@@ -110,7 +110,8 @@ spring:
 
 ### Dichiarazione Exchange, Queue, Binding via @Bean
 
-<!-- REVIEW: verificare se in Spring AMQP 4.x / Boot 4 (Jackson 3) Jackson2JsonMessageConverter è deprecato in favore di JacksonJsonMessageConverter -->
+!!! note "Jackson 3 (Spring AMQP 4.x / Boot 4)"
+    In Spring AMQP 4.x `Jackson2JsonMessageConverter` è deprecato per la rimozione in favore di `JacksonJsonMessageConverter` (Jackson 3). Gli esempi sotto usano la classe Jackson 2 (Spring Boot 3.x / Spring AMQP 3.x); su Boot 4 sostituisci il tipo con `JacksonJsonMessageConverter`.
 
 ```java
 import org.springframework.amqp.core.*;
@@ -173,7 +174,7 @@ public class RabbitConfig {
     }
 
     // Converter JSON: POJO ↔ JSON automatico
-    // In Spring AMQP 4.x (Boot 4 / Jackson 3) potrebbe esistere JacksonJsonMessageConverter al posto di questo
+    // Spring AMQP 4.x (Boot 4 / Jackson 3): usa JacksonJsonMessageConverter (questo è deprecato)
     @Bean
     public Jackson2JsonMessageConverter messageConverter() {
         return new Jackson2JsonMessageConverter();
@@ -346,8 +347,7 @@ dotnet add package MassTransit.RabbitMQ   # include MassTransit; DI via Microsof
 ```
 
 !!! warning "Licenza e versioni"
-    <!-- REVIEW: verificare stato licenza MassTransit v9 (commerciale) e fino a quando v8 resta open source/supportata -->
-    MassTransit v8 è open source (Apache 2.0); la linea v9 è stata annunciata con licenza commerciale. Verifica versione e termini prima di adottarlo in un nuovo progetto. Il codice sotto è per v8.
+    MassTransit v8 è open source (Apache 2.0); dalla v9 (annunciata ad aprile 2025, ora rilasciata) la licenza è **commerciale**. La v8 resta utilizzabile con licenza open source ma il supporto termina a fine 2026; esiste inoltre il fork community OpenTransit di v8. Verifica versione e termini prima di adottarlo in un nuovo progetto. Il codice sotto è per v8.
 
 ### Configurazione con DI ASP.NET Core
 
@@ -957,13 +957,16 @@ rabbitmqctl list_bindings | grep orders.queue
 
 ### Messaggi in DLQ
 
-<!-- REVIEW: verificare flag esatti di rabbitmqadmin v2 (v1 deprecato) -->
+<!-- CURRENCY: flag esatti di rabbitmqadmin v2 per get/publish non verificati (2026-10) — controllare `rabbitmqadmin get --help` / `publish --help` -->
 **Sintomo:** La DLQ si riempie, la coda principale si svuota.
 
 **Causa principale:** Il consumer fa `nack` con `requeue=false` (o lancia eccezioni dopo N retry).
+
+!!! note "rabbitmqadmin v1 deprecato"
+    `rabbitmqadmin` v1 non è più sviluppato; la v2 (`rabbitmqadmin-ng`) usa flag long (`--queue`, ...) invece di `key=value`. I comandi `get` e `publish` della v2 sono pensati solo per sviluppo/test: verifica i flag con `--help`. Gli esempi sotto usano la sintassi v1.
+
 ```bash
-# Peek del primo messaggio della DLQ (sintassi rabbitmqadmin v1; la v2 usa
-# `rabbitmqadmin get messages --queue orders.dlq ...`)
+# Peek del primo messaggio della DLQ (sintassi rabbitmqadmin v1)
 rabbitmqadmin get queue=orders.dlq count=1 requeue=true
 # Controlla l'header x-death per il motivo del dead-lettering
 ```
