@@ -7,9 +7,10 @@ search_keywords: [table partitioning, range partitioning, list partitioning, has
 parent: databases/sql-avanzato/_index
 related: [databases/fondamentali/sharding, databases/fondamentali/indici, databases/sql-avanzato/query-optimizer]
 official_docs: https://www.postgresql.org/docs/current/ddl-partitioning.html
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Partitioning
@@ -61,6 +62,9 @@ CREATE TABLE log_eventi_2024_02
     FOR VALUES FROM ('2024-02-01') TO ('2024-03-01');
 
 -- ... una per ogni mese ...
+-- Nota: i bound su TIMESTAMPTZ sono letterali interpretati nel fuso della sessione
+-- (TimeZone). Usare un fuso esplicito, es. '2024-01-01 00:00:00+00', per non avere
+-- confini diversi tra sessioni/ambienti.
 
 -- Partizione default: cattura righe non coperte da nessuna altra partizione
 CREATE TABLE log_eventi_default
@@ -73,7 +77,7 @@ EXPLAIN SELECT * FROM log_eventi
 WHERE timestamp BETWEEN '2024-01-15' AND '2024-01-20';
 
 -- → Index Scan on log_eventi_2024_01 (solo questa partizione!)
--- → log_eventi_2024_02, _03, ecc. sono skippate completamente
+-- → le altre partizioni non compaiono nel piano: sono escluse in fase di planning
 ```
 
 ### List Partitioning
@@ -116,16 +120,14 @@ CREATE TABLE sessioni_1 PARTITION OF sessioni FOR VALUES WITH (MODULUS 8, REMAIN
 
 ## Indici e Partizioni
 
-Gli indici si creano separatamente su ogni partizione (ma PostgreSQL li crea automaticamente sulle partizioni figlie quando si crea l'indice sulla tabella padre):
+Un indice creato sulla tabella padre è un indice *partizionato*: PostgreSQL crea un indice equivalente su ogni partizione esistente e su quelle future. Non esiste un indice globale su tutte le partizioni: ogni partizione ha il proprio indice locale.
 
 ```sql
 -- Indice sulla tabella padre → creato automaticamente su tutte le partizioni
 CREATE INDEX idx_log_servizio ON log_eventi (servizio);
 
--- Crea automaticamente:
---   idx_log_eventi_2024_01_servizio
---   idx_log_eventi_2024_02_servizio
---   ...
+-- Crea automaticamente un indice per partizione, con nome generato
+-- (es. log_eventi_2024_01_servizio_idx)
 
 -- Index only scan funziona su partizioni individuali
 EXPLAIN SELECT servizio, COUNT(*)
@@ -135,27 +137,42 @@ GROUP BY servizio;
 -- → Index Only Scan on log_eventi_2024_01, _2024_02, ... (solo partizioni recenti)
 ```
 
+!!! warning "Vincoli UNIQUE / PRIMARY KEY"
+    Poiché non esiste un indice globale, ogni `PRIMARY KEY` o `UNIQUE` su una tabella partizionata **deve includere tutte le colonne della partition key** (es. `PRIMARY KEY (id, timestamp)`). L'unicità di `id` da solo non è garantibile tra partizioni diverse. Se serve, va assicurata a livello applicativo (es. UUID/sequence).
+
+!!! tip "Indici su tabelle grandi senza bloccare le scritture"
+    `CREATE INDEX CONCURRENTLY` non è supportato sulla tabella padre. Procedura: `CREATE INDEX ... ON ONLY log_eventi (servizio)` (indice invalido, nessun build), poi `CREATE INDEX CONCURRENTLY` su ogni partizione e infine `ALTER INDEX idx_padre ATTACH PARTITION idx_figlia`. Il padre diventa valido quando tutte le partizioni sono collegate.
+
 ---
 
 ## Lifecycle Management — Aggiungere e Rimuovere Partizioni
 
 ```sql
--- Aggiungere una nuova partizione (operazione fast, nessun lock sulla tabella)
+-- Aggiungere una nuova partizione (veloce: lock leggero sul padre, non blocca letture/scritture)
 CREATE TABLE log_eventi_2025_01
     PARTITION OF log_eventi
     FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
 
 -- Eliminare una partizione intera (istantaneo, no bloat, no VACUUM necessario)
 DROP TABLE log_eventi_2022_01;  -- Elimina tutti i dati di quel mese in O(1)
+-- (richiede ACCESS EXCLUSIVE sulla partizione e un lock anche sul padre: brevissimo, ma
+--  attende le query in corso)
 
 -- Detach una partizione (separa dalla tabella padre, diventa tabella indipendente)
 ALTER TABLE log_eventi DETACH PARTITION log_eventi_2022_01;
 -- Ora log_eventi_2022_01 è una tabella normale — puoi archiviarla su storage più lento
 
+-- PG 14+: DETACH senza lock ACCESS EXCLUSIVE sul padre (non utilizzabile in una transazione
+-- esplicita né se esiste una partizione DEFAULT)
+ALTER TABLE log_eventi DETACH PARTITION log_eventi_2022_01 CONCURRENTLY;
+
 -- Attach una tabella esistente come partizione
 ALTER TABLE log_eventi ATTACH PARTITION log_eventi_2025_03
     FOR VALUES FROM ('2025-03-01') TO ('2025-04-01');
 ```
+
+!!! warning "Partizione DEFAULT e ATTACH/CREATE"
+    Creare o collegare una nuova partizione richiede di scansionare la partizione DEFAULT per verificare che non contenga righe che rientrerebbero nel nuovo range (con lock ACCESS EXCLUSIVE sulla DEFAULT). Se la DEFAULT cresce, questa operazione diventa lenta e fallisce se contiene righe in conflitto. Usare la DEFAULT come rete di sicurezza e monitorarla (deve restare vuota), non come contenitore.
 
 **Pattern archiving**: invece di DELETE su milioni di righe (lento, genera WAL), fare DETACH e poi DROP o dump su storage S3/cold.
 
@@ -174,7 +191,7 @@ SELECT partman.create_parent(
     p_parent_table => 'public.log_eventi',
     p_control      => 'timestamp',
     p_type         => 'range',
-    p_interval     => 'monthly',
+    p_interval     => '1 month',
     p_premake      => 3          -- Crea 3 partizioni future in anticipo
 );
 
@@ -184,8 +201,9 @@ SET retention            = '12 months',
     retention_keep_table = false  -- DROP invece di DETACH
 WHERE parent_table = 'public.log_eventi';
 
--- Chiama periodicamente (es. da cron ogni ora)
+-- Chiama periodicamente (es. da pg_cron ogni ora)
 SELECT partman.run_maintenance();
+-- In alternativa la procedure partman.run_maintenance_proc() (commit per tabella, meno lock lunghi)
 ```
 
 ---
@@ -202,11 +220,11 @@ WHERE timestamp > NOW() - INTERVAL '7 days' AND servizio = 'api';
 
 -- INEFFICIENTE: nessun filtro sulla partition key
 SELECT COUNT(*) FROM log_eventi WHERE livello = 'ERROR';
--- → scansiona TUTTE le partizioni in parallelo (o in sequenza)
--- → considera un indice globale o una tabella summary separata
+-- → scansiona TUTTE le partizioni (con il proprio indice locale, se esiste)
+-- → considera un filtro aggiuntivo sulla partition key o una tabella summary separata
 ```
 
-**Parallel query su partizioni**: PostgreSQL può eseguire query multi-partizione in parallelo se `max_parallel_workers_per_gather > 0`. Utile per query analytics.
+**Parallel query su partizioni**: PostgreSQL può eseguire query multi-partizione in parallelo se `max_parallel_workers_per_gather > 0`. Utile per query analytics. Per JOIN e aggregazioni tra tabelle partizionate allo stesso modo esistono `enable_partitionwise_join` e `enable_partitionwise_aggregate` (default `off` perché aumentano il costo di planning): valutarli per workload analitici.
 
 ---
 
@@ -227,7 +245,7 @@ SELECT COUNT(*) FROM log_eventi WHERE livello = 'ERROR';
 
 **Sintomo:** `EXPLAIN` mostra che la query tocca tutte le partizioni anche con filtro sulla partition key.
 
-**Causa:** Il filtro non è abbastanza selettivo per il planner, oppure si usa una funzione sulla colonna (es. `DATE(timestamp) = '2024-01-01'`) che impedisce il pruning, oppure `enable_partition_pruning = off`.
+**Causa:** Manca un filtro sulla partition key, oppure si usa una funzione/cast sulla colonna (es. `DATE(timestamp) = '2024-01-01'`) che impedisce di confrontarla con i bound, oppure `enable_partition_pruning = off`.
 
 **Soluzione:**
 ```sql
@@ -245,7 +263,8 @@ WHERE timestamp >= '2024-01-15' AND timestamp < '2024-01-16';
 -- Verifica con EXPLAIN
 EXPLAIN (ANALYZE, BUFFERS)
 SELECT * FROM log_eventi WHERE timestamp >= '2024-01-15' AND timestamp < '2024-01-16';
--- Cerca "Partitions: 1 out of N" o "Rows Removed by Partition Pruning"
+-- Nel piano devono comparire solo le partizioni attese. Con parametri (prepared statement,
+-- subquery) il pruning avviene a runtime: cerca "Subplans Removed: N"
 ```
 
 ---
@@ -281,14 +300,14 @@ ORDER BY relname;
 
 ### Scenario 3 — ATTACH PARTITION lento o causa lock eccessivo
 
-**Sintomo:** `ALTER TABLE ... ATTACH PARTITION` blocca la tabella padre per minuti su tabelle grandi.
+**Sintomo:** `ALTER TABLE ... ATTACH PARTITION` resta in esecuzione per minuti su tabelle grandi, tenendo lock sulla nuova tabella (e sulla DEFAULT, se presente).
 
-**Causa:** PostgreSQL esegue una scansione full della nuova tabella per verificare che tutte le righe rispettino i vincoli della partizione. Su tabelle da milioni di righe il lock è prolungato.
+**Causa:** PostgreSQL esegue una scansione full della tabella da collegare per verificare che tutte le righe rispettino i bound, tenendo `ACCESS EXCLUSIVE` su di essa (dal PG 12 sul padre basta `SHARE UPDATE EXCLUSIVE`, quindi letture/scritture sul padre continuano). La scansione è saltata se esiste già un CHECK constraint validato equivalente ai bound.
 
 **Soluzione:**
 ```sql
 -- Tecnica per ATTACH senza lock prolungato:
--- 1. Aggiungere un CHECK constraint PRIMA dell'attach (non richiede scansione al momento dell'attach)
+-- 1. Aggiungere un CHECK constraint equivalente ai bound PRIMA dell'attach
 ALTER TABLE log_eventi_2025_03
     ADD CONSTRAINT chk_ts CHECK (
         timestamp >= '2025-03-01' AND timestamp < '2025-04-01'
@@ -297,7 +316,8 @@ ALTER TABLE log_eventi_2025_03
 -- 2. Validare il constraint in background (richiede solo ShareUpdateExclusiveLock)
 ALTER TABLE log_eventi_2025_03 VALIDATE CONSTRAINT chk_ts;
 
--- 3. Ora l'ATTACH è quasi istantaneo (il constraint è già verificato)
+-- 3. Ora l'ATTACH salta la scansione (il constraint è già validato)
+--    Se esiste una partizione DEFAULT, viene comunque scansionata (vedi warning sopra)
 ALTER TABLE log_eventi ATTACH PARTITION log_eventi_2025_03
     FOR VALUES FROM ('2025-03-01') TO ('2025-04-01');
 
@@ -312,7 +332,7 @@ WHERE inhparent = 'log_eventi'::regclass;
 
 **Sintomo:** Le partizioni future non vengono create automaticamente; INSERT fallisce con errore "no partition found".
 
-**Causa:** `partman.run_maintenance()` non viene eseguito dalla cron job, oppure `p_premake` è troppo basso, oppure l'estensione pg_cron non è configurata.
+**Causa:** `partman.run_maintenance()` non viene eseguito da nessuno scheduler (pg_cron o cron esterno), oppure `premake` è troppo basso rispetto all'intervallo tra due run, oppure il job gira su un database sbagliato (pg_cron esegue nel DB indicato in `cron.database_name`).
 
 **Soluzione:**
 ```sql
@@ -334,8 +354,9 @@ SELECT * FROM cron.job WHERE command LIKE '%run_maintenance%';
 SELECT cron.schedule('partman-maintenance', '0 * * * *',
     'SELECT partman.run_maintenance()');
 
--- Controlla eventuali errori nel log di pg_partman
-SELECT * FROM partman.part_config_sub WHERE sub_parent = 'public.log_eventi';
+-- Controlla l'esito delle esecuzioni pg_cron (richiede pg_cron 1.4+)
+SELECT status, return_message, start_time FROM cron.job_run_details
+WHERE command LIKE '%run_maintenance%' ORDER BY start_time DESC LIMIT 5;
 ```
 
 ---
