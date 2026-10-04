@@ -3,20 +3,17 @@ title: "Kustomize Avanzato"
 slug: avanzato
 category: containers
 tags: [kustomize, json-patch, components, transformers, functions, argocd, helm-kustomize, cross-cutting]
-search_keywords: [kustomize JSON 6902 patch, kustomize RFC 6902, kustomize components, kustomize replacements, kustomize transformer config, kustomize KRM functions, kustomize helm inflator, kustomize validate, kustomize build pipeline, kustomize ArgoCD, kustomize cross-cutting concerns, kustomize inline patch, kustomize fieldspecs, kustomize openapi]
+search_keywords: [kustomize JSON 6902 patch, kustomize RFC 6902, kustomize components, kustomize replacements, kustomize transformer config, kustomize KRM functions, kustomize helm inflator, kustomize validate, kustomize build pipeline, kustomize ArgoCD, kustomize cross-cutting concerns, kustomize inline patch, kustomize fieldspecs, kustomize exec plugin]
 parent: containers/kustomize/_index
 related: [containers/kustomize/_index, containers/helm/_index, containers/openshift/gitops-pipelines, containers/kubernetes/sicurezza]
 official_docs: https://kubectl.docs.kubernetes.io/references/kustomize/
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-04
 last_verified: 2026-10-04
 ---
 
 # Kustomize Avanzato
-
-<!-- REVIEW: keyword/tag promettono KRM functions, `kustomize openapi` e transformer custom ma nel file non c'è una sezione dedicata: aggiungere (annotation config.kubernetes.io/function, --enable-alpha-plugins, --enable-exec) o rimuovere keyword/tag -->
-<!-- REVIEW: verificare chiavi argocd-cm kustomize.buildOptions.<ver> / kustomize.path.<ver> sulla versione ArgoCD corrente -->
 
 ## JSON 6902 Patch — Chirurgia Precisa sul YAML
 
@@ -467,6 +464,34 @@ git push
 
 ---
 
+## KRM Functions — Transformer Custom
+
+Le **KRM functions** sono transformer/generator esterni: ricevono un `ResourceList` su stdin e lo restituiscono su stdout. Si dichiarano con l'annotation `config.kubernetes.io/function` su una risorsa di configurazione referenziata in `transformers:` o `generators:`.
+
+```yaml
+# transformers/my-transformer.yaml
+apiVersion: example.com/v1
+kind: MyTransformer
+metadata:
+  name: my-transformer
+  annotations:
+    config.kubernetes.io/function: |
+      exec:
+        path: ./plugins/my-transformer.sh   # path relativo alla kustomization
+spec:
+  label: team-a
+```
+
+```bash
+# Le funzioni exec richiedono entrambi i flag
+kustomize build --enable-alpha-plugins --enable-exec ./overlays/production
+```
+
+!!! warning "Sicurezza"
+    Le exec function non hanno sandbox: eseguono codice arbitrario sull'host. Preferire funzioni containerizzate per plugin distribuiti; riservare `exec` a script locali fidati. In ArgoCD abilitare i flag solo se strettamente necessario (`kustomize.buildOptions`).
+
+---
+
 ## Validazione e Linting
 
 ```bash
@@ -712,7 +737,9 @@ metadata:
   namespace: argocd
 data:
   kustomize.buildOptions: "--enable-helm"
-  # Opzioni per una versione specifica di kustomize (registrata con kustomize.path.v5.3.0: <binario>)
+  # Versione specifica di kustomize: binario registrato con kustomize.path.<ver>,
+  # opzioni con kustomize.buildOptions.<ver> (<ver> = vMAJOR.MINOR.PATCH)
+  kustomize.path.v5.3.0: /custom-tools/kustomize_5_3_0
   kustomize.buildOptions.v5.3.0: "--enable-helm"
 ```
 
