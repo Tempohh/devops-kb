@@ -7,9 +7,10 @@ search_keywords: [kafka disaster recovery, mirrormaker 2, kafka multi datacenter
 parent: messaging/kafka/operazioni
 related: [messaging/kafka/operazioni/replication-fault-tolerance, messaging/kafka/fondamenti/broker-cluster, messaging/kafka/kubernetes-cloud/msk-aws]
 official_docs: https://kafka.apache.org/documentation/#georeplication
-status: complete
+status: reviewed
 difficulty: expert
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Disaster Recovery
@@ -18,9 +19,9 @@ last_updated: 2026-03-29
 
 Il disaster recovery per Kafka riguarda la capacità di sopravvivere alla perdita di un intero cluster o datacenter, con perdita di dati e downtime controllati. Kafka non è un database con backup tradizionale: la strategia principale è la **geo-replicazione** tramite **MirrorMaker 2** che mantiene un cluster secondario sincronizzato. La preparazione è fondamentale — il DR non improvvisato non funziona.
 
-**RPO (Recovery Point Objective):** Quanti dati possiamo perdere? Con MirrorMaker 2 ben configurato, il RPO è tipicamente < 1 minuto.
+**RPO (Recovery Point Objective):** Quanti dati possiamo perdere? MM2 replica in modo asincrono: il RPO coincide con il lag di replicazione, tipicamente secondi ma non garantito. Va misurato (metrica `replication-latency-ms`, heartbeat), non assunto.
 
-**RTO (Recovery Time Objective):** Quanto tempo ci vuole per ripristinare? Con una procedura documentata e testata, l'RTO può essere di pochi minuti.
+**RTO (Recovery Time Objective):** Quanto tempo ci vuole per ripristinare? Con una procedura documentata, automatizzata e testata l'RTO può essere di pochi minuti; senza drill è imprevedibile (client da ripuntare, offset da verificare).
 
 ## Concetti Chiave
 
@@ -30,7 +31,7 @@ Il disaster recovery per Kafka riguarda la capacità di sopravvivere alla perdit
 
 **Active-Active** — Entrambi i cluster servono client. MM2 replica bidirezionalmente. Richiede gestione dei conflitti e topic naming convention per evitare loop di replicazione.
 
-**Offset Translation** — Gli offset nel cluster sorgente non corrispondono agli offset nel cluster destinazione. MM2 mantiene una mappatura degli offset tradotti nel topic `mm2-offsets`.
+**Offset Translation** — Gli offset nel cluster sorgente non corrispondono agli offset nel cluster destinazione. MM2 scrive la mappatura nel topic interno `mm2-offset-syncs.<alias>.internal` (cluster sorgente) e i checkpoint dei consumer group, già tradotti, in `<alias>.checkpoints.internal` nel cluster destinazione (es. `primary.checkpoints.internal`). Li produce il `MirrorCheckpointConnector`; si leggono con `RemoteClusterUtils.translateOffsets()` (`MirrorClient`).
 
 **Alias dei cluster** — MM2 usa alias per identificare i cluster (es. `primary`, `secondary`). I topic replicati vengono prefissati con l'alias sorgente: `primary.orders` nel cluster secondario.
 
@@ -40,14 +41,14 @@ Il disaster recovery per Kafka riguarda la capacità di sopravvivere alla perdit
 flowchart LR
     subgraph DC1["Datacenter 1 (Primary)"]
         P[Producers]
-        K1["Kafka Cluster\nPrimary"]
+        K1["Kafka Cluster<br/>Primary"]
         C1[Consumers]
         MM_S["MirrorMaker 2\nSource Connector"]
     end
 
     subgraph DC2["Datacenter 2 (Secondary)"]
-        K2["Kafka Cluster\nSecondary"]
-        C2["Consumers\n(DR Only)"]
+        K2["Kafka Cluster<br/>Secondary"]
+        C2["Consumers<br/>(DR Only)"]
         MM_T["MirrorMaker 2\nDestination"]
     end
 
@@ -75,15 +76,19 @@ secondary.bootstrap.servers = secondary-kafka:9092
 
 # Replicazione da primary a secondary
 primary->secondary.enabled = true
-primary->secondary.topics = .*               # tutti i topic (regex)
-primary->secondary.topics.blacklist = .*internal.*, .*_schema_version_.*
+# NB: nei file .properties i commenti vanno su riga propria: a fine riga
+# verrebbero letti come parte del valore.
+# Tutti i topic (regex); i topic interni (*.internal, __*) sono esclusi di default
+primary->secondary.topics = .*
+# topics.blacklist è deprecato: usare topics.exclude
+primary->secondary.topics.exclude = .*[\-\.]internal, .*\.replica, __.*
 
 # Sincronizzazione offset consumer group
 primary->secondary.sync.group.offsets.enabled = true
 primary->secondary.sync.group.offsets.interval.seconds = 60
-primary->secondary.emit.offset.syncs.enabled = true
+primary->secondary.emit.checkpoints.enabled = true
 
-# Replicazione bidirezionale (se active-active)
+# Replicazione inversa: false in active-passive, true in active-active
 secondary->primary.enabled = false
 
 # Heartbeat per monitorare la latenza di replicazione
@@ -95,6 +100,9 @@ tasks.max = 4
 replication.factor = 3
 ```
 
+!!! note "Sync offset: condizioni"
+    `sync.group.offsets.enabled` è **false** di default. Anche se attivo, MM2 scrive gli offset tradotti nel cluster destinazione solo per i consumer group **senza membri attivi** lì. Prima del failover i consumer DR devono quindi essere fermi.
+
 ```bash
 # Avviare MirrorMaker 2
 connect-mirror-maker.sh mm2.properties
@@ -102,7 +110,7 @@ connect-mirror-maker.sh mm2.properties
 
 ### MirrorMaker 2 come Kafka Connect Connector
 
-Per integrare MM2 in un cluster Kafka Connect esistente:
+Per integrare MM2 in un cluster Kafka Connect esistente (meglio vicino al cluster **destinazione**: la lettura attraversa la WAN, la scrittura è locale). I record sono copiati senza deserializzazione, quindi servono i `ByteArrayConverter`:
 
 ```bash
 # MirrorSourceConnector: replica topic e dati
@@ -117,9 +125,10 @@ curl -X POST http://connect:8083/connectors \
       "source.cluster.bootstrap.servers": "primary-kafka:9092",
       "target.cluster.bootstrap.servers": "secondary-kafka:9092",
       "topics": "orders,payments,users",
+      "key.converter": "org.apache.kafka.connect.converters.ByteArrayConverter",
+      "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter",
       "tasks.max": "4",
-      "replication.factor": "3",
-      "source->target.enabled": "true"
+      "replication.factor": "3"
     }
   }'
 
@@ -149,19 +158,19 @@ curl -X POST http://connect:8083/connectors \
 kafka-topics.sh --bootstrap-server primary-kafka:9092 --list
 # Se fallisce → procedere con failover
 
-# ─── FASE 2: Tradurre gli offset ────────────────────────────────────────────
-# MM2 mantiene la mappatura degli offset. Usare lo script di traduzione:
-./kafka-console-consumer.sh \
-  --bootstrap-server secondary-kafka:9092 \
-  --topic mm2-offsets.primary.internal \
-  --from-beginning
-
-# Oppure usare l'API MirrorClient per tradurre gli offset automaticamente
-# (disponibile nel connector MirrorCheckpoint)
+# ─── FASE 2: Verificare gli offset tradotti ─────────────────────────────────
+# I checkpoint stanno in primary.checkpoints.internal sul secondario (formato
+# binario: si leggono via MirrorClient/RemoteClusterUtils.translateOffsets,
+# non con il console consumer). Con sync.group.offsets.enabled=true sono già
+# applicati ai consumer group inattivi: controllare che esistano.
+kafka-consumer-groups.sh --bootstrap-server secondary-kafka:9092 \
+  --describe --group my-consumer-group
 
 # ─── FASE 3: Aggiornare i consumer ──────────────────────────────────────────
 # Puntare i consumer al cluster secondario
-# I consumer group offset sono già sincronizzati da MM2
+# Gli offset sono già sincronizzati da MM2 (sync attivo e gruppo inattivo).
+# Il lag residuo dell'ultimo intervallo causa riletture: i consumer devono
+# essere idempotenti (MM2 è at-least-once).
 
 # Se i topic nel secondario hanno il prefisso "primary.":
 # Aggiornare i consumer per leggere da "primary.orders" invece di "orders"
@@ -170,6 +179,8 @@ kafka-topics.sh --bootstrap-server primary-kafka:9092 --list
 # ─── FASE 4: Aggiornare i producer ──────────────────────────────────────────
 # Puntare i producer al cluster secondario
 # bootstrap.servers=secondary-kafka:9092
+# Il failback è un'operazione separata: richiede di replicare in senso inverso
+# (secondary->primary) e ritradurre gli offset.
 
 # ─── FASE 5: Verificare ─────────────────────────────────────────────────────
 kafka-consumer-groups.sh \
@@ -187,7 +198,7 @@ replication.policy.class = org.apache.kafka.connect.mirror.IdentityReplicationPo
 ```
 
 !!! warning "IdentityReplicationPolicy richiede attenzione"
-    Con la policy di identità, in modalità active-active i topic vengono replicati in loop. Usarla solo con topologie active-passive.
+    Senza prefisso MM2 non riconosce i topic già replicati: in active-active i record rimbalzano all'infinito tra i cluster. Usarla solo con topologie active-passive (disponibile da Kafka 3.0).
 
 ### Backup dei metadati
 
@@ -202,7 +213,7 @@ kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
 
 # Export config broker
 kafka-configs.sh --bootstrap-server kafka:9092 \
-  --entity-type brokers --describe --all > broker-config-backup.txt
+  --entity-type brokers --entity-default --describe --all > broker-config-backup.txt
 ```
 
 ## Best Practices
@@ -225,7 +236,7 @@ kafka-configs.sh --bootstrap-server kafka:9092 \
 
 **Sintomo:** Un nuovo topic creato nel cluster primario non appare nel cluster secondario dopo diversi minuti.
 
-**Causa:** La regex `topics` del connector non copre il nuovo topic, oppure il topic è incluso nella blacklist. MM2 rileva nuovi topic con un polling periodico (default 10 minuti).
+**Causa:** La regex `topics` del connector non copre il nuovo topic, oppure il topic è incluso nella blacklist. MM2 rileva nuovi topic con un polling periodico (`refresh.topics.interval.seconds`, default 600 s).
 
 **Soluzione:** Verificare la configurazione del connector e forzare il refresh.
 
@@ -236,22 +247,23 @@ curl http://connect:8083/connectors/mirror-source-connector/config | jq .
 # Controllare i topic attualmente replicati
 kafka-topics.sh --bootstrap-server secondary-kafka:9092 --list | grep "^primary\."
 
-# Forzare refresh della lista topic nel connector (restart task)
-curl -X POST http://connect:8083/connectors/mirror-source-connector/tasks/0/restart
+# Forzare un refresh: restart di connector e task
+curl -X POST "http://connect:8083/connectors/mirror-source-connector/restart?includeTasks=true"
 
-# Se la blacklist esclude il topic, aggiornare la configurazione
+# Per cambiare config: PUT /config SOSTITUISCE l'intera config, quindi inviare
+# sempre il JSON completo (partire dall'output del GET .../config)
 curl -X PUT http://connect:8083/connectors/mirror-source-connector/config \
   -H "Content-Type: application/json" \
-  -d '{"topics.blacklist": ".*internal.*"}'
+  -d @mirror-source-config-completa.json
 ```
 
 ---
 
 ### Scenario 2 — Consumer group offset non sincronizzato dopo failover
 
-**Sintomo:** Dopo il failover, i consumer riprendono dall'inizio del topic (offset 0) invece di riprendere dall'ultimo offset processato.
+**Sintomo:** Dopo il failover, i consumer ripartono dall'inizio (o dalla fine, secondo `auto.offset.reset`) invece che dall'ultimo offset processato.
 
-**Causa:** Il `MirrorCheckpointConnector` non è in esecuzione o il sync degli offset era in ritardo al momento del disastro. Gli offset tradotti risiedono nel topic `mm2-checkpoints.primary.internal`.
+**Causa:** Il `MirrorCheckpointConnector` non gira, `sync.group.offsets.enabled` è false (default), il gruppo era già attivo sul secondario, oppure il sync era in ritardo al momento del disastro. Gli offset tradotti risiedono in `primary.checkpoints.internal`.
 
 **Soluzione:** Verificare il checkpoint connector e, se necessario, ripristinare gli offset manualmente.
 
@@ -259,18 +271,14 @@ curl -X PUT http://connect:8083/connectors/mirror-source-connector/config \
 # Verificare lo stato del MirrorCheckpointConnector
 curl http://connect:8083/connectors/mirror-checkpoint-connector/status | jq .
 
-# Leggere gli offset tradotti disponibili
-kafka-console-consumer.sh \
-  --bootstrap-server secondary-kafka:9092 \
-  --topic mm2-checkpoints.primary.internal \
-  --from-beginning --max-messages 100
-
-# Impostare manualmente l'offset per un consumer group
+# Fallback manuale (gruppo fermo): ripartire da un timestamp poco precedente
+# al disastro; si accettano duplicati ma non si perdono dati.
+# --to-latest perderebbe tutto ciò che non era ancora stato consumato.
 kafka-consumer-groups.sh \
   --bootstrap-server secondary-kafka:9092 \
   --group my-consumer-group \
   --topic primary.orders \
-  --reset-offsets --to-latest --execute
+  --reset-offsets --to-datetime 2026-10-04T10:00:00.000 --execute
 
 # Ridurre l'intervallo di sync per il futuro (nel connector config)
 # sync.group.offsets.interval.seconds=30
@@ -287,18 +295,18 @@ kafka-consumer-groups.sh \
 **Soluzione:** Aumentare il parallelismo e monitorare le metriche di rete.
 
 ```bash
-# Verificare il lag di replicazione per topic
-kafka-consumer-groups.sh \
-  --bootstrap-server secondary-kafka:9092 \
-  --describe --group primary.primary->secondary
+# Il source connector assegna le partizioni a mano e non usa un consumer group:
+# il lag si legge dalle metriche JMX kafka.connect.mirror:type=MirrorSourceConnector
+# (replication-latency-ms-avg/max, record-count) e dal topic heartbeats.
+# Confrontare gli end offset sorgente/destinazione di un topic:
+kafka-get-offsets.sh --bootstrap-server primary-kafka:9092 --topic orders
+kafka-get-offsets.sh --bootstrap-server secondary-kafka:9092 --topic primary.orders
 
-# Controllare metriche JMX MM2 via kcat
-kcat -b secondary-kafka:9092 -L | grep "primary\."
-
-# Aumentare tasks.max nel connector (richiede restart)
+# Aumentare tasks.max: inviare la config COMPLETA (PUT sostituisce tutto),
+# con tasks.max più alto (max utile = numero totale di partizioni replicate)
 curl -X PUT http://connect:8083/connectors/mirror-source-connector/config \
   -H "Content-Type: application/json" \
-  -d '{"tasks.max": "8", "connector.class": "org.apache.kafka.connect.mirror.MirrorSourceConnector"}'
+  -d @mirror-source-config-completa.json
 
 # Monitorare throughput di rete tra datacenter
 # Su Linux: iftop -i eth0 -f "host secondary-kafka"
@@ -308,9 +316,9 @@ curl -X PUT http://connect:8083/connectors/mirror-source-connector/config \
 
 ### Scenario 4 — Loop di replicazione in topologia active-active
 
-**Sintomo:** I messaggi vengono duplicati indefinitamente tra i due cluster. I topic crescono in modo anomalo. I log mostrano messaggi con header `__mm2_origin` che vengono rireplicati.
+**Sintomo:** I messaggi vengono duplicati indefinitamente tra i due cluster. I topic crescono in modo anomalo. Gli stessi record compaiono in entrambi i cluster con offset crescenti.
 
-**Causa:** Con `IdentityReplicationPolicy` in modalità active-active, MM2 non distingue i messaggi originali da quelli già replicati e li ricopia in entrambe le direzioni creando un loop.
+**Causa:** Con `IdentityReplicationPolicy` in modalità active-active i topic hanno lo stesso nome nei due cluster. MM2 rileva i cicli solo tramite il prefisso alias (es. `primary.primary.orders` viene scartato), quindi senza prefisso ricopia i record in entrambe le direzioni.
 
 **Soluzione:** Ripristinare la `DefaultReplicationPolicy` (che usa i prefissi) o disabilitare una direzione di replicazione.
 
@@ -319,22 +327,22 @@ curl -X PUT http://connect:8083/connectors/mirror-source-connector/config \
 curl http://connect:8083/connectors/mirror-source-connector/config | \
   jq '."replication.policy.class"'
 
-# Disabilitare immediatamente la replicazione inversa per fermare il loop
-curl -X PUT http://connect:8083/connectors/mirror-source-secondary-primary/config \
-  -H "Content-Type: application/json" \
-  -d '{"enabled": "false"}'
+# Fermare subito il loop: mettere in pausa il connector della direzione inversa
+# (il nome dipende da come è stato creato; elencarli con GET /connectors)
+curl http://connect:8083/connectors
+curl -X PUT http://connect:8083/connectors/<connector-secondary-to-primary>/pause
 
-# Ripristinare DefaultReplicationPolicy (usa prefissi per evitare loop)
-curl -X PUT http://connect:8083/connectors/mirror-source-connector/config \
-  -H "Content-Type: application/json" \
-  -d '{"replication.policy.class": "org.apache.kafka.connect.mirror.DefaultReplicationPolicy"}'
+# Ripristinare DefaultReplicationPolicy (prefissi) in TUTTI i connector MM2
+# (config completa, PUT sostituisce tutto) oppure nel mm2.properties:
+#   replication.policy.class = org.apache.kafka.connect.mirror.DefaultReplicationPolicy
 
-# Verificare che non ci siano topic con doppio prefisso (es. primary.primary.orders)
-kafka-topics.sh --bootstrap-server secondary-kafka:9092 --list | grep "primary\.primary\."
+# Poi ripulire i topic duplicati creati dal loop
+kafka-topics.sh --bootstrap-server secondary-kafka:9092 --list
 ```
 
 ## Riferimenti
 
 - [MirrorMaker 2 Documentation](https://kafka.apache.org/documentation/#georeplication)
 - [KIP-382: MirrorMaker 2.0](https://cwiki.apache.org/confluence/display/KAFKA/KIP-382)
+- [Confluent Cluster Linking (alternativa Confluent: offset preservati, nessun prefisso)](https://docs.confluent.io/platform/current/multi-dc-deployments/cluster-linking/index.html)
 - [Confluent Replicator (enterprise alternative)](https://docs.confluent.io/platform/current/multi-dc-deployments/replicator/replicator-quickstart.html)

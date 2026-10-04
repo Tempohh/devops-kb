@@ -847,7 +847,9 @@ def cmd_approve_proposal(prop_id):
         "priority": task_priority,
         "status": "pending",
         "reason": target_data.get("description", target_data.get("title", "")),
-        "proposal_id": target_file.stem
+        "proposal_id": target_file.stem,
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "source": "proposals",
     }
     state["queue"].append(task)
     state["total_ops"] = state.get("total_ops", 0) + 1
@@ -941,6 +943,10 @@ def cmd_auto_approve_proposals():
             "status": "pending",
             "reason": data.get("description", data.get("title", "")),
             "proposal_id": prop_file.stem,
+            # created_at: il cooldown della cascata deve vedere anche questi task,
+            # altrimenti lifecycle accoda un secondo currency sullo stesso file.
+            "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "source": "proposals",
         }
         queue.append(task)
 
