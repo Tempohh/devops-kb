@@ -7,7 +7,7 @@ search_keywords: [spring boot, spring boot 3, spring boot kubernetes, spring boo
 parent: dev/linguaggi/_index
 related: [messaging/kafka/sviluppo/spring-kafka, dev/linguaggi/java-quarkus, dev/runtime/jvm-tuning, dev/resilienza/circuit-breaker]
 official_docs: https://docs.spring.io/spring-boot/docs/current/reference/html/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -39,7 +39,7 @@ Quando usare Spring Boot: team Java esistente, necessità di un ecosistema matur
 | AOT (Ahead-of-Time) compilation | 3.0 | Riduce startup anche senza Native |
 
 !!! warning "Versioni: 3.x è la linea precedente"
-    Spring Boot 4.0 (Spring Framework 7, baseline Jakarta EE 11) è uscito a fine 2025 e porta starter modularizzati, Jackson 3 e null-safety JSpecify; la linea 3.5 è l'ultima 3.x e il suo supporto open source è terminato nel 2026. Il contenuto di questa pagina (pattern Kubernetes, Actuator, probe, immagini) resta valido, ma per nuovi progetti partire da Boot 4 e verificare la guida di migrazione: cambiano alcuni nomi di starter/moduli di test e Testcontainers passa alla 2.x (artifact `testcontainers-postgresql`). Java 25 (LTS) è supportato dalle versioni recenti; Java 21 resta un baseline valido. <!-- REVIEW: verificare date EOL Boot 3.5 e dettagli migrazione Boot 4 (starter, Testcontainers 2.x) su spring.io/projects/spring-boot#support -->
+    Spring Boot 4.0 (Spring Framework 7, baseline Jakarta EE 11) è uscito a fine 2025 e porta starter modularizzati, Jackson 3 e null-safety JSpecify; la linea 3.5 è l'ultima 3.x e il suo supporto open source è terminato il 30 giugno 2026 (solo supporto commerciale, fino al 2032). Boot 4.0 ha supporto OSS fino al 31 dicembre 2026; la release corrente è la 4.1.x. Il contenuto di questa pagina (pattern Kubernetes, Actuator, probe, immagini) resta valido, ma per nuovi progetti partire da Boot 4 e consultare la [guida di migrazione](https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-4.0-Migration-Guide): gli starter sono modularizzati (`spring-boot-starter-<tecnologia>` con relativo `spring-boot-starter-<tecnologia>-test`; Flyway e Liquibase richiedono uno starter dedicato; esistono starter "classic" come ponte), Jackson 3 (group ID `tools.jackson`), `@MockBean`/`@SpyBean` sostituiti da `@MockitoBean`/`@MockitoSpyBean`, `@SpringBootTest` non fornisce più `TestRestTemplate`/MockMvc senza `@AutoConfigureTestRestTemplate`/`@AutoConfigureMockMvc`. Testcontainers passa alla 2.x: artifact con prefisso `testcontainers-` (es. `testcontainers-postgresql`) e classi in `org.testcontainers.<modulo>`. Java 17 resta il minimo, Java 25 (LTS) è supportato; Java 21 resta un baseline valido.
 
 ### Struttura Progetto Standard
 
@@ -729,7 +729,7 @@ lifecycle:
       command: ["/bin/sh", "-c", "sleep 5"]
 ```
 
-Il tempo totale (`preStop` + `timeout-per-shutdown-phase`) deve stare dentro `terminationGracePeriodSeconds` (default 30s), altrimenti il kubelet invia SIGKILL a metà shutdown. Le immagini senza shell (Paketo `tiny`, distroless) non possono usare `exec sleep`: usare l'azione nativa `preStop.sleep.seconds` (Kubernetes ≥ 1.30). <!-- REVIEW: verificare stato GA di preStop sleep nella versione K8s target -->
+Il tempo totale (`preStop` + `timeout-per-shutdown-phase`) deve stare dentro `terminationGracePeriodSeconds` (default 30s), altrimenti il kubelet invia SIGKILL a metà shutdown. Le immagini senza shell (Paketo `tiny`, distroless) non possono usare `exec sleep`: usare l'azione nativa `preStop.sleep.seconds` (alpha in Kubernetes 1.29, beta e abilitata di default dalla 1.30, stabile (GA) dalla 1.34).
 
 !!! note "Mantieni il collegamento con le probe"
     In shutdown graceful Spring Boot porta `readiness` a `REFUSING_TRAFFIC` mentre completa le richieste in corso: è il segnale che toglie il Pod dal routing.
