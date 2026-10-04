@@ -7,9 +7,10 @@ search_keywords: [developer workflow, dev workflow, inner loop, outer loop, loca
 parent: dev/processi/_index
 related: [ci-cd/pipeline, ci-cd/strategie/trunk-based-development, ci-cd/testing/contract-testing, containers/docker/compose, dev/testing/_index]
 official_docs: https://skaffold.dev/docs/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Developer Workflow per Microservizi
@@ -56,8 +57,6 @@ Per un microservizio tipico, il file `docker-compose.dev.yml` gestisce le **sole
 # docker-compose.dev.yml — dipendenze infrastrutturali per sviluppo locale
 # Il servizio applicativo NON è qui: gira nel processo del developer (mvn spring-boot:run, go run ., etc.)
 
-version: "3.9"
-
 services:
   # ── PostgreSQL ────────────────────────────────────────────────────────────
   postgres:
@@ -78,14 +77,19 @@ services:
       retries: 10
 
   # ── Kafka (KRaft mode, no Zookeeper) ─────────────────────────────────────
+  # Due listener: PLAINTEXT_HOST (localhost:9092) per l'app sul host,
+  # PLAINTEXT (kafka:29092) per gli altri container (es. kafka-ui) sulla rete Compose.
+  # Un solo advertised listener su localhost romperebbe i client dentro Docker.
   kafka:
     image: confluentinc/cp-kafka:7.6.0
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
@@ -106,16 +110,17 @@ services:
       - "6379:6379"
 
   # ── Kafka UI (opzionale, utile per debug) ─────────────────────────────────
+  # Kafbat UI: fork mantenuto di provectus/kafka-ui (progetto originale non più attivo)
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: ghcr.io/kafbat/kafka-ui:latest
     depends_on:
       kafka:
         condition: service_healthy
     environment:
       KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
     ports:
-      - "8080:8080"
+      - "8081:8080"   # host 8081: la 8080 è riservata all'app (Spring Boot, port-forward Skaffold)
 
 volumes:
   postgres_data:
@@ -129,9 +134,9 @@ volumes:
 
 ## Avvia le dipendenze infrastrutturali
 dev-up:
-	docker compose -f docker-compose.dev.yml up -d
-	@echo "Waiting for services to be healthy..."
-	docker compose -f docker-compose.dev.yml wait postgres kafka redis
+	# --wait blocca finché i servizi con healthcheck sono healthy
+	# (NON usare `docker compose wait`: attende che i container *terminino*)
+	docker compose -f docker-compose.dev.yml up -d --wait postgres kafka redis
 
 ## Ferma e rimuove i container (preserva i volumi)
 dev-down:
@@ -177,6 +182,7 @@ Per questi casi, il cluster locale può essere `kind`, `minikube`, o `k3d`.
 
 ```yaml
 # skaffold.yaml — inner loop su Kubernetes locale
+# (verificare la versione schema corrente con `skaffold fix`, che migra allo schema più recente)
 apiVersion: skaffold/v4beta11
 kind: Config
 metadata:
@@ -188,14 +194,13 @@ build:
       docker:
         dockerfile: Dockerfile.dev   # Dockerfile ottimizzato per dev (no multi-stage finale)
       sync:
-        # Hot reload: copia i file modificati nel container senza rebuild
-        infer:
-          - "src/**/*.java"
-          - "src/**/*.go"
-      hooks:
-        after:
-          - command: ["./scripts/wait-for-startup.sh"]
-            container: true
+        # File sincronizzati nel container senza rebuild dell'immagine.
+        # Ha senso per file interpretati/statici (script, template, risorse);
+        # per linguaggi compilati (Java, Go) serve un rebuild o un reload nativo del framework.
+        manual:
+          - src: "src/main/resources/**/*"
+            dest: /app/resources
+            strip: src/main/resources/
 
 deploy:
   kubectl:
@@ -263,13 +268,9 @@ k8s_resource(
     labels=['services']
 )
 
-# Dipendenze infrastrutturali via Helm
-helm_resource(
-    'postgres',
-    'bitnami/postgresql',
-    flags=['--set', 'auth.postgresPassword=dev'],
-    labels=['infra']
-)
+# Dipendenze infrastrutturali: manifest semplice nel repo (immagine ufficiale postgres)
+k8s_yaml('k8s/dev/postgres.yaml')
+k8s_resource('postgres', port_forwards='5432:5432', labels=['infra'])
 ```
 
 ---
@@ -290,25 +291,19 @@ helm_resource(
 // .devcontainer/devcontainer.json
 {
   "name": "Order Service Dev",
-  "image": "mcr.microsoft.com/devcontainers/java:21-bullseye",
+  "image": "mcr.microsoft.com/devcontainers/java:1-21-bookworm",  // JDK 21 già incluso
 
   // Feature standardizzate — aggiungono strumenti senza Dockerfile custom
   "features": {
+    // Docker-in-Docker: daemon Docker isolato dentro il devcontainer.
+    // Alternativa: feature docker-outside-of-docker (usa il daemon del host via socket).
+    // Non montare a mano /var/run/docker.sock insieme a DinD: i due si sovrappongono.
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
-      "version": "1.29",
-      "helm": "3.14"
-    },
-    "ghcr.io/devcontainers/features/java:1": {
-      "version": "21",
-      "jdkDistro": "ms"
+      "version": "latest",
+      "helm": "latest"
     }
   },
-
-  // Mount del Docker socket host (alternativa a Docker-in-Docker)
-  "mounts": [
-    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
-  ],
 
   // Estensioni VS Code pre-installate nel devcontainer
   "customizations": {
@@ -317,7 +312,6 @@ helm_resource(
         "vmware.vscode-spring-boot",
         "redhat.java",
         "ms-kubernetes-tools.vscode-kubernetes-tools",
-        "hashicorp.terraform",
         "sonarsource.sonarlint-vscode"
       ],
       "settings": {
@@ -349,8 +343,8 @@ echo "=== Setting up Order Service dev environment ==="
 # Installa dipendenze del progetto
 ./mvnw dependency:go-offline -q
 
-# Configura git hooks (conventional commits, etc.)
-npm install --prefix .husky
+# Installa husky + commitlint (lo script "prepare" di package.json attiva gli hook git)
+npm ci
 
 # Configura variabili d'ambiente locali
 cp .env.example .env.local
@@ -595,6 +589,9 @@ class OrderRepositoryIntegrationTest {
 }
 ```
 
+!!! note "Testcontainers 2.x (Java)"
+    Con Testcontainers 2.0 i moduli sono stati rinominati (es. `testcontainers-postgresql`), le classi sono in package dedicati (`org.testcontainers.postgresql.PostgreSQLContainer`, non più generiche) e `KafkaContainer` Confluent diventa `org.testcontainers.kafka.ConfluentKafkaContainer`. L'esempio sotto usa l'API 1.x; con Spring Boot 3.1+ preferisci `@ServiceConnection` al posto di `@DynamicPropertySource` (elimina il wiring manuale delle proprietà).
+
 ```go
 // Go — Integration test con Testcontainers
 func TestOrderRepository_Integration(t *testing.T) {
@@ -604,8 +601,8 @@ func TestOrderRepository_Integration(t *testing.T) {
 
     ctx := context.Background()
 
-    pgContainer, err := postgres.RunContainer(ctx,
-        testcontainers.WithImage("postgres:16-alpine"),
+    // postgres.Run sostituisce il deprecato postgres.RunContainer
+    pgContainer, err := postgres.Run(ctx, "postgres:16-alpine",
         postgres.WithDatabase("orders_test"),
         postgres.WithUsername("test"),
         postgres.WithPassword("test"),
@@ -615,7 +612,7 @@ func TestOrderRepository_Integration(t *testing.T) {
         ),
     )
     require.NoError(t, err)
-    t.Cleanup(func() { pgContainer.Terminate(ctx) })
+    testcontainers.CleanupContainer(t, pgContainer)
 
     connStr, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
     db, _ := sqlx.Connect("postgres", connStr)
@@ -706,7 +703,7 @@ public class OrderService {
 # 4. Remove toggle: cleanup del codice, elimina il branch morto
 
 # Regola: ogni toggle deve avere una data di scadenza nel commento
-# // TODO(2026-06-01): remove NEW_PAYMENT_PROCESSOR toggle after full rollout
+# // TODO(2027-01-31): remove NEW_PAYMENT_PROCESSOR toggle after full rollout
 ```
 
 !!! warning "Debito tecnico dei feature toggle"
@@ -774,12 +771,12 @@ build:
     - image: order-service
       sync:
         manual:
-          - src: "src/**/*.java"
-            dest: /app/src
-            strip: src/
-      local:
-        useBuildkit: true        # abilita BuildKit per caching
-        concurrency: 0           # usa tutti i core disponibili
+          - src: "src/main/resources/**/*"
+            dest: /app/resources
+            strip: src/main/resources/
+  local:                         # `local` sta sotto `build`, non sotto l'artifact
+    useBuildkit: true            # abilita BuildKit per caching
+    concurrency: 0               # build artifact in parallelo senza limite
 ```
 
 ### Conventional Commits — commitlint rifiuta il commit
@@ -819,7 +816,9 @@ abstract class AbstractIntegrationTest {
 
     static {
         POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withReuse(true);  // riusa il container tra run diverse (Testcontainers Desktop)
+            .withReuse(true);  // opzionale: riusa il container anche tra run diverse, ma solo con
+                               // testcontainers.reuse.enable=true in ~/.testcontainers.properties
+                               // (sconsigliato in CI). Il singleton in sé basta per condividerlo nella JVM.
         KAFKA = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"))
             .withReuse(true);
 
@@ -842,9 +841,10 @@ abstract class AbstractIntegrationTest {
 **Causa:** lo stato del toggle è diverso tra ambienti, oppure il contesto utente passato alla valutazione è diverso.
 
 ```bash
-# Diagnosi: verifica lo stato del toggle su Unleash
-curl -H "Authorization: *:development.secret" \
-  "https://unleash.internal/api/admin/features/new-payment-processor"
+# Diagnosi: verifica lo stato del toggle su Unleash (Admin API, serve un token Admin/PAT;
+# un client token "*:development.xxx" funziona solo sulle Client API)
+curl -H "Authorization: $UNLEASH_ADMIN_TOKEN" \
+  "https://unleash.internal/api/admin/projects/default/features/new-payment-processor"
 
 # Verifica anche i segmenti e le strategie per ambiente:
 # - "gradual rollout" con seed diverso tra ambienti può dare risultati diversi
