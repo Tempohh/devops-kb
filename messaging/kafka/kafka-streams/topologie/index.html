@@ -16992,7 +16992,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17678,7 +17678,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17703,7 +17703,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17915,10 +17915,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#state-store-corrotto-dopo-crash" class="md-nav__link">
+  <a href="#invalidstatestoreexception-durante-interactive-queries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        State store corrotto dopo crash
+        InvalidStateStoreException durante Interactive Queries
       
     </span>
   </a>
@@ -17985,7 +17985,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -18162,7 +18162,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18197,7 +18197,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18232,7 +18232,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24711,10 +24711,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#state-store-corrotto-dopo-crash" class="md-nav__link">
+  <a href="#invalidstatestoreexception-durante-interactive-queries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        State store corrotto dopo crash
+        InvalidStateStoreException durante Interactive Queries
       
     </span>
   </a>
@@ -24908,7 +24908,7 @@
 <h1 id="topologie-in-kafka-streams">Topologie in Kafka Streams<a class="headerlink" href="#topologie-in-kafka-streams" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
 <p>Kafka Streams è una libreria client Java per il processing di stream in modo stateful o stateless, senza richiedere un cluster di processing separato (come Flink o Spark). Ogni applicazione Kafka Streams è un normale processo JVM che legge da uno o più topic Kafka, applica trasformazioni e scrive i risultati su altri topic. La logica di processing è espressa come una <strong>topologia</strong>: un grafo orientato aciclico (DAG) di processori connessi da stream.</p>
-<p>A differenza di altri framework di stream processing, Kafka Streams è embeddato nell'applicazione come libreria, garantisce esattamente-una-volta la semantica (exactly-once semantics), e scala orizzontalmente semplicemente avviando più istanze della stessa applicazione.</p>
+<p>A differenza di altri framework di stream processing, Kafka Streams è embeddato nell'applicazione come libreria, supporta la semantica exactly-once (opt-in via <code>processing.guarantee</code>), e scala orizzontalmente semplicemente avviando più istanze della stessa applicazione.</p>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <h3 id="processor-topology">Processor Topology<a class="headerlink" href="#processor-topology" title="Permanent link">&para;</a></h3>
 <p>Una topologia è composta da tre tipi di nodi:</p>
@@ -24947,7 +24947,7 @@
 <p><strong>KTable</strong> — rappresenta una tabella mutabile dove ogni record con la stessa chiave aggiorna lo stato. Semantica: changelog log (ultimo valore per chiave).</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>KTable: key=ord1 → stato corrente DELIVERED (i valori precedenti sono obsoleti)
 </span></code></pre></div>
-<p><strong>GlobalKTable</strong> — come KTable ma completamente replicata su ogni istanza dell'applicazione. Usata per lookup di dati di riferimento (configurazione, mappings) da fare join senza partitioning.</p>
+<p><strong>GlobalKTable</strong> — come KTable ma completamente replicata su ogni istanza dell'applicazione. Usata per lookup di dati di riferimento (configurazione, mappings) per join senza vincolo di co-partitioning (ogni istanza ha tutti i dati, quindi la chiave di join può anche essere un campo del value). Costo: l'intero topic va replicato su ogni istanza, quindi solo per dataset piccoli.</p>
 <h3 id="operazioni-stateless-vs-stateful">Operazioni Stateless vs Stateful<a class="headerlink" href="#operazioni-stateless-vs-stateful" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -24976,7 +24976,7 @@
 <tr>
 <td><code>selectKey</code></td>
 <td>Stateless</td>
-<td>Cambia la chiave (causa repartitioning)</td>
+<td>Cambia la chiave e marca lo stream come "da ripartizionare": il repartition avviene alla prima operazione stateful successiva (join, aggregate)</td>
 </tr>
 <tr>
 <td><code>aggregate</code></td>
@@ -25009,7 +25009,7 @@
 <p>Le operazioni stateful usano uno <strong>state store</strong> per mantenere lo stato locale. Per default, Kafka Streams usa <strong>RocksDB</strong> come implementazione persistente dello state store. RocksDB è un key-value store embedded, ottimizzato per SSD, sviluppato da Facebook.</p>
 <div class="admonition note">
 <p class="admonition-title">State store e changelog topic</p>
-<p>Ogni state store ha un <strong>changelog topic</strong> interno su Kafka che replica ogni aggiornamento. In caso di failure o restart dell'applicazione, il state store viene ricostituito dal changelog topic. Questo garantisce fault tolerance senza coordinator esterni.</p>
+<p>Ogni state store ha un <strong>changelog topic</strong> interno su Kafka che replica ogni aggiornamento. In caso di failure o restart dell'applicazione, il state store viene ricostituito dal changelog topic. Questo garantisce fault tolerance senza coordinator esterni. Il restore può richiedere molto tempo su store grandi: <code>num.standby.replicas</code> &gt; 0 mantiene repliche calde su altre istanze e riduce il failover a secondi.</p>
 </div>
 <h3 id="thread-model-e-tasks">Thread Model e Tasks<a class="headerlink" href="#thread-model-e-tasks" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Applicazione Kafka Streams
@@ -25023,7 +25023,7 @@
 <ul>
 <li>Ogni <strong>task</strong> è assegnato a un insieme di partizioni e processa i record in modo sequenziale</li>
 <li>Ogni <strong>thread</strong> può gestire più task (configurabile via <code>num.stream.threads</code>)</li>
-<li>Il numero di task è determinato dal numero massimo di partizioni tra tutti i topic sorgente</li>
+<li>Il numero di task per ogni sub-topology è il massimo numero di partizioni tra i suoi topic sorgente; il totale dell'applicazione è la somma sulle sub-topology. I task sono l'unità di parallelismo e vengono distribuiti tra tutte le istanze (stesso <code>application.id</code>)</li>
 </ul>
 <h2 id="come-funziona-architettura">Come Funziona / Architettura<a class="headerlink" href="#come-funziona-architettura" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart TD
@@ -25073,7 +25073,7 @@
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">config</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="p">.</span><span class="na">BOOTSTRAP_SERVERS_CONFIG</span><span class="p">,</span><span class="w"> </span><span class="s">"localhost:9092"</span><span class="p">);</span>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">config</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="p">.</span><span class="na">DEFAULT_KEY_SERDE_CLASS_CONFIG</span><span class="p">,</span><span class="w"> </span><span class="n">Serdes</span><span class="p">.</span><span class="na">String</span><span class="p">().</span><span class="na">getClass</span><span class="p">());</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">config</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="p">.</span><span class="na">DEFAULT_VALUE_SERDE_CLASS_CONFIG</span><span class="p">,</span><span class="w"> </span><span class="n">Serdes</span><span class="p">.</span><span class="na">String</span><span class="p">().</span><span class="na">getClass</span><span class="p">());</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1">// Exactly-once semantics (richiede Kafka 2.5+)</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1">// Exactly-once semantics v2 (richiede broker 2.5+)</span>
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">config</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="p">.</span><span class="na">PROCESSING_GUARANTEE_CONFIG</span><span class="p">,</span><span class="w"> </span><span class="n">StreamsConfig</span><span class="p">.</span><span class="na">EXACTLY_ONCE_V2</span><span class="p">);</span>
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="c1">// Numero di thread per istanza</span>
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">config</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="n">StreamsConfig</span><span class="p">.</span><span class="na">NUM_STREAM_THREADS_CONFIG</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">);</span>
@@ -25103,57 +25103,60 @@
 </span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="c1">// Stateless: cambia la chiave da orderId a customerId per il join</span>
 </span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">OrderEvent</span><span class="o">&gt;</span><span class="w"> </span><span class="n">byCustomer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">createdOrders</span>
 </span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">    </span><span class="p">.</span><span class="na">selectKey</span><span class="p">((</span><span class="n">orderId</span><span class="p">,</span><span class="w"> </span><span class="n">order</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">order</span><span class="p">.</span><span class="na">getCustomerId</span><span class="p">());</span>
-</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">    </span><span class="c1">// Nota: selectKey causa un repartitioning implicito</span>
-</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>
-</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="c1">// Stateful: join KStream con KTable (lookup del customer)</span>
-</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">EnrichedOrder</span><span class="o">&gt;</span><span class="w"> </span><span class="n">enrichedOrders</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">byCustomer</span>
-</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">    </span><span class="p">.</span><span class="na">join</span><span class="p">(</span>
-</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="w">        </span><span class="n">customersTable</span><span class="p">,</span>
-</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="w">        </span><span class="p">(</span><span class="n">order</span><span class="p">,</span><span class="w"> </span><span class="n">customer</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">EnrichedOrder</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span>
-</span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="w">            </span><span class="p">.</span><span class="na">order</span><span class="p">(</span><span class="n">order</span><span class="p">)</span>
-</span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a><span class="w">            </span><span class="p">.</span><span class="na">customerName</span><span class="p">(</span><span class="n">customer</span><span class="p">.</span><span class="na">getName</span><span class="p">())</span>
-</span><span id="__span-4-32"><a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a><span class="w">            </span><span class="p">.</span><span class="na">customerTier</span><span class="p">(</span><span class="n">customer</span><span class="p">.</span><span class="na">getTier</span><span class="p">())</span>
-</span><span id="__span-4-33"><a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a><span class="w">            </span><span class="p">.</span><span class="na">build</span><span class="p">(),</span>
-</span><span id="__span-4-34"><a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a><span class="w">        </span><span class="n">Joined</span><span class="p">.</span><span class="na">with</span><span class="p">(</span><span class="n">Serdes</span><span class="p">.</span><span class="na">String</span><span class="p">(),</span><span class="w"> </span><span class="n">orderEventSerde</span><span class="p">,</span><span class="w"> </span><span class="n">customerSerde</span><span class="p">)</span>
-</span><span id="__span-4-35"><a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a><span class="w">    </span><span class="p">);</span>
-</span><span id="__span-4-36"><a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a>
-</span><span id="__span-4-37"><a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a><span class="c1">// Sink: scrivi gli ordini arricchiti su un topic di output</span>
-</span><span id="__span-4-38"><a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a><span class="n">enrichedOrders</span><span class="p">.</span><span class="na">to</span><span class="p">(</span>
-</span><span id="__span-4-39"><a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a><span class="w">    </span><span class="s">"enriched-orders"</span><span class="p">,</span>
-</span><span id="__span-4-40"><a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a><span class="w">    </span><span class="n">Produced</span><span class="p">.</span><span class="na">with</span><span class="p">(</span><span class="n">Serdes</span><span class="p">.</span><span class="na">String</span><span class="p">(),</span><span class="w"> </span><span class="n">enrichedOrderSerde</span><span class="p">)</span>
-</span><span id="__span-4-41"><a id="__codelineno-4-41" name="__codelineno-4-41" href="#__codelineno-4-41"></a><span class="p">);</span>
-</span><span id="__span-4-42"><a id="__codelineno-4-42" name="__codelineno-4-42" href="#__codelineno-4-42"></a>
-</span><span id="__span-4-43"><a id="__codelineno-4-43" name="__codelineno-4-43" href="#__codelineno-4-43"></a><span class="c1">// Stateful: aggrega per customerId — totale speso</span>
-</span><span id="__span-4-44"><a id="__codelineno-4-44" name="__codelineno-4-44" href="#__codelineno-4-44"></a><span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">Double</span><span class="o">&gt;</span><span class="w"> </span><span class="n">customerTotals</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enrichedOrders</span>
-</span><span id="__span-4-45"><a id="__codelineno-4-45" name="__codelineno-4-45" href="#__codelineno-4-45"></a><span class="w">    </span><span class="p">.</span><span class="na">groupByKey</span><span class="p">()</span>
-</span><span id="__span-4-46"><a id="__codelineno-4-46" name="__codelineno-4-46" href="#__codelineno-4-46"></a><span class="w">    </span><span class="p">.</span><span class="na">aggregate</span><span class="p">(</span>
-</span><span id="__span-4-47"><a id="__codelineno-4-47" name="__codelineno-4-47" href="#__codelineno-4-47"></a><span class="w">        </span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="mf">0.0</span><span class="p">,</span><span class="w">  </span><span class="c1">// initializer</span>
-</span><span id="__span-4-48"><a id="__codelineno-4-48" name="__codelineno-4-48" href="#__codelineno-4-48"></a><span class="w">        </span><span class="p">(</span><span class="n">customerId</span><span class="p">,</span><span class="w"> </span><span class="n">order</span><span class="p">,</span><span class="w"> </span><span class="n">total</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">total</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">order</span><span class="p">.</span><span class="na">getOrder</span><span class="p">().</span><span class="na">getTotalAmount</span><span class="p">(),</span>
-</span><span id="__span-4-49"><a id="__codelineno-4-49" name="__codelineno-4-49" href="#__codelineno-4-49"></a><span class="w">        </span><span class="n">Materialized</span><span class="p">.</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">Double</span><span class="p">,</span><span class="w"> </span><span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="p">,</span><span class="w"> </span><span class="kt">byte</span><span class="o">[]&gt;&gt;</span><span class="n">as</span><span class="p">(</span><span class="s">"customer-totals-store"</span><span class="p">)</span>
-</span><span id="__span-4-50"><a id="__codelineno-4-50" name="__codelineno-4-50" href="#__codelineno-4-50"></a><span class="w">            </span><span class="p">.</span><span class="na">withKeySerde</span><span class="p">(</span><span class="n">Serdes</span><span class="p">.</span><span class="na">String</span><span class="p">())</span>
-</span><span id="__span-4-51"><a id="__codelineno-4-51" name="__codelineno-4-51" href="#__codelineno-4-51"></a><span class="w">            </span><span class="p">.</span><span class="na">withValueSerde</span><span class="p">(</span><span class="n">Serdes</span><span class="p">.</span><span class="na">Double</span><span class="p">())</span>
-</span><span id="__span-4-52"><a id="__codelineno-4-52" name="__codelineno-4-52" href="#__codelineno-4-52"></a><span class="w">    </span><span class="p">);</span>
-</span><span id="__span-4-53"><a id="__codelineno-4-53" name="__codelineno-4-53" href="#__codelineno-4-53"></a>
-</span><span id="__span-4-54"><a id="__codelineno-4-54" name="__codelineno-4-54" href="#__codelineno-4-54"></a><span class="c1">// Scrivi i totali aggregati su un topic</span>
-</span><span id="__span-4-55"><a id="__codelineno-4-55" name="__codelineno-4-55" href="#__codelineno-4-55"></a><span class="n">customerTotals</span>
-</span><span id="__span-4-56"><a id="__codelineno-4-56" name="__codelineno-4-56" href="#__codelineno-4-56"></a><span class="w">    </span><span class="p">.</span><span class="na">toStream</span><span class="p">()</span>
-</span><span id="__span-4-57"><a id="__codelineno-4-57" name="__codelineno-4-57" href="#__codelineno-4-57"></a><span class="w">    </span><span class="p">.</span><span class="na">to</span><span class="p">(</span><span class="s">"customer-totals"</span><span class="p">,</span><span class="w"> </span><span class="n">Produced</span><span class="p">.</span><span class="na">with</span><span class="p">(</span><span class="n">Serdes</span><span class="p">.</span><span class="na">String</span><span class="p">(),</span><span class="w"> </span><span class="n">Serdes</span><span class="p">.</span><span class="na">Double</span><span class="p">()));</span>
-</span><span id="__span-4-58"><a id="__codelineno-4-58" name="__codelineno-4-58" href="#__codelineno-4-58"></a>
-</span><span id="__span-4-59"><a id="__codelineno-4-59" name="__codelineno-4-59" href="#__codelineno-4-59"></a><span class="c1">// Build e avvio topologia</span>
-</span><span id="__span-4-60"><a id="__codelineno-4-60" name="__codelineno-4-60" href="#__codelineno-4-60"></a><span class="n">Topology</span><span class="w"> </span><span class="n">topology</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">builder</span><span class="p">.</span><span class="na">build</span><span class="p">();</span>
-</span><span id="__span-4-61"><a id="__codelineno-4-61" name="__codelineno-4-61" href="#__codelineno-4-61"></a>
-</span><span id="__span-4-62"><a id="__codelineno-4-62" name="__codelineno-4-62" href="#__codelineno-4-62"></a><span class="c1">// Stampa la descrizione della topologia (utile per debug)</span>
-</span><span id="__span-4-63"><a id="__codelineno-4-63" name="__codelineno-4-63" href="#__codelineno-4-63"></a><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">topology</span><span class="p">.</span><span class="na">describe</span><span class="p">());</span>
-</span><span id="__span-4-64"><a id="__codelineno-4-64" name="__codelineno-4-64" href="#__codelineno-4-64"></a>
-</span><span id="__span-4-65"><a id="__codelineno-4-65" name="__codelineno-4-65" href="#__codelineno-4-65"></a><span class="n">KafkaStreams</span><span class="w"> </span><span class="n">streams</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">KafkaStreams</span><span class="p">(</span><span class="n">topology</span><span class="p">,</span><span class="w"> </span><span class="n">config</span><span class="p">);</span>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">    </span><span class="c1">// Nota: il repartitioning implicito scatta al join successivo.</span>
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">    </span><span class="c1">// Il topic customers deve avere lo stesso numero di partizioni del repartition topic (co-partitioning).</span>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">    </span><span class="c1">// Il join è inner: ordini senza customer corrispondente vengono scartati (usa leftJoin per mantenerli).</span>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>
+</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="c1">// Stateful: join KStream con KTable (lookup del customer)</span>
+</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">EnrichedOrder</span><span class="o">&gt;</span><span class="w"> </span><span class="n">enrichedOrders</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">byCustomer</span>
+</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="w">    </span><span class="p">.</span><span class="na">join</span><span class="p">(</span>
+</span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="w">        </span><span class="n">customersTable</span><span class="p">,</span>
+</span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a><span class="w">        </span><span class="p">(</span><span class="n">order</span><span class="p">,</span><span class="w"> </span><span class="n">customer</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">EnrichedOrder</span><span class="p">.</span><span class="na">builder</span><span class="p">()</span>
+</span><span id="__span-4-32"><a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a><span class="w">            </span><span class="p">.</span><span class="na">order</span><span class="p">(</span><span class="n">order</span><span class="p">)</span>
+</span><span id="__span-4-33"><a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a><span class="w">            </span><span class="p">.</span><span class="na">customerName</span><span class="p">(</span><span class="n">customer</span><span class="p">.</span><span class="na">getName</span><span class="p">())</span>
+</span><span id="__span-4-34"><a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a><span class="w">            </span><span class="p">.</span><span class="na">customerTier</span><span class="p">(</span><span class="n">customer</span><span class="p">.</span><span class="na">getTier</span><span class="p">())</span>
+</span><span id="__span-4-35"><a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a><span class="w">            </span><span class="p">.</span><span class="na">build</span><span class="p">(),</span>
+</span><span id="__span-4-36"><a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a><span class="w">        </span><span class="n">Joined</span><span class="p">.</span><span class="na">with</span><span class="p">(</span><span class="n">Serdes</span><span class="p">.</span><span class="na">String</span><span class="p">(),</span><span class="w"> </span><span class="n">orderEventSerde</span><span class="p">,</span><span class="w"> </span><span class="n">customerSerde</span><span class="p">)</span>
+</span><span id="__span-4-37"><a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a><span class="w">    </span><span class="p">);</span>
+</span><span id="__span-4-38"><a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a>
+</span><span id="__span-4-39"><a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a><span class="c1">// Sink: scrivi gli ordini arricchiti su un topic di output</span>
+</span><span id="__span-4-40"><a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a><span class="n">enrichedOrders</span><span class="p">.</span><span class="na">to</span><span class="p">(</span>
+</span><span id="__span-4-41"><a id="__codelineno-4-41" name="__codelineno-4-41" href="#__codelineno-4-41"></a><span class="w">    </span><span class="s">"enriched-orders"</span><span class="p">,</span>
+</span><span id="__span-4-42"><a id="__codelineno-4-42" name="__codelineno-4-42" href="#__codelineno-4-42"></a><span class="w">    </span><span class="n">Produced</span><span class="p">.</span><span class="na">with</span><span class="p">(</span><span class="n">Serdes</span><span class="p">.</span><span class="na">String</span><span class="p">(),</span><span class="w"> </span><span class="n">enrichedOrderSerde</span><span class="p">)</span>
+</span><span id="__span-4-43"><a id="__codelineno-4-43" name="__codelineno-4-43" href="#__codelineno-4-43"></a><span class="p">);</span>
+</span><span id="__span-4-44"><a id="__codelineno-4-44" name="__codelineno-4-44" href="#__codelineno-4-44"></a>
+</span><span id="__span-4-45"><a id="__codelineno-4-45" name="__codelineno-4-45" href="#__codelineno-4-45"></a><span class="c1">// Stateful: aggrega per customerId — totale speso</span>
+</span><span id="__span-4-46"><a id="__codelineno-4-46" name="__codelineno-4-46" href="#__codelineno-4-46"></a><span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">Double</span><span class="o">&gt;</span><span class="w"> </span><span class="n">customerTotals</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enrichedOrders</span>
+</span><span id="__span-4-47"><a id="__codelineno-4-47" name="__codelineno-4-47" href="#__codelineno-4-47"></a><span class="w">    </span><span class="p">.</span><span class="na">groupByKey</span><span class="p">()</span>
+</span><span id="__span-4-48"><a id="__codelineno-4-48" name="__codelineno-4-48" href="#__codelineno-4-48"></a><span class="w">    </span><span class="p">.</span><span class="na">aggregate</span><span class="p">(</span>
+</span><span id="__span-4-49"><a id="__codelineno-4-49" name="__codelineno-4-49" href="#__codelineno-4-49"></a><span class="w">        </span><span class="p">()</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="mf">0.0</span><span class="p">,</span><span class="w">  </span><span class="c1">// initializer</span>
+</span><span id="__span-4-50"><a id="__codelineno-4-50" name="__codelineno-4-50" href="#__codelineno-4-50"></a><span class="w">        </span><span class="p">(</span><span class="n">customerId</span><span class="p">,</span><span class="w"> </span><span class="n">order</span><span class="p">,</span><span class="w"> </span><span class="n">total</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">total</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">order</span><span class="p">.</span><span class="na">getOrder</span><span class="p">().</span><span class="na">getTotalAmount</span><span class="p">(),</span>
+</span><span id="__span-4-51"><a id="__codelineno-4-51" name="__codelineno-4-51" href="#__codelineno-4-51"></a><span class="w">        </span><span class="n">Materialized</span><span class="p">.</span><span class="o">&lt;</span><span class="n">String</span><span class="p">,</span><span class="w"> </span><span class="n">Double</span><span class="p">,</span><span class="w"> </span><span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="p">,</span><span class="w"> </span><span class="kt">byte</span><span class="o">[]&gt;&gt;</span><span class="n">as</span><span class="p">(</span><span class="s">"customer-totals-store"</span><span class="p">)</span>
+</span><span id="__span-4-52"><a id="__codelineno-4-52" name="__codelineno-4-52" href="#__codelineno-4-52"></a><span class="w">            </span><span class="p">.</span><span class="na">withKeySerde</span><span class="p">(</span><span class="n">Serdes</span><span class="p">.</span><span class="na">String</span><span class="p">())</span>
+</span><span id="__span-4-53"><a id="__codelineno-4-53" name="__codelineno-4-53" href="#__codelineno-4-53"></a><span class="w">            </span><span class="p">.</span><span class="na">withValueSerde</span><span class="p">(</span><span class="n">Serdes</span><span class="p">.</span><span class="na">Double</span><span class="p">())</span>
+</span><span id="__span-4-54"><a id="__codelineno-4-54" name="__codelineno-4-54" href="#__codelineno-4-54"></a><span class="w">    </span><span class="p">);</span>
+</span><span id="__span-4-55"><a id="__codelineno-4-55" name="__codelineno-4-55" href="#__codelineno-4-55"></a>
+</span><span id="__span-4-56"><a id="__codelineno-4-56" name="__codelineno-4-56" href="#__codelineno-4-56"></a><span class="c1">// Scrivi i totali aggregati su un topic</span>
+</span><span id="__span-4-57"><a id="__codelineno-4-57" name="__codelineno-4-57" href="#__codelineno-4-57"></a><span class="n">customerTotals</span>
+</span><span id="__span-4-58"><a id="__codelineno-4-58" name="__codelineno-4-58" href="#__codelineno-4-58"></a><span class="w">    </span><span class="p">.</span><span class="na">toStream</span><span class="p">()</span>
+</span><span id="__span-4-59"><a id="__codelineno-4-59" name="__codelineno-4-59" href="#__codelineno-4-59"></a><span class="w">    </span><span class="p">.</span><span class="na">to</span><span class="p">(</span><span class="s">"customer-totals"</span><span class="p">,</span><span class="w"> </span><span class="n">Produced</span><span class="p">.</span><span class="na">with</span><span class="p">(</span><span class="n">Serdes</span><span class="p">.</span><span class="na">String</span><span class="p">(),</span><span class="w"> </span><span class="n">Serdes</span><span class="p">.</span><span class="na">Double</span><span class="p">()));</span>
+</span><span id="__span-4-60"><a id="__codelineno-4-60" name="__codelineno-4-60" href="#__codelineno-4-60"></a>
+</span><span id="__span-4-61"><a id="__codelineno-4-61" name="__codelineno-4-61" href="#__codelineno-4-61"></a><span class="c1">// Build e avvio topologia</span>
+</span><span id="__span-4-62"><a id="__codelineno-4-62" name="__codelineno-4-62" href="#__codelineno-4-62"></a><span class="n">Topology</span><span class="w"> </span><span class="n">topology</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">builder</span><span class="p">.</span><span class="na">build</span><span class="p">();</span>
+</span><span id="__span-4-63"><a id="__codelineno-4-63" name="__codelineno-4-63" href="#__codelineno-4-63"></a>
+</span><span id="__span-4-64"><a id="__codelineno-4-64" name="__codelineno-4-64" href="#__codelineno-4-64"></a><span class="c1">// Stampa la descrizione della topologia (utile per debug)</span>
+</span><span id="__span-4-65"><a id="__codelineno-4-65" name="__codelineno-4-65" href="#__codelineno-4-65"></a><span class="n">System</span><span class="p">.</span><span class="na">out</span><span class="p">.</span><span class="na">println</span><span class="p">(</span><span class="n">topology</span><span class="p">.</span><span class="na">describe</span><span class="p">());</span>
 </span><span id="__span-4-66"><a id="__codelineno-4-66" name="__codelineno-4-66" href="#__codelineno-4-66"></a>
-</span><span id="__span-4-67"><a id="__codelineno-4-67" name="__codelineno-4-67" href="#__codelineno-4-67"></a><span class="c1">// Gestione graceful shutdown</span>
-</span><span id="__span-4-68"><a id="__codelineno-4-68" name="__codelineno-4-68" href="#__codelineno-4-68"></a><span class="n">Runtime</span><span class="p">.</span><span class="na">getRuntime</span><span class="p">().</span><span class="na">addShutdownHook</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">Thread</span><span class="p">(</span><span class="n">streams</span><span class="p">::</span><span class="n">close</span><span class="p">));</span>
-</span><span id="__span-4-69"><a id="__codelineno-4-69" name="__codelineno-4-69" href="#__codelineno-4-69"></a>
-</span><span id="__span-4-70"><a id="__codelineno-4-70" name="__codelineno-4-70" href="#__codelineno-4-70"></a><span class="n">streams</span><span class="p">.</span><span class="na">cleanUp</span><span class="p">();</span><span class="w"> </span><span class="c1">// Pulisce stato locale (solo in dev/test)</span>
-</span><span id="__span-4-71"><a id="__codelineno-4-71" name="__codelineno-4-71" href="#__codelineno-4-71"></a><span class="n">streams</span><span class="p">.</span><span class="na">start</span><span class="p">();</span>
+</span><span id="__span-4-67"><a id="__codelineno-4-67" name="__codelineno-4-67" href="#__codelineno-4-67"></a><span class="n">KafkaStreams</span><span class="w"> </span><span class="n">streams</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">KafkaStreams</span><span class="p">(</span><span class="n">topology</span><span class="p">,</span><span class="w"> </span><span class="n">config</span><span class="p">);</span>
+</span><span id="__span-4-68"><a id="__codelineno-4-68" name="__codelineno-4-68" href="#__codelineno-4-68"></a>
+</span><span id="__span-4-69"><a id="__codelineno-4-69" name="__codelineno-4-69" href="#__codelineno-4-69"></a><span class="c1">// Gestione graceful shutdown</span>
+</span><span id="__span-4-70"><a id="__codelineno-4-70" name="__codelineno-4-70" href="#__codelineno-4-70"></a><span class="n">Runtime</span><span class="p">.</span><span class="na">getRuntime</span><span class="p">().</span><span class="na">addShutdownHook</span><span class="p">(</span><span class="k">new</span><span class="w"> </span><span class="n">Thread</span><span class="p">(</span><span class="n">streams</span><span class="p">::</span><span class="n">close</span><span class="p">));</span>
+</span><span id="__span-4-71"><a id="__codelineno-4-71" name="__codelineno-4-71" href="#__codelineno-4-71"></a>
+</span><span id="__span-4-72"><a id="__codelineno-4-72" name="__codelineno-4-72" href="#__codelineno-4-72"></a><span class="c1">// streams.cleanUp(); // SOLO dev/test: cancella lo stato locale e forza un restore completo dal changelog a ogni avvio</span>
+</span><span id="__span-4-73"><a id="__codelineno-4-73" name="__codelineno-4-73" href="#__codelineno-4-73"></a><span class="n">streams</span><span class="p">.</span><span class="na">start</span><span class="p">();</span>
 </span></code></pre></div>
 <h3 id="output-di-topologydescribe">Output di <code>topology.describe()</code><a class="headerlink" href="#output-di-topologydescribe" title="Permanent link">&para;</a></h3>
+<p>Output indicativo e troncato: numeri dei nodi e nomi dei topic interni variano con la topologia (i repartition topic hanno prefisso <code>&lt;application.id&gt;-</code>). Assegna nomi espliciti (<code>Named</code>, <code>Grouped</code>, <code>Materialized</code>) così che aggiungere un operatore non rinumeri i nodi e non rompa la compatibilità dello stato e dei topic interni.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Topologies:
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>   Sub-topology: 0
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    Source: KSTREAM-SOURCE-0000000000 (topics: [orders])
@@ -25167,7 +25170,7 @@
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    Processor: KSTREAM-KEY-SELECT-0000000003 (stores: [])
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>      --&gt; KSTREAM-SINK-0000000004
 </span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>      &lt;-- KSTREAM-PEEK-0000000002
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>    Sink: KSTREAM-SINK-0000000004 (topic: orders-KSTREAM-JOIN-0000000007-repartition)
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>    Sink: KSTREAM-SINK-0000000004 (topic: order-processor-KSTREAM-KEY-SELECT-0000000003-repartition)
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>      &lt;-- KSTREAM-KEY-SELECT-0000000003
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>
 </span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>   Sub-topology: 1
@@ -25218,22 +25221,22 @@
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Preferisci la Streams DSL</strong> alla Processor API: è più leggibile, mantenibile e viene ottimizzata automaticamente. Usa la Processor API solo quando la DSL non è sufficiente.</li>
-<li><strong>Attenzione a <code>selectKey</code></strong>: cambiare la chiave causa un repartitioning implicito (scrittura su un topic interno e rilettura). Pianifica le chiavi fin dall'inizio del design della topologia.</li>
-<li><strong>Imposta <code>exactly-once</code> solo in produzione</strong>: ha un overhead di performance del 10-20% rispetto ad <code>at-least-once</code>.</li>
-<li><strong>Dimensiona i thread correttamente</strong>: <code>num.stream.threads</code> non deve superare il numero di partizioni del topic con più partizioni. Thread aggiuntivi rimarranno idle.</li>
-<li><strong>Usa <code>suppress</code> per ridurre l'output delle KTable</strong>: senza <code>suppress</code>, ogni aggiornamento intermedio viene emesso. <code>suppress(Suppressed.untilTimeLimit(...))</code> emette solo l'aggiornamento finale per finestra.</li>
+<li><strong>Attenzione a <code>selectKey</code></strong>: cambiare la chiave causa un repartitioning (scrittura su un topic interno e rilettura) alla prima operazione stateful successiva. Pianifica le chiavi fin dall'inizio del design della topologia.</li>
+<li><strong>Scegli la garanzia consapevolmente</strong>: <code>exactly_once_v2</code> aggiunge overhead (transazioni, commit più frequenti, latenza end-to-end maggiore) rispetto ad <code>at_least_once</code>; abilitalo dove i duplicati non sono tollerabili e testa con la stessa configurazione di produzione. Non usare <code>EXACTLY_ONCE</code> (v1): deprecato e rimosso nelle versioni recenti.</li>
+<li><strong>Dimensiona i thread correttamente</strong>: il parallelismo massimo totale è il numero di task; thread oltre il numero di task (sommati su tutte le istanze) restano idle.</li>
+<li><strong>Usa <code>suppress</code> per ridurre l'output delle KTable</strong>: senza <code>suppress</code>, vengono emessi gli aggiornamenti intermedi (il record cache ne riduce già una parte). <code>suppress(Suppressed.untilWindowCloses(...))</code> su KTable finestrata emette solo il risultato finale per finestra; <code>untilTimeLimit</code> si limita a rate-limitare gli update. Dettagli in <a href="../windowing/">Windowing</a>.</li>
 <li><strong>Monitora il lag del consumer group</strong> con <code>kafka-consumer-groups.sh --describe</code>. Se il lag cresce, l'applicazione non riesce a stare al passo con il rate di produzione.</li>
 <li><strong>Usa <code>Materialized.as(...)</code> esplicitamente</strong> quando vuoi interrogare lo state store via Interactive Queries.</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="applicazione-bloccata-in-rebalancing">Applicazione bloccata in REBALANCING<a class="headerlink" href="#applicazione-bloccata-in-rebalancing" title="Permanent link">&para;</a></h3>
-<p><strong>Causa:</strong> L'applicazione sta ribilanciando le partizioni tra le istanze. Può durare da secondi a minuti.
-<strong>Soluzione:</strong> Verificare che tutte le istanze siano raggiungibili. Controllare <code>session.timeout.ms</code> e <code>heartbeat.interval.ms</code>. Se il rebalancing è frequente, aumentare <code>session.timeout.ms</code>.</p>
-<h3 id="state-store-corrotto-dopo-crash">State store corrotto dopo crash<a class="headerlink" href="#state-store-corrotto-dopo-crash" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> L'applicazione sta ribilanciando le partizioni tra le istanze. Lo stato resta REBALANCING anche durante il restore degli state store dal changelog: può durare da secondi a ore su store grandi.
+<strong>Soluzione:</strong> Verificare che tutte le istanze siano raggiungibili. Controllare <code>session.timeout.ms</code>, <code>heartbeat.interval.ms</code> e <code>max.poll.interval.ms</code> (processing lento tra due poll espelle l'istanza dal gruppo). Se il rebalancing è frequente, aumentare i timeout; <code>group.instance.id</code> (static membership) evita rebalance ai restart rapidi, <code>num.standby.replicas</code> accelera il failover.</p>
+<h3 id="invalidstatestoreexception-durante-interactive-queries">InvalidStateStoreException durante Interactive Queries<a class="headerlink" href="#invalidstatestoreexception-durante-interactive-queries" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>org.apache.kafka.streams.errors.InvalidStateStoreException:
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>The state store may have migrated to another instance
 </span></code></pre></div>
-<p><strong>Causa:</strong> L'istanza non era il proprietario di quella partizione al momento della query.
+<p><strong>Causa:</strong> L'istanza non è (o non è più) proprietaria della partizione al momento della query, oppure lo store è ancora in restore/rebalancing.
 <strong>Soluzione:</strong> Usare le Interactive Queries con discovery (<code>streams.queryMetadataForKey(...)</code>) per trovare l'istanza corretta.</p>
 <h3 id="performance-degradata-con-rocksdb">Performance degradata con RocksDB<a class="headerlink" href="#performance-degradata-con-rocksdb" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Latenza alta nelle operazioni stateful, alto consumo di CPU.
@@ -25253,7 +25256,7 @@
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/">Kafka Streams Developer Guide</a></li>
-<li><a href="https://kafka.apache.org/36/javadoc/org/apache/kafka/streams/package-summary.html">Kafka Streams API Javadoc</a></li>
+<li><a href="https://kafka.apache.org/documentation/streams/developer-guide/write-streams.html">Kafka Streams API Javadoc</a></li>
 <li><a href="https://docs.confluent.io/platform/current/streams/architecture.html">Confluent — Kafka Streams Architecture</a></li>
 <li><a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide">RocksDB Tuning Guide</a></li>
 <li><a href="https://docs.confluent.io/platform/current/streams/developer-guide/interactive-queries.html">Confluent — Interactive Queries</a></li>

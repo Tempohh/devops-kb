@@ -16992,7 +16992,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17669,7 +17669,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17704,7 +17704,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -17881,7 +17881,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17925,7 +17925,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17950,7 +17950,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18182,7 +18182,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24805,7 +24805,8 @@
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <p><strong>Consumer group</strong> — Ogni sink connector agisce come un consumer group Kafka. Le partizioni del topic vengono distribuite tra i task del connector.</p>
 <p><strong>Idempotency</strong> — I sink connector migliori supportano scritture idempotenti: se un record viene scritto due volte (at-least-once), il risultato è lo stesso di una singola scrittura.</p>
-<p><strong>Exactly-once (sink)</strong> — Alcuni connector (es. JDBC Sink) supportano l'esatto-once tramite transazioni sul lato destinazione.</p>
+<p><strong>Exactly-once (sink)</strong> — Kafka Connect garantisce di default solo <em>at-least-once</em> sul lato sink: gli offset vengono committati dopo la scrittura, quindi un crash causa la riscrittura. L'effetto exactly-once si ottiene rendendo la scrittura idempotente (JDBC: <code>insert.mode=upsert</code>; Elasticsearch: <code>key.ignore=false</code>, document ID = chiave Kafka) oppure con connector che producono file deterministici (S3 Sink con partitioner deterministico e <code>flush.size</code>/rotazione basata su record, non su wall-clock). JDBC Sink <strong>non</strong> offre transazioni exactly-once end-to-end.</p>
+<p><strong>DLQ (Dead Letter Queue)</strong> — Topic Kafka dove il framework Connect scarta i record che falliscono in deserializzazione/conversione o in una SMT (Single Message Transform), invece di fermare il task. Vale solo per i sink.</p>
 <p><strong>Flush</strong> — I record vengono accumulati in buffer e scritti in batch verso la destinazione. La frequenza di flush è controllabile.</p>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="elasticsearch-sink-connector">Elasticsearch Sink Connector<a class="headerlink" href="#elasticsearch-sink-connector" title="Permanent link">&para;</a></h3>
@@ -24816,26 +24817,29 @@
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="s1">    "config": {</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="s1">      "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",</span>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="s1">      "connection.url": "http://elasticsearch:9200",</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="s1">      "type.name": "_doc",</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="s1">      "topics": "orders",</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="s1">      "key.ignore": "false",</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="s1">      "schema.ignore": "true",</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="s1">      "behavior.on.null.values": "DELETE",</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="s1">      "behavior.on.malformed.documents": "WARN",</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="s1">      "batch.size": 2000,</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="s1">      "max.buffered.records": 20000,</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="s1">      "flush.timeout.ms": 10000,</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="s1">      "max.retries": 5,</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="s1">      "retry.backoff.ms": 3000,</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="s1">      "transforms": "addMetadata",</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="s1">      "transforms.addMetadata.type": "org.apache.kafka.connect.transforms.InsertField$Value",</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="s1">      "transforms.addMetadata.timestamp.field": "indexed_at"</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="s1">    }</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="s1">  }'</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="s1">      "topics": "orders",</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="s1">      "key.ignore": "false",</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="s1">      "schema.ignore": "true",</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="s1">      "behavior.on.null.values": "DELETE",</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="s1">      "behavior.on.malformed.documents": "WARN",</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="s1">      "batch.size": 2000,</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="s1">      "max.buffered.records": 20000,</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="s1">      "flush.timeout.ms": 10000,</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="s1">      "max.retries": 5,</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="s1">      "retry.backoff.ms": 3000,</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="s1">      "transforms": "addMetadata",</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="s1">      "transforms.addMetadata.type": "org.apache.kafka.connect.transforms.InsertField$Value",</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="s1">      "transforms.addMetadata.timestamp.field": "indexed_at"</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="s1">    }</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="s1">  }'</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">type.name</p>
+<p>Le versioni recenti del connector (ES 7+/8) non usano più mapping type: <code>type.name</code> è stato rimosso, non impostarlo.</p>
+</div>
 <h3 id="s3-sink-connector-confluent">S3 Sink Connector (Confluent)<a class="headerlink" href="#s3-sink-connector-confluent" title="Permanent link">&para;</a></h3>
 <p>Archivia record Kafka su Amazon S3, organizzandoli in partizioni per tempo o campo.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8083/connectors<span class="w"> </span><span class="se">\</span>
@@ -24850,31 +24854,35 @@
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="s1">      "topics": "orders,payments",</span>
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="s1">      "flush.size": "1000",</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="s1">      "rotate.interval.ms": "3600000",</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="s1">      "rotate.schedule.interval.ms": "3600000",</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="s1">      "storage.class": "io.confluent.connect.s3.storage.S3Storage",</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="s1">      "format.class": "io.confluent.connect.s3.format.parquet.ParquetFormat",</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="s1">      "partitioner.class": "io.confluent.connect.storage.partitioner.TimeBasedPartitioner",</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="s1">      "path.format": "'</span><span class="se">\'</span><span class="s1">'year'</span><span class="se">\'</span><span class="s1">'=YYYY/'</span><span class="se">\'</span><span class="s1">'month'</span><span class="se">\'</span><span class="s1">'=MM/'</span><span class="se">\'</span><span class="s1">'day'</span><span class="se">\'</span><span class="s1">'=dd/'</span><span class="se">\'</span><span class="s1">'hour'</span><span class="se">\'</span><span class="s1">'=HH",</span>
-</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="s1">      "locale": "en_US",</span>
-</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="s1">      "timezone": "UTC",</span>
-</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>
-</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="s1">      "schema.compatibility": "FULL"</span>
-</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="s1">    }</span>
-</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="s1">  }'</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="s1">      "rotate.schedule.interval.ms": "3600000",</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="s1">      "storage.class": "io.confluent.connect.s3.storage.S3Storage",</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="s1">      "format.class": "io.confluent.connect.s3.format.parquet.ParquetFormat",</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="s1">      "partitioner.class": "io.confluent.connect.storage.partitioner.TimeBasedPartitioner",</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="s1">      "path.format": "'</span><span class="se">\'</span><span class="s1">'year'</span><span class="se">\'</span><span class="s1">'=YYYY/'</span><span class="se">\'</span><span class="s1">'month'</span><span class="se">\'</span><span class="s1">'=MM/'</span><span class="se">\'</span><span class="s1">'day'</span><span class="se">\'</span><span class="s1">'=dd/'</span><span class="se">\'</span><span class="s1">'hour'</span><span class="se">\'</span><span class="s1">'=HH",</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="s1">      "locale": "en_US",</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="s1">      "timezone": "UTC",</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="s1">      "schema.compatibility": "FULL"</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="s1">    }</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="s1">  }'</span>
 </span></code></pre></div>
-<p><strong>Struttura S3 risultante:</strong>
+<p><strong>Struttura S3 risultante</strong> (prefisso <code>topics.dir</code>, default <code>topics</code>):
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>s3://my-kafka-archive/
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>└── orders/
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    └── year=2026/
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>        └── month=02/
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>            └── day=23/
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>                └── hour=14/
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>                    ├── orders+0+0000001000.parquet
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>                    └── orders+1+0000001500.parquet
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>└── topics/
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    └── orders/
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>        └── year=2026/
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>            └── month=02/
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>                └── day=23/
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>                    └── hour=14/
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>                        ├── orders+0+0000001000.parquet
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>                        └── orders+1+0000001500.parquet
 </span></code></pre></div></p>
+<div class="admonition note">
+<p class="admonition-title">Rotazione e Parquet</p>
+<p><code>rotate.schedule.interval.ms</code> chiude i file a intervalli di wall-clock (richiede <code>timezone</code>) ma rende l'output non deterministico → perde la semantica exactly-once; <code>rotate.interval.ms</code> si basa sul timestamp dei record. <code>ParquetFormat</code> richiede record con schema (Avro, JSON Schema, Protobuf o JSON con <code>schemas.enable=true</code>), non JSON schemaless.</p>
+</div>
 <h3 id="jdbc-sink-connector">JDBC Sink Connector<a class="headerlink" href="#jdbc-sink-connector" title="Permanent link">&para;</a></h3>
 <p>Scrive record Kafka su tabelle di database relazionali. Supporta upsert (insert or update) tramite chiave primaria.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8083/connectors<span class="w"> </span><span class="se">\</span>
@@ -24885,7 +24893,7 @@
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="s1">      "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",</span>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="s1">      "connection.url": "jdbc:postgresql://db:5432/analytics",</span>
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="s1">      "connection.user": "writer",</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="s1">      "connection.password": "secret",</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="s1">      "connection.password": "${file:/opt/secrets/db.properties:password}",</span>
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="s1">      "topics": "orders",</span>
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="s1">      "table.name.format": "${topic}",</span>
@@ -24901,21 +24909,31 @@
 </span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="s1">    }</span>
 </span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="s1">  }'</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Segreti</p>
+<p>Il placeholder <code>${file:...}</code> richiede un <code>ConfigProvider</code> sul worker (<code>config.providers=file</code> e <code>config.providers.file.class=org.apache.kafka.common.config.provider.FileConfigProvider</code>): così la password non finisce in chiaro nella REST API né nel topic <code>connect-configs</code>. Lo stesso vale per <code>${env:...}</code> (<code>EnvVarConfigProvider</code>).</p>
+</div>
 <h3 id="http-sink-connector-open-source">HTTP Sink Connector (open source)<a class="headerlink" href="#http-sink-connector-open-source" title="Permanent link">&para;</a></h3>
+<p>Il connector <code>clescot/kafka-connect-http</code> <strong>non</strong> prende URL, metodo e header dalla configurazione: li legge da ogni record Kafka, il cui value deve essere una struttura <code>HttpRequest</code> (campi <code>url</code>, <code>method</code>, <code>headers</code>, <code>bodyAsString</code>, ecc.). Il formato testato è JSON Schema (Avro e Protobuf previsti ma senza garanzie). La configurazione del connector contiene solo le impostazioni del client HTTP, con prefissi gerarchici <code>config.default.</code> / <code>config.&lt;id&gt;.</code>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8083/connectors<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="s1">    "name": "http-webhook-sink",</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="s1">    "config": {</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="s1">      "connector.class": "io.github.clescot.kafka.connect.http.sink.HttpSinkConnector",</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="s1">      "http.url": "https://api.example.com/webhooks/orders",</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="s1">      "http.request.method": "POST",</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="s1">      "http.headers": "Content-Type:application/json,Authorization:Bearer ${env:API_TOKEN}",</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="s1">      "topics": "orders",</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="s1">      "tasks.max": "3"</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="s1">    }</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="s1">  }'</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="s1">      "topics": "http-requests",</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="s1">      "tasks.max": "3",</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="s1">      "value.converter": "io.confluent.connect.json.JsonSchemaConverter",</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="s1">      "value.converter.schema.registry.url": "http://schema-registry:8081",</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="s1">      "config.default.retries": "3",</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="s1">      "config.default.retry.delay.in.ms": "2000"</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="s1">    }</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="s1">  }'</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Messaggio in ingresso</p>
+<p>Un producer (o una SMT/Streams) deve costruire il record <code>HttpRequest</code> con URL e payload di destinazione. Per un webhook con payload fisso esistono alternative commerciali (es. Confluent HTTP Sink) che configurano l'URL nel connector. Riferimento: <a href="https://github.com/clescot/kafka-connect-http">kafka-connect-http</a>.</p>
+</div>
 <h3 id="gestione-errori-e-dlq">Gestione errori e DLQ<a class="headerlink" href="#gestione-errori-e-dlq" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8083/connectors<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
@@ -24935,6 +24953,10 @@
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="s1">    }</span>
 </span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="s1">  }'</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Cosa copre la DLQ</p>
+<p>Il framework instrada alla DLQ solo gli errori di conversione e di SMT. Gli errori di scrittura verso la destinazione (<code>put()</code>) finiscono nella DLQ solo se il connector usa l'<em>errant record reporter</em> (es. JDBC, Elasticsearch, S3 per record non validi); un'indisponibilità della destinazione fa invece ritentare e poi fallire il task.</p>
+</div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
 <p class="admonition-title">Aumentare batch.size per throughput</p>
@@ -24961,10 +24983,12 @@
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>kafka:9092<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--group<span class="w"> </span>connect-elasticsearch-orders-sink<span class="w"> </span>--describe
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Aggiornare la configurazione del connector</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://localhost:8083/connectors/elasticsearch-orders-sink/config<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{"tasks.max": "4", "batch.size": "3000"}'</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Aggiornare la configurazione: PUT /config SOSTITUISCE l'intera config,</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># quindi va inviata completa (partire da quella attuale)</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:8083/connectors/elasticsearch-orders-sink/config<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'. + {"tasks.max": "4", "batch.size": "3000"}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://localhost:8083/connectors/elasticsearch-orders-sink/config<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">      </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span>-d<span class="w"> </span>@-
 </span></code></pre></div>
 <h3 id="scenario-2-errori-di-schema-schema-mismatch-deserialization-error">Scenario 2 — Errori di schema (schema mismatch / deserialization error)<a class="headerlink" href="#scenario-2-errori-di-schema-schema-mismatch-deserialization-error" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il connector entra in stato FAILED con errori <code>org.apache.kafka.connect.errors.DataException</code> o <code>SchemaParseException</code>.</p>
@@ -24977,11 +25001,12 @@
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>kafka-console-consumer.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>kafka:9092<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span>--topic<span class="w"> </span>orders<span class="w"> </span>--from-beginning<span class="w"> </span>--max-messages<span class="w"> </span><span class="m">1</span>
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1"># Se JSON: usare JsonConverter</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://localhost:8083/connectors/elasticsearch-orders-sink/config<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{"value.converter": "org.apache.kafka.connect.json.JsonConverter",</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="s1">       "value.converter.schemas.enable": "false"}'</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1"># Se JSON: usare JsonConverter (PUT sostituisce tutta la config: si parte da quella attuale)</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:8083/connectors/elasticsearch-orders-sink/config<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'. + {"value.converter": "org.apache.kafka.connect.json.JsonConverter",</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="s1">             "value.converter.schemas.enable": "false"}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://localhost:8083/connectors/elasticsearch-orders-sink/config<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">      </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span>-d<span class="w"> </span>@-
 </span></code></pre></div>
 <h3 id="scenario-3-connector-reprocessa-record-dopo-restart">Scenario 3 — Connector reprocessa record dopo restart<a class="headerlink" href="#scenario-3-connector-reprocessa-record-dopo-restart" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Dopo un riavvio del connector (o del worker), i record già scritti vengono scritti nuovamente nella destinazione, causando duplicati.</p>
@@ -24997,7 +25022,7 @@
 </span></code></pre></div>
 <h3 id="scenario-4-record-finiscono-nella-dlq-invece-di-essere-scritti">Scenario 4 — Record finiscono nella DLQ invece di essere scritti<a class="headerlink" href="#scenario-4-record-finiscono-nella-dlq-invece-di-essere-scritti" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il connector rimane attivo (stato RUNNING) ma i record non arrivano alla destinazione. Il topic DLQ si riempie di messaggi con header di errore.</p>
-<p><strong>Causa:</strong> <code>errors.tolerance=all</code> è configurato e i record falliscono silenziosamente. Causa tipica: record malformati, destinazione non raggiungibile intermittentemente, o trasformazione (SMT) che fallisce.</p>
+<p><strong>Causa:</strong> <code>errors.tolerance=all</code> è configurato e i record falliscono silenziosamente. Causa tipica: record malformati, errore di deserializzazione/converter, trasformazione (SMT) che fallisce, documenti rifiutati dalla destinazione.</p>
 <p><strong>Soluzione:</strong> Ispezionare i record nella DLQ leggendo gli header di errore. Correggere la causa root e riconsiderare <code>errors.tolerance</code> se il volume di errori è inatteso.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Leggere i record dalla DLQ con header</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kafka-console-consumer.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>kafka:9092<span class="w"> </span><span class="se">\</span>
@@ -25008,8 +25033,10 @@
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>curl<span class="w"> </span>http://localhost:8083/connectors/elasticsearch-sink-with-dlq/status<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span>jq<span class="w"> </span><span class="s1">'.tasks[] | {id: .id, state: .state, trace: .trace}'</span>
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Se la destinazione era temporaneamente non raggiungibile: riavviare i task</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Se un task è FAILED (es. destinazione era non raggiungibile): riavviarlo</span>
 </span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8083/connectors/elasticsearch-sink-with-dlq/tasks/0/restart
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># oppure tutti i task falliti in una volta (Kafka 3.0+)</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">"http://localhost:8083/connectors/elasticsearch-sink-with-dlq/restart?includeTasks=true&amp;onlyFailed=true"</span>
 </span></code></pre></div>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>

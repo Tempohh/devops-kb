@@ -16992,7 +16992,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17669,7 +17669,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17704,7 +17704,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -17890,7 +17890,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17915,7 +17915,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18005,10 +18005,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#filestream-source-connector-built-in-test" class="md-nav__link">
+  <a href="#filestream-source-connector-solo-test" class="md-nav__link">
     <span class="md-ellipsis">
       
-        FileStream Source Connector (built-in, test)
+        FileStream Source Connector (solo test)
       
     </span>
   </a>
@@ -18158,7 +18158,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18193,7 +18193,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24550,10 +24550,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#filestream-source-connector-built-in-test" class="md-nav__link">
+  <a href="#filestream-source-connector-solo-test" class="md-nav__link">
     <span class="md-ellipsis">
       
-        FileStream Source Connector (built-in, test)
+        FileStream Source Connector (solo test)
       
     </span>
   </a>
@@ -24847,14 +24847,14 @@
     end
 
     subgraph Connect["Kafka Connect Cluster"]
-        W1["Worker 1\nConnector A\nTask 0, 1"]
-        W2["Worker 2\nConnector B\nTask 0"]
+        W1["Worker 1&lt;br/&gt;Connector A&lt;br/&gt;Task 0, 1"]
+        W2["Worker 2&lt;br/&gt;Connector B&lt;br/&gt;Task 0"]
     end
 
     subgraph Kafka
         T1[Topic: orders]
         T2[Topic: logs]
-        TC["connect-offsets\nconnect-configs\nconnect-status"]
+        TC["connect-offsets&lt;br/&gt;connect-configs&lt;br/&gt;connect-status"]
     end
 
     DB --&gt; W1 --&gt; T1
@@ -24955,7 +24955,11 @@
 </tr>
 </tbody>
 </table>
-<h3 id="filestream-source-connector-built-in-test">FileStream Source Connector (built-in, test)<a class="headerlink" href="#filestream-source-connector-built-in-test" title="Permanent link">&para;</a></h3>
+<h3 id="filestream-source-connector-solo-test">FileStream Source Connector (solo test)<a class="headerlink" href="#filestream-source-connector-solo-test" title="Permanent link">&para;</a></h3>
+<div class="admonition warning">
+<p class="admonition-title">Non per produzione</p>
+<p><code>FileStreamSourceConnector</code> è un esempio didattico: non gestisce rotazione dei file né garantisce affidabilità. Dalla 3.2 il JAR <code>connect-file</code> non è più nel <code>plugin.path</code> di default: va aggiunto esplicitamente (es. <code>plugin.path=/opt/kafka/libs/connect-file-&lt;versione&gt;.jar</code>). Per i log in produzione usare un agent dedicato (Filebeat, Fluent Bit).</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8083/connectors<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{</span>
@@ -24990,7 +24994,7 @@
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">"transforms"</span><span class="p">:</span><span class="w"> </span><span class="s2">"dropField,renameField"</span><span class="p">,</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">"transforms.dropField.type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"org.apache.kafka.connect.transforms.ReplaceField$Value"</span><span class="p">,</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">"transforms.dropField.blacklist"</span><span class="p">:</span><span class="w"> </span><span class="s2">"internal_id,password_hash"</span><span class="p">,</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">"transforms.dropField.exclude"</span><span class="p">:</span><span class="w"> </span><span class="s2">"internal_id,password_hash"</span><span class="p">,</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="nt">"transforms.renameField.type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"org.apache.kafka.connect.transforms.ReplaceField$Value"</span><span class="p">,</span>
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">  </span><span class="nt">"transforms.renameField.renames"</span><span class="p">:</span><span class="w"> </span><span class="s2">"cust_id:customer_id,ord_ts:order_timestamp"</span>
@@ -25003,7 +25007,13 @@
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Separare la configurazione per ambiente</p>
-<p>Usare variabili d'ambiente o un config provider (es. HashiCorp Vault) per le credenziali, mai hardcodate nella configurazione del connector.</p>
+<p>Usare un config provider (<code>FileConfigProvider</code>, <code>EnvVarConfigProvider</code>, o provider per Vault/AWS Secrets Manager) per le credenziali: la config di un connector è leggibile via REST API e salvata in chiaro in <code>connect-configs</code>, quindi un segreto hardcodato è esposto a chiunque acceda alla API o al topic.</p>
+<div class="language-properties highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># worker</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="na">config.providers</span><span class="o">=</span><span class="s">file</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="na">config.providers.file.class</span><span class="o">=</span><span class="s">org.apache.kafka.common.config.provider.FileConfigProvider</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># connector</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="na">connection.password</span><span class="o">=</span><span class="s">${file:/etc/connect/secrets.properties:db.password}</span>
+</span></code></pre></div>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">JDBC Source non cattura DELETE</p>
@@ -25011,79 +25021,82 @@
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Schema evolution con JDBC</p>
-<p>Se lo schema del database cambia (nuova colonna), Kafka Connect aggiorna automaticamente lo schema del topic. Verificare che i consumer siano in grado di gestire l'evoluzione degli schemi.</p>
+<p>Se lo schema della tabella cambia (nuova colonna), il connector rileva la modifica al poll successivo ed emette record con il nuovo schema Connect. Con un converter Avro/Protobuf + Schema Registry viene registrata una nuova versione, soggetta alla compatibility configurata: una modifica incompatibile fa fallire il task. Con JSON il cambiamento passa senza controlli e i consumer devono tollerarlo.</p>
 </div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-task-in-stato-failed">Scenario 1 — Task in stato <code>FAILED</code><a class="headerlink" href="#scenario-1-task-in-stato-failed" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il connector è visibile ma uno o più task risultano in stato <code>FAILED</code> nella REST API.</p>
 <p><strong>Causa:</strong> Errore di connessione alla sorgente, credenziali scadute, schema incompatibile, o eccezione non gestita nel polling.</p>
 <p><strong>Soluzione:</strong> Leggere il trace dell'errore dal task status, correggere la configurazione e riavviare il task.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Ispezionare l'errore del task</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:8083/connectors/my-connector/status<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.tasks[] | {id, state, trace}'</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Riavviare il task fallito (task id 0)</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8083/connectors/my-connector/tasks/0/restart
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Se tutti i task sono failed, riavviare il connector intero</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8083/connectors/my-connector/restart
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Ispezionare l'errore del task</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:8083/connectors/my-connector/status<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.tasks[] | {id, state, trace}'</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Riavviare il task fallito (task id 0)</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8083/connectors/my-connector/tasks/0/restart
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Se tutti i task sono failed, riavviare il connector intero</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8083/connectors/my-connector/restart
 </span></code></pre></div>
 <h3 id="scenario-2-connector-lento-o-lag-elevato">Scenario 2 — Connector lento o lag elevato<a class="headerlink" href="#scenario-2-connector-lento-o-lag-elevato" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> I record arrivano su Kafka con ritardo rispetto alla sorgente; il consumer group del topic di destinazione accumula lag.</p>
-<p><strong>Causa:</strong> <code>poll.interval.ms</code> troppo alto, <code>batch.max.rows</code> troppo basso, <code>tasks.max=1</code> con molte tabelle, o query lenta sul database sorgente.</p>
-<p><strong>Soluzione:</strong> Aumentare il parallelismo e ottimizzare i parametri di polling.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Aggiornare la configurazione del connector via REST API</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://localhost:8083/connectors/postgres-orders-source/config<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="s1">    "connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="s1">    "tasks.max": "4",</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="s1">    "poll.interval.ms": "500",</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="s1">    "batch.max.rows": "5000",</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="s1">    "connection.url": "jdbc:postgresql://db:5432/mydb",</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="s1">    "connection.user": "kafka_user",</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="s1">    "connection.password": "secret",</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="s1">    "mode": "timestamp+incrementing",</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="s1">    "timestamp.column.name": "updated_at",</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="s1">    "incrementing.column.name": "id",</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="s1">    "table.whitelist": "orders,customers",</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="s1">    "topic.prefix": "db."</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="s1">  }'</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="c1"># Monitorare il lag consumer sul topic</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>kafka:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">  </span>--describe<span class="w"> </span>--group<span class="w"> </span>my-consumer-group
+<p><strong>Causa:</strong> <code>poll.interval.ms</code> troppo alto, <code>batch.max.rows</code> troppo basso, <code>tasks.max=1</code> con molte tabelle, o query lenta sul database sorgente (manca un indice su <code>updated_at</code>/<code>id</code>).</p>
+<p><strong>Soluzione:</strong> Aumentare il parallelismo e ottimizzare i parametri di polling. Nel JDBC Source il parallelismo è per tabella: i task effettivi sono <code>min(tasks.max, numero tabelle)</code>, quindi con 2 tabelle <code>tasks.max=4</code> ne avvia solo 2. Il ritardo del connector è la distanza sorgente→topic, non un lag di consumer group; il comando sotto misura i consumer a valle.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Aggiornare la configurazione del connector via REST API</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://localhost:8083/connectors/postgres-orders-source/config<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="s1">    "connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="s1">    "tasks.max": "4",</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="s1">    "poll.interval.ms": "500",</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="s1">    "batch.max.rows": "5000",</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="s1">    "connection.url": "jdbc:postgresql://db:5432/mydb",</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="s1">    "connection.user": "kafka_user",</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="s1">    "connection.password": "secret",</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="s1">    "mode": "timestamp+incrementing",</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="s1">    "timestamp.column.name": "updated_at",</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="s1">    "incrementing.column.name": "id",</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="s1">    "table.whitelist": "orders,customers",</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="s1">    "topic.prefix": "db."</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="s1">  }'</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="c1"># Monitorare il lag consumer sul topic</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>kafka:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">  </span>--describe<span class="w"> </span>--group<span class="w"> </span>my-consumer-group
 </span></code></pre></div>
 <h3 id="scenario-3-record-duplicati-dopo-restart">Scenario 3 — Record duplicati dopo restart<a class="headerlink" href="#scenario-3-record-duplicati-dopo-restart" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Dopo un riavvio del worker o del connector, compaiono record duplicati nel topic Kafka.</p>
 <p><strong>Causa:</strong> At-least-once delivery garantita da Kafka Connect: se un commit degli offset non va a buon fine prima del crash, i record vengono rielaborati.</p>
-<p><strong>Soluzione:</strong> Il consumer deve essere idempotente. Con <code>mode=incrementing</code> il rischio è minimizzato perché gli offset sono deterministici. Verificare che il topic <code>connect-offsets</code> sia replicato correttamente.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Verificare il contenuto degli offset salvati</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>kafka-console-consumer.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>kafka:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--topic<span class="w"> </span>connect-offsets<span class="w"> </span>--from-beginning<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--formatter<span class="w"> </span><span class="s2">"kafka.coordinator.group.GroupMetadataManager\$OffsetMessageFormatter"</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># Controllare la replication factor del topic degli offset</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>kafka:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">  </span>--describe<span class="w"> </span>--topic<span class="w"> </span>connect-offsets
+<p><strong>Soluzione:</strong> Il consumer deve essere idempotente. Con <code>mode=incrementing</code> il rischio è minimizzato perché gli offset sono deterministici. Verificare che il topic <code>connect-offsets</code> sia replicato correttamente. Dal Kafka 3.3 (KIP-618) i source connector che lo supportano possono dare exactly-once: worker con <code>exactly.once.source.support=enabled</code> e connector che dichiari il supporto (per il JDBC Source verificare nella sua documentazione).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Offset di un connector (Kafka 3.5+, KIP-875)</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:8083/connectors/postgres-orders-source/offsets
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Contenuto grezzo del topic: chiave/valore JSON, NON offset di consumer group</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>kafka-console-consumer.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>kafka:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span>--topic<span class="w"> </span>connect-offsets<span class="w"> </span>--from-beginning<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span>--property<span class="w"> </span>print.key<span class="o">=</span><span class="nb">true</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1"># Controllare la replication factor del topic degli offset</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>kafka:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">  </span>--describe<span class="w"> </span>--topic<span class="w"> </span>connect-offsets
 </span></code></pre></div>
 <h3 id="scenario-4-connector-non-si-avvia-classnotfoundexception-o-plugin-non-trovato">Scenario 4 — Connector non si avvia: <code>ClassNotFoundException</code> o plugin non trovato<a class="headerlink" href="#scenario-4-connector-non-si-avvia-classnotfoundexception-o-plugin-non-trovato" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Al momento della creazione del connector la REST API restituisce <code>500</code> con errore <code>ClassNotFoundException</code> o "Connector class not found".</p>
 <p><strong>Causa:</strong> Il JAR del connector non è presente nel <code>plugin.path</code> configurato nel worker, oppure il path è errato o il processo non è stato riavviato dopo l'installazione del plugin.</p>
 <p><strong>Soluzione:</strong> Verificare che il JAR sia nella directory corretta e riavviare il worker Connect.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Listare i plugin riconosciuti dal worker</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:8083/connector-plugins<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.[].class'</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Verificare il contenuto del plugin.path</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>ls<span class="w"> </span>-la<span class="w"> </span>/opt/kafka/plugins/
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Installare un plugin da Confluent Hub (se confluent-hub è disponibile)</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>confluent-hub<span class="w"> </span>install<span class="w"> </span>confluentinc/kafka-connect-jdbc:latest<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">  </span>--component-dir<span class="w"> </span>/opt/kafka/plugins<span class="w"> </span>--no-prompt
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># Dopo l'installazione riavviare il worker Connect</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>systemctl<span class="w"> </span>restart<span class="w"> </span>kafka-connect
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="c1"># oppure, in ambiente containerizzato</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>docker<span class="w"> </span>restart<span class="w"> </span>kafka-connect
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Listare i plugin riconosciuti dal worker</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:8083/connector-plugins<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span><span class="s1">'.[].class'</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Verificare il contenuto del plugin.path</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>ls<span class="w"> </span>-la<span class="w"> </span>/opt/kafka/plugins/
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># Installare un plugin da Confluent Hub (se confluent-hub è disponibile)</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>confluent-hub<span class="w"> </span>install<span class="w"> </span>confluentinc/kafka-connect-jdbc:latest<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span>--component-dir<span class="w"> </span>/opt/kafka/plugins<span class="w"> </span>--no-prompt
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># Dopo l'installazione riavviare il worker Connect</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>systemctl<span class="w"> </span>restart<span class="w"> </span>kafka-connect
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="c1"># oppure, in ambiente containerizzato</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>docker<span class="w"> </span>restart<span class="w"> </span>kafka-connect
 </span></code></pre></div>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>

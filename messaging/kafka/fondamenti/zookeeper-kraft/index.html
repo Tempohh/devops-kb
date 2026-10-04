@@ -17001,7 +17001,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17026,7 +17026,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17967,7 +17967,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18002,7 +18002,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -18179,7 +18179,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18214,7 +18214,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18249,7 +18249,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24934,8 +24934,8 @@
 
 <h1 id="zookeeper-e-kraft">ZooKeeper e KRaft<a class="headerlink" href="#zookeeper-e-kraft" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>Storicamente Apache Kafka dipendeva da <strong>Apache ZooKeeper</strong> per gestire i metadati del cluster: lista dei broker, configurazione dei topic, elezioni del controller. Dalla versione 3.3+, <strong>KRaft</strong> (Kafka Raft) è il nuovo protocollo interno che elimina questa dipendenza esterna, rendendo Kafka un sistema autonomo e semplificando drasticamente l'architettura operativa.</p>
-<p><strong>ZooKeeper</strong> rimane supportato nelle versioni attuali per compatibilità, ma è ufficialmente <strong>deprecato</strong> e sarà rimosso nelle versioni future. <strong>Tutte le nuove installazioni dovrebbero usare KRaft.</strong></p>
+<p>Storicamente Apache Kafka dipendeva da <strong>Apache ZooKeeper</strong> per gestire i metadati del cluster: lista dei broker, configurazione dei topic, elezioni del controller. Dalla versione 3.3 <strong>KRaft</strong> (Kafka Raft, definito da KIP-500: <em>Kafka Improvement Proposal</em>, il documento di design con cui la community Kafka propone modifiche) è il protocollo interno che elimina questa dipendenza esterna, rendendo Kafka un sistema autonomo e semplificando drasticamente l'architettura operativa.</p>
+<p><strong>ZooKeeper è stato rimosso in Kafka 4.0</strong> (marzo 2025): le versioni 4.x girano <strong>solo</strong> in modalità KRaft. Un cluster ancora su ZooKeeper deve prima migrare (passando da 3.9, vedi timeline) e solo dopo aggiornare a 4.x. <strong>Tutte le nuove installazioni usano KRaft.</strong></p>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <h3 id="zookeeper-architettura-legacy">ZooKeeper (architettura legacy)<a class="headerlink" href="#zookeeper-architettura-legacy" title="Permanent link">&para;</a></h3>
 <p><strong>Ruolo di ZooKeeper in Kafka:</strong>
@@ -24946,16 +24946,17 @@
 - Memorizzare configurazioni e ACL</p>
 <p><strong>Limiti dell'architettura ZooKeeper:</strong>
 - Dipendenza operativa esterna (cluster ZooKeeper separato da mantenere)
-- Scalabilità limitata: lo stato è in memoria in ZooKeeper (~200K partizioni max)
-- Failover del controller lento (il nuovo controller deve leggere tutto lo stato da ZooKeeper)
+- Scalabilità limitata: lo stato è in ZooKeeper e il controller deve caricarlo per intero (nella pratica ~200K partizioni per cluster come ordine di grandezza)
+- Failover del controller lento (il nuovo controller deve rileggere tutto lo stato da ZooKeeper, tempo proporzionale al numero di partizioni)
 - Doppia complessità operativa: aggiornamenti, monitoring, sicurezza di due sistemi</p>
 <h3 id="kraft-architettura-moderna">KRaft (architettura moderna)<a class="headerlink" href="#kraft-architettura-moderna" title="Permanent link">&para;</a></h3>
 <p><strong>Cosa cambia con KRaft:</strong>
 - I metadati sono gestiti da un <strong>quorum di controller</strong> interni a Kafka
-- I controller usano il <strong>protocollo Raft</strong> (simile a etcd/Consul) per consenso distribuito
-- Il <strong>metadata log</strong> è un topic Kafka interno (<code>@metadata</code>) replicato tra i controller
-- Il failover del controller è in millisecondi (il follower ha già lo stato aggiornato)
-- Supporta milioni di partizioni per cluster</p>
+- I controller usano il <strong>protocollo Raft</strong> (simile a etcd/Consul) per consenso distribuito: un leader scrive su un log replicato e una modifica è valida quando la maggioranza (quorum) dei controller l'ha persistita
+- Il <strong>metadata log</strong> è un log interno a partizione singola (topic <code>__cluster_metadata</code>) replicato tra i controller; ogni modifica ai metadati (topic, partizioni, ACL, config) è un record in questo log
+- Il failover del controller è rapido (tipicamente sotto il secondo): i follower hanno già lo stato in memoria, non serve ricaricarlo
+- Scala a un numero di partizioni molto maggiore (ordine dei milioni per cluster)
+- Con quorum di N controller si tollerano <code>(N-1)/2</code> guasti: 3 controller → 1 guasto, 5 → 2. Usare sempre un numero <strong>dispari</strong> (un quorum pari non aumenta la tolleranza)</p>
 <p><strong>Ruoli in KRaft:</strong></p>
 <table>
 <thead>
@@ -24984,8 +24985,8 @@
 <pre class="mermaid"><code>flowchart TB
     subgraph ZK["Architettura ZooKeeper (Legacy)"]
         direction LR
-        ZK1["ZooKeeper\nEnsemble"]
-        KB1["Kafka Broker 1\n(Controller)"]
+        ZK1["ZooKeeper&lt;br/&gt;Ensemble"]
+        KB1["Kafka Broker 1&lt;br/&gt;(Controller)"]
         KB2[Kafka Broker 2]
         KB3[Kafka Broker 3]
         ZK1 &lt;--&gt; KB1
@@ -24995,23 +24996,23 @@
 
     subgraph KR["Architettura KRaft (Moderna)"]
         direction LR
-        KC1["Kafka Controller 1\n(Active)"]
+        KC1["Kafka Controller 1&lt;br/&gt;(Active)"]
         KC2[Kafka Controller 2]
         KC3[Kafka Controller 3]
         KB4[Kafka Broker 1]
         KB5[Kafka Broker 2]
         KC1 &lt;--&gt;|Raft| KC2
         KC1 &lt;--&gt;|Raft| KC3
-        KC1 --&gt; KB4
-        KC1 --&gt; KB5
+        KB4 --&gt;|heartbeat + fetch metadata| KC1
+        KB5 --&gt;|heartbeat + fetch metadata| KC1
     end</code></pre>
 <h3 id="flusso-kraft">Flusso KRaft<a class="headerlink" href="#flusso-kraft" title="Permanent link">&para;</a></h3>
 <ol>
 <li>Il <strong>quorum di controller</strong> elegge un <strong>active controller</strong> tramite Raft</li>
 <li>L'active controller gestisce tutte le decisioni sui metadati (elezione leader partizioni, creazione topic, ecc.)</li>
-<li>I broker si registrano con l'active controller tramite heartbeat</li>
-<li>Lo stato dei metadati viene replicato nei controller follower via metadata log</li>
-<li>Se l'active controller muore → elezione Raft in pochi millisecondi → il nuovo active ha già lo stato completo</li>
+<li>I broker si registrano con l'active controller e gli inviano heartbeat periodici (se mancano, il broker è considerato morto e le sue leadership vengono riassegnate)</li>
+<li>Lo stato dei metadati viene replicato nei controller follower via metadata log; i broker <strong>leggono</strong> (fetch) il metadata log dai controller e tengono una copia locale, invece di ricevere push come con ZooKeeper</li>
+<li>Se l'active controller muore → nuova elezione Raft → il nuovo active ha già lo stato completo, senza ricaricarlo</li>
 </ol>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="avviare-un-cluster-kraft-single-node-development">Avviare un cluster KRaft (single-node, development)<a class="headerlink" href="#avviare-un-cluster-kraft-single-node-development" title="Permanent link">&para;</a></h3>
@@ -25063,26 +25064,29 @@
 </span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="na">log.dirs</span><span class="o">=</span><span class="s">/data/kafka-logs</span>
 </span></code></pre></div>
 <h3 id="docker-compose-kraft-single-node">Docker Compose KRaft (single-node)<a class="headerlink" href="#docker-compose-kraft-single-node" title="Permanent link">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">'3.8'</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">services</span><span class="p">:</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">kafka</span><span class="p">:</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apache/kafka:3.9.0</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">hostname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">broker</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">container_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-kraft</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">'9092:9092'</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">      </span><span class="nt">KAFKA_NODE_ID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">      </span><span class="nt">KAFKA_PROCESS_ROLES</span><span class="p">:</span><span class="w"> </span><span class="s">'broker,controller'</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">      </span><span class="nt">KAFKA_CONTROLLER_QUORUM_VOTERS</span><span class="p">:</span><span class="w"> </span><span class="s">'1@broker:29093'</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">      </span><span class="nt">KAFKA_LISTENERS</span><span class="p">:</span><span class="w"> </span><span class="s">'PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092'</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">      </span><span class="nt">KAFKA_ADVERTISED_LISTENERS</span><span class="p">:</span><span class="w"> </span><span class="s">'PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092'</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">      </span><span class="nt">KAFKA_LISTENER_SECURITY_PROTOCOL_MAP</span><span class="p">:</span><span class="w"> </span><span class="s">'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">      </span><span class="nt">KAFKA_CONTROLLER_LISTENER_NAMES</span><span class="p">:</span><span class="w"> </span><span class="s">'CONTROLLER'</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">      </span><span class="nt">KAFKA_INTER_BROKER_LISTENER_NAME</span><span class="p">:</span><span class="w"> </span><span class="s">'PLAINTEXT'</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">      </span><span class="nt">KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">      </span><span class="nt">CLUSTER_ID</span><span class="p">:</span><span class="w"> </span><span class="s">'MkU3OEVBNTcwNTJENDM2Qk'</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">services</span><span class="p">:</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">kafka</span><span class="p">:</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apache/kafka:4.0.0</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">hostname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">broker</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">container_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka-kraft</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">'9092:9092'</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">      </span><span class="nt">KAFKA_NODE_ID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">      </span><span class="nt">KAFKA_PROCESS_ROLES</span><span class="p">:</span><span class="w"> </span><span class="s">'broker,controller'</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">      </span><span class="nt">KAFKA_CONTROLLER_QUORUM_VOTERS</span><span class="p">:</span><span class="w"> </span><span class="s">'1@broker:29093'</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">      </span><span class="nt">KAFKA_LISTENERS</span><span class="p">:</span><span class="w"> </span><span class="s">'PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092'</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">      </span><span class="nt">KAFKA_ADVERTISED_LISTENERS</span><span class="p">:</span><span class="w"> </span><span class="s">'PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092'</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">      </span><span class="nt">KAFKA_LISTENER_SECURITY_PROTOCOL_MAP</span><span class="p">:</span><span class="w"> </span><span class="s">'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">      </span><span class="nt">KAFKA_CONTROLLER_LISTENER_NAMES</span><span class="p">:</span><span class="w"> </span><span class="s">'CONTROLLER'</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">      </span><span class="nt">KAFKA_INTER_BROKER_LISTENER_NAME</span><span class="p">:</span><span class="w"> </span><span class="s">'PLAINTEXT'</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">      </span><span class="nt">KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">      </span><span class="nt">CLUSTER_ID</span><span class="p">:</span><span class="w"> </span><span class="s">'MkU3OEVBNTcwNTJENDM2Qk'</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Quorum statico vs dinamico</p>
+<p><code>controller.quorum.voters</code> definisce un quorum <strong>statico</strong>: aggiungere o sostituire un controller richiede di riconfigurare e riavviare tutti i nodi. Dalla 3.9 (KIP-853) esiste il quorum <strong>dinamico</strong>: si usa <code>controller.quorum.bootstrap.servers</code> al posto di <code>voters</code> e si gestiscono i membri con <code>kafka-metadata-quorum.sh add-controller</code> / <code>remove-controller</code>. Un cluster nato con quorum statico non si converte automaticamente: verificare la documentazione della versione in uso.</p>
+</div>
 <h3 id="verificare-lo-stato-del-quorum-kraft">Verificare lo stato del quorum KRaft<a class="headerlink" href="#verificare-lo-stato-del-quorum-kraft" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Stato del quorum controller</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kafka-metadata-quorum.sh<span class="w"> </span><span class="se">\</span>
@@ -25099,7 +25103,7 @@
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
 <p class="admonition-title">Usare sempre KRaft per nuove installazioni</p>
-<p>ZooKeeper è deprecato a partire da Kafka 3.5 e sarà rimosso in una versione futura. Non iniziare nuovi progetti con ZooKeeper.</p>
+<p>ZooKeeper è deprecato dalla 3.5 e rimosso dalla 4.0. Non esiste più alcuna alternativa a KRaft nelle versioni correnti.</p>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Separare controller e broker in produzione</p>
@@ -25120,19 +25124,27 @@
 <tbody>
 <tr>
 <td>2.8 - 3.2</td>
-<td>KRaft in Early Access</td>
+<td>KRaft in Early Access / preview</td>
 </tr>
 <tr>
-<td>3.3+</td>
-<td>KRaft production-ready, ZooKeeper deprecato</td>
+<td>3.3</td>
+<td>KRaft production-ready per nuovi cluster</td>
 </tr>
 <tr>
-<td>3.5+</td>
-<td>Deprecation warnings attivi</td>
+<td>3.4</td>
+<td>Migrazione ZooKeeper → KRaft disponibile (early access, poi stabile)</td>
 </tr>
 <tr>
-<td>4.0 (roadmap)</td>
-<td>Rimozione ZooKeeper</td>
+<td>3.5</td>
+<td>ZooKeeper ufficialmente deprecato</td>
+</tr>
+<tr>
+<td>3.9</td>
+<td>Ultima versione con ZooKeeper: <strong>ponte obbligato</strong> per migrare</td>
+</tr>
+<tr>
+<td>4.0+</td>
+<td>ZooKeeper rimosso, solo KRaft</td>
 </tr>
 </tbody>
 </table>
@@ -25140,14 +25152,14 @@
 <h3 id="scenario-1-kafka-storagesh-format-fallisce-con-already-formatted">Scenario 1 — <code>kafka-storage.sh format</code> fallisce con "already formatted"<a class="headerlink" href="#scenario-1-kafka-storagesh-format-fallisce-con-already-formatted" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il comando di format restituisce <code>Log directory ... is already formatted</code>.</p>
 <p><strong>Causa:</strong> La directory <code>log.dirs</code> contiene già un metadata log da una precedente inizializzazione (anche fallita o di un cluster diverso).</p>
-<p><strong>Soluzione:</strong> Pulire la directory e riformattare, oppure usare <code>--ignore-formatted</code> se si vuole riutilizzare uno stato esistente.</p>
+<p><strong>Soluzione:</strong> Se la directory è di test, pulirla e riformattare. Se invece contiene dati da conservare <strong>non cancellarla</strong>: <code>--ignore-formatted</code> fa saltare il format per le directory già formattate (utile negli script idempotenti) senza toccarne il contenuto. Se il <code>cluster.id</code> della directory differisce da quello passato, il nodo non partirà: usare l'ID originale.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Opzione 1: pulire e riformattare</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>rm<span class="w"> </span>-rf<span class="w"> </span>/tmp/kraft-logs/*
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>kafka-storage.sh<span class="w"> </span>format<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--config<span class="w"> </span>/opt/kafka/config/kraft/server.properties<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--cluster-id<span class="w"> </span><span class="s2">"</span><span class="nv">$KAFKA_CLUSTER_ID</span><span class="s2">"</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># Opzione 2: forzare ignorando lo stato esistente</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># Opzione 2: non formattare se già formattato (non cancella nulla)</span>
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>kafka-storage.sh<span class="w"> </span>format<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">  </span>--config<span class="w"> </span>/opt/kafka/config/kraft/server.properties<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span>--cluster-id<span class="w"> </span><span class="s2">"</span><span class="nv">$KAFKA_CLUSTER_ID</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
@@ -25157,10 +25169,10 @@
 <h3 id="scenario-2-controller-leader-non-eletto-cluster-non-parte">Scenario 2 — Controller leader non eletto, cluster non parte<a class="headerlink" href="#scenario-2-controller-leader-non-eletto-cluster-non-parte" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> I broker non partono e nei log compare <code>TimeoutException: Timed out waiting for a node assignment</code> o <code>No brokers found in metadata</code>.</p>
 <p><strong>Causa:</strong> Il quorum Raft non riesce a eleggere un active controller. Cause tipiche: <code>controller.quorum.voters</code> configurato in modo inconsistente tra i nodi, porta 9093 non raggiungibile, o cluster ID diverso tra i controller.</p>
-<p><strong>Soluzione:</strong> Verificare configurazione e connettività del quorum.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Verificare che il quorum sia raggiungibile</span>
+<p><strong>Soluzione:</strong> Verificare configurazione e connettività del quorum. Se nessun broker è attivo, <code>--bootstrap-server</code> non funziona: interrogare direttamente un controller con <code>--bootstrap-controller</code> (dalla 3.7, KIP-919).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Verificare lo stato del quorum interrogando un controller</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kafka-metadata-quorum.sh<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--bootstrap-controller<span class="w"> </span>ctrl1:9093<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>describe<span class="w"> </span>--status
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Controllare i log del controller per errori Raft</span>
@@ -25190,23 +25202,32 @@
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-migrazione-da-zookeeper-a-kraft-fallisce-o-si-blocca">Scenario 4 — Migrazione da ZooKeeper a KRaft fallisce o si blocca<a class="headerlink" href="#scenario-4-migrazione-da-zookeeper-a-kraft-fallisce-o-si-blocca" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> Il processo di migrazione si blocca in fase <code>MIGRATION</code> o il cluster diventa irraggiungibile dopo il roll del first controller.</p>
-<p><strong>Causa:</strong> La migrazione ZK→KRaft è un processo in più fasi; un cluster ID mismatch, un broker non aggiornato alla versione compatibile, o un metadata snapshot incompleto possono bloccarla.</p>
-<p><strong>Soluzione:</strong> Verificare lo stato della migrazione e i prerequisiti.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Controllare la versione Kafka (richiede &gt;= 3.4 per migrazione stabile)</span>
+<p><strong>Sintomo:</strong> Il processo di migrazione resta fermo prima di completare la copia dei metadati (stato <code>MIGRATION</code> non raggiunto) o i broker non si registrano ai nuovi controller.</p>
+<p><strong>Causa:</strong> La migrazione ZK→KRaft è un processo in più fasi (si avviano i controller KRaft con la migrazione abilitata, si riavviano i broker in modalità migrazione, si copiano i metadati, poi si passano i broker a KRaft puro). Cause tipiche: cluster ID dei controller diverso da quello del cluster ZooKeeper, broker non alla stessa versione/<code>inter.broker.protocol.version</code> richiesta, configurazione ZooKeeper mancante sui controller.</p>
+<p><strong>Soluzione:</strong> Migrare <strong>sempre su 3.9</strong> (o almeno ≥ 3.4) <em>prima</em> di aggiornare a 4.x, e verificare lo stato.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Versione delle API supportate dai broker</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>kafka-broker-api-versions.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-5
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Verificare lo stato della migrazione tramite ZooKeeper</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>zookeeper-shell.sh<span class="w"> </span>localhost:2181<span class="w"> </span>get<span class="w"> </span>/controller_epoch
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Monitorare il metadata log durante la migrazione</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>kafka-metadata-quorum.sh<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">  </span>describe<span class="w"> </span>--replication
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># In caso di blocco: non riavviare i broker manualmente —</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1"># consultare la KRaft Migration Guide ufficiale prima di intervenire</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Stato della migrazione: metrica JMX sul controller attivo</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1">#   kafka.controller:type=KafkaController,name=ZkMigrationState</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1">#   valori: 2=PRE_MIGRATION, 1=MIGRATION, 3=POST_MIGRATION</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Stato del quorum e lag dei controller</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>kafka-metadata-quorum.sh<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">  </span>describe<span class="w"> </span>--replication
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1"># In caso di blocco: non riavviare i broker a caso —</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># seguire la KRaft Migration Guide ufficiale (ogni fase è reversibile fino alla finalizzazione)</span>
 </span></code></pre></div>
+<div class="admonition danger">
+<p class="admonition-title">Punto di non ritorno</p>
+<p>Finché i controller sono in migration mode (<code>zookeeper.metadata.migration.enable=true</code>) si può tornare a ZooKeeper. Il rollback diventa impossibile con la <strong>finalizzazione</strong>: rimozione di <code>zookeeper.metadata.migration.enable</code> dai controller KRaft (riavvio uno alla volta) dopo che tutti i broker sono in KRaft. Prima di finalizzare conviene attendere qualche giorno per validare il cluster.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Nessun upgrade diretto 3.x ZooKeeper → 4.x</p>
+<p>Kafka 4.0 non contiene più il codice ZooKeeper e non sa migrare. Un cluster ZooKeeper va portato a 3.9, migrato a KRaft, e solo dopo aggiornato a 4.x.</p>
+</div>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://kafka.apache.org/documentation/#kraft">KRaft Documentation</a></li>

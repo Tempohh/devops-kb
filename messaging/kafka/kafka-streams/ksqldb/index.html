@@ -16992,7 +16992,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17669,7 +17669,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17713,7 +17713,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -17738,7 +17738,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -17994,10 +17994,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#errore-table-must-have-a-primary-key" class="md-nav__link">
+  <a href="#errore-create-table-senza-primary-key" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Errore: Table must have a primary key
+        Errore: CREATE TABLE senza PRIMARY KEY
       
     </span>
   </a>
@@ -18020,6 +18020,17 @@
     <span class="md-ellipsis">
       
         Errore di Join: Input topics non allineati
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pull-query-su-streamtable-non-supportata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pull query su stream/table non supportata
       
     </span>
   </a>
@@ -18217,7 +18228,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18252,7 +18263,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18287,7 +18298,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24810,10 +24821,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#errore-table-must-have-a-primary-key" class="md-nav__link">
+  <a href="#errore-create-table-senza-primary-key" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Errore: Table must have a primary key
+        Errore: CREATE TABLE senza PRIMARY KEY
       
     </span>
   </a>
@@ -24836,6 +24847,17 @@
     <span class="md-ellipsis">
       
         Errore di Join: Input topics non allineati
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pull-query-su-streamtable-non-supportata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pull query su stream/table non supportata
       
     </span>
   </a>
@@ -25063,8 +25085,12 @@
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">customerId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'cust-789'</span><span class="p">;</span>
 </span></code></pre></div>
 <div class="admonition warning">
-<p class="admonition-title">Pull query richiedono Materialized View</p>
-<p>Le pull query funzionano solo su TABLE o MATERIALIZED VIEW, non su STREAM. Tentare una pull query su uno stream restituisce un errore.</p>
+<p class="admonition-title">Pull query: il caso d'uso tipico è la Materialized View</p>
+<p>Il caso d'uso classico delle pull query è la lettura puntuale per chiave su una TABLE / MATERIALIZED VIEW (lookup su state store). Le versioni più vecchie rifiutavano le pull query su STREAM; le versioni recenti le supportano su stream, su tabelle create con <code>CREATE TABLE AS SELECT</code> (anche con join e windowed) ma <strong>non</strong> su tabelle create con <code>CREATE TABLE</code> semplice. I table scan (query su colonne non-chiave, senza uguaglianza sulla chiave) sono <strong>disabilitati di default</strong>: si abilitano con <code>ksql.query.pull.table.scan.enabled=true</code> (server property o sessione CLI) e il costo è una scansione completa.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Stato del progetto (2026)</p>
+<p>ksqlDB è sotto Confluent Community License (non open source OSI) e lo sviluppo è rallentato: per nuovi progetti Confluent spinge verso Flink SQL (Confluent Cloud for Apache Flink). Valutare questa traiettoria prima di adottarlo per workload nuovi. Nel dicembre 2025 IBM ha annunciato l'acquisizione di Confluent (~11 miliardi di USD, all-cash); Confluent resta un brand distinto, ma non risulta una roadmap pubblica che rilanci ksqlDB.</p>
 </div>
 <h2 id="come-funziona-architettura">Come Funziona / Architettura<a class="headerlink" href="#come-funziona-architettura" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart LR
@@ -25102,48 +25128,55 @@
 5. Espone un endpoint REST per push e pull queries</p>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="docker-compose-per-avviare-ksqldb">Docker Compose per avviare ksqlDB<a class="headerlink" href="#docker-compose-per-avviare-ksqldb" title="Permanent link">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">'3.8'</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">services</span><span class="p">:</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">zookeeper</span><span class="p">:</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">confluentinc/cp-zookeeper:7.6.0</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">      </span><span class="nt">ZOOKEEPER_CLIENT_PORT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2181</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">kafka</span><span class="p">:</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">confluentinc/cp-kafka:7.6.0</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">zookeeper</span><span class="p p-Indicator">]</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">      </span><span class="nt">KAFKA_ZOOKEEPER_CONNECT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">zookeeper:2181</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">      </span><span class="nt">KAFKA_ADVERTISED_LISTENERS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PLAINTEXT://kafka:9092</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">      </span><span class="nt">KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"9092:9092"</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span><span class="nt">schema-registry</span><span class="p">:</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">confluentinc/cp-schema-registry:7.6.0</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">kafka</span><span class="p p-Indicator">]</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">      </span><span class="nt">SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka:9092</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">      </span><span class="nt">SCHEMA_REGISTRY_HOST_NAME</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">schema-registry</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"8081:8081"</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a>
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">  </span><span class="nt">ksqldb-server</span><span class="p">:</span>
-</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">confluentinc/cp-ksqldb-server:7.6.0</span>
-</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">kafka</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">schema-registry</span><span class="p p-Indicator">]</span>
-</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
-</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"8088:8088"</span>
-</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="w">      </span><span class="nt">KSQL_BOOTSTRAP_SERVERS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka:9092</span>
-</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">      </span><span class="nt">KSQL_KSQL_SCHEMA_REGISTRY_URL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://schema-registry:8081</span>
-</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">      </span><span class="nt">KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
-</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">      </span><span class="nt">KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
-</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a>
-</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="w">  </span><span class="nt">ksqldb-cli</span><span class="p">:</span>
-</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">confluentinc/cp-ksqldb-cli:7.6.0</span>
-</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ksqldb-server</span><span class="p p-Indicator">]</span>
-</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="w">    </span><span class="nt">entrypoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/bin/sh</span>
-</span><span id="__span-2-42"><a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a><span class="w">    </span><span class="nt">tty</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="admonition note">
+<p class="admonition-title">ZooKeeper</p>
+<p>L'esempio usa ZooKeeper per semplicità; Kafka 4.0+ funziona solo in modalità KRaft, quindi con broker recenti sostituire <code>zookeeper</code> con un broker KRaft (vedi <a href="../../fondamenti/zookeeper-kraft/">ZooKeeper vs KRaft</a>).</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Versioni immagini</p>
+<p>Le immagini <code>cp-*</code> sono pinnate a 7.9.0, ultima linea Confluent Platform con ZooKeeper. Confluent Platform 8.x (es. 8.2.x) è solo KRaft: con 8.x usare un broker KRaft e il relativo tag.</p>
+</div>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">services</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">zookeeper</span><span class="p">:</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">confluentinc/cp-zookeeper:7.9.0</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">      </span><span class="nt">ZOOKEEPER_CLIENT_PORT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2181</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">kafka</span><span class="p">:</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">confluentinc/cp-kafka:7.9.0</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">zookeeper</span><span class="p p-Indicator">]</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">      </span><span class="nt">KAFKA_ZOOKEEPER_CONNECT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">zookeeper:2181</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">      </span><span class="nt">KAFKA_ADVERTISED_LISTENERS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PLAINTEXT://kafka:9092</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">      </span><span class="nt">KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"9092:9092"</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">  </span><span class="nt">schema-registry</span><span class="p">:</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">confluentinc/cp-schema-registry:7.9.0</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">kafka</span><span class="p p-Indicator">]</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">      </span><span class="nt">SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka:9092</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">      </span><span class="nt">SCHEMA_REGISTRY_HOST_NAME</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">schema-registry</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"8081:8081"</span>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">  </span><span class="nt">ksqldb-server</span><span class="p">:</span>
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">confluentinc/cp-ksqldb-server:7.9.0</span>
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">kafka</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">schema-registry</span><span class="p p-Indicator">]</span>
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"8088:8088"</span>
+</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="w">      </span><span class="nt">KSQL_BOOTSTRAP_SERVERS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka:9092</span>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="w">      </span><span class="nt">KSQL_KSQL_SCHEMA_REGISTRY_URL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://schema-registry:8081</span>
+</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">      </span><span class="nt">KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
+</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">      </span><span class="nt">KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
+</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>
+</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">  </span><span class="nt">ksqldb-cli</span><span class="p">:</span>
+</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">confluentinc/cp-ksqldb-cli:7.9.0</span>
+</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">ksqldb-server</span><span class="p p-Indicator">]</span>
+</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="w">    </span><span class="nt">entrypoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/bin/sh</span>
+</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="w">    </span><span class="nt">tty</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Avviare l'ambiente</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>docker-compose<span class="w"> </span>up<span class="w"> </span>-d
@@ -25264,7 +25297,7 @@
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">customerId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'cust-789'</span><span class="p">;</span>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1">-- Recupera il totale orario per un cliente</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">customerId</span><span class="p">,</span><span class="w"> </span><span class="n">hourlyTotal</span><span class="p">,</span><span class="w"> </span><span class="n">FROM_UNIXTIME</span><span class="p">(</span><span class="n">windowStart</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1000</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">window</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">customerId</span><span class="p">,</span><span class="w"> </span><span class="n">hourlyTotal</span><span class="p">,</span><span class="w"> </span><span class="n">FROM_UNIXTIME</span><span class="p">(</span><span class="n">windowStart</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">window</span>
 </span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="k">FROM</span><span class="w"> </span><span class="n">hourly_order_totals</span>
 </span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">customerId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'cust-789'</span><span class="p">;</span>
 </span></code></pre></div>
@@ -25279,9 +25312,9 @@
 </span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="s1">    }</span>
 </span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="s1">  }'</span>
 </span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="c1"># Push query via REST (streaming response)</span>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8088/query-stream<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/vnd.ksql.v1+json"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="c1"># Push query via REST (streaming response; /query-stream richiede HTTP/2)</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>curl<span class="w"> </span>--http2<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:8088/query-stream<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/vnd.ksqlapi.delimited.v1"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{</span>
 </span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="s1">    "sql": "SELECT * FROM orders_stream EMIT CHANGES;",</span>
 </span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="s1">    "properties": {</span>
@@ -25358,7 +25391,7 @@
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Usa <code>EMIT FINAL</code></strong> invece di <code>EMIT CHANGES</code> per le aggregazioni con windowing: riduce il numero di messaggi di output emettendo solo il risultato finale della finestra.</li>
-<li><strong>Definisci sempre la <code>PRIMARY KEY</code></strong> nelle TABLE: senza di essa, ksqlDB non può fare pull query su quella tabella.</li>
+<li><strong>Dichiara la <code>PRIMARY KEY</code></strong> nelle <code>CREATE TABLE</code> su topic: è obbligatoria e identifica la chiave di upsert/lookup usata dalle pull query. Nelle tabelle derivate da aggregazione la chiave è la colonna di <code>GROUP BY</code>.</li>
 <li><strong>Scala ksqlDB orizzontalmente</strong> avviando più istanze dello stesso server: le query vengono distribuite automaticamente tramite Kafka consumer group.</li>
 <li><strong>Usa User Defined Functions (UDF)</strong> per logiche custom non esprimibili in SQL:</li>
 </ul>
@@ -25381,19 +25414,20 @@
 <h3 id="query-non-produce-output">Query non produce output<a class="headerlink" href="#query-non-produce-output" title="Permanent link">&para;</a></h3>
 <p><strong>Causa:</strong> L'offset reset è impostato su <code>latest</code> (default) e non ci sono nuovi messaggi.
 <strong>Soluzione:</strong> <code>SET 'auto.offset.reset' = 'earliest';</code> prima di eseguire la query.</p>
-<h3 id="errore-table-must-have-a-primary-key">Errore: Table must have a primary key<a class="headerlink" href="#errore-table-must-have-a-primary-key" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>Statement is invalid because it requires a TABLE that has a primary key
-</span></code></pre></div>
-<p><strong>Causa:</strong> Si sta tentando una pull query su uno STREAM o una TABLE senza PRIMARY KEY.
-<strong>Soluzione:</strong> Ridefinire la TABLE con <code>PRIMARY KEY</code> sul campo chiave.</p>
+<h3 id="errore-create-table-senza-primary-key">Errore: CREATE TABLE senza PRIMARY KEY<a class="headerlink" href="#errore-create-table-senza-primary-key" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> <code>CREATE TABLE</code> su un topic senza <code>PRIMARY KEY</code> nello schema viene rifiutata (una TABLE è per definizione stato per chiave).
+<strong>Soluzione:</strong> Dichiarare <code>PRIMARY KEY</code> sul campo chiave del messaggio.</p>
 <h3 id="consumer-lag-crescente">Consumer lag crescente<a class="headerlink" href="#consumer-lag-crescente" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il processing non riesce a stare al passo con il rate di produzione.
 <strong>Soluzione:</strong> Aumentare le istanze ksqlDB o aumentare <code>ksql.streams.num.stream.threads</code> nel server properties.</p>
 <h3 id="errore-di-join-input-topics-non-allineati">Errore di Join: Input topics non allineati<a class="headerlink" href="#errore-di-join-input-topics-non-allineati" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>For stream-table joins, the input records for the table must be co-partitioned with the stream
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>For stream-table joins, the input records for the table must be co-partitioned with the stream
 </span></code></pre></div>
-<p><strong>Causa:</strong> Stream e Table hanno un numero diverso di partizioni.
-<strong>Soluzione:</strong> Assicurarsi che i topic abbiano lo stesso numero di partizioni, oppure usare GlobalKTable (<code>CREATE GLOBAL TABLE</code>).</p>
+<p><strong>Causa:</strong> Stream e Table hanno un numero diverso di partizioni (il join è locale per partizione, quindi serve co-partitioning: stesso numero di partizioni e stessa chiave).
+<strong>Soluzione:</strong> Ricreare uno dei due con <code>CREATE ... AS SELECT ... WITH (PARTITIONS = N)</code> allineando le partizioni. ksqlDB non supporta GlobalKTable (nessun <code>CREATE GLOBAL TABLE</code>). <!-- CURRENCY: testo esatto del messaggio d'errore non verificato (2026-10) — la doc conferma il requisito di co-partitioning (stesso numero di partizioni; unica eccezione i join table-table su foreign key) --></p>
+<h3 id="pull-query-su-streamtable-non-supportata">Pull query su stream/table non supportata<a class="headerlink" href="#pull-query-su-streamtable-non-supportata" title="Permanent link">&para;</a></h3>
+<p><strong>Causa:</strong> Pull query su tabella creata con <code>CREATE TABLE</code> semplice (non supportata), oppure query senza uguaglianza sulla chiave con table scan disabilitato (default).
+<strong>Soluzione:</strong> Creare una materialized view (<code>CREATE TABLE ... AS SELECT ... GROUP BY</code>) e interrogare quella, oppure abilitare <code>ksql.query.pull.table.scan.enabled=true</code> accettando la scansione completa.</p>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://ksqldb.io/">ksqlDB — Documentazione Ufficiale</a></li>
