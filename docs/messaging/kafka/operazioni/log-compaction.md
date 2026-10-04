@@ -7,9 +7,10 @@ search_keywords: [kafka log compaction, kafka compaction policy, kafka cleanup p
 parent: messaging/kafka/operazioni
 related: [messaging/kafka/fondamenti/topics-partizioni, messaging/kafka/kafka-streams/topologie]
 official_docs: https://kafka.apache.org/documentation/#compaction
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Log Compaction
@@ -34,6 +35,11 @@ La **log compaction** è una policy di retention alternativa alla retention basa
 
 **Log Head** — La parte più recente del log (dirty), dove vengono scritti i nuovi record.
 **Log Tail** — La parte già compattata del log (clean), con al massimo un record per chiave.
+
+**Active segment** — Il segmento su cui il broker sta scrivendo. **Non viene mai compattato**: il cleaner lavora solo su segmenti chiusi. Un segmento si chiude (roll) al raggiungimento di `segment.bytes` o `segment.ms`; finché non avviene, i duplicati restano visibili anche se il dirty ratio è alto.
+
+!!! note "Uso interno"
+    `__consumer_offsets` (offset committati dai consumer group) e i changelog di Kafka Streams sono topic compacted: la compaction è un meccanismo centrale di Kafka, non solo una feature opzionale.
 
 ## Architettura / Come Funziona
 
@@ -63,7 +69,7 @@ flowchart TB
 1. Il **Log Cleaner thread** monitora il dirty ratio di tutti i topic compacted
 2. Quando supera `min.cleanable.dirty.ratio`, il cleaner crea un indice delle chiavi con i loro ultimi offset nel dirty segment
 3. Il cleaner riscrive i segmenti rimuovendo i record con offset inferiore all'ultimo per quella chiave
-4. I tombstone vengono mantenuti per `delete.retention.ms` poi eliminati
+4. I tombstone vengono mantenuti per `delete.retention.ms` poi eliminati (il conteggio parte da quando il segmento che li contiene è stato compattato, non dall'invio)
 
 **Garanzie importanti:**
 - L'ordine relativo dei record per una stessa chiave è preservato
@@ -122,7 +128,7 @@ kafka-configs.sh \
 # Frequenza di esecuzione del cleaner thread
 log.cleaner.enable=true
 log.cleaner.threads=1                    # aumentare se compaction lenta
-log.cleaner.io.max.bytes.per.second=1048576  # rate limiting I/O
+log.cleaner.io.max.bytes.per.second=1048576  # rate limiting I/O (default: illimitato)
 
 # Per topic
 min.cleanable.dirty.ratio=0.5           # inizia compaction quando 50% dirty
@@ -147,14 +153,14 @@ producer.send(tombstone);
 ```
 
 ```bash
-# Da CLI (valore vuoto = tombstone)
-echo "user:123:" | kafka-console-producer.sh \
+# Da CLI: un valore vuoto NON è un tombstone (è una stringa vuota).
+# Serve null.marker (Kafka >= 3.2, KIP-810): il valore "~" viene inviato come null
+echo "user:123:~" | kafka-console-producer.sh \
   --bootstrap-server localhost:9092 \
   --topic user-preferences \
   --property "parse.key=true" \
   --property "key.separator=:" \
   --property "null.marker=~"
-# Note: null marker approach varies by Kafka version
 ```
 
 ### Topic changelog di Kafka Streams
@@ -165,12 +171,14 @@ Kafka Streams crea automaticamente topic changelog per i state store con compact
 // I topic changelog hanno naming: application-id-store-name-changelog
 // Es: my-app-orders-store-changelog
 // Creati con cleanup.policy=compact di default
+// (i changelog di window store usano compact,delete con retention.ms
+//  legata alla durata della finestra)
 ```
 
 ## Best Practices
 
 !!! tip "Usare sempre le chiavi con i topic compacted"
-    La compaction è basata sulle chiavi. Record senza chiave (key=null) non vengono mai compattati e si accumulano.
+    La compaction è basata sulle chiavi. Un topic con `cleanup.policy=compact` **rifiuta** i record con key=null (il broker risponde con `InvalidRecordException: Compacted topic cannot accept message without key`). Con `compact,delete` il rifiuto vale ugualmente.
 
 !!! warning "Tombstone non elimina immediatamente"
     Dopo aver inviato un tombstone, il record con valore null rimane nel log per `delete.retention.ms`. Consumer che leggono durante questo periodo vedranno il tombstone. Progettare i consumer per gestire i valori null.
@@ -194,7 +202,8 @@ Kafka Streams crea automaticamente topic changelog per i state store con compact
 ```bash
 # Verificare configurazione del broker (cleaner abilitato)
 kafka-configs.sh --bootstrap-server localhost:9092 \
-  --entity-type brokers --entity-name 1 --describe | grep cleaner
+  --entity-type brokers --entity-name 1 --describe --all | grep cleaner
+# senza --all vengono mostrate solo le override dinamiche, non server.properties
 
 # Verificare che il topic abbia cleanup.policy=compact
 kafka-configs.sh --bootstrap-server localhost:9092 \
@@ -205,9 +214,14 @@ kafka-configs.sh --bootstrap-server localhost:9092 \
   --entity-type topics --entity-name my-topic \
   --alter --add-config min.cleanable.dirty.ratio=0.1
 
+# Il cleaner thread può morire per un'eccezione (es. segmento corrotto):
+# cercare "Error due to" / "Stopped" nel log e la metrica
+# kafka.log:type=LogCleanerManager,name=time-since-last-run-ms
+grep -E "kafka.log.LogCleaner|log-cleaner" /var/log/kafka/server.log | tail
+
 # Abilitare log DEBUG per monitorare il cleaner
-# In log4j.properties del broker:
-# log4j.logger.kafka.log.LogCleaner=DEBUG
+# log4j.properties (Kafka 3.x):  log4j.logger.kafka.log.LogCleaner=DEBUG
+# log4j2 (Kafka 4.x): logger name="kafka.log.LogCleaner" level="DEBUG"
 ```
 
 ---
@@ -216,18 +230,15 @@ kafka-configs.sh --bootstrap-server localhost:9092 \
 
 **Sintomo:** Il log compacted aumenta di dimensione senza che i vecchi record vengano rimossi.
 
-**Causa:** Record scritti senza chiave (key=null) non vengono mai compattati. Oppure il dirty ratio è troppo alto e il cleaner non si attiva abbastanza spesso.
+**Causa:** Cause tipiche: (1) il segmento attivo non è compattabile e `segment.bytes` (default 1 GiB) / `segment.ms` (default 7 giorni) sono troppo grandi, quindi i segmenti non si chiudono mai; (2) `min.compaction.lag.ms` impedisce di compattare record recenti; (3) il dirty ratio è troppo alto; (4) il cleaner thread è morto; (5) la policy è `compact,delete` e la dimensione è dominata da record con chiavi tutte distinte (nessun duplicato da rimuovere). Record senza chiave non sono la causa: il broker li rifiuta sui topic compacted (possono esistere solo se la policy è stata aggiunta a un topic già popolato).
 
-**Soluzione:** Verificare che tutti i producer inviino record con chiave. Ridurre `min.cleanable.dirty.ratio`.
+**Soluzione:** Ridurre `segment.ms`/`segment.bytes` e `min.cleanable.dirty.ratio`; verificare `min.compaction.lag.ms`; controllare che il cleaner sia vivo (Scenario 1). Usare `max.compaction.lag.ms` per forzare la compaction entro un tempo massimo.
 
 ```bash
-# Controllare se ci sono record senza chiave nel topic
-kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 \
-  --topic my-topic \
-  --from-beginning \
-  --property print.key=true \
-  --max-messages 100 | grep -c "^null"
+# Chiudere più spesso i segmenti (es. 1 ora) così diventano compattabili
+kafka-configs.sh --bootstrap-server localhost:9092 \
+  --entity-type topics --entity-name my-topic \
+  --alter --add-config segment.ms=3600000
 
 # Verificare dimensione segmenti dirty vs clean (tramite JMX)
 # Metric: kafka.log:type=LogCleanerManager,name=max-dirty-percent
@@ -278,10 +289,11 @@ kafka-console-consumer.sh \
 # Metric: kafka.log:type=LogCleaner,name=cleaner-recopy-percent
 # Metric: kafka.log:type=LogCleanerManager,name=max-dirty-percent
 
-# Aggiornare configurazione broker (richiede riavvio o dynamic config se supportato)
-# In server.properties:
-# log.cleaner.threads=2
-# log.cleaner.io.max.bytes.per.second=52428800   # 50 MB/s
+# Entrambi i parametri sono dynamic broker config (nessun riavvio):
+kafka-configs.sh --bootstrap-server localhost:9092 \
+  --entity-type brokers --entity-default --alter \
+  --add-config log.cleaner.threads=2,log.cleaner.io.max.bytes.per.second=52428800  # 50 MB/s
+# In alternativa in server.properties (richiede riavvio)
 
 # Verificare throughput del cleaner nel log del broker
 grep "LogCleaner" /var/log/kafka/server.log | tail -50
