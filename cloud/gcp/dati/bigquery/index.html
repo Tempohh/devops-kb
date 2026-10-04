@@ -8674,7 +8674,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -9173,7 +9173,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -9320,7 +9320,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -9345,7 +9345,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24978,8 +24978,8 @@
 <p>BigQuery ha due modelli di pricing incompatibili tra loro a livello di progetto:</p>
 <h4 id="on-demand-default">On-Demand (default)<a class="headerlink" href="#on-demand-default" title="Permanent link">&para;</a></h4>
 <p>Si paga per TB di dati <strong>scansionati</strong> dalla query:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Costo = TB scansionati × $6.25/TB  (marzo 2026, regione US)
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>        (Europe: ~$6.25–7.50/TB a seconda della regione)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Costo = TB scansionati × ~$6.25/TB  (regione US; le regioni EU costano di più)
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>        (verificare il prezzo corrente sulla pagina pricing)
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>Primo 1 TB/mese: gratuito
 </span></code></pre></div>
@@ -24992,12 +24992,16 @@
 <div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Slot = unità di capacità computazionale BigQuery
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>       1 slot ≈ 1 vCPU BigQuery (molto semplificando)
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>Edizioni disponibili (2024):
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  Standard:  100 slot min, $0.04/slot/hour  → pay-as-you-go
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>  Enterprise: 100 slot min, sconto su impegno 1 anno
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  Enterprise Plus: 100 slot min, sconto su impegno 3 anni
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>  Flex Slots: 100 slot min, impegno 60 secondi  → burst temporaneo
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>Edizioni (capacity pricing, autoscaling a incrementi di 50 slot):
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  Standard:        pay-as-you-go (~$0.04/slot/hour), nessun commitment
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>  Enterprise:      pay-as-you-go (~$0.06/slot/hour) o commitment 1/3 anni scontato
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  Enterprise Plus: pay-as-you-go (~$0.10/slot/hour) o commitment 1/3 anni scontato
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>  (prezzi indicativi, regione US: verificare sulla pagina pricing)
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Flex Slots non esistono più</p>
+<p>I Flex Slots (commitment da 60 secondi) sono stati sostituiti dalle <strong>edizioni</strong> con autoscaling: si definisce una <em>reservation</em> con baseline + max slot e si paga solo la capacità effettivamente scalata. Le edizioni Enterprise/Plus aggiungono feature (es. CMEK, column-level security avanzata, BigQuery ML esteso); Standard è la più limitata.</p>
+</div>
 <p><strong>Quando preferire Slot-Based:</strong>
 - Query frequenti e prevedibili su grandi dataset (costo fisso, non per byte)
 - Ambienti con molti utenti condivisi (budget controllato)
@@ -25065,7 +25069,7 @@
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Clustering vs Indici</p>
-<p>BigQuery non ha indici tradizionali — il clustering è il meccanismo equivalente. Le colonne cluster più efficaci sono quelle usate frequentemente in <code>WHERE</code>, <code>JOIN</code>, e <code>GROUP BY</code>. Mettere le colonne a bassa cardinalità prima (es. <code>paese</code> prima di <code>user_id</code>).</p>
+<p>BigQuery non ha indici tradizionali — il clustering è il meccanismo equivalente. Le colonne cluster più efficaci sono quelle usate frequentemente in <code>WHERE</code>, <code>JOIN</code>, e <code>GROUP BY</code>. L'<strong>ordine conta</strong>: i dati sono ordinati per la prima colonna, poi per la seconda, ecc.; il pruning è efficace se i filtri coprono un prefisso dell'elenco (es. <code>paese</code> da solo o <code>paese + user_id</code>, ma non <code>user_id</code> da solo). Mettere per prima la colonna filtrata più spesso.</p>
 </div>
 <hr />
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
@@ -25128,57 +25132,61 @@
 </span></code></pre></div>
 <h3 id="caricamento-dati-batch-vs-streaming">Caricamento Dati: Batch vs Streaming<a class="headerlink" href="#caricamento-dati-batch-vs-streaming" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># ── STREAMING INSERT (Python SDK) ──────────────────────────</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Per dati in tempo reale con latenza secondi (non minuti)</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Costo: $0.01/200MB inseriti (aggiuntivo rispetto allo storage)</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">google.cloud</span><span class="w"> </span><span class="kn">import</span> <span class="n">bigquery</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="n">client</span> <span class="o">=</span> <span class="n">bigquery</span><span class="o">.</span><span class="n">Client</span><span class="p">()</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="n">table_id</span> <span class="o">=</span> <span class="s2">"progetto.analytics_prod.eventi_rt"</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="n">rows_to_insert</span> <span class="o">=</span> <span class="p">[</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="p">{</span><span class="s2">"ts"</span><span class="p">:</span> <span class="s2">"2026-03-26T10:00:00Z"</span><span class="p">,</span> <span class="s2">"user_id"</span><span class="p">:</span> <span class="mi">42</span><span class="p">,</span> <span class="s2">"event_type"</span><span class="p">:</span> <span class="s2">"login"</span><span class="p">},</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="p">{</span><span class="s2">"ts"</span><span class="p">:</span> <span class="s2">"2026-03-26T10:00:01Z"</span><span class="p">,</span> <span class="s2">"user_id"</span><span class="p">:</span> <span class="mi">43</span><span class="p">,</span> <span class="s2">"event_type"</span><span class="p">:</span> <span class="s2">"page_view"</span><span class="p">},</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="p">]</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">insert_rows_json</span><span class="p">(</span><span class="n">table_id</span><span class="p">,</span> <span class="n">rows_to_insert</span><span class="p">)</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>    <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Errori inserimento: </span><span class="si">{</span><span class="n">errors</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="c1"># ── BATCH LOAD (consigliato per volumi alti) ────────────────</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="c1"># Gratuito — non c'è costo per caricare dati via job batch</span>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="n">job_config</span> <span class="o">=</span> <span class="n">bigquery</span><span class="o">.</span><span class="n">LoadJobConfig</span><span class="p">(</span>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>    <span class="n">source_format</span><span class="o">=</span><span class="n">bigquery</span><span class="o">.</span><span class="n">SourceFormat</span><span class="o">.</span><span class="n">PARQUET</span><span class="p">,</span>
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>    <span class="n">write_disposition</span><span class="o">=</span><span class="n">bigquery</span><span class="o">.</span><span class="n">WriteDisposition</span><span class="o">.</span><span class="n">WRITE_APPEND</span><span class="p">,</span>
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="p">)</span>
-</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>
-</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">"local-file.parquet"</span><span class="p">,</span> <span class="s2">"rb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
-</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>    <span class="n">job</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">load_table_from_file</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">table_id</span><span class="p">,</span> <span class="n">job_config</span><span class="o">=</span><span class="n">job_config</span><span class="p">)</span>
-</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>
-</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a><span class="n">job</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>  <span class="c1"># attende completamento</span>
-</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Caricati </span><span class="si">{</span><span class="n">job</span><span class="o">.</span><span class="n">output_rows</span><span class="si">}</span><span class="s2"> righe"</span><span class="p">)</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># API legacy (tabledata.insertAll) per dati in tempo reale con latenza secondi.</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Costo: ~$0.01/200MB inseriti; la Storage Write API costa meno ed è preferibile</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># per nuovi sviluppi (vedi warning sotto).</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">google.cloud</span><span class="w"> </span><span class="kn">import</span> <span class="n">bigquery</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="n">client</span> <span class="o">=</span> <span class="n">bigquery</span><span class="o">.</span><span class="n">Client</span><span class="p">()</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="n">table_id</span> <span class="o">=</span> <span class="s2">"progetto.analytics_prod.eventi_rt"</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="n">rows_to_insert</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="p">{</span><span class="s2">"ts"</span><span class="p">:</span> <span class="s2">"2026-03-26T10:00:00Z"</span><span class="p">,</span> <span class="s2">"user_id"</span><span class="p">:</span> <span class="mi">42</span><span class="p">,</span> <span class="s2">"event_type"</span><span class="p">:</span> <span class="s2">"login"</span><span class="p">},</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="p">{</span><span class="s2">"ts"</span><span class="p">:</span> <span class="s2">"2026-03-26T10:00:01Z"</span><span class="p">,</span> <span class="s2">"user_id"</span><span class="p">:</span> <span class="mi">43</span><span class="p">,</span> <span class="s2">"event_type"</span><span class="p">:</span> <span class="s2">"page_view"</span><span class="p">},</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="p">]</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="n">errors</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">insert_rows_json</span><span class="p">(</span><span class="n">table_id</span><span class="p">,</span> <span class="n">rows_to_insert</span><span class="p">)</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>    <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Errori inserimento: </span><span class="si">{</span><span class="n">errors</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="c1"># ── BATCH LOAD (consigliato per volumi alti) ────────────────</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="c1"># Gratuito — non c'è costo per caricare dati via job batch</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="n">job_config</span> <span class="o">=</span> <span class="n">bigquery</span><span class="o">.</span><span class="n">LoadJobConfig</span><span class="p">(</span>
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>    <span class="n">source_format</span><span class="o">=</span><span class="n">bigquery</span><span class="o">.</span><span class="n">SourceFormat</span><span class="o">.</span><span class="n">PARQUET</span><span class="p">,</span>
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>    <span class="n">write_disposition</span><span class="o">=</span><span class="n">bigquery</span><span class="o">.</span><span class="n">WriteDisposition</span><span class="o">.</span><span class="n">WRITE_APPEND</span><span class="p">,</span>
+</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="p">)</span>
+</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>
+</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">"local-file.parquet"</span><span class="p">,</span> <span class="s2">"rb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>    <span class="n">job</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">load_table_from_file</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">table_id</span><span class="p">,</span> <span class="n">job_config</span><span class="o">=</span><span class="n">job_config</span><span class="p">)</span>
+</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>
+</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="n">job</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>  <span class="c1"># attende completamento</span>
+</span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Caricati </span><span class="si">{</span><span class="n">job</span><span class="o">.</span><span class="n">output_rows</span><span class="si">}</span><span class="s2"> righe"</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Streaming Insert: limitazioni</p>
-<p>Le righe inserite via streaming <strong>non sono immediatamente visibili</strong> per <code>TABLE_DATE_RANGE</code> e alcune operazioni DML. Il buffer di streaming ha un ritardo di disponibilità per l'export. Per pipeline ad alta frequenza preferire <strong>Pub/Sub → Dataflow → BigQuery</strong> o <strong>BigQuery Storage Write API</strong> (più efficiente e con semantica exactly-once).</p>
+<p>Le righe inserite via <code>insertAll</code> sono leggibili quasi subito, ma restano in uno <em>streaming buffer</em> per un tempo limitato: in quel periodo non sono disponibili a certe operazioni (es. copy job/export di quelle righe) e <code>UPDATE</code>/<code>DELETE</code>/<code>MERGE</code> su di esse possono essere limitati. La deduplica è solo best-effort (<code>insertId</code>). Per nuove pipeline preferire la <strong>BigQuery Storage Write API</strong> (stream <code>_default</code> at-least-once, o stream committed/pending per semantica exactly-once; più economica, con una quota gratuita mensile) oppure <strong>Pub/Sub → BigQuery subscription</strong> / <strong>Dataflow</strong>.</p>
 </div>
 <h3 id="federated-queries-external-tables">Federated Queries (External Tables)<a class="headerlink" href="#federated-queries-external-tables" title="Permanent link">&para;</a></h3>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1">-- Tabella esterna su GCS (Parquet — dati non replicati in BQ)</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">EXTERNAL</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">analytics_prod</span><span class="p">.</span><span class="n">raw_logs_gcs</span><span class="o">`</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="k">OPTIONS</span><span class="w"> </span><span class="p">(</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'PARQUET'</span><span class="p">,</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="n">uris</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'gs://my-bucket/raw-logs/year=2026/month=*/day=*/*.parquet'</span><span class="p">],</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="n">hive_partition_uri_prefix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'gs://my-bucket/raw-logs'</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="p">);</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1">-- Query federata verso Cloud Spanner (senza export)</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">order_id</span><span class="p">,</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">amount</span><span class="p">,</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">nome</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="k">FROM</span><span class="w"> </span><span class="n">EXTERNAL_QUERY</span><span class="p">(</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">    </span><span class="s1">'projects/my-project/locations/europe-west8/instances/my-spanner/databases/mydb'</span><span class="p">,</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">    </span><span class="s1">'SELECT order_id, amount FROM orders WHERE status = ''PENDING'''</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">s</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">analytics_prod</span><span class="p">.</span><span class="n">clienti</span><span class="o">`</span><span class="w"> </span><span class="k">c</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">client_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">id</span><span class="p">;</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="c1">-- ogni URI ammette un solo carattere jolly '*'</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="n">uris</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'gs://my-bucket/raw-logs/year=2026/*'</span><span class="p">],</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span><span class="n">hive_partition_uri_prefix</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'gs://my-bucket/raw-logs'</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="p">);</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1">-- Query federata verso Cloud Spanner (senza export).</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1">-- Usa una BigQuery *connection* (creata prima, con `bq mk --connection`),</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1">-- nella stessa location del dataset; la query interna gira su Spanner.</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">order_id</span><span class="p">,</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">amount</span><span class="p">,</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">nome</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="k">FROM</span><span class="w"> </span><span class="n">EXTERNAL_QUERY</span><span class="p">(</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">    </span><span class="s1">'projects/my-project/locations/eu/connections/spanner_conn'</span><span class="p">,</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span><span class="s1">'SELECT order_id, client_id, amount FROM orders WHERE status = ''PENDING'''</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">s</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">analytics_prod</span><span class="p">.</span><span class="n">clienti</span><span class="o">`</span><span class="w"> </span><span class="k">c</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">client_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">id</span><span class="p">;</span>
 </span></code></pre></div>
 <h3 id="bigquery-ml-bqml">BigQuery ML (BQML)<a class="headerlink" href="#bigquery-ml-bqml" title="Permanent link">&para;</a></h3>
 <p>BigQuery ML consente di addestrare e fare inference su modelli ML direttamente in SQL, senza estrarre i dati:</p>
@@ -25255,8 +25263,16 @@
 <td>Import di modelli TensorFlow esistenti</td>
 </tr>
 <tr>
-<td><code>LLMB</code></td>
-<td>Integrazione con modelli Gemini via Vertex AI</td>
+<td><code>DNN_CLASSIFIER</code> / <code>DNN_REGRESSOR</code></td>
+<td>Reti neurali</td>
+</tr>
+<tr>
+<td><code>ARIMA_PLUS</code></td>
+<td>Forecasting di serie temporali</td>
+</tr>
+<tr>
+<td>Remote model (<code>REMOTE WITH CONNECTION</code>)</td>
+<td>Endpoint Vertex AI, es. Gemini, usati con <code>ML.GENERATE_TEXT</code> / funzioni <code>AI.*</code></td>
 </tr>
 </tbody>
 </table>
@@ -25268,12 +25284,11 @@
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Clustering per colonne ad alta selettività</p>
-<p>Colonne ideali per il clustering: colonne usate spesso in <code>WHERE</code> con alta cardinalità (user_id, product_id) o bassa cardinalità ma con query filtrate (paese, categoria). Mettere sempre la colonna più filtrata per prima nell'elenco CLUSTER BY.</p>
+<p>Colonne ideali per il clustering: colonne usate spesso in <code>WHERE</code>, con cardinalità medio-alta (user_id, product_id) o bassa ma molto filtrata (paese, categoria). Mettere la colonna più filtrata per prima nell'elenco CLUSTER BY. Il clustering aiuta davvero su tabelle oltre ~1 GB; su tabelle piccole il beneficio è trascurabile.</p>
 </div>
 <div class="admonition warning">
-<p class="admonition-title">Evitare funzioni sulle colonne di partizione</p>
-<p><code>WHERE ts &gt;= TIMESTAMP('2026-01-01')</code> è corretto.
-<code>WHERE CAST(ts AS DATE) &gt;= '2026-01-01'</code> <strong>disabilita il partition pruning</strong> perché applica una funzione alla colonna prima del confronto. Usare <code>WHERE DATE(ts) &gt;= '2026-01-01'</code> oppure comparare con TIMESTAMP direttamente.</p>
+<p class="admonition-title">Il filtro di partizione deve essere costante</p>
+<p>Il pruning avviene a query-planning solo se il filtro sulla colonna di partizione è confrontato con <strong>costanti</strong> (o espressioni costanti come <code>CURRENT_DATE()</code>). Un filtro il cui valore deriva da una subquery o da un'altra tabella (<code>WHERE ts &gt; (SELECT MAX(ts) FROM altra)</code>) <strong>non</strong> riduce i byte scansionati. Con <code>PARTITION BY DATE(ts)</code> sono ok sia <code>WHERE ts &gt;= TIMESTAMP('2026-01-01')</code> sia <code>WHERE DATE(ts) &gt;= '2026-01-01'</code>. Verificare sempre i byte stimati con dry run.</p>
 </div>
 <h3 id="ottimizzazione-query">Ottimizzazione Query<a class="headerlink" href="#ottimizzazione-query" title="Permanent link">&para;</a></h3>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">-- ✗ MALE: SELECT * scansiona tutte le colonne</span>
@@ -25286,27 +25301,26 @@
 </span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">paese</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'IT'</span>
 </span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span><span class="k">AND</span><span class="w"> </span><span class="nb">DATE</span><span class="p">(</span><span class="n">ts</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">CURRENT_DATE</span><span class="p">();</span><span class="w">  </span><span class="c1">-- partition pruning</span>
 </span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="c1">-- ✗ MALE: subquery non correlata rieseguita per ogni riga</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">dataset</span><span class="p">.</span><span class="n">ordini</span><span class="o">`</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">cliente_id</span><span class="w"> </span><span class="k">IN</span><span class="w"> </span><span class="p">(</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">    </span><span class="k">SELECT</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">dataset</span><span class="p">.</span><span class="n">clienti</span><span class="o">`</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">piano</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'PREMIUM'</span>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="p">);</span>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="c1">-- ✓ BENE: JOIN esplicito (BigQuery ottimizza meglio)</span>
-</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="o">*</span>
-</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">dataset</span><span class="p">.</span><span class="n">ordini</span><span class="o">`</span><span class="w"> </span><span class="n">o</span>
-</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">dataset</span><span class="p">.</span><span class="n">clienti</span><span class="o">`</span><span class="w"> </span><span class="k">c</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">cliente_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">id</span>
-</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="k">WHERE</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">piano</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'PREMIUM'</span><span class="p">;</span>
-</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a>
-</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="c1">-- ✓ Usare APPROX_COUNT_DISTINCT invece di COUNT(DISTINCT) su dataset enormi</span>
-</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="c1">-- COUNT(DISTINCT) richiede shuffle completo; APPROX_COUNT_DISTINCT è 99%+ accurato</span>
-</span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a><span class="k">SELECT</span>
-</span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a><span class="w">    </span><span class="n">paese</span><span class="p">,</span>
-</span><span id="__span-11-28"><a id="__codelineno-11-28" name="__codelineno-11-28" href="#__codelineno-11-28"></a><span class="w">    </span><span class="n">APPROX_COUNT_DISTINCT</span><span class="p">(</span><span class="n">user_id</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">utenti_unici_approx</span>
-</span><span id="__span-11-29"><a id="__codelineno-11-29" name="__codelineno-11-29" href="#__codelineno-11-29"></a><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">dataset</span><span class="p">.</span><span class="n">eventi</span><span class="o">`</span>
-</span><span id="__span-11-30"><a id="__codelineno-11-30" name="__codelineno-11-30" href="#__codelineno-11-30"></a><span class="k">WHERE</span><span class="w"> </span><span class="nb">DATE</span><span class="p">(</span><span class="n">ts</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">CURRENT_DATE</span><span class="p">()</span>
-</span><span id="__span-11-31"><a id="__codelineno-11-31" name="__codelineno-11-31" href="#__codelineno-11-31"></a><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">paese</span><span class="p">;</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="c1">-- ✗ MALE: SELECT * su colonne non servite (anche con LIMIT si paga tutto)</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">dataset</span><span class="p">.</span><span class="n">ordini</span><span class="o">`</span><span class="w"> </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="c1">-- ✓ BENE: per ispezionare i dati usare l'anteprima tabella (gratuita)</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="c1">--   console "Preview" oppure: bq head -n 10 progetto:dataset.ordini</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1">-- IN (subquery) e JOIN sono equivalenti per l'optimizer (semi-join):</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="c1">-- scegliere in base alla leggibilità, non alla performance.</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">importo</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">dataset</span><span class="p">.</span><span class="n">ordini</span><span class="o">`</span><span class="w"> </span><span class="n">o</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">dataset</span><span class="p">.</span><span class="n">clienti</span><span class="o">`</span><span class="w"> </span><span class="k">c</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">o</span><span class="p">.</span><span class="n">cliente_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">id</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="k">WHERE</span><span class="w"> </span><span class="k">c</span><span class="p">.</span><span class="n">piano</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'PREMIUM'</span><span class="p">;</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="c1">-- ✓ Usare APPROX_COUNT_DISTINCT invece di COUNT(DISTINCT) su dataset enormi</span>
+</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="c1">-- COUNT(DISTINCT) richiede shuffle completo; APPROX_COUNT_DISTINCT è 99%+ accurato</span>
+</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="k">SELECT</span>
+</span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a><span class="w">    </span><span class="n">paese</span><span class="p">,</span>
+</span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a><span class="w">    </span><span class="n">APPROX_COUNT_DISTINCT</span><span class="p">(</span><span class="n">user_id</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">utenti_unici_approx</span>
+</span><span id="__span-11-28"><a id="__codelineno-11-28" name="__codelineno-11-28" href="#__codelineno-11-28"></a><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">dataset</span><span class="p">.</span><span class="n">eventi</span><span class="o">`</span>
+</span><span id="__span-11-29"><a id="__codelineno-11-29" name="__codelineno-11-29" href="#__codelineno-11-29"></a><span class="k">WHERE</span><span class="w"> </span><span class="nb">DATE</span><span class="p">(</span><span class="n">ts</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">CURRENT_DATE</span><span class="p">()</span>
+</span><span id="__span-11-30"><a id="__codelineno-11-30" name="__codelineno-11-30" href="#__codelineno-11-30"></a><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">paese</span><span class="p">;</span>
 </span></code></pre></div>
 <h3 id="controllo-costi">Controllo Costi<a class="headerlink" href="#controllo-costi" title="Permanent link">&para;</a></h3>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1">-- Stimare i byte scansionati PRIMA di eseguire (dry run)</span>
@@ -25315,11 +25329,12 @@
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span><span class="s1">'SELECT paese, COUNT(*) FROM `progetto.dataset.eventi` GROUP BY paese'</span>
 </span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1">-- Output: "Query successfully validated. Bytes processed: 1234567890"</span>
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1">-- Impostare un limite massimo di byte per query (protezione costi)</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="n">bq</span><span class="w"> </span><span class="n">query</span><span class="w"> </span><span class="err">\</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">    </span><span class="c1">--maximum_bytes_billed=10737418240 \  # 10 GB max</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">    </span><span class="c1">--use_legacy_sql=false \</span>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">    </span><span class="s1">'SELECT ...'</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1">-- Impostare un limite massimo di byte fatturati per query (10 GB):</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1">-- se la stima lo supera, la query fallisce senza costi</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="n">bq</span><span class="w"> </span><span class="n">query</span><span class="w"> </span><span class="err">\</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">    </span><span class="c1">--maximum_bytes_billed=10737418240 \</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">    </span><span class="c1">--use_legacy_sql=false \</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">    </span><span class="s1">'SELECT ...'</span>
 </span></code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Limite di byte via SDK Python</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">job_config</span> <span class="o">=</span> <span class="n">bigquery</span><span class="o">.</span><span class="n">QueryJobConfig</span><span class="p">(</span>
@@ -25333,103 +25348,107 @@
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># roles/bigquery.admin          → accesso totale</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># roles/bigquery.dataEditor     → read/write su dati + crea tabelle</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># roles/bigquery.dataViewer     → solo lettura dati</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># roles/bigquery.jobUser        → eseguire query (+ dataViewer per leggere)</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># roles/bigquery.user           → eseguire query su dataset dove si ha accesso</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="c1"># Assegnare accesso a un dataset specifico (non al progetto intero)</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>bq<span class="w"> </span>add-iam-policy-binding<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"user:analyst@example.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/bigquery.dataViewer"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">    </span>progetto:analytics_prod
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># roles/bigquery.jobUser        → eseguire job/query nel progetto (non legge dati da solo)</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># roles/bigquery.user           → come jobUser + creare dataset e listare risorse</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Pattern tipico: jobUser a livello progetto + dataViewer sul singolo dataset</span>
 </span></code></pre></div>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1">-- Row-Level Security: policy di accesso per riga</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">ROW</span><span class="w"> </span><span class="k">ACCESS</span><span class="w"> </span><span class="n">POLICY</span><span class="w"> </span><span class="n">accesso_italia</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="k">ON</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">analytics_prod</span><span class="p">.</span><span class="n">vendite</span><span class="o">`</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">GRANT</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="p">(</span><span class="ss">"group:team-italia@example.com"</span><span class="p">)</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="n">FILTER</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="n">paese</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'IT'</span><span class="p">);</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="c1">-- Column-Level Security: mascherare dati sensibili</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="c1">-- (richiede policy tag creati in Data Catalog)</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="c1">-- Le colonne con policy tag vengono mascherate per chi non ha il ruolo 'roles/datacatalog.categoryFineGrainedReader'</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1">-- Assegnare accesso a un dataset specifico (non al progetto intero)</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">GRANT</span><span class="w"> </span><span class="o">`</span><span class="n">roles</span><span class="o">/</span><span class="n">bigquery</span><span class="p">.</span><span class="n">dataViewer</span><span class="o">`</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="k">ON</span><span class="w"> </span><span class="k">SCHEMA</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">analytics_prod</span><span class="o">`</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">TO</span><span class="w"> </span><span class="ss">"user:analyst@example.com"</span><span class="p">;</span>
+</span></code></pre></div>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1">-- Row-Level Security: policy di accesso per riga</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">ROW</span><span class="w"> </span><span class="k">ACCESS</span><span class="w"> </span><span class="n">POLICY</span><span class="w"> </span><span class="n">accesso_italia</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="k">ON</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">analytics_prod</span><span class="p">.</span><span class="n">vendite</span><span class="o">`</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="k">GRANT</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="p">(</span><span class="ss">"group:team-italia@example.com"</span><span class="p">)</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">FILTER</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="p">(</span><span class="n">paese</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'IT'</span><span class="p">);</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1">-- Column-Level Security: proteggere colonne sensibili</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1">-- (richiede policy tag in una taxonomy di Dataplex Universal Catalog, ex Data Catalog)</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1">-- Senza 'roles/datacatalog.categoryFineGrainedReader' la query sulla colonna fallisce</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="c1">-- (access denied); con data masking rules (data policy + 'roles/bigquerydatapolicy.maskedReader')</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="c1">-- si ottiene invece il valore mascherato.</span>
 </span></code></pre></div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <p><strong>Problema: query lenta nonostante partition filter</strong>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1">-- Causa: la colonna di partizione è TIMESTAMP ma il filtro è su DATE con CAST</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1">-- Sbagliato:</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="k">WHERE</span><span class="w"> </span><span class="k">CAST</span><span class="p">(</span><span class="n">ts</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="nb">DATE</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'2026-03-26'</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1">-- Corretto:</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">ts</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="k">TIMESTAMP</span><span class="p">(</span><span class="s1">'2026-03-26'</span><span class="p">)</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">  </span><span class="k">AND</span><span class="w"> </span><span class="n">ts</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="k">TIMESTAMP</span><span class="p">(</span><span class="s1">'2026-03-27'</span><span class="p">)</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1">-- oppure (se la partizione è per DATE(ts)):</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="k">WHERE</span><span class="w"> </span><span class="nb">DATE</span><span class="p">(</span><span class="n">ts</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'2026-03-26'</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="c1">-- Verificare il piano di esecuzione nella console BQ &gt; Query &gt; Execution Details</span>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="c1">-- Cercare "Partitions read: 1 of 365" per confermare il pruning</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1">-- Causa tipica: il filtro non è costante (es. subquery sul valore di ts)</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1">-- oppure manca del tutto il filtro sulla colonna di partizione.</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1">-- Sbagliato (nessun pruning):</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">ts</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="p">(</span><span class="k">SELECT</span><span class="w"> </span><span class="k">MAX</span><span class="p">(</span><span class="n">ts</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="n">progetto</span><span class="p">.</span><span class="n">dataset</span><span class="p">.</span><span class="n">altra_tabella</span><span class="o">`</span><span class="p">)</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1">-- Corretto (costanti):</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">ts</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="k">TIMESTAMP</span><span class="p">(</span><span class="s1">'2026-03-26'</span><span class="p">)</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">  </span><span class="k">AND</span><span class="w"> </span><span class="n">ts</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="k">TIMESTAMP</span><span class="p">(</span><span class="s1">'2026-03-27'</span><span class="p">)</span>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="c1">-- oppure (se la partizione è per DATE(ts)):</span>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="k">WHERE</span><span class="w"> </span><span class="nb">DATE</span><span class="p">(</span><span class="n">ts</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'2026-03-26'</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>
+</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="c1">-- Verificare il piano di esecuzione nella console BQ &gt; Query &gt; Execution Details</span>
+</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="c1">-- Cercare "Partitions read: 1 of 365" per confermare il pruning</span>
 </span></code></pre></div></p>
 <p><strong>Problema: <code>quotaExceeded</code> durante streaming insert</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Causa: superato il limite di 1GB/secondo per tabella in streaming insert</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># Soluzione 1: usare BigQuery Storage Write API (limite 3GB/sec per tabella)</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># Soluzione 2: sharding su più tabelle (tabella_IT, tabella_DE, ecc.)</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Soluzione 3: bufferizzare su Pub/Sub e usare Dataflow per batch da 100MB+</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1"># Verificare i limiti attuali del progetto</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>gcloud<span class="w"> </span>services<span class="w"> </span>quota<span class="w"> </span>list<span class="w"> </span>--service<span class="o">=</span>bigquery.googleapis.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">    </span>--project<span class="o">=</span>my-project<span class="w"> </span>--filter<span class="o">=</span><span class="s2">"quotaId:StreamingInsertBytes"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Causa: superata la quota di throughput di streaming (legacy insertAll: ordine di 1 GB/s</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># per progetto in US/EU multi-region, molto meno nelle regioni singole)</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># Soluzione 1: migrare alla BigQuery Storage Write API (quota più alta)</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Soluzione 2: distribuire il carico su più progetti/regioni dove sensato</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="c1"># Soluzione 3: bufferizzare su Pub/Sub e usare Dataflow o batch load</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="c1"># Verificare i valori correnti in Console &gt; IAM &amp; Admin &gt; Quotas (filtro: BigQuery API)</span>
 </span></code></pre></div></p>
 <p><strong>Problema: <code>Resources exceeded during query execution</code></strong>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1">-- Causa: query che produce risultati intermedi troppo grandi (shuffle data skew)</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1">-- Diagnostica: nella console, Execution Details &gt; vedere "Slot time consumed" e "Shuffle bytes"</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1">-- Soluzione 1: aggiungere filtri per ridurre il dataset</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="c1">-- Soluzione 2: spezzare la query in CTEs con tabelle intermedie</span>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="c1">-- Soluzione 3: riscrivere JOIN con data skew usando hints</span>
-</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="k">SELECT</span><span class="w"> </span><span class="cm">/*+ BROADCAST(small_table) */</span>
-</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">    </span><span class="n">a</span><span class="p">.</span><span class="o">*</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">info</span>
-</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="n">grossa_tabella</span><span class="o">`</span><span class="w"> </span><span class="n">a</span>
-</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="k">JOIN</span><span class="w"> </span><span class="o">`</span><span class="n">piccola_tabella</span><span class="o">`</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">id</span><span class="p">;</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1">-- Causa: query che produce risultati intermedi troppo grandi (shuffle data skew)</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1">-- Diagnostica: nella console, Execution Details &gt; vedere "Slot time consumed" e "Shuffle bytes"</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1">-- Soluzione 1: aggiungere filtri per ridurre il dataset</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="c1">-- Soluzione 2: spezzare la query in CTEs con tabelle intermedie</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="c1">-- Soluzione 3: forzare il metodo di join con join hint (sintassi BigQuery)</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">info</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="k">FROM</span><span class="w"> </span><span class="o">`</span><span class="n">grossa_tabella</span><span class="o">`</span><span class="w"> </span><span class="n">a</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="k">JOIN</span><span class="w"> </span><span class="o">@</span><span class="err">{</span><span class="n">JOIN_METHOD</span><span class="o">=</span><span class="n">BROADCAST</span><span class="err">}</span><span class="w"> </span><span class="o">`</span><span class="n">piccola_tabella</span><span class="o">`</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">a</span><span class="p">.</span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">b</span><span class="p">.</span><span class="n">id</span><span class="p">;</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="c1">-- Soluzione 4: ORDER BY senza LIMIT su grandi risultati è causa frequente: rimuoverlo o limitarlo</span>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="c1">-- Soluzione 5: con capacity pricing, aumentare slot/max autoscaling della reservation</span>
 </span></code></pre></div></p>
 <p><strong>Problema: dataset non trovato cross-region</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Causa: query su dataset in regione diversa dalla regione di processing</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># BigQuery non permette JOIN tra dataset in regioni diverse nella stessa query</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Diagnostica</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>bq<span class="w"> </span>show<span class="w"> </span>--format<span class="o">=</span>json<span class="w"> </span>progetto:dataset_a<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>location
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>bq<span class="w"> </span>show<span class="w"> </span>--format<span class="o">=</span>json<span class="w"> </span>progetto:dataset_b<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>location
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>
-</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="c1"># Soluzione: copiare il dataset nella stessa regione</span>
-</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>bq<span class="w"> </span>mk<span class="w"> </span>--dataset<span class="w"> </span>--location<span class="o">=</span>EU<span class="w"> </span>progetto:dataset_b_eu
-</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>bq<span class="w"> </span>cp<span class="w"> </span>progetto:dataset_b.tabella<span class="w"> </span>progetto:dataset_b_eu.tabella
-</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="c1"># oppure usare BigQuery Data Transfer Service per sync periodico</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Causa: query che referenzia dataset in location diverse (es. US ed EU)</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># BigQuery non permette JOIN tra dataset in location diverse nella stessa query</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># ("Not found: Dataset ... was not found in location ...")</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># Diagnostica</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>bq<span class="w"> </span>show<span class="w"> </span>--format<span class="o">=</span>json<span class="w"> </span>progetto:dataset_a<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>location
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>bq<span class="w"> </span>show<span class="w"> </span>--format<span class="o">=</span>json<span class="w"> </span>progetto:dataset_b<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>location
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># Soluzione: copiare i dati nella stessa location (cross-region copy)</span>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>bq<span class="w"> </span>mk<span class="w"> </span>--dataset<span class="w"> </span>--location<span class="o">=</span>EU<span class="w"> </span>progetto:dataset_b_eu
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>bq<span class="w"> </span>cp<span class="w"> </span>progetto:dataset_b.tabella<span class="w"> </span>progetto:dataset_b_eu.tabella
+</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="c1"># oppure usare BigQuery Data Transfer Service (dataset copy) per sync periodico;</span>
+</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="c1"># il trasferimento cross-region può comportare costi di egress</span>
 </span></code></pre></div></p>
 <p><strong>Problema: costo query inaspettatamente alto</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Causa: query senza partition filter su tabella grande partizionata</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># Verifica: dry run per stimare bytes scansionati prima di eseguire</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>bq<span class="w"> </span>query<span class="w"> </span>--dry_run<span class="w"> </span>--use_legacy_sql<span class="o">=</span><span class="nb">false</span><span class="w"> </span><span class="s1">'SELECT ...'</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># Verifica storico query e costi</span>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>bq<span class="w"> </span>query<span class="w"> </span>--use_legacy_sql<span class="o">=</span><span class="nb">false</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">    </span><span class="s1">'SELECT job_id, total_bytes_processed, total_slot_ms, creation_time</span>
-</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="s1">     FROM `region-eu`.INFORMATION_SCHEMA.JOBS_BY_PROJECT</span>
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="s1">     WHERE creation_time &gt;= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)</span>
-</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="s1">     ORDER BY total_bytes_processed DESC</span>
-</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="s1">     LIMIT 20'</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Causa: query senza partition filter su tabella grande partizionata</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1"># Verifica: dry run per stimare bytes scansionati prima di eseguire</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>bq<span class="w"> </span>query<span class="w"> </span>--dry_run<span class="w"> </span>--use_legacy_sql<span class="o">=</span><span class="nb">false</span><span class="w"> </span><span class="s1">'SELECT ...'</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="c1"># Verifica storico query e costi</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>bq<span class="w"> </span>query<span class="w"> </span>--use_legacy_sql<span class="o">=</span><span class="nb">false</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">    </span><span class="s1">'SELECT job_id, total_bytes_billed, total_slot_ms, creation_time</span>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="s1">     FROM `region-eu`.INFORMATION_SCHEMA.JOBS_BY_PROJECT</span>
+</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="s1">     WHERE creation_time &gt;= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)</span>
+</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="s1">     ORDER BY total_bytes_billed DESC</span>
+</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a><span class="s1">     LIMIT 20'</span>
 </span></code></pre></div></p>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <p>BigQuery si integra strettamente con l'ecosistema GCP per formare pipeline dati end-to-end:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>Sorgenti dati
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>├── Applicazioni  ──► Pub/Sub  ──► Dataflow  ──► BigQuery (streaming)
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>├── File/Batch    ──► Cloud Storage  ──► BigQuery Load Job (batch)
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>├── Database      ──► Datastream  ──► BigQuery (CDC replication)
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>└── SaaS tools    ──► BigQuery Data Transfer Service  ──► BigQuery
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>
-</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>BigQuery
-</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>├── BI / Reporting  ──► Looker, Looker Studio, Tableau, Power BI
-</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>├── ML              ──► BigQuery ML (in-BQ) / Vertex AI (export)
-</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>├── Data Catalog    ──► Dataplex (governance, lineage, profiling)
-</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>└── Export          ──► Cloud Storage  ──► altri sistemi
+<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>Sorgenti dati
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>├── Applicazioni  ──► Pub/Sub  ──► Dataflow  ──► BigQuery (streaming)
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>├── File/Batch    ──► Cloud Storage  ──► BigQuery Load Job (batch)
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>├── Database      ──► Datastream  ──► BigQuery (CDC replication)
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>└── SaaS tools    ──► BigQuery Data Transfer Service  ──► BigQuery
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>BigQuery
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>├── BI / Reporting  ──► Looker, Looker Studio, Tableau, Power BI
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>├── ML              ──► BigQuery ML (in-BQ) / Vertex AI (export)
+</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>├── Governance      ──► Dataplex Universal Catalog (ex Data Catalog: lineage, profiling, policy tag)
+</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>└── Export          ──► Cloud Storage  ──► altri sistemi
 </span></code></pre></div>
 <details class="info">
 <summary>GCP Fondamentali — IAM e Progetti</summary>

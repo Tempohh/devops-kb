@@ -8674,7 +8674,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -9173,7 +9173,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -9311,7 +9311,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24683,8 +24683,8 @@
 <p><strong>Quando scegliere alternative:</strong>
 - Workload con stato persistente su disco locale → <strong>GKE</strong> (volume PersistentVolumeClaim)
 - Necessità di DaemonSet, sidecar avanzati, o Service Mesh → <strong>GKE</strong>
-- Latenza ultra-bassa senza cold start accettabile → GKE con min replicas sempre attive
-- Protocolli non HTTP (TCP raw, UDP, WebSocket long-lived senza HTTP) → <strong>GKE</strong></p>
+- Latenza ultra-bassa con cold start non tollerabile → <code>min-instances</code> ≥ 1 su Cloud Run; GKE solo se servono anche altre funzioni (vedi sopra)
+- Protocolli non HTTP (TCP raw, UDP) → <strong>GKE</strong>. WebSocket/SSE/gRPC streaming sono supportati (upgrade HTTP) ma restano soggetti al timeout di richiesta (max 60 min): client con riconnessione obbligatoria</p>
 <p><strong>Le tre forme di Cloud Run:</strong></p>
 <table>
 <thead>
@@ -24733,8 +24733,9 @@
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        ├── Scarica immagine dal registry (Artifact Registry)
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        ├── Avvia container (entrypoint / CMD)
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        ├── Attende che la porta sia in ascolto
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>        └── Inoltro richiesta (timeout di avvio: default 4 min, max 60 min)
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>        └── Inoltro richiesta
 </span></code></pre></div>
+<p>Il tempo concesso all'avvio è governato dalla <strong>startup probe</strong>: di default un check TCP sulla porta del container con finestra di 240 s; con una <code>startupProbe</code> esplicita la finestra è <code>initialDelaySeconds + periodSeconds × failureThreshold</code>. Il timeout di 60 min (default 5 min) riguarda invece la <strong>singola richiesta</strong>, non l'avvio.</p>
 <p>Il container <strong>deve</strong> avviare un server HTTP sulla porta configurata (default <code>PORT=8080</code>, variabile iniettata automaticamente). Cloud Run invia richieste a quella porta e considera il container pronto quando la porta è in ascolto.</p>
 <h3 id="revision-e-traffic-splitting">Revision e Traffic Splitting<a class="headerlink" href="#revision-e-traffic-splitting" title="Permanent link">&para;</a></h3>
 <p>Ogni deploy crea una nuova <strong>Revision</strong> — uno snapshot immutabile dell'immagine + configurazione. Il traffico viene instradato verso le Revision tramite regole percentuali.</p>
@@ -24750,14 +24751,16 @@
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>├── Richiesta 1 (in elaborazione)
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>├── Richiesta 2 (in elaborazione)
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>├── Richiesta 3 (in elaborazione)
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>└── ... fino a maxConcurrentRequests (default: 80, max: 1000)
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>└── ... fino a `concurrency` (flag `--concurrency`, campo YAML `containerConcurrency`; default 80, max 1000)
 </span></code></pre></div>
-<p>Quando tutte le istanze sono sature al 100% della concorrenza configurata, Cloud Run avvia nuove istanze. La formula per stimare il numero di istanze:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>istanze_necessarie = ceil(RPS / (concurrency * requestsPerSecond_per_vCPU))
+<p>Cloud Run non attende la saturazione: aggiunge istanze quando la concorrenza media o l'utilizzo CPU superano circa il <strong>60%</strong> del target, quindi scala in anticipo. Stima di partenza (legge di Little):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>richieste_in_volo = RPS × latenza_media_secondi
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>istanze_necessarie ≈ ceil(richieste_in_volo / (concurrency × 0.6))
 </span></code></pre></div>
+<p>Il valore reale può essere maggiore se la CPU satura prima della concorrenza: validare con load test.</p>
 <div class="admonition warning">
 <p class="admonition-title">Concorrenza e thread-safety</p>
-<p>Se la tua applicazione non è thread-safe (es. variabili globali mutabili), abbassare <code>maxConcurrentRequests</code> a 1 — ogni istanza gestirà una sola richiesta alla volta, come una Lambda. Questo aumenta i costi ma garantisce isolamento.</p>
+<p>Se la tua applicazione non è thread-safe (es. variabili globali mutabili), abbassare <code>--concurrency</code> a 1 — ogni istanza gestirà una sola richiesta alla volta, come una Lambda. Questo aumenta i costi ma garantisce isolamento.</p>
 </div>
 <h3 id="cpu-allocation">CPU Allocation<a class="headerlink" href="#cpu-allocation" title="Permanent link">&para;</a></h3>
 <p>Cloud Run offre due modalità di allocazione CPU:</p>
@@ -24772,13 +24775,13 @@
 </thead>
 <tbody>
 <tr>
-<td><strong>CPU throttled</strong> (default)</td>
+<td><strong>CPU throttled</strong> (request-based billing, default)</td>
 <td>Solo durante richieste HTTP</td>
 <td>Più basso</td>
 <td>Servizi HTTP stateless standard</td>
 </tr>
 <tr>
-<td><strong>CPU always-on</strong></td>
+<td><strong>CPU always-on</strong> (instance-based billing, <code>--no-cpu-throttling</code>)</td>
 <td>Sempre (anche tra richieste)</td>
 <td>Più alto</td>
 <td>Background tasks, caching in memoria, websocket</td>
@@ -24903,36 +24906,37 @@
 </span></code></pre></div>
 <h3 id="cloud-run-jobs">Cloud Run Jobs<a class="headerlink" href="#cloud-run-jobs" title="Permanent link">&para;</a></h3>
 <p>I <strong>Cloud Run Jobs</strong> eseguono container fino al completamento (non server HTTP):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Creare un job</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>gcloud<span class="w"> </span>run<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>create<span class="w"> </span>my-batch-job<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>--image<span class="o">=</span>europe-west8-docker.pkg.dev/my-project/my-repo/batch-worker:latest<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span>--tasks<span class="o">=</span><span class="m">10</span><span class="w"> </span><span class="se">\ </span><span class="w">                    </span><span class="c1"># numero di task paralleli</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span>--max-retries<span class="o">=</span><span class="m">3</span><span class="w"> </span><span class="se">\ </span><span class="w">               </span><span class="c1"># retry per task fallito</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span>--task-timeout<span class="o">=</span><span class="m">3600</span><span class="w"> </span><span class="se">\ </span><span class="w">           </span><span class="c1"># timeout per task (1 ora)</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span>--cpu<span class="o">=</span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span>--memory<span class="o">=</span>2Gi<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span>--set-env-vars<span class="o">=</span><span class="s2">"BATCH_ID=run-001"</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># Eseguire il job</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>gcloud<span class="w"> </span>run<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>execute<span class="w"> </span>my-batch-job<span class="w"> </span>--region<span class="o">=</span>europe-west8
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1"># Esecuzione con override variabili</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>gcloud<span class="w"> </span>run<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>execute<span class="w"> </span>my-batch-job<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">    </span>--update-env-vars<span class="o">=</span><span class="s2">"BATCH_ID=run-002"</span>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="c1"># Verificare lo stato dell'esecuzione</span>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>gcloud<span class="w"> </span>run<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>executions<span class="w"> </span>list<span class="w"> </span>--job<span class="o">=</span>my-batch-job<span class="w"> </span>--region<span class="o">=</span>europe-west8
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>gcloud<span class="w"> </span>run<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>executions<span class="w"> </span>describe<span class="w"> </span>EXECUTION_ID<span class="w"> </span>--region<span class="o">=</span>europe-west8
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="c1"># Schedulare tramite Cloud Scheduler</span>
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>gcloud<span class="w"> </span>scheduler<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>create<span class="w"> </span>http<span class="w"> </span>my-batch-schedule<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="w">    </span>--schedule<span class="o">=</span><span class="s2">"0 2 * * *"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="w">    </span>--uri<span class="o">=</span><span class="s2">"https://europe-west8-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/my-project/jobs/my-batch-job:run"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="w">    </span>--message-body<span class="o">=</span><span class="s1">'{}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="w">    </span>--oauth-service-account-email<span class="o">=</span>scheduler-sa@my-project.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a><span class="w">    </span>--location<span class="o">=</span>europe-west8
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Creare un job: --tasks = task totali (parallelismo con --parallelism),</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># --max-retries = retry per task fallito, --task-timeout = timeout per task (1 ora)</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>gcloud<span class="w"> </span>run<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>create<span class="w"> </span>my-batch-job<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>--image<span class="o">=</span>europe-west8-docker.pkg.dev/my-project/my-repo/batch-worker:latest<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span>--tasks<span class="o">=</span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span>--max-retries<span class="o">=</span><span class="m">3</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span>--task-timeout<span class="o">=</span><span class="m">3600</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span>--cpu<span class="o">=</span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span>--memory<span class="o">=</span>2Gi<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">    </span>--set-env-vars<span class="o">=</span><span class="s2">"BATCH_ID=run-001"</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1"># Eseguire il job</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>gcloud<span class="w"> </span>run<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>execute<span class="w"> </span>my-batch-job<span class="w"> </span>--region<span class="o">=</span>europe-west8
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="c1"># Esecuzione con override variabili</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>gcloud<span class="w"> </span>run<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>execute<span class="w"> </span>my-batch-job<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">    </span>--update-env-vars<span class="o">=</span><span class="s2">"BATCH_ID=run-002"</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="c1"># Verificare lo stato dell'esecuzione</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>gcloud<span class="w"> </span>run<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>executions<span class="w"> </span>list<span class="w"> </span>--job<span class="o">=</span>my-batch-job<span class="w"> </span>--region<span class="o">=</span>europe-west8
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>gcloud<span class="w"> </span>run<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>executions<span class="w"> </span>describe<span class="w"> </span>EXECUTION_ID<span class="w"> </span>--region<span class="o">=</span>europe-west8
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="c1"># Schedulare tramite Cloud Scheduler</span>
+</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>gcloud<span class="w"> </span>scheduler<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>create<span class="w"> </span>http<span class="w"> </span>my-batch-schedule<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="w">    </span>--schedule<span class="o">=</span><span class="s2">"0 2 * * *"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="w">    </span>--uri<span class="o">=</span><span class="s2">"https://europe-west8-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/my-project/jobs/my-batch-job:run"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="w">    </span>--message-body<span class="o">=</span><span class="s1">'{}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a><span class="w">    </span>--oauth-service-account-email<span class="o">=</span>scheduler-sa@my-project.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="w">    </span>--location<span class="o">=</span>europe-west8
 </span></code></pre></div>
 <hr />
 <h2 id="networking">Networking<a class="headerlink" href="#networking" title="Permanent link">&para;</a></h2>
@@ -25003,14 +25007,15 @@
 <p><strong>Direct VPC Egress</strong> è il metodo moderno (sandbox gen2): nessun componente aggiuntivo da gestire, latenza inferiore, costo minore. Usa VPC Connector solo per servizi già esistenti che lo usano o per compatibilità con regioni che non supportano Direct VPC Egress.</p>
 </div>
 <h3 id="connessione-a-cloud-sql">Connessione a Cloud SQL<a class="headerlink" href="#connessione-a-cloud-sql" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Metodo 1: Cloud SQL Proxy (via socket Unix — raccomandato)</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># Il proxy viene iniettato come container sidecar automaticamente</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>gcloud<span class="w"> </span>run<span class="w"> </span>services<span class="w"> </span>update<span class="w"> </span>my-service<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span>--add-cloudsql-instances<span class="o">=</span>my-project:europe-west8:my-db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">    </span>--set-env-vars<span class="o">=</span><span class="s2">"DB_SOCKET_PATH=/cloudsql/my-project:europe-west8:my-db"</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Metodo 2: IP privato via Direct VPC Egress</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Configurare il VPC, poi connettersi all'IP privato direttamente</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Metodo 1: integrazione Cloud SQL built-in (socket Unix in /cloudsql — raccomandato)</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># Nessun proxy/sidecar da gestire: Cloud Run monta il socket e autentica via IAM</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># (il SA del servizio richiede roles/cloudsql.client)</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>gcloud<span class="w"> </span>run<span class="w"> </span>services<span class="w"> </span>update<span class="w"> </span>my-service<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">    </span>--add-cloudsql-instances<span class="o">=</span>my-project:europe-west8:my-db<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">    </span>--set-env-vars<span class="o">=</span><span class="s2">"DB_SOCKET_PATH=/cloudsql/my-project:europe-west8:my-db"</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Metodo 2: IP privato via Direct VPC Egress</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># Configurare il VPC, poi connettersi all'IP privato direttamente</span>
 </span></code></pre></div>
 <hr />
 <h2 id="autenticazione-e-iam">Autenticazione e IAM<a class="headerlink" href="#autenticazione-e-iam" title="Permanent link">&para;</a></h2>
@@ -25034,10 +25039,12 @@
 <h3 id="chiamata-autenticata-da-codice">Chiamata Autenticata da Codice<a class="headerlink" href="#chiamata-autenticata-da-codice" title="Permanent link">&para;</a></h3>
 <p>Per chiamare un servizio Cloud Run autenticato, il caller deve aggiungere un <strong>OIDC token</strong> nell'header <code>Authorization</code>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Ottenere un token OIDC per chiamare il servizio (da CLI)</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nv">TOKEN</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>auth<span class="w"> </span>print-identity-token<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span>--audiences<span class="o">=</span>https://my-service-xxxx-xx.a.run.app<span class="k">)</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span>https://my-service-xxxx-xx.a.run.app/api/v1/data
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># --audiences funziona solo con credenziali di service account (o --impersonate-service-account);</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># con un account utente: gcloud auth print-identity-token (senza --audiences)</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="nv">TOKEN</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>auth<span class="w"> </span>print-identity-token<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span>--audiences<span class="o">=</span>https://my-service-xxxx-xx.a.run.app<span class="k">)</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span>https://my-service-xxxx-xx.a.run.app/api/v1/data
 </span></code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Python — chiamata autenticata service-to-service</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">google.auth.transport.requests</span>
@@ -25076,19 +25083,19 @@
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
 <p class="admonition-title">Impostare min-instances=1 per servizi critici</p>
-<p>Con <code>min-instances=0</code> (default), ogni periodo di inattività produce un <strong>cold start</strong> alla richiesta successiva. Per servizi con SLA di latenza, impostare <code>--min-instances=1</code>: un'istanza sempre calda elimina il cold start al costo di ~1 vCPU/ora anche in idle.</p>
+<p>Con <code>min-instances=0</code> (default), ogni periodo di inattività produce un <strong>cold start</strong> alla richiesta successiva. Per servizi con SLA di latenza, impostare <code>--min-instances=1</code>: un'istanza sempre calda elimina il cold start. Costo: le istanze minime inattive sono fatturate a una tariffa idle ridotta (con CPU throttled), a tariffa piena con CPU always-on — vedere <a href="https://cloud.google.com/run/pricing">Pricing</a>.</p>
 </div>
 <div class="admonition warning">
-<p class="admonition-title">Timeout richieste e cold start</p>
-<p>Il timeout di Cloud Run include il cold start. Se un container impiega 3 secondi ad avviarsi e il timeout è 5 secondi, alcune richieste scadranno durante i cold start. Dimensionare il timeout tenendo conto del tempo di avvio: <code>timeout &gt; startup_time + max_request_time</code>.</p>
+<p class="admonition-title">Richieste in coda durante lo scale-out</p>
+<p>Se non ci sono istanze con capacità libera, la richiesta resta in coda mentre parte una nuova istanza; se l'avvio è troppo lento o <code>max-instances</code> è raggiunto, il client riceve <code>429</code>/<code>503</code>. Il timeout di richiesta (<code>--timeout</code>) limita la durata dell'elaborazione, non compensa un avvio lento: ridurre il tempo di avvio (startup CPU boost, immagine leggera, lazy init) è la leva giusta.</p>
 </div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Struttura Dockerfile ottimizzata per cold start rapidi</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># 1. Usare immagini base leggere (alpine, distroless)</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># 2. Multi-stage build per minimizzare la dimensione</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># 3. Copiare le dipendenze PRIMA del codice sorgente (cache Docker)</span>
 </span></code></pre></div>
-<div class="language-dockerfile highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c"># Esempio: Go service con immagine distroless (cold start &lt; 100ms)</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="k">FROM</span><span class="w"> </span><span class="s">golang:1.22-alpine</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="s">builder</span>
+<div class="language-dockerfile highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c"># Esempio: Go service con immagine distroless (binario statico, immagine minima)</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="k">FROM</span><span class="w"> </span><span class="s">golang:1.25-alpine</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="s">builder</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="k">WORKDIR</span><span class="w"> </span><span class="s">/app</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="k">COPY</span><span class="w"> </span>go.mod<span class="w"> </span>go.sum<span class="w"> </span>./
 </span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="k">RUN</span><span class="w"> </span>go<span class="w"> </span>mod<span class="w"> </span>download
@@ -25128,10 +25135,10 @@
 </span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="w">    </span>--min-instances<span class="o">=</span><span class="m">1</span>
 </span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>
-</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="c1"># Soluzione 2: aumentare il timeout per dare tempo al cold start</span>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="c1"># Soluzione 2: startup CPU boost (più CPU durante l'avvio)</span>
 </span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a>gcloud<span class="w"> </span>run<span class="w"> </span>services<span class="w"> </span>update<span class="w"> </span>my-service<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-19-15"><a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-16"><a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="w">    </span>--timeout<span class="o">=</span><span class="m">60</span>
+</span><span id="__span-19-16"><a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="w">    </span>--cpu-boost
 </span><span id="__span-19-17"><a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a>
 </span><span id="__span-19-18"><a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a><span class="c1"># Soluzione 3: ottimizzare il container (vedere Dockerfile sopra)</span>
 </span><span id="__span-19-19"><a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a><span class="c1"># Verificare il startup time reale dai log</span>
@@ -25228,14 +25235,18 @@
 </span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="w">    </span>--concurrency<span class="o">=</span><span class="m">200</span><span class="w">  </span><span class="c1"># aumentare se l'app è thread-safe</span>
 </span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>
-</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="c1"># Soluzione 2: usare startup CPU boost (gen2) per ridurre i cold start</span>
-</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="c1"># In YAML:</span>
-</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="c1">#   run.googleapis.com/startup-cpu-boost: "true"</span>
-</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>
-</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="c1"># Soluzione 3: pre-warm con min-instances</span>
-</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>gcloud<span class="w"> </span>run<span class="w"> </span>services<span class="w"> </span>update<span class="w"> </span>my-service<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-24-15"><a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a><span class="w">    </span>--min-instances<span class="o">=</span><span class="m">5</span><span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># 5 istanze pronte ad assorbire il traffico iniziale</span>
-</span><span id="__span-24-16"><a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a><span class="w">    </span>--max-instances<span class="o">=</span><span class="m">200</span>
+</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="c1"># Soluzione 2: startup CPU boost per ridurre i cold start</span>
+</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a>gcloud<span class="w"> </span>run<span class="w"> </span>services<span class="w"> </span>update<span class="w"> </span>my-service<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a><span class="w">    </span>--cpu-boost
+</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="c1"># In YAML: run.googleapis.com/startup-cpu-boost: "true"</span>
+</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>
+</span><span id="__span-24-15"><a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a><span class="c1"># Soluzione 3: pre-warm con min-instances (5 istanze pronte ad assorbire il picco)</span>
+</span><span id="__span-24-16"><a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a><span class="c1"># e max-instances adeguato (se raggiunto, le richieste in eccesso ricevono 429)</span>
+</span><span id="__span-24-17"><a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a>gcloud<span class="w"> </span>run<span class="w"> </span>services<span class="w"> </span>update<span class="w"> </span>my-service<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-18"><a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-19"><a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a><span class="w">    </span>--min-instances<span class="o">=</span><span class="m">5</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-20"><a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a><span class="w">    </span>--max-instances<span class="o">=</span><span class="m">200</span>
 </span></code></pre></div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
