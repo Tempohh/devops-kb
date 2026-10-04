@@ -3,13 +3,13 @@ title: "Azure Key Vault"
 slug: key-vault-azure
 category: cloud
 tags: [azure, key-vault, secrets, keys, certificates, managed-hsm, rbac-key-vault]
-search_keywords: [Azure Key Vault, segreti password connection string, chiavi RSA EC crittografia, certificati X.509 TLS, Managed HSM FIPS 140-2, RBAC Key Vault Secrets User, soft delete purge protection, Key Vault Reference App Settings, EventGrid rotation automatica, DefaultAzureCredential Python SDK]
+search_keywords: [Azure Key Vault, segreti password connection string, chiavi RSA EC crittografia, certificati X.509 TLS, Managed HSM FIPS 140-3, RBAC Key Vault Secrets User, soft delete purge protection, Key Vault Reference App Settings, EventGrid rotation automatica, DefaultAzureCredential Python SDK]
 parent: cloud/azure/security/_index
 related: [cloud/azure/compute/app-service-functions, cloud/azure/compute/aks-containers, cloud/azure/database/azure-sql]
 official_docs: https://learn.microsoft.com/azure/key-vault/
-status: needs-review
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
 last_verified: 2026-10-04
 ---
 
@@ -29,8 +29,11 @@ Azure Key Vault è il servizio centralizzato per la gestione sicura di segreti, 
 | SKU | Protezione Chiavi | FIPS Level | Use Case |
 |---|---|---|---|
 | **Standard** | Software-protected | FIPS 140-2 Level 1 | La maggior parte dei workload |
-| **Premium** | HSM-protected (opzione) | FIPS 140-2 Level 2 <!-- REVIEW: verificare livello FIPS Premium (Microsoft cita HSM validati FIPS 140-3 Level 3) --> | Chiavi critiche, compliance normativa |
-| **Managed HSM** | Dedicated HSM | FIPS 140-2 Level 3 | Istituzioni finanziarie, settore regolamentato, massima sicurezza |
+| **Premium** | HSM-protected (opzione) | FIPS 140-3 Level 3 (HSM Platform 2, tutte le nuove chiavi); le chiavi legacy su HSM Platform 1 restano FIPS 140-2 Level 2 | Chiavi critiche, compliance normativa |
+| **Managed HSM** | Dedicated HSM (single-tenant) | FIPS 140-3 Level 3 | Istituzioni finanziarie, settore regolamentato, massima sicurezza |
+
+!!! note "Piattaforma HSM"
+    Le chiavi software-protected (HSM Platform 0) sono FIPS 140-2 Level 1. L'attributo `hsmPlatform` della key version indica quale piattaforma HSM la protegge. Le chiavi simmetriche `oct-HSM` (AES) su Premium sono in **public preview**.
 
 ## Creare Key Vault
 
