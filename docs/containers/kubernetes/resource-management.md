@@ -7,9 +7,10 @@ search_keywords: [kubernetes requests limits, QoS classes kubernetes, LimitRange
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/autoscaling, containers/kubernetes/scheduling-avanzato, containers/kubernetes/workloads]
 official_docs: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Kubernetes Resource Management
@@ -68,9 +69,12 @@ Kubernetes assegna automaticamente una **Quality of Service class** ad ogni pod 
 
 | QoS Class | Condizione | Priorità Eviction |
 |-----------|-----------|-------------------|
-| **Guaranteed** | `requests == limits` per TUTTI i container, per CPU e memoria | Ultima (più protetta) |
-| **Burstable** | Almeno un container ha requests < limits, OPPURE solo memory request impostata | Media |
-| **BestEffort** | Nessun request né limit impostato | Prima (meno protetta) |
+| **Guaranteed** | TUTTI i container (init inclusi) hanno `requests == limits` sia per CPU sia per memoria (se si dichiarano solo i limits, le requests ereditano lo stesso valore) | Ultima (più protetta) |
+| **Burstable** | Non è Guaranteed e almeno un container ha una request o un limit (CPU o memoria) | Media |
+| **BestEffort** | Nessun container ha request né limit | Prima (meno protetta) |
+
+!!! note "Eviction non è solo QoS"
+    Il kubelet, sotto pressione di memoria, ordina i pod candidati per: (1) se l'uso supera le `requests`, (2) `PriorityClass`, (3) uso rispetto alle requests. La QoS class è quindi una conseguenza (BestEffort supera sempre le requests=0), non il criterio diretto. Un pod Guaranteed può comunque essere evicato se i processi di sistema consumano più di quanto riservato (`system-reserved`/`kube-reserved`). Distinto è l'**OOM kill** a livello cgroup (container oltre il proprio `limits.memory`), che avviene senza passare dall'eviction.
 
 ```yaml
 # Guaranteed — requests == limits su tutti i container
@@ -109,7 +113,7 @@ spec:
 ```
 
 !!! tip "Quando usare Guaranteed"
-    Workload critici (database, sistema di pagamenti, componenti di infrastruttura) devono essere `Guaranteed`. I pod `Guaranteed` non vengono evicati a meno che non superino i propri limits. Il costo è che lo scheduler non piazza il pod se il nodo non ha abbastanza risorse allocatable pari ai limits.
+    Workload critici (database, sistema di pagamenti, componenti di infrastruttura) conviene siano `Guaranteed`: sono gli ultimi candidati all'eviction e, con la CPU Manager policy `static` e requests intere (es. `cpu: "2"`), ottengono core esclusivi (utile per workload latency-sensitive). Il costo è che lo scheduler riserva l'intero limit: nessuna possibilità di overcommit e minor densità sul nodo.
 
 ### Flusso di Scheduling e Enforcement
 
@@ -119,19 +123,25 @@ spec:
 2. kube-scheduler seleziona nodo:
    sum(existing pod requests) + new pod requests ≤ node allocatable
         ↓
-3. kubelet ammette il pod sul nodo (ammission control)
+3. kubelet ammette il pod sul nodo (admission control)
         ↓
-4. Container Runtime (containerd) applica:
-   - CPU: cgroups cpu.shares (requests) + cpu.cfs_quota (limits)
-   - Memory: cgroups memory.limit_in_bytes (limits)
+4. Container Runtime (containerd) configura i cgroup:
+   - cgroup v2 (default sulle distro moderne):
+     CPU requests → cpu.weight (peso relativo solo in contesa)
+     CPU limits   → cpu.max (quota/periodo, tipicamente 100ms)
+     Memory limits → memory.max
+   - cgroup v1 (legacy): cpu.shares, cpu.cfs_quota_us, memory.limit_in_bytes
         ↓
 5. Runtime enforcement:
    - CPU oltre limits → throttling (container rallenta, non muore)
-   - Memory oltre limits → OOMKiller uccide il container
+   - Memory oltre limits → OOM killer uccide il container
         ↓
 6. Kubelet eviction (node pressure):
-   - Ordine: BestEffort → Burstable (oltre requests) → Guaranteed
+   - Pod sopra le requests prima, poi PriorityClass, poi uso relativo:
+     in pratica BestEffort → Burstable (oltre requests) → Guaranteed
 ```
+
+Perché le `requests` CPU contano solo sotto contesa: `cpu.weight` ripartisce i cicli in proporzione quando i core sono saturi; a nodo scarico un container può usare più delle sue requests (fino al limit, se presente). La memoria invece non si "ripartisce": non è comprimibile, quindi o c'è o scatta OOM/eviction.
 
 ---
 
@@ -156,7 +166,7 @@ spec:
         cpu: "1000m"
         memory: "512Mi"
   - name: sidecar
-    image: envoy:latest
+    image: envoyproxy/envoy:v1.32.0
     resources:
       requests:
         cpu: "50m"
@@ -265,13 +275,15 @@ kubectl describe resourcequota team-alpha-quota -n team-alpha
 !!! warning "ResourceQuota e LimitRange insieme"
     Se un namespace ha una ResourceQuota su `requests.cpu`, TUTTI i pod in quel namespace devono dichiarare `resources.requests.cpu`. Altrimenti la creazione fallisce. Per questo LimitRange con `defaultRequest` è quasi sempre necessario insieme a ResourceQuota.
 
-### ResourceQuota per QoS Class
+### ResourceQuota con Scope (PriorityClass, QoS)
+
+Gli `scopes` restringono la quota a un sottoinsieme di pod. `scopeSelector` con `PriorityClass` separa il budget dei workload critici; lo scope `BestEffort` permette di limitare (solo come numero di `pods`) i pod senza risorse.
 
 ```yaml
 apiVersion: v1
 kind: ResourceQuota
 metadata:
-  name: guaranteed-only
+  name: critical-priority-quota
   namespace: critical-apps
 spec:
   hard:
@@ -317,12 +329,12 @@ kubectl describe vpa myapp-vpa -n production
 
 **Regola empirica per avvio:**
 - `requests.cpu` = 50-70% del consumo medio rilevato
-- `limits.cpu` = 2-4x le requests (burst temporaneo accettabile)
-- `requests.memory` = consumo medio + 20% buffer
-- `limits.memory` = requests.memory × 1.5-2 (non troppo alto — OOM kill è violento)
+- `limits.cpu` = 2-4x le requests (burst temporaneo accettabile) oppure nessun limit (vedi sotto)
+- `requests.memory` = consumo medio + 20% buffer (meglio il p95/picco per workload con memoria stabile)
+- `limits.memory` = requests.memory × 1.0-2 (non troppo alto — OOM kill è violento)
 
 !!! tip "Memory limits stretti"
-    Impostare `limits.memory` molto vicino a `requests.memory` (ratio 1.0-1.5) aumenta la stabilità: il container va in OOM e si riavvia pulito invece di occupare memoria in modo irregolare. Meglio un restart controllato che un nodo degradato.
+    Impostare `limits.memory` uguale o molto vicino a `requests.memory` (ratio 1.0-1.5) aumenta la prevedibilità: la somma dei limits non supera di molto la RAM del nodo, quindi si riduce il rischio di pressione di memoria sul nodo e di eviction a catena. Il container che sfora va in OOM e si riavvia da solo: meglio un restart controllato che un nodo degradato.
 
 ### Pattern Multi-tenant
 
@@ -350,7 +362,10 @@ Struttura tipica per cluster multi-tenant:
 
 ### CPU Throttling e Limits
 
-Il CPU throttling è invisibile ma degrada le performance. Un container che usa `500m` con `limits.cpu=500m` non viene mai throttled. Uno con `requests.cpu=100m` e `limits.cpu=500m` viene throttled quando la domanda supera il tempo CPU disponibile.
+Il CPU throttling è invisibile ma degrada le performance. Il limit è una **quota per periodo** (CFS, tipicamente 100 ms): `limits.cpu=500m` = 50 ms di CPU ogni 100 ms, sommati su tutti i thread. Un'app multi-thread può esaurire la quota in pochi ms e restare ferma fino al periodo successivo, quindi si è throttled (con latenze di coda alte) anche se la media di utilizzo è sotto il limit. Le `requests` invece non causano throttling: contano solo per lo scheduling e per il peso in caso di contesa.
+
+!!! note "Dibattito: CPU limits sì o no"
+    Molti team (e parte delle guide di tuning) omettono i `limits.cpu` per i workload latency-sensitive e tengono solo le `requests`: la CPU è comprimibile, a nodo scarico il container può usare cicli liberi e in contesa le requests garantiscono la quota minima. Tenere i limits ha senso per batch/rumorosi, multi-tenant non fidati o per ottenere QoS Guaranteed. Conseguenza dell'omissione: il pod diventa Burstable, non Guaranteed.
 
 ```bash
 # Verificare CPU throttling (richiede accesso ai nodi o metrics server avanzato)
@@ -361,7 +376,7 @@ Il CPU throttling è invisibile ma degrada le performance. Un container che usa 
 ```
 
 !!! warning "CPU Limits e Java/JVM"
-    Applicazioni JVM in container richiedono `-XX:+UseContainerSupport` (default da Java 8u191+) per rispettare i CPU limits. Senza questo flag, la JVM vede i core del nodo fisico e crea thread pool oversized. Verificare sempre `JAVA_OPTS` nelle immagini legacy.
+    La JVM dimensiona thread pool e heap leggendo i cgroup: `-XX:+UseContainerSupport` è attivo di default da Java 10 e 8u191+. Su versioni più vecchie, o con `-XX:-UseContainerSupport`, la JVM vede core e RAM del nodo fisico e crea pool oversized. Il numero di CPU rilevato deriva dal **limit** (non dalle requests): senza `limits.cpu` la JVM vede tutti i core del nodo. Per l'heap usare `-XX:MaxRAMPercentage` invece di `-Xmx` fisso, lasciando margine per metaspace e thread stack.
 
 ### Anti-pattern da Evitare
 
@@ -369,9 +384,14 @@ Il CPU throttling è invisibile ma degrada le performance. Un container che usa 
 |-------------|---------|-----------|
 | Nessun request/limit | BestEffort pod evicati per primi, nessuna garanzia | Impostare sempre, o usare LimitRange |
 | requests = 0, limits alti | Scheduling sbagliato — nodo sembra vuoto ma si satura | requests deve riflettere il consumo reale |
-| limits.memory molto sopra requests | Pod occupa molta memoria senza essere evictable | ratio memory limit/request ≤ 2 |
+| limits.memory molto sopra requests | Overcommit di RAM: il nodo può esaurire la memoria prima che i singoli container raggiungano il limit → eviction a catena | ratio memory limit/request ≤ 2 |
 | CPU limits uguale a requests per batch | Batch job non può fare burst → lento | Batch: limits.cpu >> requests.cpu |
 | ResourceQuota senza LimitRange | Pods senza resources.requests rifiutati | Sempre LimitRange + ResourceQuota insieme |
+
+### Novità: resize in-place e risorse a livello di pod
+
+<!-- REVIEW: verificare stato corrente (versione di GA) di In-Place Pod Resize (KEP-1287) e Pod-level resources (KEP-2837) su kubernetes.io -->
+Storicamente cambiare requests/limits richiedeva ricreare il pod. Le versioni recenti di Kubernetes introducono il **resize in-place** (`kubectl patch pod ... --subresource resize`, beta dalla 1.33) che modifica le risorse di un container senza riavviarlo (con `resizePolicy` per scegliere se serve il restart), e le **pod-level resources** (`spec.resources`) per condividere un budget tra container. Controllare la versione del cluster e i feature gate prima di usarli; abilitano anche VPA in modalità `InPlaceOrRecreate` (vedi [Autoscaling](./autoscaling.md)).
 
 ---
 
