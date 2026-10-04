@@ -7,9 +7,10 @@ search_keywords: [openshift OLM, Operator Lifecycle Manager, OperatorHub, Cluste
 parent: containers/openshift/_index
 related: [containers/kubernetes/operators-crd, containers/openshift/architettura]
 official_docs: https://docs.openshift.com/container-platform/latest/operators/understanding/olm/olm-understanding-olm.html
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Operators e OLM
@@ -102,6 +103,9 @@ oc get catalogsource -n openshift-marketplace
 
 ## Subscription — Installazione Operator
 
+!!! note "Esempio illustrativo"
+    Il package `vault` / CSV `vault.v1.16.0` usato negli esempi è **fittizio** (non è un package di `redhat-operators`; l'operator `banzaicloud/vault-operator` citato nel CSV è community e non più mantenuto). Per un caso reale usare `oc get packagemanifest -n openshift-marketplace` e scegliere un package esistente (es. `openshift-cert-manager-operator`, channel `stable-v1`). <!-- REVIEW: sostituire gli esempi vault con un operator reale supportato -->
+
 ```yaml
 # Installa un operator con approval manuale (produzione)
 apiVersion: operators.coreos.com/v1alpha1
@@ -151,6 +155,8 @@ oc patch installplan install-abc123 \
     --type merge \
     -p '{"spec":{"approved":true}}' \
     -n vault-system
+# Nota: senza OperatorGroup nel namespace la CSV resta in fallimento
+# (condizione "no operator group found"): crearlo PRIMA della Subscription.
 
 # 4. Verifica installazione
 oc get csv -n vault-system
@@ -178,7 +184,8 @@ metadata:
 spec:
   displayName: HashiCorp Vault
   version: 1.16.0
-  replaces: vault.v1.15.3    # upgradepath: questa versione sostituisce la precedente
+  replaces: vault.v1.15.3    # upgrade path: questa versione sostituisce la precedente
+  # alternativa: olm.skipRange (annotation) per saltare versioni intermedie, es. ">=1.14.0 <1.16.0"
   description: |
     HashiCorp Vault secures, stores, and tightly controls access to tokens,
     passwords, certificates, API keys...
@@ -262,39 +269,76 @@ oc patch installplan upgrade-xyz789 \
 
 ---
 
+## OLM v1 — Operator Controller (ClusterExtension)
+
+OLM "classico" (v0, descritto sopra) rimane il default per gli Operator su OpenShift, ma da OpenShift 4.18 è GA **OLM v1**, riscrittura basata su due componenti: **catalogd** (serve i contenuti dei catalog come `ClusterCatalog`) e **operator-controller** (installa/aggiorna estensioni tramite `ClusterExtension`). <!-- REVIEW: verificare stato GA, bundle format supportati (registry+v1) e limiti (es. solo installMode AllNamespaces, niente webhook) alla versione OCP target -->
+
+| Aspetto | OLM v0 (classico) | OLM v1 |
+|---|---|---|
+| Risorse utente | `Subscription` + `OperatorGroup` + `InstallPlan` | `ClusterExtension` (+ `ServiceAccount` dedicato) |
+| Catalog | `CatalogSource` | `ClusterCatalog` |
+| Permessi installazione | OLM usa privilegi propri (cluster-admin implicito) | L'installazione usa il `ServiceAccount` indicato: least privilege esplicito |
+| Dipendenze | Resolver tra package | Nessun resolver di dipendenze tra operator |
+| Scope | Per namespace via OperatorGroup | Orientato a installazione cluster-wide |
+
+```yaml
+apiVersion: olm.operatorframework.io/v1
+kind: ClusterExtension
+metadata:
+  name: cert-manager
+spec:
+  namespace: cert-manager-operator
+  serviceAccount:
+    name: cert-manager-installer   # SA con i soli permessi per applicare i manifest del bundle
+  source:
+    sourceType: Catalog
+    catalog:
+      packageName: openshift-cert-manager-operator
+      channels: [stable-v1]
+```
+
+Perché esiste: v0 concentra privilegi enormi in OLM (un bundle può creare RBAC arbitrario) e il modello `OperatorGroup` è fragile; v1 rende espliciti permessi e scope. Per i bundle che richiedono `OwnNamespace`/`SingleNamespace` o webhook, verificare la compatibilità prima di migrare.
+
+---
+
 ## Disconnected Cluster — Mirroring del Catalog
 
 In ambienti air-gapped o disconnected, il catalog deve essere specchiato localmente.
 
-```bash
-# Mirror del Red Hat Operators catalog (richiede pull secret Red Hat)
-oc mirror \
-    --config ./imageset-config.yaml \
-    docker://registry.company.com/mirror
+!!! warning "oc-mirror v1 deprecato"
+    Il plugin `oc-mirror` v1 (`apiVersion: mirror.openshift.io/v1alpha2`, `storageConfig`, directory `oc-mirror-workspace/`) è deprecato da OpenShift 4.18 in favore di **oc-mirror v2** (`--v2`, `apiVersion: mirror.openshift.io/v2alpha1`). v2 non usa più `storageConfig` (niente metadata nel registry): lo stato è in una *workspace* locale. <!-- REVIEW: verificare flag --v2 / default di oc-mirror v2 sulla versione OCP target e rimozione effettiva di v1 -->
 
-# imageset-config.yaml:
+```bash
+# imageset-config.yaml (oc-mirror v2)
 # kind: ImageSetConfiguration
-# apiVersion: mirror.openshift.io/v1alpha2
-# storageConfig:
-#   registry:
-#     imageURL: registry.company.com/mirror/metadata
+# apiVersion: mirror.openshift.io/v2alpha1
 # mirror:
 #   operators:
-#   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.15
+#   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.20
 #     packages:
-#     - name: vault
-#       channels:
-#       - name: stable
-#     - name: cert-manager
+#     - name: openshift-cert-manager-operator
 #       channels:
 #       - name: stable-v1
 
-# Dopo il mirror, applica i manifesti generati
-oc apply -f ./oc-mirror-workspace/results-*/
+# Mirror-to-mirror (host con accesso a internet E al registry interno).
+# Richiede pull secret Red Hat in ~/.docker/config.json o $XDG_RUNTIME_DIR/containers/auth.json
+oc mirror --v2 \
+    -c ./imageset-config.yaml \
+    --workspace file:///data/oc-mirror \
+    docker://registry.company.com/mirror
 
-# Crea CatalogSource che punta al mirror locale
-# (generato automaticamente da oc mirror)
+# Variante air-gapped vera: due passi con trasporto fisico dell'archivio
+#   1) mirror-to-disk (host connesso)
+oc mirror --v2 -c ./imageset-config.yaml file:///data/oc-mirror
+#   2) disk-to-mirror (host nella rete isolata)
+oc mirror --v2 -c ./imageset-config.yaml \
+    --from file:///data/oc-mirror docker://registry.company.com/mirror
+
+# Applica le risorse generate (IDMS/ITMS + CatalogSource + ClusterCatalog)
+oc apply -f /data/oc-mirror/working-dir/cluster-resources/
 ```
+
+Perché servono **IDMS/ITMS** (`ImageDigestMirrorSet`/`ImageTagMirrorSet`): i bundle OLM referenziano immagini per digest su `registry.redhat.io`; i mirror set istruiscono i nodi (CRI-O) a risolverle sul registry interno senza riscrivere i manifest. Il `CatalogSource` generato punta all'indice mirrorato; i vecchi `ImageContentSourcePolicy` (ICSP) sono deprecati.
 
 ---
 
