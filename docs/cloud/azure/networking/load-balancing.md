@@ -1,20 +1,44 @@
 ---
 title: "Azure Load Balancing"
-slug: load-balancing-azure
+slug: load-balancing
 category: cloud
 tags: [azure, load-balancer, application-gateway, front-door, traffic-manager, waf]
-search_keywords: [Azure Load Balancer, ALB Azure, Application Gateway, WAF Web Application Firewall, Azure Front Door, Traffic Manager, Layer 4 load balancing, Layer 7 load balancing, global load balancing, URL based routing, SSL termination, health probe, backend pool, Azure CDN, SKU Standard Basic]
+search_keywords: [Azure Load Balancer, ALB Azure, Application Gateway, AGW, WAF Web Application Firewall, Azure Front Door, AFD, Traffic Manager, Layer 4 load balancing, Layer 7 load balancing, global load balancing, URL based routing, SSL termination, health probe, backend pool, Azure CDN, SKU Standard Basic, Application Gateway for Containers, DRS, Default Rule Set]
 parent: cloud/azure/networking/_index
 related: [cloud/azure/networking/vnet, cloud/azure/networking/dns-cdn, cloud/azure/compute/virtual-machines]
 official_docs: https://learn.microsoft.com/azure/load-balancer/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Azure Load Balancing
 
-Azure offre quattro servizi di load balancing complementari per scenari diversi:
+## Panoramica
+
+Azure non ha un unico load balancer: ne ha quattro, che lavorano a livelli diversi dello stack e si **combinano** (es. Front Door davanti a più Application Gateway regionali, ciascuno davanti a un pool di VM). La scelta si fa su due domande: il traffico è HTTP(S) o generico TCP/UDP? Serve bilanciare dentro una region o tra region?
+
+- **Load Balancer** (L4): inoltra pacchetti TCP/UDP senza ispezionarli, latenza minima, nessun WAF. Adatto a traffico non-HTTP (database, protocolli custom) e a tier interni.
+- **Application Gateway** (L7 regionale): termina TLS e legge URL/header, quindi può instradare per path/host e applicare un WAF.
+- **Front Door** (L7 globale): punto d'ingresso Anycast sui POP Microsoft; accelera, cachea e fa failover tra region.
+- **Traffic Manager** (DNS): non vede il traffico, risponde solo alle query DNS con l'endpoint migliore; funziona anche per endpoint non-HTTP o fuori Azure, ma il failover dipende dal TTL e dalla cache dei client.
+
+!!! note "Servizi correlati"
+    Per Kubernetes esiste **Application Gateway for Containers** (evoluzione di AGIC, supporta Gateway API) e per appliance di rete **Gateway Load Balancer**; non trattati qui.
+
+| Servizio | Layer | Scope | Use Case |
+|----------|-------|-------|----------|
+| **Azure Load Balancer** | 4 (TCP/UDP) | Regionale | VM, VMSS — traffico interno e esterno |
+| **Application Gateway** | 7 (HTTP/HTTPS) | Regionale | Web app, API con WAF |
+| **Azure Front Door** | 7 (HTTP/HTTPS) | Globale | App globali, CDN, WAF globale |
+| **Traffic Manager** | DNS | Globale | Routing DNS tra region/endpoint |
+
+!!! warning "Dismissioni da conoscere (stato 2026)"
+    - **Basic Load Balancer** e Basic Public IP: ritirati il 30/09/2025 — usare solo SKU **Standard**.
+    - **Application Gateway v1**: ritirato il 28/04/2026 — usare solo SKU v2 (`Standard_v2`/`WAF_v2`).
+    - **Front Door (classic)**: ritiro previsto il 31/03/2027 — migrare a Standard/Premium.
+    - Standard LB/Public IP sono *secure by default*: il traffico in ingresso è bloccato finché un NSG non lo consente.
 
 | Servizio | Layer | Scope | Use Case |
 |----------|-------|-------|----------|
@@ -36,8 +60,9 @@ PIP_ID=$(az network public-ip create \
     --name myapp-pip \
     --sku Standard \
     --allocation-method Static \
-    --zone 1 2 3 \                  # Zone-redundant
+    --zone 1 2 3 \
     --query id -o tsv)
+# --zone 1 2 3 = IP zone-redundant
 
 # Creare Load Balancer Standard
 LB_ID=$(az network lb create \
@@ -76,6 +101,7 @@ az network lb rule create \
     --disable-outbound-snat false
 
 # Creare NAT Rule (accesso diretto a VM specifica)
+# Attenzione: esporre SSH/RDP su IP pubblico è sconsigliato — preferire Azure Bastion
 az network lb inbound-nat-rule create \
     --resource-group myapp-rg \
     --lb-name myapp-lb \
@@ -103,10 +129,14 @@ az network lb create \
     --sku Standard \
     --vnet-name production-vnet \
     --subnet app-subnet \
-    --private-ip-address 10.1.2.100 \   # IP privato fisso
+    --private-ip-address 10.1.2.100 \
     --frontend-ip-name FrontendIP \
     --backend-pool-name BackendPool
+# --private-ip-address = IP privato fisso del frontend
 ```
+
+!!! note "Outbound"
+    Dal 30/09/2025 le nuove VNet non hanno più *default outbound access*: per l'uscita verso Internet usare **NAT Gateway** (consigliato) o outbound rules del Standard LB.
 
 ---
 
@@ -134,8 +164,8 @@ az network application-gateway create \
     --resource-group myapp-rg \
     --name production-appgw \
     --location italynorth \
-    --sku WAF_v2 \                      # Standard_v2 (no WAF) o WAF_v2
-    --capacity 2 \                      # istanze fisse o auto-scale
+    --sku WAF_v2 \
+    --capacity 2 \
     --vnet-name production-vnet \
     --subnet AppGwSubnet \
     --public-ip-address appgw-pip \
@@ -145,6 +175,7 @@ az network application-gateway create \
     --frontend-port 80 \
     --routing-rule-type Basic \
     --priority 100
+# --sku: Standard_v2 (senza WAF) o WAF_v2; --capacity: istanze fisse (in alternativa autoscaling con --min-capacity/--max-capacity)
 
 # Aggiungere backend pool (VM o VMSS o FQDN)
 az network application-gateway address-pool update \
@@ -159,6 +190,7 @@ az network application-gateway ssl-cert create \
     --gateway-name production-appgw \
     --name myapp-cert \
     --key-vault-secret-id "https://myvault.vault.azure.net/secrets/myapp-tls"
+# Richiede una managed identity user-assigned associata al gateway, con permesso di lettura dei secret su Key Vault
 
 az network application-gateway frontend-port create \
     --resource-group myapp-rg \
@@ -175,6 +207,7 @@ az network application-gateway http-listener create \
     --host-name "myapp.company.com"
 
 # Path-based routing (URL routing)
+# Nota: la regola creata sopra è Basic; per usare la path map serve una rule di tipo PathBasedRouting
 az network application-gateway url-path-map create \
     --resource-group myapp-rg \
     --gateway-name production-appgw \
@@ -185,21 +218,34 @@ az network application-gateway url-path-map create \
     --default-address-pool web-backend \
     --default-http-settings web-settings
 
-# Abilitare WAF Policy
+# WAF Policy (modello attuale; waf-config set è la configurazione legacy)
 az network application-gateway waf-policy create \
     --resource-group myapp-rg \
-    --name myapp-waf-policy \
-    --type OWASP \
-    --version 3.2
+    --name myapp-waf-policy
 
-az network application-gateway waf-config set \
+# Modalità: Detection (solo log) o Prevention (blocca)
+az network application-gateway waf-policy policy-setting update \
     --resource-group myapp-rg \
-    --gateway-name production-appgw \
-    --enabled true \
-    --firewall-mode Prevention \         # Detection (log only) o Prevention (block)
-    --rule-set-type OWASP \
-    --rule-set-version 3.2
+    --policy-name myapp-waf-policy \
+    --state Enabled \
+    --mode Prevention
+
+# Rule set gestito: Default Rule Set 2.1 (successore di OWASP CRS 3.2)
+az network application-gateway waf-policy managed-rule rule-set add \
+    --resource-group myapp-rg \
+    --policy-name myapp-waf-policy \
+    --type Microsoft_DefaultRuleSet \
+    --version 2.1
+
+# Associare la policy al gateway
+az network application-gateway update \
+    --resource-group myapp-rg \
+    --name production-appgw \
+    --set firewallPolicy.id=$(az network application-gateway waf-policy show -g myapp-rg -n myapp-waf-policy --query id -o tsv)
 ```
+
+!!! tip "Perché la WAF Policy"
+    La policy è una risorsa separata dal gateway: si riusa su più gateway/listener, permette regole per-listener o per-path e supporta bot protection e rate limiting. La vecchia `waf-config` è per-gateway e non ha queste funzioni.
 
 ---
 
@@ -212,7 +258,8 @@ az network application-gateway waf-config set \
 az afd profile create \
     --resource-group myapp-rg \
     --profile-name myapp-afd \
-    --sku Premium_AzureFrontDoor       # Standard_AzureFrontDoor o Premium_AzureFrontDoor (WAF avanzato)
+    --sku Premium_AzureFrontDoor
+# Standard_AzureFrontDoor: WAF solo con custom rules; Premium_AzureFrontDoor: managed rule set + bot protection + Private Link verso le origin
 
 # Creare endpoint
 az afd endpoint create \
@@ -254,7 +301,10 @@ az afd origin create \
     --origin-group-name production-origins \
     --origin-name west-europe \
     --host-name "myapp-westeurope.azurewebsites.net" \
-    --priority 2 \                     # failover — usato solo se italy-north non disponibile
+    --origin-host-header "myapp-westeurope.azurewebsites.net" \
+    --http-port 80 \
+    --https-port 443 \
+    --priority 2 \
     --weight 100 \
     --enabled-state Enabled
 
@@ -269,7 +319,10 @@ az afd route create \
     --https-redirect Enabled \
     --forwarding-protocol HttpsOnly \
     --patterns-to-match "/*"
+# priority 2 sull'origin west-europe = failover: usato solo se italy-north è unhealthy
 ```
+
+Perché si usano le probe con `sample-size`/`successful-samples-required`: un'origin è *healthy* se almeno `successful-samples-required` delle ultime `sample-size` probe sono riuscite. Valori più alti di `successful-samples-required` → l'origin viene dichiarata unhealthy **prima** (più sensibile, più falsi positivi).
 
 ---
 
@@ -291,12 +344,14 @@ az afd route create \
 az network traffic-manager profile create \
     --resource-group myapp-rg \
     --name myapp-tm \
-    --routing-method Performance \      # o Priority, Weighted, Geographic
-    --unique-dns-name myapp-global \    # myapp-global.trafficmanager.net
+    --routing-method Performance \
+    --unique-dns-name myapp-global \
     --monitor-protocol HTTPS \
     --monitor-port 443 \
     --monitor-path /health \
     --ttl 30
+# --routing-method alternative: Priority, Weighted, Geographic, Multivalue, Subnet
+# --unique-dns-name myapp-global → myapp-global.trafficmanager.net
 
 # Aggiungere endpoint (Azure App Service)
 az network traffic-manager endpoint create \
@@ -324,7 +379,7 @@ az network traffic-manager endpoint create \
 |----------------|---------------|---------------------|------------|-----------------|
 | Layer | 4 (TCP/UDP) | 7 (HTTP) | 7 (HTTP) | DNS |
 | Scope | Regionale | Regionale | Globale | Globale |
-| WAF | No | Sì (v2) | Sì (Premium) | No |
+| WAF | No | Sì (WAF_v2) | Sì (Standard: custom rules; Premium: managed rules) | No |
 | SSL Termination | No | Sì | Sì | No |
 | URL Routing | No | Sì | Sì | No |
 | CDN | No | No | Sì | No |
@@ -340,9 +395,9 @@ az network traffic-manager endpoint create \
 
 **Sintomo:** Il Load Balancer o Application Gateway mostra tutti i backend come "unhealthy"; il traffico non viene instradato.
 
-**Causa:** La health probe non riceve risposta HTTP 200 dal path configurato, oppure il NSG blocca le sonde (Azure Load Balancer usa IP `168.63.129.16`).
+**Causa:** La health probe non riceve risposta HTTP 200 dal path configurato, oppure il NSG blocca le sonde. Le probe del Load Balancer partono dall'IP `168.63.129.16` (tag `AzureLoadBalancer`); quelle di Application Gateway v2 partono invece dagli IP della **subnet del gateway** (il NSG del backend deve consentire quella subnet, e il NSG della subnet gateway deve consentire `GatewayManager` su 65200-65535).
 
-**Soluzione:** Verificare che il NSG consenta il traffico dal tag `AzureLoadBalancer` e che l'endpoint di health risponda correttamente.
+**Soluzione:** Verificare che il NSG consenta la sorgente corretta per il servizio in uso e che l'endpoint di health risponda correttamente.
 
 ```bash
 # Verificare lo stato dei backend nel Load Balancer
@@ -407,9 +462,9 @@ az monitor log-analytics query \
 
 **Sintomo:** Quando l'origin primario è down, Front Door non reindirizza il traffico all'origin secondario; i client ricevono errori.
 
-**Causa:** Il `successful-samples-required` è impostato troppo alto, oppure il `probe-interval-in-seconds` è troppo lungo — Front Door non ha ancora dichiarato unhealthy l'origin primario.
+**Causa:** Il `probe-interval-in-seconds` è troppo lungo, oppure `successful-samples-required` è troppo basso rispetto a `sample-size` (es. 1 su 4: basta una probe riuscita per restare healthy) — Front Door non dichiara unhealthy l'origin primario. Altre cause: il path `/health` risponde 200 anche con backend degradato, oppure le probe sono disabilitate (con una sola origin nel gruppo Front Door non esegue probe).
 
-**Soluzione:** Abbassare la soglia di failure detection o aumentare la frequenza delle probe. Verificare anche che l'origin secondario risponda alle probe.
+**Soluzione:** Ridurre l'intervallo delle probe e alzare `successful-samples-required` (es. 3 su 4) per rilevare prima il guasto; far sì che `/health` verifichi le dipendenze reali. Verificare anche che l'origin secondario risponda alle probe.
 
 ```bash
 # Controllare lo stato attuale delle origini
@@ -426,7 +481,7 @@ az afd origin-group update \
     --origin-group-name production-origins \
     --probe-interval-in-seconds 10 \
     --sample-size 4 \
-    --successful-samples-required 2
+    --successful-samples-required 3
 
 # Forzare disable di un'origin per test failover
 az afd origin update \
@@ -477,6 +532,32 @@ az network traffic-manager endpoint update \
 nslookup myapp-global.trafficmanager.net
 dig myapp-global.trafficmanager.net
 ```
+
+---
+
+## Best Practices
+
+- **Scegli per layer e scope**: L4 → Load Balancer; HTTP regionale → Application Gateway; HTTP multi-region → Front Door; DNS/non-HTTP multi-region → Traffic Manager.
+- **Sempre SKU Standard/v2** e IP zone-redundant: sopravvive al guasto di una Availability Zone e non dipende dalle SKU ritirate.
+- **Health endpoint significativo**: `/health` deve verificare le dipendenze critiche e rispondere 200 solo se il nodo può servire traffico; no redirect 301/302.
+- **Subnet dedicata** per Application Gateway, con NSG che consenta `GatewayManager` (65200-65535) e il traffico client.
+- **WAF in Detection → Prevention**: partire in Detection per individuare falsi positivi, poi passare a Prevention con esclusioni mirate.
+- **Front Door + Application Gateway/origin privati**: limitare l'accesso alle origin al solo Front Door (header `X-Azure-FDID`, service tag `AzureFrontDoor.Backend` o Private Link con Premium).
+- **TTL basso** su Traffic Manager (10-30 s) se il failover è un requisito, sapendo che alcuni resolver non rispettano il TTL.
+
+---
+
+## Relazioni
+
+??? info "VNet — Approfondimento"
+    Load Balancer interno e Application Gateway vivono in subnet della VNet; NSG e NAT Gateway ne regolano ingresso e uscita.
+
+    **Approfondimento completo →** [VNet](vnet.md)
+
+??? info "DNS e CDN — Approfondimento"
+    Traffic Manager è un servizio DNS; Front Door integra il CDN e usa domini custom con record CNAME/alias.
+
+    **Approfondimento completo →** [DNS e CDN](dns-cdn.md)
 
 ---
 
