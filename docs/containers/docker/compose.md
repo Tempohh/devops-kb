@@ -7,9 +7,10 @@ search_keywords: [docker compose production, docker compose healthcheck, docker 
 parent: containers/docker/_index
 related: [containers/docker/networking, containers/docker/storage, containers/kubernetes/workloads]
 official_docs: https://docs.docker.com/compose/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Docker Compose
@@ -34,12 +35,15 @@ volumes:                           # named volumes dichiarati
 networks:                          # network dichiarate
   # ...
 
-secrets:                           # secrets dichiarati (Swarm o file)
+secrets:                           # secrets dichiarati (file, environment o external)
   # ...
 
-configs:                           # config files (Swarm)
+configs:                           # config files montati nel container (come i secrets, ma non sensibili)
   # ...
 ```
+
+!!! note "Campo `version` obsoleto"
+    Il campo top-level `version:` (`"3.8"`, `"3.9"`…) è ignorato da Compose v2 e genera un warning: va omesso. Il formato è oggi la **Compose Specification**, non più le versioni 2.x/3.x.
 
 ---
 
@@ -92,17 +96,17 @@ services:
     networks:
       backend:
         aliases: [api-service]
-        ipv4_address: 172.20.0.10  # IP statico (opzionale)
+        ipv4_address: 172.20.0.10  # IP statico (opzionale): richiede `ipam` con subnet nella network
       frontend:
 
     # ── Volumes ──────────────────────────────────────────────
     volumes:
       - app-data:/app/data
       - ./config/app.yaml:/app/config.yaml:ro
-      - /tmp/api:/tmp             # tmpfs alternativo su container
+      - ./logs:/app/logs          # bind mount host:container (per RAM-only usare `tmpfs:` più sotto)
 
     # ── Risorse ──────────────────────────────────────────────
-    deploy:                       # usato da Swarm E da compose (v3.9+)
+    deploy:                       # Compose Spec: resources e replicas onorati da `docker compose up` (non serve Swarm)
       resources:
         limits:
           cpus: "1.0"
@@ -110,15 +114,12 @@ services:
         reservations:
           cpus: "0.25"
           memory: 128M
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
-      replicas: 2                 # solo Swarm mode
+      replicas: 2                 # equivale a --scale api=2 (incompatibile con container_name e porte host fisse)
+      # restart_policy (condition/delay/max_attempts/window) è pensata per Swarm:
+      # in Compose standalone usare `restart:` qui sotto, non entrambi.
 
     # ── Restart Policy ───────────────────────────────────────
-    restart: unless-stopped      # no | always | on-failure | unless-stopped
+    restart: unless-stopped      # no | always | on-failure[:max-retries] | unless-stopped
 
     # ── Dipendenze e Healthcheck ─────────────────────────────
     depends_on:
@@ -130,7 +131,7 @@ services:
         condition: service_completed_successfully  # attende job completato
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]  # curl deve esistere nell'immagine (assente in distroless/alpine minimali)
       interval: 30s
       timeout: 10s
       retries: 3
@@ -265,7 +266,7 @@ services:
 
   # Servizi solo in dev
   mailhog:
-    image: mailhog/mailhog
+    image: axllent/mailpit         # successore attivo di MailHog (non più mantenuto)
     ports:
       - "8025:8025"
     profiles: [dev]
@@ -296,7 +297,7 @@ services:
 
 secrets:
   db_password:
-    external: true
+    file: ./secrets/db_password.txt   # external: true funziona solo con Swarm; in Compose standalone usare file/environment
 ```
 
 ```bash
@@ -348,7 +349,7 @@ secrets:
   api_key:
     environment: API_KEY_VALUE
 
-  # Modalità 3: Swarm secret (produzione con Swarm)
+  # Modalità 3: Swarm secret (solo con `docker stack deploy`, non con `docker compose up`)
   tls_cert:
     external: true              # creato con: docker secret create tls_cert cert.pem
 ```
@@ -467,9 +468,9 @@ services:
 
 ### Scenario 2 — Variabili d'ambiente non risolte (valore letterale `${VAR}`)
 
-**Sintomo:** Il container riceve la stringa letterale `${DATABASE_URL}` invece del valore atteso, oppure Compose emette warning `variable is not set`.
+**Sintomo:** Il container riceve un valore vuoto (o la stringa letterale `${DATABASE_URL}` se il `$` è stato escapato come `$$` o il valore passa da una shell) invece del valore atteso, e Compose emette warning `The "DATABASE_URL" variable is not set. Defaulting to a blank string.`
 
-**Causa:** Il file `.env` non è nella stessa directory da cui si lancia `docker compose`, oppure la variabile non è definita nel file `.env` né nell'environment dell'host.
+**Causa:** Il file `.env` non è nella *project directory* (di norma la directory del compose file; cambiabile con `--project-directory`), oppure la variabile non è definita nel file `.env` né nell'environment dell'host.
 
 **Soluzione:** Verificare la presenza e il contenuto del file `.env`, oppure dichiarare esplicitamente il percorso con `--env-file`.
 
