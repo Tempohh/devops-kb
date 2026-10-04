@@ -14448,7 +14448,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14473,7 +14473,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25248,15 +25248,15 @@
 
 <h1 id="jvm-tuning-per-kubernetes">JVM Tuning per Kubernetes<a class="headerlink" href="#jvm-tuning-per-kubernetes" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>La JVM (Java Virtual Machine) non era originariamente progettata per girare dentro container con limiti di memoria rigidi: le versioni pre-Java 10 leggevano la RAM dell'host ignorando i cgroup, causando heap allocation sbagliate e OOM kill silenziosi. Da <strong>Java 11+</strong> la JVM è pienamente <strong>container-aware</strong>: usa automaticamente i cgroup per determinare la memoria disponibile e calcola l'heap di default come 25% della RAM del container. Il tuning JVM in Kubernetes richiede di gestire quattro aree: (1) <strong>heap sizing</strong> corretto rispetto ai <code>limits</code> K8s, (2) <strong>scelta del Garbage Collector</strong> in base ai requisiti di latenza, (3) <strong>gestione della memoria non-heap</strong> (Metaspace, Code Cache, thread stack), (4) <strong>profiling e diagnostica</strong> per identificare colli di bottiglia senza interrompere il servizio. Queste configurazioni si applicano a qualsiasi workload JVM: Spring Boot, Quarkus in modalità JVM, Micronaut, Jakarta EE.</p>
+<p>La JVM (Java Virtual Machine) non era originariamente progettata per girare dentro container con limiti di memoria rigidi: le versioni pre-Java 10 leggevano la RAM dell'host ignorando i cgroup, causando heap allocation sbagliate e OOM kill silenziosi. Da <strong>Java 10</strong> (backport in 8u191+) la JVM è <strong>container-aware</strong>: usa automaticamente i cgroup per determinare la memoria disponibile e calcola l'heap di default come 25% della RAM del container. Il tuning JVM in Kubernetes richiede di gestire quattro aree: (1) <strong>heap sizing</strong> corretto rispetto ai <code>limits</code> K8s, (2) <strong>scelta del Garbage Collector</strong> in base ai requisiti di latenza, (3) <strong>gestione della memoria non-heap</strong> (Metaspace, Code Cache, thread stack), (4) <strong>profiling e diagnostica</strong> per identificare colli di bottiglia senza interrompere il servizio. Queste configurazioni si applicano a qualsiasi workload JVM: Spring Boot, Quarkus in modalità JVM, Micronaut, Jakarta EE.</p>
 <div class="admonition warning">
 <p class="admonition-title">Java &lt; 11 in container</p>
-<p>Se usi ancora Java 8 o 10, la JVM legge la RAM dell'host, non quella del container. Su un nodo da 64 GB, la JVM si alloca un heap da ~16 GB anche se il Pod ha limit di 512 MB → OOM kill immediato. Migra a Java 17+ o usa <code>-XX:+UseContainerSupport</code> (backportato in Java 8u191+).</p>
+<p>Se usi ancora Java 8 precedente a 8u191, la JVM legge la RAM dell'host, non quella del container. Su un nodo da 64 GB, la JVM si alloca un heap da ~16 GB anche se il Pod ha limit di 512 MB → OOM kill immediato. Migra a Java 17+ (meglio 21/25) o aggiorna a 8u191+, dove <code>-XX:+UseContainerSupport</code> è attivo di default.</p>
 </div>
 <hr />
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <h3 id="container-awareness-come-la-jvm-legge-i-limiti-k8s">Container-Awareness: come la JVM legge i limiti K8s<a class="headerlink" href="#container-awareness-come-la-jvm-legge-i-limiti-k8s" title="Permanent link">&para;</a></h3>
-<p>Da Java 11, il flag <code>-XX:+UseContainerSupport</code> è <strong>attivo per default</strong>. La JVM interroga i cgroup v1/v2 del container per determinare:</p>
+<p>Da Java 10 (e 8u191+), il flag <code>-XX:+UseContainerSupport</code> è <strong>attivo per default</strong>. La JVM interroga i cgroup v1/v2 del container per determinare:</p>
 <table>
 <thead>
 <tr>
@@ -25268,13 +25268,13 @@
 <tbody>
 <tr>
 <td>Memoria massima heap</td>
-<td><code>memory.limit_in_bytes</code> (cgroup)</td>
+<td><code>memory.limit_in_bytes</code> (cgroup v1) / <code>memory.max</code> (v2)</td>
 <td>25% della RAM container</td>
 </tr>
 <tr>
 <td>CPU disponibili</td>
-<td><code>cpu.cfs_quota_us / cpu.cfs_period_us</code></td>
-<td>Numero vCPU visibili nel container</td>
+<td><code>cpu.cfs_quota_us / cpu.cfs_period_us</code> (v1) / <code>cpu.max</code> (v2), arrotondato per eccesso</td>
+<td><code>limits.cpu</code> del Pod (se assente: CPU del nodo)</td>
 </tr>
 <tr>
 <td>GC thread count</td>
@@ -25284,6 +25284,10 @@
 </tbody>
 </table>
 <p>La <strong>formula di default</strong> (25%) è troppo conservativa per la maggior parte dei microservizi. Il tuning corretto prevede di alzarla al 50-75% a seconda del profilo dell'applicazione.</p>
+<div class="admonition warning">
+<p class="admonition-title">Il GC di default dipende dalle risorse del container</p>
+<p>La JVM sceglie G1 solo su una macchina "server-class": <strong>≥2 CPU disponibili e ≥~1792 MB di RAM</strong>. Un Pod con <code>limits.cpu: 1</code> o <code>limits.memory: 1Gi</code> ottiene silenziosamente <strong>SerialGC</strong> (pause stop-the-world, un solo thread GC). Per questo i flag di questa pagina impostano <code>-XX:+UseG1GC</code> esplicitamente: verifica il GC reale con <code>java -XX:+PrintFlagsFinal -version | grep Use.*GC</code> dentro il container.</p>
+</div>
 <h3 id="memoria-jvm-le-4-regioni">Memoria JVM: le 4 regioni<a class="headerlink" href="#memoria-jvm-le-4-regioni" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>┌─────────────────────────────────────────────────────────┐
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>│                   Container Memory Limit                 │
@@ -25309,7 +25313,7 @@
 <p>La formula alloca il 65% della RAM al heap e tiene 35% + 50 MB di buffer per off-heap. Per un container da 1 GiB:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Heap = (1024 MB × 0.65) - 50 MB = ~615 MB
 </span></code></pre></div>
-<p>Equivalente JVM flag: <code>-XX:MaxRAMPercentage=65.0</code></p>
+<p>Il flag JVM <code>-XX:MaxRAMPercentage=65.0</code> ne è l'approssimazione senza il termine fisso: dà ~665 MB su 1 GiB (la differenza di 50 MB conta solo sui container piccoli).</p>
 <p><strong>Linee guida per percentuale:</strong></p>
 <table>
 <thead>
@@ -25359,7 +25363,7 @@
 <tr>
 <td><strong>G1GC</strong></td>
 <td><code>-XX:+UseG1GC</code></td>
-<td>9 (default da 9)</td>
+<td>9 (default da 9, solo su macchine server-class)</td>
 <td>~10-50ms pause</td>
 <td>Alto</td>
 <td>Default per la maggior parte dei microservizi</td>
@@ -25367,7 +25371,7 @@
 <tr>
 <td><strong>ZGC</strong></td>
 <td><code>-XX:+UseZGC</code></td>
-<td>15 (prod), 21 (LTS)</td>
+<td>15 (prod); generazionale da 21; solo generazionale da 24</td>
 <td>&lt;1ms (sub-ms)</td>
 <td>Leggermente inferiore</td>
 <td>Servizi latency-sensitive, heap &gt;4 GB</td>
@@ -25405,14 +25409,13 @@
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="s2">  -XX:MaxRAMPercentage=65.0 \</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="s2">  -XX:InitialRAMPercentage=50.0 \</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="s2">  -XX:MaxGCPauseMillis=200 \</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="s2">  -XX:G1HeapRegionSize=4m \</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="s2">  -XX:+G1UseAdaptiveIHOP \</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="s2">  -XX:InitiatingHeapOccupancyPercent=45 \</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="s2">  -Xss512k \</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="s2">  -XX:MetaspaceSize=128m \</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="s2">  -XX:MaxMetaspaceSize=256m \</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="s2">  -XX:ReservedCodeCacheSize=128m \</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="s2">  -XX:+UseStringDeduplication"</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="s2">  -XX:+G1UseAdaptiveIHOP \</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="s2">  -XX:InitiatingHeapOccupancyPercent=45 \</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="s2">  -Xss512k \</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="s2">  -XX:MetaspaceSize=128m \</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="s2">  -XX:MaxMetaspaceSize=256m \</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="s2">  -XX:ReservedCodeCacheSize=128m \</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="s2">  -XX:+UseStringDeduplication"</span>
 </span></code></pre></div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Deployment Kubernetes con JAVA_OPTS</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apps/v1</span>
@@ -25445,21 +25448,23 @@
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">G1HeapRegionSize</p>
-<p>G1GC divide l'heap in regioni. La dimensione ideale è: <code>heap / 2048</code> regioni. Con heap da 600 MB → 300 KB (usa il default). Con heap da 4 GB → 2 MB. Con heap da 8 GB → 4 MB. Impostare manualmente <code>-XX:G1HeapRegionSize</code> solo con heap &gt;4 GB.</p>
+<p>G1GC divide l'heap in regioni (potenza di 2, da 1 a 32 MB) puntando a ~2048 regioni: <code>region ≈ heap / 2048</code>, arrotondato. Con heap da 600 MB → 1 MB (minimo). Con heap da 4 GB → 2 MB. Con heap da 8 GB → 4 MB. Il default va bene quasi sempre; imposta <code>-XX:G1HeapRegionSize</code> solo per mitigare allocazioni humongous (vedi Scenario 4).
+<code>InitiatingHeapOccupancyPercent</code> è solo il valore iniziale: con <code>G1UseAdaptiveIHOP</code> (default) G1 lo adatta a runtime.</p>
 </div>
 <h3 id="zgc-configurazione-per-latenza-sub-ms-java-21">ZGC — Configurazione per Latenza Sub-ms (Java 21)<a class="headerlink" href="#zgc-configurazione-per-latenza-sub-ms-java-21" title="Permanent link">&para;</a></h3>
-<p>ZGC è il collector ottimale per servizi con SLA di latenza stretti (&lt;10ms p99). Da Java 21 LTS è pienamente maturo e generazionale (Generational ZGC).</p>
+<p>ZGC è il collector ottimale per servizi con SLA di latenza stretti (&lt;10ms p99). Da Java 21 è disponibile in versione generazionale (Generational ZGC, opt-in con <code>-XX:+ZGenerational</code>, molto più efficiente in CPU/memoria della versione non generazionale); da Java 23 è il default di <code>-XX:+UseZGC</code> e da <strong>Java 24</strong> la modalità non generazionale è rimossa: <code>-XX:+ZGenerational</code> è obsoleto e va tolto (la JVM stampa un warning).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># ZGC per servizio latency-sensitive (container 2 GiB, Java 21)</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nv">JAVA_OPTS</span><span class="o">=</span><span class="s2">"-XX:+UseZGC \</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="s2">  -XX:+ZGenerational \</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="s2">  -XX:MaxRAMPercentage=60.0 \</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="s2">  -XX:InitialRAMPercentage=40.0 \</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="s2">  -XX:ZAllocationSpikeTolerance=2.0 \</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="s2">  -XX:ConcGCThreads=2 \</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="s2">  -Xss512k \</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="s2">  -XX:MetaspaceSize=128m \</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="s2">  -XX:MaxMetaspaceSize=256m \</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="s2">  -XX:ReservedCodeCacheSize=256m"</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Su Java 23+ rimuovere -XX:+ZGenerational</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nv">JAVA_OPTS</span><span class="o">=</span><span class="s2">"-XX:+UseZGC \</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="s2">  -XX:+ZGenerational \</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="s2">  -XX:MaxRAMPercentage=60.0 \</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="s2">  -XX:InitialRAMPercentage=40.0 \</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="s2">  -XX:ZAllocationSpikeTolerance=2.0 \</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="s2">  -XX:ConcGCThreads=2 \</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="s2">  -Xss512k \</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="s2">  -XX:MetaspaceSize=128m \</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="s2">  -XX:MaxMetaspaceSize=256m \</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="s2">  -XX:ReservedCodeCacheSize=256m"</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Verifica che ZGC sia attivo e controlla pause times</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Output nei log JVM con -Xlog:gc*:stdout:time,uptime,level,tags</span>
@@ -25470,7 +25475,7 @@
 <p>ZGC esegue il GC in modo concorrente (mentre l'applicazione gira), richiedendo più CPU rispetto a G1GC. Su container con <code>cpu.limit</code> basso (&lt;500m), ZGC può essere più lento di G1GC perché i thread GC vengono throttled. Testa sempre con load test prima di scegliere.</p>
 </div>
 <h3 id="shenandoah-red-hat-openshift">Shenandoah — Red Hat / OpenShift<a class="headerlink" href="#shenandoah-red-hat-openshift" title="Permanent link">&para;</a></h3>
-<p>Shenandoah è sviluppato da Red Hat e incluso nelle distribuzioni OpenJDK di Red Hat. Simile a ZGC per caratteristiche di latenza, ma con un modello di pause leggermente diverso.</p>
+<p>Shenandoah è sviluppato da Red Hat e incluso in OpenJDK 15+ (build Red Hat, Adoptium/Temurin e altre; <strong>non</strong> nelle build Oracle JDK). Simile a ZGC per caratteristiche di latenza, ma con un modello di pause leggermente diverso.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Shenandoah (solo OpenJDK Red Hat / Adoptium con supporto)</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nv">JAVA_OPTS</span><span class="o">=</span><span class="s2">"-XX:+UseShenandoahGC \</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="s2">  -XX:ShenandoahGCMode=adaptive \</span>
@@ -25513,18 +25518,20 @@
 </span></code></pre></div>
 <p><strong>Code Cache</strong> contiene il codice nativo compilato dal JIT. Se si esaurisce, la JVM deoptimizza il codice → degrado performance drastico.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Code Cache — Default 240 MB in JDK 11+, aumentare per app grandi</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>-XX:ReservedCodeCacheSize<span class="o">=</span>256m<span class="w">   </span><span class="c1"># Per microservizi standard</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>-XX:ReservedCodeCacheSize<span class="o">=</span>512m<span class="w">   </span><span class="c1"># Per app grandi con molti metodi hot (es. Hibernate ORM)</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>-XX:+UseCodeCacheFlushing<span class="w">         </span><span class="c1"># Permette flush parziale se si avvicina al limite</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>-XX:ReservedCodeCacheSize<span class="o">=</span>128m<span class="w">   </span><span class="c1"># Riduce il footprint in container piccoli (usato negli esempi di questa pagina)</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>-XX:ReservedCodeCacheSize<span class="o">=</span>256m<span class="w">   </span><span class="c1"># Per microservizi standard</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>-XX:ReservedCodeCacheSize<span class="o">=</span>512m<span class="w">   </span><span class="c1"># Per app grandi con molti metodi hot (es. Hibernate ORM)</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Monitoraggio Code Cache via JMX/jcmd</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>jcmd<span class="w"> </span>&lt;pid&gt;<span class="w"> </span>VM.native_memory<span class="w"> </span>summary
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># Cerca "Code" nella sezione Non-heap:</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Code (CodeCache + CompileQueue + CodeHeap)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Monitoraggio Code Cache: richiede Native Memory Tracking attivo all'avvio</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># (-XX:NativeMemoryTracking=summary, overhead ~5-10%), altrimenti jcmd risponde "not enabled"</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>jcmd<span class="w"> </span>&lt;pid&gt;<span class="w"> </span>VM.native_memory<span class="w"> </span>summary
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Alternativa leggera: jcmd &lt;pid&gt; Compiler.codecache</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># Cerca "Code" nella sezione Non-heap:</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># Code (CodeCache + CompileQueue + CodeHeap)</span>
 </span></code></pre></div>
 <h3 id="thread-stack-e-concorrenza">Thread Stack e Concorrenza<a class="headerlink" href="#thread-stack-e-concorrenza" title="Permanent link">&para;</a></h3>
 <p>Ogni thread JVM alloca uno stack. Con <code>-Xss</code> si controlla la dimensione per thread.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Default: 512k-1MB per thread (dipende da OS e JVM version)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Default: 1 MB per thread su Linux x64 (dipende da OS e architettura)</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># Per microservizi con molti thread (Tomcat, Jetty):</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>-Xss512k<span class="w">     </span><span class="c1"># 512 KB per thread — sicuro per la maggior parte dei casi</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
@@ -25532,17 +25539,21 @@
 </span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1"># Tenerne conto nel budget memoria off-heap</span>
 </span></code></pre></div>
 <p><strong>Virtual Threads (Java 21 + Project Loom):</strong></p>
-<div class="language-java highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1">// Spring Boot 3.2+ — abilitare Virtual Threads</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1">// application.yml</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nl">spring</span><span class="p">:</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="n">threads</span><span class="p">:</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="n">virtual</span><span class="p">:</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">      </span><span class="n">enabled</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="err">#</span><span class="w"> </span><span class="n">Con</span><span class="w"> </span><span class="n">Virtual</span><span class="w"> </span><span class="n">Threads</span><span class="p">:</span><span class="w"> </span><span class="n">thread</span><span class="w"> </span><span class="n">stack</span><span class="w"> </span><span class="n">overhead</span><span class="w"> </span><span class="n">è</span><span class="w"> </span><span class="n">trascurabile</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="err">#</span><span class="w"> </span><span class="n">Non</span><span class="w"> </span><span class="n">è</span><span class="w"> </span><span class="n">più</span><span class="w"> </span><span class="n">necessario</span><span class="w"> </span><span class="n">dimensionare</span><span class="w"> </span><span class="n">il</span><span class="w"> </span><span class="n">pool</span><span class="w"> </span><span class="n">di</span><span class="w"> </span><span class="n">thread</span><span class="w"> </span><span class="n">Tomcat</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="err">#</span><span class="w"> </span><span class="o">-</span><span class="n">Xss</span><span class="w"> </span><span class="n">può</span><span class="w"> </span><span class="n">restare</span><span class="w"> </span><span class="n">al</span><span class="w"> </span><span class="k">default</span><span class="w"> </span><span class="err">—</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="n">virtual</span><span class="w"> </span><span class="n">thread</span><span class="w"> </span><span class="n">sono</span><span class="w"> </span><span class="nf">leggeri</span><span class="w"> </span><span class="p">(</span><span class="o">&lt;</span><span class="n">KB</span><span class="p">)</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Spring Boot 3.2+ (Java 21+) — application.yml</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">spring</span><span class="p">:</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">threads</span><span class="p">:</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">virtual</span><span class="p">:</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Con Virtual Threads: thread stack overhead è trascurabile</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="c1"># Non è più necessario dimensionare il pool di thread Tomcat</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="c1"># -Xss riguarda solo i thread di piattaforma; i virtual thread hanno stack</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># nell'heap (pochi KB), quindi migliaia di thread pesano sull'heap, non sull'off-heap</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Pinning su <code>synchronized</code> (Java 21-23)</p>
+<p>In Java 21-23 un virtual thread che blocca dentro un blocco <code>synchronized</code> (o una chiamata nativa) <strong>blocca anche il carrier thread</strong> (pinning), azzerando il beneficio con driver/librerie datate. Da <strong>Java 24</strong> (JEP 491) <code>synchronized</code> non causa più pinning. Diagnosi: <code>-Djdk.tracePinnedThreads=full</code> (Java 21-23) o l'evento JFR <code>jdk.VirtualThreadPinned</code>.</p>
+</div>
 <h3 id="jvm-17-vs-21-differenze-rilevanti-per-container">JVM 17 vs 21 — Differenze Rilevanti per Container<a class="headerlink" href="#jvm-17-vs-21-differenze-rilevanti-per-container" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -25550,70 +25561,80 @@
 <th>Feature</th>
 <th>Java 17 (LTS)</th>
 <th>Java 21 (LTS)</th>
+<th>Java 25 (LTS)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
+<td>ZGC production-ready</td>
+<td>Sì (non generazionale)</td>
+<td>Sì</td>
+<td>Sì</td>
+</tr>
+<tr>
 <td>Generational ZGC</td>
 <td>No</td>
-<td>Sì (<code>-XX:+ZGenerational</code>)</td>
+<td>Opt-in (<code>-XX:+ZGenerational</code>)</td>
+<td>Unica modalità ZGC</td>
 </tr>
 <tr>
 <td>Virtual Threads</td>
-<td>Preview</td>
-<td>GA (Project Loom)</td>
+<td>No (preview solo in 19/20)</td>
+<td>GA (Project Loom), con pinning su <code>synchronized</code></td>
+<td>GA, pinning su <code>synchronized</code> risolto (JEP 491, da 24)</td>
 </tr>
 <tr>
-<td>Compact Heap</td>
-<td>Parziale</td>
-<td>Migliorato</td>
-</tr>
-<tr>
-<td>Sealed Classes</td>
-<td>GA</td>
-<td>GA</td>
-</tr>
-<tr>
-<td>Pattern Matching</td>
-<td>Parziale</td>
-<td>GA</td>
-</tr>
-<tr>
-<td>ZGC production-ready</td>
+<td>Compact object headers</td>
 <td>No</td>
-<td>Sì</td>
+<td>No</td>
+<td>Sì, opt-in (<code>-XX:+UseCompactObjectHeaders</code>): meno heap per oggetto</td>
+</tr>
+<tr>
+<td>Shenandoah generazionale</td>
+<td>No</td>
+<td>No</td>
+<td>Prodotto (<code>-XX:ShenandoahGCMode=generational</code>)</td>
+</tr>
+<tr>
+<td>Class Data Sharing automatico</td>
+<td>No</td>
+<td>Sì (<code>-XX:+AutoCreateSharedArchive</code>, da 19)</td>
+<td>Sì, più AOT cache (<code>-XX:AOTCache</code>, Project Leyden)</td>
 </tr>
 </tbody>
 </table>
 <div class="admonition tip">
-<p class="admonition-title">Scegli Java 21 per nuovi progetti</p>
-<p>Java 21 è l'LTS corrente (fino al 2031). I miglioramenti al GC (ZGC generazionale) e i Virtual Threads rendono Java 21 superiore a Java 17 per microservizi K8s. La migrazione da 17 a 21 è solitamente non-breaking.</p>
+<p class="admonition-title">Scegli Java 25 (o 21) per nuovi progetti</p>
+<p>Nel 2026 l'LTS corrente è <strong>Java 25</strong> (settembre 2025); Java 21 resta supportato (Oracle Premier fino al 2028, Extended fino al 2031) ed è la baseline più diffusa nelle immagini e nei framework. Java 17 è ancora supportato ma privo di Virtual Threads e ZGC generazionale. Le migrazioni tra LTS sono solitamente non-breaking per il tuning JVM, ma verifica i flag obsoleti (es. <code>ZGenerational</code>) e le dipendenze che usano API rimosse.</p>
 </div>
 <hr />
 <h2 id="profiling-async-profiler-e-jfr">Profiling: async-profiler e JFR<a class="headerlink" href="#profiling-async-profiler-e-jfr" title="Permanent link">&para;</a></h2>
 <h3 id="async-profiler-profiling-a-basso-overhead-in-produzione">async-profiler — Profiling a basso overhead in produzione<a class="headerlink" href="#async-profiler-profiling-a-basso-overhead-in-produzione" title="Permanent link">&para;</a></h3>
-<p>async-profiler è un profiler sampling a basso overhead (&lt;3% CPU) che funziona anche in container senza accesso root completo.</p>
+<p>async-profiler è un profiler sampling a basso overhead (tipicamente pochi % di CPU) che usa <code>perf_events</code> e l'API <code>AsyncGetCallTrace</code>, evitando il safepoint bias dei profiler JVMTI classici.</p>
+<div class="admonition note">
+<p class="admonition-title">Permessi in container</p>
+<p>Il default <code>-e cpu</code> usa <code>perf_events</code>, spesso bloccato in container non privilegiati (<code>kernel.perf_event_paranoid</code>, seccomp). Senza <code>CAP_SYS_ADMIN</code>/<code>CAP_PERFMON</code> usa il fallback <code>-e itimer</code> (funziona senza privilegi, meno preciso sul kernel stack). Per l'attach al processo serve inoltre poter fare ptrace/attach sullo stesso utente: in K8s usa un ephemeral container (<code>kubectl debug</code>) con <code>shareProcessNamespace</code>, oppure includi il profiler nell'immagine.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># 1. Scaricare async-profiler nel container (o incluso nell'immagine base)</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>wget<span class="w"> </span>https://github.com/async-profiler/async-profiler/releases/latest/download/async-profiler-linux-x64.tar.gz
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>tar<span class="w"> </span>-xzf<span class="w"> </span>async-profiler-linux-x64.tar.gz
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1"># 2. Avviare profiling CPU per 30 secondi sul processo JVM</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>./asprof<span class="w"> </span>-d<span class="w"> </span><span class="m">30</span><span class="w"> </span>-f<span class="w"> </span>/tmp/flamegraph.html<span class="w"> </span><span class="k">$(</span>pgrep<span class="w"> </span>java<span class="k">)</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="c1"># 3. Profiling allocazioni heap (trova chi alloca troppo)</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>./asprof<span class="w"> </span>-e<span class="w"> </span>alloc<span class="w"> </span>-d<span class="w"> </span><span class="m">30</span><span class="w"> </span>-f<span class="w"> </span>/tmp/alloc-flamegraph.html<span class="w"> </span><span class="k">$(</span>pgrep<span class="w"> </span>java<span class="k">)</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="c1"># 4. Profiling lock contention</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>./asprof<span class="w"> </span>-e<span class="w"> </span>lock<span class="w"> </span>-d<span class="w"> </span><span class="m">30</span><span class="w"> </span>-f<span class="w"> </span>/tmp/lock-flamegraph.html<span class="w"> </span><span class="k">$(</span>pgrep<span class="w"> </span>java<span class="k">)</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># Gli asset includono la versione: sostituire &lt;versione&gt; con l'ultima release GitHub</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>wget<span class="w"> </span>https://github.com/async-profiler/async-profiler/releases/download/v&lt;versione&gt;/async-profiler-&lt;versione&gt;-linux-x64.tar.gz
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>tar<span class="w"> </span>-xzf<span class="w"> </span>async-profiler-&lt;versione&gt;-linux-x64.tar.gz<span class="w"> </span>--strip-components<span class="o">=</span><span class="m">1</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1"># Senza perf_events: aggiungere -e itimer ai comandi seguenti</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="c1"># 2. Avviare profiling CPU per 30 secondi sul processo JVM</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>./asprof<span class="w"> </span>-d<span class="w"> </span><span class="m">30</span><span class="w"> </span>-f<span class="w"> </span>/tmp/flamegraph.html<span class="w"> </span><span class="k">$(</span>pgrep<span class="w"> </span>java<span class="k">)</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="c1"># 3. Profiling allocazioni heap (trova chi alloca troppo)</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>./asprof<span class="w"> </span>-e<span class="w"> </span>alloc<span class="w"> </span>-d<span class="w"> </span><span class="m">30</span><span class="w"> </span>-f<span class="w"> </span>/tmp/alloc-flamegraph.html<span class="w"> </span><span class="k">$(</span>pgrep<span class="w"> </span>java<span class="k">)</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="c1"># 4. Profiling lock contention</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>./asprof<span class="w"> </span>-e<span class="w"> </span>lock<span class="w"> </span>-d<span class="w"> </span><span class="m">30</span><span class="w"> </span>-f<span class="w"> </span>/tmp/lock-flamegraph.html<span class="w"> </span><span class="k">$(</span>pgrep<span class="w"> </span>java<span class="k">)</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Accedere al flamegraph fuori dal container</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kubectl<span class="w"> </span>cp<span class="w"> </span>&lt;namespace&gt;/&lt;pod&gt;:/tmp/flamegraph.html<span class="w"> </span>./flamegraph.html
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Alternativa: port-forward se l'app espone async-profiler via HTTP</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1"># (richiede integrazione con py-spy o similar per Spring Boot Actuator)</span>
 </span></code></pre></div>
 <h3 id="jfr-java-flight-recorder-diagnostica-integrata">JFR (Java Flight Recorder) — Diagnostica integrata<a class="headerlink" href="#jfr-java-flight-recorder-diagnostica-integrata" title="Permanent link">&para;</a></h3>
-<p>JFR è integrato nella JVM da Java 11+ e ha overhead &lt;1%. Ideale per diagnostica in produzione.</p>
+<p>JFR è open source e integrato in OpenJDK da Java 11 (backport in 8u262+) e ha overhead tipicamente &lt;1-2% con il profilo <code>default</code>. Ideale per diagnostica in produzione.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Avviare una JFR recording tramite jcmd (dentro il container)</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>&lt;pod&gt;<span class="w"> </span>--<span class="w"> </span>jcmd<span class="w"> </span><span class="m">1</span><span class="w"> </span>JFR.start<span class="w"> </span><span class="nv">duration</span><span class="o">=</span>60s<span class="w"> </span><span class="nv">filename</span><span class="o">=</span>/tmp/recording.jfr
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
@@ -25626,7 +25647,7 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Abilitare JFR continuo all'avvio (bassa overhead, sempre attivo)</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nv">JAVA_OPTS</span><span class="o">=</span><span class="s2">"</span><span class="nv">$JAVA_OPTS</span><span class="s2"> \</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="s2">  -XX:StartFlightRecording=disk=true,maxage=1h,maxsize=500m,\</span>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="s2">dumponexit=true,filename=/tmp/jfr/"</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="s2">dumponexit=true,filename=/tmp/jfr/recording.jfr"</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Analisi rapida da CLI con jfr tool (incluso in JDK 17+)</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>jfr<span class="w"> </span>print<span class="w"> </span>--events<span class="w"> </span>GarbageCollection<span class="w"> </span>/tmp/recording.jfr<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-100
@@ -25634,7 +25655,7 @@
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">JFR in Kubernetes — persistent volume</p>
-<p>Monta un PVC o usa un sidecar per raccogliere i file JFR prima che il pod si riavvii. Alternativa: usa <code>-XX:FlightRecorderOptions=dumponexit=true</code> e configura un InitContainer per esfiltrare i file verso object storage (S3/GCS) all'uscita.</p>
+<p>Il filesystem del container è effimero: i file JFR spariscono col restart. Scrivili su un PVC (o <code>emptyDir</code> letto da un sidecar) che li carica su object storage (S3/GCS). Con <code>dumponexit=true</code> il dump avviene solo su uscita pulita (SIGTERM): su OOMKilled (SIGKILL) non c'è nessun dump, quindi tieni il recording <code>disk=true</code> con <code>maxage</code> e su volume persistente.</p>
 </div>
 <hr />
 <h2 id="oomkiller-riconoscimento-e-prevenzione">OOMKiller: Riconoscimento e Prevenzione<a class="headerlink" href="#oomkiller-riconoscimento-e-prevenzione" title="Permanent link">&para;</a></h2>
@@ -25671,26 +25692,33 @@
 </span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>
 </span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="c1"># Strategia 2: HeapDump automatico per diagnostica post-mortem</span>
 </span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>-XX:+HeapDumpOnOutOfMemoryError
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>-XX:HeapDumpPath<span class="o">=</span>/dumps/heapdump-<span class="k">$(</span>hostname<span class="k">)</span>.hprof
-</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="c1"># (Montare /dumps su un PVC per persistenza tra restart)</span>
-</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>
-</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a><span class="c1"># Strategia 3: GC overhead circuit breaker</span>
-</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a><span class="c1"># La JVM lancia OutOfMemoryError se GC impiega &gt;98% del tempo</span>
-</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a><span class="c1"># con &lt;2% di heap liberato — evita loop infiniti di GC</span>
-</span><span id="__span-22-14"><a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a><span class="c1"># Questo è il comportamento di default, NON disabilitarlo con:</span>
-</span><span id="__span-22-15"><a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a><span class="c1"># -XX:-UseGCOverheadLimit  ← NON USARE</span>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>-XX:HeapDumpPath<span class="o">=</span>/dumps
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="c1"># Se HeapDumpPath è una directory, la JVM crea java_pid&lt;pid&gt;.hprof (la shell non</span>
+</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="c1"># espande $(hostname) dentro JAVA_OPTS). Montare /dumps su un PVC per persistenza.</span>
+</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a><span class="c1"># Attenzione: un heap dump pesa quanto l'heap usato; dimensiona il volume di conseguenza.</span>
+</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>
+</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a><span class="c1"># Strategia 3: GC overhead limit (solo ParallelGC)</span>
+</span><span id="__span-22-14"><a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a><span class="c1"># Con ParallelGC la JVM lancia OutOfMemoryError se il GC impiega &gt;98% del tempo</span>
+</span><span id="__span-22-15"><a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a><span class="c1"># recuperando &lt;2% di heap. G1/ZGC non hanno questo meccanismo: lì un heap saturo</span>
+</span><span id="__span-22-16"><a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a><span class="c1"># si manifesta come Full GC ripetuti e latenze crescenti, quindi monitora i log GC.</span>
+</span><span id="__span-22-17"><a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a><span class="c1"># Non disabilitarlo su ParallelGC con -XX:-UseGCOverheadLimit</span>
+</span><span id="__span-22-18"><a id="__codelineno-22-18" name="__codelineno-22-18" href="#__codelineno-22-18"></a>
+</span><span id="__span-22-19"><a id="__codelineno-22-19" name="__codelineno-22-19" href="#__codelineno-22-19"></a><span class="c1"># Nota: ExitOnOutOfMemoryError copre solo l'OutOfMemoryError Java (heap/metaspace);</span>
+</span><span id="__span-22-20"><a id="__codelineno-22-20" name="__codelineno-22-20" href="#__codelineno-22-20"></a><span class="c1"># non evita l'OOMKill del kernel causato dalla memoria off-heap.</span>
 </span></code></pre></div>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Kubernetes: impostare sempre request = limit per QoS Guaranteed</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># Questo previene che il pod venga schedulato su nodi senza memoria sufficiente</span>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># e riduce la probabilità di OOM per overcommit del nodo</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="nt">resources</span><span class="p">:</span>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="w">  </span><span class="nt">requests</span><span class="p">:</span>
-</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="w">    </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"768Mi"</span><span class="w">  </span><span class="c1"># Uguale a limits per QoS Guaranteed</span>
-</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="w">    </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"250m"</span>
-</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a><span class="w">  </span><span class="nt">limits</span><span class="p">:</span>
-</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="w">    </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"768Mi"</span><span class="w">  </span><span class="c1"># Stesso valore = QoS Guaranteed</span>
-</span><span id="__span-23-10"><a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a><span class="w">    </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"1000m"</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Kubernetes: memory request = memory limit (la JVM non restituisce facilmente memoria</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># al nodo, quindi un request più basso del limit significa overcommit sul nodo e</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># rischio di eviction/OOM). QoS Guaranteed richiede request = limit per</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="c1"># TUTTE le risorse (anche CPU), per ogni container del Pod.</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="nt">resources</span><span class="p">:</span>
+</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="w">  </span><span class="nt">requests</span><span class="p">:</span>
+</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="w">    </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"1Gi"</span>
+</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a><span class="w">    </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"1000m"</span>
+</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="w">  </span><span class="nt">limits</span><span class="p">:</span>
+</span><span id="__span-23-10"><a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a><span class="w">    </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"1Gi"</span><span class="w">   </span><span class="c1"># Stesso valore = memoria prevedibile</span>
+</span><span id="__span-23-11"><a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a><span class="w">    </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"1000m"</span><span class="w">    </span><span class="c1"># cpu uguale = QoS Guaranteed; attenzione: limits.cpu=1000m → JVM vede 1 CPU (SerialGC se non forzi G1)</span>
 </span></code></pre></div>
+<p>Se <code>limits.cpu</code> è molto più basso dei core usati a runtime, il CFS throttling allunga startup e pause GC: valuta di omettere il limit CPU (mantenendo il request) e di fissare <code>-XX:ActiveProcessorCount=&lt;n&gt;</code> per dimensionare thread GC/JIT.</p>
 <hr />
 <h2 id="jvm-vs-graalvm-native-image">JVM vs GraalVM Native Image<a class="headerlink" href="#jvm-vs-graalvm-native-image" title="Permanent link">&para;</a></h2>
 <h3 id="confronto-caratteristiche">Confronto Caratteristiche<a class="headerlink" href="#confronto-caratteristiche" title="Permanent link">&para;</a></h3>
@@ -25772,7 +25800,7 @@
 </span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>./mvnw<span class="w"> </span>package<span class="w"> </span>-Dnative<span class="w"> </span>-Dquarkus.native.container-build<span class="o">=</span><span class="nb">true</span>
 </span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>
 </span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="c1"># Dockerfile multi-stage per native image</span>
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>FROM<span class="w"> </span>ghcr.io/graalvm/native-image:21<span class="w"> </span>AS<span class="w"> </span>builder
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>FROM<span class="w"> </span>ghcr.io/graalvm/native-image-community:21<span class="w"> </span>AS<span class="w"> </span>builder
 </span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>WORKDIR<span class="w"> </span>/app
 </span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>COPY<span class="w"> </span>.<span class="w"> </span>.
 </span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>RUN<span class="w"> </span>./mvnw<span class="w"> </span>-Pnative<span class="w"> </span>native:compile<span class="w"> </span>-DskipTests
@@ -25784,7 +25812,7 @@
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Native Image e reflection</p>
-<p>GraalVM Native Image esegue la compilazione AOT: tutto ciò che usa reflection, proxy dinamici, o classpath scanning deve essere dichiarato esplicitamente in file JSON di configurazione (<code>reflect-config.json</code>, <code>proxy-config.json</code>). Spring Boot 3.x e Quarkus gestiscono la maggior parte automaticamente, ma librerie di terze parti potrebbero richiedere configurazione manuale.</p>
+<p>GraalVM Native Image esegue la compilazione AOT: tutto ciò che usa reflection, proxy dinamici, o classpath scanning deve essere dichiarato esplicitamente nei <em>reachability metadata</em> (file JSON in <code>META-INF/native-image/</code>: <code>reachability-metadata.json</code> nelle versioni recenti, <code>reflect-config.json</code>/<code>proxy-config.json</code> nel formato storico), generabili con il tracing agent. Spring Boot 3.x e Quarkus gestiscono la maggior parte automaticamente, ma librerie di terze parti potrebbero richiedere configurazione manuale.</p>
 </div>
 <hr />
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
@@ -25853,24 +25881,22 @@
 <p><strong>Sintomo:</strong> Il container parte ma la readiness probe fallisce per 30-60s. <code>kubectl describe pod</code> mostra <code>Readiness probe failed</code> nella fase iniziale.</p>
 <p><strong>Causa:</strong> La JVM impiega tempo a caricare le classi e il JIT a ottimizzare il codice (JVM warmup). Compounding: classpath scanning di Spring Boot, inizializzazione Hibernate.</p>
 <p><strong>Soluzione:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># 1. Aggiungere Class Data Sharing (CDS) per accelerare il load delle classi</span>
-</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="c1"># Step 1: generare l'archivio CDS</span>
-</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>java<span class="w"> </span>-Xshare:dump<span class="w"> </span>-XX:SharedArchiveFile<span class="o">=</span>/app/app-cds.jsa<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="w">     </span>-XX:SharedClassListFile<span class="o">=</span>/app/classlist.txt<span class="w"> </span>-jar<span class="w"> </span>/app/app.jar
-</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>
-</span><span id="__span-28-6"><a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a><span class="c1"># Step 2: usarlo all'avvio</span>
-</span><span id="__span-28-7"><a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a>java<span class="w"> </span>-Xshare:on<span class="w"> </span>-XX:SharedArchiveFile<span class="o">=</span>/app/app-cds.jsa<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-28-8"><a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a><span class="w">     </span><span class="nv">$JAVA_OPTS</span><span class="w"> </span>-jar<span class="w"> </span>/app/app.jar
-</span><span id="__span-28-9"><a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a>
-</span><span id="__span-28-10"><a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a><span class="c1"># 2. Spring AOT (Spring Boot 3.x) — pre-compila parte del context</span>
-</span><span id="__span-28-11"><a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a>./mvnw<span class="w"> </span>spring-boot:build-image<span class="w"> </span>-Pnative<span class="w">  </span><span class="c1"># oppure solo AOT senza native</span>
-</span><span id="__span-28-12"><a id="__codelineno-28-12" name="__codelineno-28-12" href="#__codelineno-28-12"></a>
-</span><span id="__span-28-13"><a id="__codelineno-28-13" name="__codelineno-28-13" href="#__codelineno-28-13"></a><span class="c1"># 3. Aumentare initialDelaySeconds nella readiness probe</span>
-</span><span id="__span-28-14"><a id="__codelineno-28-14" name="__codelineno-28-14" href="#__codelineno-28-14"></a><span class="c1"># Non è una soluzione, è un workaround — ma evita restart prematuri</span>
-</span><span id="__span-28-15"><a id="__codelineno-28-15" name="__codelineno-28-15" href="#__codelineno-28-15"></a>readinessProbe:
-</span><span id="__span-28-16"><a id="__codelineno-28-16" name="__codelineno-28-16" href="#__codelineno-28-16"></a><span class="w">  </span>initialDelaySeconds:<span class="w"> </span><span class="m">30</span>
-</span><span id="__span-28-17"><a id="__codelineno-28-17" name="__codelineno-28-17" href="#__codelineno-28-17"></a><span class="w">  </span>periodSeconds:<span class="w"> </span><span class="m">10</span>
-</span><span id="__span-28-18"><a id="__codelineno-28-18" name="__codelineno-28-18" href="#__codelineno-28-18"></a><span class="w">  </span>failureThreshold:<span class="w"> </span><span class="m">6</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># 1. Application Class Data Sharing (AppCDS): archivio delle classi già parsate/verificate</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="c1"># Java 19+: l'archivio viene creato al primo avvio e riusato dai successivi</span>
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>java<span class="w"> </span>-XX:+AutoCreateSharedArchive<span class="w"> </span>-XX:SharedArchiveFile<span class="o">=</span>/tmp/app-cds.jsa<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="w">     </span><span class="nv">$JAVA_OPTS</span><span class="w"> </span>-jar<span class="w"> </span>/app/app.jar
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="c1"># (nell'immagine: generarlo in fase di build, così il Pod parte già con l'archivio.</span>
+</span><span id="__span-28-6"><a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a><span class="c1">#  Java 25 / Leyden: -XX:AOTCache=app.aot, che include anche profili di linking)</span>
+</span><span id="__span-28-7"><a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a>
+</span><span id="__span-28-8"><a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a><span class="c1"># 2. Spring AOT (Spring Boot 3.x) — pre-elabora bean definition a build time</span>
+</span><span id="__span-28-9"><a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a><span class="c1"># Build: ./mvnw spring-boot:process-aot ; run: java -Dspring.aot.enabled=true -jar app.jar</span>
+</span><span id="__span-28-10"><a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a>
+</span><span id="__span-28-11"><a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a><span class="c1"># 3. Startup probe: separa "avvio lento" da "app non sana" senza gonfiare la liveness</span>
+</span><span id="__span-28-12"><a id="__codelineno-28-12" name="__codelineno-28-12" href="#__codelineno-28-12"></a>startupProbe:
+</span><span id="__span-28-13"><a id="__codelineno-28-13" name="__codelineno-28-13" href="#__codelineno-28-13"></a><span class="w">  </span>httpGet:<span class="w"> </span><span class="o">{</span><span class="w"> </span>path:<span class="w"> </span>/actuator/health/readiness,<span class="w"> </span>port:<span class="w"> </span><span class="m">8080</span><span class="w"> </span><span class="o">}</span>
+</span><span id="__span-28-14"><a id="__codelineno-28-14" name="__codelineno-28-14" href="#__codelineno-28-14"></a><span class="w">  </span>periodSeconds:<span class="w"> </span><span class="m">5</span>
+</span><span id="__span-28-15"><a id="__codelineno-28-15" name="__codelineno-28-15" href="#__codelineno-28-15"></a><span class="w">  </span>failureThreshold:<span class="w"> </span><span class="m">24</span><span class="w">   </span><span class="c1"># fino a 120 s per avviarsi</span>
+</span><span id="__span-28-16"><a id="__codelineno-28-16" name="__codelineno-28-16" href="#__codelineno-28-16"></a><span class="c1"># Se limits.cpu è basso (es. 500m) l'avvio è throttled: il JIT e il class loading sono CPU-bound.</span>
 </span></code></pre></div>
 <h3 id="scenario-4-latenze-spike-improvvisi-stop-the-world-gc-pause">Scenario 4 — Latenze spike improvvisi (stop-the-world GC pause)<a class="headerlink" href="#scenario-4-latenze-spike-improvvisi-stop-the-world-gc-pause" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Ogni N minuti ci sono spike di latenza da 500ms-2s. I log GC mostrano <code>[GC pause (G1 Humongous Allocation)]</code> o <code>Full GC</code>.</p>
