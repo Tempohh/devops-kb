@@ -7,9 +7,10 @@ search_keywords: [health check, health probe, liveness probe, readiness probe, s
 parent: dev/resilienza/_index
 related: [containers/kubernetes/workloads, dev/linguaggi/java-spring-boot, dev/linguaggi/dotnet, dev/linguaggi/go, dev/resilienza/_index]
 official_docs: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Health Checks
@@ -30,6 +31,8 @@ La regola fondamentale: **liveness controlla solo il processo stesso**, readines
 
 !!! warning "Anti-pattern critico"
     Una liveness probe che chiama il database provoca restart a cascata: se il DB è down, tutti i pod vengono riavviati contemporaneamente, aggravando la situazione invece di gestirla in graceful degradation. La liveness probe deve fallire solo se il processo stesso è irrecuperabile.
+
+Oltre a `httpGet`, le probe supportano `tcpSocket`, `exec` e `grpc` (GA da Kubernetes 1.27, per servizi che implementano il gRPC Health Checking Protocol). La startup probe è GA da 1.20.
 
 ---
 
@@ -113,7 +116,7 @@ Container avviato
 ### Separazione degli endpoint per Kubernetes
 
 ```
-/livez  →  liveness   (controlla: processo vivo, thread pool non saturato)
+/livez  →  liveness   (controlla: processo vivo e in grado di rispondere)
 /readyz →  readiness  (controlla: DB, cache, broker, dipendenze critiche)
 /health →  combined   (per monitoring esterno, non per K8s probes)
 
@@ -151,11 +154,9 @@ management:
         liveness:
           include: livenessState    # solo lo stato interno del processo
         readiness:
-          include: >-
-            readinessState,         # stato di readiness del framework
-            db,                     # DataSource health
-            redis,                  # Redis health
-            kafka                   # Kafka health
+          # readinessState = stato del framework; db/redis = indicator built-in;
+          # kafka = indicator custom (nessun indicator Kafka built-in)
+          include: readinessState,db,redis,kafka
   endpoints:
     web:
       exposure:
@@ -167,20 +168,10 @@ management:
       application: ${spring.application.name}
 ```
 
-Quando l'applicazione gira su Kubernetes, Spring Boot rileva automaticamente l'ambiente e imposta i gruppi. Per ambienti non-K8s, forzare con:
+Quando l'applicazione gira su Kubernetes, Spring Boot rileva automaticamente l'ambiente (variabili `*_SERVICE_HOST`/`*_SERVICE_PORT`) e abilita i gruppi di probe. Per ambienti non-K8s (o per forzarli), `probes.enabled: true` (già mostrato sopra) abilita gli indicator `livenessState`/`readinessState` e i path `/actuator/health/liveness` e `/readiness`.
 
-```yaml
-# application.yml — forzare la modalità K8s
-spring:
-  application:
-    name: my-service
-management:
-  health:
-    livenessstate:
-      enabled: true
-    readinessstate:
-      enabled: true
-```
+!!! note "Nomi dei contributor"
+    Il nome usato in `group.*.include` deriva dal nome del bean senza suffisso `HealthIndicator` (`KafkaHealthIndicator` → `kafka`). `DatabaseHealthIndicator` sotto diventerebbe `database`, non `db`: l'indicator `db` esiste già in Spring Boot, quindi nella pratica serve custom solo dove manca (es. Kafka).
 
 ### Spring Boot — HealthIndicator Custom
 
@@ -225,40 +216,28 @@ public class DatabaseHealthIndicator implements HealthIndicator {
 
 ```java
 // KafkaHealthIndicator.java
-// Controlla che il producer Kafka possa raggiungere il broker
+// Controlla che il cluster Kafka risponda (describeCluster via AdminClient)
+// NB: il producer si connette in modo lazy, quindi "connection-count" = 0 è normale
+// finché non invia il primo messaggio: non è un segnale affidabile di broker down.
 @Component
 public class KafkaHealthIndicator implements HealthIndicator {
 
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final KafkaAdmin kafkaAdmin;
 
-    public KafkaHealthIndicator(KafkaTemplate<String, String> kafkaTemplate) {
-        this.kafkaTemplate = kafkaTemplate;
+    public KafkaHealthIndicator(KafkaAdmin kafkaAdmin) {
+        this.kafkaAdmin = kafkaAdmin;
     }
 
     @Override
     public Health health() {
-        try {
-            // List topics è una chiamata leggera che verifica la connettività al broker
-            Map<String, Object> producerMetrics = kafkaTemplate
-                .metrics()
-                .entrySet()
-                .stream()
-                .filter(e -> e.getKey().name().equals("connection-count"))
-                .collect(Collectors.toMap(
-                    e -> e.getKey().name(),
-                    e -> e.getValue().metricValue()
-                ));
-
-            double connectionCount = (double) producerMetrics
-                .getOrDefault("connection-count", 0.0);
-
-            if (connectionCount == 0) {
-                return Health.down()
-                    .withDetail("reason", "No active Kafka connections")
-                    .build();
-            }
+        // In produzione: riusa un AdminClient condiviso invece di crearne uno a ogni probe
+        try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+            DescribeClusterResult cluster = admin.describeCluster();
+            String clusterId = cluster.clusterId().get(2, TimeUnit.SECONDS);
+            int nodes = cluster.nodes().get(2, TimeUnit.SECONDS).size();
             return Health.up()
-                .withDetail("connections", (int) connectionCount)
+                .withDetail("clusterId", clusterId)
+                .withDetail("nodes", nodes)
                 .build();
         } catch (Exception e) {
             return Health.down()
@@ -272,6 +251,7 @@ public class KafkaHealthIndicator implements HealthIndicator {
 ```java
 // RedisHealthIndicator.java
 // Controlla la connettività Redis con PING
+// (esempio didattico: spring-boot-starter-data-redis fornisce già l'indicator "redis")
 @Component
 public class RedisHealthIndicator implements HealthIndicator {
 
@@ -284,7 +264,7 @@ public class RedisHealthIndicator implements HealthIndicator {
     @Override
     public Health health() {
         try {
-            String pong = redisTemplate.execute(RedisServerCommands::ping);
+            String pong = redisTemplate.execute((RedisCallback<String>) RedisConnectionCommands::ping);
             if ("PONG".equalsIgnoreCase(pong)) {
                 return Health.up()
                     .withDetail("ping", "PONG")
@@ -365,6 +345,8 @@ spec:
 
 ### .NET — HealthChecks API
 
+Pacchetti NuGet: `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` (`AddDbContextCheck`), `AspNetCore.HealthChecks.Redis` (`AddRedis`), `AspNetCore.HealthChecks.UI.Client` (`UIResponseWriter`).
+
 ```csharp
 // Program.cs — .NET 6+ minimal hosting model
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -434,6 +416,7 @@ app.Run();
 // KafkaHealthCheck.cs — IHealthCheck custom
 public class KafkaHealthCheck : IHealthCheck
 {
+    // Confluent.Kafka: IProducer non espone GetMetadata, si usa un admin client dipendente
     private readonly IProducer<string, string> _producer;
     private readonly ILogger<KafkaHealthCheck> _logger;
 
@@ -452,10 +435,8 @@ public class KafkaHealthCheck : IHealthCheck
         try
         {
             // Verifica metadati del cluster (leggero, non produce messaggi)
-            var metadata = _producer.GetMetadata(
-                allTopics: false,
-                timeout: TimeSpan.FromSeconds(2)
-            );
+            using var admin = new DependentAdminClientBuilder(_producer.Handle).Build();
+            var metadata = admin.GetMetadata(TimeSpan.FromSeconds(2));
 
             if (metadata.Brokers.Count == 0)
             {
@@ -572,7 +553,7 @@ import (
     "database/sql"
     "fmt"
 
-    "github.com/go-redis/redis/v8"
+    "github.com/redis/go-redis/v9"
 )
 
 // DBChecker verifica la connettività al database
@@ -643,10 +624,12 @@ func main() {
 
 ```
 Cosa includere in LIVENESS:
-  ✅ Thread pool / goroutine pool saturo
-  ✅ Deadlock rilevato
-  ✅ Heap quasi pieno (>95%) senza possibilità di GC
+  ✅ Deadlock rilevato (es. watchdog interno, event loop bloccato)
   ✅ Stato interno corrotto irrecuperabile
+  ✅ Il server HTTP risponde (check minimale: spesso basta questo)
+
+  ⚠️ Evita saturazione thread pool / heap alto: sotto carico elevato farebbe
+     riavviare i pod proprio quando servono, scaricando il traffico sugli altri
 
   ❌ Database unreachable
   ❌ Redis down
@@ -729,11 +712,15 @@ func main() {
 
     <-quit // attendi SIGTERM da Kubernetes
 
-    // Prima: imposta readiness probe a DOWN (via flag atomico)
+    // Prima: imposta readiness a DOWN (flag atomico `ready`, dichiarato a livello
+    // di package e controllato da ReadyzHandler: se 0 → 503)
     atomic.StoreInt32(&ready, 0)
 
-    // Poi: attendi il grace period di K8s (terminationGracePeriodSeconds)
-    // e completa le richieste in corso
+    // Attendi qualche secondo (o usa preStop sleep) perché la rimozione da Endpoints
+    // si propaghi a kube-proxy/ingress prima di chiudere il listener
+    time.Sleep(5 * time.Second)
+
+    // Poi: completa le richieste in corso entro terminationGracePeriodSeconds
     ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
     defer cancel()
     srv.Shutdown(ctx)
@@ -819,14 +806,14 @@ kubectl describe pod <pod-name> -n production | grep -A 10 "Readiness"
 # Aggiungi startupProbe se manca
 startupProbe:
   httpGet:
-    path: /readyz
+    path: /livez            # NON /readyz: un fallimento della startup probe riavvia il container
     port: 8080
   failureThreshold: 30      # 30 × 10s = 5 minuti per app molto lente
   periodSeconds: 10
 
-# Riduci il timeout del check se la probe scade prima che il DB risponda
+# Aumenta il timeout se la probe scade prima che il DB risponda
 readinessProbe:
-  timeoutSeconds: 10        # aumenta se il DB è lento a rispondere durante startup
+  timeoutSeconds: 10        # DB lento a rispondere durante startup
 ```
 
 ---
@@ -885,7 +872,7 @@ public class DatabaseHealthIndicator implements HealthIndicator {
 
 ### Problema: Startup probe blocca il rolling update
 
-**Sintomo:** Il rolling update si blocca: il nuovo pod rimane in `Pending` o `Init:0/1` per molto tempo. Kubernetes non procede con il drain del pod vecchio.
+**Sintomo:** Il rolling update si blocca: il nuovo pod resta `Running` ma `0/1` con RESTARTS in aumento (e poi `CrashLoopBackOff`), perché la startup probe lo uccide prima che finisca l'avvio. Kubernetes non procede con il drain del pod vecchio.
 
 **Causa:** La startupProbe ha un `failureThreshold × periodSeconds` totale troppo basso rispetto al tempo reale di startup in produzione (es. startup lenta per cold start su DB con molti schemi da caricare).
 
@@ -934,7 +921,7 @@ startupProbe:
 ## Riferimenti
 
 - [Kubernetes Docs: Configure Liveness, Readiness and Startup Probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/) — Documentazione ufficiale Kubernetes
-- [Spring Boot Docs: Kubernetes Probes](https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html#actuator.endpoints.kubernetes-probes) — Guida Actuator con K8s
+- [Spring Boot Docs: Kubernetes Probes](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html#actuator.endpoints.kubernetes-probes) — Guida Actuator con K8s
 - [Microsoft Docs: Health checks in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/health-checks) — Documentazione .NET ufficiale
 - [Learnk8s: Liveness vs Readiness](https://learnk8s.io/production-best-practices#application-development) — Best practice K8s per le probe
 - [Google SRE: Health Checking](https://sre.google/sre-book/monitoring-distributed-systems/) — Approccio SRE al monitoring
