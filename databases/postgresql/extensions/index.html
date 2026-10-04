@@ -12695,7 +12695,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12730,7 +12730,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12765,7 +12765,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -12809,7 +12809,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12834,7 +12834,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13088,7 +13088,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24852,7 +24852,7 @@
 
 <h1 id="postgresql-extensions">PostgreSQL Extensions<a class="headerlink" href="#postgresql-extensions" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>PostgreSQL è estensibile by design: le estensioni aggiungono tipi di dati, funzioni, operatori, metodi di accesso agli indici e perfino esecutori di query — tutto senza fork del codice sorgente. Il catalogo ufficiale <a href="https://pgxn.org/">PGXN</a> conta oltre 1000 estensioni; AWS RDS, Google Cloud SQL e Azure Database supportano un sottoinsieme selezionato.</p>
+<p>PostgreSQL è estensibile by design: le estensioni aggiungono tipi di dati, funzioni, operatori, metodi di accesso agli indici e perfino esecutori di query — tutto senza fork del codice sorgente. Il registro comunitario <a href="https://pgxn.org/">PGXN</a> raccoglie centinaia di estensioni; AWS RDS, Google Cloud SQL e Azure Database supportano un sottoinsieme selezionato.</p>
 <p>Le estensioni più rilevanti in un contesto DevOps/backend si dividono in categorie:</p>
 <table>
 <thead>
@@ -24884,7 +24884,7 @@
 </tr>
 <tr>
 <td>Monitoring</td>
-<td><code>pg_stat_statements</code>, <code>pg_activity</code></td>
+<td><code>pg_stat_statements</code></td>
 </tr>
 <tr>
 <td>Full-text search</td>
@@ -24896,19 +24896,20 @@
 </tr>
 </tbody>
 </table>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">-- Installa un'estensione (richiede superuser o pg_extension_owner)</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">EXTENSION</span><span class="w"> </span><span class="n">pgvector</span><span class="p">;</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1">-- Lista estensioni installate</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">extname</span><span class="p">,</span><span class="w"> </span><span class="n">extversion</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">pg_extension</span><span class="p">;</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1">-- Aggiorna un'estensione</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="k">ALTER</span><span class="w"> </span><span class="n">EXTENSION</span><span class="w"> </span><span class="n">pgvector</span><span class="w"> </span><span class="k">UPDATE</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="s1">'0.7.0'</span><span class="p">;</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">-- Installa un'estensione (superuser, oppure CREATE sul database se l'estensione è "trusted", PG13+;</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1">-- il nome è quello del file .control: per pgvector è `vector`, non `pgvector`)</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">EXTENSION</span><span class="w"> </span><span class="n">vector</span><span class="p">;</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1">-- Lista estensioni installate</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">extname</span><span class="p">,</span><span class="w"> </span><span class="n">extversion</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">pg_extension</span><span class="p">;</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1">-- Aggiorna un'estensione</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">ALTER</span><span class="w"> </span><span class="n">EXTENSION</span><span class="w"> </span><span class="n">vector</span><span class="w"> </span><span class="k">UPDATE</span><span class="p">;</span><span class="w">   </span><span class="c1">-- porta alla versione dei binari installati</span>
 </span></code></pre></div>
 <hr />
 <h2 id="pgvector-ricerca-vettoriale">pgvector — Ricerca Vettoriale<a class="headerlink" href="#pgvector-ricerca-vettoriale" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/pgml/pgvector">pgvector</a> aggiunge il tipo <code>vector</code> e indici per nearest-neighbor search. Permette di fare semantic search, recommendation e RAG direttamente su PostgreSQL, senza un vector database separato (Pinecone, Weaviate, ecc.).</p>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">-- Crea tabella con embedding a 1536 dimensioni (OpenAI ada-002)</span>
+<p><a href="https://github.com/pgvector/pgvector">pgvector</a> aggiunge il tipo <code>vector</code> e indici per nearest-neighbor search. Permette di fare semantic search, recommendation e RAG direttamente su PostgreSQL, senza un vector database separato (Pinecone, Weaviate, ecc.).</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">-- Crea tabella con embedding a 1536 dimensioni (es. OpenAI text-embedding-3-small)</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">documenti</span><span class="w"> </span><span class="p">(</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="n">id</span><span class="w">        </span><span class="n">BIGSERIAL</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="p">,</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="n">testo</span><span class="w">     </span><span class="nb">TEXT</span><span class="p">,</span>
@@ -24941,7 +24942,7 @@
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">WITH</span><span class="w"> </span><span class="p">(</span><span class="n">lists</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">100</span><span class="p">);</span><span class="w">   </span><span class="c1">-- sqrt(num_rows) è un buon punto di partenza</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1">-- HNSW: grafo navigabile su small world — recall migliore di IVFFlat, build più lenta</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1">-- Preferito per uso generale (PostgreSQL 16+ / pgvector 0.5+)</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1">-- Preferito per uso generale (richiede pgvector 0.5+; indipendente dalla versione di PostgreSQL)</span>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">documenti</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="n">hnsw</span><span class="w"> </span><span class="p">(</span><span class="n">embedding</span><span class="w"> </span><span class="n">vector_cosine_ops</span><span class="p">)</span>
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">WITH</span><span class="w"> </span><span class="p">(</span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">16</span><span class="p">,</span><span class="w"> </span><span class="n">ef_construction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span><span class="p">);</span>
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1">-- m = connessioni per nodo (trade-off recall/memoria)</span>
@@ -24958,7 +24959,7 @@
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="c1"># Genera embedding della query</span>
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">response</span> <span class="o">=</span> <span class="n">openai</span><span class="o">.</span><span class="n">embeddings</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>        <span class="nb">input</span><span class="o">=</span><span class="n">query</span><span class="p">,</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>        <span class="n">model</span><span class="o">=</span><span class="s2">"text-embedding-ada-002"</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>        <span class="n">model</span><span class="o">=</span><span class="s2">"text-embedding-3-small"</span>   <span class="c1"># 1536 dimensioni di default</span>
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="p">)</span>
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">query_embedding</span> <span class="o">=</span> <span class="n">response</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">embedding</span>
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
@@ -25006,12 +25007,16 @@
 </span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="w">    </span><span class="n">timescaledb</span><span class="p">.</span><span class="n">compress_orderby</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'time DESC'</span>
 </span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a><span class="p">);</span>
 </span><span id="__span-4-32"><a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a>
-</span><span id="__span-4-33"><a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a><span class="c1">-- Abilita retention policy: comprimi chunk &gt; 7 giorni</span>
+</span><span id="__span-4-33"><a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a><span class="c1">-- Policy: comprimi automaticamente i chunk più vecchi di 7 giorni</span>
 </span><span id="__span-4-34"><a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">add_compression_policy</span><span class="p">(</span><span class="s1">'metriche'</span><span class="p">,</span><span class="w"> </span><span class="nb">INTERVAL</span><span class="w"> </span><span class="s1">'7 days'</span><span class="p">);</span>
 </span><span id="__span-4-35"><a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a>
-</span><span id="__span-4-36"><a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a><span class="c1">-- Drop automatico chunk vecchi (retention)</span>
+</span><span id="__span-4-36"><a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a><span class="c1">-- Retention: drop automatico dei chunk più vecchi di 90 giorni</span>
 </span><span id="__span-4-37"><a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">add_retention_policy</span><span class="p">(</span><span class="s1">'metriche'</span><span class="p">,</span><span class="w"> </span><span class="nb">INTERVAL</span><span class="w"> </span><span class="s1">'90 days'</span><span class="p">);</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Licenza e managed service</p>
+<p>La compressione fa parte dell'edizione Community con Timescale License (non Apache 2.0). AWS RDS/Aurora non offrono TimescaleDB: serve Timescale Cloud o self-hosting. Dalla 2.18 la compressione è presentata come <em>columnstore</em> (nuove API <code>add_columnstore_policy</code> ecc.); le funzioni usate qui restano come alias retrocompatibili.</p>
+</div>
 <hr />
 <h2 id="postgis-dati-geospaziali">PostGIS — Dati Geospaziali<a class="headerlink" href="#postgis-dati-geospaziali" title="Permanent link">&para;</a></h2>
 <p><a href="https://postgis.net/">PostGIS</a> aggiunge tipi spaziali (geometry, geography) e centinaia di funzioni GIS. È lo standard de facto per spatial SQL.</p>
@@ -25044,6 +25049,7 @@
 <hr />
 <h2 id="pg_partman-lifecycle-partizioni">pg_partman — Lifecycle Partizioni<a class="headerlink" href="#pg_partman-lifecycle-partizioni" title="Permanent link">&para;</a></h2>
 <p>Vedi <a href="../../sql-avanzato/partitioning/">Partitioning</a> per la trattazione completa.</p>
+<p>La tabella padre deve già essere partizionata nativamente (<code>PARTITION BY RANGE</code>): da pg_partman 5.x il partizionamento basato su trigger non esiste più.</p>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">EXTENSION</span><span class="w"> </span><span class="n">pg_partman</span><span class="w"> </span><span class="k">SCHEMA</span><span class="w"> </span><span class="n">partman</span><span class="p">;</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1">-- Automatizza creazione e cleanup partizioni</span>
@@ -25051,7 +25057,7 @@
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="n">p_parent_table</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="s1">'public.log_eventi'</span><span class="p">,</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="n">p_control</span><span class="w">      </span><span class="o">=&gt;</span><span class="w"> </span><span class="s1">'timestamp'</span><span class="p">,</span>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="n">p_type</span><span class="w">         </span><span class="o">=&gt;</span><span class="w"> </span><span class="s1">'range'</span><span class="p">,</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="n">p_interval</span><span class="w">     </span><span class="o">=&gt;</span><span class="w"> </span><span class="s1">'monthly'</span><span class="p">,</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="n">p_interval</span><span class="w">     </span><span class="o">=&gt;</span><span class="w"> </span><span class="s1">'1 month'</span><span class="p">,</span><span class="w">   </span><span class="c1">-- pg_partman 5.x: solo intervalli testuali, non più 'monthly'</span>
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="n">p_premake</span><span class="w">      </span><span class="o">=&gt;</span><span class="w"> </span><span class="mi">3</span>
 </span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="p">);</span>
 </span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
@@ -25137,7 +25143,7 @@
 </span></code></pre></div>
 <hr />
 <h2 id="utility-extensions">Utility Extensions<a class="headerlink" href="#utility-extensions" title="Permanent link">&para;</a></h2>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">-- uuid-ossp: genera UUID v1/v4</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">-- uuid-ossp: genera UUID v1/v4 (per UUID v7 time-ordered PostgreSQL 18 offre uuidv7() built-in)</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">EXTENSION</span><span class="w"> </span><span class="ss">"uuid-ossp"</span><span class="p">;</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">uuid_generate_v4</span><span class="p">();</span><span class="w">   </span><span class="c1">-- UUID casuale</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1">-- Preferire gen_random_uuid() built-in (PostgreSQL 13+, nessuna estensione)</span>
@@ -25158,7 +25164,7 @@
 </span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>
 </span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="c1">-- pg_trgm: trigram similarity per fuzzy search e LIKE veloce</span>
 </span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">EXTENSION</span><span class="w"> </span><span class="n">pg_trgm</span><span class="p">;</span>
-</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">similarity</span><span class="p">(</span><span class="s1">'postgresql'</span><span class="p">,</span><span class="w"> </span><span class="s1">'postresql'</span><span class="p">);</span><span class="w">  </span><span class="c1">-- ~0.53 (typo)</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">similarity</span><span class="p">(</span><span class="s1">'postgresql'</span><span class="p">,</span><span class="w"> </span><span class="s1">'postresql'</span><span class="p">);</span><span class="w">  </span><span class="c1">-- ~0.62 (typo)</span>
 </span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">idx_nome_trgm</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">prodotti</span><span class="w"> </span><span class="k">USING</span><span class="w"> </span><span class="n">GIN</span><span class="w"> </span><span class="p">(</span><span class="n">nome</span><span class="w"> </span><span class="n">gin_trgm_ops</span><span class="p">);</span>
 </span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">prodotti</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">nome</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="s1">'postgresq'</span><span class="p">;</span><span class="w">  </span><span class="c1">-- fuzzy match</span>
 </span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">prodotti</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">nome</span><span class="w"> </span><span class="k">ILIKE</span><span class="w"> </span><span class="s1">'%postg%'</span><span class="p">;</span><span class="w">  </span><span class="c1">-- LIKE veloce con indice trgm</span>
@@ -25166,10 +25172,10 @@
 <hr />
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Preferire built-in a estensioni quando possibile</strong>: <code>gen_random_uuid()</code>, <code>jsonb</code>, <code>tsvector</code> sono built-in da PG13+. Le estensioni hanno overhead di installazione/aggiornamento</li>
+<li><strong>Preferire built-in a estensioni quando possibile</strong>: <code>gen_random_uuid()</code> (PG13+), <code>jsonb</code> e <code>tsvector</code> sono built-in. Le estensioni hanno overhead di installazione/aggiornamento</li>
 <li><strong>Verificare supporto su managed service</strong>: non tutte le estensioni sono disponibili su RDS/Cloud SQL. Verificare prima dell'architettura</li>
 <li><strong><code>shared_preload_libraries</code> richiede restart</strong>: le estensioni che usano questo parametro (pg_stat_statements, pg_cron, timescaledb) richiedono restart di PostgreSQL per l'installazione iniziale</li>
-<li><strong>pgvector: scegliere le dimensioni con cura</strong>: vettori a 1536 dim (OpenAI) pesano 6KB per riga — con 1M righe = 6GB solo per gli embedding. Considerare quantizzazione o dimensioni ridotte</li>
+<li><strong>pgvector: scegliere le dimensioni con cura</strong>: vettori a 1536 dim (OpenAI) pesano 6KB per riga — con 1M righe = 6GB solo per gli embedding. Considerare <code>halfvec</code> (float16, pgvector 0.7+), quantizzazione o dimensioni ridotte</li>
 <li><strong>TimescaleDB e pg_partman non coesistono</strong>: non usare entrambi sulla stessa tabella — TimescaleDB gestisce il proprio partizionamento interno</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -25191,15 +25197,15 @@
 <hr />
 <h3 id="scenario-2-pgvector-query-di-similarita-lente-nonostante-lindice">Scenario 2 — pgvector: query di similarità lente nonostante l'indice<a class="headerlink" href="#scenario-2-pgvector-query-di-similarita-lente-nonostante-lindice" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Query <code>ORDER BY embedding &lt;=&gt; $1 LIMIT 10</code> impiega secondi su tabelle da centinaia di migliaia di righe, anche con indice HNSW creato.</p>
-<p><strong>Causa 1:</strong> L'indice è stato creato prima di popolare la tabella — un indice HNSW/IVFFlat costruito su poche righe non beneficia le query su milioni di righe.
-<strong>Causa 2:</strong> <code>hnsw.ef_search</code> troppo basso, oppure l'indice IVFFlat ha <code>lists</code> sottodimensionato.</p>
+<p><strong>Causa 1:</strong> Indice IVFFlat creato prima di popolare la tabella — i centroidi (<code>lists</code>) sono calcolati sui dati presenti al build, quindi su poche righe risultano inadatti. (HNSW non ha questo problema: si aggiorna in modo incrementale.)
+<strong>Causa 2:</strong> Il planner non usa l'indice (verificare con <code>EXPLAIN</code>), oppure <code>hnsw.ef_search</code> / <code>ivfflat.probes</code> sono mal tarati. Con filtri <code>WHERE</code> l'indice approssimato può restituire meno risultati del <code>LIMIT</code>.</p>
 <p><strong>Soluzione:</strong></p>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1">-- Verifica che il planner usi l'indice</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="p">(</span><span class="k">ANALYZE</span><span class="p">,</span><span class="w"> </span><span class="n">BUFFERS</span><span class="p">)</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">documenti</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">embedding</span><span class="w"> </span><span class="o">&lt;=&gt;</span><span class="w"> </span><span class="err">$</span><span class="mi">1</span><span class="w"> </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">10</span><span class="p">;</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1">-- Ricostruisci l'indice dopo il caricamento bulk</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="k">REINDEX</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">CONCURRENTLY</span><span class="w"> </span><span class="n">idx_documenti_hnsw</span><span class="p">;</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1">-- IVFFlat: ricostruisci l'indice dopo il caricamento bulk</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="k">REINDEX</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">CONCURRENTLY</span><span class="w"> </span><span class="n">idx_documenti_ivfflat</span><span class="p">;</span>
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="c1">-- Aumenta ef_search per migliorare recall (a scapito della latenza)</span>
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="k">SET</span><span class="w"> </span><span class="n">hnsw</span><span class="p">.</span><span class="n">ef_search</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">200</span><span class="p">;</span>
@@ -25239,7 +25245,7 @@
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-timescaledb-la-compressione-non-riduce-lo-spazio">Scenario 4 — TimescaleDB: la compressione non riduce lo spazio<a class="headerlink" href="#scenario-4-timescaledb-la-compressione-non-riduce-lo-spazio" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> <code>add_compression_policy</code> è attivo ma lo spazio su disco non diminuisce. <code>select_tablespace</code> mostra chunk non compressi.</p>
+<p><strong>Sintomo:</strong> <code>add_compression_policy</code> è attivo ma lo spazio su disco non diminuisce. <code>chunk_compression_stats</code> non mostra chunk compressi.</p>
 <p><strong>Causa:</strong> La compression policy si attiva solo sui chunk che soddisfano l'intervallo minimo (<code>compress_after</code>). Chunk recenti non vengono mai compressi. Oppure la policy è definita ma il job di background TimescaleDB è disabilitato.</p>
 <p><strong>Soluzione:</strong></p>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1">-- Verifica stato dei job TimescaleDB (background workers)</span>
@@ -25255,14 +25261,15 @@
 </span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">chunk_name</span><span class="p">,</span>
 </span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">       </span><span class="n">pg_size_pretty</span><span class="p">(</span><span class="n">before_compression_total_bytes</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="k">before</span><span class="p">,</span>
 </span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="w">       </span><span class="n">pg_size_pretty</span><span class="p">(</span><span class="n">after_compression_total_bytes</span><span class="p">)</span><span class="w">  </span><span class="k">AS</span><span class="w"> </span><span class="k">after</span><span class="p">,</span>
-</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="w">       </span><span class="n">compression_ratio</span>
-</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="k">FROM</span><span class="w"> </span><span class="n">chunk_compression_stats</span><span class="p">(</span><span class="s1">'metriche'</span><span class="p">)</span>
-</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">chunk_name</span><span class="p">;</span>
-</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>
-</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="c1">-- Se il job è in pausa, riabilitalo</span>
-</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">alter_job</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span><span class="w"> </span><span class="n">scheduled</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="k">true</span><span class="p">)</span>
-</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="k">FROM</span><span class="w"> </span><span class="n">timescaledb_information</span><span class="p">.</span><span class="n">jobs</span>
-</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">proc_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'policy_compression'</span><span class="p">;</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="w">       </span><span class="n">round</span><span class="p">(</span><span class="n">before_compression_total_bytes</span><span class="p">::</span><span class="nb">numeric</span>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="w">             </span><span class="o">/</span><span class="w"> </span><span class="k">NULLIF</span><span class="p">(</span><span class="n">after_compression_total_bytes</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">),</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">ratio</span>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="k">FROM</span><span class="w"> </span><span class="n">chunk_compression_stats</span><span class="p">(</span><span class="s1">'metriche'</span><span class="p">)</span>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">chunk_name</span><span class="p">;</span>
+</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a>
+</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="c1">-- Se il job è in pausa, riabilitalo</span>
+</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">alter_job</span><span class="p">(</span><span class="n">job_id</span><span class="p">,</span><span class="w"> </span><span class="n">scheduled</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="k">true</span><span class="p">)</span>
+</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="k">FROM</span><span class="w"> </span><span class="n">timescaledb_information</span><span class="p">.</span><span class="n">jobs</span>
+</span><span id="__span-16-22"><a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">proc_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'policy_compression'</span><span class="p">;</span>
 </span></code></pre></div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
@@ -25278,7 +25285,7 @@
 </details>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="https://github.com/pgml/pgvector">pgvector — Vector Similarity Search</a></li>
+<li><a href="https://github.com/pgvector/pgvector">pgvector — Vector Similarity Search</a></li>
 <li><a href="https://docs.timescale.com/">TimescaleDB Documentation</a></li>
 <li><a href="https://postgis.net/documentation/">PostGIS Documentation</a></li>
 <li><a href="https://github.com/citusdata/pg_cron">pg_cron — Job Scheduling</a></li>

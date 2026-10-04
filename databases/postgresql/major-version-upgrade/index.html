@@ -12695,7 +12695,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12730,7 +12730,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12765,7 +12765,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -12800,7 +12800,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12844,7 +12844,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -12869,7 +12869,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -25139,7 +25139,7 @@
 </thead>
 <tbody>
 <tr>
-<td>Le <strong>sequenze</strong> non vengono replicate (fino a PG 18; da PG 19 sono previste)</td>
+<td>Le <strong>sequenze</strong> non vengono replicate (fino a PG 18; da PG 19 sono previste) <!-- REVIEW: verificare se PG 19 (autunno 2026) ha rilasciato la replica delle sequenze e se pg_upgrade/stato corrente delle versioni supportate è cambiato --></td>
 <td>Dopo il cutover gli <code>INSERT</code> falliscono con duplicate key</td>
 <td>Sincronizzare con <code>setval()</code> al cutover</td>
 </tr>
@@ -25295,19 +25295,22 @@
 <p><code>pg_dump</code> della versione target sa leggere i server più vecchi ed emette SQL adatto alla destinazione. L'opposto non vale.</p>
 </div>
 <h3 id="strategia-2-pg_upgrade">Strategia 2 — pg_upgrade<a class="headerlink" href="#strategia-2-pg_upgrade" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># 1. Installa i binari 17 accanto ai 15 e crea il nuovo cluster vuoto</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>sudo<span class="w"> </span>-u<span class="w"> </span>postgres<span class="w"> </span>/usr/lib/postgresql/17/bin/initdb<span class="w"> </span>-D<span class="w"> </span>/var/lib/postgresql/17/main<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span>--data-checksums<span class="w"> </span>--locale-provider<span class="o">=</span>icu<span class="w"> </span>--icu-locale<span class="o">=</span>it-IT
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># 2. Controllo di compatibilità: NON modifica nulla, si può ripetere a cluster in produzione</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>sudo<span class="w"> </span>-u<span class="w"> </span>postgres<span class="w"> </span>/usr/lib/postgresql/17/bin/pg_upgrade<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span>--old-bindir<span class="o">=</span>/usr/lib/postgresql/15/bin<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span>--new-bindir<span class="o">=</span>/usr/lib/postgresql/17/bin<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span>--old-datadir<span class="o">=</span>/var/lib/postgresql/15/main<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span>--new-datadir<span class="o">=</span>/var/lib/postgresql/17/main<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span>--link<span class="w"> </span>--jobs<span class="o">=</span><span class="m">8</span><span class="w"> </span>--check
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># 1. Installa i binari 17 accanto ai 15 e crea il nuovo cluster vuoto.</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1">#    Encoding, locale e locale provider DEVONO coincidere con il vecchio cluster</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1">#    (verifica con: SELECT datname, datcollate, datctype, datlocprovider FROM pg_database;),</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1">#    altrimenti pg_upgrade --check fallisce. Idem per i data checksums: stessa impostazione.</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>sudo<span class="w"> </span>-u<span class="w"> </span>postgres<span class="w"> </span>/usr/lib/postgresql/17/bin/initdb<span class="w"> </span>-D<span class="w"> </span>/var/lib/postgresql/17/main<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span>--encoding<span class="o">=</span>UTF8<span class="w"> </span>--locale<span class="o">=</span>it_IT.UTF-8
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># 2. Controllo di compatibilità: NON modifica nulla, si può ripetere a cluster in produzione</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>sudo<span class="w"> </span>-u<span class="w"> </span>postgres<span class="w"> </span>/usr/lib/postgresql/17/bin/pg_upgrade<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span>--old-bindir<span class="o">=</span>/usr/lib/postgresql/15/bin<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span>--new-bindir<span class="o">=</span>/usr/lib/postgresql/17/bin<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span>--old-datadir<span class="o">=</span>/var/lib/postgresql/15/main<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span>--new-datadir<span class="o">=</span>/var/lib/postgresql/17/main<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">    </span>--link<span class="w"> </span>--jobs<span class="o">=</span><span class="m">8</span><span class="w"> </span>--check
 </span></code></pre></div>
-<p>Output atteso: <code>*Clusters are compatible*</code>. Con <code>--check</code> si scoprono i blocchi tipici: prepared transactions, tipi <code>reg*</code> nelle tabelle utente, estensioni mancanti, <code>data checksums</code> diversi tra i due cluster (devono coincidere nelle versioni più vecchie di PG 18).</p>
+<p>Output atteso: <code>*Clusters are compatible*</code>. Con <code>--check</code> si scoprono i blocchi tipici: prepared transactions, tipi <code>reg*</code> nelle tabelle utente, estensioni mancanti, <code>data checksums</code> diversi tra i due cluster (devono coincidere), encoding/locale/locale provider diversi. Attenzione: da PG 18 <code>initdb</code> abilita i checksum <strong>di default</strong>; se il vecchio cluster non li ha, creare il nuovo con <code>initdb --no-data-checksums</code> (oppure abilitarli prima sul vecchio con <code>pg_checksums --enable</code>, a cluster fermo).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># 3. Finestra di manutenzione: ferma l'applicazione e il vecchio cluster</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>sudo<span class="w"> </span>systemctl<span class="w"> </span>stop<span class="w"> </span>postgresql@15-main
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
@@ -25350,7 +25353,7 @@
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Alternativa fisica → logica: pg_createsubscriber</p>
-<p>Da PG 17, <code>pg_createsubscriber</code> converte una <strong>standby fisica</strong> in un subscriber logico, evitando la copia iniziale dei dati (molto più veloce per DB grandi). Va comunque combinata con un upgrade di versione (es. <code>pg_upgrade</code> sulla standby promossa) per ottenere un green sulla versione nuova.</p>
+<p>Da PG 17, <code>pg_createsubscriber</code> converte una <strong>standby fisica</strong> (stessa major del primary) in un subscriber logico, evitando la copia iniziale dei dati (molto più veloce per DB grandi). Da solo <strong>non</strong> cambia versione: la standby ha la stessa major del primary. Per arrivare a una major superiore, dopo la conversione si esegue <code>pg_upgrade</code> sul subscriber, che da un cluster PG 17+ preserva slot e stato della subscription; quindi il percorso vale per partenze da PG 17 in su.</p>
 </div>
 <h4 id="script-di-cutover-con-verifica-del-lag-lsn">Script di cutover con verifica del lag LSN<a class="headerlink" href="#script-di-cutover-con-verifica-del-lag-lsn" title="Permanent link">&para;</a></h4>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="ch">#!/usr/bin/env bash</span>
@@ -25382,7 +25385,7 @@
 </span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a>psql<span class="w"> </span><span class="s2">"</span><span class="nv">$BLUE</span><span class="s2">"</span><span class="w"> </span>-Atc<span class="w"> </span><span class="s2">"SELECT format('SELECT setval(%L, %s, true);', quote_ident(schemaname)||'.'||quote_ident(sequencename), last_value) FROM pg_sequences WHERE last_value IS NOT NULL;"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>psql<span class="w"> </span><span class="s2">"</span><span class="nv">$GREEN</span><span class="s2">"</span>
 </span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a>
-</span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"5) Rimuovi la subscription (mantieni blue intatto per il rollback)"</span>
+</span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"5) Rimuovi la subscription (blue resta intatto per il rollback; lo slot su blue NON viene droppato: eliminarlo a mano quando non serve più, altrimenti trattiene WAL)"</span>
 </span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a>psql<span class="w"> </span><span class="s2">"</span><span class="nv">$GREEN</span><span class="s2">"</span><span class="w"> </span>-c<span class="w"> </span><span class="s2">"ALTER SUBSCRIPTION upgrade_sub DISABLE;"</span>
 </span><span id="__span-9-32"><a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a>psql<span class="w"> </span><span class="s2">"</span><span class="nv">$GREEN</span><span class="s2">"</span><span class="w"> </span>-c<span class="w"> </span><span class="s2">"ALTER SUBSCRIPTION upgrade_sub SET (slot_name = NONE);"</span>
 </span><span id="__span-9-33"><a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a>psql<span class="w"> </span><span class="s2">"</span><span class="nv">$GREEN</span><span class="s2">"</span><span class="w"> </span>-c<span class="w"> </span><span class="s2">"DROP SUBSCRIPTION upgrade_sub;"</span>
@@ -25523,7 +25526,7 @@
 <li>Usa i <strong>binari della versione target</strong> per <code>pg_dump</code>, <code>pg_upgrade</code>, <code>vacuumdb</code>.</li>
 <li>Esegui <code>pg_upgrade --check</code> giorni prima, non il giorno dell'upgrade.</li>
 <li>Prepara la <strong>configurazione</strong> della nuova versione partendo dal file della nuova versione e riportando i soli parametri custom (non copiare il vecchio <code>postgresql.conf</code>).</li>
-<li>Abilita i <strong>data checksums</strong> sul nuovo cluster (<code>initdb --data-checksums</code>): è l'occasione per farlo. Con <code>pg_upgrade</code> i due cluster devono avere la stessa impostazione (nelle versioni precedenti a PG 18).</li>
+<li>I <strong>data checksums</strong> rilevano la corruzione silenziosa dei blocchi su disco. Con <code>pg_upgrade</code> i due cluster devono avere la stessa impostazione: per abilitarli nel passaggio usare dump/restore o logical replication (<code>initdb --data-checksums</code> sul nuovo), oppure <code>pg_checksums --enable</code> sul vecchio cluster fermo prima dell'upgrade.</li>
 <li>Congela <strong>deploy e migrazioni di schema</strong> durante una migrazione logica.</li>
 <li>Monitora il lag, il numero di connessioni, <code>pg_stat_statements</code> e i tempi p95/p99 per 24–72 h dopo l'upgrade.</li>
 <li><strong>Anti-pattern</strong>: upgrade e cambio di OS/glibc nello stesso passo senza REINDEX; omettere <code>ANALYZE</code>; spegnere il vecchio cluster il giorno stesso.</li>

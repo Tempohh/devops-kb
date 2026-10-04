@@ -12695,7 +12695,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12730,7 +12730,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12774,7 +12774,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -12799,7 +12799,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -13109,7 +13109,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13144,7 +13144,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24947,7 +24947,7 @@
 <p><strong>PgBouncer</strong> è un connection pooler leggero (scritto in C, ~1MB RAM idle) che si posiziona tra l'applicazione e PostgreSQL, riutilizzando le connessioni al server. L'applicazione vede un PostgreSQL normale sulla porta 5432 (o 6432); PgBouncer mantiene un pool ridotto di connessioni reali al server.</p>
 <div class="admonition warning">
 <p class="admonition-title">PgBouncer non è opzionale in produzione</p>
-<p>Su istanze con &gt;100 connessioni simultanee, PgBouncer (o equivalent) è praticamente obbligatorio. AWS RDS, Aurora e la maggior parte dei managed service lo raccomandano esplicitamente. RDS Proxy è essenzialmente PgBouncer as-a-service.</p>
+<p>Su istanze con &gt;100 connessioni simultanee, PgBouncer (o equivalent) è praticamente obbligatorio. AWS RDS, Aurora e la maggior parte dei managed service lo raccomandano esplicitamente. RDS Proxy è un servizio di pooling gestito equivalente nello scopo (non è PgBouncer).</p>
 </div>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <h3 id="i-tre-pool-mode">I Tre Pool Mode<a class="headerlink" href="#i-tre-pool-mode" title="Permanent link">&para;</a></h3>
@@ -24985,7 +24985,8 @@
 <p><strong>Limitazioni di Transaction Mode:</strong>
 - <code>SET</code> e variabili di sessione (es. <code>SET search_path = myschema</code>) non sopravvivono tra transazioni — la connessione potrebbe andare a un client diverso
 - <code>LISTEN/NOTIFY</code> richiede session mode
-- Prepared statements: richiedono configurazione specifica (<code>max_prepared_statements</code>)
+- Prepared statements: richiedono configurazione specifica (<code>max_prepared_statements</code>, PgBouncer ≥ 1.21)
+- Advisory lock di sessione (<code>pg_advisory_lock</code>), tabelle <code>TEMP</code> e <code>WITH HOLD</code> cursor: legati alla connessione server, non sicuri tra transazioni
 - <code>DECLARE CURSOR</code> senza <code>HOLD</code> non funziona cross-transaction</p>
 <h3 id="anatomia-del-pool">Anatomia del Pool<a class="headerlink" href="#anatomia-del-pool" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>App Pod 1 (20 connessioni) ─┐
@@ -24995,7 +24996,7 @@
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>                              60 client conn      10 server conn
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                              max_client_conn=200  default_pool_size=10
 </span></code></pre></div>
-<p>Se tutte le 10 connessioni server sono occupate, i client vengono messi in coda (fino a <code>server_connect_timeout</code>). PgBouncer non rifiuta richieste — le serializza.</p>
+<p>Se tutte le 10 connessioni server sono occupate, i client vengono messi in coda (fino a <code>query_wait_timeout</code>, poi errore al client). PgBouncer non rifiuta subito le richieste — le accoda.</p>
 <h3 id="pool-size-formula">Pool Size — Formula<a class="headerlink" href="#pool-size-formula" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a># Regola empirica:
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pool_size = num_cores * 2  (per workload CPU-bound)
@@ -25007,7 +25008,8 @@
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a># Con 10 pod applicativi che usano PgBouncer:
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>max_client_conn = 10 * 50 = 500 connessioni client
 </span></code></pre></div>
-<p>La formula di PostgreSQL per il massimo teorico: <code>max_connections = (RAM - shared_buffers) / (work_mem * average_concurrent_queries)</code>. In pratica, <code>max_connections = 100-400</code> è il range comune.</p>
+<p><strong>Perché questo range:</strong> oltre qualche connessione per core le query concorrenti competono per CPU, I/O e lock, e il throughput non cresce più (anzi cala per context switch). Il pool piccolo + coda lato PgBouncer è più veloce di tante connessioni attive.</p>
+<p><code>default_pool_size</code> vale <strong>per coppia (database, user)</strong>: la somma di tutti i pool deve restare sotto <code>max_connections</code> di PostgreSQL (meno <code>superuser_reserved_connections</code>). Per un tetto globale per database usare <code>max_db_connections</code>. In pratica <code>max_connections = 100-400</code> è il range comune.</p>
 <hr />
 <h2 id="configurazione">Configurazione<a class="headerlink" href="#configurazione" title="Permanent link">&para;</a></h2>
 <h3 id="pgbouncerini">pgbouncer.ini<a class="headerlink" href="#pgbouncerini" title="Permanent link">&para;</a></h3>
@@ -25067,32 +25069,36 @@
 <div class="language-ini highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># pgbouncer.ini — abilita prepared statement caching</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="na">max_prepared_statements</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">100</span><span class="w">      </span><span class="c1"># 0 = disabilita, &gt;0 = PgBouncer fa il tracking</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Con max_prepared_statements &gt; 0, PgBouncer trasla i named prepared statement</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># (es. "stmt_1") in statement anonimi server-side, rendendoli compatibili con</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># il pool mode transaction. Richiede PostgreSQL 14+.</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Con max_prepared_statements &gt; 0 (PgBouncer &gt;= 1.21) PgBouncer intercetta i</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># prepared statement del protocollo esteso (Parse/Bind), li rinomina e li</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># prepara al bisogno sulla connessione server effettiva, rendendoli compatibili</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># con transaction mode. Non gestisce i comandi SQL PREPARE/EXECUTE testuali.</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Nessun requisito di versione lato PostgreSQL.</span>
 </span></code></pre></div>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Python psycopg3 — prepared statements funzionano con PgBouncer</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># (psycopg3 gestisce il lato client, non usa named server-side prepared statements)</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">conn</span> <span class="o">=</span> <span class="n">psycopg3</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">dsn</span><span class="p">,</span> <span class="n">prepare_threshold</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Dopo 5 esecuzioni, la query viene preparata automaticamente</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Python psycopg (v3): dopo prepare_threshold esecuzioni usa prepared statement</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># server-side (named). Con PgBouncer &gt;= 1.21 + max_prepared_statements funziona;</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># con versioni precedenti disabilitare con prepare_threshold=None.</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">psycopg</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">conn</span> <span class="o">=</span> <span class="n">psycopg</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">dsn</span><span class="p">,</span> <span class="n">prepare_threshold</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="docker-compose-kubernetes">Docker Compose / Kubernetes<a class="headerlink" href="#docker-compose-kubernetes" title="Permanent link">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># docker-compose.yml</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">pgbouncer</span><span class="p">:</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pgbouncer/pgbouncer:1.22</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">environment</span><span class="p">:</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">POSTGRESQL_HOST</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgres</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nt">POSTGRESQL_PORT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5432</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="nt">POSTGRESQL_DATABASE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">myapp_db</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nt">POSTGRESQL_USERNAME</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">myapp_user</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="nt">POSTGRESQL_PASSWORD</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${DB_PASSWORD}</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="nt">PGBOUNCER_POOL_MODE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">transaction</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="nt">PGBOUNCER_MAX_CLIENT_CONN</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span><span class="nt">PGBOUNCER_DEFAULT_POOL_SIZE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">25</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span><span class="nt">ports</span><span class="p">:</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"5432:5432"</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span><span class="nt">depends_on</span><span class="p">:</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgres</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="c1"># &lt;!-- REVIEW: verificare immagine e nomi variabili: POSTGRESQL_*/PGBOUNCER_* sono dell'immagine Bitnami (deprecata/spostata nel 2025); tag 1.22 superato --&gt;</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pgbouncer/pgbouncer:1.22</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="nt">environment</span><span class="p">:</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nt">POSTGRESQL_HOST</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgres</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="nt">POSTGRESQL_PORT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5432</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nt">POSTGRESQL_DATABASE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">myapp_db</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="nt">POSTGRESQL_USERNAME</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">myapp_user</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="nt">POSTGRESQL_PASSWORD</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${DB_PASSWORD}</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="nt">PGBOUNCER_POOL_MODE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">transaction</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span><span class="nt">PGBOUNCER_MAX_CLIENT_CONN</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span><span class="nt">PGBOUNCER_DEFAULT_POOL_SIZE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">25</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">  </span><span class="nt">ports</span><span class="p">:</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"5432:5432"</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">  </span><span class="nt">depends_on</span><span class="p">:</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgres</span>
 </span></code></pre></div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Kubernetes — PgBouncer come sidecar nel Deployment dell'app</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># oppure come deployment separato (più comune)</span>
@@ -25182,14 +25188,14 @@
 <h3 id="metriche-prometheus">Metriche Prometheus<a class="headerlink" href="#metriche-prometheus" title="Permanent link">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># pgbouncer_exporter — espone metriche PgBouncer per Prometheus</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># https://github.com/prometheus-community/pgbouncer_exporter</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># docker-compose</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="nt">pgbouncer_exporter</span><span class="p">:</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prometheuscommunity/pgbouncer-exporter:latest</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span><span class="nt">environment</span><span class="p">:</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="nt">DATA_SOURCE_URI</span><span class="p">:</span><span class="w"> </span><span class="s">"localhost:5432/pgbouncer?sslmode=disable"</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span><span class="nt">DATA_SOURCE_USER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span><span class="nt">DATA_SOURCE_PASS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${MONITORING_PASSWORD}</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># Nota: la connessione si passa con --pgBouncer.connectionString (non con le</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># variabili DATA_SOURCE_* di postgres_exporter).</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># docker-compose</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="nt">pgbouncer_exporter</span><span class="p">:</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prometheuscommunity/pgbouncer-exporter:latest</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span><span class="nt">command</span><span class="p">:</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"--pgBouncer.connectionString=postgres://monitoring:${MONITORING_PASSWORD}@pgbouncer:5432/pgbouncer?sslmode=disable"</span>
 </span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">  </span><span class="nt">ports</span><span class="p">:</span>
 </span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"9127:9127"</span>
 </span></code></pre></div>
@@ -25222,7 +25228,7 @@
 <li><strong>pool_size = num_CPU * 2-4</strong>: non aumentare pool_size oltre questo range — più connessioni = più context switch = peggioramento. Il bottleneck è PostgreSQL, non PgBouncer</li>
 <li><strong>2 istanze PgBouncer per HA (High Availability)</strong>: PgBouncer è stateless — 2 repliche davanti allo stesso PostgreSQL garantiscono HA senza complessità. In Kubernetes usare un Service con 2 pod</li>
 <li><strong>Sidecar vs deployment dedicato</strong>: sidecar (PgBouncer nel pod dell'app) massimizza il controllo per pod; deployment dedicato riduce i processi. In Kubernetes il deployment dedicato è più comune</li>
-<li><strong>Non usare PgBouncer per PostgreSQL gestito (RDS, Cloud SQL)</strong>: AWS RDS Proxy, Cloud SQL Auth Proxy e simili integrano già il connection pooling — aggiungere PgBouncer davanti crea doppio pooling senza benefici</li>
+<li><strong>Managed service (RDS, Cloud SQL)</strong>: PgBouncer resta valido (molti lo usano su RDS/Aurora). Alternative gestite: RDS Proxy, pooler gestito di Cloud SQL. Non impilare due pooler in cascata: aggiunge latenza e rende opaco il debug. Nota: Cloud SQL Auth Proxy è un tunnel TLS/IAM, <strong>non</strong> un pooler</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-prepared-statement-gia-esistente">Scenario 1 — Prepared statement già esistente<a class="headerlink" href="#scenario-1-prepared-statement-gia-esistente" title="Permanent link">&para;</a></h3>
@@ -25274,8 +25280,8 @@
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1">-- Verifica connessioni client correnti</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">psql</span><span class="w"> </span><span class="o">-</span><span class="n">h</span><span class="w"> </span><span class="n">localhost</span><span class="w"> </span><span class="o">-</span><span class="n">p</span><span class="w"> </span><span class="mi">5432</span><span class="w"> </span><span class="o">-</span><span class="n">U</span><span class="w"> </span><span class="n">pgbouncer_admin</span><span class="w"> </span><span class="n">pgbouncer</span><span class="w"> </span><span class="o">-</span><span class="k">c</span><span class="w"> </span><span class="ss">"SHOW CLIENTS;"</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1">-- Quante connessioni apre ogni pod applicativo?</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">psql</span><span class="w"> </span><span class="o">-</span><span class="n">h</span><span class="w"> </span><span class="n">localhost</span><span class="w"> </span><span class="o">-</span><span class="n">p</span><span class="w"> </span><span class="mi">5432</span><span class="w"> </span><span class="o">-</span><span class="n">U</span><span class="w"> </span><span class="n">pgbouncer_admin</span><span class="w"> </span><span class="n">pgbouncer</span><span class="w"> </span><span class="o">-</span><span class="k">c</span><span class="w"> </span><span class="ss">"SHOW STATS;"</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1">-- Quante connessioni apre ogni pod applicativo? Raggruppare per indirizzo (colonna addr)</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">psql</span><span class="w"> </span><span class="o">-</span><span class="n">h</span><span class="w"> </span><span class="n">localhost</span><span class="w"> </span><span class="o">-</span><span class="n">p</span><span class="w"> </span><span class="mi">5432</span><span class="w"> </span><span class="o">-</span><span class="n">U</span><span class="w"> </span><span class="n">pgbouncer_admin</span><span class="w"> </span><span class="n">pgbouncer</span><span class="w"> </span><span class="o">-</span><span class="k">c</span><span class="w"> </span><span class="ss">"SHOW CLIENTS;"</span>
 </span></code></pre></div>
 <div class="language-ini highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># pgbouncer.ini — aumentare il limite (verificare prima i limiti OS: ulimit -n)</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="na">max_client_conn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">2000</span>

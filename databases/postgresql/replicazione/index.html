@@ -12695,7 +12695,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12739,7 +12739,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12764,7 +12764,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13046,7 +13046,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -13081,7 +13081,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13116,7 +13116,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24921,10 +24921,14 @@
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Commit sincrono vs asincrono</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="na">synchronous_commit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">on</span><span class="w">      </span><span class="c1"># Attende ack dalla standby prima di rispondere al client</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># synchronous_commit = off   # Non attende — possibile perdita di max 2×wal_writer_delay ms</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># synchronous_commit = off   # Non attende — possibile perdita di transazioni confermate (finestra max 3×wal_writer_delay), ma nessuna corruzione</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># synchronous_commit = remote_write  # Standby ha ricevuto il WAL ma non ha fatto fsync</span>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1"># synchronous_commit = remote_apply  # Standby ha applicato il WAL (più sicuro, più lento)</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Nome della standby sincrona</p>
+<p>I valori di <code>synchronous_standby_names</code> (es. <code>standby1</code>) sono confrontati con l'<code>application_name</code> che la standby dichiara nella sua <code>primary_conninfo</code>. Senza <code>application_name=standby1</code> la standby resta <code>async</code> e, se nessuna standby corrisponde, i COMMIT <strong>si bloccano</strong> in attesa di un ack che non arriva. Per tollerare la perdita di una standby usare un quorum: <code>ANY 1 (standby1, standby2)</code>.</p>
+</div>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1">-- pg_hba.conf: permetti connessioni di replicazione</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">host</span><span class="w">  </span><span class="n">replication</span><span class="w">  </span><span class="n">replicator</span><span class="w">  </span><span class="n">standby</span><span class="o">-</span><span class="n">ip</span><span class="o">/</span><span class="mi">32</span><span class="w">  </span><span class="n">scram</span><span class="o">-</span><span class="n">sha</span><span class="o">-</span><span class="mi">256</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
@@ -24946,9 +24950,10 @@
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>touch<span class="w"> </span>/var/lib/postgresql/data/standby.signal
 </span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
 </span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="c1"># postgresql.conf sul standby</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="nv">primary_conninfo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'host=primary-host user=replicator password=strongpassword'</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="nv">hot_standby</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>on<span class="w">                  </span><span class="c1"># Permette letture in read-only sulla standby</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="nv">hot_standby_feedback</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>on<span class="w">         </span><span class="c1"># Informa il primary delle query attive sul standby</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="nv">primary_conninfo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'host=primary-host user=replicator application_name=standby1'</span><span class="w">  </span><span class="c1"># password via ~/.pgpass o PGPASSFILE, non in chiaro</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="nv">primary_slot_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'standby1_slot'</span><span class="w">  </span><span class="c1"># usa lo slot creato sul primary (vedi sotto)</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="nv">hot_standby</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>on<span class="w">                  </span><span class="c1"># Permette letture in read-only sulla standby</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="nv">hot_standby_feedback</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>on<span class="w">         </span><span class="c1"># Informa il primary delle query attive sul standby</span>
 </span></code></pre></div>
 <h3 id="monitoraggio-replication-lag">Monitoraggio Replication Lag<a class="headerlink" href="#monitoraggio-replication-lag" title="Permanent link">&para;</a></h3>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1">-- Sul primary: stato di tutte le standby</span>
@@ -24983,11 +24988,13 @@
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="n">slot_name</span><span class="p">,</span>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="n">slot_type</span><span class="p">,</span>
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="n">active</span><span class="p">,</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="n">pg_size_pretty</span><span class="p">(</span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">confirmed_flush_lsn</span><span class="p">))</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">slot_lag</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="n">pg_size_pretty</span><span class="p">(</span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">restart_lsn</span><span class="p">))</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">slot_lag</span>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_replication_slots</span><span class="p">;</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="c1">-- ⚠ Elimina uno slot inattivo se il consumer è perso (evita riempimento disco)</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_drop_replication_slot</span><span class="p">(</span><span class="s1">'standby1_slot'</span><span class="p">);</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1">-- restart_lsn = il WAL più vecchio che lo slot trattiene (vale per slot fisici e logici;</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="c1">-- confirmed_flush_lsn è NULL sugli slot fisici)</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="c1">-- ⚠ Elimina uno slot inattivo se il consumer è perso (evita riempimento disco)</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_drop_replication_slot</span><span class="p">(</span><span class="s1">'standby1_slot'</span><span class="p">);</span>
 </span></code></pre></div>
 <hr />
 <h2 id="logical-replication-replica-selettiva">Logical Replication — Replica Selettiva<a class="headerlink" href="#logical-replication-replica-selettiva" title="Permanent link">&para;</a></h2>
@@ -25033,25 +25040,32 @@
 <h3 id="limitazioni-della-logical-replication">Limitazioni della Logical Replication<a class="headerlink" href="#limitazioni-della-logical-replication" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Non replica DDL (ALTER TABLE, CREATE INDEX, ecc.) — deve essere applicato manualmente</li>
-<li>Non replica sequenze (i valori SERIAL/BIGSERIAL non vengono sincronizzati)</li>
-<li>Non replica TRUNCATE di default (configurabile in PG 11+)</li>
+<li>Non replica sequenze (i valori SERIAL/BIGSERIAL non vengono sincronizzati): prima dello switchover vanno allineate a mano (<code>setval</code>)</li>
+<li>TRUNCATE è replicato dalla PG 11 (opzione <code>publish</code> della publication, default <code>insert, update, delete, truncate</code>)</li>
+<li>UPDATE/DELETE richiedono una <code>REPLICA IDENTITY</code> (di default la primary key): tabelle senza PK vanno configurate</li>
 <li>Non replica Large Objects</li>
+<li>Il subscriber è un database scrivibile: scritture locali sulle tabelle replicate generano conflitti</li>
 </ul>
+<div class="admonition tip">
+<p class="admonition-title">Novità PG 15-17</p>
+<p>PG 15: row filter e column list nelle publication, <code>ALTER SUBSCRIPTION ... SKIP (lsn = ...)</code>. PG 16: logical decoding dalla standby. PG 17: <strong>failover degli slot logici</strong> (<code>failover = true</code> sulla subscription + <code>sync_replication_slots</code> sulla standby) e <code>pg_createsubscriber</code> per convertire una standby fisica in subscriber logico. <!-- REVIEW: verificare novità PG 18 su logical replication (es. conflict logging) --></p>
+</div>
 <hr />
 <h2 id="zero-downtime-major-version-upgrade">Zero-Downtime Major Version Upgrade<a class="headerlink" href="#zero-downtime-major-version-upgrade" title="Permanent link">&para;</a></h2>
-<p>La logical replication permette di fare upgrade da PostgreSQL 14 a PostgreSQL 16 senza downtime:</p>
+<p>La logical replication permette di fare upgrade tra major version (es. da PostgreSQL 15 a 17) con downtime minimo (secondi). Alternativa più semplice se è accettabile una finestra più lunga: <code>pg_upgrade --link</code> (vedi <a href="../major-version-upgrade/">Major Version Upgrade</a>).</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>Phase 1: Setup replica sulla nuova versione
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>  PG14 (primary) --logical replication--&gt; PG16 (subscriber)
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>Phase 2: Catchup
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>  Attendi che PG16 sia allineato con PG14 (lag ≈ 0)
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>Phase 3: Switchover (maintenance window minima ~30s)
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>  1. Blocca scritture su PG14 (set default_transaction_read_only = on)
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>  2. Verifica che PG16 sia completamente allineato
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>  3. Promuovi PG16 a primary (DROP SUBSCRIPTION)
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>  4. Aggiorna la stringa di connessione dell'applicazione
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>  5. Applica DDL mancante su PG16
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>  PG15 (primary) --logical replication--&gt; PG17 (subscriber)
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>  (schema copiato prima con pg_dump --schema-only)
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>Phase 2: Catchup
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>  Attendi che PG17 sia allineato con PG15 (lag ≈ 0)
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>Phase 3: Switchover (maintenance window minima ~30s)
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>  1. Blocca scritture su PG15 (default_transaction_read_only = on + termina le sessioni attive)
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>  2. Verifica che PG17 sia completamente allineato
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>  3. Allinea le sequenze su PG17 (setval dai valori di PG15)
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>  4. DROP SUBSCRIPTION su PG17: diventa il nuovo primary
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>  5. Aggiorna la stringa di connessione dell'applicazione
 </span></code></pre></div>
 <hr />
 <h2 id="wal-archiving-e-point-in-time-recovery">WAL Archiving e Point-in-Time Recovery<a class="headerlink" href="#wal-archiving-e-point-in-time-recovery" title="Permanent link">&para;</a></h2>
@@ -25061,7 +25075,7 @@
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="na">archive_command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'aws s3 cp %p s3://my-wal-archive/%f'</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># %p = path del file WAL, %f = nome file</span>
 </span></code></pre></div>
-<p>Il PITR è trattato in dettaglio nella sezione <a href="../../replicazione-ha/backup-pitr/">Backup e PITR</a>.</p>
+<p><code>archive_command</code> deve restituire exit 0 solo a copia riuscita e non sovrascrivere file esistenti; in produzione si preferiscono tool dedicati (pgBackRest, WAL-G: <code>archive_command = 'pgbackrest ... archive-push %p'</code>) che comprimono, verificano e gestiscono retention. Il PITR è trattato in dettaglio nella sezione <a href="../../replicazione-ha/backup-pitr/">Backup e PITR</a>.</p>
 <hr />
 <h2 id="patroni-ha-con-failover-automatico">Patroni — HA con Failover Automatico<a class="headerlink" href="#patroni-ha-con-failover-automatico" title="Permanent link">&para;</a></h2>
 <p><a href="https://github.com/zalando/patroni">Patroni</a> è il tool standard per gestire un cluster PostgreSQL con failover automatico. Usa etcd, Consul o ZooKeeper come distributed lock per eleggere il primary:</p>
@@ -25083,20 +25097,21 @@
 </span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="w">    </span><span class="nt">loop_wait</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
 </span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="w">    </span><span class="nt">retry_timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
 </span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="w">    </span><span class="nt">maximum_lag_on_failover</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1048576</span><span class="w">  </span><span class="c1"># 1MB max lag per failover</span>
-</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>
-</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="nt">postgresql</span><span class="p">:</span>
-</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a><span class="w">  </span><span class="nt">listen</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.0.0.0:5432</span>
-</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a><span class="w">  </span><span class="nt">connect_address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">node1-ip:5432</span>
-</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a><span class="w">  </span><span class="nt">data_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/var/lib/postgresql/data</span>
-</span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a><span class="w">  </span><span class="nt">parameters</span><span class="p">:</span>
-</span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="w">    </span><span class="nt">synchronous_commit</span><span class="p">:</span><span class="w"> </span><span class="s">"on"</span>
-</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a><span class="w">    </span><span class="nt">synchronous_standby_names</span><span class="p">:</span><span class="w"> </span><span class="s">"ANY</span><span class="nv"> </span><span class="s">1</span><span class="nv"> </span><span class="s">(*)"</span>
+</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a><span class="w">    </span><span class="nt">synchronous_mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">            </span><span class="c1"># Patroni gestisce da solo synchronous_standby_names</span>
+</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a>
+</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a><span class="nt">postgresql</span><span class="p">:</span>
+</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a><span class="w">  </span><span class="nt">listen</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.0.0.0:5432</span>
+</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a><span class="w">  </span><span class="nt">connect_address</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">node1-ip:5432</span>
+</span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a><span class="w">  </span><span class="nt">data_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/var/lib/postgresql/data</span>
+</span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="w">  </span><span class="nt">parameters</span><span class="p">:</span>
+</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a><span class="w">    </span><span class="nt">synchronous_commit</span><span class="p">:</span><span class="w"> </span><span class="s">"on"</span>
+</span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a><span class="w">    </span><span class="c1"># NON impostare synchronous_standby_names qui: con synchronous_mode lo scrive Patroni</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Stato del cluster</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>patronictl<span class="w"> </span>-c<span class="w"> </span>/etc/patroni.yml<span class="w"> </span>list
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Failover manuale</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>patronictl<span class="w"> </span>-c<span class="w"> </span>/etc/patroni.yml<span class="w"> </span>failover<span class="w"> </span>postgres-cluster<span class="w"> </span>--master<span class="w"> </span>pg-node-1<span class="w"> </span>--candidate<span class="w"> </span>pg-node-2
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>patronictl<span class="w"> </span>-c<span class="w"> </span>/etc/patroni.yml<span class="w"> </span>failover<span class="w"> </span>postgres-cluster<span class="w"> </span>--leader<span class="w"> </span>pg-node-1<span class="w"> </span>--candidate<span class="w"> </span>pg-node-2
 </span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1"># Reinizializza una standby (es. dopo failover e promozione)</span>
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>patronictl<span class="w"> </span>-c<span class="w"> </span>/etc/patroni.yml<span class="w"> </span>reinit<span class="w"> </span>postgres-cluster<span class="w"> </span>pg-node-1
@@ -25119,35 +25134,36 @@
 <hr />
 <h3 id="scenario-2-replication-slot-inattivo-riempie-il-disco">Scenario 2 — Replication slot inattivo riempie il disco<a class="headerlink" href="#scenario-2-replication-slot-inattivo-riempie-il-disco" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Disco del primary si riempie con WAL; <code>pg_replication_slots</code> mostra slot inattivi con <code>slot_lag</code> enorme.</p>
-<p><strong>Causa:</strong> Un replication slot (fisico o logico) è rimasto attivo dopo la disconnessione del consumer. Il primary non può rimuovere il WAL finché lo slot non avanza.</p>
+<p><strong>Causa:</strong> Un replication slot (fisico o logico) è rimasto definito dopo la disconnessione permanente del consumer (<code>active = false</code>). Il primary non può rimuovere il WAL finché lo slot non avanza.</p>
 <p><strong>Soluzione:</strong> Se il consumer è permanentemente perso, eliminare lo slot. Prima verificare che nessun processo attivo lo stia usando.</p>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1">-- Identifica slot inattivi con lag elevato</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">slot_name</span><span class="p">,</span><span class="w"> </span><span class="n">active</span><span class="p">,</span><span class="w"> </span><span class="n">slot_type</span><span class="p">,</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">       </span><span class="n">pg_size_pretty</span><span class="p">(</span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">confirmed_flush_lsn</span><span class="p">))</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">lag</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">slot_name</span><span class="p">,</span><span class="w"> </span><span class="n">active</span><span class="p">,</span><span class="w"> </span><span class="n">slot_type</span><span class="p">,</span><span class="w"> </span><span class="n">wal_status</span><span class="p">,</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">       </span><span class="n">pg_size_pretty</span><span class="p">(</span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">restart_lsn</span><span class="p">))</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">lag</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_replication_slots</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">confirmed_flush_lsn</span><span class="p">)</span><span class="w"> </span><span class="k">DESC</span><span class="p">;</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">restart_lsn</span><span class="p">)</span><span class="w"> </span><span class="k">DESC</span><span class="p">;</span>
 </span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
 </span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="c1">-- Elimina lo slot inattivo (irreversibile)</span>
 </span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_drop_replication_slot</span><span class="p">(</span><span class="s1">'nome_slot_inattivo'</span><span class="p">);</span>
 </span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>
 </span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="c1">-- Imposta un limite massimo per prevenire il problema</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="c1">-- postgresql.conf:</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="c1">-- max_slot_wal_keep_size = 10GB</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="c1">-- postgresql.conf (PG 13+): oltre il limite lo slot diventa 'lost' (wal_status) e il consumer</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="c1">-- va reinizializzato, ma il primary non finisce il disco:</span>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="c1">-- max_slot_wal_keep_size = 10GB</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-errore-di-connessione-wal-sender-receiver">Scenario 3 — Errore di connessione WAL sender / receiver<a class="headerlink" href="#scenario-3-errore-di-connessione-wal-sender-receiver" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> Log della standby riporta <code>could not connect to the primary server</code> o <code>FATAL: replication terminated by primary server</code>. La standby passa in stato <code>disconnected</code> in <code>pg_stat_replication</code>.</p>
+<p><strong>Sintomo:</strong> Log della standby riporta <code>could not connect to the primary server</code> o <code>FATAL: replication terminated by primary server</code>. La standby scompare da <code>pg_stat_replication</code> (o resta in <code>startup</code>/<code>catchup</code>).</p>
 <p><strong>Causa:</strong> Password errata, <code>pg_hba.conf</code> non include la standby, firewall, max_wal_senders raggiunto, o il WAL richiesto è già stato eliminato (slot non configurato e <code>wal_keep_size</code> troppo basso).</p>
 <p><strong>Soluzione:</strong></p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Verifica connettività dalla standby verso il primary</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>psql<span class="w"> </span><span class="s2">"host=primary-host user=replicator dbname=replication"</span><span class="w"> </span>-c<span class="w"> </span><span class="s2">"IDENTIFY_SYSTEM;"</span><span class="w"> </span><span class="nv">replication</span><span class="o">=</span><span class="m">1</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>psql<span class="w"> </span><span class="s2">"host=primary-host user=replicator replication=true"</span><span class="w"> </span>-c<span class="w"> </span><span class="s2">"IDENTIFY_SYSTEM;"</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Controlla i log della standby</span>
 </span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>tail<span class="w"> </span>-f<span class="w"> </span>/var/log/postgresql/postgresql.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"FATAL|ERROR|replication"</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># Verifica su primary che max_wal_senders non sia esaurito</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>SELECT<span class="w"> </span>count<span class="o">(</span>*<span class="o">)</span><span class="w"> </span>FROM<span class="w"> </span>pg_stat_replication<span class="p">;</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1"># Se uguale a max_wal_senders → aumentare il parametro e ricaricare</span>
+</span></code></pre></div>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1">-- Sul primary: max_wal_senders esaurito? (richiede restart per aumentarlo)</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_replication</span><span class="p">;</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1">-- Se uguale a max_wal_senders → aumentare il parametro e riavviare</span>
 </span></code></pre></div>
 <p>Se il WAL necessario non è più disponibile → reinizializzare la standby con <code>pg_basebackup</code>.</p>
 <hr />
@@ -25155,22 +25171,24 @@
 <p><strong>Sintomo:</strong> <code>pg_stat_subscription</code> mostra <code>received_lsn</code> fermo; il subscriber non applica nuovi cambiamenti. La tabella sul subscriber è ferma mentre il primary avanza.</p>
 <p><strong>Causa:</strong> Errore di applicazione su una riga (es. violazione di constraint, chiave duplicata), worker della subscription crashato, o connessione interrotta senza riconnessione automatica.</p>
 <p><strong>Soluzione:</strong></p>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1">-- Sul subscriber: stato di tutte le subscription</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">subname</span><span class="p">,</span><span class="w"> </span><span class="n">pid</span><span class="p">,</span><span class="w"> </span><span class="n">received_lsn</span><span class="p">,</span><span class="w"> </span><span class="n">latest_end_lsn</span><span class="p">,</span><span class="w"> </span><span class="n">last_msg_receipt_time</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_subscription</span><span class="p">;</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1">-- Controlla errori nei log o in pg_subscription_rel</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">srrelid</span><span class="p">::</span><span class="n">regclass</span><span class="p">,</span><span class="w"> </span><span class="n">srsubstate</span><span class="p">,</span><span class="w"> </span><span class="n">srsublsn</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_subscription_rel</span><span class="p">;</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="c1">-- srsubstate: 'i'=initialize, 'd'=data copy, 's'=synced, 'r'=ready, 'e'=error</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="c1">-- Disabilita e riabilita la subscription per forzare riconnessione</span>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="k">ALTER</span><span class="w"> </span><span class="n">SUBSCRIPTION</span><span class="w"> </span><span class="n">mia_subscription</span><span class="w"> </span><span class="n">DISABLE</span><span class="p">;</span>
-</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="k">ALTER</span><span class="w"> </span><span class="n">SUBSCRIPTION</span><span class="w"> </span><span class="n">mia_subscription</span><span class="w"> </span><span class="n">ENABLE</span><span class="p">;</span>
-</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>
-</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="c1">-- Se la causa è un conflitto di dati: risolverlo manualmente sulla tabella subscriber</span>
-</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="c1">-- poi avanzare l'LSN per saltare la transazione problematica</span>
-</span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_replication_origin_advance</span><span class="p">(</span><span class="s1">'pg_24601'</span><span class="p">,</span><span class="w"> </span><span class="s1">'LSN_DA_SALTARE'</span><span class="p">);</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1">-- Sul subscriber: stato di tutte le subscription</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">subname</span><span class="p">,</span><span class="w"> </span><span class="n">pid</span><span class="p">,</span><span class="w"> </span><span class="n">received_lsn</span><span class="p">,</span><span class="w"> </span><span class="n">latest_end_lsn</span><span class="p">,</span><span class="w"> </span><span class="n">last_msg_receipt_time</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_subscription</span><span class="p">;</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="c1">-- Controlla errori nei log o in pg_subscription_rel</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">srrelid</span><span class="p">::</span><span class="n">regclass</span><span class="p">,</span><span class="w"> </span><span class="n">srsubstate</span><span class="p">,</span><span class="w"> </span><span class="n">srsublsn</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_subscription_rel</span><span class="p">;</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="c1">-- srsubstate: 'i'=initialize, 'd'=data copy, 'f'=finished copy, 's'=synchronized, 'r'=ready</span>
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="c1">-- (non esiste uno stato di errore: cercarlo nel log o in pg_stat_subscription_stats.apply_error_count)</span>
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>
+</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="c1">-- Disabilita e riabilita la subscription per forzare riconnessione</span>
+</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="k">ALTER</span><span class="w"> </span><span class="n">SUBSCRIPTION</span><span class="w"> </span><span class="n">mia_subscription</span><span class="w"> </span><span class="n">DISABLE</span><span class="p">;</span>
+</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="k">ALTER</span><span class="w"> </span><span class="n">SUBSCRIPTION</span><span class="w"> </span><span class="n">mia_subscription</span><span class="w"> </span><span class="n">ENABLE</span><span class="p">;</span>
+</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>
+</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="c1">-- Se la causa è un conflitto di dati: risolverlo manualmente sulla tabella subscriber</span>
+</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="c1">-- oppure saltare la transazione problematica (PG 15+; LSN dal log: "finished at 0/XXXX")</span>
+</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="k">ALTER</span><span class="w"> </span><span class="n">SUBSCRIPTION</span><span class="w"> </span><span class="n">mia_subscription</span><span class="w"> </span><span class="n">SKIP</span><span class="w"> </span><span class="p">(</span><span class="n">lsn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'0/14C0378'</span><span class="p">);</span>
+</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a><span class="c1">-- Prima di PG 15: SELECT pg_replication_origin_advance('pg_&lt;oid_subscription&gt;', 'LSN');</span>
 </span></code></pre></div>
 <hr />
 <details class="info">
