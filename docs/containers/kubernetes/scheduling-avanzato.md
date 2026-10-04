@@ -7,7 +7,7 @@ search_keywords: [kubernetes HPA, kubernetes VPA, KEDA kubernetes, pod affinity 
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/workloads, containers/kubernetes/architettura]
 official_docs: https://kubernetes.io/docs/concepts/scheduling-eviction/
-status: needs-review
+status: reviewed
 difficulty: expert
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -375,12 +375,13 @@ spec:
     kind: Deployment
     name: api
   updatePolicy:
-    updateMode: "Recreate"    # Off | Initial | Recreate | Auto (+ InPlaceOrRecreate nelle versioni recenti)
+    updateMode: "Recreate"    # Off | Initial | Recreate | InPlaceOrRecreate | InPlace (Auto deprecato)
     # Off:        solo raccomandazioni, nessun update automatico
     # Initial:    applica al pod creation, non a quelli esistenti
     # Recreate:   evicts e ricrea i pod per applicare i nuovi valori
-    # Auto:       oggi equivale a Recreate (modalità in via di deprecazione)
-    # InPlaceOrRecreate: prova il resize in-place, altrimenti evict <!-- REVIEW: verificare nome, stato (alpha/beta) e versione VPA che introduce InPlaceOrRecreate e deprecazione di Auto -->
+    # Auto:       DEPRECATO (alias di Recreate): non usarlo
+    # InPlaceOrRecreate: prova il resize in-place, altrimenti evict (alpha VPA 1.4, beta 1.5, GA 1.6; richiede K8s ≥1.33 con InPlacePodVerticalScaling)
+    # InPlace:    solo resize in-place, senza eviction (richiede supporto del cluster)
     # Nota: Recreate/Auto evictano i pod → servono PodDisruptionBudget e ≥2 repliche
   resourcePolicy:
     containerPolicies:
