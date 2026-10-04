@@ -39,9 +39,12 @@ last_verified: 2026-10-04
 | **Defender for App Service** | HTTP endpoint protection, anomaly detection | ~$15/istanza/mese |
 | **Defender for Key Vault** | Anomaly detection accessi Key Vault | ~$0.02/10K operazioni |
 
-<!-- REVIEW: verificare prezzi (pricing page Defender for Cloud) e se Defender for App Service/Key Vault/Resource Manager sono ancora piani separati -->
+<!-- CURRENCY: prezzi non verificati (2026-10): la pricing page non espone gli importi senza selezione regione/valuta -->
 !!! note "Prezzi indicativi"
     I prezzi sono orientativi (USD, list price) e cambiano: usare la [pricing page ufficiale](https://azure.microsoft.com/pricing/details/defender-for-cloud/). Defender CSPM è fatturato per risorsa fatturabile/ora (~$0.01 ≈ $7/mese).
+
+!!! note "Altri piani"
+    Defender for App Service, Key Vault e **Resource Manager** restano piani separati (insieme a Defender for APIs, Databases e AI Services). Defender for DNS non è più vendibile come piano standalone per nuove subscription: gli alert DNS sono inclusi in Defender for Servers P2.
 
 ### Secure Score
 
@@ -169,7 +172,8 @@ az rest --method GET \
 
 MCSB (ex Azure Security Benchmark) definisce best practice di sicurezza per Azure organizzate in domini: Network Security, Identity Management, Privileged Access, Data Protection, Asset Management, Logging and Threat Detection, Incident Response, Posture and Vulnerability Management, Endpoint Security, Backup and Recovery, DevOps Security, Governance and Strategy.
 
-<!-- REVIEW: verificare se MCSB v2 (con dominio AI Security) è GA e se va citato -->
+!!! note "MCSB v2 (preview)"
+    **MCSB v2** è in **preview** (doc aggiornata 2026) e sostituirà v1: aggiunge il dominio **Artificial Intelligence Security (AI)** con 7 controlli e oltre 420 built-in Azure Policy mappate. Gli esempi CLI sotto riguardano lo standard built-in corrente in Defender for Cloud.
 
 ```bash
 # Verificare compliance rispetto a MCSB
@@ -191,7 +195,7 @@ az security regulatory-compliance-assessments list \
 ## Microsoft Sentinel
 
 !!! warning "Sentinel si sposta nel portale Microsoft Defender"
-    Microsoft sta unificando Sentinel con Defender XDR nel **portale Defender** (security.microsoft.com): l'esperienza SIEM nel portale Azure è in dismissione. <!-- REVIEW: verificare data di ritiro del portale Azure per Sentinel (annunciata marzo 2027, prima luglio 2026) --> Nel portale Defender incidenti e alert SIEM+XDR sono correlati in un'unica coda; i nuovi workspace vanno onboardati lì. Esiste inoltre il **Sentinel data lake** per retention a lungo termine a basso costo. <!-- REVIEW: verificare stato GA del data lake -->
+    Microsoft sta unificando Sentinel con Defender XDR nel **portale Defender** (security.microsoft.com): l'esperienza SIEM nel portale Azure è in dismissione: dopo il **31 marzo 2027** Sentinel non sarà più supportato nel portale Azure e sarà disponibile solo nel portale Defender (redirect automatico). Nel portale Defender incidenti e alert SIEM+XDR sono correlati in un'unica coda; i nuovi workspace vanno onboardati lì. Esiste inoltre il **Sentinel data lake** per retention a lungo termine a basso costo (fino a 12 anni, formato Parquet, query KQL e notebook Jupyter). <!-- CURRENCY: stato GA del data lake non verificato (2026-10): la doc non riporta più etichetta preview ma non dichiara la GA -->
 
 ### Architettura
 
@@ -268,35 +272,29 @@ Connettori comuni disponibili:
 
 Le Analytics Rules definiscono quando creare un Alert/Incident basandosi su query KQL schedulata.
 
-<!-- REVIEW: verificare sintassi esatta di `az sentinel alert-rule create` (estensione preview: usa parametri `--scheduled`, non `--kind`); in produzione preferire Bicep/ARM/Terraform o Sentinel Repositories (CI/CD) -->
+<!-- CURRENCY: chiavi shorthand di `--scheduled` non verificate (2026-10); controllare con `az sentinel alert-rule create --scheduled ??` -->
 !!! note "Sintassi CLI indicativa"
-    L'estensione `az sentinel` è in preview e la sintassi dei comandi `alert-rule`/`automation-rule` cambia tra versioni: gli esempi seguenti mostrano i parametri logici (frequenza, finestra, soglia, tattiche). Per detection-as-code usare ARM/Bicep/Terraform o **Sentinel Repositories** (sync da GitHub/Azure DevOps).
+    L'estensione `az sentinel` è **experimental** (tutti i comandi `alert-rule` sono marcati *Experimental*) e la sintassi cambia tra versioni. `alert-rule create` non ha `--kind`/`--query-frequency`/…: il tipo di regola si sceglie con il parametro `--scheduled`, `--nrt`, `--fusion`, `--ml-behavior-analytics`, `--ms-security-incident` o `--threat-intelligence`, che accetta shorthand-syntax, file JSON o YAML; il nome regola è `--name`/`--rule-name`. Per detection-as-code in produzione usare ARM/Bicep/Terraform o **Sentinel Repositories** (sync da GitHub/Azure DevOps).
 
 ```bash
-# Creare Scheduled Analytics Rule
+# Creare Scheduled Analytics Rule (i valori sono le proprietà logiche della regola)
 az sentinel alert-rule create \
   --resource-group rg-security-prod \
   --workspace-name law-sentinel-prod \
-  --alert-rule-id "brute-force-ssh-login" \
-  --kind Scheduled \
-  --display-name "Multiple Failed SSH Logins" \
-  --description "Rileva 10+ tentativi di login SSH falliti dallo stesso IP in 5 minuti" \
-  --severity Medium \
-  --enabled true \
-  --query-frequency PT5M \
-  --query-period PT5M \
-  --trigger-operator GreaterThan \
-  --trigger-threshold 0 \
-  --suppression-duration PT1H \
-  --suppression-enabled false \
-  --query "Syslog
+  --rule-name "brute-force-ssh-login" \
+  --scheduled "display-name='Multiple Failed SSH Logins' severity=Medium enabled=true query-frequency=PT5M query-period=PT5M trigger-operator=GreaterThan trigger-threshold=0 suppression-duration=PT1H suppression-enabled=false description='Rileva 10+ login SSH falliti dallo stesso IP in 5 minuti' query=@brute-force-ssh.kql"
+```
+
+```kql
+// brute-force-ssh.kql
+Syslog
 | where TimeGenerated > ago(5m)
 | where Facility == 'auth' and SeverityLevel == 'err'
 | where SyslogMessage contains 'Failed password'
 | extend IPAddress = extract(@'from\s+(\d+\.\d+\.\d+\.\d+)', 1, SyslogMessage)
 | where isnotempty(IPAddress)
 | summarize FailedAttempts = count() by IPAddress, bin(TimeGenerated, 5m)
-| where FailedAttempts >= 10"
+| where FailedAttempts >= 10
 ```
 
 #### KQL Examples: Rilevamento Minacce
@@ -488,22 +486,17 @@ Sentinel mappa automaticamente le Analytics Rules alle tecniche MITRE ATT&CK, vi
 az sentinel alert-rule create \
   --resource-group rg-security-prod \
   --workspace-name law-sentinel-prod \
-  --alert-rule-id "credential-dumping-detection" \
-  --kind Scheduled \
-  --display-name "Credential Dumping via LSASS" \
-  --severity High \
-  --enabled true \
-  --query-frequency PT1H \
-  --query-period PT1H \
-  --trigger-operator GreaterThan \
-  --trigger-threshold 0 \
-  --tactics "CredentialAccess" \
-  --techniques "T1003" "T1003.001" \
-  --query "SecurityEvent
+  --rule-name "credential-dumping-detection" \
+  --scheduled "display-name='Credential Dumping via LSASS' severity=High enabled=true query-frequency=PT1H query-period=PT1H trigger-operator=GreaterThan trigger-threshold=0 tactics=['CredentialAccess'] techniques=['T1003','T1003.001'] query=@lsass-dump.kql"
+```
+
+```kql
+// lsass-dump.kql
+SecurityEvent
 | where EventID == 4663
 | where ObjectName has 'lsass.exe'
 | where AccessMask == '0x40' or AccessMask == '0x1410'
-| project TimeGenerated, Computer, SubjectUserName, ProcessName, ObjectName"
+| project TimeGenerated, Computer, SubjectUserName, ProcessName, ObjectName
 ```
 
 ## Best Practices
@@ -593,8 +586,8 @@ az sentinel alert-rule list \
 az sentinel alert-rule update \
   --resource-group rg-security-prod \
   --workspace-name law-sentinel-prod \
-  --alert-rule-id "brute-force-ssh-login" \
-  --enabled true
+  --rule-name "brute-force-ssh-login" \
+  --scheduled "enabled=true"
 ```
 
 ---
