@@ -16817,7 +16817,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16852,7 +16852,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16896,7 +16896,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16921,7 +16921,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17281,7 +17281,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25067,7 +25067,7 @@
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <h3 id="poll-loop">Poll Loop<a class="headerlink" href="#poll-loop" title="Permanent link">&para;</a></h3>
 <p>Il cuore di un consumer Kafka è il <strong>poll loop</strong>: un ciclo infinito che chiama periodicamente <code>consumer.poll(Duration)</code> per ottenere un batch di record dal broker. Il metodo <code>poll()</code> serve anche a:
-- Inviare <strong>heartbeat</strong> al <strong>Group Coordinator</strong> — il broker designato a gestire l'iscrizione al consumer group, tracking degli offset committati e orchestrazione dei rebalancing (indica che il consumer è vivo)
+- Comunicare con il <strong>Group Coordinator</strong> — il broker designato a gestire l'iscrizione al consumer group, tracking degli offset committati e orchestrazione dei rebalancing. Gli <strong>heartbeat</strong> (segnale "sono vivo") non partono da <code>poll()</code> ma da un <strong>thread in background</strong> (dal KIP-62); <code>poll()</code> però resta il segnale di <em>progresso</em> del thread applicativo, controllato da <code>max.poll.interval.ms</code>
 - Eseguire eventuali <strong>rebalancing</strong> — il processo con cui Kafka redistribuisce l'assegnazione delle partizioni tra i consumer del gruppo quando un membro si unisce, se ne va o viene considerato morto
 - Processare il commit degli offset schedulati (auto-commit)</p>
 <p>Se <code>poll()</code> non viene chiamato entro <code>max.poll.interval.ms</code>, il consumer viene considerato morto e viene avviato un rebalancing.</p>
@@ -25116,7 +25116,12 @@
 <div class="language-properties highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="na">enable.auto.commit</span><span class="o">=</span><span class="s">true</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="na">auto.commit.interval.ms</span><span class="o">=</span><span class="s">5000  # commit ogni 5 secondi</span>
 </span></code></pre></div>
-<p>Il consumer fa automaticamente il commit dell'offset più alto restituito da <code>poll()</code> ogni <code>auto.commit.interval.ms</code>. <strong>Rischio:</strong> se il consumer cade dopo la <code>poll()</code> ma prima di processare completamente i record, il commit di quegli offset è già avvenuto → al restart non li rilegge → perdita di messaggi.</p>
+<p>Il commit automatico avviene <strong>dentro la chiamata successiva a <code>poll()</code></strong> (e in <code>close()</code>), se sono passati <code>auto.commit.interval.ms</code>: viene committato l'offset dei record restituiti dalla <code>poll()</code> <em>precedente</em>. Se il processing è sincrono e completato prima della <code>poll()</code> successiva, la semantica è di fatto at-least-once. <strong>Rischi:</strong></p>
+<ul>
+<li><strong>Perdita di messaggi</strong> se il processing è asincrono (es. record passati a un thread pool o a una coda interna): la <code>poll()</code> successiva committa offset di record non ancora elaborati; un crash li perde.</li>
+<li><strong>Duplicati</strong> se il consumer cade dopo aver processato ma prima del commit successivo (fino a <code>auto.commit.interval.ms</code> di record riletti).</li>
+<li>Nessun controllo sul momento del commit: difficile legarlo all'esito del processing o a un rebalancing.</li>
+</ul>
 <h4 id="manual-commit">Manual Commit<a class="headerlink" href="#manual-commit" title="Permanent link">&para;</a></h4>
 <div class="language-properties highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="na">enable.auto.commit</span><span class="o">=</span><span class="s">false</span>
 </span></code></pre></div>
@@ -25157,7 +25162,11 @@
 </ul>
 <div class="admonition warning">
 <p class="admonition-title">Heartbeat vs max.poll.interval.ms</p>
-<p>Il heartbeat viene inviato da un thread separato, quindi <code>session.timeout.ms</code> misura l'assenza di heartbeat. <code>max.poll.interval.ms</code> misura invece l'inattività del thread principale (troppo tempo tra una <code>poll()</code> e la successiva). Entrambi possono causare un rebalancing se violati.</p>
+<p>Il heartbeat viene inviato da un thread separato, quindi <code>session.timeout.ms</code> misura l'assenza di heartbeat (processo morto, rete down). <code>max.poll.interval.ms</code> misura invece l'inattività del thread principale (troppo tempo tra una <code>poll()</code> e la successiva): serve a scoprire consumer vivi ma "incastrati" nel processing. Entrambi possono causare un rebalancing se violati.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Nuovo protocollo di rebalance (KIP-848, Kafka 4.0+)</p>
+<p>Con <code>group.protocol=consumer</code> (GA in Kafka 4.0, richiede broker 4.0+) la logica di assegnazione passa al broker, i rebalance diventano incrementali senza barriera "stop-the-world" e <code>session.timeout.ms</code> / <code>heartbeat.interval.ms</code> diventano configurazioni <strong>lato broker</strong> (<code>group.consumer.*</code>), non più del client. Il protocollo classico (<code>group.protocol=classic</code>) resta il default dei client Java 4.x (fino a 4.3), quindi i parametri di questa pagina valgono per esso. Secondo KIP-1274 (accettata) il default passerà a <code>consumer</code> in Kafka 5.0 e il protocollo classic sarà rimosso in 6.0; in 4.3 il client logga solo un messaggio che raccomanda il nuovo protocollo.</p>
 </div>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
 <h3 id="poll-loop-lifecycle">Poll Loop Lifecycle<a class="headerlink" href="#poll-loop-lifecycle" title="Permanent link">&para;</a></h3>
@@ -25194,8 +25203,7 @@
     participant Leader as Broker Leader&lt;br/&gt;(Partizione)
 
     App-&gt;&gt;Consumer: poll(1000ms)
-    Consumer-&gt;&gt;Coordinator: Heartbeat
-    Coordinator--&gt;&gt;Consumer: OK
+    Note over Consumer,Coordinator: Heartbeat in background (thread separato)
     Consumer-&gt;&gt;Leader: FetchRequest(topic, partition, offset=N, maxBytes=1MB)
     Leader--&gt;&gt;Consumer: FetchResponse(records N..N+499)
     Consumer--&gt;&gt;App: ConsumerRecords (500 record)
@@ -25364,27 +25372,30 @@
 <h3 id="seek-a-un-offset-specifico-override-della-posizione">Seek a un Offset Specifico (Override della posizione)<a class="headerlink" href="#seek-a-un-offset-specifico-override-della-posizione" title="Permanent link">&para;</a></h3>
 <div class="language-java highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1">// Seek all'inizio di tutte le partizioni assegnate</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">consumer</span><span class="p">.</span><span class="na">subscribe</span><span class="p">(</span><span class="n">List</span><span class="p">.</span><span class="na">of</span><span class="p">(</span><span class="s">"orders"</span><span class="p">));</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">consumer</span><span class="p">.</span><span class="na">poll</span><span class="p">(</span><span class="n">Duration</span><span class="p">.</span><span class="na">ofMillis</span><span class="p">(</span><span class="mi">100</span><span class="p">));</span><span class="w"> </span><span class="c1">// necessario per ottenere l'assegnazione</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">consumer</span><span class="p">.</span><span class="na">seekToBeginning</span><span class="p">(</span><span class="n">consumer</span><span class="p">.</span><span class="na">assignment</span><span class="p">());</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1">// Seek alla fine</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">consumer</span><span class="p">.</span><span class="na">seekToEnd</span><span class="p">(</span><span class="n">consumer</span><span class="p">.</span><span class="na">assignment</span><span class="p">());</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1">// Attenzione: una sola poll(100) può tornare con assegnazione ancora vuota (il join al gruppo è asincrono)</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1">// e i record eventualmente restituiti andrebbero scartati. In produzione: ConsumerRebalanceListener.onPartitionsAssigned()</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1">// oppure loop su poll() finché consumer.assignment() non è vuoto.</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">consumer</span><span class="p">.</span><span class="na">poll</span><span class="p">(</span><span class="n">Duration</span><span class="p">.</span><span class="na">ofMillis</span><span class="p">(</span><span class="mi">100</span><span class="p">));</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">consumer</span><span class="p">.</span><span class="na">seekToBeginning</span><span class="p">(</span><span class="n">consumer</span><span class="p">.</span><span class="na">assignment</span><span class="p">());</span>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1">// Seek a un offset specifico</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">TopicPartition</span><span class="w"> </span><span class="n">partition0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">TopicPartition</span><span class="p">(</span><span class="s">"orders"</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="n">consumer</span><span class="p">.</span><span class="na">seek</span><span class="p">(</span><span class="n">partition0</span><span class="p">,</span><span class="w"> </span><span class="mi">42L</span><span class="p">);</span><span class="w"> </span><span class="c1">// rilegge dall'offset 42</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="c1">// Seek per timestamp (rileggi dall'ora X)</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="n">Map</span><span class="o">&lt;</span><span class="n">TopicPartition</span><span class="p">,</span><span class="w"> </span><span class="n">Long</span><span class="o">&gt;</span><span class="w"> </span><span class="n">timestampsToSearch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">HashMap</span><span class="o">&lt;&gt;</span><span class="p">();</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="n">consumer</span><span class="p">.</span><span class="na">assignment</span><span class="p">().</span><span class="na">forEach</span><span class="p">(</span><span class="n">tp</span><span class="w"> </span><span class="o">-&gt;</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">    </span><span class="n">timestampsToSearch</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="n">tp</span><span class="p">,</span><span class="w"> </span><span class="n">System</span><span class="p">.</span><span class="na">currentTimeMillis</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">3600_000L</span><span class="p">)</span><span class="w"> </span><span class="c1">// 1 ora fa</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="p">);</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="n">Map</span><span class="o">&lt;</span><span class="n">TopicPartition</span><span class="p">,</span><span class="w"> </span><span class="n">OffsetAndTimestamp</span><span class="o">&gt;</span><span class="w"> </span><span class="n">offsets</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">consumer</span><span class="p">.</span><span class="na">offsetsForTimes</span><span class="p">(</span><span class="n">timestampsToSearch</span><span class="p">);</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="n">offsets</span><span class="p">.</span><span class="na">forEach</span><span class="p">((</span><span class="n">tp</span><span class="p">,</span><span class="w"> </span><span class="n">offsetAndTimestamp</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">offsetAndTimestamp</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">        </span><span class="n">consumer</span><span class="p">.</span><span class="na">seek</span><span class="p">(</span><span class="n">tp</span><span class="p">,</span><span class="w"> </span><span class="n">offsetAndTimestamp</span><span class="p">.</span><span class="na">offset</span><span class="p">());</span>
-</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="p">});</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1">// Seek alla fine</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">consumer</span><span class="p">.</span><span class="na">seekToEnd</span><span class="p">(</span><span class="n">consumer</span><span class="p">.</span><span class="na">assignment</span><span class="p">());</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1">// Seek a un offset specifico</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="n">TopicPartition</span><span class="w"> </span><span class="n">partition0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">TopicPartition</span><span class="p">(</span><span class="s">"orders"</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="n">consumer</span><span class="p">.</span><span class="na">seek</span><span class="p">(</span><span class="n">partition0</span><span class="p">,</span><span class="w"> </span><span class="mi">42L</span><span class="p">);</span><span class="w"> </span><span class="c1">// rilegge dall'offset 42</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="c1">// Seek per timestamp (rileggi dall'ora X)</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="n">Map</span><span class="o">&lt;</span><span class="n">TopicPartition</span><span class="p">,</span><span class="w"> </span><span class="n">Long</span><span class="o">&gt;</span><span class="w"> </span><span class="n">timestampsToSearch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">HashMap</span><span class="o">&lt;&gt;</span><span class="p">();</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="n">consumer</span><span class="p">.</span><span class="na">assignment</span><span class="p">().</span><span class="na">forEach</span><span class="p">(</span><span class="n">tp</span><span class="w"> </span><span class="o">-&gt;</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">    </span><span class="n">timestampsToSearch</span><span class="p">.</span><span class="na">put</span><span class="p">(</span><span class="n">tp</span><span class="p">,</span><span class="w"> </span><span class="n">System</span><span class="p">.</span><span class="na">currentTimeMillis</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">3600_000L</span><span class="p">)</span><span class="w"> </span><span class="c1">// 1 ora fa</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="p">);</span>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="n">Map</span><span class="o">&lt;</span><span class="n">TopicPartition</span><span class="p">,</span><span class="w"> </span><span class="n">OffsetAndTimestamp</span><span class="o">&gt;</span><span class="w"> </span><span class="n">offsets</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">consumer</span><span class="p">.</span><span class="na">offsetsForTimes</span><span class="p">(</span><span class="n">timestampsToSearch</span><span class="p">);</span>
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="n">offsets</span><span class="p">.</span><span class="na">forEach</span><span class="p">((</span><span class="n">tp</span><span class="p">,</span><span class="w"> </span><span class="n">offsetAndTimestamp</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">offsetAndTimestamp</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">        </span><span class="n">consumer</span><span class="p">.</span><span class="na">seek</span><span class="p">(</span><span class="n">tp</span><span class="p">,</span><span class="w"> </span><span class="n">offsetAndTimestamp</span><span class="p">.</span><span class="na">offset</span><span class="p">());</span>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="p">});</span>
 </span></code></pre></div>
 <h3 id="comandi-cli-per-consumer">Comandi CLI per Consumer<a class="headerlink" href="#comandi-cli-per-consumer" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Consumare dall'inizio del topic</span>
@@ -25450,8 +25461,8 @@
 </tr>
 <tr>
 <td><strong>Exactly-once</strong></td>
-<td>Kafka Transactions + idempotent consumer</td>
-<td>Complessità maggiore</td>
+<td>Consume-transform-produce transazionale (<code>sendOffsetsToTransaction</code> + consumer <code>isolation.level=read_committed</code>), oppure sink idempotente</td>
+<td>Complessità maggiore; garantito solo dentro Kafka</td>
 </tr>
 </tbody>
 </table>
@@ -25509,7 +25520,7 @@
 <div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>org.apache.kafka.clients.consumer.NoOffsetForPartitionException:
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>  Undefined offset with no reset policy for partitions: [orders-0]
 </span></code></pre></div>
-<p><strong>Causa:</strong> l'offset committato per il gruppo è fuori dalla finestra di retention del topic (il record con quell'offset è stato eliminato). <code>auto.offset.reset=none</code> genera questa eccezione invece di resettare.
+<p><strong>Causa:</strong> con <code>auto.offset.reset=none</code> il consumer non ha un offset committato per la partizione (gruppo nuovo, oppure offset del gruppo scaduto: i gruppi inattivi perdono gli offset dopo <code>offsets.retention.minutes</code>, default 7 giorni) e lancia questa eccezione invece di resettare. Se invece l'offset esiste ma è fuori dalla retention del topic (record già eliminati), l'errore è <code>OffsetOutOfRangeException</code>, anch'esso gestito dalla policy di reset.
 <strong>Soluzione:</strong> impostare <code>auto.offset.reset=earliest</code> o <code>latest</code>, oppure fare seek manuale.</p>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>

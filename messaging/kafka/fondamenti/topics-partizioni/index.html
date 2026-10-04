@@ -16826,7 +16826,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16851,7 +16851,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17157,6 +17157,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#relazioni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relazioni
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#riferimenti" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -17200,7 +17211,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17235,7 +17246,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17270,7 +17281,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24872,6 +24883,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#relazioni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relazioni
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#riferimenti" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -25062,7 +25084,7 @@
 <p>Ogni partizione ha esattamente:
 - <strong>1 Leader:</strong> il broker che riceve le scritture dei producer e serve le letture dei consumer
 - <strong>N-1 Follower:</strong> broker che replicano passivamente i dati dal leader
-- <strong>ISR (In-Sync Replicas):</strong> insieme dei follower che sono aggiornati entro un certo lag dal leader. Solo le repliche nell'ISR possono diventare leader in caso di elezione.</p>
+- <strong>ISR (In-Sync Replicas):</strong> insieme dei follower che sono aggiornati dal leader: un follower esce dall'ISR se non raggiunge la fine del log del leader entro <code>replica.lag.time.max.ms</code> (default 30 s). Solo le repliche nell'ISR possono diventare leader in caso di elezione.</p>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
 <h3 id="struttura-di-un-topic-con-3-partizioni">Struttura di un Topic con 3 Partizioni<a class="headerlink" href="#struttura-di-un-topic-con-3-partizioni" title="Permanent link">&para;</a></h3>
 <pre class="mermaid"><code>graph LR
@@ -25106,8 +25128,8 @@
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── 00000000000000000000.log       ← segmento che inizia dall'offset 0
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── 00000000000000000000.index     ← indice sparso per offset → posizione fisica
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├── 00000000000000000000.timeindex ← indice per timestamp → offset
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>├── 00000000001073741824.log       ← secondo segmento (inizia dall'offset 1073741824)
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>├── 00000000001073741824.index
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>├── 00000000000000368769.log       ← secondo segmento (il nome è il base offset, qui 368769)
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>├── 00000000000000368769.index
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>└── leader-epoch-checkpoint
 </span></code></pre></div>
 <p>Un nuovo segmento viene creato quando:
@@ -25129,8 +25151,9 @@
     Follower2-&gt;&gt;Leader: Fetch(offset N)
     Leader--&gt;&gt;Follower2: Record(offset N)
     Follower2-&gt;&gt;Follower2: Write to local log
-    Leader-&gt;&gt;Leader: Update ISR: all replicas in sync
+    Leader-&gt;&gt;Leader: Advance High Watermark (tutte le repliche ISR hanno offset N)
     Leader--&gt;&gt;Producer: ACK (offset N committed)</code></pre>
+<p>L'<strong>High Watermark</strong> è l'offset più alto replicato su tutte le repliche ISR: i consumer vedono solo i record fino a quel punto, così un record non ancora replicato (e quindi perdibile in caso di failover del leader) non viene mai letto. Con <code>acks=all</code> il leader risponde al producer solo quando l'High Watermark ha superato il record <strong>e</strong> l'ISR contiene almeno <code>min.insync.replicas</code> repliche; altrimenti restituisce <code>NotEnoughReplicas</code>.</p>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="creazione-e-gestione-topic-con-kafka-topicssh">Creazione e Gestione Topic con kafka-topics.sh<a class="headerlink" href="#creazione-e-gestione-topic-con-kafka-topicssh" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Creare un topic con 6 partizioni e replication factor 3</span>
@@ -25238,14 +25261,16 @@
 <div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Fattori da considerare:
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>1. Throughput target: partizioni_needed = throughput_MB_s / throughput_per_partition_MB_s
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>2. Consumer parallelism: max_consumer_per_group = num_partitions
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>3. Overhead broker: un broker regge ~4000 partizioni totali
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>Esempio pratico:
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>- Target: 200 MB/s di ingestion
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>- Un producer scrive ~50 MB/s per partizione
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>- Partizioni minime lato producer: 200/50 = 4
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>- Consumer: vogliamo 6 consumer paralleli
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>- Scelta: 6 partizioni (soddisfa entrambi i vincoli)
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>3. Overhead broker: ogni partizione costa file handle, memoria e tempo di failover.
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>   Linea guida storica (era ZooKeeper): ~4000 partizioni per broker e ~200.000 per cluster.
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>   Con KRaft i limiti del cluster sono molto più alti, ma resta valido dimensionare in base ai requisiti reali.
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>Esempio pratico:
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>- Target: 200 MB/s di ingestion
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>- Un producer scrive ~50 MB/s per partizione
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>- Partizioni minime lato producer: 200/50 = 4
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>- Consumer: vogliamo 6 consumer paralleli
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>- Scelta: 6 partizioni (soddisfa entrambi i vincoli)
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <h3 id="naming-convention-per-i-topic">Naming Convention per i Topic<a class="headerlink" href="#naming-convention-per-i-topic" title="Permanent link">&para;</a></h3>
@@ -25320,11 +25345,27 @@
 </span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">  </span>--offset-json-file<span class="w"> </span>delete-records.json
 </span></code></pre></div>
+<h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
+<details class="info">
+<summary>Producer — partizionamento per chiave</summary>
+<p>Il producer sceglie la partizione (hash della key o sticky/round-robin senza key): da qui dipende l'ordinamento per chiave.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../produttori/">Produttori</a></p>
+</details>
+<details class="info">
+<summary>Consumer Groups — parallelismo</summary>
+<p>Ogni partizione è assegnata a un solo consumer per gruppo: il numero di partizioni è il tetto del parallelismo.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../consumatori/">Consumatori</a></p>
+</details>
+<details class="info">
+<summary>Broker e Cluster — leader e repliche</summary>
+<p>Leader, follower ed elezione dal pool ISR sono gestiti dal controller del cluster.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../broker-cluster/">Broker e Cluster</a></p>
+</details>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://kafka.apache.org/documentation/#intro_topics">Apache Kafka Documentation: Topics</a></li>
 <li><a href="https://kafka.apache.org/documentation/#log">Apache Kafka Documentation: Log</a></li>
-<li><a href="https://www.oreilly.com/library/view/kafka-the-definitive/9781491936153/">Kafka: The Definitive Guide — Chapter 2: Installing Kafka</a></li>
+<li><a href="https://www.oreilly.com/library/view/kafka-the-definitive/9781491936153/">Kafka: The Definitive Guide</a></li>
 <li><a href="https://docs.confluent.io/platform/current/installation/configuration/topic-configs.html">Confluent: Kafka Topic Configuration</a></li>
 <li><a href="https://developer.confluent.io/courses/architecture/compaction/">Confluent: Kafka Log Compaction</a></li>
 </ul>

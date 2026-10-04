@@ -16817,7 +16817,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16861,7 +16861,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16886,7 +16886,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17257,7 +17257,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17292,7 +17292,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25135,13 +25135,17 @@
 <ol>
 <li><strong>Partizione esplicita:</strong> se il <code>ProducerRecord</code> specifica la partizione, viene usata quella.</li>
 <li><strong>Key-based (hash):</strong> se la key non è null, la partizione è <code>murmur2(key) % numPartitions</code>. Stesso key → stessa partizione (ordinamento garantito per quella key).</li>
-<li><strong>Round-robin (sticky):</strong> se la key è null, Kafka usa lo <strong>Sticky Partitioner</strong> (default da Kafka 2.4): riempie un batch su una partizione prima di passare alla successiva, migliorando l'efficienza del batching.</li>
+<li><strong>Sticky (key null):</strong> se la key è null, il partitioner built-in (sticky, introdotto in Kafka 2.4) riempie un batch su una partizione prima di passare alla successiva: batch più grandi, meno richieste. Da Kafka 3.3 (KIP-794) la scelta è <em>adattiva</em>: le partizioni più lente ricevono meno record (<code>partitioner.adaptive.partitioning.enable=true</code> di default), evitando che un broker lento accumuli backlog.</li>
 </ol>
+<div class="admonition note">
+<p class="admonition-title">Partitioner custom</p>
+<p>Da Kafka 4.0 le classi <code>DefaultPartitioner</code> e <code>UniformStickyPartitioner</code> sono rimosse: la logica sopra è built-in nel producer. <code>partitioner.class</code> serve solo per logiche custom.</p>
+</div>
 <h3 id="batching">Batching<a class="headerlink" href="#batching" title="Permanent link">&para;</a></h3>
 <p>Il producer non invia ogni record singolarmente: li accumula in un <strong>batch</strong> per partizione prima di spedirli al broker. I parametri chiave:</p>
 <ul>
 <li><code>batch.size</code> (default: 16384 byte / 16 KB): dimensione massima del batch per partizione. Batch inviato quando è pieno.</li>
-<li><code>linger.ms</code> (default: 0): attesa aggiuntiva prima di inviare un batch non pieno. Aumentare per migliorare il throughput a scapito della latenza.</li>
+<li><code>linger.ms</code> (default: 0 fino a Kafka 3.x, <strong>5 ms da Kafka 4.0</strong> — KIP-1030): attesa aggiuntiva prima di inviare un batch non pieno. Aumentare per migliorare il throughput a scapito della latenza: batch più grandi = meno richieste e migliore compressione. Con 0, i record si accumulano comunque se il sender è occupato.</li>
 <li><code>buffer.memory</code> (default: 33554432 / 32 MB): memoria totale del buffer del producer. Se pieno, il producer si blocca per <code>max.block.ms</code>.</li>
 </ul>
 <h3 id="garanzie-acks">Garanzie acks<a class="headerlink" href="#garanzie-acks" title="Permanent link">&para;</a></h3>
@@ -25159,7 +25163,7 @@
 <tr>
 <td><code>0</code></td>
 <td>Nessuna (fire &amp; forget)</td>
-<td>Perdita dati garantita se broker cade</td>
+<td>Perdita silenziosa se broker cade o cambia leader; nessun offset restituito</td>
 <td>Massimo</td>
 </tr>
 <tr>
@@ -25182,14 +25186,18 @@
 </div>
 <h3 id="idempotenza">Idempotenza<a class="headerlink" href="#idempotenza" title="Permanent link">&para;</a></h3>
 <p>Con <code>enable.idempotence=true</code>, il producer assegna a ogni record un <strong>Producer ID (PID)</strong> e un <strong>sequence number</strong>. Il broker verifica che ogni sequence number sia esattamente uno in più rispetto all'ultimo ricevuto. Se un retry invia lo stesso record due volte (stesso PID + sequence), il broker deduplica e l'effetto è <strong>exactly-once</strong> per singola sessione del producer.</p>
-<p>L'idempotenza implica automaticamente: <code>acks=all</code>, <code>retries=Integer.MAX_VALUE</code>, <code>max.in.flight.requests.per.connection &lt;= 5</code>.</p>
+<p>L'idempotenza richiede/implica: <code>acks=all</code>, <code>retries=Integer.MAX_VALUE</code>, <code>max.in.flight.requests.per.connection &lt;= 5</code> (con ≤5 richieste in volo il broker riesce a verificare l'ordine delle sequence e i retry non riordinano i record).</p>
+<div class="admonition note">
+<p class="admonition-title">Default dal Kafka 3.0</p>
+<p>Dal client 3.0 <code>enable.idempotence=true</code> e <code>acks=all</code> sono già il default. Se si imposta esplicitamente un valore incompatibile (es. <code>acks=1</code>) senza toccare <code>enable.idempotence</code>, l'idempotenza viene disabilitata silenziosamente; se si impostano esplicitamente entrambi in conflitto, il client lancia <code>ConfigException</code>.</p>
+</div>
 <h3 id="retry-e-backoff">Retry e Backoff<a class="headerlink" href="#retry-e-backoff" title="Permanent link">&para;</a></h3>
 <p>In caso di errore temporaneo (leader non disponibile, errore di rete), il producer ritenta automaticamente:
 - <code>retries</code> (default con idempotenza: MAX_VALUE): numero di tentativi
 - <code>retry.backoff.ms</code> (default: 100): attesa tra un retry e il successivo
 - <code>delivery.timeout.ms</code> (default: 120000 ms / 2 min): timeout complessivo per un record (inclusi retry)</p>
 <p>Errori <strong>retriable</strong>: <code>LEADER_NOT_AVAILABLE</code>, <code>NOT_LEADER_OR_FOLLOWER</code>, <code>NETWORK_EXCEPTION</code>
-Errori <strong>non-retriable</strong>: <code>MESSAGE_TOO_LARGE</code>, <code>INVALID_TOPIC_EXCEPTION</code>, <code>OFFSET_OUT_OF_RANGE</code></p>
+Errori <strong>non-retriable</strong>: <code>RecordTooLargeException</code> (<code>MESSAGE_TOO_LARGE</code>), <code>INVALID_TOPIC_EXCEPTION</code>, <code>TOPIC_AUTHORIZATION_FAILED</code>, errori di serializzazione</p>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
 <h3 id="flusso-producer-partitioner-broker">Flusso Producer → Partitioner → Broker<a class="headerlink" href="#flusso-producer-partitioner-broker" title="Permanent link">&para;</a></h3>
 <pre class="mermaid"><code>flowchart TD
@@ -25375,9 +25383,10 @@ Errori <strong>non-retriable</strong>: <code>MESSAGE_TOO_LARGE</code>, <code>INV
 <h3 id="configurazione-per-bassa-latenza">Configurazione per Bassa Latenza<a class="headerlink" href="#configurazione-per-bassa-latenza" title="Permanent link">&para;</a></h3>
 <div class="language-properties highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Ottimizzato per minimizzare la latenza</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="na">linger.ms</span><span class="o">=</span><span class="s">0</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="na">batch.size</span><span class="o">=</span><span class="s">1</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="na">compression.type</span><span class="o">=</span><span class="s">none</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="na">acks</span><span class="o">=</span><span class="s">1</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># batch.size lasciato al default: batch.size=0/1 disabilita di fatto il batching</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># e peggiora latenza e throughput (ogni record fuori dal pool di buffer)</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="na">compression.type</span><span class="o">=</span><span class="s">none</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="na">acks</span><span class="o">=</span><span class="s">1                  # accettabile solo se la perdita è tollerabile; disabilita l'idempotenza se non esplicitata</span>
 </span></code></pre></div>
 <h3 id="configurazione-per-zero-data-loss">Configurazione per Zero Data Loss<a class="headerlink" href="#configurazione-per-zero-data-loss" title="Permanent link">&para;</a></h3>
 <div class="language-properties highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Massima durabilità</span>
@@ -25397,7 +25406,7 @@ Errori <strong>non-retriable</strong>: <code>MESSAGE_TOO_LARGE</code>, <code>INV
 <li><strong>Creare un producer per ogni messaggio:</strong> il <code>KafkaProducer</code> è thread-safe e costoso da inizializzare. Creare un'istanza singleton e condividerla.</li>
 <li><strong>Ignorare il callback:</strong> senza un callback o senza chiamare <code>.get()</code> sul future, gli errori di produzione passano silenti.</li>
 <li><strong>Non chiamare <code>close()</code> al termine:</strong> il producer non effettua il flush del buffer automaticamente alla chiusura JVM. Usare uno shutdown hook o try-with-resources.</li>
-<li><strong>Usare <code>linger.ms=0</code> con <code>batch.size</code> grande:</strong> non ha senso. Se si vuole bassa latenza, usare batch.size piccolo.</li>
+<li><strong>Ridurre <code>batch.size</code> per ottenere bassa latenza:</strong> la latenza dipende da <code>linger.ms</code>, non dalla dimensione massima del batch. Un <code>batch.size</code> troppo piccolo frammenta le richieste e danneggia il throughput; per bassa latenza basta <code>linger.ms=0</code>.</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="record-non-inviati-buffer-pieno">Record Non Inviati (Buffer Pieno)<a class="headerlink" href="#record-non-inviati-buffer-pieno" title="Permanent link">&para;</a></h3>
@@ -25420,7 +25429,8 @@ Errori <strong>non-retriable</strong>: <code>MESSAGE_TOO_LARGE</code>, <code>INV
 </span></code></pre></div></p>
 <h3 id="duplicati-nonostante-lidempotenza">Duplicati Nonostante l'Idempotenza<a class="headerlink" href="#duplicati-nonostante-lidempotenza" title="Permanent link">&para;</a></h3>
 <p>L'idempotenza del producer protegge solo durante la sessione di vita del producer. Se il producer viene riavviato, riceve un nuovo PID e un retry di un record precedente può creare un duplicato. Per exactly-once end-to-end (producer + consumer) usare le <strong>Kafka Transactions</strong>.</p>
-<div class="language-java highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1">// Exactly-once con transazioni</span>
+<p>Le transazioni richiedono un <code>transactional.id</code> stabile e univoco per istanza logica (implica idempotenza): al riavvio, lo stesso id permette al broker di fare <em>fencing</em> delle istanze zombie e completare/abortire transazioni pendenti. I consumer devono usare <code>isolation.level=read_committed</code> per non leggere record abortiti.</p>
+<div class="language-java highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1">// Exactly-once con transazioni (props: transactional.id=orders-producer-1)</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">producer</span><span class="p">.</span><span class="na">initTransactions</span><span class="p">();</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="k">try</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="n">producer</span><span class="p">.</span><span class="na">beginTransaction</span><span class="p">();</span>
