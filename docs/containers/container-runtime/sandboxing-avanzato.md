@@ -7,9 +7,10 @@ search_keywords: [gVisor runsc, Kata Containers QEMU, Firecracker microVM, conta
 parent: containers/container-runtime/_index
 related: [containers/docker/sicurezza, containers/kubernetes/sicurezza, containers/container-runtime/_index]
 official_docs: https://gvisor.dev/docs/
-status: complete
+status: reviewed
 difficulty: expert
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Sandboxing Avanzato
@@ -72,7 +73,8 @@ gVisor Architecture
   Sentry (gVisor kernel) — processo user-space
   +------------------------------------------+
   |  Implementa POSIX syscall interface       |
-  |  ~ 200 syscall supportate (subset Linux)  |
+  |  Subset delle syscall Linux (no io_uring, |
+  |  bpf, perf_event_open)                    |
   |  Written in Go (memory-safe)              |
   |  Gestisce:                                |
   |  - Filesystem (via Gofer)                 |
@@ -86,21 +88,25 @@ gVisor Architecture
   Linux Kernel (HOST) — ridotta superficie
 ```
 
-**Due modalità di intercettazione:**
+**Platform di intercettazione** (come il Sentry cattura le syscall dell'app):
 
 ```
-ptrace mode (default, non richiede KVM):
-  - Sentry usa ptrace() per intercettare le syscall del container
-  - Maggiore portabilità (funziona su qualsiasi Linux)
-  - Performance peggiore (ptrace ha overhead significativo)
-  - Utile per: ambienti senza virtualizzazione hardware (VM cloud annidate)
+systrap (default dal 2023, non richiede KVM):
+  - seccomp SECCOMP_RET_TRAP + signal handler: l'app notifica il Sentry
+  - Funziona su qualsiasi Linux, anche in VM cloud senza nested virt
+  - Overhead molto inferiore a ptrace: scelta consigliata nella maggior parte dei casi
 
-KVM mode (raccomandato per produzione):
-  - Sentry gira come una VM leggera (usa KVM direttamente)
-  - Migliore isolamento (hardware boundary)
-  - Performance migliore rispetto a ptrace
-  - Richiede: accesso a /dev/kvm (nested virt su cloud o bare metal)
+KVM:
+  - Il Sentry usa KVM per far girare l'app in un address space guest
+  - Costo di syscall/context switch più basso su bare metal
+  - Richiede /dev/kvm; su VM cloud con nested virt può risultare PIÙ lento di systrap
+
+ptrace (legacy, deprecata):
+  - Overhead alto; mantenuta solo per compatibilità, non usarla per nuovi deployment
 ```
+
+!!! note "Perché un kernel user-space"
+    Il Sentry è scritto in Go (memory-safe) e gestisce le syscall al posto del kernel host: un bug nell'implementazione di una syscall compromette il Sentry, non l'host. Il Sentry stesso gira con un filtro seccomp stretto, quindi verso l'host espone solo una piccola parte della superficie syscall.
 
 ```bash
 # Installazione runsc (gVisor runtime)
@@ -118,13 +124,12 @@ apt-get update && apt-get install -y runsc
 
 # /etc/containerd/runsc.toml
 # [runsc_config]
-#   platform = "kvm"       # kvm | ptrace | systrap
+#   platform = "systrap"   # systrap (default) | kvm | ptrace (deprecata)
 #   file-access = "shared" # per performance I/O (shared host filesystem)
 
 # Verifica
 runsc --version
-# runsc version release-20240212.0
-# spec: 1.0.2-dev
+# runsc version release-<data>   (le release sono datate, es. release-20260105.0)
 ```
 
 **Performance gVisor:**
@@ -157,7 +162,7 @@ gVisor Performance Trade-offs
 
 ## Kata Containers — VM-Based Containers
 
-**Kata Containers** (OpenStack Foundation) esegue ogni pod in una VM leggera (QEMU, Firecracker, Cloud Hypervisor). Combina la velocità dei container con l'isolamento delle VM.
+**Kata Containers** (OpenInfra Foundation) esegue ogni pod in una VM leggera (QEMU, Firecracker, Cloud Hypervisor). Combina la velocità dei container con l'isolamento delle VM.
 
 ```
 Kata Containers Architecture
@@ -190,10 +195,12 @@ Kata Containers Architecture
 
 ```bash
 # Installazione Kata Containers
-# 1. Install Kata packages
-dnf install -y kata-containers
-# oppure:
-kubectl apply -f https://github.com/kata-containers/kata-containers/releases/latest/download/kata-operator.yaml
+# 1. Installa Kata
+# Su host: pacchetti della distro o release tarball (kata-static) da GitHub
+# Su Kubernetes: kata-deploy (Helm chart: DaemonSet che installa il runtime e registra le RuntimeClass).
+#   Il vecchio kata-operator è deprecato.
+helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+  --namespace kube-system   # verificare chart/valori nella doc ufficiale
 
 # 2. Verifica che nested virtualization sia disponibile
 cat /proc/cpuinfo | grep -E "vmx|svm"   # vmx=Intel, svm=AMD
@@ -213,7 +220,7 @@ kata-runtime kata-env # mostra la configurazione
 
 # Test: run un container con Kata
 docker run --runtime io.containerd.kata.v2 ubuntu:22.04 uname -r
-# 5.15.0-kata-containers  ← diverso dal kernel host!
+# <versione kernel guest Kata>  ← diverso dal kernel host!
 ```
 
 **Comparazione QEMU vs Firecracker per Kata:**
@@ -222,9 +229,9 @@ docker run --runtime io.containerd.kata.v2 ubuntu:22.04 uname -r
 |---|---|---|
 | **Startup** | ~800ms-2s | ~125ms |
 | **Memory overhead** | ~150-200MB | ~5MB |
-| **Compatibilità** | Massima (emula HW completo) | Limitata (no USB, no serial) |
+| **Compatibilità** | Massima (emula HW completo) | Limitata (no USB/PCI/GPU, no virtio-fs: serve block device, es. snapshotter devmapper) |
 | **Features** | Tutto (GPU passthrough, PCI) | Minimalista |
-| **Usato da** | Default Kata | AWS Lambda, Fargate |
+| **Usato da** | Default Kata | AWS Lambda, Fargate (hypervisor diretto, non via Kata) |
 | **Miglior uso** | Workloads che richiedono device | Serverless, funzioni brevi |
 
 ---
@@ -237,9 +244,9 @@ docker run --runtime io.containerd.kata.v2 ubuntu:22.04 uname -r
 Firecracker MicroVM
 
   Caratteristiche:
-  - ~5ms per creare una microVM (record di velocità)
-  - ~5MB overhead di memoria
-  - No dispositivi legacy (no serial, no USB, no BIOS)
+  - Boot di una microVM in ~125ms
+  - ~5MB overhead di memoria per microVM
+  - Device model minimale (no USB, no PCI passthrough, no BIOS: boot diretto del kernel)
   - Solo KVM (nessun emulazione software)
   - Scritto in Rust (memory-safe)
   - API REST per la gestione (no monitor QEMU)
@@ -255,12 +262,13 @@ Firecracker MicroVM
   - AWS Lambda
   - AWS Fargate
   - Fly.io (isolamento tenant)
-  - Cloudflare Workers (sperimentale)
+  - Sandbox per codice generato da agenti AI (es. E2B)
 ```
 
 ```bash
-# Firecracker + containerd (via firecracker-containerd)
+# Firecracker + containerd (via firecracker-containerd, progetto poco attivo)
 # https://github.com/firecracker-microvm/firecracker-containerd
+# In pratica si usa Kata + Firecracker (richiede snapshotter devmapper, no virtio-fs)
 
 # Con Kata + Firecracker:
 # /opt/kata/share/defaults/kata-containers/configuration-fc.toml
@@ -298,15 +306,42 @@ RUNTIME SELECTION
          RuntimeClass per selezione per namespace/pod
 ```
 
+In Kubernetes la `RuntimeClass` mappa un nome all'handler configurato in containerd; `scheduling.nodeSelector` limita ai nodi che hanno quel runtime.
+
+```yaml
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: gvisor
+handler: runsc          # nome del runtime in containerd
+scheduling:
+  nodeSelector:
+    sandbox.gvisor/enabled: "true"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: untrusted-job
+spec:
+  runtimeClassName: gvisor
+  containers:
+    - name: app
+      image: busybox:1.37
+      command: ["sleep", "3600"]
+```
+
+!!! tip "Servizi gestiti e confidential computing"
+    GKE Sandbox è gVisor gestito. Kata è la base dei Confidential Containers (CNCF CoCo) per TEE hardware (AMD SEV-SNP, Intel TDX).
+
 ---
 
 ## Troubleshooting
 
-### Scenario 1 — gVisor: container non si avvia con `exec format error` o syscall non supportata
+### Scenario 1 — gVisor: container crasha per syscall non supportata
 
 **Sintomo:** Il container si avvia ma crasha immediatamente con errori tipo `Function not implemented` o `invalid argument`.
 
-**Causa:** Il workload usa syscall non implementate dal Sentry gVisor (implementa ~200 syscall su ~350+ del kernel Linux). Spesso: `io_uring`, `perf_event_open`, `bpf`.
+**Causa:** Il workload usa syscall non implementate dal Sentry gVisor (implementa solo un sottoinsieme delle syscall Linux). Spesso: `io_uring`, `perf_event_open`, `bpf`.
 
 **Soluzione:** Verificare quali syscall mancano, valutare se usare Kata invece di gVisor per quel workload.
 
@@ -323,8 +358,8 @@ runsc --debug --debug-log=/tmp/gvisor-debug.log run <container-id>
 # Cercare le syscall fallite nei log
 grep -i "unimplemented\|not implemented\|ENOSYS" /tmp/gvisor-debug.log
 
-# Lista ufficiale syscall supportate
-curl -s https://gvisor.dev/docs/user_guide/compatibility/linux/amd64/ | grep "Full support"
+# Tabelle ufficiali syscall supportate:
+# https://gvisor.dev/docs/user_guide/compatibility/linux/amd64/
 ```
 
 ---
@@ -333,9 +368,9 @@ curl -s https://gvisor.dev/docs/user_guide/compatibility/linux/amd64/ | grep "Fu
 
 **Sintomo:** `kata-runtime check` restituisce `ERROR: kernel module kvm requires root privileges` o `could not access /dev/kvm`.
 
-**Causa:** Nested virtualization non abilitata sul nodo (comune su VM cloud), oppure il modulo KVM non è caricato.
+**Causa:** Nested virtualization non abilitata sul nodo (comune su VM cloud), oppure il modulo KVM non è caricato. Kata richiede sempre KVM.
 
-**Soluzione:** Abilitare nested virt sul cloud provider o sul hypervisor host, oppure configurare Kata in modalità QEMU-TCG (più lento, senza KVM).
+**Soluzione:** Abilitare nested virt sul cloud provider o sull'hypervisor host, oppure usare nodi bare metal. Se KVM non è disponibile, usare gVisor con platform systrap (non lo richiede).
 
 ```bash
 # Verifica moduli KVM
@@ -352,9 +387,6 @@ modprobe kvm_amd     # AMD
 # Verifica completa dell'ambiente Kata
 kata-runtime kata-env
 kata-runtime check --verbose
-
-# Alternativa: QEMU TCG (no KVM, solo per test)
-# configuration-qemu.toml: machine_type = "q35" + disable_nesting_checks = true
 ```
 
 ---
@@ -402,7 +434,7 @@ kubectl describe pod <pod-name> | grep -A10 "Events:"
 # /etc/containerd/runsc.toml — opzioni per ridurre overhead I/O
 # [runsc_config]
 #   file-access = "shared"    # shared = meno safe ma più veloce (default: exclusive)
-#   overlay = false           # disabilita overlay per ridurre syscall
+#   overlay2 = "root:self"    # overlay del rootfs (default); "none" lo disabilita
 #   network = "host"          # network=host elimina il netstack overhead (richiede trust)
 
 # Benchmark per confrontare runc vs gVisor
