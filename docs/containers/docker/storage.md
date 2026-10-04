@@ -7,7 +7,7 @@ search_keywords: [docker volumes, docker bind mount, docker tmpfs, overlay2 stor
 parent: containers/docker/_index
 related: [containers/docker/architettura-interna, containers/kubernetes/storage]
 official_docs: https://docs.docker.com/engine/storage/
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -212,8 +212,7 @@ docker run --rm ubuntu \
 Regola pratica: per I/O intensivo e dati persistenti (DB, log) usare volumi — non tanto per il throughput sequenziale quanto per persistenza, copy-up evitato e possibilità di montare un disco dedicato.
 
 !!! note "containerd image store (Docker Engine 29+)"
-    Le installazioni nuove di Docker Engine 29 usano di default il **containerd image store** (snapshotter `overlayfs`) al posto del classico graph driver `overlay2`; i layer stanno in `/var/lib/containerd` e `docker info` mostra `driver-type: io.containerd.snapshotter.v1`. Le installazioni aggiornate mantengono il driver precedente. I concetti (union FS, copy-up, volumi) restano identici, ma i path e i comandi di ispezione di questa sezione valgono per il graph driver `overlay2`. <!-- REVIEW: verificare default e versione esatta (Engine 29) su docs.docker.com/engine/storage/containerd/ -->
-
+    Le installazioni nuove di Docker Engine 29 usano di default il **containerd image store** (snapshotter `overlayfs`) al posto del classico graph driver `overlay2`; i layer stanno in `/var/lib/containerd` e `docker info` mostra `driver-type: io.containerd.snapshotter.v1`. Le installazioni aggiornate mantengono il driver precedente. I concetti (union FS, copy-up, volumi) restano identici, ma i path e i comandi di ispezione di questa sezione valgono per il graph driver `overlay2`.
 
 **Scegliere il giusto driver:**
 
