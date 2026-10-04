@@ -7,9 +7,10 @@ search_keywords: [Cloud Pub/Sub, Google Pub/Sub, GCP messaging, pub sub GCP, top
 parent: cloud/gcp/messaging/_index
 related: [cloud/gcp/compute/cloud-run, cloud/gcp/dati/bigquery, cloud/gcp/iam/iam-service-accounts, cloud/gcp/containers/gke]
 official_docs: https://cloud.google.com/pubsub/docs
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-31
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Cloud Pub/Sub
@@ -18,11 +19,11 @@ last_updated: 2026-03-31
 
 Cloud Pub/Sub è il servizio di **messaggistica asincrona fully managed** di Google Cloud. Implementa il pattern publisher/subscriber: i producer pubblicano messaggi su un **topic** e i consumer li ricevono tramite **subscription**, senza che i due lati si conoscano o siano online contemporaneamente. È il backbone della messaggistica asincrona su GCP.
 
-A differenza di Kafka, Pub/Sub è completamente serverless: non ci sono broker, partizioni o cluster da gestire. La scalabilità è automatica e globale — Pub/Sub è **multi-region by default**, replicando i messaggi su più datacenter senza configurazione aggiuntiva.
+A differenza di Kafka, Pub/Sub è completamente serverless: non ci sono broker, partizioni o cluster da gestire. La scalabilità è automatica e il servizio è **globale**: il publisher si connette all'endpoint più vicino e i messaggi sono replicati su più zone senza configurazione. Per default i messaggi sono salvati nella regione più vicina al publisher; se serve vincolare la residenza dei dati si imposta una **message storage policy** sul topic (`--message-storage-policy-allowed-regions`).
 
 **Quando usare Pub/Sub:**
 - Disaccoppiare microservizi produttori di eventi dai consumer
-- Triggerare Cloud Run o Cloud Functions su eventi asincroni (equivalente SQS→Lambda)
+- Triggerare Cloud Run o Cloud Run functions (ex Cloud Functions) su eventi asincroni (equivalente SQS→Lambda)
 - Pipeline di streaming verso Dataflow, BigQuery, o Cloud Storage
 - Fan-out: un evento deve essere processato da più sistemi indipendenti
 - Ingestione di dati da dispositivi IoT o log ad alto volume
@@ -63,7 +64,7 @@ A differenza di Kafka, Pub/Sub è completamente serverless: non ci sono broker, 
     Per default, ogni messaggio può essere consegnato **più di una volta**. I consumer devono essere **idempotenti** oppure abilitare la modalità exactly-once delivery (disponibile, ma con limitazioni di throughput).
 
 !!! tip "Exactly-once delivery"
-    Abilitabile per subscription con `--enable-exactly-once-delivery`. Pub/Sub garantisce che il messaggio venga consegnato esattamente una volta all'interno della finestra di retention, ma riduce il throughput massimo. Usarlo solo quando l'idempotenza nel consumer non è implementabile.
+    Abilitabile per subscription con `--enable-exactly-once-delivery`. Vale **solo per pull/StreamingPull** (non per push né export subscription) e la garanzia è **regionale**: un messaggio ACKato con successo non viene riconsegnato, ma l'ACK può fallire e va verificato (nelle client library, `ack_with_response()`). Aumenta la latenza e riduce il throughput. Non rende idempotenti gli effetti collaterali del consumer: usarlo solo quando l'idempotenza non è implementabile.
 
 ---
 
@@ -97,7 +98,12 @@ Publisher (es. Cloud Run, GKE, VM)
 
 ### Retention e Delivery
 
-I messaggi vengono conservati nel topic per la durata di retention configurata (default **7 giorni**, min 10 min, max 31 giorni). La subscription ha il suo puntatore di avanzamento: un messaggio non ACK viene riconsegnato dopo l'`ackDeadline` (default 10s, max 600s).
+Esistono due retention distinte:
+
+- **Subscription** (`message-retention-duration`): i messaggi non ACK sono conservati per default **7 giorni** (min 10 min, max 31 giorni); oltre, vengono eliminati. I messaggi ACK sono rimossi subito, salvo `--retain-acked-messages`.
+- **Topic** (`--message-retention-duration`): **disattivata per default**. Se abilitata (max 31 giorni) il topic conserva i messaggi anche dopo l'ACK di tutte le subscription, permettendo il replay (seek) e il backfill di subscription nuove.
+
+Ogni subscription ha il suo puntatore di avanzamento: un messaggio non ACK viene riconsegnato dopo l'`ackDeadline` (default 10s, max 600s).
 
 ```
 Timeline messaggio in Pub/Sub:
@@ -110,7 +116,7 @@ T+11  Msg non ACK → riconsegnato (at-least-once)
       O
 T+5   Consumer elabora → ACK → msg rimosso dalla subscription
 
-T+7d  Topic retention scade → msg eliminato dal topic
+T+7d  Se mai ACK: retention della subscription scade → msg eliminato
 ```
 
 ---
@@ -125,11 +131,15 @@ Il consumer **chiede attivamente** i messaggi a Pub/Sub. Adatto per worker pool,
 # Creare una pull subscription
 gcloud pubsub subscriptions create my-pull-sub \
     --topic=my-topic \
-    --ack-deadline=60 \                      # secondi prima della riconsegna
-    --message-retention-duration=7d \         # quanti giorni trattenere msg non ACK
-    --max-delivery-attempts=5 \              # prima di mandare al Dead Letter Topic
+    --ack-deadline=60 \
+    --message-retention-duration=7d \
+    --max-delivery-attempts=5 \
     --dead-letter-topic=my-topic-dlq \
-    --expiration-period=never                 # la subscription non scade
+    --expiration-period=never
+# ack-deadline: secondi prima della riconsegna
+# message-retention-duration: quanto trattenere i msg non ACK
+# max-delivery-attempts: tentativi (5-100) prima del Dead Letter Topic
+# expiration-period=never: senza, la subscription inattiva per 31 giorni viene eliminata
 
 # Pull manuale (fino a 10 messaggi per chiamata)
 gcloud pubsub subscriptions pull my-pull-sub \
@@ -213,12 +223,14 @@ gcloud run services add-iam-policy-binding my-service \
     --member="serviceAccount:pubsub-invoker@my-project.iam.gserviceaccount.com" \
     --role="roles/run.invoker"
 
-# Dare al SA di Pub/Sub il permesso di creare token
-# (necessario per push con autenticazione OIDC)
+# Solo per service agent Pub/Sub creati prima di aprile 2021: concedere
+# il permesso di creare token OIDC. I progetti recenti lo hanno già.
 gcloud projects add-iam-policy-binding my-project \
     --member="serviceAccount:service-PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com" \
     --role="roles/iam.serviceAccountTokenCreator"
 ```
+
+Pub/Sub firma un token **OIDC** (OpenID Connect, JWT) a nome del Service Account (SA) indicato e lo invia nell'header `Authorization`: Cloud Run lo valida e verifica `roles/run.invoker`. Senza `--push-auth-service-account` la richiesta è anonima e Cloud Run risponde 403.
 
 Il payload che arriva all'endpoint push ha questo formato:
 
@@ -268,7 +280,7 @@ def pubsub_push():
 ```
 
 !!! warning "Timeout push subscription"
-    Pub/Sub considera un messaggio non ACK se l'endpoint risponde con status 5xx o non risponde entro l'`ackDeadline`. Impostare `ackDeadline` coerente con il tempo di elaborazione del Cloud Run handler. Il retry usa backoff esponenziale.
+    Pub/Sub considera un messaggio non ACK se l'endpoint risponde con status 5xx o non risponde entro l'`ackDeadline`. Impostare `ackDeadline` coerente con il tempo di elaborazione del Cloud Run handler. Per default il retry è **immediato** (nessun backoff): per evitare di martellare un endpoint in difficoltà configurare la retry policy con `--min-retry-delay=10s --max-retry-delay=600s` (exponential backoff).
 
 ### BigQuery Subscription
 
@@ -284,13 +296,17 @@ bq mk --table my-project:my_dataset.pubsub_events \
 gcloud pubsub subscriptions create my-bq-sub \
     --topic=my-topic \
     --bigquery-table=my-project:my_dataset.pubsub_events \
-    --write-metadata \       # include message_id, publish_time, subscription_name
-    --drop-unknown-fields    # ignora attributi non presenti nello schema BQ
+    --write-metadata
+# write-metadata: aggiunge message_id, publish_time, subscription_name, attributes
+# Con --use-topic-schema o --use-table-schema i campi del messaggio sono mappati
+# sulle colonne; --drop-unknown-fields scarta i campi assenti dalla tabella.
+# Senza schema, il payload finisce nella colonna "data".
 
-# Il SA di Pub/Sub deve avere permessi su BQ
-gcloud projects add-iam-policy-binding my-project \
+# Il SA di Pub/Sub deve avere permessi su BQ (meglio a livello dataset che di progetto)
+bq add-iam-policy-binding \
     --member="serviceAccount:service-PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com" \
-    --role="roles/bigquery.dataEditor"
+    --role="roles/bigquery.dataEditor" \
+    my-project:my_dataset.pubsub_events
 ```
 
 ### Cloud Storage Subscription
@@ -304,8 +320,27 @@ gcloud pubsub subscriptions create my-gcs-sub \
     --cloud-storage-bucket=my-archive-bucket \
     --cloud-storage-file-prefix=events/ \
     --cloud-storage-file-suffix=.json \
-    --cloud-storage-max-bytes=100000000 \   # 100 MB per file
-    --cloud-storage-max-duration=600s        # o ogni 10 minuti, il primo che scatta
+    --cloud-storage-max-bytes=100000000 \
+    --cloud-storage-max-duration=600s
+# max-bytes: 100 MB per file; max-duration: o ogni 10 minuti, il primo che scatta
+
+# Il SA di Pub/Sub deve poter scrivere sul bucket
+gcloud storage buckets add-iam-policy-binding gs://my-archive-bucket \
+    --member="serviceAccount:service-PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com" \
+    --role="roles/storage.objectCreator"
+gcloud storage buckets add-iam-policy-binding gs://my-archive-bucket \
+    --member="serviceAccount:service-PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com" \
+    --role="roles/storage.legacyBucketReader"
+```
+
+### Subscription Filter
+
+Una subscription può ricevere solo i messaggi che soddisfano un filtro sugli `attributes`, evitando consumer che scartano a mano. Il filtro è **immutabile** dopo la creazione e i messaggi esclusi sono ACKati automaticamente (non costano consegna).
+
+```bash
+gcloud pubsub subscriptions create orders-eu-sub \
+    --topic=order-events \
+    --message-filter='attributes.region = "eu" AND hasPrefix(attributes.eventType, "order.")'
 ```
 
 ---
@@ -317,7 +352,7 @@ gcloud pubsub subscriptions create my-gcs-sub \
 ```bash
 # Creare topic
 gcloud pubsub topics create my-topic \
-    --message-retention-duration=7d    # retention del topic (default 7d, max 31d)
+    --message-retention-duration=7d    # retention del topic (opzionale, default disattivata, max 31d)
 
 # Creare topic con schema (validazione messaggi)
 gcloud pubsub schemas create user-event-schema \
@@ -343,7 +378,7 @@ gcloud pubsub subscriptions describe my-pull-sub
 
 # Eliminare subscription/topic
 gcloud pubsub subscriptions delete my-pull-sub
-gcloud pubsub topics delete my-topic   # elimina anche tutte le subscription
+gcloud pubsub topics delete my-topic   # le subscription NON vengono eliminate: restano "detached" (topic _deleted-topic_) e non ricevono più messaggi
 ```
 
 ### Dead Letter Topic
@@ -357,7 +392,7 @@ gcloud pubsub subscriptions create my-topic-dlq-sub \
     --topic=my-topic-dlq
 
 # Configurare DLT sulla subscription principale
-gcloud pubsub subscriptions modify-config my-pull-sub \
+gcloud pubsub subscriptions update my-pull-sub \
     --dead-letter-topic=my-topic-dlq \
     --max-delivery-attempts=5    # dopo 5 tentativi → DLQ
 
@@ -399,7 +434,7 @@ gcloud pubsub topics publish my-topic \
 
 ### Snapshot e Seek — Replay
 
-Pub/Sub permette di **tornare indietro** nella timeline dei messaggi tramite seek:
+Pub/Sub permette di **tornare indietro** nella timeline dei messaggi tramite seek. Il replay di messaggi già ACK richiede che siano ancora conservati: subscription con `--retain-acked-messages` oppure retention sul topic. Uno snapshot conserva i messaggi non ACK al momento della creazione e scade con il più vecchio di essi (max 7 giorni).
 
 ```bash
 # Creare uno snapshot del checkpoint attuale
@@ -481,6 +516,9 @@ kubectl annotate serviceaccount my-ksa \
     iam.gke.io/gcp-service-account=pubsub-consumer-sa@my-project.iam.gserviceaccount.com
 ```
 
+!!! note "Workload Identity Federation for GKE"
+    Alternativa moderna al binding `workloadIdentityUser`: concedere il ruolo Pub/Sub direttamente al principal del KSA (`principal://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/my-project.svc.id.goog/subject/ns/my-namespace/sa/my-ksa`), senza SA GCP intermedio.
+
 !!! tip "Principio del minimo privilegio"
     Un publisher non deve avere `roles/pubsub.subscriber` e viceversa. Creare SA separati per producer e consumer, ciascuno con binding sul topic o sulla subscription specifica — non sul progetto intero. Questo limita l'impatto in caso di compromissione.
 
@@ -537,7 +575,8 @@ gcloud pubsub topics publish order-events \
 ### Pub/Sub → Dataflow (Stream Processing)
 
 ```bash
-# Template Dataflow per Pub/Sub → BigQuery con trasformazioni
+# Template Google-provided per Pub/Sub → BigQuery (verificare nome/versione
+# aggiornati nel catalogo template Dataflow; per nuovi job valutare i Flex Template)
 gcloud dataflow jobs run pubsub-to-bq \
     --gcs-location=gs://dataflow-templates/latest/PubSub_to_BigQuery \
     --region=europe-west8 \
@@ -554,10 +593,6 @@ outputDeadletterTable=my-project:my_dataset.errors
 ### Metriche Chiave
 
 ```bash
-# Visualizzare le metriche principali di una subscription
-gcloud monitoring metrics list \
-    --filter="metric.type:pubsub.googleapis.com/subscription"
-
 # Le metriche più importanti (via Cloud Monitoring / Metrics Explorer):
 # subscription/num_undelivered_messages     — messaggi in attesa di ACK (backlog)
 # subscription/oldest_unacked_message_age   — età del messaggio più vecchio non ACK (CRITICA)
@@ -697,9 +732,11 @@ gcloud projects add-iam-policy-binding my-project \
 gcloud pubsub subscriptions describe my-ordered-sub
 
 # Soluzione: identificare il messaggio bloccato (nel log del consumer)
-# e decidere: fixare il consumer oppure fare seek per saltare il messaggio problematico
+# e decidere: fixare il consumer, configurare un Dead Letter Topic
+# oppure fare seek per saltare il messaggio problematico
 
-# Seek al timestamp del primo messaggio problematico (salta i messaggi bloccati)
+# Seek a un timestamp SUCCESSIVO al messaggio problematico (i messaggi precedenti
+# al timestamp sono considerati ACK; un timestamp precedente li riconsegnerebbe)
 gcloud pubsub subscriptions seek my-ordered-sub \
     --time="2026-03-31T10:30:00Z"
 
