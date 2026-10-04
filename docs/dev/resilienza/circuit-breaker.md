@@ -7,9 +7,10 @@ search_keywords: [circuit breaker, circuit-breaker, cb, hystrix, resilience4j, p
 parent: dev/resilienza/_index
 related: [dev/resilienza/_index, dev/linguaggi/java-spring-boot, dev/linguaggi/dotnet, dev/linguaggi/go, networking/service-mesh/istio]
 official_docs: https://resilience4j.readme.io/docs/circuitbreaker
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Circuit Breaker — Implementazione Applicativa
@@ -34,25 +35,15 @@ I due livelli non si escludono ma vanno coordinati — vedi sezione [App vs Serv
 ### Macchina a Stati
 
 ```
-                  error_rate > threshold
-       ┌─────────────────────────────────────┐
-       │                                     ▼
-   ┌───────┐  wait_duration expires   ┌────────────┐
-   │ OPEN  │─────────────────────────▶│ HALF-OPEN  │
-   └───────┘                          └────────────┘
-       ▲                                    │
-       │    probe calls fail                │ probe calls succeed
-       │◄───────────────────────────────────┘
-                                            │ probe calls succeed
-                                            ▼
-                                       ┌────────┐
-                                       │ CLOSED │
-                                       └────────┘
-                                            │
-                                  error_rate > threshold
-                                            │
-                                            ▼
-                                        (→ OPEN)
+   ┌────────┐  failure/slow rate >= threshold   ┌───────┐
+   │ CLOSED │──────────────────────────────────▶│ OPEN  │◀──┐
+   └────────┘                                   └───────┘   │
+       ▲                                            │       │ probe calls
+       │ probe calls OK                             │       │ KO (rate >= threshold)
+       │                          wait_duration     ▼       │
+       │                          expires     ┌───────────┐  │
+       └──────────────────────────────────────│ HALF-OPEN │──┘
+                                              └───────────┘
 ```
 
 | Stato | Comportamento | Transizione |
@@ -101,7 +92,10 @@ Request
 Chiamata reale
 ```
 
-Il bulkhead sta all'esterno: se il pool è pieno, rifiuta la request prima ancora di consultare il CB. Il CB sta fuori dal retry: se il circuito è aperto, non ha senso nemmeno tentare il retry — il CB aperto è già un segnale che tutti i tentativi falliranno.
+Il bulkhead sta all'esterno: se il pool è pieno, rifiuta la request prima ancora di consultare il CB. Il CB sta fuori dal retry: il CB vede un solo esito per operazione (dopo i retry) e, se aperto, non innesca retry inutili.
+
+!!! warning "L'ordine di default di Resilience4j è diverso"
+    Con le annotazioni Spring l'ordine di wrapping **non** dipende dall'ordine in cui le scrivi: lo decidono gli aspect order (`resilience4j.circuitbreaker.circuitBreakerAspectOrder`, `retryAspectOrder`, …). Il default è `Retry ( CircuitBreaker ( RateLimiter ( TimeLimiter ( Bulkhead ( chiamata ) ) ) ) )`: il Retry è esterno e **ogni tentativo** viene registrato dal CB (apertura più rapida, e un CB aperto fa comunque consumare i tentativi di retry). Per ottenere l'ordine del diagramma sopra imposta gli order esplicitamente (valore più basso = più esterno) oppure usa la composizione programmatica (`Decorators`).
 
 ### App vs Service Mesh
 
@@ -153,7 +147,7 @@ Il bulkhead sta all'esterno: se il pool è pieno, rifiuta la request prima ancor
 <dependency>
     <groupId>io.github.resilience4j</groupId>
     <artifactId>resilience4j-spring-boot3</artifactId>
-    <version>2.2.0</version>
+    <version>2.2.0</version> <!-- REVIEW: verificare ultima 2.x e compatibilità con Spring Boot 4 -->
 </dependency>
 <!-- AOP obbligatorio per le annotazioni @CircuitBreaker, @Retry, etc. -->
 <dependency>
@@ -273,7 +267,8 @@ public class PaymentClient {
         this.webClient = builder.baseUrl("http://payment-service").build();
     }
 
-    // Ordine annotazioni = ordine wrapping (CircuitBreaker esterno, Retry interno)
+    // Attenzione: l'ordine di wrapping NON segue l'ordine delle annotazioni,
+    // ma gli aspect order (default: Retry esterno, CircuitBreaker interno)
     @CircuitBreaker(name = "paymentService", fallbackMethod = "paymentFallback")
     @Retry(name = "paymentService", fallbackMethod = "paymentFallback")
     @Bulkhead(name = "paymentService")
@@ -322,16 +317,17 @@ Resilience4j espone automaticamente metriche via Micrometer quando `spring-boot-
 # Filtra metriche CB:
 curl -s http://localhost:8080/actuator/prometheus | grep resilience4j_circuitbreaker
 
-# Output atteso:
+# Output atteso (nomi indicativi, dipendono dalla versione di Micrometer):
 # resilience4j_circuitbreaker_state{name="paymentService",state="closed"} 1.0
 # resilience4j_circuitbreaker_state{name="paymentService",state="open"} 0.0
 # resilience4j_circuitbreaker_state{name="paymentService",state="half_open"} 0.0
-# resilience4j_circuitbreaker_failure_rate{name="paymentService"} 12.5
+# resilience4j_circuitbreaker_failure_rate{name="paymentService"} 12.5   (-1 finché < minimum-number-of-calls)
 # resilience4j_circuitbreaker_slow_call_rate{name="paymentService"} 0.0
-# resilience4j_circuitbreaker_calls_total{kind="successful",name="paymentService"} 42.0
-# resilience4j_circuitbreaker_calls_total{kind="failed",name="paymentService"} 6.0
-# resilience4j_circuitbreaker_calls_total{kind="not_permitted",name="paymentService"} 0.0
-# resilience4j_circuitbreaker_calls_total{kind="slow_successful",name="paymentService"} 3.0
+# resilience4j_circuitbreaker_buffered_calls{kind="successful",name="paymentService"} 42.0
+# resilience4j_circuitbreaker_buffered_calls{kind="failed",name="paymentService"} 6.0
+# resilience4j_circuitbreaker_calls_seconds_count{kind="successful",name="paymentService"} 42.0   (timer: successful|failed|ignored)
+# resilience4j_circuitbreaker_not_permitted_calls_total{kind="not_permitted",name="paymentService"} 0.0
+# resilience4j_circuitbreaker_slow_calls{kind="successful",name="paymentService"} 3.0
 ```
 
 ```yaml
@@ -439,7 +435,9 @@ Polly v8 ha introdotto l'API `ResiliencePipeline` (fluent builder), sostituendo 
 
 ```csharp
 // Program.cs / Startup.cs
-builder.Services.AddResiliencePipeline("payment-pipeline", static builder =>
+// Pipeline generica <TKey, TResult>: necessaria per usare le strategie tipizzate
+// (FallbackStrategyOptions<PaymentResult>, ...) e GetPipeline<PaymentResult>(...)
+builder.Services.AddResiliencePipeline<string, PaymentResult>("payment-pipeline", static builder =>
 {
     // Ordine: dal più esterno al più interno
     builder
@@ -461,7 +459,7 @@ builder.Services.AddResiliencePipeline("payment-pipeline", static builder =>
         })
 
         // 2. Circuit Breaker
-        .AddCircuitBreaker(new CircuitBreakerStrategyOptions
+        .AddCircuitBreaker(new CircuitBreakerStrategyOptions<PaymentResult>
         {
             SamplingDuration = TimeSpan.FromSeconds(30),
             MinimumThroughput = 5,              // Min chiamate per valutare
@@ -488,20 +486,8 @@ builder.Services.AddResiliencePipeline("payment-pipeline", static builder =>
             }
         })
 
-        // 3. Timeout per singolo tentativo
-        .AddTimeout(new TimeoutStrategyOptions
-        {
-            Timeout = TimeSpan.FromSeconds(3),
-            OnTimeout = static args =>
-            {
-                Console.Error.WriteLine(
-                    $"[Timeout] Call timed out after {args.Timeout.TotalSeconds}s");
-                return ValueTask.CompletedTask;
-            }
-        })
-
-        // 4. Retry con exponential backoff + jitter (innermost)
-        .AddRetry(new RetryStrategyOptions
+        // 3. Retry con exponential backoff + jitter
+        .AddRetry(new RetryStrategyOptions<PaymentResult>
         {
             MaxRetryAttempts = 3,
             Delay = TimeSpan.FromMilliseconds(200),
@@ -517,6 +503,19 @@ builder.Services.AddResiliencePipeline("payment-pipeline", static builder =>
                 Console.Error.WriteLine(
                     $"[Retry] Attempt {args.AttemptNumber + 1}. Delay: {args.RetryDelay.TotalMilliseconds}ms. " +
                     $"Reason: {args.Outcome.Exception?.Message}");
+                return ValueTask.CompletedTask;
+            }
+        })
+
+        // 4. Timeout per singolo tentativo (innermost: sta DENTRO il retry,
+        //    altrimenti sarebbe un timeout complessivo su tutti i tentativi)
+        .AddTimeout(new TimeoutStrategyOptions
+        {
+            Timeout = TimeSpan.FromSeconds(3),
+            OnTimeout = static args =>
+            {
+                Console.Error.WriteLine(
+                    $"[Timeout] Call timed out after {args.Timeout.TotalSeconds}s");
                 return ValueTask.CompletedTask;
             }
         });
@@ -581,18 +580,16 @@ builder.Services.AddHttpClient("PaymentService", client =>
     client.BaseAddress = new Uri("http://payment-service");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 })
-.AddResilienceHandler("payment-resilience", static builder =>
+// AddStandardResilienceHandler è un'estensione di IHttpClientBuilder:
+// rate limiter → total timeout → retry → circuit breaker → attempt timeout
+.AddStandardResilienceHandler(options =>
 {
-    // Pipeline inline per HttpClient
-    builder.AddStandardResilienceHandler(options =>
-    {
-        options.Retry.MaxRetryAttempts = 3;
-        options.Retry.UseJitter = true;
-        options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30);
-        options.CircuitBreaker.FailureRatio = 0.5;
-        options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(15);
-        options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(4);
-    });
+    options.Retry.MaxRetryAttempts = 3;
+    options.Retry.UseJitter = true;
+    options.CircuitBreaker.SamplingDuration = TimeSpan.FromSeconds(30); // >= 2x AttemptTimeout
+    options.CircuitBreaker.FailureRatio = 0.5;
+    options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(15);
+    options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(4);
 });
 ```
 
@@ -629,7 +626,8 @@ func NewPaymentCB() *gobreaker.CircuitBreaker[[]byte] {
     settings := gobreaker.Settings{
         Name: "payment-service",
 
-        // Finestra di valutazione: ultimi 30 secondi
+        // Periodo ciclico di azzeramento dei contatori in stato CLOSED
+        // (NON è una sliding window: i Counts si resettano ogni Interval)
         Interval: 30 * time.Second,
 
         // Timeout in stato OPEN prima di passare a HALF-OPEN
@@ -760,7 +758,9 @@ func (c *Client) doHTTPCall(ctx context.Context, req PaymentRequest) ([]byte, er
 
 #### Test del Circuit Breaker con Clock Stub
 
-`gobreaker/v2` supporta l'iniezione di un clock personalizzato per testare le transizioni di stato senza aspettare:
+Per testare le transizioni di stato senza attendere il `Timeout` reale si inietta un clock finto:
+
+<!-- REVIEW: verificare che gobreaker/v2 esponga davvero un campo `Clock` in Settings (nelle versioni note il tempo non è iniettabile; alternativa: Timeout breve, es. 50ms, + time.Sleep) -->
 
 ```go
 // payment/client_test.go
@@ -904,7 +904,10 @@ class PaymentClientResilienceTest {
             CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("paymentService");
             assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.OPEN);
 
-            // Verifica che le successive chiamate falliscano immediatamente (< 100ms)
+            // Verifica che le successive chiamate falliscano immediatamente (< 100ms).
+            // Nota: con il fallback di PaymentClient la CallNotPermittedException non
+            // arriva al chiamante; per questo test usa un client senza fallback
+            // oppure asserisci sul risultato "pending" e su cb.getMetrics().getNumberOfNotPermittedCalls().
             long start = System.currentTimeMillis();
             assertThatThrownBy(() -> paymentClient.processPayment(buildRequest(99)))
                 .isInstanceOf(CallNotPermittedException.class);
@@ -948,6 +951,7 @@ class PaymentClientResilienceTest {
 }
 ```
 
+<!-- REVIEW: verificare API testcontainers-go toxiproxy module (toxiproxy.Run, URI, ControlURI) e client Go Shopify/toxiproxy: snippet non compilabile così com'è -->
 ```go
 // Go — Toxiproxy con Testcontainers
 // payment/integration_test.go
@@ -1062,17 +1066,20 @@ Circuit Breaker — Checklist
 
 **Sintomo:** Il downstream è chiaramente in errore, ma `resilience4j_circuitbreaker_state` rimane `closed` e `failure_rate` è basso o 0.
 
-**Causa 1 — Le eccezioni non sono registrate:**
+**Causa 1 — Le eccezioni non sono registrate o non arrivano al CB:**
 ```bash
 # Verifica quali eccezioni vengono registrate
 curl -s http://localhost:8080/actuator/prometheus | grep resilience4j_circuitbreaker_calls
-# kind="failed" deve incrementare; se rimane 0 le eccezioni vengono ignorate
+# kind="failed" deve incrementare; se rimane 0 le eccezioni sono ignorate (ignore-exceptions,
+# record-exceptions troppo ristretto) oppure catturate dentro il metodo protetto prima del CB
 ```
 ```yaml
-# Fix: aggiungi le eccezioni concrete al record-exceptions
+# Fix: aggiungi le eccezioni concrete di infrastruttura al record-exceptions.
+# Se record-exceptions è vuoto, di default TUTTE le eccezioni (non ignorate) contano come failure.
 resilience4j.circuitbreaker.instances.myService:
   record-exceptions:
-    - java.lang.Exception  # cattura tutto come punto di partenza, poi affina
+    - java.io.IOException
+    - java.util.concurrent.TimeoutException
 ```
 
 **Causa 2 — minimum-number-of-calls troppo alto per il traffico:**
@@ -1116,27 +1123,23 @@ resilience4j.circuitbreaker.instances.myService:
 
 **Sintomo:** Il CB è OPEN ma anche avanzando il tempo il CB rimane OPEN.
 
-**Causa:** `gobreaker.Execute()` non viene chiamato dopo il `Timeout`. La transizione a HALF-OPEN in gobreaker non è automatica: avviene solo quando viene eseguita una nuova chiamata *dopo* che il timeout è trascorso.
+**Causa:** gobreaker non ha timer in background: lo stato viene ricalcolato in modo *lazy* quando si chiama `State()` o `Execute()`. Se il `Timeout` non è ancora trascorso (o `Timeout` è 0 → default 60s) il CB resta OPEN. Il flusso corretto è:
 
 ```go
-// SBAGLIATO: aspettarsi la transizione automatica
-cb.State() // → StateOpen (corretto)
-time.Sleep(31 * time.Second) // aspetta il timeout
-cb.State() // → StateOpen ancora! NON transita senza una chiamata
-
-// CORRETTO: la transizione avviene sulla prossima chiamata
-time.Sleep(31 * time.Second)
-cb.Execute(func() ([]byte, error) { ... }) // ora transita in HALF-OPEN
-cb.State() // → StateHalfOpen
+time.Sleep(31 * time.Second)   // Timeout = 30s
+cb.State()                     // → StateHalfOpen (ricalcolato lazy alla lettura)
+cb.Execute(func() ([]byte, error) { ... }) // probe: se OK → StateClosed
 ```
+
+Differenza da Resilience4j: non esiste un equivalente di `automatic-transition-from-open-to-half-open-enabled`; nessun evento `OnStateChange` parte finché nessuno legge lo stato o esegue una chiamata.
 
 ---
 
 ### Problema: Doppio conteggio errori (app + mesh)
 
-**Sintomo:** Il CB applicativo si apre molto più velocemente del previsto. Le metriche mostrano failure rate elevato anche quando poche chiamate reali falliscono.
+**Sintomo:** Il downstream riceve molto più traffico del previsto durante un guasto (retry storm) e si riprende lentamente; il CB applicativo può sembrare "inefficace" perché vede solo l'esito finale.
 
-**Causa:** Il service mesh esegue retry (es. Istio: `attempts: 3`). Ogni tentativo che fallisce viene registrato come failure nel CB applicativo. 3 retry mesh × 3 retry app = fino a 9 tentativi registrati per una singola operazione.
+**Causa:** Il sidecar esegue retry in modo trasparente (Istio: di default `attempts: 2` su errori di connessione/5xx selezionati). L'app vede una sola risposta per i retry del mesh, quindi il suo CB conta **un** failure; ma il downstream riceve fino a 3 (app) × 3 (mesh) = 9 richieste per una singola operazione. L'amplificazione colpisce il downstream, non i contatori del CB.
 
 **Soluzione:**
 ```yaml
