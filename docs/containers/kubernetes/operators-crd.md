@@ -7,9 +7,10 @@ search_keywords: [kubernetes operators, CRD custom resource definition, kubernet
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/architettura, containers/openshift/operators-olm, containers/kubernetes/sicurezza]
 official_docs: https://kubernetes.io/docs/concepts/extend-kubernetes/operator/
-status: complete
+status: reviewed
 difficulty: expert
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Operators e CRD
@@ -17,6 +18,9 @@ last_updated: 2026-03-29
 ## Il Pattern Operator
 
 Un **Operator** è un controller che gestisce applicazioni complesse su Kubernetes, codificando la logica operativa umana in software. Estende le API di Kubernetes tramite **Custom Resource Definitions (CRD)**.
+
+!!! note "Controller, informer e reconcile: il meccanismo"
+    Un controller non reagisce a "eventi" isolati: è **level-triggered**. Un *informer* mantiene una cache locale (alimentata da una `watch` sull'API server) e accoda in una *work queue* la chiave (`namespace/name`) dell'oggetto cambiato. Il `Reconcile` riceve solo la chiave, rilegge lo stato attuale e lo porta verso quello desiderato. Perché: eventi persi o duplicati non causano drift, e il reconcile deve essere idempotente. Con più repliche del controller-manager, la **leader election** (Lease) garantisce che un solo pod riconcilii alla volta.
 
 ```
 Operator Pattern — Esempio: DatabaseCluster Operator
@@ -131,7 +135,7 @@ spec:
                       message:
                         type: string
       # Subresources
-      subresources:
+      subresources:  # (validazioni cross-field senza webhook: vedi x-kubernetes-validations sotto)
         status: {}    # abilita /status subresource (aggiornamento status separato)
         scale:        # abilita /scale subresource (kubectl scale)
           specReplicasPath: .spec.replicas
@@ -149,11 +153,26 @@ spec:
           jsonPath: .metadata.creationTimestamp
 ```
 
+### Validazione con CEL (senza webhook)
+
+Dalla 1.29 (GA) le CRD supportano regole **CEL** (*Common Expression Language*) valutate direttamente dall'API server con `x-kubernetes-validations`. Coprono la maggior parte delle validazioni cross-field senza dover gestire un webhook (niente pod, certificati o `failurePolicy` da presidiare).
+
+```yaml
+# dentro openAPIV3Schema.properties.spec.properties.autoscaling
+autoscaling:
+  type: object
+  x-kubernetes-validations:
+    - rule: "!has(self.maxReplicas) || !has(self.minReplicas) || self.maxReplicas >= self.minReplicas"
+      message: "maxReplicas deve essere >= minReplicas"
+```
+
+In Kubebuilder: marker `// +kubebuilder:validation:XValidation:rule="...",message="..."`. Usare i webhook solo per logica che CEL non esprime (lookup su altre risorse, chiamate esterne, defaulting complesso).
+
 ---
 
 ## Kubebuilder — Scaffolding del Controller
 
-**Kubebuilder** è il framework raccomandato per sviluppare Operator in Go.
+**Kubebuilder** è il framework raccomandato per sviluppare Operator in Go, basato su **controller-runtime**. **Operator SDK** (usato per l'integrazione con OLM, vedi [Operators e OLM](../openshift/operators-olm.md)) ne riusa lo scaffolding Go e aggiunge anche operator basati su Helm e Ansible.
 
 ```bash
 # Inizializza un progetto Operator
@@ -299,7 +318,8 @@ func (r *WebApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
     // ── 5. Ritorna il risultato ───────────────────────────────
     // ctrl.Result{}: successo, nessun requeue immediato
     // ctrl.Result{RequeueAfter: 30*time.Second}: requeue tra 30s
-    // ctrl.Result{Requeue: true}: requeue immediatamente
+    // ctrl.Result{Requeue: true}: requeue con rate limiter (deprecato nelle
+    //   versioni recenti di controller-runtime: preferire RequeueAfter)
     return ctrl.Result{}, nil
 }
 
@@ -307,7 +327,8 @@ func (r *WebApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 func (r *WebApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
     return ctrl.NewControllerManagedBy(mgr).
         For(&appsv1.WebApplication{}).       // watch WebApplication
-        Owns(&appsv1beta1.Deployment{}).     // watch Deployment (owned by webapp)
+        Owns(&k8sappsv1.Deployment{}).       // watch Deployment (owned by webapp);
+                                             // k8sappsv1 = k8s.io/api/apps/v1
         Watches(
             &corev1.ConfigMap{},
             handler.EnqueueRequestsFromMapFunc(r.configMapToWebApp),
@@ -384,9 +405,12 @@ func (m *WebApplicationMutator) Default(ctx context.Context, obj runtime.Object)
 
 ```yaml
 apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingAdmissionWebhook
+kind: ValidatingWebhookConfiguration
 metadata:
   name: webapp-validator.company.com
+  annotations:
+    # cert-manager inietta il caBundle dal Certificate indicato
+    cert-manager.io/inject-ca-from: webapp-operator-system/webapp-serving-cert
 webhooks:
   - name: vwebapplication.kb.io
     clientConfig:
@@ -394,7 +418,7 @@ webhooks:
         name: webapp-operator-webhook-service
         namespace: webapp-operator-system
         path: /validate-apps-company-com-v1-webapplication
-      caBundle: <base64-ca>   # gestito da cert-manager con annotation
+      # caBundle: omesso, iniettato da cert-manager (annotation sopra)
     rules:
       - apiGroups: ["apps.company.com"]
         apiVersions: ["v1"]
@@ -434,21 +458,30 @@ PATTERN ESSENZIALI:
    Errori permanenti (invalid config) → aggiorna status → non requeue
 
 6. RATE LIMITING — WorkQueue con backoff esponenziale
-   workqueue.NewItemExponentialFailureRateLimiter(5*time.Millisecond, 1000*time.Second)
+   Il default di controller-runtime è già un backoff esponenziale per-item
+   (5ms → 1000s) combinato con un token bucket; personalizzarlo solo se serve
+   (controller.Options{RateLimiter: ...}, con le varianti generiche workqueue.NewTyped*)
 
 7. METRICS — esponi metriche per observability
-   controller-runtime espone già: reconcile_total, reconcile_errors_total, reconcile_duration
+   controller-runtime espone già: controller_runtime_reconcile_total,
+   controller_runtime_reconcile_errors_total, controller_runtime_reconcile_time_seconds
+
+8. LEADER ELECTION — con >1 replica del manager abilita --leader-elect
+   (Kubebuilder lo scaffolda); evita reconcile concorrenti dello stesso oggetto
 ```
 
 ---
 
 ## Troubleshooting
 
-### Scenario 1 — CRD non registrata / "no kind is registered"
+### Scenario 1 — CRD non registrata / "no matches for kind"
 
-**Sintomo:** `kubectl apply -f cr.yaml` ritorna `error: no kind "WebApplication" is registered for version "apps.company.com/v1"` oppure il controller logga `no kind is registered for the type`.
+**Sintomo:** `kubectl apply -f cr.yaml` ritorna `error: resource mapping not found ... no matches for kind "WebApplication" in version "apps.company.com/v1"`; oppure il controller logga `no matches for kind` / `failed to wait for caches to sync` all'avvio.
 
-**Causa:** La CRD non è stata installata nel cluster prima del CR, oppure il controller è stato avviato prima che la CRD fosse established.
+**Causa:** La CRD non è stata installata nel cluster prima del CR, oppure il controller è stato avviato prima che la CRD fosse `Established`.
+
+!!! note "Non confondere con l'errore Go"
+    `no kind "WebApplication" is registered for version ...` (o `no kind is registered for the type`) è invece un errore del **client Go**: il tipo non è nello `Scheme` del manager. Manca `appsv1.AddToScheme(scheme)` in `cmd/main.go` (o `utilruntime.Must(...)`); installare la CRD non lo risolve.
 
 **Soluzione:** Installare prima la CRD e attendere che sia in stato `Established`.
 
@@ -547,6 +580,20 @@ kubectl run debug --image=curlimages/curl --restart=Never -- \
 ```
 
 ---
+
+## Relazioni
+
+??? info "Architettura Kubernetes — Approfondimento"
+    CRD e controller si appoggiano su API server, etcd e il modello watch/reconcile dei controller built-in.
+
+    **Approfondimento completo →** [Architettura Kubernetes](architettura.md)
+
+??? info "Operators e OLM — Approfondimento"
+    OLM (Operator Lifecycle Manager) distribuisce e aggiorna gli Operator come pacchetti versionati.
+
+    **Approfondimento completo →** [Operators e OLM](../openshift/operators-olm.md)
+
+## Riferimenti
 
 - [Kubernetes Operators](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/)
 - [Kubebuilder Book](https://book.kubebuilder.io/)
