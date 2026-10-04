@@ -7,9 +7,10 @@ search_keywords: [kubernetes backup, k8s backup, kubernetes disaster recovery, k
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/storage, containers/kubernetes/architettura, containers/kubernetes/multi-cluster, containers/kubernetes/troubleshooting, databases/kubernetes-cloud/db-su-kubernetes, databases/replicazione-ha/backup-pitr, ci-cd/gitops/argocd]
 official_docs: https://velero.io/docs/
-status: complete
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-03
+last_verified: 2026-10-04
 ---
 
 # Kubernetes Backup & Disaster Recovery
@@ -127,12 +128,16 @@ spec:
           containers:
             - name: backup
               image: registry.k8s.io/etcd:3.5.15-0   # stessa versione del cluster
-              command: ["/bin/sh", "-c"]
+              # L'immagine etcd è minimale (niente shell né `date`): si invoca etcdctl direttamente
+              command: ["etcdctl"]
               args:
-                - |
-                  etcdctl --endpoints=https://127.0.0.1:2379 \
-                    --cacert=/pki/ca.crt --cert=/pki/server.crt --key=/pki/server.key \
-                    snapshot save /backup/etcd-$(date +%Y%m%d-%H%M).db
+                - --endpoints=https://127.0.0.1:2379
+                - --cacert=/pki/ca.crt
+                - --cert=/pki/server.crt
+                - --key=/pki/server.key
+                - snapshot
+                - save
+                - /backup/etcd-latest.db
               volumeMounts:
                 - {name: pki, mountPath: /pki, readOnly: true}
                 - {name: backup, mountPath: /backup}
@@ -144,7 +149,7 @@ spec:
 ```
 
 !!! tip "Esportare lo snapshot"
-    Il file su hostPath è inutile se il nodo muore. Aggiungere uno step di upload (es. `aws s3 cp`, `rclone`) con cifratura e retention, oppure montare uno storage esterno.
+    Il file su hostPath è inutile se il nodo muore, e `etcd-latest.db` viene sovrascritto a ogni run (nessuna storia). Aggiungere uno step di upload con nome datato, cifratura e retention (es. `aws s3 cp`, `rclone`, da un secondo container/job con shell), oppure montare uno storage esterno.
 
 ### Restore di etcd (kubeadm, single control plane)
 
@@ -194,7 +199,7 @@ velero install \
 velero backup-location get          # PHASE deve essere Available
 ```
 
-Le versioni dei plugin vanno scelte dalla matrice di compatibilità della release Velero (non usare `latest` in produzione). Azure e GCP usano gli analoghi `velero-plugin-for-microsoft-azure` e `velero-plugin-for-gcp`.
+Dalla 1.14 la logica CSI è integrata in Velero (non serve più il plugin separato), ma resta da abilitare con `--features=EnableCSI`. Le versioni dei plugin vanno scelte dalla matrice di compatibilità della release Velero (non usare `latest` in produzione). Azure e GCP usano gli analoghi `velero-plugin-for-microsoft-azure` e `velero-plugin-for-gcp`.
 
 ### Backup e Schedule
 
@@ -269,7 +274,7 @@ spec:
 ```
 
 !!! warning "Consistenza dei database"
-    Uno snapshot di volume "crash-consistent" di un database può richiedere recovery all'avvio, e in casi limite essere inutilizzabile. Per Postgres/MySQL usare hook di quiesce (`pg_backup_start`/`CHECKPOINT`, `FLUSH TABLES WITH READ LOCK`) oppure il backup nativo dell'operatore (es. CloudNativePG con barman) e considerare lo snapshot di Velero come seconda linea. Dettagli in [Database su Kubernetes](../../databases/kubernetes-cloud/db-su-kubernetes.md).
+    Uno snapshot di volume "crash-consistent" di un database può richiedere recovery all'avvio, e in casi limite essere inutilizzabile. Per Postgres/MySQL usare hook di quiesce (`CHECKPOINT` riduce il lavoro di recovery ma non rende lo snapshot consistente; `pg_backup_start`/`FLUSH TABLES WITH READ LOCK` richiedono di mantenere aperta la stessa sessione fino al post-hook, quindi non funzionano con un semplice `exec` one-shot) oppure il backup nativo dell'operatore (es. CloudNativePG con barman) e considerare lo snapshot di Velero come seconda linea. Dettagli in [Database su Kubernetes](../../databases/kubernetes-cloud/db-su-kubernetes.md).
 
 ### Restore
 
