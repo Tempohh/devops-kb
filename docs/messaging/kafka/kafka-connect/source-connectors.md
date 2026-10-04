@@ -7,9 +7,10 @@ search_keywords: [kafka connect source, source connector kafka, jdbc source conn
 parent: messaging/kafka/kafka-connect
 related: [messaging/kafka/kafka-connect/debezium-cdc, messaging/kafka/kafka-connect/sink-connectors]
 official_docs: https://kafka.apache.org/documentation/#connect
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Source Connectors
@@ -45,14 +46,14 @@ flowchart LR
     end
 
     subgraph Connect["Kafka Connect Cluster"]
-        W1["Worker 1\nConnector A\nTask 0, 1"]
-        W2["Worker 2\nConnector B\nTask 0"]
+        W1["Worker 1<br/>Connector A<br/>Task 0, 1"]
+        W2["Worker 2<br/>Connector B<br/>Task 0"]
     end
 
     subgraph Kafka
         T1[Topic: orders]
         T2[Topic: logs]
-        TC["connect-offsets\nconnect-configs\nconnect-status"]
+        TC["connect-offsets<br/>connect-configs<br/>connect-status"]
     end
 
     DB --> W1 --> T1
@@ -143,7 +144,10 @@ curl -X POST http://localhost:8083/connectors \
 | `timestamp` | Legge righe aggiornate tramite colonna timestamp | Colonna `updated_at` |
 | `timestamp+incrementing` | Combina entrambi | Entrambe le colonne |
 
-### FileStream Source Connector (built-in, test)
+### FileStream Source Connector (solo test)
+
+!!! warning "Non per produzione"
+    `FileStreamSourceConnector` è un esempio didattico: non gestisce rotazione dei file né garantisce affidabilità. Dalla 3.2 il JAR `connect-file` non è più nel `plugin.path` di default: va aggiunto esplicitamente (es. `plugin.path=/opt/kafka/libs/connect-file-<versione>.jar`). Per i log in produzione usare un agent dedicato (Filebeat, Fluent Bit).
 
 ```bash
 curl -X POST http://localhost:8083/connectors \
@@ -186,7 +190,7 @@ curl -X POST http://localhost:8083/connectors/postgres-orders-source/tasks/0/res
   "transforms": "dropField,renameField",
 
   "transforms.dropField.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
-  "transforms.dropField.blacklist": "internal_id,password_hash",
+  "transforms.dropField.exclude": "internal_id,password_hash",
 
   "transforms.renameField.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
   "transforms.renameField.renames": "cust_id:customer_id,ord_ts:order_timestamp"
@@ -199,13 +203,21 @@ curl -X POST http://localhost:8083/connectors/postgres-orders-source/tasks/0/res
     La modalità `bulk` rilegge tutta la tabella ad ogni poll. Con `timestamp+incrementing` si leggono solo le righe nuove o aggiornate.
 
 !!! tip "Separare la configurazione per ambiente"
-    Usare variabili d'ambiente o un config provider (es. HashiCorp Vault) per le credenziali, mai hardcodate nella configurazione del connector.
+    Usare un config provider (`FileConfigProvider`, `EnvVarConfigProvider`, o provider per Vault/AWS Secrets Manager) per le credenziali: la config di un connector è leggibile via REST API e salvata in chiaro in `connect-configs`, quindi un segreto hardcodato è esposto a chiunque acceda alla API o al topic.
+
+    ```properties
+    # worker
+    config.providers=file
+    config.providers.file.class=org.apache.kafka.common.config.provider.FileConfigProvider
+    # connector
+    connection.password=${file:/etc/connect/secrets.properties:db.password}
+    ```
 
 !!! warning "JDBC Source non cattura DELETE"
     Il JDBC Source Connector non può rilevare le eliminazioni di righe. Per catturare insert/update/delete usare [Debezium CDC](debezium-cdc.md).
 
 !!! warning "Schema evolution con JDBC"
-    Se lo schema del database cambia (nuova colonna), Kafka Connect aggiorna automaticamente lo schema del topic. Verificare che i consumer siano in grado di gestire l'evoluzione degli schemi.
+    Se lo schema della tabella cambia (nuova colonna), il connector rileva la modifica al poll successivo ed emette record con il nuovo schema Connect. Con un converter Avro/Protobuf + Schema Registry viene registrata una nuova versione, soggetta alla compatibility configurata: una modifica incompatibile fa fallire il task. Con JSON il cambiamento passa senza controlli e i consumer devono tollerarlo.
 
 ## Troubleshooting
 
@@ -232,9 +244,9 @@ curl -X POST http://localhost:8083/connectors/my-connector/restart
 
 **Sintomo:** I record arrivano su Kafka con ritardo rispetto alla sorgente; il consumer group del topic di destinazione accumula lag.
 
-**Causa:** `poll.interval.ms` troppo alto, `batch.max.rows` troppo basso, `tasks.max=1` con molte tabelle, o query lenta sul database sorgente.
+**Causa:** `poll.interval.ms` troppo alto, `batch.max.rows` troppo basso, `tasks.max=1` con molte tabelle, o query lenta sul database sorgente (manca un indice su `updated_at`/`id`).
 
-**Soluzione:** Aumentare il parallelismo e ottimizzare i parametri di polling.
+**Soluzione:** Aumentare il parallelismo e ottimizzare i parametri di polling. Nel JDBC Source il parallelismo è per tabella: i task effettivi sono `min(tasks.max, numero tabelle)`, quindi con 2 tabelle `tasks.max=4` ne avvia solo 2. Il ritardo del connector è la distanza sorgente→topic, non un lag di consumer group; il comando sotto misura i consumer a valle.
 
 ```bash
 # Aggiornare la configurazione del connector via REST API
@@ -266,13 +278,16 @@ kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
 
 **Causa:** At-least-once delivery garantita da Kafka Connect: se un commit degli offset non va a buon fine prima del crash, i record vengono rielaborati.
 
-**Soluzione:** Il consumer deve essere idempotente. Con `mode=incrementing` il rischio è minimizzato perché gli offset sono deterministici. Verificare che il topic `connect-offsets` sia replicato correttamente.
+**Soluzione:** Il consumer deve essere idempotente. Con `mode=incrementing` il rischio è minimizzato perché gli offset sono deterministici. Verificare che il topic `connect-offsets` sia replicato correttamente. Dal Kafka 3.3 (KIP-618) i source connector che lo supportano possono dare exactly-once: worker con `exactly.once.source.support=enabled` e connector che dichiari il supporto (per il JDBC Source verificare nella sua documentazione).
 
 ```bash
-# Verificare il contenuto degli offset salvati
+# Offset di un connector (Kafka 3.5+, KIP-875)
+curl -s http://localhost:8083/connectors/postgres-orders-source/offsets
+
+# Contenuto grezzo del topic: chiave/valore JSON, NON offset di consumer group
 kafka-console-consumer.sh --bootstrap-server kafka:9092 \
   --topic connect-offsets --from-beginning \
-  --formatter "kafka.coordinator.group.GroupMetadataManager\$OffsetMessageFormatter"
+  --property print.key=true
 
 # Controllare la replication factor del topic degli offset
 kafka-topics.sh --bootstrap-server kafka:9092 \
