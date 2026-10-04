@@ -7,9 +7,10 @@ search_keywords: [database models, relational model, document database, key valu
 parent: databases/fondamentali/_index
 related: [databases/fondamentali/acid-base-cap, databases/nosql/redis, databases/nosql/mongodb, databases/nosql/cassandra]
 official_docs: https://martinfowler.com/articles/nosql-distilled.html
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Modelli dei Dati
@@ -26,7 +27,7 @@ Il modello relazionale (Codd, 1970) organizza i dati in **relazioni** (tabelle) 
 
 ### Normalizzazione — Il Principio, Non il Dogma
 
-La normalizzazione elimina la ridondanza: ogni fatto è memorizzato una sola volta. La 3NF (Terza Forma Normale) garantisce che ogni attributo dipenda solo dalla chiave primaria.
+La normalizzazione elimina la ridondanza: ogni fatto è memorizzato una sola volta. La 3NF (Terza Forma Normale) garantisce che ogni attributo non-chiave dipenda dalla chiave, dall'intera chiave e da nient'altro che la chiave (nessuna dipendenza transitiva tra attributi non-chiave).
 
 ```sql
 -- Forma denormalizzata (ridondante)
@@ -40,7 +41,7 @@ ordini_righe(id, ordine_id FK, prodotto_id FK, quantita, prezzo_unitario)
 prodotti(id, nome, prezzo_base)
 ```
 
-**Il costo della normalizzazione**: più JOIN per ricostruire i dati. In sistemi OLAP o con pattern di lettura molto specifici, la denormalizzazione deliberata (materializzare join, duplicare dati) è una strategia valida — non un errore.
+**Il costo della normalizzazione**: più JOIN per ricostruire i dati. In sistemi OLAP (Online Analytical Processing: query analitiche aggregate su grandi volumi, in contrapposizione a OLTP, le transazioni operative) o con pattern di lettura molto specifici, la denormalizzazione deliberata (materializzare join, duplicare dati) è una strategia valida — non un errore.
 
 ### Impedance Mismatch
 
@@ -109,7 +110,7 @@ Il modello più semplice: una hash table distribuita. Una chiave identifica univ
 
 ```
 GET user:session:a1b2c3d4     → {user_id: 123, expires: 1708780800}
-SET cache:product:456 300 "..." → (expiry 300s)
+SET cache:product:456 "..." EX 300 → OK (expiry 300s)
 INCR rate:ip:192.168.1.1      → 47
 ```
 
@@ -144,9 +145,9 @@ I database graph (Neo4j, Amazon Neptune, ArangoDB) modellano i dati come nodi e 
 
 ```cypher
 -- Neo4j Cypher: trova tutti gli amici di amici a distanza ≤ 3
-MATCH (p:Person {name: "Alice"})-[:FRIENDS_WITH*1..3]-(friend)
+MATCH path = (p:Person {name: "Alice"})-[:FRIENDS_WITH*1..3]-(friend)
 WHERE NOT friend = p
-RETURN DISTINCT friend.name, LENGTH(path) AS hops
+RETURN friend.name, min(length(path)) AS hops
 ```
 
 ```sql
@@ -212,7 +213,7 @@ results = db.query(
 **Indici per similarity search:**
 - **HNSW** (Hierarchical Navigable Small World): alta recall, bassa latenza, alto uso memoria
 - **IVF** (Inverted File Index): più scalabile in memoria, recall leggermente inferiore
-- **Flat**: brute-force esatto, impraticabile oltre ~1M vettori
+- **Flat**: brute-force esatto (recall 100%), latenza lineare col numero di vettori: valido fino a qualche centinaio di migliaia, poi serve un indice approssimato (ANN)
 
 !!! note "pgvector in PostgreSQL"
     pgvector permette di fare similarity search all'interno di PostgreSQL, combinando il modello relazionale con la ricerca vettoriale. Ottimo per applicazioni che già usano Postgres — evita la complessità di un sistema separato.
@@ -262,7 +263,7 @@ logging.getLogger('django.db.backends').setLevel(logging.DEBUG)
 
 ### Scenario 2 — Document MongoDB con crescita incontrollata
 
-**Sintomo**: errore `Document exceeds maximum size 16793600` oppure letture sempre più lente su una collection; documenti nella collection superano i 16MB.
+**Sintomo**: scritture rifiutate con errore di dimensione BSON (limite 16 MB = 16793600 byte, es. `object to insert too large` / `BSONObj size ... is invalid`) oppure letture e update sempre più lenti su una collection; documenti vicini al limite.
 
 **Causa**: array embedded non limitato (commenti, log, eventi) che cresce indefinitamente all'interno di un singolo documento.
 
@@ -294,31 +295,35 @@ db.posts.find({}).forEach(post => {
 
 **Sintomo**: query con `ALLOW FILTERING` in produzione con latenze elevate e timeout; warnings nei log del driver.
 
-**Causa**: query su colonne che non fanno parte della partition key o clustering key — Cassandra deve scansionare tutte le partizioni (full table scan distribuito).
+**Causa**: query su colonne che non fanno parte della primary key (o che non rispettano l'ordine delle clustering key) — Cassandra non può usare l'indice di partizione e deve scansionare. Senza la partition key nel predicato è un full table scan distribuito su tutti i nodi; con la partition key il filtro resta dentro una partizione, ma costa comunque proporzionalmente alla sua dimensione.
 
 **Soluzione**: riprogettare il data model creando una tabella dedicata per il pattern di query necessario (query-driven design).
 
 ```cql
 -- PROBLEMA: query su colonna non chiave
 SELECT * FROM events WHERE user_id = 123 AND status = 'pending' ALLOW FILTERING;
--- Questo scansiona TUTTE le partizioni — inaccettabile in produzione
+-- Filtra riga per riga: costo proporzionale alla partizione (a tutta la tabella
+-- se user_id non è la partition key) — inaccettabile in produzione
 
--- SOLUZIONE: tabella dedicata al pattern di query
+-- SOLUZIONE: tabella dedicata al pattern di query.
+-- Il bucket giornaliero nella partition key evita una partizione "pending"
+-- unbounded (hot partition, che è un anti-pattern per sé).
 CREATE TABLE events_by_status (
   status TEXT,
+  day DATE,
   created_at TIMESTAMP,
   user_id UUID,
   event_data TEXT,
-  PRIMARY KEY ((status), created_at, user_id)
-) WITH CLUSTERING ORDER BY (created_at DESC);
+  PRIMARY KEY ((status, day), created_at, user_id)
+) WITH CLUSTERING ORDER BY (created_at DESC, user_id ASC);
 
--- Query efficiente sulla nuova tabella
+-- Query efficiente sulla nuova tabella (una partizione per giorno)
 SELECT * FROM events_by_status
-WHERE status = 'pending' AND created_at > '2024-01-01';
+WHERE status = 'pending' AND day = '2024-01-15';
 
--- Verificare execution plan
+-- Verificare il comportamento della query (cqlsh)
 TRACING ON;
-SELECT * FROM events_by_status WHERE status = 'pending' LIMIT 100;
+SELECT * FROM events_by_status WHERE status = 'pending' AND day = '2024-01-15' LIMIT 100;
 ```
 
 ---
@@ -333,8 +338,9 @@ SELECT * FROM events_by_status WHERE status = 'pending' LIMIT 100;
 
 ```python
 # pgvector — verifica e ricreazione indice con parametri ottimizzati
-# ef_construction: qualità costruzione (default 64, aumentare per recall alta)
-# m: connessioni per nodo (default 16, range 4-64)
+# ef_construction: qualità costruzione (default 64, range 4-1000, aumentare per recall alta)
+# m: connessioni per nodo (default 16, range 2-100)
+# hnsw.ef_search: candidati esplorati a query time (default 40)
 
 # Diagnosi: misurare recall con ground truth
 import psycopg2
