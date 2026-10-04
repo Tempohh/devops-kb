@@ -7,7 +7,7 @@ search_keywords: [Google Cloud Well-Architected Framework, Google Cloud Architec
 parent: cloud/gcp/fondamentali/_index
 related: [cloud/aws/fondamentali/well-architected, cloud/azure/fondamentali/well-architected, cloud/gcp/fondamentali/panoramica, cloud/gcp/fondamentali/shared-responsibility]
 official_docs: https://cloud.google.com/architecture/framework
-status: needs-review
+status: reviewed
 difficulty: beginner
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -15,10 +15,7 @@ last_verified: 2026-10-04
 
 # Google Cloud Well-Architected Framework
 
-Il **Google Cloud Well-Architected Framework** (WAF GCP, in passato **Architecture Framework** / GCAF) è la guida ufficiale di Google per progettare e valutare workload cloud **sicuri, affidabili, performanti e ottimizzati nei costi**. Analogo all'AWS e all'Azure Well-Architected Framework, si articola in una categoria fondativa (**System Design**) più **5 pilastri**, e fornisce principi di design e raccomandazioni operative. Include anche prospettive trasversali (es. AI/ML).
-
-<!-- REVIEW: verificare struttura attuale del framework (pilastri, prospettive AI/ML, eventuale sustainability) su cloud.google.com/architecture/framework -->
-<!-- REVIEW: verificare percentuali CUD/Spot/SUD e famiglie VM con SUD su cloud.google.com/compute/docs/instances/signing-up-committed-use-discounts -->
+Il **Google Cloud Well-Architected Framework** (WAF GCP, in passato **Architecture Framework** / GCAF) è la guida ufficiale di Google per progettare e valutare workload cloud **sicuri, affidabili, performanti e ottimizzati nei costi**. Analogo all'AWS e all'Azure Well-Architected Framework, si articola in una categoria fondativa (**System Design**) più **6 pilastri** (incluso **Sustainability**), e fornisce principi di design e raccomandazioni operative. Include anche prospettive trasversali: **AI and ML** e **Financial Services**.
 
 !!! note "Perché esiste e come si usa"
     Un framework dà un **vocabolario comune** e una checklist: invece di discutere "è un buon design?", si verifica pilastro per pilastro dove ci sono gap e li si prioritizza. Non è prescrittivo: i pilastri entrano in tensione (più affidabilità = più costo), e va documentato quale trade-off si sceglie.
@@ -33,7 +30,7 @@ Il **Google Cloud Well-Architected Framework** (WAF GCP, in passato **Architectu
 
 ---
 
-## System Design + 5 Pilastri
+## System Design + 6 Pilastri
 
 ```
 Google Cloud Well-Architected Framework
@@ -56,10 +53,16 @@ Google Cloud Well-Architected Framework
   │ sprechi,       │          │ throughput     │
   │ right-size     │          │ ottimale       │
   └────────────────┘          └────────────────┘
+
+  7. Sustainability
+  ┌────────────────┐
+  │ Workload cloud │
+  │ sostenibili    │
+  └────────────────┘
 ```
 
 !!! note "Differenza rispetto ad AWS WAF"
-    Il framework GCP tratta **System Design** come categoria fondativa (modularità, loose coupling, design for failure), mentre AWS ha 6 pilastri (incluso *Sustainability*) e non ha una categoria equivalente. GCP chiama **Performance Optimization** ciò che AWS chiama *Performance Efficiency*. Nel resto del documento la numerazione 1–6 segue le sezioni, non una gerarchia ufficiale.
+    Il framework GCP tratta **System Design** come categoria fondativa (modularità, loose coupling, design for failure), mentre AWS ha 6 pilastri (incluso *Sustainability*, presente ora anche in GCP) e non ha una categoria equivalente. GCP chiama **Performance Optimization** ciò che AWS chiama *Performance Efficiency*. Nel resto del documento la numerazione 1–6 segue le sezioni, non una gerarchia ufficiale.
 
 ---
 
@@ -406,9 +409,9 @@ spec:
 
 | Meccanismo | Dettaglio | Risparmio |
 |-----------|-----------|-----------|
-| **Sustained Use Discounts (SUD)** | Automatico per VM usate > 25% del mese, solo su alcune famiglie Compute Engine (es. N1, N2; non le generazioni più recenti) | Fino al 30% |
-| **Committed Use Discounts (CUD)** | Impegno 1 o 3 anni: resource-based (vCPU/memoria) o flexible (spesa oraria) | Circa 28-37% (1yr) / 46-55% (3yr), fino al 70% su memory-optimized |
-| **Spot VMs** | VM interrompibili con preavviso 30s (ex Preemptible), nessuna scadenza max a 24h | Fino al 60-91% |
+| **Sustained Use Discounts (SUD)** | Automatico con soglie 25/50/75/100% del mese, solo su famiglie legacy: N1, M1, M2 (max 30%); N2, N2D, C2 (max 20%). Non per le generazioni più recenti né per risorse già coperte da CUD | Fino al 30% |
+| **Committed Use Discounts (CUD)** | Impegno 1 o 3 anni: resource-based (vCPU/memoria) o flexible (spesa oraria). Il piano 3 anni ha tasso maggiore | Fino al 55% (vCPU/memoria), fino al 70% su alcuni tipi |
+| **Spot VMs** | VM interrompibili (ex Preemptible), preemption notice configurabile: 0s default o 120s; nessuna scadenza max a 24h, runtime limitabile opzionalmente | Fino al 91% |
 | **Cloud Run** | Billing per ms di CPU/memoria effettiva, scale-to-zero | Ideale per traffic burst-y |
 | **Committed Use (BigQuery)** | Slot commitments per query analytics intense | Variabile vs on-demand |
 | **Coldline / Archive Storage** | Per dati raramente accessibili in Cloud Storage | Fino a 95% vs Standard |
@@ -553,6 +556,12 @@ spec:
 
 ---
 
+## 7. Sustainability
+
+Il pilastro **Sustainability** guida a costruire workload cloud ambientalmente sostenibili: scegliere regioni a basse emissioni di carbonio, right-sizing e scale-to-zero per ridurre risorse inutilizzate, e misurare l'impatto con gli strumenti di carbon footprint di Google Cloud.
+
+---
+
 ## Architecture Center e Strumenti di Review
 
 ### Google Cloud Architecture Center
@@ -567,14 +576,12 @@ spec:
 Processo di architecture review consigliato (manuale, usando le raccomandazioni di ogni pilastro come checklist):
 
 1. Identificare il workload da revisionare
-2. Mappare ogni componente a System Design e ai 5 pilastri
+2. Mappare ogni componente a System Design e ai 6 pilastri
 3. Per ogni pilastro: identificare gap rispetto alle raccomandazioni
 4. Prioritizzare i gap per impatto e sforzo di remediation
 5. Creare un improvement plan con milestone e owner
 
-Per review formali su workload mission-critical o pre-migrazione ci si può appoggiare al team Google Cloud o a partner.
-
-<!-- REVIEW: verificare se esiste un assessment tool ufficiale self-service per il framework (rimossa la citazione "Console → Framework Assessment", non verificabile) -->
+Per review formali su workload mission-critical o pre-migrazione ci si può appoggiare al team Google Cloud o a partner. La documentazione ufficiale del framework non cita un assessment tool self-service (verificato 2026-10-04).
 
 Strumenti nativi complementari: **Recommender** e **Active Assist** (rightsizing, IAM, costi), **Security Command Center** (postura di sicurezza), **Cloud Monitoring** (osservabilità).
 
@@ -584,11 +591,11 @@ Strumenti nativi complementari: **Recommender** e **Active Assist** (rightsizing
 
 | Aspetto | GCP Architecture Framework | AWS Well-Architected | Azure Well-Architected |
 |---------|---------------------------|---------------------|------------------------|
-| **Struttura** | System Design (fondativa) + 5 pilastri | 6 pilastri (incl. Sustainability) | 5 pilastri |
+| **Struttura** | System Design (fondativa) + 6 pilastri (incl. Sustainability) | 6 pilastri (incl. Sustainability) | 5 pilastri |
 | **Elemento distintivo GCP** | System Design come categoria autonoma | — | — |
 | **Tool di review** | Checklist/raccomandazioni nella documentazione | AWS Well-Architected Tool (gratuito in Console) | Azure Well-Architected Review + Azure Advisor |
 | **Reference Architectures** | Architecture Center | AWS Architecture Center | Azure Architecture Center |
-| **Specializzazioni** | Prospettive (es. AI/ML) | Lenses (Serverless, SaaS, ML...) | Workload guides (es. AI, SAP, AKS) |
+| **Specializzazioni** | Prospettive (AI and ML, Financial Services) | Lenses (Serverless, SaaS, ML...) | Workload guides (es. AI, SAP, AKS) |
 | **SRE integration** | Forte (principi SRE Google interni) | Moderata | Moderata |
 
 !!! note "Origini SRE"
@@ -720,7 +727,7 @@ kubectl rollout status deployment/my-deployment -n <namespace>
 ## Relazioni
 
 ??? info "AWS Well-Architected Framework — Confronto"
-    Il framework GCP e l'AWS WAF hanno obiettivi analoghi e pilastri in larga parte sovrapponibili. La differenza principale è che GCP separa **System Design** come categoria fondativa, mentre AWS ha *Sustainability* come pilastro. Il framework GCP ha una forte impronta **SRE** (error budget, SLO) derivante dalle pratiche interne di Google.
+    Il framework GCP e l'AWS WAF hanno obiettivi analoghi e pilastri in larga parte sovrapponibili (entrambi includono *Sustainability*). La differenza principale è che GCP separa **System Design** come categoria fondativa. Il framework GCP ha una forte impronta **SRE** (error budget, SLO) derivante dalle pratiche interne di Google.
 
     **Approfondimento →** [AWS Well-Architected Framework](../../aws/fondamentali/well-architected.md)
 
