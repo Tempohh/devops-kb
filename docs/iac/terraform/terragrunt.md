@@ -7,7 +7,7 @@ search_keywords: [terragrunt, terragrunt.hcl, root.hcl, terragrunt run --all, ru
 parent: iac/terraform/_index
 related: [iac/terraform/ci-cd, iac/terraform/state-management, iac/terraform/moduli, iac/terraform/opentofu, iac/terraform/fondamentali]
 official_docs: https://docs.terragrunt.com/
-status: needs-review
+status: reviewed
 last_verified: 2026-10-04
 difficulty: advanced
 last_updated: 2026-10-04
@@ -22,7 +22,7 @@ last_updated: 2026-10-04
 Il modello mentale: ogni directory con un `terragrunt.hcl` è una **unit** (un root module + il suo state); una collezione di unit è uno **stack** (implicito = albero di directory, esplicito = file `terragrunt.stack.hcl`).
 
 !!! note "Versioni di riferimento"
-    Documentazione allineata alla **CLI redesign** (comando `run`, flag senza prefisso `--terragrunt-`, default che non inoltra più comandi sconosciuti a OpenTofu dalla v0.88). Le feature `stack` e `--filter` evolvono rapidamente: verificare le release notes su <https://docs.terragrunt.com/> prima di copiare i comandi in CI.
+    Documentazione allineata alla **CLI redesign** (comando `run`, flag senza prefisso `--terragrunt-`, default che non inoltra più comandi sconosciuti a OpenTofu dalla v0.88). **Terragrunt 1.0** (30 marzo 2026) è la prima release con impegno di retrocompatibilità: flag CLI, output di `find`, configurazione HCL stabili per tutta la serie 1.x; ultima 1.0.5 al momento della verifica. `--filter` è GA. Verificare le release notes su <https://docs.terragrunt.com/> prima di aggiornare il pin in CI.
 
 ### Quando NON serve
 
@@ -99,7 +99,7 @@ locals {
 }
 
 # Versioni minime: evita il drift tra sviluppatori e CI
-terragrunt_version_constraint = ">= 0.88, < 1.0"
+terragrunt_version_constraint = ">= 1.0, < 2.0"
 terraform_version_constraint  = ">= 1.10"   # richiesto da use_lockfile
 
 remote_state {
@@ -243,12 +243,12 @@ cd live/prod
 terragrunt run --all plan
 terragrunt run --all apply --non-interactive --parallelism 4
 
-# Filtrare le unit (query sintassi --filter; verificare i dettagli nella versione in uso)
-# <!-- REVIEW: verificare in quale versione di Terragrunt --filter è stabile (la CI sotto pinna 0.88.0) e la sintassi 'eks...' -->
-# <!-- REVIEW: verificare che 'dag graph', 'find --dag' e '--backend-bootstrap' esistano in 0.88 e che il no-forwarding parta da 0.88 -->
-
+# Filtrare le unit con --filter (GA: l'esperimento filter-flag è completato; stabile in 1.x).
+# --filter implica --all. Non usarlo con pin < 1.0 (in 0.88 era ancora sperimentale).
 terragrunt run --all --filter './eu-west-1/**' plan
-terragrunt run --all --filter 'eks...' plan     # eks + dipendenze (sintassi grafo)
+terragrunt run --all --filter 'eks...' plan     # eks + sue dipendenze
+terragrunt run --all --filter '...vpc' plan     # vpc + chi dipende da vpc
+terragrunt run --all --filter './prod/** | name=eks' plan   # intersezione con |
 ```
 
 **Migrazione dai flag legacy** (i vecchi funzionano ancora con warning di deprecazione, ma verranno rimossi):
@@ -356,7 +356,7 @@ jobs:
         with: { tofu_version: "1.10.x" }
       - uses: gruntwork-io/terragrunt-action@v3
         with:
-          tg_version: "0.88.0"
+          tg_version: "1.0.5"
           tofu_version: "1.10.x"
           tg_dir: live/prod
           tg_command: "run --all plan"
