@@ -13,6 +13,7 @@ last_updated: 2026-10-04
 last_verified: 2026-10-04
 ---
 
+
 # Kubernetes Cost Management — OpenCost e Kubecost
 
 ## Panoramica
@@ -33,7 +34,9 @@ Nei cluster Kubernetes multi-team, la **cloud bill è aggregata**: il provider c
 - Cluster di sviluppo/test con costi trascurabili rispetto alla produzione
 
 !!! note "OpenCost vs Kubecost"
-    **OpenCost** è il progetto CNCF open source (incubating), standard e gratuito — ideale per organizzazioni con stack Prometheus già esistente. Nasce da Kubecost, che ne ha donato il motore di allocazione alla CNCF (2022); **Kubecost** (oggi di proprietà IBM, tramite Apptio) lo usa come base e aggiunge funzionalità commerciali (UI avanzata, savings engine, budget alerts, multi-cluster, riconciliazione con la fattura reale). Per molte organizzazioni OpenCost basta per allocation e showback senza costo di licenza. <!-- REVIEW: verificare stato CNCF (incubating), proprietà IBM e limiti attuali del tier gratuito Kubecost -->
+    **OpenCost** è il progetto CNCF open source (incubating), standard e gratuito — ideale per organizzazioni con stack Prometheus già esistente. Nasce da Kubecost, che ne ha donato il motore di allocazione alla CNCF (2022); **Kubecost** (oggi di proprietà IBM, tramite Apptio) lo usa come base e aggiunge funzionalità commerciali (UI avanzata, savings engine, budget alerts, multi-cluster, riconciliazione con la fattura reale). Per molte organizzazioni OpenCost basta per allocation e showback senza costo di licenza. Kubecost ha un tier gratuito (Foundations: cluster illimitati fino a 250 core, retention metriche 15 giorni); oltre quei limiti serve una licenza.
+
+    OpenCost è CNCF **Incubating** dal 25/10/2024 (accettato come Sandbox il 17/06/2022). La documentazione Kubecost è ora ospitata su IBM Docs.
 
 !!! note "Termini"
     **PVC** = PersistentVolumeClaim (richiesta di storage); **P95** = 95° percentile (valore sotto cui sta il 95% delle misure, ignora i picchi estremi); **OOMKill** = container terminato dal kernel per memoria esaurita.
@@ -132,8 +135,9 @@ helm repo update
 helm install opencost opencost/opencost \
   --namespace opencost \
   --create-namespace \
-  --set opencost.exporter.cloudProviderApiKey="YOUR_CLOUD_API_KEY" \
+  --set opencost.exporter.defaultClusterId="my-cluster" \
   --set opencost.ui.enabled=true
+# opencost.exporter.cloudProviderApiKey serve solo per la GCP Pricing API (chiave di valutazione)
 
 # Verifica che i pod siano running
 kubectl get pods -n opencost
@@ -141,7 +145,8 @@ kubectl get pods -n opencost
 
 Per configurare il cloud provider (es. AWS) con IAM Roles for Service Accounts (IRSA):
 
-<!-- REVIEW: verificare chiavi values del chart opencost (serviceAccount.annotations, opencost.exporter.*) e permessi IAM necessari per prezzi/Cloud Costs -->
+Le chiavi `serviceAccount.annotations`, `opencost.exporter.defaultClusterId`, `opencost.prometheus.internal.*` e `opencost.ui.*` sono quelle del chart ufficiale. Per la Cloud Cost (fatture reali) esiste la sezione `opencost.cloudCost`, con permessi IAM dedicati: vedere la documentazione del chart.
+
 ```yaml
 # values.yaml — OpenCost su EKS con IRSA
 serviceAccount:
@@ -211,7 +216,7 @@ helm install cost-analyzer kubecost/cost-analyzer \
   --set global.prometheus.enabled=false \
   --set global.prometheus.fqdn="http://prometheus-operated.monitoring.svc:9090" \
   --set kubecostToken="TOKEN_DA_KUBECOST_IO"  # token del tier gratuito (registrazione su kubecost.com); con licenza enterprise usare quello della licenza
-# <!-- REVIEW: verificare modalità attuale di attivazione tier gratuito e chiavi values (chart cost-analyzer 2.x/3.x) -->
+# <!-- CURRENCY: non verificato (2026-10): modalità di attivazione del tier gratuito (kubecostToken) e chiavi values del chart cost-analyzer -->  (IBM Docs non lo riporta nella first-time-user-guide)
 
 # Con Prometheus bundled (setup rapido per test)
 helm install cost-analyzer kubecost/cost-analyzer \
@@ -223,7 +228,8 @@ helm install cost-analyzer kubecost/cost-analyzer \
 
 Gli alert si definiscono nei values Helm del chart (non in un ConfigMap creato a mano, che Kubecost non legge):
 
-<!-- REVIEW: verificare path e schema esatti degli alert nei values (global.notifications.alertConfigs vs kubecostProductConfigs) e nome campo webhook Slack -->
+Path confermato: `global.notifications.alertConfigs`. I budget alert accettano `window` da 1 a 7 giorni (o 1-24 ore), non `month`. Webhook Slack: `slackWebhookUrl` per alert, oppure `globalSlackWebhookUrl` a livello globale.
+
 ```yaml
 # values.yaml — alert budget Kubecost
 global:
@@ -232,8 +238,8 @@ global:
       enabled: true
       alerts:
         - type: budget
-          threshold: 1000            # $1000/mese
-          window: month
+          threshold: 250             # $250 su finestra di 7 giorni
+          window: 7d
           aggregation: namespace
           filter: "payments"
           slackWebhookUrl: "https://hooks.slack.com/services/..."
@@ -351,13 +357,16 @@ Over-provisioning è la fonte principale di costo evitabile in Kubernetes. Il wo
 1. **Baseline**: raccogliere dati di utilizzo per almeno 7 giorni (meglio 30)
 2. **Query Kubecost API** per raccomandazioni rightsizing:
 
-<!-- REVIEW: verificare endpoint attuale (/model/savings/requestSizingV2?) e parametri (algorithmCPU, targetCPUUtilization…) nella Savings API Kubecost -->
+L'endpoint corrente è `/model/savings/requestSizingV2` (parametri: `window`, `algorithmCPU`/`algorithmRAM` = `quantileOfMaxes`|`quantileOfAverages`, `qCPU`/`qRAM`, `targetCPUUtilization`/`targetRAMUtilization` — default 0.7, `filter`, `minRecCPUMillicores`, `minRecRAMBytes`).
+
 ```bash
 # Raccomandazioni rightsizing — target utilization 80%
-curl "http://cost-analyzer.kubecost.svc:9090/model/savings/requestSizing?window=30d&targetUtilization=0.8"
+curl "http://cost-analyzer.kubecost.svc:9090/model/savings/requestSizingV2?window=30d&targetCPUUtilization=0.8&targetRAMUtilization=0.8"
 
 # Filtrare per namespace specifico
-curl "http://cost-analyzer.kubecost.svc:9090/model/savings/requestSizing?window=30d&targetUtilization=0.8&filterNamespaces=payments"
+curl -G "http://cost-analyzer.kubecost.svc:9090/model/savings/requestSizingV2" \
+  --data-urlencode "window=30d" --data-urlencode "targetCPUUtilization=0.8" \
+  --data-urlencode 'filter=namespace:"payments"'
 
 # Output: per ogni container, requests consigliate vs attuali
 # {
@@ -514,12 +523,12 @@ kubectl rollout restart deployment/cost-analyzer -n kubecost
 **Soluzione:**
 ```bash
 # Usare finestra più lunga e target utilization più conservativo
-curl "http://cost-analyzer.kubecost.svc:9090/savings/requestSizing?window=30d&targetUtilization=0.65"
-# targetUtilization=0.65 → le nuove requests = utilizzo_P95 / 0.65 (buffer del 35%)
+curl "http://cost-analyzer.kubecost.svc:9090/model/savings/requestSizingV2?window=30d&targetCPUUtilization=0.65"
+# targetCPUUtilization=0.65 → le nuove requests = utilizzo_P95 / 0.65 (buffer del 35%)
 
 # Per workload con picchi stagionali (es. e-commerce a Natale):
 # usare window=90d per catturare i picchi storici
-curl "http://cost-analyzer.kubecost.svc:9090/savings/requestSizing?window=90d&targetUtilization=0.70"
+curl "http://cost-analyzer.kubecost.svc:9090/model/savings/requestSizingV2?window=90d&targetCPUUtilization=0.70"
 ```
 
 ---
