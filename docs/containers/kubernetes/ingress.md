@@ -7,7 +7,7 @@ search_keywords: [ingress controller kubernetes, nginx ingress, traefik kubernet
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/networking, containers/kubernetes/sicurezza, containers/kubernetes/workloads]
 official_docs: https://kubernetes.io/docs/concepts/services-networking/ingress/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -26,8 +26,7 @@ La risorsa Ingress da sola **non fa nulla**: richiede un **Ingress Controller** 
 **Quando NON usare Ingress:** protocolli non-HTTP (TCP/UDP raw → usare Service `LoadBalancer` o `NodePort`), service mesh avanzato con mTLS bidirezionale (→ Istio/Linkerd), ambienti on-premise senza accesso a cloud LB (valutare MetalLB + Ingress).
 
 !!! danger "ingress-nginx è stato ritirato (marzo 2026)"
-    Il progetto **ingress-nginx** (`kubernetes/ingress-nginx`) è stato dichiarato in pensione da Kubernetes SIG Network e Security Response Committee: dopo marzo 2026 niente più release, bugfix né patch di sicurezza. Le installazioni esistenti continuano a funzionare, ma non ricevono più fix per nuove CVE. Per nuovi cluster scegliere un controller mantenuto (Traefik, HAProxy, Envoy-based, controller del cloud provider) oppure la **Gateway API**; per i cluster esistenti pianificare la migrazione (strumento di supporto: `ingress2gateway`). Gli esempi NGINX sotto restano utili come riferimento per l'installato, ma non vanno adottati per nuovi progetti. <!-- REVIEW: verificare stato attuale del repo ingress-nginx e di eventuali fork/successori -->
-
+    Il progetto **ingress-nginx** (`kubernetes/ingress-nginx`) è stato dichiarato in pensione da Kubernetes SIG Network e Security Response Committee: il repository è stato **archiviato il 24 marzo 2026** (ultima release: v1.15.1), senza più release, bugfix né patch di sicurezza. Chart Helm e immagini container già pubblicati restano disponibili e le installazioni esistenti continuano a funzionare, ma non ricevono più fix per nuove CVE. Il progetto non indica un fork o successore ufficiale: raccomanda la Gateway API o un altro controller mantenuto. Per nuovi cluster scegliere un controller mantenuto (Traefik, HAProxy, Envoy-based, controller del cloud provider) oppure la **Gateway API**; per i cluster esistenti pianificare la migrazione (strumento di supporto: `ingress2gateway`). Gli esempi NGINX sotto restano utili come riferimento per l'installato, ma non vanno adottati per nuovi progetti.
 !!! note "Ingress API congelata"
     La risorsa Ingress (`networking.k8s.io/v1`) è stabile ma **feature-frozen**: nuove funzionalità (traffic splitting, header manipulation, TCP/gRPC route) vivono nella [Gateway API](https://gateway-api.sigs.k8s.io/), che separa i ruoli (infra: `GatewayClass`/`Gateway`; sviluppatori: `HTTPRoute`) ed evita la dipendenza da annotations proprietarie.
 
