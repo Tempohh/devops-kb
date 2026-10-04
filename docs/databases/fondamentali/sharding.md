@@ -7,9 +7,10 @@ search_keywords: [database sharding, horizontal partitioning, vertical partition
 parent: databases/fondamentali/_index
 related: [databases/fondamentali/acid-base-cap, databases/fondamentali/modelli-dati, databases/nosql/cassandra, databases/nosql/mongodb, databases/sql-avanzato/partitioning]
 official_docs: https://vitess.io/docs/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Sharding
@@ -25,9 +26,12 @@ Lo sharding risolve problemi di scalabilità ma introduce costi significativi: l
 
 ## Partitioning vs Sharding
 
-**Partitioning** (o sharding verticale): dividere una tabella in più segmenti sullo **stesso nodo**. Vedi [Partitioning SQL](../sql-avanzato/partitioning.md). Migliora le performance di query e manutenzione ma non scala oltre il singolo server.
+**Partitioning**: dividere una tabella in più segmenti (per righe) sullo **stesso nodo**. Vedi [Partitioning SQL](../sql-avanzato/partitioning.md). Migliora le performance di query e manutenzione (partition pruning, drop veloce di dati vecchi) ma non scala oltre il singolo server.
 
-**Sharding** (o partitioning orizzontale): distribuire i dati su **nodi diversi**. Scala sia il volume che il throughput.
+**Sharding**: distribuire i dati (per righe) su **nodi diversi**. Scala sia il volume che il throughput di scrittura, perché ogni nodo gestisce solo la propria porzione.
+
+!!! note "Orizzontale vs verticale"
+    Sia partitioning che sharding sono **orizzontali** (si dividono le righe). Il partitioning **verticale** è un'altra cosa: separa le *colonne* di una tabella (es. colonne rare o BLOB in una tabella a parte) o interi domini in database distinti (database-per-service).
 
 ---
 
@@ -49,10 +53,10 @@ Shard 3: user_id [2.000.000 – 3.000.000)
 
 ```
 Range sharding su created_at:
-Shard 1: Jan-Mar 2022  → quasi inattivo
-Shard 2: Apr-Jun 2022  → quasi inattivo
-Shard 3: Jul-Sep 2022  → quasi inattivo
-Shard 4: Oct-Dec 2024  → 95% del traffico (dati recenti)
+Shard 1: Jan-Jun 2023  → quasi inattivo
+Shard 2: Jul-Dec 2023  → quasi inattivo
+Shard 3: Jan-Jun 2024  → quasi inattivo
+Shard 4: Jul-Dec 2024  → 95% del traffico (dati recenti)
 ```
 
 ### Hash Sharding
@@ -67,6 +71,9 @@ shard_id = hash(12345) % 4  → shard 2
 shard_id = hash(67890) % 4  → shard 0
 shard_id = hash(11111) % 4  → shard 3
 ```
+
+!!! warning "Il modulo non scala con il numero di shard"
+    Con `hash(k) % N`, passare da N a N+1 cambia lo shard di quasi **tutte** le chiavi (circa N/(N+1)): un resharding diventa una migrazione quasi totale. Per questo i sistemi reali usano consistent hashing o un numero elevato di slot/chunk fissi (es. 16384 hash slot in Redis Cluster) assegnati ai nodi. Nota: la funzione `hash()` built-in di Python non è stabile tra processi (randomizzazione); in produzione usare un hash deterministico (murmur3, xxhash, CRC).
 
 **Vantaggio**: distribuzione uniforme del carico — nessun hotspot per shard key con buona distribuzione.
 
@@ -94,7 +101,7 @@ Aggiunta Nodo 4 tra Nodo 2 e Nodo 3:
   → Spostamento minimo dei dati (1/N delle chiavi, con N nodi)
 ```
 
-Usato da: Amazon DynamoDB (consistent hashing interno), Apache Cassandra (virtual nodes), Redis Cluster.
+Usato da: Apache Cassandra (token ring con virtual nodes), Dynamo (paper originale di Amazon, da cui deriva il modello; DynamoDB gestisce oggi il partizionamento in modo interno e trasparente). **Redis Cluster** non usa un ring vero e proprio: divide lo spazio in 16384 *hash slot* (`CRC16(key) mod 16384`) assegnati ai nodi, e lo resharding sposta slot interi. MongoDB usa invece chunk (range o hash) gestiti dal balancer.
 
 ### Directory Sharding
 
@@ -115,7 +122,7 @@ Directory:
 
 ## Scelta della Shard Key — La Decisione più Critica
 
-La shard key è (quasi) permanente. Cambiarla richiede di riscrivere tutti i dati — un'operazione costosa e rischiosa.
+La shard key è (quasi) permanente. Cambiarla richiede di riscrivere tutti i dati — un'operazione costosa e rischiosa. Alcuni sistemi oggi la rendono fattibile online (MongoDB ≥ 5.0 `reshardCollection`, ≥ 4.4 `refineCollectionShardKey` per aggiungere suffissi), ma resta una copia completa del dataset: costo, tempo e carico aggiuntivo restano elevati.
 
 ### Criteri di valutazione
 
@@ -178,9 +185,9 @@ COMMIT;
 
 Gli indici secondari su sistemi shardati hanno due implementazioni:
 
-**Local secondary index** (es. DynamoDB LSI, Cassandra): l'indice è sullo stesso shard dei dati. Query su indice secondario = scatter-gather su tutti gli shard.
+**Local (document-partitioned) index** (es. indici secondari di Cassandra, MongoDB): ogni shard indicizza solo i propri dati. Scrittura economica (un solo shard), ma una query sull'indice senza shard key = scatter-gather su tutti gli shard. Nota: il DynamoDB LSI è un caso diverso — condivide la partition key della tabella e si interroga sempre dentro una singola partition.
 
-**Global secondary index** (es. DynamoDB GSI, Vitess): l'indice ha la sua distribuzione indipendente. Query su indice secondario = 1 lookup. Costo: write amplification (ogni write aggiorna anche l'indice su un shard diverso, con eventual consistency).
+**Global (term-partitioned) index** (es. DynamoDB GSI, lookup Vindex di Vitess): l'indice è distribuito indipendentemente dai dati, per valore indicizzato. Query su indice secondario = 1 lookup mirato. Costo: write amplification (ogni write aggiorna anche l'indice, su uno shard diverso). In DynamoDB il GSI è aggiornato in modo asincrono (eventual consistency); in Vitess il lookup Vindex è mantenuto nella stessa transazione/flusso di scrittura, con costo di una scrittura cross-shard.
 
 ---
 
@@ -202,13 +209,16 @@ Dopo il resharding:
 ```
 
 Il resharding richiede:
-1. Copiare i dati nel nuovo shard mantenendo entrambi in sync (doppia scrittura)
-2. Aggiornare la routing table
-3. Fermare le scritture sull'intervallo migrato (breve maintenance window) o usare CDC
-4. Verificare la consistenza
-5. Rimuovere i dati dal vecchio shard
+1. Copia snapshot dei dati dai vecchi ai nuovi shard (il vecchio shard continua a servire traffico)
+2. Sincronizzazione continua delle modifiche successive allo snapshot tramite CDC (Change Data Capture: lettura di binlog/WAL/oplog). Alternativa meno robusta: doppia scrittura applicativa, soggetta a divergenze
+3. Verifica di consistenza (diff dei dati tra sorgente e destinazione)
+4. Cutover: breve blocco delle scritture, aggiornamento della routing table, switch del traffico (con possibilità di reverse replication per il rollback)
+5. Rimozione dei dati dal vecchio shard
 
-**Vitess** (usato da YouTube, GitHub, Slack) automatizza il resharding orizzontale di MySQL con resharding online e senza downtime.
+**Vitess** (usato da YouTube, Slack, GitHub per parti dell'infrastruttura) automatizza questo flusso su MySQL con i workflow `Reshard`/`MoveTables` basati su VReplication, con cutover di pochi secondi. Nei database sharded nativi (MongoDB, Cassandra, CockroachDB, TiDB, YugabyteDB, Spanner) lo split/rebalance dei chunk/range è invece continuo e gestito dal sistema.
+
+!!! tip "Alternative con auto-sharding (NewSQL)"
+    I sistemi *distributed SQL* (CockroachDB, YugabyteDB, TiDB, Google Spanner) frammentano automaticamente i dati in range e li ribilanciano, con transazioni ACID distribuite. Eliminano gran parte del lavoro manuale di sharding applicativo, a fronte di latenza di commit più alta per le scritture cross-range e di un modello operativo diverso dal PostgreSQL/MySQL "classico".
 
 ---
 
@@ -219,30 +229,35 @@ Il resharding richiede:
 MongoDB implementa sharding nativo con un cluster coordinator:
 
 ```javascript
-// Abilita sharding sul database
-sh.enableSharding("myapp")
-
 // Shard sulla collection ordini usando hashed shard key
+// (da MongoDB 6.0 sh.enableSharding() non è più necessario: shardCollection basta)
 sh.shardCollection("myapp.ordini", { "tenant_id": "hashed" })
 
-// Verifica distribuzione
+// Verifica distribuzione di dati e documenti per shard
 db.ordini.getShardDistribution()
-// Output:
-// Shard shard0000: 33.2% degli chunk
-// Shard shard0001: 33.5% degli chunk
-// Shard shard0002: 33.3% degli chunk
+
+// Cambiare shard key online (MongoDB ≥ 5.0): copia completa della collection
+db.adminCommand({ reshardCollection: "myapp.ordini", key: { "tenant_id": 1, "created_at": 1 } })
 ```
+
+Il **balancer** sposta automaticamente i chunk tra shard per equalizzare la distribuzione. Una hashed shard key evita hotspot da chiavi monotone ma rende le range query scatter-gather.
 
 ### Citus (PostgreSQL Sharding)
 
 Citus è un'estensione PostgreSQL che aggiunge sharding trasparente:
 
 ```sql
--- Installa estensione
+-- Installa estensione (richiede shared_preload_libraries = 'citus' e riavvio)
 CREATE EXTENSION citus;
 
--- Crea tabella distribuita
+-- Crea tabella distribuita (hash sharding sulla distribution column)
 SELECT create_distributed_table('ordini', 'tenant_id');
+
+-- Tabelle di piccole dimensioni replicate su tutti i nodi (per join locali)
+SELECT create_reference_table('paesi');
+
+-- Dopo aver aggiunto worker: ribilanciare gli shard
+SELECT citus_rebalance_start();
 
 -- Le query rimangono SQL standard
 SELECT COUNT(*), SUM(importo)
@@ -252,9 +267,11 @@ GROUP BY status;
 -- → routing automatico al shard corretto
 ```
 
+Le tabelle **co-locate** (stessa distribution column, `colocate_with`) permettono join e transazioni locali a un singolo shard. Citus è open source ed è la base di Azure Cosmos DB for PostgreSQL; dalla 12 supporta anche lo *schema-based sharding* (un tenant = uno schema).
+
 ### DynamoDB Partitioning
 
-DynamoDB gestisce il sharding automaticamente (transparent partitioning) basandosi sulla partition key. Il limite è **3000 RCU e 1000 WCU per partition**.
+DynamoDB gestisce il sharding automaticamente (transparent partitioning) basandosi sulla partition key. Il limite è **3000 RCU e 1000 WCU per partition** (e ~10 GB per partition). L'*adaptive capacity* e lo split automatico per throughput mitigano gli hotspot, ma una singola partition key resta vincolata a questi limiti: una chiave molto "calda" va comunque distribuita.
 
 ```python
 # Evitare hot partitions in DynamoDB
@@ -292,7 +309,8 @@ item = {
 # MongoDB: verificare distribuzione degli chunk
 mongosh --eval "db.ordini.getShardDistribution()"
 
-# DynamoDB: monitorare consumed capacity per partition
+# DynamoDB: consumo a livello di tabella (per le chiavi più calde usare
+# CloudWatch Contributor Insights for DynamoDB)
 aws cloudwatch get-metric-statistics \
   --namespace AWS/DynamoDB \
   --metric-name ConsumedWriteCapacityUnits \
@@ -301,8 +319,9 @@ aws cloudwatch get-metric-statistics \
   --start-time 2024-01-01T00:00:00Z \
   --end-time 2024-01-01T01:00:00Z
 
-# Vitess: ispezionare distribuzione tablet
-vtctlclient GetShard ks/0
+# Vitess: elenco shard e stato del keyspace
+vtctldclient GetShard ks/-80
+vtctldclient GetKeyspace ks
 ```
 
 ---
@@ -336,24 +355,31 @@ EXPLAIN (VERBOSE, ANALYZE)
 
 **Sintomo**: dopo un resharding, alcune query restituiscono risultati mancanti o duplicati. Oppure il processo di migrazione non avanza.
 
-**Causa**: mancata sincronizzazione tra la doppia scrittura (vecchio e nuovo shard) e l'aggiornamento della routing table. Race condition durante il cutover.
+**Causa**: replica CDC in ritardo o interrotta, oppure cutover eseguito prima che la sincronizzazione fosse completa; routing table aggiornata in modo non atomico (race condition durante il cutover); con doppia scrittura applicativa, divergenza tra le due copie.
 
-**Soluzione**: usare un periodo di doppia scrittura verificato, validare la count dei record prima del cutover, e usare CDC (Change Data Capture) per garantire la sync.
+**Soluzione**: monitorare il lag di replica, eseguire un diff dei dati prima del cutover e usare un tool che gestisca CDC e switch del traffico in modo coordinato (nessuna doppia scrittura manuale).
 
 ```bash
-# Vitess: monitorare stato resharding
-vtctlclient VReplicationExec \
-  <tablet-alias> "select * from _vt.vreplication"
+# Vitess (vtctldclient; vtctlclient è deprecato): stato del workflow di resharding
+vtctldclient Reshard --target-keyspace ks --workflow reshard1 show
+vtctldclient Reshard --target-keyspace ks --workflow reshard1 status
 
-# Verificare che i dati siano in sync prima del cutover
-# (confronto count su vecchio vs nuovo shard)
-vtctlclient VDiff <keyspace>/<workflow>
+# Verifica che i dati coincidano prima del cutover
+vtctldclient VDiff --target-keyspace ks --workflow reshard1 create
+vtctldclient VDiff --target-keyspace ks --workflow reshard1 show last
 
-# In caso di errore, rollback al vecchio shard
-vtctlclient CancelResharding <keyspace>
+# Cutover; se qualcosa va storto, reverse-traffic o cancel (prima di complete)
+vtctldclient Reshard --target-keyspace ks --workflow reshard1 switchtraffic
+vtctldclient Reshard --target-keyspace ks --workflow reshard1 reversetraffic
+vtctldclient Reshard --target-keyspace ks --workflow reshard1 cancel
+```
 
-# MongoDB: stato della migrazione chunk
-mongosh --eval "sh.status()" | grep "currently running"
+```javascript
+// MongoDB: stato di balancer e migrazioni di chunk
+sh.status()
+sh.isBalancerRunning()
+// reshardCollection in corso:
+db.getSiblingDB("admin").aggregate([{ $currentOp: { allUsers: true, localOps: false } }, { $match: { type: "op", "originatingCommand.reshardCollection": { $exists: true } } }])
 ```
 
 ---
@@ -369,24 +395,29 @@ mongosh --eval "sh.status()" | grep "currently running"
 ```python
 # Saga pattern con compensating transaction
 def trasferisci_ordine(order_id, from_tenant, to_tenant):
+    step1_done = False
     try:
         # Step 1: aggiorna shard del tenant sorgente
         shard_from.execute(
             "UPDATE ordini SET tenant_id = %s WHERE id = %s",
             (to_tenant, order_id)
         )
+        step1_done = True
         # Step 2: aggiorna shard del tenant destinazione
         shard_to.execute(
             "INSERT INTO ordini_log VALUES (%s, %s, NOW())",
             (order_id, to_tenant)
         )
-    except Exception as e:
-        # Compensating transaction: annulla step 1
-        shard_from.execute(
-            "UPDATE ordini SET tenant_id = %s WHERE id = %s",
-            (from_tenant, order_id)
-        )
+    except Exception:
+        # Compensating transaction: annulla step 1 solo se è stato eseguito.
+        # Deve essere idempotente e ritentabile (anche la compensazione può fallire).
+        if step1_done:
+            shard_from.execute(
+                "UPDATE ordini SET tenant_id = %s WHERE id = %s",
+                (from_tenant, order_id)
+            )
         raise
+```
 
 ## Relazioni
 
@@ -399,6 +430,11 @@ def trasferisci_ordine(order_id, from_tenant, to_tenant):
     Come Cassandra distribuisce i dati con virtual nodes.
 
     **Approfondimento →** [Cassandra](../nosql/cassandra.md)
+
+??? info "MongoDB — Sharded cluster"
+    Architettura mongos/config server/shard, chunk e balancer.
+
+    **Approfondimento →** [MongoDB](../nosql/mongodb.md)
 
 ## Riferimenti
 
