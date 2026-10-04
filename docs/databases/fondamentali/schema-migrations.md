@@ -7,7 +7,7 @@ search_keywords: [schema migration, database migration, versioned migration, dec
 parent: databases/fondamentali/_index
 related: [databases/fondamentali/transazioni-concorrenza, dev/integrazioni/database-patterns, ci-cd/gitops/argocd]
 official_docs: https://atlasgo.io/docs
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -76,7 +76,7 @@ flyway -url=jdbc:postgresql://localhost:5432/app -user=app -password=*** migrate
 # Verifica stato senza applicare
 flyway -url=jdbc:postgresql://localhost:5432/app info
 
-# Rollback: SOLO in Flyway Teams (a pagamento) con `flyway undo`
+# Rollback: SOLO in edizione a pagamento (Teams/Enterprise) con `flyway undo`
 # In Community: si scrive una nuova migration V5 che fa DROP COLUMN o inverte
 ```
 
@@ -211,11 +211,10 @@ migrate -path ./migrations -database "postgres://..." down 1
 - **Committare `schema.hcl` (Atlas) o le directory `migrations/` in git insieme al codice applicativo**: la versione dello schema deve essere tracciabile allo stesso commit del codice che la richiede.
 
 !!! tip "Scegliere in base al rollback che serve davvero"
-    Se il rollback automatico è un requisito hard (compliance, cambio frequente di piani), Liquibase con rollback dichiarati esplicitamente o Flyway Teams sono le uniche opzioni pronte all'uso senza scrivere script "down" a mano. Se il team è disciplinato nello scrivere `.down.sql` per ogni migration, golang-migrate è la scelta più leggera. Se serve drift detection continuo su ambienti dove qualcuno potrebbe intervenire manualmente sul DB, solo Atlas lo copre nativamente.
+    Se il rollback automatico è un requisito hard (compliance, cambio frequente di piani), Liquibase con rollback dichiarati esplicitamente o Flyway a pagamento (Teams/Enterprise) sono le uniche opzioni pronte all'uso senza scrivere script "down" a mano. Se il team è disciplinato nello scrivere `.down.sql` per ogni migration, golang-migrate è la scelta più leggera. Se serve drift detection continuo su ambienti dove qualcuno potrebbe intervenire manualmente sul DB, solo Atlas lo copre nativamente.
 
 !!! warning "Flyway Community non fa rollback automatico"
-    <!-- REVIEW: verificare edizioni Flyway attuali (Redgate ha riorganizzato le edizioni; "Teams" potrebbe non esistere più con questo nome) e quale edizione include `flyway undo` -->
-    È il trade-off più sottovalutato: un team che sceglie Flyway (community, gratuito) assumendo di poter fare `flyway undo` come con Liquibase scopre solo in un incidente che quel comando è a pagamento (Teams edition). Il piano di rollback per Flyway Community è sempre "scrivi e applica una nuova migration forward che inverte l'effetto" — va progettato PRIMA, non improvvisato durante un incidente.
+    È il trade-off più sottovalutato: un team che sceglie Flyway (community, gratuito) assumendo di poter fare `flyway undo` come con Liquibase scopre solo in un incidente che quel comando è a pagamento (edizione Teams nella documentazione del comando; il sito Redgate oggi promuove Community ed Enterprise, con undo script generati automaticamente — verificare il nome dell'edizione sul proprio contratto). Il piano di rollback per Flyway Community è sempre "scrivi e applica una nuova migration forward che inverte l'effetto" — va progettato PRIMA, non improvvisato durante un incidente.
 
 ## Troubleshooting
 
