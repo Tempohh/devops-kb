@@ -7,9 +7,10 @@ search_keywords: [kafka consumer, consumatore kafka, poll loop, offset commit, a
 parent: messaging/kafka/fondamenti
 related: [messaging/kafka/fondamenti/architettura, messaging/kafka/fondamenti/topics-partizioni, messaging/kafka/fondamenti/produttori, messaging/kafka/fondamenti/consumer-groups]
 official_docs: https://kafka.apache.org/documentation/#consumerconfigs
-status: complete
+status: needs-review
+last_verified: 2026-10-04
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-10-04
 ---
 
 # Consumatori (Consumer)
@@ -23,7 +24,7 @@ Il **consumer** è il componente client che legge record da uno o più topic Kaf
 ### Poll Loop
 
 Il cuore di un consumer Kafka è il **poll loop**: un ciclo infinito che chiama periodicamente `consumer.poll(Duration)` per ottenere un batch di record dal broker. Il metodo `poll()` serve anche a:
-- Inviare **heartbeat** al **Group Coordinator** — il broker designato a gestire l'iscrizione al consumer group, tracking degli offset committati e orchestrazione dei rebalancing (indica che il consumer è vivo)
+- Comunicare con il **Group Coordinator** — il broker designato a gestire l'iscrizione al consumer group, tracking degli offset committati e orchestrazione dei rebalancing. Gli **heartbeat** (segnale "sono vivo") non partono da `poll()` ma da un **thread in background** (dal KIP-62); `poll()` però resta il segnale di *progresso* del thread applicativo, controllato da `max.poll.interval.ms`
 - Eseguire eventuali **rebalancing** — il processo con cui Kafka redistribuisce l'assegnazione delle partizioni tra i consumer del gruppo quando un membro si unisce, se ne va o viene considerato morto
 - Processare il commit degli offset schedulati (auto-commit)
 
@@ -54,7 +55,11 @@ enable.auto.commit=true
 auto.commit.interval.ms=5000  # commit ogni 5 secondi
 ```
 
-Il consumer fa automaticamente il commit dell'offset più alto restituito da `poll()` ogni `auto.commit.interval.ms`. **Rischio:** se il consumer cade dopo la `poll()` ma prima di processare completamente i record, il commit di quegli offset è già avvenuto → al restart non li rilegge → perdita di messaggi.
+Il commit automatico avviene **dentro la chiamata successiva a `poll()`** (e in `close()`), se sono passati `auto.commit.interval.ms`: viene committato l'offset dei record restituiti dalla `poll()` *precedente*. Se il processing è sincrono e completato prima della `poll()` successiva, la semantica è di fatto at-least-once. **Rischi:**
+
+- **Perdita di messaggi** se il processing è asincrono (es. record passati a un thread pool o a una coda interna): la `poll()` successiva committa offset di record non ancora elaborati; un crash li perde.
+- **Duplicati** se il consumer cade dopo aver processato ma prima del commit successivo (fino a `auto.commit.interval.ms` di record riletti).
+- Nessun controllo sul momento del commit: difficile legarlo all'esito del processing o a un rebalancing.
 
 #### Manual Commit
 
@@ -87,7 +92,11 @@ Il consumer invia **heartbeat** periodici al Group Coordinator per segnalare che
 - `max.poll.interval.ms` (default: 300000 ms / 5 min): timeout massimo tra due chiamate `poll()`. Se il processing di un batch richiede più di questo tempo, il consumer viene espulso dal gruppo.
 
 !!! warning "Heartbeat vs max.poll.interval.ms"
-    Il heartbeat viene inviato da un thread separato, quindi `session.timeout.ms` misura l'assenza di heartbeat. `max.poll.interval.ms` misura invece l'inattività del thread principale (troppo tempo tra una `poll()` e la successiva). Entrambi possono causare un rebalancing se violati.
+    Il heartbeat viene inviato da un thread separato, quindi `session.timeout.ms` misura l'assenza di heartbeat (processo morto, rete down). `max.poll.interval.ms` misura invece l'inattività del thread principale (troppo tempo tra una `poll()` e la successiva): serve a scoprire consumer vivi ma "incastrati" nel processing. Entrambi possono causare un rebalancing se violati.
+
+!!! note "Nuovo protocollo di rebalance (KIP-848, Kafka 4.0+)"
+    Con `group.protocol=consumer` (GA in Kafka 4.0, richiede broker 4.0+) la logica di assegnazione passa al broker, i rebalance diventano incrementali senza barriera "stop-the-world" e `session.timeout.ms` / `heartbeat.interval.ms` diventano configurazioni **lato broker** (`group.consumer.*`), non più del client. Il protocollo classico (`group.protocol=classic`) resta il default dei client Java 4.x, quindi i parametri di questa pagina valgono per esso. <!-- REVIEW: verificare default group.protocol nell'ultima release client -->
+
 
 ## Architettura / Come Funziona
 
@@ -131,8 +140,7 @@ sequenceDiagram
     participant Leader as Broker Leader<br/>(Partizione)
 
     App->>Consumer: poll(1000ms)
-    Consumer->>Coordinator: Heartbeat
-    Coordinator-->>Consumer: OK
+    Note over Consumer,Coordinator: Heartbeat in background (thread separato)
     Consumer->>Leader: FetchRequest(topic, partition, offset=N, maxBytes=1MB)
     Leader-->>Consumer: FetchResponse(records N..N+499)
     Consumer-->>App: ConsumerRecords (500 record)
@@ -312,7 +320,10 @@ public class OrderConsumer {
 ```java
 // Seek all'inizio di tutte le partizioni assegnate
 consumer.subscribe(List.of("orders"));
-consumer.poll(Duration.ofMillis(100)); // necessario per ottenere l'assegnazione
+// Attenzione: una sola poll(100) può tornare con assegnazione ancora vuota (il join al gruppo è asincrono)
+// e i record eventualmente restituiti andrebbero scartati. In produzione: ConsumerRebalanceListener.onPartitionsAssigned()
+// oppure loop su poll() finché consumer.assignment() non è vuoto.
+consumer.poll(Duration.ofMillis(100));
 consumer.seekToBeginning(consumer.assignment());
 
 // Seek alla fine
@@ -389,7 +400,7 @@ max.poll.interval.ms=600000  # aumentare solo se necessario
 |---|---|---|
 | **At-most-once** | Commit prima del processing | Perdita di messaggi |
 | **At-least-once** | Commit dopo il processing (manuale) | Duplicati in caso di crash |
-| **Exactly-once** | Kafka Transactions + idempotent consumer | Complessità maggiore |
+| **Exactly-once** | Consume-transform-produce transazionale (`sendOffsetsToTransaction` + consumer `isolation.level=read_committed`), oppure sink idempotente | Complessità maggiore; garantito solo dentro Kafka |
 
 In produzione, **at-least-once è il compromesso standard**: progettare i consumer in modo che il riprocessamento di un record sia idempotente (es. upsert su database invece di insert).
 
@@ -461,7 +472,7 @@ org.apache.kafka.clients.consumer.NoOffsetForPartitionException:
   Undefined offset with no reset policy for partitions: [orders-0]
 ```
 
-**Causa:** l'offset committato per il gruppo è fuori dalla finestra di retention del topic (il record con quell'offset è stato eliminato). `auto.offset.reset=none` genera questa eccezione invece di resettare.
+**Causa:** con `auto.offset.reset=none` il consumer non ha un offset committato per la partizione (gruppo nuovo, oppure offset del gruppo scaduto: i gruppi inattivi perdono gli offset dopo `offsets.retention.minutes`, default 7 giorni) e lancia questa eccezione invece di resettare. Se invece l'offset esiste ma è fuori dalla retention del topic (record già eliminati), l'errore è `OffsetOutOfRangeException`, anch'esso gestito dalla policy di reset.
 **Soluzione:** impostare `auto.offset.reset=earliest` o `latest`, oppure fare seek manuale.
 
 ## Riferimenti
