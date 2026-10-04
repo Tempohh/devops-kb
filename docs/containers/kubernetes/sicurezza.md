@@ -7,9 +7,10 @@ search_keywords: [kubernetes security hardening, Pod Security Admission, PSA kub
 parent: containers/kubernetes/_index
 related: [security/autenticazione/mtls-spiffe, security/autorizzazione/opa, security/supply-chain/admission-control, containers/kubernetes/workloads]
 official_docs: https://kubernetes.io/docs/concepts/security/
-status: complete
+status: reviewed
 difficulty: expert
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Kubernetes Sicurezza
@@ -30,8 +31,8 @@ last_updated: 2026-03-29
   |  +-----------------------------------------------+|
   +---------------------------------------------------+
 
-  Ogni layer difende indipendentemente.
-  Un attaccante deve compromettere TUTTI i layer.
+  Ogni layer difende indipendentemente (defense in depth):
+  la compromissione di un layer non deve bastare a compromettere gli altri.
 ```
 
 ---
@@ -50,6 +51,8 @@ metadata:
     # Tre livelli: privileged | baseline | restricted
     # Tre modalità: enforce | audit | warn
     pod-security.kubernetes.io/enforce: restricted
+    # Pin della versione delle regole del profilo (default: latest).
+    # Pinnare evita che un upgrade del cluster inasprisca il profilo di colpo.
     pod-security.kubernetes.io/enforce-version: v1.29
     pod-security.kubernetes.io/audit: restricted
     pod-security.kubernetes.io/warn: restricted
@@ -72,11 +75,19 @@ BASELINE: restrizioni minime, compatibile con la maggior parte delle app
 RESTRICTED: sicurezza massima, alcune app devono essere adattate
   Tutto ciò che blocca BASELINE più:
   Richiede: allowPrivilegeEscalation: false
-            runAsNonRoot: true
+            runAsNonRoot: true (e nessun runAsUser: 0)
             seccompProfile: RuntimeDefault o Localhost
-  Blocca: capabilities diverse da NET_BIND_SERVICE
-           volume types limitati (no hostPath, no NFS senza CSI)
+            capabilities.drop: ["ALL"]
+  Ammette: add solo di NET_BIND_SERVICE
+  Blocca: volume types limitati (solo configMap, csi, downwardAPI,
+          emptyDir, ephemeral, persistentVolumeClaim, projected, secret)
 ```
+
+!!! note "Eccezioni PSA"
+    PSA non è un policy engine: ha solo 3 profili fissi, nessuna eccezione per singolo pod.
+    Esenzioni per utenti, namespace o RuntimeClass si configurano a livello di API server
+    (`AdmissionConfiguration` del plugin `PodSecurity`). Per regole custom serve un
+    admission controller (vedi sezione Admission e ValidatingAdmissionPolicy).
 
 ```bash
 # Testa se un pod viola il profilo senza applicarlo
@@ -88,9 +99,13 @@ kubectl apply --dry-run=server -f pod.yaml
 kubectl label namespace staging \
     pod-security.kubernetes.io/audit=restricted
 
-# Poi controlla l'audit log:
-# audit.k8s.io/level: RequestResponse
-# annotations.pod-security.kubernetes.io/audit: would violate PodSecurity...
+# Poi controlla l'audit log dell'API server: l'evento di create del pod porta
+# l'annotation  pod-security.kubernetes.io/audit-violations: "would violate PodSecurity ..."
+
+# Prima di abilitare enforce su un namespace esistente: simula l'impatto
+# sui pod già in esecuzione (warning per ogni pod non conforme, nessuna modifica)
+kubectl label --dry-run=server --overwrite ns --all \
+    pod-security.kubernetes.io/enforce=restricted
 ```
 
 ---
@@ -108,8 +123,10 @@ spec:
     fsGroupChangePolicy: OnRootMismatch  # performance: cambia solo se necessario
     supplementalGroups: [2000]  # gruppi aggiuntivi
     sysctls:
-      - name: net.core.somaxconn
-        value: "65535"           # solo sysctls "safe" (non richiede privileged)
+      - name: net.ipv4.ip_local_port_range
+        value: "1024 65535"      # sysctl "safe": ammesso di default.
+                                 # Gli "unsafe" (es. net.core.somaxconn) richiedono
+                                 # kubelet --allowed-unsafe-sysctls e sono bloccati da PSA baseline
     seccompProfile:
       type: RuntimeDefault       # profilo seccomp del container runtime
 
@@ -156,8 +173,10 @@ metadata:
 rules:
   - apiGroups: [""]           # core group
     resources: ["configmaps", "secrets"]
-    verbs: ["get", "list"]
+    verbs: ["get"]
     resourceNames: ["api-config", "api-secrets"]  # solo risorse specifiche
+    # NB: "list"/"watch" con resourceNames funziona solo se il client filtra con
+    # fieldSelector metadata.name=<nome>; un list generico verrebbe negato
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch"]
@@ -209,11 +228,16 @@ kubectl auth can-i list secrets --as=system:serviceaccount:production:api-sa -n 
 kubectl get rolebindings,clusterrolebindings -A -o json | \
     jq '.items[] | select(.subjects[].name=="api-sa") | {name:.metadata.name, role:.roleRef.name}'
 
-# tool: rakkess (access matrix)
-kubectl-access_matrix --sa production:api-sa
+# plugin krew: rakkess (access matrix)
+kubectl access-matrix --sa production:api-sa
 ```
 
 **Projected Service Account Tokens:**
+
+Dal 1.22 i token SA montati di default nei pod sono già *bound* (JWT legati a pod e SA,
+scadenza 1h, rinnovati dal kubelet). Dal 1.24 non vengono più creati Secret `kubernetes.io/service-account-token`
+automatici: quelli (non scadono mai) esistono solo se creati a mano o ereditati da cluster vecchi.
+Il volume `projected` serve per ottenere un token con **audience dedicata** verso un servizio terzo.
 
 ```yaml
 # Token con scadenza e audience limitate (Kubernetes 1.22+)
@@ -228,15 +252,27 @@ volumes:
             audience: "https://api.company.com"  # solo per questo audience
 
 # Nel pod:
+# (path dipende dal volumeMount, es. mountPath: /var/run/secrets/sa-token)
 # /var/run/secrets/sa-token/token  ← token JWT con exp e aud limitati
-# NON usare automountServiceAccountToken: true + il token default che non scade mai
+# expirationSeconds minimo: 600. Il kubelet rinnova il token al ~80% del TTL.
+# Se il pod non parla con l'API server: automountServiceAccountToken: false
+# Elimina i Secret di tipo service-account-token legacy: sono credenziali senza scadenza.
 ```
 
 ---
 
-## Workload Identity — IRSA e GKE WI
+## Workload Identity — IRSA, Pod Identity e GKE WI
 
 Il **Workload Identity** permette ai pod di assumere IAM role cloud senza credenziali hardcoded.
+Il pod presenta il proprio token SA (OIDC JWT firmato dal cluster); il cloud IAM si fida
+dell'issuer del cluster e lo scambia con credenziali temporanee legate a quel SA.
+
+| Cloud | Meccanismo | Note |
+|---|---|---|
+| AWS | **IRSA** (OIDC provider per cluster + trust policy per SA) | Richiede un OIDC provider IAM per ogni cluster; limite sulla dimensione della trust policy |
+| AWS | **EKS Pod Identity** (add-on agent + `aws eks create-pod-identity-association`) | Alternativa più recente: nessun OIDC provider, trust policy unica verso `pods.eks.amazonaws.com`, niente annotation sul SA |
+| GCP | **Workload Identity Federation for GKE** | Si può dare accesso IAM direttamente al principal `principal://...svc.id.goog/subject/ns/<ns>/sa/<sa>`; l'annotation `iam.gke.io/gcp-service-account` serve solo per l'impersonation di un GSA |
+| Azure | **Microsoft Entra Workload Identity** | Federated credential sul managed identity + label `azure.workload.identity/use` |
 
 ```
 AWS IRSA (IAM Roles for Service Accounts)
@@ -251,6 +287,9 @@ AWS IRSA (IAM Roles for Service Accounts)
 
   IAM Trust Policy:
   {
+    "Effect": "Allow",
+    "Principal": { "Federated": "arn:aws:iam::123456789:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/xxx" },
+    "Action": "sts:AssumeRoleWithWebIdentity",
     "Condition": {
       "StringEquals": {
         "oidc.eks.eu-west-1.amazonaws.com/id/xxx:sub":
@@ -279,6 +318,11 @@ eksctl create iamserviceaccount \
 ---
 
 ## Network Policy — Microsegmentazione
+
+!!! warning "Serve un CNI che le implementa"
+    Le NetworkPolicy sono solo oggetti API: le applica il CNI plugin. Con CNI che non le
+    supportano (es. Flannel puro) `kubectl apply` ha successo ma **nulla viene filtrato**,
+    senza alcun errore. Usare Calico, Cilium o equivalente e verificare con un test reale.
 
 ```yaml
 # Default deny-all — baseline di sicurezza zero-trust
@@ -370,6 +414,11 @@ spec:
 
 ## Audit Logging Kubernetes
 
+Le regole sono valutate **in ordine e vince la prima che corrisponde**: le eccezioni
+specifiche (`None`, `Metadata` sui secrets) vanno sopra quelle generiche. L'API server
+va avviato con `--audit-policy-file` e `--audit-log-path` (o `--audit-webhook-config-file`);
+sui cluster managed (EKS/GKE/AKS) l'audit log si abilita dal provider, non da questo file.
+
 ```yaml
 # /etc/kubernetes/audit-policy.yaml
 apiVersion: audit.k8s.io/v1
@@ -413,7 +462,8 @@ jq -r 'select(.objectRef.resource=="secrets") |
     @csv' /var/log/kubernetes/audit.log
 
 # Trova exec su container (possibile segnale di compromissione)
-jq -r 'select(.verb=="create" and .objectRef.subresource=="exec") |
+# Nessun filtro su .verb: con il transport WebSocket di kubectl exec il verbo può essere "get" invece di "create"
+jq -r 'select(.objectRef.subresource=="exec") |
     [.requestReceivedTimestamp, .user.username, .objectRef.namespace, .objectRef.name, .responseStatus.code] |
     @csv' /var/log/kubernetes/audit.log
 ```
@@ -425,10 +475,10 @@ jq -r 'select(.verb=="create" and .objectRef.subresource=="exec") |
 Vedi [security/compliance/audit-logging.md](../../security/compliance/audit-logging.md) per la configurazione completa di Falco. In sintesi per Kubernetes:
 
 ```yaml
-# Falco DaemonSet con eBPF (no kernel module necessario)
+# Falco DaemonSet con modern eBPF (CO-RE: nessun kernel module né compilazione probe)
 # Helm values.yaml
 driver:
-  kind: ebpf              # ebpf | module | modern_ebpf
+  kind: modern_ebpf       # modern_ebpf | kmod | ebpf (probe legacy, deprecato) | auto
 
 falcosidekick:
   enabled: true
@@ -458,12 +508,54 @@ falcosidekick:
 # 3. RBAC: least privilege per ogni ServiceAccount
 # 4. Non automountare il token SA (automountServiceAccountToken: false)
 # 5. ResourceQuota su ogni namespace (anti-DoS)
-# 6. Secrets crittografati in etcd (EncryptionConfiguration KMS)
+# 6. Secrets crittografati in etcd (EncryptionConfiguration con provider KMS v2;
+#    KMS v1 è deprecato)
 # 7. Audit logging abilitato e analizzato
 # 8. Falco o equivalente per runtime monitoring
 # 9. Image scanning nel CI e continuous scanning con Trivy Operator
-# 10. Admission controller: Gatekeeper o Kyverno per policy enforcement
+# 10. Policy enforcement: ValidatingAdmissionPolicy (nativa, CEL) per regole semplici,
+#     Gatekeeper o Kyverno per regole complesse/mutation/generation
 ```
+
+### Admission e ValidatingAdmissionPolicy
+
+PSA copre solo i profili standard. Per regole custom (registry ammessi, label obbligatorie,
+niente tag `latest`) i **ValidatingAdmissionPolicy** (VAP, GA dal 1.30) valutano espressioni CEL
+direttamente nell'API server: nessun webhook esterno, quindi nessun componente in più da
+mantenere né latenza di rete nel path di admission. Gatekeeper e Kyverno restano la scelta
+quando servono mutation, generazione di risorse, o logica non esprimibile in CEL.
+
+```yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: no-latest-tag
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+  validations:
+    - expression: "object.spec.template.spec.containers.all(c, !c.image.endsWith(':latest'))"
+      message: "Tag :latest non ammesso"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: no-latest-tag-prod
+spec:
+  policyName: no-latest-tag
+  validationActions: [Deny]      # Warn | Audit per un rollout graduale
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: production
+```
+
+Approfondimento: [Admission Control](../../security/supply-chain/admission-control.md), [OPA](../../security/autorizzazione/opa.md).
 
 ---
 
@@ -533,8 +625,12 @@ kubectl describe networkpolicy default-deny-all -n production
 kubectl run nettest --image=nicolaka/netshoot --rm -it --restart=Never \
     -n production -- curl -v http://api:8080
 
-# Controlla i log del CNI plugin (es. Calico) per drop
-kubectl logs -n calico-system -l k8s-app=calico-node --tail=50 | grep -i denied
+# Osserva i drop: Cilium li espone via Hubble; Calico NON logga i drop di default
+# (serve una regola con action: Log nella policy Calico)
+hubble observe --namespace production --verdict DROPPED --last 50
+
+# NB: se il namespace ha PSA restricted, questo pod di debug (netshoot, root) viene rifiutato:
+# usa un namespace baseline/di test o un'immagine conforme
 
 # Verifica che DNS sia raggiungibile
 kubectl run dnstest --image=busybox --rm -it --restart=Never \
@@ -562,7 +658,8 @@ aws iam list-open-id-connect-providers
 # Verifica il token proiettato nel pod
 kubectl exec -n production <pod-name> -- \
     cat /var/run/secrets/eks.amazonaws.com/serviceaccount/token | \
-    cut -d'.' -f2 | base64 -d 2>/dev/null | jq '{sub, aud, exp}'
+    cut -d'.' -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | jq '{sub, aud, exp}'
+# (il JWT è base64url: tr converte l'alfabeto; se base64 lamenta il padding aggiungi "==")
 
 # Controlla le variabili d'ambiente AWS impostate da IRSA
 kubectl exec -n production <pod-name> -- env | grep -E 'AWS_|ROLE'
@@ -577,4 +674,6 @@ kubectl exec -n production <pod-name> -- env | grep -E 'AWS_|ROLE'
 - [NetworkPolicy](https://kubernetes.io/docs/concepts/services-networking/network-policies/)
 - [Audit Logging](https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/)
 - [Security Checklist](https://kubernetes.io/docs/concepts/security/security-checklist/)
+- [ValidatingAdmissionPolicy](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/)
+- [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html)
 - [CIS Kubernetes Benchmark](https://www.cisecurity.org/benchmark/kubernetes)
