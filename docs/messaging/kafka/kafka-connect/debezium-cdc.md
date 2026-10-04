@@ -7,7 +7,7 @@ search_keywords: [debezium cdc, change data capture kafka, debezium postgresql, 
 parent: messaging/kafka/kafka-connect
 related: [messaging/kafka/pattern-microservizi/outbox-pattern, messaging/kafka/kafka-connect/source-connectors]
 official_docs: https://debezium.io/documentation/
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -109,7 +109,7 @@ CREATE PUBLICATION debezium_pub FOR ALL TABLES;
 ### Docker Compose: PostgreSQL + Kafka + Debezium
 
 !!! note "Versioni immagini"
-    L'esempio usa Debezium 2.7. Le release 3.x (Java 17+) sono la linea corrente e le immagini sono pubblicate su `quay.io/debezium/connect`, non più su Docker Hub. <!-- REVIEW: verificare tag 3.x corrente di quay.io/debezium/connect e aggiornare compose/versione negli esempi -->
+    L'esempio usa Debezium 3.7.0.Final (ottobre 2026; connector Java 17+, Kafka Connect 3.1+). Le immagini sono pubblicate su `quay.io/debezium/connect`, non più su Docker Hub. Preferire tag completi (`3.7.0.Final`) a `latest`/`3.7`, che sono mobili.
 
 ```yaml
 services:
@@ -146,7 +146,7 @@ services:
       - "9092:9092"
 
   kafka-connect:
-    image: debezium/connect:2.7
+    image: quay.io/debezium/connect:3.7.0.Final
     depends_on:
       - kafka
       - postgres
@@ -214,7 +214,7 @@ Con l'`unwrap` configurato qui il valore dei record è già "piatto" (vedi SMT s
       "created_at": "2026-02-23T14:30:00Z"
     },
     "source": {
-      "version": "2.7.0.Final",
+      "version": "3.7.0.Final",
       "connector": "postgresql",
       "name": "db",
       "ts_ms": 1740321000000,
