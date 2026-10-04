@@ -7,7 +7,7 @@ search_keywords: [kafka consumer, consumatore kafka, poll loop, offset commit, a
 parent: messaging/kafka/fondamenti
 related: [messaging/kafka/fondamenti/architettura, messaging/kafka/fondamenti/topics-partizioni, messaging/kafka/fondamenti/produttori, messaging/kafka/fondamenti/consumer-groups]
 official_docs: https://kafka.apache.org/documentation/#consumerconfigs
-status: needs-review
+status: reviewed
 last_verified: 2026-10-04
 difficulty: intermediate
 last_updated: 2026-10-04
@@ -95,7 +95,7 @@ Il consumer invia **heartbeat** periodici al Group Coordinator per segnalare che
     Il heartbeat viene inviato da un thread separato, quindi `session.timeout.ms` misura l'assenza di heartbeat (processo morto, rete down). `max.poll.interval.ms` misura invece l'inattività del thread principale (troppo tempo tra una `poll()` e la successiva): serve a scoprire consumer vivi ma "incastrati" nel processing. Entrambi possono causare un rebalancing se violati.
 
 !!! note "Nuovo protocollo di rebalance (KIP-848, Kafka 4.0+)"
-    Con `group.protocol=consumer` (GA in Kafka 4.0, richiede broker 4.0+) la logica di assegnazione passa al broker, i rebalance diventano incrementali senza barriera "stop-the-world" e `session.timeout.ms` / `heartbeat.interval.ms` diventano configurazioni **lato broker** (`group.consumer.*`), non più del client. Il protocollo classico (`group.protocol=classic`) resta il default dei client Java 4.x, quindi i parametri di questa pagina valgono per esso. <!-- REVIEW: verificare default group.protocol nell'ultima release client -->
+    Con `group.protocol=consumer` (GA in Kafka 4.0, richiede broker 4.0+) la logica di assegnazione passa al broker, i rebalance diventano incrementali senza barriera "stop-the-world" e `session.timeout.ms` / `heartbeat.interval.ms` diventano configurazioni **lato broker** (`group.consumer.*`), non più del client. Il protocollo classico (`group.protocol=classic`) resta il default dei client Java 4.x (fino a 4.3), quindi i parametri di questa pagina valgono per esso. Secondo KIP-1274 (accettata) il default passerà a `consumer` in Kafka 5.0 e il protocollo classic sarà rimosso in 6.0; in 4.3 il client logga solo un messaggio che raccomanda il nuovo protocollo.
 
 
 ## Architettura / Come Funziona
