@@ -10341,7 +10341,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10366,7 +10366,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10570,7 +10570,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10805,7 +10805,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -10910,7 +10910,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -10945,7 +10945,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -11155,7 +11155,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -11190,7 +11190,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -11939,7 +11939,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -11974,7 +11974,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24879,7 +24879,12 @@
 <div class="admonition warning">
 <p class="admonition-title">Published port e firewall host (ufw/firewalld)</p>
 <p><code>-p 8080:80</code> mette il DNAT in <code>PREROUTING</code> della tabella <code>nat</code>, <strong>prima</strong> delle chain <code>INPUT</code> gestite da ufw/firewalld: il traffico verso la porta pubblicata non viene filtrato dalle loro regole. Per limitare l'accesso inserire regole in <code>DOCKER-USER</code> (valutata prima delle regole Docker) oppure pubblicare solo su loopback: <code>-p 127.0.0.1:8080:80</code>.</p>
-<!-- REVIEW: verificare se le release recenti di Docker Engine (28+/29) offrono backend nftables e cambiano il filtraggio delle porte pubblicate/accesso diretto ai container da altre reti -->
+<p><strong>Novità recenti di Docker Engine:</strong></p>
+<ul>
+<li><strong>28.0.0</strong>: l'accesso routed diretto (da host remoti sulla stessa L2) alle porte <strong>non</strong> pubblicate è bloccato nella chain <code>DOCKER</code>. Le bridge network hanno il <code>gateway mode</code> (<code>nat</code>, <code>nat-unprotected</code>, <code>routed</code>, <code>isolated</code> per le reti internal).</li>
+<li><strong>28.0.1</strong>: la chain <code>DOCKER-USER</code> non ha più la regola <code>RETURN</code> esplicita, quindi si può anche fare append oltre che insert.</li>
+<li><strong>29.0.0</strong>: backend <strong>nftables sperimentale</strong> (<code>--firewall-backend=nftables</code> o <code>"firewall-backend": "nftables"</code> in <code>daemon.json</code>). In questa modalità <code>DOCKER-USER</code> <strong>non esiste</strong>: servono tabelle/chain nftables proprie. Non è utilizzabile in Swarm mode e Docker non abilita da solo l'IP forwarding. Il default resta iptables, e gli esempi qui sotto valgono per quello.</li>
+</ul>
 </div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Esempio: consenti l'accesso alla porta pubblicata solo da una subnet</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># (in DOCKER-USER la destinazione è già tradotta: filtrare con conntrack original dport)</span>

@@ -10332,7 +10332,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10367,7 +10367,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10602,7 +10602,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -10707,7 +10707,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -10742,7 +10742,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10961,7 +10961,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -10986,7 +10986,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -11363,7 +11363,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12112,7 +12112,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -12147,7 +12147,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25120,7 +25120,7 @@
 - Team multipli con ownership di cluster separati
 - Limiti di scalabilità di un singolo cluster (&gt;5000 nodi, &gt;150K pod)</p>
 <p><strong>Quando NON adottare:</strong>
-- Meno di 3 cluster → overhead non giustificato, namespaces sufficienti
+- Un solo ambiente senza requisiti di isolamento o geo-distribuzione → overhead non giustificato, namespace sufficienti (prod separato da non-prod resta comunque raccomandato, vedi Best Practices)
 - Team piccolo senza skill di piattaforma → la complessità operativa è alta
 - Workload fortemente interdipendenti che richiedono latenza sub-millisecondo → mantenerli sullo stesso cluster</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Multi-Cluster Topology — Pattern Hub and Spoke
@@ -25238,15 +25238,20 @@
 </span><span id="__span-3-36"><a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a><span class="w">      </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1.29.0</span>
 </span><span id="__span-3-37"><a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a><span class="w">      </span><span class="nt">bootstrap</span><span class="p">:</span>
 </span><span id="__span-3-38"><a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a><span class="w">        </span><span class="nt">configRef</span><span class="p">:</span>
-</span><span id="__span-3-39"><a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a><span class="w">          </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">KubeadmConfigTemplate</span>
-</span><span id="__span-3-40"><a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a><span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-eu-west-1-worker-bootstrap</span>
-</span><span id="__span-3-41"><a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a><span class="w">      </span><span class="nt">infrastructureRef</span><span class="p">:</span>
-</span><span id="__span-3-42"><a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a><span class="w">        </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AWSMachineTemplate</span>
-</span><span id="__span-3-43"><a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a><span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-eu-west-1-worker-machine</span>
+</span><span id="__span-3-39"><a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a><span class="w">          </span><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bootstrap.cluster.x-k8s.io/v1beta1</span>
+</span><span id="__span-3-40"><a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a><span class="w">          </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">KubeadmConfigTemplate</span>
+</span><span id="__span-3-41"><a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a><span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-eu-west-1-worker-bootstrap</span>
+</span><span id="__span-3-42"><a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a><span class="w">      </span><span class="nt">infrastructureRef</span><span class="p">:</span>
+</span><span id="__span-3-43"><a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a><span class="w">        </span><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">infrastructure.cluster.x-k8s.io/v1beta2</span>
+</span><span id="__span-3-44"><a id="__codelineno-3-44" name="__codelineno-3-44" href="#__codelineno-3-44"></a><span class="w">        </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AWSMachineTemplate</span>
+</span><span id="__span-3-45"><a id="__codelineno-3-45" name="__codelineno-3-45" href="#__codelineno-3-45"></a><span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-eu-west-1-worker-machine</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">CAPI in produzione</p>
-<p>CAPI gestisce risorse cloud reali: un errore in un MachineDeployment può terminare nodi in produzione. Usa sempre <code>--dry-run</code> per verificare i manifest, e proteggili con policy OPA/Kyverno prima di applicarli.</p>
+<p>CAPI gestisce risorse cloud reali: un errore in un MachineDeployment può terminare nodi in produzione. Verifica i manifest con <code>kubectl apply --dry-run=server</code> (validazione lato API server, a differenza di <code>client</code>) e proteggili con policy OPA/Kyverno prima di applicarli.</p>
+<p><!-- REVIEW: verificare versioni API CAPI — da CAPI v1.11 esiste v1beta2 per i tipi core (v1beta1 deprecata); aggiornare apiVersion e <code>--kubernetes-version</code> (v1.29 è fuori supporto) -->
+<!-- REVIEW: manifest CAPI sono estratti parziali: mancano KubeadmControlPlane, AWSMachineTemplate, KubeadmConfigTemplate -->
+I numeri di versione (<code>v1.29.0</code>) sono esempi: usa una versione Kubernetes ancora supportata e compatibile con il provider.</p>
 </div>
 <hr />
 <h2 id="argo-cd-multi-cluster">Argo CD Multi-Cluster<a class="headerlink" href="#argo-cd-multi-cluster" title="Permanent link">&para;</a></h2>
@@ -25377,6 +25382,11 @@
 <hr />
 <h2 id="crossplane-infrastructure-as-kubernetes">Crossplane — Infrastructure as Kubernetes<a class="headerlink" href="#crossplane-infrastructure-as-kubernetes" title="Permanent link">&para;</a></h2>
 <p><strong>Crossplane</strong> trasforma il management cluster in un piano di controllo universale: provisiona risorse cloud (RDS, S3, GKE, AKS) come se fossero oggetti Kubernetes nativi.</p>
+<div class="admonition warning">
+<p class="admonition-title">Crossplane v2</p>
+<p>Gli esempi sotto usano il modello v1 (Claim + <code>Composition</code> con <code>resources</code>/<code>patches</code> nativi, richiede anche una <code>CompositeResourceDefinition</code> non mostrata). Crossplane v2 ha rimosso patch-and-transform nativo (si usa <code>mode: Pipeline</code> con composition function, es. <code>function-patch-and-transform</code>) e i Claim a favore di XR namespaced.
+<!-- REVIEW: verificare e riscrivere esempi Crossplane per v2 (Pipeline mode, XR namespaced, XRD) --></p>
+</div>
 <h3 id="architettura-crossplane">Architettura Crossplane<a class="headerlink" href="#architettura-crossplane" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>Crossplane — Flusso di provisioning
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
@@ -25489,7 +25499,7 @@
 </span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>
 </span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>  4. Submariner
 </span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>     cluster-A ←→ Broker ←→ cluster-B
-</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>     ✓ open source  ✓ multi-provider  ✗ single point of failure broker
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>     ✓ open source  ✓ multi-provider  ✗ broker = SPOF solo per scambio metadati (il data plane è diretto gateway↔gateway)
 </span></code></pre></div>
 <h3 id="cilium-cluster-mesh">Cilium Cluster Mesh<a class="headerlink" href="#cilium-cluster-mesh" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Abilita cluster mesh su entrambi i cluster</span>
@@ -25534,6 +25544,16 @@
 </span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="c1"># Verifica connettività</span>
 </span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>istioctl<span class="w"> </span>remote-clusters<span class="w"> </span>--context<span class="w"> </span>primary-cluster
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Esempio semplificato</p>
+<p>Il setup reale richiede anche <code>meshID</code>, <code>clusterName</code>, <code>network</code> coerenti per ogni cluster, un East-West Gateway e i secret di accesso reciproco (<code>istioctl create-remote-secret</code>). Vedi la guida <em>Install Multicluster</em> di Istio. Per meno overhead (sidecar-less) esiste il multicluster di Istio Ambient.
+<!-- REVIEW: verificare maturità Istio Ambient multicluster e completare i passi del setup primary-remote --></p>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Lacune note</p>
+<p>Non coperti: <strong>Karmada</strong>, <strong>vcluster</strong> (virtual cluster per multi-tenancy), <strong>Multi-Cluster Services API</strong> (<code>ServiceExport</code>/<code>ServiceImport</code>, KEP-1645) — citati nelle keyword ma senza sezione dedicata.
+<!-- REVIEW: aggiungere sezioni Karmada / vcluster / MCS API --></p>
+</div>
 <hr />
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
@@ -25605,9 +25625,9 @@
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="c1"># Dettaglio dell'errore</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>bundledeployment<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>fleet-default
 </span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="c1"># Forza re-sincronizzazione del GitRepo</span>
-</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>kubectl<span class="w"> </span>annotate<span class="w"> </span>gitrepo<span class="w"> </span>my-app<span class="w"> </span>-n<span class="w"> </span>fleet-default<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="w">  </span>fleet.cattle.io/force-sync<span class="o">=</span><span class="s2">"</span><span class="k">$(</span>date<span class="k">)</span><span class="s2">"</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="c1"># Forza re-sincronizzazione del GitRepo: incrementa forceSyncGeneration</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>gitrepo<span class="w"> </span>my-app<span class="w"> </span>-n<span class="w"> </span>fleet-default<span class="w"> </span>--type<span class="w"> </span>merge<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"spec":{"forceSyncGeneration":2}}'</span>
 </span></code></pre></div>
 <h3 id="scenario-4-latenza-elevata-cross-cluster-con-cluster-mesh">Scenario 4 — Latenza elevata cross-cluster con Cluster Mesh<a class="headerlink" href="#scenario-4-latenza-elevata-cross-cluster-con-cluster-mesh" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo</strong>: latenza &gt;50 ms tra pod di cluster diversi.</p>
@@ -25620,9 +25640,10 @@
 </span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>kube-system<span class="w"> </span>ds/cilium<span class="w"> </span>--<span class="w"> </span>cilium<span class="w"> </span>config<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>mtu
 </span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>
 </span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="c1"># Abilita direct routing (bypassa overlay quando possibile)</span>
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="c1"># In cilium values.yaml:</span>
-</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="c1"># tunnel: disabled</span>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="c1"># In cilium values.yaml (Cilium &gt;= 1.15; `tunnel: disabled` è stato rimosso):</span>
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="c1"># routingMode: native</span>
 </span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="c1"># autoDirectNodeRoutes: true</span>
+</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a><span class="c1"># ipv4NativeRoutingCIDR: &lt;CIDR pod aggregato&gt;</span>
 </span></code></pre></div>
 <h3 id="scenario-5-servizi-cross-cluster-non-raggiungibili-cidr-sovrapposti">Scenario 5 — Servizi cross-cluster non raggiungibili (CIDR sovrapposti)<a class="headerlink" href="#scenario-5-servizi-cross-cluster-non-raggiungibili-cidr-sovrapposti" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo</strong>: i pod di un cluster non raggiungono pod/servizi dell'altro; traffico instradato verso il cluster sbagliato.</p>

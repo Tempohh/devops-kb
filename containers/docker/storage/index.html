@@ -10332,7 +10332,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10376,7 +10376,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10401,7 +10401,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10805,7 +10805,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -10910,7 +10910,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -10945,7 +10945,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -11155,7 +11155,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -11190,7 +11190,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -11939,7 +11939,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -11974,7 +11974,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24774,57 +24774,67 @@
 <hr />
 <h2 id="named-volumes-lo-standard-per-la-persistenza">Named Volumes — Lo Standard per la Persistenza<a class="headerlink" href="#named-volumes-lo-standard-per-la-persistenza" title="Permanent link">&para;</a></h2>
 <p>I <strong>named volumes</strong> sono gestiti interamente da Docker e sono il metodo raccomandato per i dati persistenti in produzione.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Crea un volume named</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>docker<span class="w"> </span>volume<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span>--driver<span class="w"> </span><span class="nb">local</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span>--opt<span class="w"> </span><span class="nv">type</span><span class="o">=</span>none<span class="w"> </span><span class="se">\ </span><span class="w">         </span><span class="c1"># tipo filesystem</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span>--opt<span class="w"> </span><span class="nv">device</span><span class="o">=</span>/mnt/data<span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># path fisico (local driver)</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>--opt<span class="w"> </span><span class="nv">o</span><span class="o">=</span><span class="nb">bind</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span>app-data
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Usa il volume nel container</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span>--name<span class="w"> </span>postgres<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span>--volume<span class="w"> </span>postgres-data:/var/lib/postgresql/data<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span>--volume<span class="w"> </span>postgres-config:/etc/postgresql:ro<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span>postgres:16
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># Ispezione</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>docker<span class="w"> </span>volume<span class="w"> </span>inspect<span class="w"> </span>postgres-data
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="c1"># {</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1">#   "Driver": "local",</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="c1">#   "Mountpoint": "/var/lib/docker/volumes/postgres-data/_data",</span>
-</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="c1">#   "Name": "postgres-data",</span>
-</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="c1">#   "Scope": "local"</span>
-</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="c1"># }</span>
-</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>
-</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="c1"># Backup di un volume (esportazione tar)</span>
-</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="w">    </span>-v<span class="w"> </span>postgres-data:/data:ro<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="w">    </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/backup:/backup<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="w">    </span>alpine<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="w">    </span>tar<span class="w"> </span>czf<span class="w"> </span>/backup/postgres-data-<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span>.tar.gz<span class="w"> </span>-C<span class="w"> </span>/data<span class="w"> </span>.
-</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>
-</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="c1"># Restore</span>
-</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="w">    </span>-v<span class="w"> </span>postgres-data:/data<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="w">    </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/backup:/backup:ro<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="w">    </span>alpine<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a><span class="w">    </span>tar<span class="w"> </span>xzf<span class="w"> </span>/backup/postgres-data-20260225.tar.gz<span class="w"> </span>-C<span class="w"> </span>/data
-</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>
-</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a><span class="c1"># Lista e cleanup volumi</span>
-</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>docker<span class="w"> </span>volume<span class="w"> </span>ls
-</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>docker<span class="w"> </span>volume<span class="w"> </span>ls<span class="w"> </span>-f<span class="w"> </span><span class="nv">dangling</span><span class="o">=</span><span class="nb">true</span><span class="w">  </span><span class="c1"># volumi non usati da container</span>
-</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>docker<span class="w"> </span>volume<span class="w"> </span>prune<span class="w">                </span><span class="c1"># elimina tutti i dangling volumes</span>
+<div class="admonition note">
+<p class="admonition-title">Volume vs bind mount: il perché</p>
+<p>Un named volume vive in <code>/var/lib/docker/volumes/</code> ed è gestito dal daemon: non dipende dalla struttura di directory dell'host, eredita ownership/contenuto dalla directory dell'immagine alla <strong>prima</strong> creazione (copy-up) e funziona uguale su Linux, Windows e Docker Desktop (dove i bind mount attraversano la VM e sono più lenti). Con <code>--mount</code> un source bind inesistente è un errore; con <code>-v</code> Docker lo crea (come root) — fonte comune di permission problem.</p>
+</div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Crea un volume named che punta a una directory esistente dell'host</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># (type=none + o=bind: il local driver fa un bind mount di device)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>docker<span class="w"> </span>volume<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span>--driver<span class="w"> </span><span class="nb">local</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span>--opt<span class="w"> </span><span class="nv">type</span><span class="o">=</span>none<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>--opt<span class="w"> </span><span class="nv">device</span><span class="o">=</span>/mnt/data<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span>--opt<span class="w"> </span><span class="nv">o</span><span class="o">=</span><span class="nb">bind</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span>app-data
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Usa il volume nel container</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span>--name<span class="w"> </span>postgres<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span>--volume<span class="w"> </span>postgres-data:/var/lib/postgresql/data<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span>--volume<span class="w"> </span>postgres-config:/etc/postgresql:ro<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span>postgres:16
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1"># Ispezione</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>docker<span class="w"> </span>volume<span class="w"> </span>inspect<span class="w"> </span>postgres-data
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># {</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="c1">#   "Driver": "local",</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="c1">#   "Mountpoint": "/var/lib/docker/volumes/postgres-data/_data",</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="c1">#   "Name": "postgres-data",</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="c1">#   "Scope": "local"</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="c1"># }</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="c1"># Backup di un volume (esportazione tar)</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="w">    </span>-v<span class="w"> </span>postgres-data:/data:ro<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="w">    </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/backup:/backup<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="w">    </span>alpine<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="w">    </span>tar<span class="w"> </span>czf<span class="w"> </span>/backup/postgres-data-<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span>.tar.gz<span class="w"> </span>-C<span class="w"> </span>/data<span class="w"> </span>.
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="c1"># Restore</span>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="w">    </span>-v<span class="w"> </span>postgres-data:/data<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="w">    </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/backup:/backup:ro<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a><span class="w">    </span>alpine<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a><span class="w">    </span>tar<span class="w"> </span>xzf<span class="w"> </span>/backup/postgres-data-20260225.tar.gz<span class="w"> </span>-C<span class="w"> </span>/data
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="c1"># Lista e cleanup volumi</span>
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>docker<span class="w"> </span>volume<span class="w"> </span>ls
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>docker<span class="w"> </span>volume<span class="w"> </span>ls<span class="w"> </span>-f<span class="w"> </span><span class="nv">dangling</span><span class="o">=</span><span class="nb">true</span><span class="w">  </span><span class="c1"># volumi non usati da container</span>
+</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>docker<span class="w"> </span>volume<span class="w"> </span>prune<span class="w">                </span><span class="c1"># elimina i volumi ANONIMI non usati (Docker 23+)</span>
+</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>docker<span class="w"> </span>volume<span class="w"> </span>prune<span class="w"> </span>-a<span class="w">             </span><span class="c1"># elimina anche i named volume non usati — DATI PERSI</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Cambio di comportamento di <code>prune</code> (Docker Engine 23+)</p>
+<p>Dalla 23.0 <code>docker volume prune</code> (e <code>docker system prune --volumes</code>) rimuove solo i volumi <strong>anonimi</strong>. I named volume non usati richiedono <code>-a</code>/<code>--all</code>. Su host con engine precedenti, <code>prune</code> cancellava anche i named volume non collegati a un container: verificare la versione prima di fidarsi di vecchi runbook.</p>
+</div>
 <hr />
 <h2 id="bind-mounts-development-workflow">Bind Mounts — Development Workflow<a class="headerlink" href="#bind-mounts-development-workflow" title="Permanent link">&para;</a></h2>
 <p>I <strong>bind mount</strong> montano direttamente una directory dell'host nel container. Utili per lo sviluppo (hot reload) ma da evitare in produzione (accoppiamento con il filesystem host).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Bind mount per development (hot reload)</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span>--name<span class="w"> </span>dev-server<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span>--mount<span class="w"> </span><span class="nv">type</span><span class="o">=</span>bind,source<span class="o">=</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/src,target<span class="o">=</span>/app/src,readonly<span class="o">=</span><span class="nb">false</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span>--mount<span class="w"> </span><span class="nv">type</span><span class="o">=</span>bind,source<span class="o">=</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>/config.yaml,target<span class="o">=</span>/app/config.yaml,readonly<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span>--mount<span class="w"> </span><span class="nv">type</span><span class="o">=</span>bind,source<span class="o">=</span><span class="s2">"</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span><span class="s2">"</span>/src,target<span class="o">=</span>/app/src<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span>--mount<span class="w"> </span><span class="nv">type</span><span class="o">=</span>bind,source<span class="o">=</span><span class="s2">"</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span><span class="s2">"</span>/config.yaml,target<span class="o">=</span>/app/config.yaml,readonly<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span>-p<span class="w"> </span><span class="m">8080</span>:8080<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span>myapp:dev
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
@@ -24839,7 +24849,7 @@
 </span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span>--name<span class="w"> </span>nginx<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">    </span>-v<span class="w"> </span>/etc/nginx/sites-available/:/etc/nginx/sites-available/:ro<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">    </span>-v<span class="w"> </span>/var/log/nginx/:/var/log/nginx/<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span>nginx:1.25
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span>nginx:stable
 </span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
 </span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="c1"># Attenzione alle permission:</span>
 </span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="c1"># I file del bind mount hanno i permessi del filesystem host.</span>
@@ -24850,7 +24860,7 @@
 </span></code></pre></div>
 <hr />
 <h2 id="tmpfs-mounts-storage-in-memoria">tmpfs Mounts — Storage in Memoria<a class="headerlink" href="#tmpfs-mounts-storage-in-memoria" title="Permanent link">&para;</a></h2>
-<p>I <strong>tmpfs</strong> mount vivono solo in RAM, mai scritti su disco. Ideali per dati temporanei sensibili (token, certificati temporanei).</p>
+<p>I <strong>tmpfs</strong> mount vivono in RAM (page cache del kernel) e non toccano il filesystem del container. Ideali per dati temporanei sensibili (token, certificati temporanei). Nota: se l'host ha swap, le pagine tmpfs possono finire su disco; per dati davvero sensibili usare swap cifrato o disabilitato. tmpfs è solo Linux e conta nel limite di memoria del cgroup del container.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># tmpfs mount</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span>--mount<span class="w"> </span><span class="nv">type</span><span class="o">=</span>tmpfs,target<span class="o">=</span>/tmp,tmpfs-size<span class="o">=</span>128m,tmpfs-mode<span class="o">=</span><span class="m">1777</span><span class="w"> </span><span class="se">\</span>
@@ -24900,19 +24910,21 @@
 </span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>      /var/lib/docker/overlay2/&lt;rw&gt;/merged
 </span></code></pre></div>
 <p><strong>Performance overlay2:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Benchmark: confronta volume vs container filesystem</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Test scrittura sequenziale</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span>-v<span class="w"> </span>/tmp/vol-test:/data<span class="w"> </span><span class="se">\ </span><span class="w">                         </span><span class="c1"># volume (ext4 diretto)</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span>ubuntu<span class="w"> </span>dd<span class="w"> </span><span class="k">if</span><span class="o">=</span>/dev/zero<span class="w"> </span><span class="nv">of</span><span class="o">=</span>/data/test<span class="w"> </span><span class="nv">bs</span><span class="o">=</span>1M<span class="w"> </span><span class="nv">count</span><span class="o">=</span><span class="m">1000</span><span class="w"> </span><span class="nv">conv</span><span class="o">=</span>fdatasync
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># Tipico: ~500-1000 MB/s</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>ubuntu<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span>dd<span class="w"> </span><span class="k">if</span><span class="o">=</span>/dev/zero<span class="w"> </span><span class="nv">of</span><span class="o">=</span>/data/test<span class="w"> </span><span class="nv">bs</span><span class="o">=</span>1M<span class="w"> </span><span class="nv">count</span><span class="o">=</span><span class="m">1000</span><span class="w"> </span><span class="nv">conv</span><span class="o">=</span>fdatasync
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Container RW layer: ~100-300 MB/s (overhead CoW)</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="c1"># Conclusione: per I/O intensivo (DB, log), usare SEMPRE volumi</span>
+<p>overlay2 opera a livello di <strong>file</strong>: alla prima scrittura su un file presente in un layer inferiore esegue un <em>copy-up</em> dell'intero file nel layer RW (costoso per file grandi, es. un DB nell'immagine). La scrittura di file nuovi o già copiati ha overhead basso; restano però il costo dello stacking dei lookup su molti layer e l'assenza di un filesystem dedicato (stesso disco dei layer, nessun tuning per DB).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Benchmark indicativo (i numeri dipendono da disco e filesystem: misurare sul proprio host)</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Volume</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-v<span class="w"> </span>bench-vol:/data<span class="w"> </span>ubuntu<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span>dd<span class="w"> </span><span class="k">if</span><span class="o">=</span>/dev/zero<span class="w"> </span><span class="nv">of</span><span class="o">=</span>/data/test<span class="w"> </span><span class="nv">bs</span><span class="o">=</span>1M<span class="w"> </span><span class="nv">count</span><span class="o">=</span><span class="m">1000</span><span class="w"> </span><span class="nv">conv</span><span class="o">=</span>fdatasync
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># Layer RW del container</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>ubuntu<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span>dd<span class="w"> </span><span class="k">if</span><span class="o">=</span>/dev/zero<span class="w"> </span><span class="nv">of</span><span class="o">=</span>/test<span class="w"> </span><span class="nv">bs</span><span class="o">=</span>1M<span class="w"> </span><span class="nv">count</span><span class="o">=</span><span class="m">1000</span><span class="w"> </span><span class="nv">conv</span><span class="o">=</span>fdatasync
 </span></code></pre></div>
+<p>Regola pratica: per I/O intensivo e dati persistenti (DB, log) usare volumi — non tanto per il throughput sequenziale quanto per persistenza, copy-up evitato e possibilità di montare un disco dedicato.</p>
+<div class="admonition note">
+<p class="admonition-title">containerd image store (Docker Engine 29+)</p>
+<p>Le installazioni nuove di Docker Engine 29 usano di default il <strong>containerd image store</strong> (snapshotter <code>overlayfs</code>) al posto del classico graph driver <code>overlay2</code>; i layer stanno in <code>/var/lib/containerd</code> e <code>docker info</code> mostra <code>driver-type: io.containerd.snapshotter.v1</code>. Le installazioni aggiornate mantengono il driver precedente. I concetti (union FS, copy-up, volumi) restano identici, ma i path e i comandi di ispezione di questa sezione valgono per il graph driver <code>overlay2</code>.</p>
+</div>
 <p><strong>Scegliere il giusto driver:</strong></p>
 <table>
 <thead>
@@ -24941,7 +24953,7 @@
 <tr>
 <td><code>fuse-overlayfs</code></td>
 <td>qualsiasi</td>
-<td>Per rootless Docker su sistemi non supportati</td>
+<td>Fallback per rootless Docker su kernel &lt; 5.11 (con kernel ≥ 5.11 il rootless usa <code>overlay2</code> nativo)</td>
 </tr>
 <tr>
 <td><code>vfs</code></td>
@@ -24969,8 +24981,12 @@
 </span></code></pre></div>
 <hr />
 <h2 id="volume-drivers-storage-remoto-e-cloud">Volume Drivers — Storage Remoto e Cloud<a class="headerlink" href="#volume-drivers-storage-remoto-e-cloud" title="Permanent link">&para;</a></h2>
-<p>I <strong>volume driver</strong> (plugin) permettono di montare storage remoto (NFS, Ceph, AWS EBS, Azure File) come volumi Docker.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># NFS volume driver</span>
+<p>I <strong>volume driver</strong> permettono di montare storage remoto (NFS, Ceph, cloud block/file storage) come volumi Docker. Il driver <code>local</code> supporta NFS/CIFS direttamente; per il resto servono plugin di terze parti.</p>
+<div class="admonition warning">
+<p class="admonition-title">Ecosistema plugin in gran parte abbandonato</p>
+<p>Il plugin REX-Ray (usato in vecchi esempi per EBS) non è più mantenuto. I plugin Docker managed sono un'API legacy: su cloud, per storage dinamico si usa oggi Kubernetes + CSI (vedi <a href="../../kubernetes/storage/">Kubernetes Storage</a>); su Docker standalone, preferire NFS via driver <code>local</code> o i volume driver ufficiali del provider (es. Azure File, Cloud Stor) dopo aver verificato che siano ancora supportati.</p>
+</div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># NFS volume (driver local)</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>docker<span class="w"> </span>volume<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span>--driver<span class="w"> </span><span class="nb">local</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span>--opt<span class="w"> </span><span class="nv">type</span><span class="o">=</span>nfs<span class="w"> </span><span class="se">\</span>
@@ -24978,20 +24994,10 @@
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span>--opt<span class="w"> </span><span class="nv">device</span><span class="o">=</span>:/exports/data<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span>nfs-data
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># Plugin REX-Ray per storage cloud</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>docker<span class="w"> </span>plugin<span class="w"> </span>install<span class="w"> </span>rexray/ebs<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="nv">EBS_ACCESSKEY</span><span class="o">=</span>xxx<span class="w"> </span><span class="nv">EBS_SECRETKEY</span><span class="o">=</span>yyy<span class="w"> </span><span class="nv">EBS_REGION</span><span class="o">=</span>eu-west-1
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>docker<span class="w"> </span>volume<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">    </span>--driver<span class="w"> </span>rexray/ebs<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span>--opt<span class="w"> </span><span class="nv">size</span><span class="o">=</span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">    </span>--opt<span class="w"> </span><span class="nv">type</span><span class="o">=</span>gp3<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">    </span>ebs-volume
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>docker<span class="w"> </span>run<span class="w"> </span>-v<span class="w"> </span>ebs-volume:/data<span class="w"> </span>myapp
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="c1"># Verificare i plugin installati</span>
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>docker<span class="w"> </span>plugin<span class="w"> </span>ls
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>docker<span class="w"> </span>run<span class="w"> </span>-v<span class="w"> </span>nfs-data:/data<span class="w"> </span>myapp
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1"># Verificare i plugin installati (volume driver di terze parti)</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>docker<span class="w"> </span>plugin<span class="w"> </span>ls
 </span></code></pre></div>
 <hr />
 <h2 id="docker-compose-storage-patterns">Docker Compose Storage Patterns<a class="headerlink" href="#docker-compose-storage-patterns" title="Permanent link">&para;</a></h2>
@@ -25023,7 +25029,7 @@
 </span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="nt">volumes</span><span class="p">:</span>
 </span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="w">  </span><span class="nt">postgres-data</span><span class="p">:</span>
 </span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="w">    </span><span class="nt">driver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">local</span>
-</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="w">    </span><span class="nt">driver_opts</span><span class="p">:</span><span class="w">                                   </span><span class="c1"># NFS per HA</span>
+</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="w">    </span><span class="nt">driver_opts</span><span class="p">:</span><span class="w">                                   </span><span class="c1"># NFS: storage condiviso (attenzione: PostgreSQL su NFS è sconsigliato, fsync/locking inaffidabili; preferire disco locale/block storage)</span>
 </span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nfs</span>
 </span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="w">      </span><span class="nt">o</span><span class="p">:</span><span class="w"> </span><span class="s">"addr=nfs.internal,rw,nfsvers=4"</span>
 </span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a><span class="w">      </span><span class="nt">device</span><span class="p">:</span><span class="w"> </span><span class="s">":/mnt/postgres"</span>
@@ -25035,7 +25041,7 @@
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-volume-non-persiste-i-dati-tra-riavvii">Scenario 1 — Volume non persiste i dati tra riavvii<a class="headerlink" href="#scenario-1-volume-non-persiste-i-dati-tra-riavvii" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> I dati scritti nel container scompaiono dopo <code>docker stop</code> / <code>docker start</code> o dopo un <code>docker rm</code>.</p>
+<p><strong>Sintomo:</strong> I dati scritti nel container scompaiono dopo un <code>docker rm</code> / ricreazione del container (con <code>docker stop</code>/<code>start</code> il layer RW sopravvive; si perde solo con <code>rm</code>, <code>compose down</code> o <code>up --force-recreate</code>).</p>
 <p><strong>Causa:</strong> Il container usa il layer RW di overlay2 invece di un named volume. Oppure il path montato nel container non corrisponde a dove l'applicazione scrive i dati.</p>
 <p><strong>Soluzione:</strong> Verificare che il volume sia correttamente dichiarato e montato sul path giusto.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Verifica i mount attivi del container</span>
@@ -25086,10 +25092,10 @@
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>docker<span class="w"> </span>container<span class="w"> </span>prune<span class="w">     </span><span class="c1"># rimuove container fermati</span>
 </span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>docker<span class="w"> </span>image<span class="w"> </span>prune<span class="w">         </span><span class="c1"># rimuove immagini dangling (senza tag)</span>
 </span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>docker<span class="w"> </span>image<span class="w"> </span>prune<span class="w"> </span>-a<span class="w">      </span><span class="c1"># rimuove TUTTE le immagini non usate da container attivi</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>docker<span class="w"> </span>volume<span class="w"> </span>prune<span class="w">        </span><span class="c1"># rimuove volumi non usati</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>docker<span class="w"> </span>volume<span class="w"> </span>prune<span class="w">        </span><span class="c1"># rimuove volumi anonimi non usati (Docker 23+; -a include i named)</span>
 </span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>docker<span class="w"> </span>builder<span class="w"> </span>prune<span class="w">       </span><span class="c1"># rimuove build cache</span>
 </span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="c1"># Pulizia totale (attenzione: rimuove tutto il non usato)</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="c1"># Pulizia totale (attenzione: rimuove tutto il non usato; --volumes = solo anonimi dalla 23+, aggiungere -a per i named)</span>
 </span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>docker<span class="w"> </span>system<span class="w"> </span>prune<span class="w"> </span>--volumes
 </span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>
 </span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="c1"># Se il problema è un container che scrive molto nel RW layer (log, tmp)</span>
@@ -25112,16 +25118,15 @@
 </span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># Soluzione A: ricrea il filesystem con ftype=1 (richiede backup e downtime)</span>
 </span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="c1"># mkfs.xfs -n ftype=1 /dev/sdX</span>
 </span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="c1"># Soluzione B: usa fuse-overlayfs (rootless) o cambia driver in daemon.json</span>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/docker/daemon.json<span class="w"> </span>&gt;<span class="w"> </span>/dev/null<span class="w"> </span><span class="s">&lt;&lt;'EOF'</span>
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="s">{</span>
-</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="s">  "storage-driver": "fuse-overlayfs"</span>
-</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="s">}</span>
-</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="s">EOF</span>
-</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>docker
-</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>
-</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="c1"># Soluzione C (dev/test only): usa il driver vfs (lento, no layer sharing)</span>
-</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a><span class="c1"># "storage-driver": "vfs"</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="c1"># Soluzione B (dev/test only): driver vfs (lento, nessuna condivisione layer)</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="c1"># Attenzione: cambiare driver rende invisibili immagini e container esistenti</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="c1"># (restano in /var/lib/docker/&lt;driver&gt;) — esportare con docker save prima.</span>
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/docker/daemon.json<span class="w"> </span>&gt;<span class="w"> </span>/dev/null<span class="w"> </span><span class="s">&lt;&lt;'EOF'</span>
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="s">{</span>
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="s">  "storage-driver": "vfs"</span>
+</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="s">}</span>
+</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a><span class="s">EOF</span>
+</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a>sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>docker
 </span></code></pre></div>
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
