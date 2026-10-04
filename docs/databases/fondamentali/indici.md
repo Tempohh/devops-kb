@@ -7,9 +7,10 @@ search_keywords: [database index, b-tree index, hash index, gin index, gist inde
 parent: databases/fondamentali/_index
 related: [databases/fondamentali/transazioni-concorrenza, databases/sql-avanzato/query-optimizer, databases/postgresql/mvcc-vacuum]
 official_docs: https://www.postgresql.org/docs/current/indexes.html
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Indici — Strutture e Strategie
@@ -52,7 +53,7 @@ SELECT * FROM ordini WHERE created_at > '2024-01-01';
 -- → il planner probabilmente farà seq scan o usa un altro indice
 ```
 
-**Regola pratica per l'ordine**: colonne con `=` prima, poi colonne con range (`<`, `>`, `BETWEEN`), poi colonne per `ORDER BY`. Le colonne con altissima selettività (es. user_id univoco) prima delle colonne con bassa selettività (es. status con 3 valori).
+**Regola pratica per l'ordine**: colonne con `=` prima, poi colonne con range (`<`, `>`, `BETWEEN`), poi colonne per `ORDER BY`. A parità di tipo di condizione (entrambe `=`), mettere prima la colonna più selettiva (es. `user_id`) rende l'indice più utile anche per query sul solo prefisso; ma se molte query filtrano solo su `status`, la colonna di testa deve essere quella usata più spesso.
 
 ### Covering Index (Index-Only Scan)
 
@@ -70,6 +71,9 @@ CREATE INDEX idx_ordini_cliente_covering
 -- Questa query usa index-only scan (nessun heap access)
 SELECT status, totale, created_at FROM ordini WHERE cliente_id = 123;
 ```
+
+!!! note "Index-only scan e visibility map"
+    PostgreSQL non memorizza la visibilità MVCC nell'indice: per evitare il heap access consulta la *visibility map*, aggiornata da `VACUUM`. Su tabelle con molti UPDATE e autovacuum in ritardo, l'`Index Only Scan` mostra `Heap Fetches` elevati e perde il vantaggio.
 
 !!! tip "Quando usare INCLUDE"
     INCLUDE è utile quando le colonne extra vengono sempre lette insieme alla chiave. Non indicizzarle come chiave (non fanno parte del criterio di ricerca) ma includile nel nodo foglia per evitare il heap access.
@@ -119,7 +123,7 @@ CREATE INDEX idx_session_token_hash ON sessioni USING hash(token);
 -- Inutile per: WHERE token > 'abc123', ORDER BY token
 ```
 
-In PostgreSQL moderno (9.1+) gli hash index sono WAL-safe (WAL — Write-Ahead Log: il meccanismo di durabilità di PostgreSQL che registra le modifiche prima di applicarle, garantendo il recovery dopo un crash). Nella pratica, i B-tree sono quasi sempre preferiti per la loro versatilità — un hash index ha senso solo se la colonna è usata *esclusivamente* per equality e il volume è tale che la differenza di performance è misurabile.
+Dalla versione 10 gli hash index sono scritti nel WAL (prima erano non crash-safe e non replicati, da cui la cattiva fama) (WAL — Write-Ahead Log: il meccanismo di durabilità di PostgreSQL che registra le modifiche prima di applicarle, garantendo il recovery dopo un crash). Nella pratica, i B-tree sono quasi sempre preferiti per la loro versatilità — un hash index ha senso solo se la colonna è usata *esclusivamente* per equality e il volume è tale che la differenza di performance è misurabile.
 
 ---
 
@@ -199,6 +203,29 @@ CREATE INDEX idx_log_timestamp_brin ON log_eventi USING brin(created_at);
 
 ---
 
+## Indici Vettoriali (pgvector)
+
+Per similarity search su embedding (RAG, ricerca semantica) l'estensione `pgvector` offre indici approssimati (ANN — Approximate Nearest Neighbor): scambiano un po' di recall per latenza molto più bassa rispetto a una scansione esatta.
+
+| Indice | Meccanismo | Trade-off |
+|---|---|---|
+| `hnsw` | Grafo multilivello navigabile | Recall/latenza migliori, build lento, molta RAM; nessun training, utilizzabile su tabella vuota |
+| `ivfflat` | Cluster (liste) con ricerca nelle `probes` più vicine | Build veloce e leggero; richiede dati presenti al build e perde recall se i dati cambiano molto |
+
+```sql
+CREATE EXTENSION vector;
+CREATE INDEX idx_doc_emb ON documenti USING hnsw (embedding vector_cosine_ops);
+
+-- operatore di distanza coerente con la operator class (<=> = coseno)
+SET hnsw.ef_search = 100;  -- più alto = recall maggiore, più lento
+SELECT id FROM documenti ORDER BY embedding <=> $1 LIMIT 10;
+```
+
+!!! warning "Operator class e filtri"
+    La query deve usare lo stesso operatore della operator class (`vector_l2_ops` → `<->`, `vector_cosine_ops` → `<=>`), altrimenti l'indice non viene usato. Con filtri `WHERE` selettivi l'indice ANN può restituire meno righe di `LIMIT`: verifica con `EXPLAIN` e valuta indici parziali o partizionamento.
+
+---
+
 ## Selectivity e Cardinalità — Come il Planner Decide
 
 Il query planner sceglie se usare un indice basandosi sul **costo stimato**. Le statistiche di selectivity (distribuzione dei valori) sono fondamentali:
@@ -240,13 +267,15 @@ Gli indici B-tree in PostgreSQL non compattano automaticamente. Le pagine con en
 -- Verifica bloat degli indici
 SELECT
     schemaname,
-    tablename,
-    indexname,
+    relname AS tablename,
+    indexrelname AS indexname,
     pg_size_pretty(pg_relation_size(indexrelid)) AS idx_size,
     idx_scan,
     idx_tup_fetch
 FROM pg_stat_user_indexes
 ORDER BY pg_relation_size(indexrelid) DESC;
+-- Questa query mostra dimensioni e utilizzo, non il bloat: per misurarlo
+-- usa l'estensione pgstattuple (pgstatindex('nome_indice') -> avg_leaf_density)
 
 -- Rebuild indice senza bloccare (PostgreSQL 12+)
 REINDEX INDEX CONCURRENTLY idx_ordini_cliente;
@@ -258,11 +287,15 @@ REINDEX INDEX CONCURRENTLY idx_ordini_cliente;
 
 ```sql
 -- 1. Verifica indici non usati (da rimuovere)
-SELECT schemaname, tablename, indexname, idx_scan
-FROM pg_stat_user_indexes
-WHERE idx_scan = 0
-  AND indexrelname NOT LIKE 'pg_%'
-ORDER BY pg_relation_size(indexrelid) DESC;
+-- (esclude indici UNIQUE/PK: servono come vincolo anche se mai scansionati)
+SELECT s.schemaname, s.relname, s.indexrelname, s.idx_scan
+FROM pg_stat_user_indexes s
+JOIN pg_index i ON i.indexrelid = s.indexrelid
+WHERE s.idx_scan = 0
+  AND NOT i.indisunique
+ORDER BY pg_relation_size(s.indexrelid) DESC;
+-- Le statistiche si azzerano con pg_stat_reset(): valuta su un periodo lungo
+-- e controlla anche le repliche prima di rimuovere
 
 -- 2. Crea indici in produzione senza lock
 CREATE INDEX CONCURRENTLY idx_ordini_data ON ordini(created_at);
@@ -311,13 +344,13 @@ SET enable_seqscan = on;
 ```sql
 -- Verifica la dimensione e il numero di scan degli indici
 SELECT
-    indexname,
+    indexrelname,
     pg_size_pretty(pg_relation_size(indexrelid)) AS size,
     idx_scan,
     idx_tup_read,
     idx_tup_fetch
 FROM pg_stat_user_indexes
-WHERE tablename = 'nome_tabella'
+WHERE relname = 'nome_tabella'
 ORDER BY pg_relation_size(indexrelid) DESC;
 
 -- Rebuild senza lock (PostgreSQL 12+)
@@ -333,7 +366,7 @@ ALTER INDEX idx_nome_new RENAME TO idx_nome;
 
 **Sintomo:** Un indice su `(a, b, c)` non viene usato per query che filtrano solo su `b` o `c`. Oppure un range filter su `a` impedisce l'uso di `b` nell'indice.
 
-**Causa:** Il B-tree composito può essere usato solo da sinistra: un range su `a` "consuma" il prefix e le colonne successive non possono essere navigate con un index scan efficiente.
+**Causa:** Il B-tree composito è navigabile efficacemente da sinistra: un range su `a` "consuma" il prefix e le colonne successive vengono solo filtrate dentro l'indice, non usate per posizionarsi. Dalla PostgreSQL 18 esiste lo *skip scan*, che permette di usare l'indice anche senza condizione sulla colonna di testa, ma solo se questa ha pochi valori distinti; nelle versioni precedenti resta il limite descritto.
 
 **Soluzione:**
 ```sql
