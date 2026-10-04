@@ -7,9 +7,10 @@ search_keywords: [helm production deployment, helmfile multi-release, helm OCI c
 parent: containers/helm/_index
 related: [containers/helm/_index, containers/helm/chart-avanzato, containers/openshift/gitops-pipelines, containers/registry/_index]
 official_docs: https://helm.sh/docs/helm/helm_upgrade/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Deployment in Produzione
@@ -36,14 +37,20 @@ helm upgrade myapp oci://registry.company.com/helm-charts/mychart \
     --namespace production \
     --values values.production.yaml
 
-# Visualizza versions disponibili (richiede registry con OCI catalog API)
-helm show chart oci://registry.company.com/helm-charts/mychart
+# Metadata e values di una versione (senza --version prende la più recente)
+helm show chart oci://registry.company.com/helm-charts/mychart --version 1.2.0
 helm show values oci://registry.company.com/helm-charts/mychart --version 1.2.0
 
-# Login al registry (una volta per sessione)
+# Elenco versioni: `helm search repo` NON funziona con OCI, serve un tool esterno
+# (crane / oras interrogano la tag list del registry)
+crane ls registry.company.com/helm-charts/mychart
+oras repo tags registry.company.com/helm-charts/mychart
+
+# Login al registry (una volta per sessione); --password-stdin evita
+# di esporre il token negli argomenti del processo
 helm registry login registry.company.com \
     --username robot-ci \
-    --password "$(cat /run/secrets/harbor-token)"
+    --password-stdin < /run/secrets/harbor-token
 
 # Con ECR
 aws ecr get-login-password --region eu-west-1 | \
@@ -62,9 +69,11 @@ helm push "mychart-${GIT_TAG}.tgz" oci://registry.company.com/helm-charts
 ## Strategie di Upgrade Sicure
 
 ```bash
-# --wait: aspetta che tutte le risorse siano Ready prima di completare
-# --timeout: timeout massimo (default 5m)
-# --atomic: rollback automatico se l'upgrade fallisce
+# --wait: aspetta che Deployment/StatefulSet/Job/PVC/Service siano Ready prima di
+#         marcare il release `deployed` (senza, Helm torna appena i manifest sono applicati)
+# --timeout: timeout massimo del wait (default 5m)
+# --atomic: se upgrade/wait fallisce, esegue rollback automatico alla revisione precedente
+#           (implica --wait)
 # Combinazione raccomandata per produzione:
 
 helm upgrade myapp ./mychart \
@@ -85,14 +94,17 @@ helm upgrade --install myapp ./mychart \
     --atomic
 
 # Dry run per validare prima di applicare
+# =server invia i manifest all'API server (validazione schema, admission, CRD);
+# il dry-run client-side (default) non rileva questi errori
 helm upgrade --install myapp ./mychart \
     --namespace production \
     --values values.production.yaml \
-    --dry-run --debug \
+    --dry-run=server --debug \
     2>&1 | head -100
 
-# --force: forza update anche se non ci sono cambiamenti rilevati
-# (utile per secrets rotati o imagePullPolicy=Always)
+# --force: elimina e ricrea le risorse che non si possono aggiornare con patch
+# (es. campo immutabile). NON è "forza il restart": per rotazione di Secret/ConfigMap
+# usare l'annotation checksum/config nel pod template. Causa downtime: da evitare in prod.
 helm upgrade myapp ./mychart --force --namespace production
 
 # Upgrade con history limit
@@ -100,6 +112,12 @@ helm upgrade myapp ./mychart \
     --namespace production \
     --history-max 10               # mantieni solo ultime 10 revisioni
 ```
+
+!!! note "Helm 4"
+    Con Helm 4 (rilasciato nel 2025) i flag sono rinominati: `--atomic` → `--rollback-on-failure`
+    e `--force` → `--force-replace` (i vecchi nomi restano come alias deprecati). Il wait
+    usa di default la strategia *watcher* basata su eventi invece del polling. Gli esempi
+    di questa pagina usano la sintassi Helm 3, ancora valida.
 
 ---
 
@@ -129,12 +147,11 @@ helm diff upgrade myapp ./mychart \
 # diff tra due revisioni dello stesso release
 helm diff revision myapp 4 5 -n production
 
-# diff con output in formato json (per parsing automatico)
+# In CI: exit code 2 se ci sono differenze, 0 se nessuna, 1 se errore
 helm diff upgrade myapp ./mychart \
     --namespace production \
     --values values.production.yaml \
-    --output json \
-    | jq '.[] | select(.change != "none") | {kind, name, change}'
+    --detailed-exitcode
 ```
 
 ---
@@ -179,7 +196,8 @@ repositories:
   - name: cert-manager
     url: https://charts.jetstack.io
   - name: company
-    url: oci://registry.company.com/helm-charts    # OCI registry
+    url: registry.company.com/helm-charts          # OCI: senza schema oci://
+    oci: true                                      # + flag oci (login: helm registry login)
 
 helmDefaults:
   wait: true
@@ -206,9 +224,11 @@ releases:
   - name: cert-manager
     namespace: cert-manager
     chart: cert-manager/cert-manager
-    version: v1.14.0
+    version: v1.17.0
     values:
-      - installCRDs: true
+      - crds:                      # sostituisce installCRDs (deprecato da v1.15)
+          enabled: true
+          keep: true               # i CRD sopravvivono a helm uninstall
         global:
           leaderElection:
             namespace: cert-manager
@@ -256,6 +276,14 @@ releases:
       - secrets/myapp-{{ .Environment.Name }}.yaml  # sops-encrypted secrets
 ```
 
+!!! warning "Chart di esempio non più raccomandati"
+    `ingress-nginx` (progetto Kubernetes) è stato dismesso a marzo 2026: nessuna
+    patch di sicurezza successiva, per nuovi deploy preferire Gateway API o un altro
+    controller. Anche il catalogo **Bitnami** (`bitnami/postgresql`) è cambiato nel 2025:
+    le immagini gratuite versionate non sono più pubblicate, serve il tier a pagamento
+    o un'alternativa (es. operator CloudNativePG). Gli esempi restano per illustrare
+    `needs` e gli ambienti, non come scelta di stack.
+
 ```bash
 # Comandi Helmfile
 helmfile -e staging sync              # deploy tutto in staging
@@ -269,12 +297,12 @@ helmfile -e staging status            # stato di tutti i releases
 helmfile -e production -l name=myapp sync
 helmfile -e production -l namespace=data sync
 
-# Dry run
-helmfile -e production sync --dry-run
+# Anteprima senza applicare: diff (usa il plugin helm-diff)
+helmfile -e production diff
 
-# Con sops per secrets cifrati
-helmfile -e production secrets decrypt   # test decrypt
+# Con sops per secrets cifrati (la decifratura usa il plugin helm-secrets)
 export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
+helm secrets decrypt secrets/myapp-production.yaml   # test decrypt
 helmfile -e production sync
 ```
 
@@ -304,8 +332,9 @@ gitops/
 ## Chart Testing — ct (Chart Testing Tool)
 
 ```bash
-# Installazione
-helm plugin install https://github.com/helm/chart-testing
+# Installazione: ct è un binario standalone (non un plugin Helm) — release GitHub
+# o brew install chart-testing; richiede helm, git e (per lint) yamllint/yamale
+ct version
 
 # ct lint — lint di tutti i charts modificati vs branch main
 ct lint \
@@ -352,12 +381,18 @@ jobs:
         with:
           fetch-depth: 0             # necessario per ct (confronto con target-branch)
 
-      - uses: azure/setup-helm@v3
+      - uses: azure/setup-helm@v4
         with:
-          version: v3.14.0
+          version: v3.19.0
 
       - name: Install ct
         uses: helm/chart-testing-action@v2
+
+      - name: List changed charts
+        id: list-changed
+        run: |
+          changed=$(ct list-changed --target-branch main)
+          if [[ -n "$changed" ]]; then echo "changed=true" >> "$GITHUB_OUTPUT"; fi
 
       - name: Lint charts
         run: ct lint --target-branch main
@@ -367,6 +402,7 @@ jobs:
         if: steps.list-changed.outputs.changed == 'true'
 
       - name: Test charts
+        if: steps.list-changed.outputs.changed == 'true'
         run: ct install --target-branch main
 
   build-push-chart:
@@ -375,15 +411,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: azure/setup-helm@v4
+
       - name: Login to Harbor
         run: |
-          helm registry login registry.company.com \
+          echo "${{ secrets.HARBOR_PASSWORD }}" | helm registry login registry.company.com \
             --username "${{ secrets.HARBOR_USER }}" \
-            --password "${{ secrets.HARBOR_PASSWORD }}"
+            --password-stdin
 
       - name: Package and push chart
         run: |
-          VERSION="${{ github.ref_name }}-${{ github.sha }}"
+          # La versione del chart deve essere SemVer valido: "main-<sha>" non lo è.
+          # Prerelease SemVer univoca per commit:
+          VERSION="0.0.0-sha-${{ github.sha }}"
           helm package ./charts/myapp --version "${VERSION}"
           helm push "myapp-${VERSION}.tgz" oci://registry.company.com/helm-charts
 
@@ -392,11 +432,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     steps:
+      - uses: actions/checkout@v4          # serve helmfile.yaml
+      - uses: azure/setup-helm@v4
+      # helmfile + plugin (helm-diff, helm-secrets) installati qui, es. helmfile/helmfile-action
       - name: Deploy to staging
         run: |
           helmfile -e staging sync
         env:
-          MYAPP_VERSION: "${{ github.ref_name }}-${{ github.sha }}"
+          MYAPP_VERSION: "0.0.0-sha-${{ github.sha }}"
           IMAGE_TAG: "${{ github.sha }}"
           KUBECONFIG: "${{ secrets.KUBECONFIG_STAGING }}"
 
@@ -405,11 +448,15 @@ jobs:
     runs-on: ubuntu-latest
     environment: production            # richiede approvazione manuale (GitHub Environments)
     steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      # come per staging: installare helmfile + plugin; KUBECONFIG deve puntare a un
+      # file (scrivere il secret su disco) — in alternativa OIDC verso il cluster
       - name: Deploy to production
         run: |
           helmfile -e production sync
         env:
-          MYAPP_VERSION: "${{ github.ref_name }}-${{ github.sha }}"
+          MYAPP_VERSION: "0.0.0-sha-${{ github.sha }}"
           IMAGE_TAG: "${{ github.sha }}"
           KUBECONFIG: "${{ secrets.KUBECONFIG_PRODUCTION }}"
 ```
@@ -436,7 +483,7 @@ spec:
         - values.production.yaml   # file nel repo GitOps
       parameters:
         - name: image.tag
-          value: "sha-abc123"      # digest immagine pinnata
+          value: "sha-abc123"      # tag immutabile per commit (più sicuro: digest @sha256:...)
       releaseName: myapp           # nome Helm release
   destination:
     server: https://kubernetes.default.svc
@@ -454,15 +501,14 @@ spec:
 # Pattern di aggiornamento GitOps (image promotion automation)
 # 1. CI build immagine → push tag
 # 2. CI aggiorna Application nel repo GitOps:
-yq -i '.spec.source.helm.parameters[] |=
-        select(.name == "image.tag").value = "sha-abc123"' \
+yq -i '(.spec.source.helm.parameters[] | select(.name == "image.tag") | .value) = "sha-abc123"' \
     apps/production/myapp-application.yaml
 
 git commit -m "chore: bump myapp image to sha-abc123"
 git push
 
 # 3. ArgoCD rileva il cambio Git → sync automatico
-# 4. oc rollout / kubectl rollout monitora il deployment
+# 4. la pipeline attende l'esito (Healthy) prima di promuovere
 argocd app wait myapp-production --health --timeout 300
 ```
 
@@ -539,12 +585,13 @@ helm uninstall myapp -n production --no-hooks
 **Soluzione:** Investigare i pod prima che vengano rimossi dal rollback.
 
 ```bash
-# Disabilitare --atomic temporaneamente per analisi
+# Senza --atomic il release resta `failed` e i pod difettosi restano in cluster
+# per l'analisi (con --atomic il rollback li sostituisce subito). Solo in staging
+# o con traffico già spostato: in produzione lascia la revisione rotta attiva.
 helm upgrade myapp ./mychart \
     --namespace production \
     --values values.production.yaml \
     --wait --timeout 10m
-    # NON aggiungere --atomic: il rollback non cancella i pod subito
 
 # Analizzare perché i pod non sono Ready
 kubectl get pods -n production -l app.kubernetes.io/name=myapp
@@ -579,8 +626,8 @@ aws ecr get-login-password --region eu-west-1 | \
         --password-stdin \
         123456789.dkr.ecr.eu-west-1.amazonaws.com
 
-# Verificare che il chart sia nel formato corretto prima del push
-helm show chart oci://registry.company.com/helm-charts/mychart 2>&1
+# Verificare che il chart sia stato pubblicato (pull del metadata)
+helm show chart oci://registry.company.com/helm-charts/mychart --version 1.2.0 2>&1
 
 # Lista charts disponibili nel registry (Harbor API)
 curl -s -u "robot-ci:${HARBOR_TOKEN}" \
