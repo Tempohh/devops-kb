@@ -7,9 +7,10 @@ search_keywords: [docker volumes, docker bind mount, docker tmpfs, overlay2 stor
 parent: containers/docker/_index
 related: [containers/docker/architettura-interna, containers/kubernetes/storage]
 official_docs: https://docs.docker.com/engine/storage/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Docker Storage
@@ -43,12 +44,16 @@ Docker Storage — Dove Vivono i Dati
 
 I **named volumes** sono gestiti interamente da Docker e sono il metodo raccomandato per i dati persistenti in produzione.
 
+!!! note "Volume vs bind mount: il perché"
+    Un named volume vive in `/var/lib/docker/volumes/` ed è gestito dal daemon: non dipende dalla struttura di directory dell'host, eredita ownership/contenuto dalla directory dell'immagine alla **prima** creazione (copy-up) e funziona uguale su Linux, Windows e Docker Desktop (dove i bind mount attraversano la VM e sono più lenti). Con `--mount` un source bind inesistente è un errore; con `-v` Docker lo crea (come root) — fonte comune di permission problem.
+
 ```bash
-# Crea un volume named
+# Crea un volume named che punta a una directory esistente dell'host
+# (type=none + o=bind: il local driver fa un bind mount di device)
 docker volume create \
     --driver local \
-    --opt type=none \          # tipo filesystem
-    --opt device=/mnt/data \   # path fisico (local driver)
+    --opt type=none \
+    --opt device=/mnt/data \
     --opt o=bind \
     app-data
 
@@ -85,8 +90,12 @@ docker run --rm \
 # Lista e cleanup volumi
 docker volume ls
 docker volume ls -f dangling=true  # volumi non usati da container
-docker volume prune                # elimina tutti i dangling volumes
+docker volume prune                # elimina i volumi ANONIMI non usati (Docker 23+)
+docker volume prune -a             # elimina anche i named volume non usati — DATI PERSI
 ```
+
+!!! warning "Cambio di comportamento di `prune` (Docker Engine 23+)"
+    Dalla 23.0 `docker volume prune` (e `docker system prune --volumes`) rimuove solo i volumi **anonimi**. I named volume non usati richiedono `-a`/`--all`. Su host con engine precedenti, `prune` cancellava anche i named volume non collegati a un container: verificare la versione prima di fidarsi di vecchi runbook.
 
 ---
 
@@ -98,8 +107,8 @@ I **bind mount** montano direttamente una directory dell'host nel container. Uti
 # Bind mount per development (hot reload)
 docker run -d \
     --name dev-server \
-    --mount type=bind,source=$(pwd)/src,target=/app/src,readonly=false \
-    --mount type=bind,source=$(pwd)/config.yaml,target=/app/config.yaml,readonly=true \
+    --mount type=bind,source="$(pwd)"/src,target=/app/src \
+    --mount type=bind,source="$(pwd)"/config.yaml,target=/app/config.yaml,readonly \
     -p 8080:8080 \
     myapp:dev
 
@@ -114,7 +123,7 @@ docker run -d \
     --name nginx \
     -v /etc/nginx/sites-available/:/etc/nginx/sites-available/:ro \
     -v /var/log/nginx/:/var/log/nginx/ \
-    nginx:1.25
+    nginx:stable
 
 # Attenzione alle permission:
 # I file del bind mount hanno i permessi del filesystem host.
@@ -128,7 +137,7 @@ docker run -v $(pwd)/data:/data:Z myapp    # SELinux: private label
 
 ## tmpfs Mounts — Storage in Memoria
 
-I **tmpfs** mount vivono solo in RAM, mai scritti su disco. Ideali per dati temporanei sensibili (token, certificati temporanei).
+I **tmpfs** mount vivono in RAM (page cache del kernel) e non toccano il filesystem del container. Ideali per dati temporanei sensibili (token, certificati temporanei). Nota: se l'host ha swap, le pagine tmpfs possono finire su disco; per dati davvero sensibili usare swap cifrato o disabilitato. tmpfs è solo Linux e conta nel limite di memoria del cgroup del container.
 
 ```bash
 # tmpfs mount
@@ -187,20 +196,24 @@ overlay2 — Struttura sul Disco
 
 **Performance overlay2:**
 
+overlay2 opera a livello di **file**: alla prima scrittura su un file presente in un layer inferiore esegue un *copy-up* dell'intero file nel layer RW (costoso per file grandi, es. un DB nell'immagine). La scrittura di file nuovi o già copiati ha overhead basso; restano però il costo dello stacking dei lookup su molti layer e l'assenza di un filesystem dedicato (stesso disco dei layer, nessun tuning per DB).
+
 ```bash
-# Benchmark: confronta volume vs container filesystem
-# Test scrittura sequenziale
-docker run --rm \
-    -v /tmp/vol-test:/data \                          # volume (ext4 diretto)
-    ubuntu dd if=/dev/zero of=/data/test bs=1M count=1000 conv=fdatasync
-# Tipico: ~500-1000 MB/s
-
-docker run --rm ubuntu \
+# Benchmark indicativo (i numeri dipendono da disco e filesystem: misurare sul proprio host)
+# Volume
+docker run --rm -v bench-vol:/data ubuntu \
     dd if=/dev/zero of=/data/test bs=1M count=1000 conv=fdatasync
-# Container RW layer: ~100-300 MB/s (overhead CoW)
 
-# Conclusione: per I/O intensivo (DB, log), usare SEMPRE volumi
+# Layer RW del container
+docker run --rm ubuntu \
+    dd if=/dev/zero of=/test bs=1M count=1000 conv=fdatasync
 ```
+
+Regola pratica: per I/O intensivo e dati persistenti (DB, log) usare volumi — non tanto per il throughput sequenziale quanto per persistenza, copy-up evitato e possibilità di montare un disco dedicato.
+
+!!! note "containerd image store (Docker Engine 29+)"
+    Le installazioni nuove di Docker Engine 29 usano di default il **containerd image store** (snapshotter `overlayfs`) al posto del classico graph driver `overlay2`; i layer stanno in `/var/lib/containerd` e `docker info` mostra `driver-type: io.containerd.snapshotter.v1`. Le installazioni aggiornate mantengono il driver precedente. I concetti (union FS, copy-up, volumi) restano identici, ma i path e i comandi di ispezione di questa sezione valgono per il graph driver `overlay2`. <!-- REVIEW: verificare default e versione esatta (Engine 29) su docs.docker.com/engine/storage/containerd/ -->
+
 
 **Scegliere il giusto driver:**
 
@@ -209,7 +222,7 @@ docker run --rm ubuntu \
 | `overlay2` | ext4, xfs (d_type=true) | **Raccomandato** — tutti i sistemi moderni |
 | `btrfs` | btrfs | Snapshots nativi, buono per build |
 | `zfs` | ZFS | Snapshots, compressione, storage avanzato |
-| `fuse-overlayfs` | qualsiasi | Per rootless Docker su sistemi non supportati |
+| `fuse-overlayfs` | qualsiasi | Fallback per rootless Docker su kernel < 5.11 (con kernel ≥ 5.11 il rootless usa `overlay2` nativo) |
 | `vfs` | qualsiasi | Nessuna condivisione layer, lento — solo testing |
 
 ```bash
@@ -235,10 +248,13 @@ xfs_info /var/lib/docker | grep "ftype"
 
 ## Volume Drivers — Storage Remoto e Cloud
 
-I **volume driver** (plugin) permettono di montare storage remoto (NFS, Ceph, AWS EBS, Azure File) come volumi Docker.
+I **volume driver** permettono di montare storage remoto (NFS, Ceph, cloud block/file storage) come volumi Docker. Il driver `local` supporta NFS/CIFS direttamente; per il resto servono plugin di terze parti.
+
+!!! warning "Ecosistema plugin in gran parte abbandonato"
+    Il plugin REX-Ray (usato in vecchi esempi per EBS) non è più mantenuto. I plugin Docker managed sono un'API legacy: su cloud, per storage dinamico si usa oggi Kubernetes + CSI (vedi [Kubernetes Storage](../kubernetes/storage.md)); su Docker standalone, preferire NFS via driver `local` o i volume driver ufficiali del provider (es. Azure File, Cloud Stor) dopo aver verificato che siano ancora supportati.
 
 ```bash
-# NFS volume driver
+# NFS volume (driver local)
 docker volume create \
     --driver local \
     --opt type=nfs \
@@ -246,19 +262,9 @@ docker volume create \
     --opt device=:/exports/data \
     nfs-data
 
-# Plugin REX-Ray per storage cloud
-docker plugin install rexray/ebs \
-    EBS_ACCESSKEY=xxx EBS_SECRETKEY=yyy EBS_REGION=eu-west-1
+docker run -v nfs-data:/data myapp
 
-docker volume create \
-    --driver rexray/ebs \
-    --opt size=100 \
-    --opt type=gp3 \
-    ebs-volume
-
-docker run -v ebs-volume:/data myapp
-
-# Verificare i plugin installati
+# Verificare i plugin installati (volume driver di terze parti)
 docker plugin ls
 ```
 
@@ -295,7 +301,7 @@ services:
 volumes:
   postgres-data:
     driver: local
-    driver_opts:                                   # NFS per HA
+    driver_opts:                                   # NFS: storage condiviso (attenzione: PostgreSQL su NFS è sconsigliato, fsync/locking inaffidabili; preferire disco locale/block storage)
       type: nfs
       o: "addr=nfs.internal,rw,nfsvers=4"
       device: ":/mnt/postgres"
@@ -311,7 +317,7 @@ volumes:
 
 ### Scenario 1 — Volume non persiste i dati tra riavvii
 
-**Sintomo:** I dati scritti nel container scompaiono dopo `docker stop` / `docker start` o dopo un `docker rm`.
+**Sintomo:** I dati scritti nel container scompaiono dopo un `docker rm` / ricreazione del container (con `docker stop`/`start` il layer RW sopravvive; si perde solo con `rm`, `compose down` o `up --force-recreate`).
 
 **Causa:** Il container usa il layer RW di overlay2 invece di un named volume. Oppure il path montato nel container non corrisponde a dove l'applicazione scrive i dati.
 
@@ -380,10 +386,10 @@ docker system df -v  # dettaglio per immagine/container/volume
 docker container prune     # rimuove container fermati
 docker image prune         # rimuove immagini dangling (senza tag)
 docker image prune -a      # rimuove TUTTE le immagini non usate da container attivi
-docker volume prune        # rimuove volumi non usati
+docker volume prune        # rimuove volumi anonimi non usati (Docker 23+; -a include i named)
 docker builder prune       # rimuove build cache
 
-# Pulizia totale (attenzione: rimuove tutto il non usato)
+# Pulizia totale (attenzione: rimuove tutto il non usato; --volumes = solo anonimi dalla 23+, aggiungere -a per i named)
 docker system prune --volumes
 
 # Se il problema è un container che scrive molto nel RW layer (log, tmp)
@@ -413,16 +419,15 @@ docker info | grep -E "Storage Driver|Backing Filesystem"
 # Soluzione A: ricrea il filesystem con ftype=1 (richiede backup e downtime)
 # mkfs.xfs -n ftype=1 /dev/sdX
 
-# Soluzione B: usa fuse-overlayfs (rootless) o cambia driver in daemon.json
+# Soluzione B (dev/test only): driver vfs (lento, nessuna condivisione layer)
+# Attenzione: cambiare driver rende invisibili immagini e container esistenti
+# (restano in /var/lib/docker/<driver>) — esportare con docker save prima.
 sudo tee /etc/docker/daemon.json > /dev/null <<'EOF'
 {
-  "storage-driver": "fuse-overlayfs"
+  "storage-driver": "vfs"
 }
 EOF
 sudo systemctl restart docker
-
-# Soluzione C (dev/test only): usa il driver vfs (lento, no layer sharing)
-# "storage-driver": "vfs"
 ```
 
 ---
