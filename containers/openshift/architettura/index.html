@@ -11180,7 +11180,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -11205,7 +11205,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24878,7 +24878,11 @@
 <p>Il <strong>Machine API</strong> permette di gestire i nodi infrastrutturali come oggetti Kubernetes, su cloud e on-premise (provider: AWS, Azure, GCP, vSphere, bare metal via Metal3, ecc.). Il Machine API Operator riconcilia <code>MachineSet</code> → <code>Machine</code> → istanza cloud; il <code>MachineHealthCheck</code> sostituisce automaticamente le macchine non sane.</p>
 <div class="admonition note">
 <p class="admonition-title">Hosted control plane e Cluster API</p>
-<p>Nei cluster con <strong>Hosted Control Plane</strong> (HyperShift, base di ROSA HCP / ARO HCP) il control plane gira come pod su un cluster di gestione e i worker sono gestiti da <code>NodePool</code>, non da MachineSet/MCO classici. <!-- REVIEW: verificare stato migrazione Machine API → Cluster API (CAPI) nelle versioni OCP 4.2x correnti --></p>
+<p>Nei cluster con <strong>Hosted Control Plane</strong> (HyperShift, base di ROSA HCP / ARO HCP) il control plane gira come pod su un cluster di gestione e i worker sono gestiti da <code>NodePool</code>, non da MachineSet/MCO classici.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Machine API vs Cluster API (CAPI)</p>
+<p>Machine API (<code>machine.openshift.io</code>) resta l'API di produzione per la gestione dei nodi. La gestione macchine via <strong>Cluster API</strong> (<code>openshift-cluster-api</code>) è ancora <strong>Technology Preview</strong> in OCP 4.22 (AWS, Google Cloud, Azure, RHOSP, vSphere, bare metal). La migrazione Machine API ↔ Cluster API (controller di sincronizzazione bidirezionale, campo <code>spec.authoritativeAPI</code>) richiede il feature gate <code>MachineAPIMigration</code> nel feature set <code>TechPreviewNoUpgrade</code> — che <strong>blocca gli upgrade</strong> del cluster — ed è disponibile solo per alcune piattaforme (compute su AWS). Non usarla in produzione.</p>
 </div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># MachineSet — definisce un gruppo di macchine identiche (come ReplicaSet per nodi)</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">machine.openshift.io/v1beta1</span>
@@ -25025,8 +25029,8 @@
 </span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>oc<span class="w"> </span>get<span class="w"> </span>machines<span class="w"> </span>-n<span class="w"> </span>openshift-machine-api<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>Running
 </span></code></pre></div>
 <div class="admonition warning">
-<p class="admonition-title">Nessun rollback/downgrade supportato</p>
-<p>OpenShift <strong>non supporta il downgrade</strong> di un cluster (i CRD, lo schema etcd e i nodi RHCOS sono già migrati). Non esiste un <code>--to=&lt;versione-precedente&gt;</code> valido. Opzioni: correggere la causa e lasciare proseguire l'upgrade, oppure — come ultima risorsa, con supporto Red Hat — restore da backup etcd. Per questo sono essenziali: backup etcd pre-upgrade, canali <code>stable</code>, e <code>oc adm upgrade</code> che mostra solo i percorsi raccomandati (<code>--allow-not-recommended</code> è per versioni con rischi noti, non per il rollback). <!-- REVIEW: verificare se le versioni OCP correnti introducono rollback supportato per z-stream --></p>
+<p class="admonition-title">Nessun rollback/downgrade self-service</p>
+<p>OpenShift <strong>non supporta il downgrade</strong> di un cluster (i CRD, lo schema etcd e i nodi RHCOS sono già migrati). Non esiste un <code>--to=&lt;versione-precedente&gt;</code> valido. Dalla 4.16 esiste solo un <strong>rollback z-stream assistito</strong>: in casi limitati, dopo aver escluso altre opzioni, è il Red Hat Support a guidarlo (4.y.z → 4.y.z-n); <strong>mai</strong> per le minor (4.y → 4.x), che porta il cluster in stato non supportato. Non è un comando da lanciare autonomamente. Opzioni: correggere la causa e lasciare proseguire l'upgrade, oppure — come ultima risorsa, con supporto Red Hat — restore da backup etcd. Per questo sono essenziali: backup etcd pre-upgrade, canali <code>stable</code>, e <code>oc adm upgrade</code> che mostra solo i percorsi raccomandati (<code>--allow-not-recommended</code> è per versioni con rischi noti, non per il rollback).</p>
 </div>
 <p>Per sospendere gli aggiornamenti dei worker mantenendo il control plane aggiornato si usa <code>oc patch mcp/worker -p '{"spec":{"paused":true}}'</code> (vedi sezione MCO), per periodi brevi: i certificati kubelet possono scadere se il pool resta in pausa a lungo.</p>
 <hr />
