@@ -13937,7 +13937,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14156,7 +14156,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -14191,7 +14191,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14226,7 +14226,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14261,7 +14261,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14296,7 +14296,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25386,8 +25386,10 @@
 <p>La riconnessione al broker è gestita automaticamente da <code>CachingConnectionFactory</code> (il client Java ha il connection recovery attivo di default). Le proprietà <code>listener.simple.retry</code> riguardano solo l'elaborazione dei messaggi.</p>
 </div>
 <h3 id="dichiarazione-exchange-queue-binding-via-bean">Dichiarazione Exchange, Queue, Binding via @Bean<a class="headerlink" href="#dichiarazione-exchange-queue-binding-via-bean" title="Permanent link">&para;</a></h3>
-<!-- REVIEW: verificare se in Spring AMQP 4.x / Boot 4 (Jackson 3) Jackson2JsonMessageConverter è deprecato in favore di JacksonJsonMessageConverter -->
-
+<div class="admonition note">
+<p class="admonition-title">Jackson 3 (Spring AMQP 4.x / Boot 4)</p>
+<p>In Spring AMQP 4.x <code>Jackson2JsonMessageConverter</code> è deprecato per la rimozione in favore di <code>JacksonJsonMessageConverter</code> (Jackson 3). Gli esempi sotto usano la classe Jackson 2 (Spring Boot 3.x / Spring AMQP 3.x); su Boot 4 sostituisci il tipo con <code>JacksonJsonMessageConverter</code>.</p>
+</div>
 <div class="language-java highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">org.springframework.amqp.core.*</span><span class="p">;</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">org.springframework.context.annotation.Bean</span><span class="p">;</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">org.springframework.context.annotation.Configuration</span><span class="p">;</span>
@@ -25448,7 +25450,7 @@
 </span><span id="__span-3-58"><a id="__codelineno-3-58" name="__codelineno-3-58" href="#__codelineno-3-58"></a><span class="w">    </span><span class="p">}</span>
 </span><span id="__span-3-59"><a id="__codelineno-3-59" name="__codelineno-3-59" href="#__codelineno-3-59"></a>
 </span><span id="__span-3-60"><a id="__codelineno-3-60" name="__codelineno-3-60" href="#__codelineno-3-60"></a><span class="w">    </span><span class="c1">// Converter JSON: POJO ↔ JSON automatico</span>
-</span><span id="__span-3-61"><a id="__codelineno-3-61" name="__codelineno-3-61" href="#__codelineno-3-61"></a><span class="w">    </span><span class="c1">// In Spring AMQP 4.x (Boot 4 / Jackson 3) potrebbe esistere JacksonJsonMessageConverter al posto di questo</span>
+</span><span id="__span-3-61"><a id="__codelineno-3-61" name="__codelineno-3-61" href="#__codelineno-3-61"></a><span class="w">    </span><span class="c1">// Spring AMQP 4.x (Boot 4 / Jackson 3): usa JacksonJsonMessageConverter (questo è deprecato)</span>
 </span><span id="__span-3-62"><a id="__codelineno-3-62" name="__codelineno-3-62" href="#__codelineno-3-62"></a><span class="w">    </span><span class="nd">@Bean</span>
 </span><span id="__span-3-63"><a id="__codelineno-3-63" name="__codelineno-3-63" href="#__codelineno-3-63"></a><span class="w">    </span><span class="kd">public</span><span class="w"> </span><span class="n">Jackson2JsonMessageConverter</span><span class="w"> </span><span class="nf">messageConverter</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-3-64"><a id="__codelineno-3-64" name="__codelineno-3-64" href="#__codelineno-3-64"></a><span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Jackson2JsonMessageConverter</span><span class="p">();</span>
@@ -25608,8 +25610,7 @@
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Licenza e versioni</p>
-<p><!-- REVIEW: verificare stato licenza MassTransit v9 (commerciale) e fino a quando v8 resta open source/supportata -->
-MassTransit v8 è open source (Apache 2.0); la linea v9 è stata annunciata con licenza commerciale. Verifica versione e termini prima di adottarlo in un nuovo progetto. Il codice sotto è per v8.</p>
+<p>MassTransit v8 è open source (Apache 2.0); dalla v9 (annunciata ad aprile 2025, ora rilasciata) la licenza è <strong>commerciale</strong>. La v8 resta utilizzabile con licenza open source ma il supporto termina a fine 2026; esiste inoltre il fork community OpenTransit di v8. Verifica versione e termini prima di adottarlo in un nuovo progetto. Il codice sotto è per v8.</p>
 </div>
 <h3 id="configurazione-con-di-aspnet-core">Configurazione con DI ASP.NET Core<a class="headerlink" href="#configurazione-con-di-aspnet-core" title="Permanent link">&para;</a></h3>
 <div class="language-csharp highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">// Program.cs</span>
@@ -26204,13 +26205,16 @@ MassTransit v8 è open source (Apache 2.0); la linea v9 è stata annunciata con 
 <p><strong>Causa 3 — Consumer esclusivo o ack mancante:</strong> un altro consumer <code>exclusive</code> detiene la coda (il secondo riceve <code>ACCESS_REFUSED</code>), oppure con ack MANUAL il listener non chiama mai <code>basicAck</code> (stesso sintomo della Causa 1). Un consumer tag duplicato sullo stesso channel viene invece rifiutato dal broker con <code>NOT_ALLOWED</code>.</p>
 <hr />
 <h3 id="messaggi-in-dlq">Messaggi in DLQ<a class="headerlink" href="#messaggi-in-dlq" title="Permanent link">&para;</a></h3>
-<!-- REVIEW: verificare flag esatti di rabbitmqadmin v2 (v1 deprecato) -->
+<!-- CURRENCY: flag esatti di rabbitmqadmin v2 per get/publish non verificati (2026-10) — controllare `rabbitmqadmin get --help` / `publish --help` -->
 <p><strong>Sintomo:</strong> La DLQ si riempie, la coda principale si svuota.</p>
-<p><strong>Causa principale:</strong> Il consumer fa <code>nack</code> con <code>requeue=false</code> (o lancia eccezioni dopo N retry).
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Peek del primo messaggio della DLQ (sintassi rabbitmqadmin v1; la v2 usa</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># `rabbitmqadmin get messages --queue orders.dlq ...`)</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>rabbitmqadmin<span class="w"> </span>get<span class="w"> </span><span class="nv">queue</span><span class="o">=</span>orders.dlq<span class="w"> </span><span class="nv">count</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">requeue</span><span class="o">=</span><span class="nb">true</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># Controlla l'header x-death per il motivo del dead-lettering</span>
+<p><strong>Causa principale:</strong> Il consumer fa <code>nack</code> con <code>requeue=false</code> (o lancia eccezioni dopo N retry).</p>
+<div class="admonition note">
+<p class="admonition-title">rabbitmqadmin v1 deprecato</p>
+<p><code>rabbitmqadmin</code> v1 non è più sviluppato; la v2 (<code>rabbitmqadmin-ng</code>) usa flag long (<code>--queue</code>, ...) invece di <code>key=value</code>. I comandi <code>get</code> e <code>publish</code> della v2 sono pensati solo per sviluppo/test: verifica i flag con <code>--help</code>. Gli esempi sotto usano la sintassi v1.</p>
+</div>
+<p><div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Peek del primo messaggio della DLQ (sintassi rabbitmqadmin v1)</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>rabbitmqadmin<span class="w"> </span>get<span class="w"> </span><span class="nv">queue</span><span class="o">=</span>orders.dlq<span class="w"> </span><span class="nv">count</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">requeue</span><span class="o">=</span><span class="nb">true</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># Controlla l'header x-death per il motivo del dead-lettering</span>
 </span></code></pre></div>
 <strong>Soluzione:</strong> Correggi il bug nel consumer, poi rimetti i messaggi nella coda originale. Per pochi messaggi, ripubblicali a mano; per volumi alti usa uno <strong>Shovel</strong> (plugin) o la funzione "move messages" della management UI:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>rabbitmqadmin<span class="w"> </span>publish<span class="w"> </span><span class="nv">exchange</span><span class="o">=</span>orders.exchange<span class="w"> </span><span class="nv">routing_key</span><span class="o">=</span>order.created<span class="w"> </span>&lt;<span class="w"> </span>message.json

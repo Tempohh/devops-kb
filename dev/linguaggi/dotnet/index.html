@@ -13937,7 +13937,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14156,7 +14156,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -14191,7 +14191,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14235,7 +14235,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14260,7 +14260,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14675,7 +14675,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14710,7 +14710,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25833,12 +25833,14 @@
 </span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="n">app</span><span class="p">.</span><span class="n">MapControllers</span><span class="p">();</span><span class="w">                   </span><span class="c1">// REST endpoint coesistono</span>
 </span></code></pre></div>
 <h3 id="net-aspire-orchestrazione-locale">.NET Aspire — Orchestrazione Locale<a class="headerlink" href="#net-aspire-orchestrazione-locale" title="Permanent link">&para;</a></h3>
-<p>.NET Aspire è lo stack per sviluppo locale di applicazioni distribuite: orchestra localmente i servizi, configura dipendenze (DB, Redis, Kafka) e inietta connection string automaticamente. L'AppHost è un orchestratore di sviluppo, non un runtime di produzione.</p>
-<!-- REVIEW: verificare nome corrente (da Aspire 13 il prodotto è "Aspire", senza ".NET"), sintassi AppHost e stato dei publisher di deploy (Kubernetes/Docker Compose) -->
-
+<p>Aspire (fino alla 9.x "<strong>.NET Aspire</strong>"; da <strong>Aspire 13</strong>, nov 2025, il prodotto è semplicemente "Aspire", piattaforma multi-linguaggio con Python e JavaScript first-class; richiede .NET 10 SDK) è lo stack per sviluppo locale di applicazioni distribuite: orchestra localmente i servizi, configura dipendenze (DB, Redis, Kafka) e inietta connection string automaticamente. L'AppHost è un orchestratore di sviluppo, non un runtime di produzione.</p>
 <div class="admonition note">
 <p class="admonition-title">Nota</p>
-<p>Gli snippet sotto seguono l'API Aspire 8/9. Le versioni più recenti hanno rinominato il prodotto e aggiunto la generazione di manifest di deploy: controllare la documentazione ufficiale prima di adottarli.</p>
+<p>Gli snippet sotto usano l'API <code>DistributedApplication</code>/<code>AddProject</code>/<code>WithReference</code>, invariata in Aspire 13. Cambia il <code>.csproj</code> dell'AppHost: <code>&lt;Project Sdk="Aspire.AppHost.Sdk/13.0.0"&gt;</code> include già <code>Aspire.Hosting.AppHost</code>, senza <code>&lt;Sdk Name=...&gt;</code> né <code>PackageReference</code> espliciti. Breaking change 13.0: <code>Aspire.Hosting.NodeJs</code> → <code>Aspire.Hosting.JavaScript</code>, <code>AddNpmApp</code> → <code>AddJavaScriptApp</code>, i publishing callback sono sostituiti da pipeline step (<code>aspire do</code>).</p>
+</div>
+<div class="admonition info">
+<p class="admonition-title">Publisher di deploy</p>
+<p>Il pacchetto <code>Aspire.Hosting.Kubernetes</code> (<code>AddKubernetesEnvironment()</code>) è GA: <code>aspire publish</code> genera Helm chart, <code>aspire deploy</code> fa il deploy sul cluster corrente via <code>helm upgrade --install</code> (richiede Helm sul PATH). <code>aspire publish</code> può emettere anche un file Docker Compose dallo stesso modello. Resta valido che l'AppHost non è il runtime di produzione.</p>
 </div>
 <div class="language-csharp highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1">// AppHost/Program.cs — AppHost Aspire (progetto separato)</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="kt">var</span><span class="w"> </span><span class="n">builder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">DistributedApplication</span><span class="p">.</span><span class="n">CreateBuilder</span><span class="p">(</span><span class="n">args</span><span class="p">);</span>
@@ -26154,7 +26156,7 @@
 <ul>
 <li><a href="https://learn.microsoft.com/en-us/aspnet/core/">ASP.NET Core Documentation</a></li>
 <li><a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/">Minimal APIs in ASP.NET Core</a></li>
-<li><a href="https://learn.microsoft.com/en-us/dotnet/aspire/">.NET Aspire Documentation</a></li>
+<li><a href="https://aspire.dev/">Aspire Documentation</a> (ex .NET Aspire)</li>
 <li><a href="https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/health-checks">Health checks in ASP.NET Core</a></li>
 <li><a href="https://learn.microsoft.com/en-us/aspnet/core/grpc/">gRPC services with ASP.NET Core</a></li>
 <li><a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/generic-host">.NET Generic Host</a></li>
