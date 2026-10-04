@@ -15248,7 +15248,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15543,7 +15543,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15578,7 +15578,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15613,7 +15613,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15683,7 +15683,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15718,7 +15718,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15753,7 +15753,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -16066,7 +16066,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16208,7 +16208,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16278,7 +16278,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16791,7 +16791,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16816,7 +16816,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25043,12 +25043,12 @@
 <td>Insieme di consumer che cooperano per leggere un topic. Ogni partizione è assegnata a un solo consumer del gruppo.</td>
 </tr>
 <tr>
-<td><strong>ZooKeeper / KRaft</strong></td>
-<td>Sistema di coordinamento per la gestione dei metadati del cluster (elezione del controller, broker registrati, ecc.). KRaft è il sostituto moderno di ZooKeeper.</td>
+<td><strong>KRaft</strong> (Kafka Raft)</td>
+<td>Meccanismo di consenso integrato in Kafka per i metadati del cluster (topic, partizioni, leader, broker registrati), basato sul protocollo Raft. Dalla <strong>versione 4.0 (marzo 2025) è l'unica modalità supportata</strong>: ZooKeeper è stato rimosso (KIP-500). I cluster 3.x ancora su ZooKeeper vanno migrati a KRaft prima di aggiornare a 4.x.</td>
 </tr>
 <tr>
 <td><strong>Controller</strong></td>
-<td>Un broker eletto come responsabile della gestione amministrativa del cluster (elezioni leader, bilanciamento).</td>
+<td>Nodo del quorum KRaft (3 o 5 in produzione) che gestisce metadati ed elezioni dei leader di partizione. Un controller è l'<em>active</em> (leader Raft), gli altri sono hot standby. Può essere dedicato (<code>process.roles=controller</code>) o combinato col broker (<code>broker,controller</code>, adatto solo a cluster piccoli/dev).</td>
 </tr>
 </tbody>
 </table>
@@ -25067,7 +25067,7 @@
     end
 
     subgraph "Kafka Cluster"
-        subgraph "Broker 1 (Controller)"
+        subgraph "Broker 1"
             B1T1P0[Topic orders&lt;br/&gt;Partition 0 - LEADER]
             B1T2P1[Topic payments&lt;br/&gt;Partition 1 - FOLLOWER]
         end
@@ -25091,7 +25091,7 @@
     end
 
     subgraph Coordination
-        ZK[ZooKeeper / KRaft&lt;br/&gt;Cluster Metadata]
+        ZK[KRaft Controller Quorum&lt;br/&gt;Cluster Metadata]
     end
 
     P1 --&gt;|publish| B1T1P0
@@ -25116,11 +25116,15 @@
 <li><strong>Il broker leader</strong> scrive il record nel log della partizione sul disco (append-only).</li>
 <li><strong>I broker follower replicano il record</strong>: ogni partizione ha un leader (il broker che riceve le scritture) e zero o più follower (broker che mantengono una copia aggiornata ma non servono richieste dirette). I follower recuperano i nuovi record dal leader tramite replication log fetch.</li>
 <li><strong>Il leader attende la conferma dalle ISR</strong>: le ISR (In-Sync Replicas) sono l'insieme delle repliche — incluso il leader — completamente sincronizzate con il log del leader. Con <code>acks=all</code> (o <code>acks=-1</code>), il leader invia l'acknowledgment al producer solo dopo che tutte le repliche nell'ISR hanno scritto il record. Il parametro <code>min.insync.replicas</code> (tipicamente 2 su cluster con replication factor 3) definisce il numero minimo di repliche ISR che devono confermare; se scende sotto questo valore, il producer riceve <code>NotEnoughReplicasException</code>.</li>
-<li><strong>Il consumer esegue il loop di <code>poll()</code></strong>: il consumer chiama periodicamente <code>consumer.poll(timeout_ms)</code> per richiedere al broker un batch di record a partire dall'offset corrente. <code>poll()</code> è il nome del metodo dell'API Kafka (Java/Python) — non è una traduzione. Kafka usa il <strong>pull model</strong>: non è il broker a inviare i dati al consumer, è sempre il consumer a richiederli (pull). Questo permette ai consumer di consumare al proprio ritmo senza rischio di overflow.</li>
+<li><strong>Il consumer esegue il loop di <code>poll()</code></strong>: il consumer chiama periodicamente <code>consumer.poll(Duration)</code> (Java; nei client Python il timeout è in millisecondi) per richiedere al broker un batch di record a partire dall'offset corrente. <code>poll()</code> è il nome del metodo dell'API Kafka — non è una traduzione. Kafka usa il <strong>pull model</strong>: non è il broker a inviare i dati al consumer, è sempre il consumer a richiederli (pull). Questo permette ai consumer di consumare al proprio ritmo senza rischio di overflow.</li>
 <li><strong>Il consumer esegue il commit dell'offset</strong>: dopo aver processato il batch, il consumer "fa il commit dell'offset" — persiste la propria posizione nel topic (es. "ho elaborato fino all'offset 1042 della partizione 0"). Kafka salva questa informazione nel topic interno <code>__consumer_offsets</code>. Al restart successivo, il consumer riprende dall'ultimo offset committato, evitando di riprocessare record già gestiti. Il commit può essere automatico (<code>enable.auto.commit=true</code>, ogni 5 secondi di default) o manuale (<code>consumer.commitSync()</code> per garanzia at-least-once, <code>consumer.commitAsync()</code> per performance).</li>
 </ol>
 <h3 id="garantia-di-ordinamento">Garantia di Ordinamento<a class="headerlink" href="#garantia-di-ordinamento" title="Permanent link">&para;</a></h3>
-<p>Kafka garantisce l'ordinamento dei record <strong>all'interno di una singola partizione</strong>. Record con la stessa key vengono sempre scritti nella stessa partizione (tramite <code>hash(key) % numPartitions</code>), garantendo l'ordinamento per quella chiave specifica. Non esiste garanzia di ordinamento globale tra partizioni diverse.</p>
+<p>Kafka garantisce l'ordinamento dei record <strong>all'interno di una singola partizione</strong>. Record con la stessa key vengono sempre scritti nella stessa partizione (il partitioner di default calcola <code>murmur2(key) % numPartitions</code>), garantendo l'ordinamento per quella chiave specifica. Non esiste garanzia di ordinamento globale tra partizioni diverse.</p>
+<div class="admonition warning">
+<p class="admonition-title">Aumentare le partizioni rompe il mapping key→partizione</p>
+<p>Poiché il modulo dipende da <code>numPartitions</code>, aggiungere partizioni a un topic esistente fa finire le stesse key in partizioni diverse: l'ordinamento per key è garantito solo entro lo stesso numero di partizioni. Dimensionare con margine fin dall'inizio.</p>
+</div>
 <h3 id="retention-dei-dati">Retention dei Dati<a class="headerlink" href="#retention-dei-dati" title="Permanent link">&para;</a></h3>
 <p>Kafka non elimina i record dopo che un consumer li ha letti. I dati vengono eliminati in base a policy configurabili:
 - <strong>Time-based:</strong> <code>log.retention.hours</code> (default: 168 ore / 7 giorni)
@@ -25128,33 +25132,29 @@
 - <strong>Compaction:</strong> solo l'ultimo valore per ogni key viene mantenuto (log compaction)</p>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="avvio-rapido-con-docker-compose-kraft-mode">Avvio Rapido con Docker Compose (KRaft mode)<a class="headerlink" href="#avvio-rapido-con-docker-compose-kraft-mode" title="Permanent link">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># docker-compose.yml - Kafka singolo nodo in KRaft mode</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">'3.8'</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">services</span><span class="p">:</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">kafka</span><span class="p">:</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">confluentinc/cp-kafka:7.6.0</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="nt">hostname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="nt">container_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"9092:9092"</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"9101:9101"</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">      </span><span class="nt">KAFKA_NODE_ID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">      </span><span class="nt">KAFKA_LISTENER_SECURITY_PROTOCOL_MAP</span><span class="p">:</span><span class="w"> </span><span class="s">'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">      </span><span class="nt">KAFKA_ADVERTISED_LISTENERS</span><span class="p">:</span><span class="w"> </span><span class="s">'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">      </span><span class="nt">KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">      </span><span class="nt">KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">      </span><span class="nt">KAFKA_TRANSACTION_STATE_LOG_MIN_ISR</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<p>Immagine ufficiale Apache (<code>apache/kafka</code>), nodo singolo con ruoli combinati <code>broker,controller</code>: <strong>solo per sviluppo locale</strong>.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># docker-compose.yml - Kafka singolo nodo in KRaft mode (solo dev)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">services</span><span class="p">:</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">kafka</span><span class="p">:</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apache/kafka:4.0.0</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="nt">container_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kafka</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"9092:9092"</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">      </span><span class="nt">KAFKA_NODE_ID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">      </span><span class="nt">KAFKA_PROCESS_ROLES</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">broker,controller</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">      </span><span class="nt">KAFKA_LISTENERS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PLAINTEXT://:9092,CONTROLLER://:9093</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">      </span><span class="nt">KAFKA_ADVERTISED_LISTENERS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PLAINTEXT://localhost:9092</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">      </span><span class="nt">KAFKA_CONTROLLER_LISTENER_NAMES</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CONTROLLER</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">      </span><span class="nt">KAFKA_LISTENER_SECURITY_PROTOCOL_MAP</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">      </span><span class="nt">KAFKA_CONTROLLER_QUORUM_VOTERS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1@localhost:9093</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">      </span><span class="c1"># Con un solo broker i topic interni non possono avere RF=3 (default)</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">      </span><span class="nt">KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">      </span><span class="nt">KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">      </span><span class="nt">KAFKA_JMX_PORT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">9101</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">      </span><span class="nt">KAFKA_PROCESS_ROLES</span><span class="p">:</span><span class="w"> </span><span class="s">'broker,controller'</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">      </span><span class="nt">KAFKA_CONTROLLER_QUORUM_VOTERS</span><span class="p">:</span><span class="w"> </span><span class="s">'1@kafka:29093'</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">      </span><span class="nt">KAFKA_LISTENERS</span><span class="p">:</span><span class="w"> </span><span class="s">'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092'</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">      </span><span class="nt">KAFKA_INTER_BROKER_LISTENER_NAME</span><span class="p">:</span><span class="w"> </span><span class="s">'PLAINTEXT'</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">      </span><span class="nt">KAFKA_CONTROLLER_LISTENER_NAMES</span><span class="p">:</span><span class="w"> </span><span class="s">'CONTROLLER'</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">      </span><span class="nt">KAFKA_LOG_DIRS</span><span class="p">:</span><span class="w"> </span><span class="s">'/tmp/kraft-combined-logs'</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">      </span><span class="nt">CLUSTER_ID</span><span class="p">:</span><span class="w"> </span><span class="s">'MkU3OEVBNTcwNTJENDM2Qk'</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">      </span><span class="nt">KAFKA_TRANSACTION_STATE_LOG_MIN_ISR</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">      </span><span class="nt">KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
 </span></code></pre></div>
+<p><code>KAFKA_ADVERTISED_LISTENERS</code> è l'indirizzo che il broker comunica ai client dopo il bootstrap: deve essere raggiungibile <em>dal client</em>, non solo dal container. I comandi CLI dell'immagine sono in <code>/opt/kafka/bin/</code> (<code>docker exec -it kafka /opt/kafka/bin/kafka-topics.sh ...</code>).</p>
 <h3 id="comandi-cli-essenziali">Comandi CLI Essenziali<a class="headerlink" href="#comandi-cli-essenziali" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Verificare lo stato del cluster</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>kafka-broker-api-versions.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092
@@ -25181,31 +25181,37 @@
 </span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">  </span>--property<span class="w"> </span>key.separator<span class="o">=</span><span class="s2">":"</span>
 </span></code></pre></div>
 <h3 id="parametri-broker-fondamentali-serverproperties">Parametri Broker Fondamentali (server.properties)<a class="headerlink" href="#parametri-broker-fondamentali-serverproperties" title="Permanent link">&para;</a></h3>
-<div class="language-properties highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Identificatore unico del broker nel cluster</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="na">broker.id</span><span class="o">=</span><span class="s">1</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Indirizzo di ascolto</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="na">listeners</span><span class="o">=</span><span class="s">PLAINTEXT://:9092</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Cartella dove sono archiviati i log (dati)</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="na">log.dirs</span><span class="o">=</span><span class="s">/var/kafka/logs</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Numero di thread per I/O di rete</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="na">num.network.threads</span><span class="o">=</span><span class="s">3</span>
+<div class="language-properties highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Modalità KRaft: ruoli del nodo (broker, controller o entrambi)</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="na">process.roles</span><span class="o">=</span><span class="s">broker</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># Identificatore unico del nodo (sostituisce broker.id di ZooKeeper)</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="na">node.id</span><span class="o">=</span><span class="s">1</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="c1"># Quorum dei controller: id@host:porta</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="na">controller.quorum.bootstrap.servers</span><span class="o">=</span><span class="s">controller1:9093,controller2:9093,controller3:9093</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="na">controller.listener.names</span><span class="o">=</span><span class="s">CONTROLLER</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># Indirizzi di ascolto e pubblicati ai client</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="na">listeners</span><span class="o">=</span><span class="s">PLAINTEXT://:9092</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="na">advertised.listeners</span><span class="o">=</span><span class="s">PLAINTEXT://broker1.example.com:9092</span>
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># Numero di thread per I/O su disco</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="na">num.io.threads</span><span class="o">=</span><span class="s">8</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># Cartella dove sono archiviati i log (dati)</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="na">log.dirs</span><span class="o">=</span><span class="s">/var/kafka/logs</span>
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># Retention per tempo (in ore)</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="na">log.retention.hours</span><span class="o">=</span><span class="s">168</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># Numero di thread per I/O di rete</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="na">num.network.threads</span><span class="o">=</span><span class="s">3</span>
 </span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># Retention per dimensione (-1 = illimitato)</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="na">log.retention.bytes</span><span class="o">=</span><span class="s">-1</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># Numero di thread per I/O su disco</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="na">num.io.threads</span><span class="o">=</span><span class="s">8</span>
 </span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="c1"># Replication factor di default per i topic interni</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="na">offsets.topic.replication.factor</span><span class="o">=</span><span class="s">3</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="na">transaction.state.log.replication.factor</span><span class="o">=</span><span class="s">3</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="na">transaction.state.log.min.isr</span><span class="o">=</span><span class="s">2</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="c1"># Retention per tempo (in ore)</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="na">log.retention.hours</span><span class="o">=</span><span class="s">168</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="c1"># Retention per dimensione (-1 = illimitato)</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="na">log.retention.bytes</span><span class="o">=</span><span class="s">-1</span>
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="c1"># Replication factor di default per i topic interni</span>
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="na">offsets.topic.replication.factor</span><span class="o">=</span><span class="s">3</span>
+</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="na">transaction.state.log.replication.factor</span><span class="o">=</span><span class="s">3</span>
+</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="na">transaction.state.log.min.isr</span><span class="o">=</span><span class="s">2</span>
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <h3 id="sizing-delle-partizioni">Sizing delle Partizioni<a class="headerlink" href="#sizing-delle-partizioni" title="Permanent link">&para;</a></h3>
@@ -25214,7 +25220,7 @@
 <p>Una formula di partenza: <code>max(T/P_producer, T/P_consumer)</code> dove <code>T</code> è il throughput target, <code>P_producer</code> è il throughput di un singolo producer e <code>P_consumer</code> è il throughput di un singolo consumer. In assenza di benchmark, iniziare con 6-12 partizioni per topic e scalare in seguito.</p>
 </div>
 <ul>
-<li><strong>Non sovra-partizionare:</strong> ogni partizione ha un overhead (file handle, memoria, tempi di elezione leader). Un broker gestisce efficacemente fino a ~4000 partizioni.</li>
+<li><strong>Non sovra-partizionare:</strong> ogni partizione ha un overhead (file handle, memoria, tempi di elezione leader). La vecchia regola "~4000 partizioni per broker" valeva con ZooKeeper; con KRaft i limiti di cluster sono molto più alti, ma resta valido dimensionare in base a benchmark e a file handle/memoria disponibili.</li>
 <li><strong>Considerare i consumer group:</strong> il numero di partizioni limita il parallelismo massimo del gruppo. Con 6 partizioni, massimo 6 consumer attivi per gruppo.</li>
 <li><strong>Partizioni e ordinamento:</strong> se l'ordinamento globale è critico, usare una sola partizione (con sacrificio del parallelismo).</li>
 </ul>
@@ -25263,7 +25269,7 @@
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--describe<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--under-replicated-partitions
 </span></code></pre></div>
-<p><strong>Causa tipica:</strong> un broker follower è irraggiungibile o è rimasto indietro nella replica (lag elevato rispetto al log del leader). Il follower viene rimosso dall'ISR fino a quando non si risincronizza completamente. Verificare che il broker sia operativo; una volta riavviato, recupera automaticamente i record mancanti e rientra nell'ISR.</p>
+<p><strong>Causa tipica:</strong> un broker follower è irraggiungibile o è rimasto indietro nella replica (lag elevato rispetto al log del leader). Il leader rimuove dall'ISR un follower che non ha fatto fetch/raggiunto la fine del log entro <code>replica.lag.time.max.ms</code> (default 30 s); resta fuori fino a quando non si risincronizza completamente. Verificare che il broker sia operativo; una volta riavviato, recupera automaticamente i record mancanti e rientra nell'ISR.</p>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://kafka.apache.org/documentation/">Apache Kafka Documentation</a></li>

@@ -15248,7 +15248,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15549,7 +15549,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15584,7 +15584,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15619,7 +15619,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15689,7 +15689,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15724,7 +15724,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15759,7 +15759,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -16078,7 +16078,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16232,7 +16232,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16257,7 +16257,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16762,7 +16762,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17263,7 +17263,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25288,7 +25288,7 @@
 - Creazione di librerie IaC riusabili e pubblicabili su npm/PyPI</p>
 <p><strong>Quando NON usare Pulumi (preferire Terraform):</strong>
 - Team con consolidata esperienza HCL e ampio Terraform Registry già utilizzato
-- Organizzazioni con governance centralizzata su Terraform Cloud/Enterprise
+- Organizzazioni con governance centralizzata su HCP Terraform / Terraform Enterprise (o su OpenTofu)
 - Necessità di leggere infrastruttura esistente via <code>terraform import</code> senza refactoring</p>
 <hr />
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
@@ -25312,13 +25312,15 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pulumi_aws</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">aws</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">bucket</span> <span class="o">=</span> <span class="n">aws</span><span class="o">.</span><span class="n">s3</span><span class="o">.</span><span class="n">Bucket</span><span class="p">(</span><span class="s2">"my-bucket"</span><span class="p">,</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">acl</span><span class="o">=</span><span class="s2">"private"</span><span class="p">,</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">versioning</span><span class="o">=</span><span class="n">aws</span><span class="o">.</span><span class="n">s3</span><span class="o">.</span><span class="n">BucketVersioningArgs</span><span class="p">(</span><span class="n">enabled</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">tags</span><span class="o">=</span><span class="p">{</span><span class="s2">"Environment"</span><span class="p">:</span> <span class="s2">"prod"</span><span class="p">}</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">tags</span><span class="o">=</span><span class="p">{</span><span class="s2">"Environment"</span><span class="p">:</span> <span class="s2">"prod"</span><span class="p">}</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">)</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Argomenti inline del bucket S3</p>
+<p>Gli argomenti inline <code>acl</code> e <code>versioning</code> di <code>aws.s3.Bucket</code> sono deprecati nei provider AWS recenti (stessa scelta del provider Terraform AWS v4+): ACL, versioning e simili si configurano con risorse dedicate (<code>aws.s3.BucketVersioning</code>, <code>aws.s3.BucketAclV2</code>, ...). Il nome logico (<code>"my-bucket"</code>) è l'identificatore nello state; Pulumi aggiunge un suffisso casuale al nome fisico (auto-naming) per permettere sostituzioni senza collisioni.</p>
+</div>
 <h3 id="outputs">Outputs<a class="headerlink" href="#outputs" title="Permanent link">&para;</a></h3>
-<p>Gli <strong>Output</strong> sono valori che dipendono dall'esecuzione (es. ARN, IP, URL). In Pulumi sono oggetti <code>Output[T]</code> — wrapped values che si risolvono solo dopo l'<code>apply</code>. Non sono stringhe normali: vanno usati con <code>pulumi.Output.all()</code> o <code>.apply()</code>.</p>
+<p>Gli <strong>Output</strong> sono valori che dipendono dall'esecuzione (es. ARN, IP, URL). In Pulumi sono oggetti <code>Output[T]</code> — wrapped values che si risolvono solo dopo l'<code>apply</code>. Non sono stringhe normali: vanno usati con <code>pulumi.Output.all()</code> o <code>.apply()</code>. <em>Perché</em>: il valore esiste solo dopo che il provider ha creato la risorsa; l'<code>Output</code> porta con sé anche le dipendenze, così il motore costruisce il grafo e ordina creazione/distruzione correttamente. Per le sole interpolazioni di stringa esiste <code>pulumi.Output.concat()</code> / <code>Output.format()</code>.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Corretto: usare .apply() per trasformare un Output</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">bucket_url</span> <span class="o">=</span> <span class="n">bucket</span><span class="o">.</span><span class="n">website_endpoint</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="k">lambda</span> <span class="n">endpoint</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"https://</span><span class="si">{</span><span class="n">endpoint</span><span class="si">}</span><span class="s2">"</span>
@@ -25447,7 +25449,7 @@
 <h3 id="installazione-e-setup">Installazione e Setup<a class="headerlink" href="#installazione-e-setup" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Installare Pulumi CLI</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># Windows (winget)</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>winget<span class="w"> </span>install<span class="w"> </span>pulumi
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>winget<span class="w"> </span>install<span class="w"> </span>Pulumi.Pulumi
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># macOS</span>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>brew<span class="w"> </span>install<span class="w"> </span>pulumi/tap/pulumi
@@ -25617,23 +25619,27 @@
 </span></code></pre></div>
 <h3 id="pulumi-automation-api">Pulumi Automation API<a class="headerlink" href="#pulumi-automation-api" title="Permanent link">&para;</a></h3>
 <p>L'<strong>Automation API</strong> permette di incorporare Pulumi in programmi Python/TypeScript come libreria, senza la CLI interattiva. Utile per pipeline CI, tool interni, o platform engineering:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pulumi.automation</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_or_select_stack</span><span class="p">,</span> <span class="n">LocalWorkspace</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">deploy</span><span class="p">(</span><span class="n">stack_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="n">stack</span> <span class="o">=</span> <span class="n">create_or_select_stack</span><span class="p">(</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>        <span class="n">stack_name</span><span class="o">=</span><span class="n">stack_name</span><span class="p">,</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>        <span class="n">project_name</span><span class="o">=</span><span class="s2">"my-infra"</span><span class="p">,</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>        <span class="n">program</span><span class="o">=</span><span class="n">pulumi_program</span><span class="p">,</span>  <span class="c1"># funzione Python normale</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>        <span class="n">opts</span><span class="o">=</span><span class="n">LocalWorkspaceOptions</span><span class="p">(</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>            <span class="n">env_vars</span><span class="o">=</span><span class="p">{</span><span class="s2">"AWS_REGION"</span><span class="p">:</span> <span class="s2">"eu-west-1"</span><span class="p">}</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>        <span class="p">)</span>
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>    <span class="p">)</span>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>
-</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">config</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>        <span class="n">stack</span><span class="o">.</span><span class="n">set_config</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">ConfigValue</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">))</span>
-</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a>
-</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">stack</span><span class="o">.</span><span class="n">up</span><span class="p">(</span><span class="n">on_output</span><span class="o">=</span><span class="nb">print</span><span class="p">)</span>
-</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>    <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">outputs</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pulumi.automation</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>    <span class="n">ConfigValue</span><span class="p">,</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>    <span class="n">LocalWorkspaceOptions</span><span class="p">,</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="n">create_or_select_stack</span><span class="p">,</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="p">)</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">deploy</span><span class="p">(</span><span class="n">stack_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>    <span class="n">stack</span> <span class="o">=</span> <span class="n">create_or_select_stack</span><span class="p">(</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>        <span class="n">stack_name</span><span class="o">=</span><span class="n">stack_name</span><span class="p">,</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>        <span class="n">project_name</span><span class="o">=</span><span class="s2">"my-infra"</span><span class="p">,</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>        <span class="n">program</span><span class="o">=</span><span class="n">pulumi_program</span><span class="p">,</span>  <span class="c1"># funzione Python normale</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>        <span class="n">opts</span><span class="o">=</span><span class="n">LocalWorkspaceOptions</span><span class="p">(</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>            <span class="n">env_vars</span><span class="o">=</span><span class="p">{</span><span class="s2">"AWS_REGION"</span><span class="p">:</span> <span class="s2">"eu-west-1"</span><span class="p">}</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>        <span class="p">)</span>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a>    <span class="p">)</span>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">config</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a>        <span class="n">stack</span><span class="o">.</span><span class="n">set_config</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">ConfigValue</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">value</span><span class="p">))</span>
+</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a>
+</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">stack</span><span class="o">.</span><span class="n">up</span><span class="p">(</span><span class="n">on_output</span><span class="o">=</span><span class="nb">print</span><span class="p">)</span>
+</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a>    <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">outputs</span>
 </span></code></pre></div>
 <hr />
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
@@ -25654,28 +25660,35 @@
 </span></code></pre></div>
 <h3 id="testing-dellinfrastruttura">Testing dell'Infrastruttura<a class="headerlink" href="#testing-dellinfrastruttura" title="Permanent link">&para;</a></h3>
 <p>Il vantaggio principale di Pulumi rispetto a Terraform è la possibilità di <strong>unit test nativi</strong>:</p>
+<p>I test unitari usano i <strong>mock</strong> del runtime (<code>pulumi.runtime.set_mocks</code>): il programma gira senza engine né provider reali, quindi nessuna risorsa viene creata. I mock vanno registrati <strong>prima</strong> di importare il modulo che dichiara le risorse.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># tests/test_infrastructure.py</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">unittest</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pulumi</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">TestInfrastructure</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>    <span class="nd">@pulumi</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">test</span>
-</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_bucket_is_private</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">        </span><span class="sd">"""Il bucket S3 deve essere privato"""</span>
-</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>        <span class="kn">import</span><span class="w"> </span><span class="nn">__main__</span>
-</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>
-</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>        <span class="k">def</span><span class="w"> </span><span class="nf">check_bucket_acl</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
-</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>            <span class="n">bucket</span><span class="p">,</span> <span class="n">acl</span> <span class="o">=</span> <span class="n">args</span>
-</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">acl</span><span class="p">,</span> <span class="s2">"private"</span><span class="p">,</span>
-</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>                <span class="s2">"Bucket deve essere privato, non pubblico"</span><span class="p">)</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="k">class</span><span class="w"> </span><span class="nc">Mocks</span><span class="p">(</span><span class="n">pulumi</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">Mocks</span><span class="p">):</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">new_resource</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="n">pulumi</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">MockResourceArgs</span><span class="p">):</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>        <span class="k">return</span> <span class="p">[</span><span class="n">args</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="s2">"_id"</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">inputs</span><span class="p">]</span>
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="n">pulumi</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">MockCallArgs</span><span class="p">):</span>
+</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>        <span class="k">return</span> <span class="p">{}</span>
+</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>
+</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>
+</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="n">pulumi</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">set_mocks</span><span class="p">(</span><span class="n">Mocks</span><span class="p">(),</span> <span class="n">preview</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a>
-</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a>        <span class="k">return</span> <span class="n">pulumi</span><span class="o">.</span><span class="n">Output</span><span class="o">.</span><span class="n">all</span><span class="p">(</span>
-</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a>            <span class="n">__main__</span><span class="o">.</span><span class="n">bucket</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
-</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a>            <span class="n">__main__</span><span class="o">.</span><span class="n">bucket</span><span class="o">.</span><span class="n">acl</span>
-</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a>        <span class="p">)</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">check_bucket_acl</span><span class="p">)</span>
+</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="kn">import</span><span class="w"> </span><span class="nn">infra</span>  <span class="c1"># modulo con le risorse (dopo set_mocks)</span>
+</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a>
+</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a>
+</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="k">class</span><span class="w"> </span><span class="nc">TestInfrastructure</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+</span><span id="__span-18-20"><a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a>    <span class="nd">@pulumi</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">test</span>
+</span><span id="__span-18-21"><a id="__codelineno-18-21" name="__codelineno-18-21" href="#__codelineno-18-21"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_bucket_has_environment_tag</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-18-22"><a id="__codelineno-18-22" name="__codelineno-18-22" href="#__codelineno-18-22"></a>        <span class="k">def</span><span class="w"> </span><span class="nf">check_tags</span><span class="p">(</span><span class="n">tags</span><span class="p">):</span>
+</span><span id="__span-18-23"><a id="__codelineno-18-23" name="__codelineno-18-23" href="#__codelineno-18-23"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">assertIn</span><span class="p">(</span><span class="s2">"Environment"</span><span class="p">,</span> <span class="n">tags</span><span class="p">,</span> <span class="s2">"Tag Environment mancante"</span><span class="p">)</span>
+</span><span id="__span-18-24"><a id="__codelineno-18-24" name="__codelineno-18-24" href="#__codelineno-18-24"></a>
+</span><span id="__span-18-25"><a id="__codelineno-18-25" name="__codelineno-18-25" href="#__codelineno-18-25"></a>        <span class="k">return</span> <span class="n">infra</span><span class="o">.</span><span class="n">bucket</span><span class="o">.</span><span class="n">tags</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">check_tags</span><span class="p">)</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Eseguire i test senza creare risorse reali</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nv">PULUMI_TEST_MODE</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/
 </span></code></pre></div>
 <h3 id="gestione-secrets">Gestione Secrets<a class="headerlink" href="#gestione-secrets" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Usare Pulumi Cloud (default) per KMS managed</span>
