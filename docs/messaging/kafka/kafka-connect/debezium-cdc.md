@@ -7,9 +7,10 @@ search_keywords: [debezium cdc, change data capture kafka, debezium postgresql, 
 parent: messaging/kafka/kafka-connect
 related: [messaging/kafka/pattern-microservizi/outbox-pattern, messaging/kafka/kafka-connect/source-connectors]
 official_docs: https://debezium.io/documentation/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Debezium e Change Data Capture
@@ -36,7 +37,9 @@ last_updated: 2026-03-29
 - `op`: tipo operazione (`c`=create/insert, `u`=update, `d`=delete, `r`=read/snapshot)
 - `source`: metadati (database, tabella, timestamp, LSN/binlog position)
 
-**Offset Debezium** — La posizione nel WAL/binlog viene salvata in Kafka Connect (`connect-offsets`). Garantisce la ripresa dal punto giusto dopo un restart.
+**Offset Debezium** — La posizione nel WAL/binlog viene salvata da Kafka Connect nel topic degli offset (`OFFSET_STORAGE_TOPIC`, negli esempi `debezium-offsets`). Garantisce la ripresa dal punto giusto dopo un restart. Delivery **at-least-once**: dopo un crash alcuni eventi possono essere riemessi, i consumer devono essere idempotenti.
+
+**REPLICA IDENTITY (PostgreSQL)** — Determina cosa finisce nel WAL come "vecchia" riga per UPDATE/DELETE. Col default (`DEFAULT`) `before` contiene solo la chiave primaria (e `null` se la chiave non cambia in un UPDATE sulle altre colonne). Per avere `before` completo: `ALTER TABLE orders REPLICA IDENTITY FULL;` (più WAL scritto, quindi usarlo solo dove serve).
 
 ## Architettura / Come Funziona
 
@@ -55,7 +58,7 @@ flowchart LR
     subgraph Kafka
         K1[db.public.orders]
         K2[db.public.payments]
-        OFFS[connect-offsets]
+        OFFS[debezium-offsets]
     end
 
     subgraph Consumers
@@ -97,14 +100,18 @@ CREATE USER debezium WITH REPLICATION LOGIN PASSWORD 'debezium_secret';
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO debezium;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO debezium;
 
--- Creare una publication (Debezium può crearla automaticamente o usarne una esistente)
+-- Creare una publication (FOR ALL TABLES richiede superuser).
+-- In produzione preferire un elenco esplicito di tabelle, creato da un admin:
+-- CREATE PUBLICATION debezium_pub FOR TABLE public.orders, public.payments;
 CREATE PUBLICATION debezium_pub FOR ALL TABLES;
 ```
 
 ### Docker Compose: PostgreSQL + Kafka + Debezium
 
+!!! note "Versioni immagini"
+    L'esempio usa Debezium 2.7. Le release 3.x (Java 17+) sono la linea corrente e le immagini sono pubblicate su `quay.io/debezium/connect`, non più su Docker Hub. <!-- REVIEW: verificare tag 3.x corrente di quay.io/debezium/connect e aggiornare compose/versione negli esempi -->
+
 ```yaml
-version: '3.8'
 services:
   postgres:
     image: postgres:16
@@ -131,7 +138,10 @@ services:
       KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      CLUSTER_ID: 'debezium-demo-cluster-id'
+      CLUSTER_ID: '5L6g3nShT-eMCtK--X86sw'  # UUID base64 di 22 caratteri (kafka-storage random-uuid)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
     ports:
       - "9092:9092"
 
@@ -164,8 +174,6 @@ curl -X POST http://localhost:8083/connectors \
       "database.user": "debezium",
       "database.password": "debezium_secret",
       "database.dbname": "mydb",
-      "database.server.name": "db",
-
       "topic.prefix": "db",
       "table.include.list": "public.orders,public.payments",
 
@@ -181,12 +189,15 @@ curl -X POST http://localhost:8083/connectors \
       "transforms": "unwrap",
       "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
       "transforms.unwrap.drop.tombstones": "false",
-      "transforms.unwrap.delete.handling.mode": "rewrite"
+      "transforms.unwrap.delete.handling.mode": "rewrite",
+      "transforms.unwrap.add.fields": "op,source.ts_ms"
     }
   }'
 ```
 
-**Topic generati:** `db.public.orders`, `db.public.payments`
+**Topic generati:** `db.public.orders`, `db.public.payments` (`<topic.prefix>.<schema>.<tabella>`). `database.server.name` è stato rimosso in Debezium 2.0: oggi si usa solo `topic.prefix`.
+
+Con l'`unwrap` configurato qui il valore dei record è già "piatto" (vedi SMT sotto); l'envelope completo seguente è ciò che si ottiene **senza** la trasformazione.
 
 ### Struttura di un evento CDC (senza unwrap)
 
@@ -240,30 +251,34 @@ La trasformazione `ExtractNewRecordState` semplifica la struttura dell'evento es
     `plugin.name=pgoutput` è il plugin di replication nativo di PostgreSQL 10+ e non richiede estensioni aggiuntive. Preferirlo a `wal2json` o `decoderbufs`.
 
 !!! warning "Gestire la replication slot con cura"
-    Una replication slot in PostgreSQL trattiene il WAL finché Debezium non lo ha letto. Se Debezium è fermo a lungo, il WAL cresce indefinitamente fino a riempire il disco. Monitorare `pg_replication_slots` e configurare `slot.max.retries`.
+    Una replication slot in PostgreSQL trattiene il WAL finché Debezium non lo ha letto. Se Debezium è fermo a lungo, il WAL cresce indefinitamente fino a riempire il disco. Monitorare `pg_replication_slots` (WAL trattenuto) con alert e impostare `max_slot_wal_keep_size` (PostgreSQL 13+) come rete di sicurezza: oltre il limite lo slot viene invalidato (`wal_status=lost`) e serve un nuovo snapshot, ma il database sorgente non si ferma. Droppare gli slot di connector dismessi.
 
 !!! tip "Heartbeat per evitare WAL retention su tabelle non attive"
-    Con `heartbeat.interval.ms`, Debezium invia heartbeat anche se non ci sono modifiche, permettendo a PostgreSQL di avanzare l'LSN confermato e liberare il WAL.
+    Con `heartbeat.interval.ms` Debezium emette heartbeat e conferma l'LSN letto anche quando le tabelle monitorate sono ferme ma il database genera WAL per altre tabelle, così PostgreSQL può liberarlo. Se il database è del tutto inattivo l'LSN non avanza comunque: in quel caso aggiungere `heartbeat.action.query` (es. un `UPDATE` su una tabella di heartbeat inclusa nella publication) per generare una modifica.
 
 !!! warning "Snapshot iniziale su tabelle grandi"
-    Lo snapshot legge l'intera tabella in una singola transazione. Su tabelle da milioni di righe, può richiedere ore. Pianificare la prima connessione con attenzione. Usare `snapshot.mode=schema_only` se non serve lo stato iniziale.
+    Lo snapshot legge l'intera tabella in una singola transazione. Su tabelle da milioni di righe, può richiedere ore. Pianificare la prima connessione con attenzione. Usare `snapshot.mode=no_data` (storico `schema_only`) se non serve lo stato iniziale, oppure i **signal ad-hoc / incremental snapshot** per ricaricare singole tabelle senza fermare lo streaming.
 
 ## Troubleshooting
 
 ### Scenario 1 — Replication slot già esistente
 
-**Sintomo:** Il connector non si avvia e nei log compare `ERROR: replication slot "debezium_slot" already exists`.
+**Sintomo:** Il connector non si avvia e nei log compare `ERROR: replication slot "debezium_slot" is active for PID <n>` (oppure `already exists` se si crea lo slot a mano con lo stesso nome).
 
-**Causa:** Un'istanza precedente di Debezium ha creato lo slot ma non lo ha rilasciato (crash, stop forzato).
+**Causa:** Debezium normalmente **riusa** uno slot esistente. L'errore "is active" compare quando la vecchia connessione di replica è ancora aperta (crash, task zombie, due connector con lo stesso `slot.name`). Ogni connector deve avere uno `slot.name` univoco.
 
-**Soluzione:** Verificare lo stato dello slot e rimuoverlo se inattivo.
+**Soluzione:** Verificare lo stato dello slot; se la sessione è orfana terminarla, e rimuovere lo slot solo se il connector è dismesso (si perde la posizione e serve un nuovo snapshot).
 
 ```sql
 -- Controllare slot esistenti e il loro stato
-SELECT slot_name, active, restart_lsn, wal_status
+SELECT slot_name, active, active_pid, restart_lsn, wal_status
 FROM pg_replication_slots;
 
--- Se active = false, eliminare il slot
+-- Sessione orfana: terminare il backend che tiene lo slot
+SELECT pg_terminate_backend(active_pid) FROM pg_replication_slots
+WHERE slot_name = 'debezium_slot' AND active;
+
+-- Solo se il connector è dismesso (active = false): eliminare lo slot
 SELECT pg_drop_replication_slot('debezium_slot');
 ```
 
@@ -271,25 +286,18 @@ SELECT pg_drop_replication_slot('debezium_slot');
 
 ### Scenario 2 — Alto lag del connector (Debezium indietro rispetto al DB)
 
-**Sintomo:** Gli eventi Kafka arrivano con ritardo crescente; `kafka.consumer.lag` del connector worker sale costantemente.
+**Sintomo:** Gli eventi Kafka arrivano con ritardo crescente rispetto alle scritture sul database; il WAL trattenuto dallo slot cresce.
 
-**Causa:** Throughput troppo basso del worker Kafka Connect: batch size insufficiente, o I/O lento durante lo snapshot iniziale su tabelle grandi.
+**Causa:** Un source connector non è un consumer: non ha consumer lag. Il ritardo sta nella lettura del WAL → Kafka: batch/queue troppo piccoli, produce lento verso il broker, SMT costose, o snapshot in corso su tabelle grandi.
 
-**Soluzione:** Aumentare i parametri di buffering e verificare il carico I/O del database sorgente.
+**Soluzione:** Misurare il lag lato sorgente (JMX `MilliSecondsBehindSource`, o `retained_wal` su `pg_replication_slots`, vedi Scenario 4), poi aumentare i buffer. `max.batch.size` e `max.queue.size` sono proprietà **del connector** (non di `connect-distributed.properties`); `PUT .../config` sostituisce l'intera configurazione, quindi va inviata completa.
 
 ```bash
-# Verificare il lag del consumer group del connector
-kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
-  --describe --group debezium-cluster
-
-# Aggiornare la configurazione del worker (connect-distributed.properties)
-# max.batch.size=8192
-# max.queue.size=16384
-
-# Oppure via REST API per il connector specifico
+# Config corrente del connector (da modificare e rimandare per intero)
+curl -s http://localhost:8083/connectors/postgres-cdc-connector/config | jq . > cfg.json
+# aggiungere in cfg.json: "max.batch.size": "8192", "max.queue.size": "16384"
 curl -X PUT http://localhost:8083/connectors/postgres-cdc-connector/config \
-  -H "Content-Type: application/json" \
-  -d '{"max.batch.size": "8192", "max.queue.size": "16384", ...}'
+  -H "Content-Type: application/json" -d @cfg.json
 ```
 
 ---
@@ -300,16 +308,14 @@ curl -X PUT http://localhost:8083/connectors/postgres-cdc-connector/config \
 
 **Causa:** `op=r` (read) indica record provenienti dallo snapshot iniziale, non da modifiche live. È il comportamento atteso alla prima connessione con `snapshot.mode=initial`.
 
-**Soluzione:** Filtrare gli eventi `op=r` a livello consumer se lo snapshot non è necessario, oppure usare `snapshot.mode=schema_only` per saltarlo.
+**Soluzione:** Trattare `r` come upsert nei consumer (stesso effetto di `c`), filtrarlo se lo snapshot non serve, oppure saltarlo con `snapshot.mode=no_data` (in Debezium < 2.6 chiamato `schema_only`). Lo snapshot viene eseguito solo se non esiste già un offset: cambiare il mode su un connector già avviato non lo riesegue.
 
 ```bash
-# Configurare snapshot.mode nel connector
-curl -X PUT http://localhost:8083/connectors/postgres-cdc-connector/config \
-  -H "Content-Type: application/json" \
-  -d '{
-    "snapshot.mode": "schema_only",
-    ...
-  }'
+# Impostare snapshot.mode (config completa, vedi Scenario 2: PUT sostituisce tutto)
+curl -s http://localhost:8083/connectors/postgres-cdc-connector/config \
+  | jq '."snapshot.mode"="no_data"' \
+  | curl -X PUT http://localhost:8083/connectors/postgres-cdc-connector/config \
+      -H "Content-Type: application/json" -d @-
 
 # Verificare lo stato corrente del connector
 curl http://localhost:8083/connectors/postgres-cdc-connector/status | jq .
