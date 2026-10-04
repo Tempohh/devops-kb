@@ -7,9 +7,10 @@ search_keywords: [enterprise sdlc, software development lifecycle, ciclo svilupp
 parent: dev/processi/_index
 related: [dev/processi/developer-workflow, dev/processi/pm-sviluppo, ci-cd/strategie/feature-flags, ci-cd/strategie/trunk-based-development]
 official_docs: https://martinfowler.com/articles/is-quality-worth-cost.html
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Enterprise SDLC per Microservizi
@@ -64,7 +65,7 @@ epic:
     Aggiornamento di tutte le dipendenze con CVE critici o major version lag > 6 mesi.
     Non porta valore utente diretto ma riduce rischio sicurezza e facilita futuri upgrade.
   stories:
-    - "Upgrade Spring Boot 3.2 → 3.3 per order-service"
+    - "Upgrade Spring Boot 3.5 → 4.0 per order-service"
     - "Upgrade PostgreSQL driver 42.5 → 42.7"
     - "Sostituire log4j con logback in inventory-service"
   acceptance_criteria:
@@ -106,7 +107,7 @@ Un principio operativo consolidato: **riservare il 20% della capacità dello spr
 | Support / bug produzione | ~10% | Buffer per imprevisti |
 | Cerimonie e overhead | ~5% | Sprint planning, retrospettiva, etc. |
 
-**Regola:** se il debito tecnico supera il 30% del backlog, il team deve comunicare
+**Regola:** se il debito tecnico supera il 40% del backlog (soglia "emergenza" del Tech Debt Ratio sotto), il team deve comunicare
 al management il rischio. Non è una negoziazione: è un fatto tecnico.
 ```
 
@@ -125,7 +126,8 @@ TECH_DEBT_LABELS = {
 JQL_OPEN_TECH_DEBT = """
 project = "ORDER-SERVICE"
 AND issuetype = Story
-AND labels = "technical-debt"
+AND labels in ("td-deliberate-prudent", "td-deliberate-imprudent",
+               "td-accidental-prudent", "td-accidental-imprudent")
 AND status != Done
 ORDER BY priority DESC
 """
@@ -179,13 +181,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # returntocorp/semgrep-action è deprecata: usare l'immagine ufficiale
       - name: Run Semgrep SAST
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: >-
-            p/owasp-top-ten
-            p/java
-            p/secrets
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep \
+            semgrep scan --error --config p/owasp-top-ten --config p/java --config p/secrets
       - name: Run SonarQube analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -206,7 +206,7 @@ jobs:
           project: ${{ github.repository }}
           path: '.'
           format: 'JSON'
-          args: '--failOnCVSS 7'   # fallisce su CVE con CVSS >= 7 (High/Critical)
+          args: '--failOnCVSS 7 --nvdApiKey ${{ secrets.NVD_API_KEY }}'   # CVSS >= 7 (High/Critical); senza API key NVD gli update sono lenti/rate-limited
 
   # ── 4. Performance Baseline ───────────────────────────────────────────────
   performance-baseline:
@@ -238,12 +238,13 @@ jobs:
           # Avvia il servizio in background e verifica le probe
           docker build -t service-test .
           docker run -d --name service -p 8080:8080 service-test
-          sleep 10
+          sleep 10   # fragile: meglio poll con retry (curl --retry 10 --retry-connrefused)
+          # Fuori da Kubernetes serve management.endpoint.health.probes.enabled=true
           # Liveness probe
           curl -f http://localhost:8080/actuator/health/liveness || exit 1
           # Readiness probe
           curl -f http://localhost:8080/actuator/health/readiness || exit 1
-          # Startup probe (se il servizio impiega > 30s ad avviarsi)
+          # Health aggregato (la startupProbe K8s riusa di norma l'endpoint di liveness)
           curl -f http://localhost:8080/actuator/health || exit 1
           docker stop service
 ```
@@ -323,7 +324,7 @@ Una story è **Done** quando:
 - [ ] Nessun TODO nel codice senza ticket associato
 
 ### Qualità Automatica (pipeline verde)
-- [ ] Coverage >= 80% sulle righe modificate
+- [ ] Coverage >= 80% sulle righe modificate (new code; misura differenziale: vedi Troubleshooting)
 - [ ] SAST green (nessun finding High/Critical)
 - [ ] Dependency check: nessun CVE con CVSS >= 7 nelle dipendenze nuove
 - [ ] Nessuna regressione performance > 20% vs baseline
@@ -396,6 +397,9 @@ Flagsmith:
   quando: serve remote config oltre ai flag booleani, o focus mobile/frontend
 ```
 
+!!! tip "OpenFeature"
+    [OpenFeature](https://openfeature.dev/) (progetto CNCF) è lo standard vendor-neutral per l'API di valutazione dei flag: il codice applicativo dipende da un'interfaccia comune e il provider (Unleash, LaunchDarkly, Flagsmith, flagd) si cambia senza riscrivere i call-site. Riduce il lock-in citato nel confronto sopra.
+
 ### Integrazione Feature Flag nel SDLC e Trunk-Based Development
 
 ```java
@@ -412,7 +416,7 @@ public class CheckoutService {
     private final LegacyPricingEngine legacyPricing;
     private final NewPricingEngine newPricing;
 
-    // TODO(2026-06-01): rimuovere flag DYNAMIC_PRICING dopo rollout completo
+    // TODO(2027-03-01): rimuovere flag DYNAMIC_PRICING dopo rollout completo
     // Ticket: https://jira.org/PROJ-1234
     private static final String FLAG_DYNAMIC_PRICING = "dynamic-pricing-v2";
 
@@ -440,8 +444,8 @@ flags:
   dynamic-pricing-v2:
     description: "Nuovo motore pricing con sconti dinamici per segmento"
     owner: "team-pricing"
-    created: "2026-02-01"
-    expires: "2026-06-01"         # data prevista per cleanup
+    created: "2026-09-01"
+    expires: "2027-03-01"         # data prevista per cleanup
     type: "release"               # release | experiment | ops | permission
     rollout_strategy: "gradual"   # percentuale crescente
     rollout_current: 25           # 25% degli utenti ora
@@ -455,14 +459,15 @@ flags:
     description: "Nuova versione API ordini (breaking change in /v2)"
     owner: "team-orders"
     created: "2026-03-01"
-    expires: "2026-07-01"
+    expires: "2027-04-01"
     type: "release"
     rollout_strategy: "userIds"   # rollout per lista utenti specifici (beta)
 ```
 
 ```bash
-# Script per trovare feature flag scaduti nel codebase
-# Da eseguire in CI come check settimanale
+# Script per trovare TODO(data) scaduti nel codebase (convenzione usata per i flag)
+# Da eseguire in CI come check settimanale. Nota: matcha ogni TODO(YYYY-MM-DD),
+# non solo quelli dei flag; Unleash/LaunchDarkly segnalano comunque i flag "stale"
 
 #!/bin/bash
 # check-expired-flags.sh
@@ -480,12 +485,12 @@ while IFS= read -r line; do
 done < <(grep -r "TODO(" src/ --include="*.java" --include="*.go" --include="*.py")
 
 if [ ${#EXPIRED[@]} -gt 0 ]; then
-  echo "❌ Feature flags scaduti trovati:"
+  echo "❌ TODO/flag scaduti trovati:"
   printf '%s\n' "${EXPIRED[@]}"
   exit 1
 fi
 
-echo "✅ Nessun feature flag scaduto"
+echo "✅ Nessun TODO/flag scaduto"
 ```
 
 ---
@@ -584,7 +589,7 @@ git checkout -b hotfix/2.3.2 v2.3.1   # branch dal tag di release, non da main
 git cherry-pick <commit-hash-del-fix>
 git tag v2.3.2
 git push origin hotfix/2.3.2 --tags
-# Deploy su produzione dall'immagine builddata dal tag v2.3.2
+# Deploy su produzione dall'immagine buildata dal tag v2.3.2 (attiva la pipeline hotfix sotto)
 
 # 4. Dopo il deploy: porta il fix su main se non già presente
 git checkout main
@@ -600,7 +605,7 @@ name: Hotfix Fast-Track
 on:
   push:
     tags:
-      - 'v*.*.*-hotfix*'   # es: v2.3.2-hotfix.1
+      - 'v*.*.*'   # tag creati da hotfix/* (es: v2.3.2); l'environment `production` impone approvazione
 
 jobs:
   hotfix-deploy:
@@ -625,11 +630,13 @@ jobs:
             -n production
           kubectl rollout status deployment/order-service -n production --timeout=120s
       - name: Notify on-call
-        uses: slackapi/slack-github-action@v1
+        uses: slackapi/slack-github-action@v2
         with:
-          channel-id: '#incidents'
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
-            { "text": "🚨 Hotfix ${{ github.ref_name }} deployed to production by ${{ github.actor }}" }
+            channel: "#incidents"
+            text: "🚨 Hotfix ${{ github.ref_name }} deployed to production by ${{ github.actor }}"
 ```
 
 ---
@@ -666,22 +673,23 @@ Adottiamo **Apache Kafka** come message broker per gli event stream di dominio.
 
 ### RabbitMQ
 - **Pro:** più semplice da operare, ottimo per task queue e work queue
-- **Contro:** non è pensato per event streaming (replay, log compaction);
-  la retention dei messaggi è limitata; scaling orizzontale più complesso
-- **Scartato perché:** avremmo bisogno del replay per il consumer
-  di analytics che sarà aggiunto in Q3
+- **Contro:** il modello classico (queue) consuma e rimuove i messaggi; i RabbitMQ
+  Streams (3.9+) offrono replay ma con ecosistema (Connect, Schema Registry, stream
+  processing) meno maturo e throughput inferiore a Kafka
+- **Scartato perché:** serve replay con retention lunga e ecosistema di integrazione
+  per il consumer di analytics che sarà aggiunto in Q3
 
 ### AWS EventBridge
 - **Pro:** fully managed, nessun overhead operativo
-- **Contro:** lock-in AWS; latenza media più alta (100-500ms vs <10ms Kafka);
-  nessun replay nativo (solo 24h archive)
+- **Contro:** lock-in AWS; latenza tipica più alta (decine/centinaia di ms vs pochi ms Kafka);
+  replay solo via Archive & Replay (riemissione per intervallo/regola, niente offset per consumer)
 - **Scartato perché:** il team prevede un deployment on-premise per un cliente enterprise
 
 ### Redis Streams
 - **Pro:** bassa latenza, già in uso come cache
-- **Contro:** durabilità limitata senza configurazione persistence;
-  community e tooling molto più piccoli di Kafka
-- **Scartato perché:** manca il supporto per consumer groups maturi e schema registry
+- **Contro:** dati in memoria (persistence AOF/RDB da configurare, retention limitata dalla RAM);
+  tooling per event streaming molto più piccolo di Kafka
+- **Scartato perché:** consumer group presenti ma manca uno schema registry e la retention a lungo termine è costosa
 
 ## Consequences
 
@@ -971,21 +979,14 @@ if __name__ == "__main__":
 
 ```bash
 # Fix: misura la coverage DIFFERENZIALE (solo sulle righe modificate nella PR)
-# JaCoCo + Danger.js per report differenziale
+# diff-cover incrocia il report JaCoCo con `git diff` e calcola la % sulle sole righe cambiate
+pip install diff-cover
+./mvnw test jacoco:report
+git fetch origin main
+diff-cover target/site/jacoco/jacoco.xml --compare-branch=origin/main --fail-under=80
 
-# In CI — genera report solo sulle linee cambiate nel PR
-./mvnw jacoco:report
-
-# dangerfile.js — applica la soglia solo alle righe modificate
-import { danger, fail } from 'danger'
-
-const changedFiles = danger.git.modified_files.filter(f => f.endsWith('.java'))
-for (const file of changedFiles) {
-  const coverage = getCoverageForFile(file)  // da jacoco.xml
-  if (coverage < 80) {
-    fail(`${file}: coverage ${coverage}% < 80% threshold su righe modificate`)
-  }
-}
+# Alternativa: il quality gate SonarQube "Sonar way" include di default
+# "Coverage on New Code >= 80%" (già attivo con -Dsonar.qualitygate.wait=true)
 ```
 
 ### ADR — Nessuno le legge o le aggiorna
@@ -1059,8 +1060,11 @@ LDConfig ldConfig = new LDConfig.Builder()
 ??? info "Developer Workflow — Il processo quotidiano"
     Il workflow del singolo developer: inner loop, Skaffold, Devcontainer, conventional commits, PR workflow. L'SDLC enterprise è il framework che contiene il developer workflow come sotto-processo. → [Developer Workflow](developer-workflow.md)
 
-??? info "CI/CD Pipeline — L'automazione del quality gate"
-    I quality gate della DoD sono implementati come job nella pipeline CI/CD. → [CI/CD Pipeline](../../ci-cd/strategie/deployment-strategies.md)
+??? info "Deployment Strategies — Rilascio dopo il quality gate"
+    Superato il quality gate, canary/blue-green/rolling determinano come il rilascio raggiunge la produzione. → [Deployment Strategies](../../ci-cd/strategie/deployment-strategies.md)
+
+??? info "Feature Flags e Trunk-Based Development — Approfondimenti"
+    Dettaglio di tooling, lifecycle dei flag e branching model su cui poggia il processo qui descritto. → [Feature Flags](../../ci-cd/strategie/feature-flags.md) · [Trunk-Based Development](../../ci-cd/strategie/trunk-based-development.md)
 
 ---
 
@@ -1074,5 +1078,5 @@ LDConfig ldConfig = new LDConfig.Builder()
 - [Flagsmith Documentation](https://docs.flagsmith.com/) — feature flags + remote config
 - [Semantic-Release](https://semantic-release.gitbook.io/) — automated versioning and changelog
 - [Team Topologies](https://teamtopologies.com/) — Conway's Law e organizzazione dei team per ridurre il coupling
-- [Accelerate — DORA Metrics](https://dora.dev/research/) — metriche di performance ingegneristica (deployment frequency, lead time, MTTR, change failure rate)
+- [Accelerate — DORA Metrics](https://dora.dev/research/) — metriche di performance ingegneristica (deployment frequency, lead time for changes, change failure rate, failed deployment recovery time — ex MTTR — e, dal 2024, rework rate)
 - [Google Engineering Practices — Technical writing](https://google.github.io/eng-practices/) — standard per documentazione tecnica e code review
