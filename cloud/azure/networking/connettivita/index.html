@@ -7170,7 +7170,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7195,7 +7195,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7390,10 +7390,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lacune-note" class="md-nav__link">
+  <a href="#expressroute-fastpath-direct-e-macsec" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Lacune note
+        ExpressRoute: FastPath, Direct e MACsec
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scegliere-vpn-vs-expressroute-vs-virtual-wan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scegliere: VPN vs ExpressRoute vs Virtual WAN
       
     </span>
   </a>
@@ -7444,7 +7455,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16679,7 +16690,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24664,10 +24675,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lacune-note" class="md-nav__link">
+  <a href="#expressroute-fastpath-direct-e-macsec" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Lacune note
+        ExpressRoute: FastPath, Direct e MACsec
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scegliere-vpn-vs-expressroute-vs-virtual-wan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scegliere: VPN vs ExpressRoute vs Virtual WAN
       
     </span>
   </a>
@@ -24868,7 +24890,7 @@
 <td><strong>ExpressRoute</strong></td>
 <td>50 Mbps - 100 Gbps</td>
 <td>bassa, prevedibile</td>
-<td>99.95%</td>
+<td>99.95% (circuito singolo); 99.99% con Maximum Resiliency (due circuiti in due peering location)</td>
 <td>Non di default (MACsec su ExpressRoute Direct, o IPsec sopra ER)</td>
 <td>Enterprise, dati sensibili</td>
 </tr>
@@ -24876,7 +24898,7 @@
 <td><strong>ExpressRoute + VPN</strong></td>
 <td>-</td>
 <td>ExpressRoute + fallback</td>
-<td>dipende dalla topologia <!-- REVIEW: verificare SLA 99.99% (richiede topologia Maximum Resiliency) --></td>
+<td>dipende dalla topologia (VPN come backup sconsigliato per carichi mission-critical/latency-sensitive: preferire Maximum Resiliency)</td>
 <td>IPSec</td>
 <td>Mission critical + DR</td>
 </tr>
@@ -24897,8 +24919,8 @@
 <p><strong>GatewaySubnet</strong>: subnet riservata (nome obbligatorio, consigliato almeno /27) dove Azure inietta le VM del gateway. <strong>Local Network Gateway (LNG)</strong>: oggetto Azure che descrive il router on-premises (IP pubblico + prefissi). <strong>IKE/IPsec</strong>: protocolli di negoziazione chiavi e cifratura del tunnel. <strong>BGP/ASN</strong>: protocollo di routing dinamico e numero di sistema autonomo; con BGP le route si propagano senza prefissi statici, abilitando failover automatico e multi-sito.</p>
 </div>
 <div class="admonition warning">
-<p class="admonition-title">SKU legacy in dismissione</p>
-<p>Lo SKU <code>Basic</code> e gli SKU non-AZ <code>VpnGw1-5</code> sono deprecati: per nuovi gateway usare <code>VpnGw1AZ-5AZ</code> (zone-redundant) con IP pubblici <strong>Standard</strong> statici. <!-- REVIEW: verificare date esatte di retirement SKU Basic/non-AZ e percorsi di migrazione --></p>
+<p class="admonition-title">SKU non-AZ in dismissione</p>
+<p>Gli SKU non-AZ <code>VpnGw1-5</code> sono <strong>ritirati dal 30 settembre 2026</strong>: dal 1 novembre 2025 non si creano più nuovi gateway, e i gateway esistenti non-AZ non accettano più modifiche di configurazione finché non vengono migrati al corrispondente <code>VpnGw1AZ-5AZ</code> (upgrade manuale da portale/PowerShell/CLI, nessun downtime nella stessa famiglia con IP Standard). Usare sempre IP pubblici <strong>Standard</strong>: i Basic public IP vanno migrati con il migration tool (che porta il gateway a Generation 2). Lo SKU VPN Gateway <code>Basic</code> <strong>non</strong> è in ritiro, ma non supporta BGP né Entra ID P2S; gli SKU legacy Standard/High Performance sono ritirati (30 settembre 2025).</p>
 </div>
 <h3 id="site-to-site-vpn">Site-to-Site VPN<a class="headerlink" href="#site-to-site-vpn" title="Permanent link">&para;</a></h3>
 <p>Connette la rete on-premises ad Azure tramite tunnel IPSec/IKE su Internet:</p>
@@ -25005,16 +25027,21 @@
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="c1"># Autenticazione con Microsoft Entra ID (ex Azure AD): solo OpenVPN, nessun</span>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># certificato da distribuire, supporta Conditional Access/MFA.</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># --aad-audience = App ID dell'app "Azure VPN Client" (varia per cloud/versione app)</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>az<span class="w"> </span>network<span class="w"> </span>vnet-gateway<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span>--name<span class="w"> </span>production-vpngw<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span>--aad-tenant<span class="w"> </span><span class="s2">"https://login.microsoftonline.com/</span><span class="nv">$TENANT_ID</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span>--aad-audience<span class="w"> </span><span class="s2">"41b23e61-6c1e-4545-b367-cd054e0ed4b4"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span>--aad-issuer<span class="w"> </span><span class="s2">"https://sts.windows.net/</span><span class="nv">$TENANT_ID</span><span class="s2">/"</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># --aad-audience = App ID Microsoft-registered dell'Azure VPN Client (raccomandato,</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1">#   stesso valore per tutti i cloud, nessuna registrazione/admin consent nel tenant)</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># L'issuer richiede lo slash finale; un gateway supporta un solo valore di audience.</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>az<span class="w"> </span>network<span class="w"> </span>vnet-gateway<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span>--name<span class="w"> </span>production-vpngw<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span>--vpn-auth-type<span class="w"> </span>AAD<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span>--aad-tenant<span class="w"> </span><span class="s2">"https://login.microsoftonline.com/</span><span class="nv">$TENANT_ID</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">    </span>--aad-audience<span class="w"> </span><span class="s2">"c632b3df-fb67-4d84-bdcf-b95ad541b5c8"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">    </span>--aad-issuer<span class="w"> </span><span class="s2">"https://sts.windows.net/</span><span class="nv">$TENANT_ID</span><span class="s2">/"</span>
 </span></code></pre></div>
-<!-- REVIEW: verificare App ID audience Entra ID corrente (esiste anche l'app "Microsoft-registered") e se serve --vpn-auth-type -->
-
+<div class="admonition warning">
+<p class="admonition-title">App ID registrata manualmente in ritiro</p>
+<p>L'audience legacy <code>41b23e61-6c1e-4545-b367-cd054e0ed4b4</code> (app registrata a mano, Azure Public) smette di funzionare il <strong>31 marzo 2028</strong> (31 marzo 2029 per Azure Government e 21Vianet): migrare a quella Microsoft-registered. Il client Azure VPN per Linux (preview) è stato ritirato il 31 agosto 2026; client supportati: Windows e macOS.</p>
+</div>
 <hr />
 <h2 id="expressroute">ExpressRoute<a class="headerlink" href="#expressroute" title="Permanent link">&para;</a></h2>
 <p><strong>ExpressRoute</strong> connette la rete on-premises ad Azure tramite connessione privata dedicata (non su Internet pubblica) attraverso un provider di connettività:</p>
@@ -25259,9 +25286,42 @@
 </span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="w">    </span>--query<span class="w"> </span>vpnClientConfiguration
 </span></code></pre></div>
 <hr />
-<h2 id="lacune-note">Lacune note<a class="headerlink" href="#lacune-note" title="Permanent link">&para;</a></h2>
-<!-- REVIEW: manca spiegazione di ExpressRoute FastPath e ExpressRoute Direct/MACsec (citati in search_keywords ma non trattati); manca guida di scelta VPN vs ExpressRoute vs vWAN e coesistenza ER+VPN per failover -->
-
+<h2 id="expressroute-fastpath-direct-e-macsec">ExpressRoute: FastPath, Direct e MACsec<a class="headerlink" href="#expressroute-fastpath-direct-e-macsec" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>FastPath</strong>: il traffico on-premises → VM bypassa il gateway ExpressRoute (meno hop, più throughput). Richiede gateway <code>UltraPerformance</code>, <code>ErGw3AZ</code> o <code>ErGwScale</code> (≥10 scale unit). Solo su <strong>ExpressRoute Direct</strong>: VNet peering (stessa region, no global peering), UDR, IPv6, Private Link (limited GA con enrollment). Non copre ILB/PaaS/Azure Firewall/DNS Private Resolver nelle spoke: il traffico passa dal gateway. Limiti IP: 25.000 (provider ≤10 Gbps), 100.000 (Direct 10 Gbps), 200.000 (Direct 100/400 Gbps).</li>
+<li><strong>ExpressRoute Direct</strong>: porte fisiche dirette sul backbone Microsoft (due porte per risorsa), 10/100 Gbps (taglie superiori su alcune location).</li>
+<li><strong>MACsec</strong> (solo Direct): cifratura L2 tra i tuoi router e gli MSEE. CAK/CKN in Key Vault (soft-delete attivo, <strong>non</strong> dietro private endpoint) + user-assigned managed identity. Cifrari: <code>GcmAes128/256</code> (10 Gbps); su ≥40 Gbps preferire <code>GcmAesXpn128/256</code>. Con router Cisco abilitare SCI.</li>
+</ul>
+<div class="language-powershell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nv">$erDirect</span><span class="p">.</span><span class="n">Links</span><span class="p">[</span><span class="n">0</span><span class="p">].</span><span class="n">MacSecConfig</span><span class="p">.</span><span class="n">Cipher</span> <span class="p">=</span> <span class="s2">"GcmAes256"</span>   <span class="c"># poi Set-AzExpressRoutePort</span>
+</span></code></pre></div>
+<h2 id="scegliere-vpn-vs-expressroute-vs-virtual-wan">Scegliere: VPN vs ExpressRoute vs Virtual WAN<a class="headerlink" href="#scegliere-vpn-vs-expressroute-vs-virtual-wan" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Esigenza</th>
+<th>Scelta</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pochi siti/sviluppatori, costo basso, Internet accettabile</td>
+<td>VPN Gateway S2S/P2S</td>
+</tr>
+<tr>
+<td>Latenza prevedibile, banda alta, dati sensibili</td>
+<td>ExpressRoute (Maximum Resiliency per SLA 99.99%)</td>
+</tr>
+<tr>
+<td>Molti branch/SD-WAN, routing transit automatico</td>
+<td>Virtual WAN</td>
+</tr>
+<tr>
+<td>Backup di un circuito ER</td>
+<td>Secondo circuito in altra location (preferito); VPN S2S coesistente solo per carichi non critici</td>
+</tr>
+</tbody>
+</table>
+<p>Coesistenza ER + VPN: stessa VNet, due gateway nella <code>GatewaySubnet</code> (ER gateway + VPN gateway con BGP); le route ER hanno precedenza sulle VPN a parità di prefisso, la VPN subentra in caso di failure.</p>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://learn.microsoft.com/azure/vpn-gateway/">VPN Gateway Documentation</a></li>
