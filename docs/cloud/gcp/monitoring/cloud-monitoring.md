@@ -7,7 +7,7 @@ search_keywords: [GCP Cloud Monitoring, Stackdriver, Stackdriver Monitoring, Clo
 parent: cloud/gcp/monitoring/_index
 related: [cloud/gcp/containers/gke, cloud/gcp/compute/cloud-run, monitoring/tools/prometheus, monitoring/fondamentali/opentelemetry, monitoring/sre/slo-sla-sli, monitoring/alerting/alertmanager, monitoring/tools/otel-collector-kubernetes]
 official_docs: https://cloud.google.com/monitoring/docs
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -244,7 +244,7 @@ AND timestamp>="2026-04-01T00:00:00Z"
 Il **Metric Explorer** ha tre modalità di query:
 - **Builder UI** (default): seleziona risorsa, metrica, aggregazione tramite dropdown
 - **PromQL**: sintassi Prometheus su *tutte* le metriche di Cloud Monitoring (anche system e custom). È il linguaggio raccomandato da Google per query e alert nuovi
-- **MQL (Monitoring Query Language)**: linguaggio proprietario Google, **in deprecazione** a favore di PromQL <!-- REVIEW: verificare date/stato deprecazione MQL (creazione nuove alerting policy MQL da console, fine supporto) su cloud.google.com/monitoring/mql -->
+- **MQL (Monitoring Query Language)**: linguaggio proprietario Google, **deprecato**: dal 22 luglio 2025 il supporto Google Cloud per MQL è terminato e MQL non è più disponibile nella console per creare chart, dashboard e alerting policy. Gli oggetti MQL esistenti continuano a funzionare e MQL resta utilizzabile via Cloud Monitoring API. Migrare a PromQL
 
 !!! warning "MQL è legacy"
     Per nuove query, dashboard e alerting policy preferire PromQL (`conditionPrometheusQueryLanguage` nelle alert policy). Gli esempi MQL sotto servono a leggere query esistenti.
@@ -489,7 +489,7 @@ resource "google_monitoring_alert_policy" "slo_burn_rate" {
 **Managed Service for Prometheus** permette di raccogliere metriche Prometheus-native da GKE senza gestire un'infrastruttura Prometheus (storage, HA, sharding). Le metriche finiscono in Cloud Monitoring sotto `prometheus.googleapis.com/` e sono accessibili tramite PromQL nativo via API compatibile Prometheus. Il modello è un DaemonSet `collector` per nodo che fa scraping e scrive su Monarch (il backend globale di Google), pilotato dall'operator via CRD.
 
 !!! note "Default sui cluster nuovi"
-    I cluster GKE recenti (Standard e Autopilot) hanno MSP abilitato di default: verificare prima di eseguire l'update. <!-- REVIEW: verificare versione GKE da cui MSP è default -->
+    I cluster **nuovi** hanno MSP abilitato di default: Autopilot da GKE 1.25, Standard da GKE 1.27 (sovrascrivibile in creazione). I cluster preesistenti non vengono modificati: verificare prima di eseguire l'update.
 
 ```bash
 # Abilitare MSP su cluster GKE esistente
