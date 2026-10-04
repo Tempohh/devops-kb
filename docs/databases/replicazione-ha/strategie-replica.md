@@ -7,9 +7,10 @@ search_keywords: [synchronous replication, asynchronous replication, semi-synchr
 parent: databases/replicazione-ha/_index
 related: [databases/postgresql/replicazione, databases/fondamentali/acid-base-cap, databases/replicazione-ha/failover-recovery]
 official_docs: https://www.postgresql.org/docs/current/warm-standby.html
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Strategie di Replica
@@ -23,6 +24,31 @@ La replica è il meccanismo che copia i dati da un nodo (primary/master) a uno o
 3. **Topologia**: come sono connessi i nodi
 
 Ogni scelta è un trade-off tra durabilità, performance e complessità operativa.
+
+## Replica Fisica vs Logica
+
+**WAL** (Write-Ahead Log) è il journal su cui il database scrive ogni modifica prima di applicarla ai data file; è la base della replica.
+
+| | Fisica (streaming) | Logica |
+|---|---|---|
+| Cosa viaggia | Record WAL a livello di blocco | Modifiche di riga decodificate (INSERT/UPDATE/DELETE) |
+| Standby | Copia binaria identica, read-only | Database indipendente, scrivibile |
+| Granularità | Intero cluster | Per tabella (publication/subscription) |
+| Versioni | Stessa major version | Major version diverse → upgrade senza downtime |
+| DDL e sequence | Replicati | **Non** replicati (PostgreSQL) |
+| Uso tipico | HA, failover, read replica | Migrazioni, CDC, consolidamento dati, replica selettiva |
+
+**Perché:** la replica fisica riapplica byte-per-byte, quindi è semplice e veloce ma rigida; la logica decodifica le modifiche, quindi è flessibile ma richiede chiave primaria/`REPLICA IDENTITY` e gestione manuale dello schema.
+
+```sql
+-- PostgreSQL: replica logica di una tabella (wal_level = logical sul publisher)
+CREATE PUBLICATION pub_ordini FOR TABLE ordini;                 -- sul publisher
+CREATE SUBSCRIPTION sub_ordini
+  CONNECTION 'host=primary dbname=app user=repl'
+  PUBLICATION pub_ordini;                                       -- sul subscriber
+```
+
+---
 
 ## Replicazione Sincrona vs Asincrona
 
@@ -67,25 +93,32 @@ Client               Primary              Standby
 **Costo della replica sincrona:**
 
 ```
-Esempio: latenza rete primary→standby = 2ms
-  Commit asincrono: 1ms (solo disco locale)
-  Commit sincrono:  1ms + 2ms + 2ms (RTT) = 5ms → 5x più lento
+Esempio: latenza di rete one-way primary→standby = 2ms (RTT = 4ms)
+  Commit asincrono: 1ms (solo fsync su disco locale)
+  Commit sincrono:  1ms + 4ms (RTT: invio WAL + ACK) = 5ms → 5x più lento
+  (se la standby fa anche fsync, aggiungere il suo tempo di flush)
 
-Con 3 standby sincrone: il commit attende la più lenta
+Con 3 standby che devono tutte confermare: il commit attende la più lenta
   → In produzione: 1 standby sync + N async (PostgreSQL: synchronous_standby_names)
 ```
 
+!!! note "synchronous_commit conta solo con standby sincrone"
+    In PostgreSQL `synchronous_commit` (`off` / `local` / `remote_write` / `on` / `remote_apply`) decide *fino a dove* aspettare la standby, ma solo se `synchronous_standby_names` non è vuoto. Con la lista vuota la replica resta asincrona qualunque sia il valore.
+
 ### Semi-sincrona
 
-Variante: il primary attende che almeno 1 standby abbia ricevuto il WAL (non necessariamente applicato). MySQL/MariaDB chiamano questa modalità "semi-sync". PostgreSQL ha `remote_write` (WAL ricevuto) vs `remote_apply` (WAL applicato).
+Variante: il primary attende che almeno 1 standby abbia *ricevuto* il WAL (non necessariamente applicato). MySQL/MariaDB chiamano questa modalità "semi-sync" (ACK dopo la scrittura nel relay log; se nessun ACK arriva entro `rpl_semi_sync_source_timeout` il primary degrada ad async). PostgreSQL non ha una modalità "semi-sync" nominata: la gradazione è data da `synchronous_commit` — `remote_write` (WAL scritto dal SO della standby, senza fsync), `on` (WAL flushed su disco della standby), `remote_apply` (WAL applicato, le letture sulla standby vedono già il commit).
 
 ```ini
-# PostgreSQL — modalità semi-sincrona
-synchronous_commit = remote_write   # WAL ricevuto dalla standby, non ancora applicato
+# PostgreSQL — livello intermedio (richiede synchronous_standby_names valorizzato)
+synchronous_standby_names = 'FIRST 1 (standby1, standby2)'
+synchronous_commit = remote_write   # WAL ricevuto dalla standby, non ancora su disco
 # più veloce di 'on' (no fsync sulla standby)
-# più lento di 'off' (attende ACK di rete)
-# RPO: può perdere al massimo le write in transito → accettabile per molti use case
+# più lento di 'local'/'off' (attende ACK di rete)
+# RPO: perdita possibile solo se primary E standby cadono insieme prima del flush
 ```
+
+Nota: a differenza di MySQL, PostgreSQL **non** degrada ad async da solo: se la standby sincrona sparisce, i commit si bloccano (vedi Scenario 2).
 
 ---
 
@@ -127,6 +160,9 @@ Pro: scala le letture orizzontalmente
 Contro: replica lag → read stale possibili (eventual consistency)
 Uso: AWS RDS Read Replicas, Aurora Read Replicas, GCP Cloud SQL replicas
 ```
+
+!!! note "Aurora è diversa"
+    RDS e Cloud SQL replicano il log al singolo standby. Le Aurora Replicas leggono invece lo **stesso storage distribuito** del writer: il lag è tipicamente di decine di ms e non c'è WAL da riapplicare sulla replica.
 
 **Pattern applicativo per read replicas:**
 
@@ -173,14 +209,15 @@ Il problema del multi-master è la **gestione dei conflitti**: se Master A e B a
 
 **Strategie di risoluzione conflitti:**
 - **Last-Write-Wins (LWW)**: vince il timestamp più recente. Semplice, ma può perdere write legittime
-- **Application-level resolution**: il conflitto viene rilevato e passato all'applicazione (es. CouchDB, Cassandra con LWT)
-- **CRDT (Conflict-free Replicated Data Types)**: strutture dati matematicamente prive di conflitti (contatori, set) — usati in Redis Cluster, Riak
+- **Application-level resolution**: il conflitto viene rilevato e passato all'applicazione (es. CouchDB: sceglie un vincitore deterministico ma conserva le revisioni in conflitto da risolvere)
+- **CRDT (Conflict-free Replicated Data Types)**: strutture dati matematicamente prive di conflitti (contatori, set) — usati in Riak e Redis Enterprise/Redis Cloud Active-Active (non in Redis Cluster open source, che è single-writer per shard)
 - **Serializable consistency**: coordinamento distribuito (2PC, Paxos) — elimina conflitti ma sacrifica disponibilità
 
 **Quando usare multi-master:**
 - Active-active geografico obbligatorio (disaster recovery senza downtime)
 - Write throughput > capacità di un singolo nodo (raro con hardware moderno)
-- Galera Cluster (MySQL), Patroni con multi-master sperimentale, CockroachDB, YugabyteDB
+- Galera Cluster (MariaDB/Percona XtraDB), MySQL Group Replication in modalità multi-primary, CockroachDB, YugabyteDB (questi ultimi due: consenso Raft per range, non vero multi-master LWW)
+- PostgreSQL nativo **non** offre multi-master: servono estensioni/prodotti (pglogical, EDB Postgres Distributed/BDR, pgEdge). Patroni gestisce solo topologie single-primary.
 
 ---
 
@@ -234,12 +271,15 @@ FROM pg_stat_replication;
 SELECT
     now() - pg_last_xact_replay_timestamp() AS replica_lag_seconds,
     pg_is_in_recovery()                      AS is_standby;
+-- ATTENZIONE: se il primary è idle (nessuna transazione) questo valore cresce
+-- senza che ci sia vero lag. Incrociare con i byte di lag (pg_stat_replication).
 ```
 
 ```yaml
-# Alert Prometheus — lag > 30s
+# Alert Prometheus — lag > 30s (metrica di postgres_exporter; il nome esatto
+# dipende da versione/query custom: verificare sul proprio /metrics)
 - alert: ReplicationLagHigh
-  expr: pg_replication_lag > 30
+  expr: pg_replication_lag_seconds > 30
   for: 2m
   annotations:
     summary: "PostgreSQL replica lag {{ $value }}s — rischio RPO violato"
@@ -260,19 +300,23 @@ SELECT client_addr, state, sync_state,
        replay_lag, write_lag, flush_lag
 FROM pg_stat_replication;
 
--- 2. Verificare conflitti hot standby sulla standby
-SELECT pid, wait_event_type, wait_event, query
+-- 2. Sulla standby: query lunghe e conflitti di recovery
+SELECT pid, now() - query_start AS durata, state, query
 FROM pg_stat_activity
-WHERE wait_event_type = 'Lock';
+WHERE state <> 'idle' ORDER BY durata DESC;
 
--- 3. Ridurre query analitiche pesanti sulla standby
--- Oppure aumentare max_standby_streaming_delay (default 30s)
--- In postgresql.conf della standby:
--- max_standby_streaming_delay = 120s
--- hot_standby_feedback = on   -- evita cancellazione vacum sul primary
+SELECT datname, confl_snapshot, confl_lock, confl_bufferpin
+FROM pg_stat_database_conflicts;
 
--- 4. Se la standby è I/O bound, verificare
-SELECT * FROM pg_stat_bgwriter;
+-- 3. Opzioni (postgresql.conf della standby):
+-- max_standby_streaming_delay = 120s  -- il replay aspetta le query fino a 120s:
+--                                     -- meno query cancellate, MA più lag (default 30s)
+-- hot_standby_feedback = on           -- il primary non fa VACUUM di righe ancora
+--                                     -- viste dalla standby: meno cancellazioni,
+--                                     -- ma possibile bloat sul primary
+-- In alternativa: spostare il reporting pesante su una replica dedicata.
+
+-- 4. Se la standby è I/O bound: pg_stat_io (PostgreSQL 16+) oppure iostat/iotop sull'host
 ```
 
 ---
@@ -299,8 +343,10 @@ SELECT pg_reload_conf();
 ALTER SYSTEM SET synchronous_standby_names = 'standby1';
 SELECT pg_reload_conf();
 
--- 4. Per evitare blocchi futuri: usare FIRST 1 (ANY) invece di ALL
--- synchronous_standby_names = 'FIRST 1 (standby1, standby2)'
+-- 4. Per evitare blocchi futuri: elencare più candidate, basta che 1 risponda
+-- synchronous_standby_names = 'FIRST 1 (standby1, standby2)'  -- per priorità
+-- synchronous_standby_names = 'ANY 1 (standby1, standby2)'    -- quorum
+-- (con un solo nome in lista, quella standby è un single point of failure per i commit)
 ```
 
 ---
@@ -337,15 +383,16 @@ SELECT pg_walfile_name(pg_current_wal_lsn());
 
 ### Scenario 4 — Split-brain in topologia multi-master
 
-**Sintomo:** Due nodi master accettano write contemporaneamente su stesse righe. I dati divergono tra i nodi. Galera Cluster mostra `wsrep_cluster_size` < quorum.
+**Sintomo:** Dopo una partizione di rete i nodi non formano più un cluster unico. In Galera i nodi in minoranza passano a `wsrep_cluster_status = non-Primary` e rifiutano query (`WSREP has not yet prepared node for application use`); con un cluster a 2 nodi, o dopo il crash simultaneo di tutti i nodi, nessuno ha il quorum. Nei sistemi multi-master senza quorum (LWW) le righe divergono davvero.
 
-**Causa:** Partizione di rete tra i nodi master. Entrambi i lati credono di essere il primary valido (split-brain).
+**Causa:** Partizione di rete tra i nodi. Galera applica il quorum: la minoranza si auto-sospende invece di divergere (scelta CP del teorema CAP), quindi il rischio reale è l'**indisponibilità** e la necessità di un bootstrap manuale. Il vero split-brain con dati divergenti avviene in sistemi senza quorum o forzando `pc.bootstrap` su entrambi i lati.
 
 **Soluzione:**
 ```bash
 # 1. Verificare stato del cluster Galera
-mysql -e "SHOW STATUS LIKE 'wsrep_%';" | grep -E "cluster_size|local_state|ready"
-# wsrep_cluster_size deve essere >= quorum (N/2 + 1)
+mysql -e "SHOW STATUS LIKE 'wsrep_%';" | grep -E "cluster_size|cluster_status|local_state|ready"
+# wsrep_cluster_status deve essere Primary; cluster_size >= quorum (N/2 + 1)
+# Se una componente ha ancora quorum, NON fare bootstrap: i nodi rientrano da soli.
 
 # 2. Identificare il nodo con dati più aggiornati (seqno più alto)
 mysql -e "SHOW STATUS LIKE 'wsrep_last_committed';"
