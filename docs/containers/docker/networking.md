@@ -7,7 +7,7 @@ search_keywords: [docker network bridge, docker overlay network swarm, docker ma
 parent: containers/docker/_index
 related: [containers/docker/architettura-interna, networking/kubernetes/cni, containers/kubernetes/_index]
 official_docs: https://docs.docker.com/engine/network/
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -153,7 +153,11 @@ docker run --rm --network app-network alpine nslookup web
 !!! warning "Published port e firewall host (ufw/firewalld)"
     `-p 8080:80` mette il DNAT in `PREROUTING` della tabella `nat`, **prima** delle chain `INPUT` gestite da ufw/firewalld: il traffico verso la porta pubblicata non viene filtrato dalle loro regole. Per limitare l'accesso inserire regole in `DOCKER-USER` (valutata prima delle regole Docker) oppure pubblicare solo su loopback: `-p 127.0.0.1:8080:80`.
 
-    <!-- REVIEW: verificare se le release recenti di Docker Engine (28+/29) offrono backend nftables e cambiano il filtraggio delle porte pubblicate/accesso diretto ai container da altre reti -->
+    **Novità recenti di Docker Engine:**
+
+    - **28.0.0**: l'accesso routed diretto (da host remoti sulla stessa L2) alle porte **non** pubblicate è bloccato nella chain `DOCKER`. Le bridge network hanno il `gateway mode` (`nat`, `nat-unprotected`, `routed`, `isolated` per le reti internal).
+    - **28.0.1**: la chain `DOCKER-USER` non ha più la regola `RETURN` esplicita, quindi si può anche fare append oltre che insert.
+    - **29.0.0**: backend **nftables sperimentale** (`--firewall-backend=nftables` o `"firewall-backend": "nftables"` in `daemon.json`). In questa modalità `DOCKER-USER` **non esiste**: servono tabelle/chain nftables proprie. Non è utilizzabile in Swarm mode e Docker non abilita da solo l'IP forwarding. Il default resta iptables, e gli esempi qui sotto valgono per quello.
 
 ```bash
 # Esempio: consenti l'accesso alla porta pubblicata solo da una subnet
