@@ -147,7 +147,8 @@ Il bulkhead sta all'esterno: se il pool è pieno, rifiuta la request prima ancor
 <dependency>
     <groupId>io.github.resilience4j</groupId>
     <artifactId>resilience4j-spring-boot3</artifactId>
-    <version>2.2.0</version> <!-- REVIEW: verificare ultima 2.x e compatibilità con Spring Boot 4 -->
+    <version>2.4.0</version> <!-- ultima 2.x su Maven Central (mar 2026) --> <!-- CURRENCY: nessun modulo resilience4j-spring-boot4 verificato (2026-10); issue #2371 aperta -->
+
 </dependency>
 <!-- AOP obbligatorio per le annotazioni @CircuitBreaker, @Retry, etc. -->
 <dependency>
@@ -758,9 +759,7 @@ func (c *Client) doHTTPCall(ctx context.Context, req PaymentRequest) ([]byte, er
 
 #### Test del Circuit Breaker con Clock Stub
 
-Per testare le transizioni di stato senza attendere il `Timeout` reale si inietta un clock finto:
-
-<!-- REVIEW: verificare che gobreaker/v2 esponga davvero un campo `Clock` in Settings (nelle versioni note il tempo non è iniettabile; alternativa: Timeout breve, es. 50ms, + time.Sleep) -->
+`gobreaker.Settings` **non** ha un campo `Clock` (campi: `Name`, `MaxRequests`, `Interval`, `Timeout`, `ReadyToTrip`, `OnStateChange`, `IsSuccessful`): il tempo non è iniettabile. Nei test si usa un `Timeout` breve (es. 50ms) e `time.Sleep` per attendere la transizione a HALF-OPEN:
 
 ```go
 // payment/client_test.go
@@ -776,18 +775,7 @@ import (
     "github.com/sony/gobreaker/v2"
 )
 
-// fakeClock permette di avanzare il tempo manualmente nei test
-type fakeClock struct {
-    current time.Time
-}
-
-func (f *fakeClock) Now() time.Time        { return f.current }
-func (f *fakeClock) Since(t time.Time) time.Duration { return f.current.Sub(t) }
-func (f *fakeClock) advance(d time.Duration) { f.current = f.current.Add(d) }
-
 func TestCircuitBreakerOpensAfterFailures(t *testing.T) {
-    clock := &fakeClock{current: time.Now()}
-
     // Server che restituisce sempre 500
     failingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         w.WriteHeader(http.StatusInternalServerError)
@@ -796,12 +784,11 @@ func TestCircuitBreakerOpensAfterFailures(t *testing.T) {
 
     settings := gobreaker.Settings{
         Name:    "test-cb",
-        Timeout: 30 * time.Second,
+        Timeout: 50 * time.Millisecond, // breve: il tempo non è iniettabile
         ReadyToTrip: func(counts gobreaker.Counts) bool {
             return counts.Requests >= 5 &&
                 float64(counts.TotalFailures)/float64(counts.Requests) >= 0.5
         },
-        Clock: clock, // inietta il clock finto
     }
     cb := gobreaker.NewCircuitBreaker[[]byte](settings)
 
@@ -816,8 +803,8 @@ func TestCircuitBreakerOpensAfterFailures(t *testing.T) {
         t.Fatalf("expected circuit to be OPEN, got %s", cb.State())
     }
 
-    // Avanza il clock oltre il timeout → deve passare a HALF-OPEN
-    clock.advance(31 * time.Second)
+    // Attendi oltre il Timeout → alla prossima chiamata passa a HALF-OPEN
+    time.Sleep(100 * time.Millisecond)
 
     // La prossima chiamata entra in HALF-OPEN e triggera il probe
     recoveredServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -951,10 +938,16 @@ class PaymentClientResilienceTest {
 }
 ```
 
-<!-- REVIEW: verificare API testcontainers-go toxiproxy module (toxiproxy.Run, URI, ControlURI) e client Go Shopify/toxiproxy: snippet non compilabile così com'è -->
+Il modulo `testcontainers-go/modules/toxiproxy` espone `Run(ctx, img, opts...)`, `URI(ctx) (string, error)` (control API) e `ProxiedEndpoint(port) (host, port, err)`; **non** ha `ControlURI` e non include il client, che arriva da `github.com/Shopify/toxiproxy/v2/client`. Il container pre-espone le porte proxy 8666 e successive.
+
+<!-- CURRENCY: non verificato (2026-10) — opzione di rete `testcontainers.WithNetworks(...)` e `GenericNetwork` (possibili sostituti: `network.New`, `network.WithNetwork`) -->
 ```go
 // Go — Toxiproxy con Testcontainers
 // payment/integration_test.go
+// import (
+//     tctoxi "github.com/testcontainers/testcontainers-go/modules/toxiproxy"
+//     toxiclient "github.com/Shopify/toxiproxy/v2/client"
+// )
 func TestCircuitBreakerWithToxiproxy(t *testing.T) {
     ctx := context.Background()
 
@@ -977,18 +970,22 @@ func TestCircuitBreakerWithToxiproxy(t *testing.T) {
     defer mockServer.Terminate(ctx)
 
     // Avvia Toxiproxy
-    toxiContainer, _ := toxiproxy.Run(ctx, "ghcr.io/shopify/toxiproxy:2.11.0",
+    toxiContainer, _ := tctoxi.Run(ctx, "ghcr.io/shopify/toxiproxy:2.11.0",
         testcontainers.WithNetworks([]string{"test-net"},
             map[string][]string{"test-net": {"toxiproxy"}}))
     defer toxiContainer.Terminate(ctx)
 
-    proxyURL, _ := toxiContainer.URI(ctx, "payment", "payment-mock:1080")
-    toxiClient := toxiproxy.NewClient(toxiContainer.ControlURI(ctx))
+    controlURL, _ := toxiContainer.URI(ctx) // control API (porta 8474)
+    toxiClient := toxiclient.NewClient(controlURL)
     proxy, _ := toxiClient.CreateProxy("payment", "0.0.0.0:8666", "payment-mock:1080")
+
+    // Endpoint raggiungibile dall'host per la porta proxy 8666
+    host, port, _ := toxiContainer.ProxiedEndpoint(8666)
+    proxyURL := "http://" + host + ":" + port
 
     // Test: connessione reset → il CB deve aprirsi
     proxy.AddToxic("reset-conn", "reset_peer", "downstream", 1.0,
-        toxiproxy.Attributes{"timeout": 0})
+        toxiclient.Attributes{"timeout": 0})
 
     client := NewClient(proxyURL)
     for i := 0; i < 5; i++ {
