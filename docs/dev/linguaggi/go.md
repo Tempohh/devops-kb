@@ -2,14 +2,15 @@
 title: "Go per Microservizi"
 slug: go
 category: dev
-tags: [go, golang, microservizi, grpc, goroutine, concurrency, gin, echo, fiber, slog, zerolog, viper, grpc, testing]
+tags: [go, golang, microservizi, grpc, goroutine, concurrency, gin, echo, fiber, slog, zerolog, viper, testing]
 search_keywords: [go, golang, go lang, go microservizi, go microservices, goroutine, channel, goroutine pool, go concorrenza, go concurrency, startup go, footprint go, gin framework, gin http, echo framework, echo go, fiber framework, fiber go, framework http go, go http server, structured logging go, slog go, slog stdlib, zerolog, zerolog go, go 1.21, go logging, context go, context.Context, context propagation, context cancellation, context timeout, context deadline, graceful shutdown go, signal.NotifyContext, grpc go, protoc-gen-go, grpc golang, protobuf go, proto go, viper config, viper golang, go config management, table-driven test, table driven test go, testify, testify go, go testing, mocking go, interface mocking go, GOMAXPROCS, automaxprocs, uber-go automaxprocs, go container, go kubernetes, go docker, go build container, go multistage dockerfile, go 1.21 slog, go modules, go mod, go embed]
 parent: dev/linguaggi/_index
 related: [networking/protocolli/grpc, dev/linguaggi/java-quarkus, dev/linguaggi/dotnet]
 official_docs: https://go.dev/doc/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Go per Microservizi
@@ -28,7 +29,7 @@ Quando usare Go: sidecar e agent Kubernetes, proxy e gateway leggeri, servizi gR
 
 ### Goroutine e Scheduler Go
 
-Go usa un runtime scheduler M:N (M goroutine, N thread OS). Il numero di thread OS attivi è controllato da `GOMAXPROCS`, default uguale al numero di CPU logiche. Ogni goroutine nasce con 2–8KB di stack che cresce dinamicamente — non c'è limite fisso. Il scheduler usa work-stealing: thread OS idle rubano goroutine dalla coda di thread occupati.
+Go usa un runtime scheduler M:N (M goroutine, N thread OS). Il numero di thread OS attivi è controllato da `GOMAXPROCS`, default uguale al numero di CPU logiche. Ogni goroutine nasce con ~2KB di stack (il runtime lo adatta dinamicamente) che cresce dinamicamente — non c'è limite fisso. Il scheduler usa work-stealing: thread OS idle rubano goroutine dalla coda di thread occupati.
 
 ```
 Goroutines (migliaia)
@@ -70,20 +71,23 @@ close(jobs)
 
 In un container Kubernetes, il runtime Go vede le CPU fisiche dell'host, non il limite del container. Con `GOMAXPROCS=32` su un pod limitato a `0.5 CPU`, si creano 32 thread OS che competono su mezzo core — context switching eccessivo e performance peggiori.
 
-**Soluzione: `uber-go/automaxprocs`** legge il `cpu.cfs_quota_us` del cgroup e imposta `GOMAXPROCS` automaticamente al valore corretto per il container.
+!!! note "Go 1.25+: container-aware nativo"
+    Da **Go 1.25** il runtime rispetta il CPU limit del cgroup (v1 e v2) e aggiorna `GOMAXPROCS` dinamicamente se il limite cambia. Con direttiva `go 1.25` (o superiore) nel `go.mod` `automaxprocs` non serve più; resta necessario con direttiva `go` < 1.25, perché il nuovo comportamento è legato alla versione dichiarata nel `go.mod`. Vale per i limiti (`limits.cpu`), non per le `requests`. Impostando `GOMAXPROCS` a mano (env var o chiamata) il comportamento automatico si disattiva.
+
+**Soluzione per Go < 1.25: `uber-go/automaxprocs`** legge la quota CPU del cgroup (`cpu.max` in cgroup v2, `cpu.cfs_quota_us` in v1) e imposta `GOMAXPROCS` al valore corretto per il container.
 
 ```go
 import _ "go.uber.org/automaxprocs"  // side-effect import nell'init
 
 // In main.go — basta importare il package
-// automaxprocs legge /sys/fs/cgroup/cpu.cfs_quota_us
+// automaxprocs legge la quota CPU del cgroup (cpu.max / cpu.cfs_quota_us)
 // e chiama runtime.GOMAXPROCS(calcolato)
 // Log output: "maxprocs: Updating GOMAXPROCS=2: determined from CPU quota"
 ```
 
-```yaml
+```dockerfile
 # Dockerfile multistage — binario statico per immagine scratch/distroless
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -96,7 +100,7 @@ ENTRYPOINT ["/service"]
 ```
 
 !!! warning "GOMAXPROCS in container senza automaxprocs"
-    Senza `automaxprocs`, un pod con `resources.limits.cpu: 500m` su un nodo con 32 core usa `GOMAXPROCS=32`. Il risultato è 32 thread OS che competono su 0.5 core: throughput cala del 20-40% e la CPU throttling del kernel aumenta drasticamente. **Importare sempre `uber-go/automaxprocs` in main.go**.
+    Senza `automaxprocs`, un pod con `resources.limits.cpu: 500m` su un nodo con 32 core usa `GOMAXPROCS=32`. Il risultato è 32 thread OS che competono su 0.5 core: il CFS throttling del kernel sospende il processo a fine quota e la latenza p99 peggiora sensibilmente. **Con Go < 1.25 importare sempre `uber-go/automaxprocs` in main.go**; con Go ≥ 1.25 è automatico.
 
 ---
 
@@ -106,13 +110,15 @@ Tutti e tre i framework si basano su `net/http` standard e sono production-ready
 
 | Aspetto | Gin | Echo | Fiber |
 |---|---|---|---|
-| Stars GitHub | ~80k | ~30k | ~34k |
 | Performance | Alta (httprouter) | Alta (radix tree) | Molto alta (fasthttp) |
 | Middleware standard | Vasto ecosistema | Buon ecosistema | Crescente |
 | API style | Funzionale | Funzionale | Funzionale (Express-like) |
 | Compatibilità `net/http` | Piena | Piena | **NO** (usa fasthttp) |
 | Binding/Validation | Built-in (go-playground/validator) | Built-in | Built-in |
 | Ideale per | Default choice, ecosistema maturo | API eleganti, middleware custom | Ultra-performance, migrazione da Node.js |
+
+!!! tip "Valutare prima la stdlib"
+    Da Go 1.22 `http.ServeMux` supporta metodo e wildcard nel pattern (`mux.HandleFunc("GET /users/{id}", h)`, `r.PathValue("id")`). Per API semplici un framework non è più necessario: meno dipendenze, piena compatibilità con l'ecosistema `net/http`.
 
 !!! warning "Fiber e net/http incompatibilità"
     Fiber usa `fasthttp` invece di `net/http`. Molte librerie Go standard e middleware OpenTelemetry/Prometheus assumono `net/http`. Prima di scegliere Fiber, verificare la compatibilità dell'intera dependency chain.
@@ -124,7 +130,7 @@ package main
 
 import (
     "net/http"
-    "go.uber.org/automaxprocs"   // GOMAXPROCS automatico
+    _ "go.uber.org/automaxprocs" // solo Go < 1.25
     "github.com/gin-gonic/gin"
     "log/slog"
     "os"
@@ -167,7 +173,9 @@ package main
 import (
     "github.com/labstack/echo/v4"
     "github.com/labstack/echo/v4/middleware"
+    echojwt "github.com/labstack/echo-jwt/v4"
     "net/http"
+    "os"
 )
 
 func main() {
@@ -177,10 +185,10 @@ func main() {
     // Middleware globali
     e.Use(middleware.RequestID())
     e.Use(middleware.Recover())
-    e.Use(middleware.Logger())  // structured logging
+    e.Use(middleware.RequestLogger())  // per log JSON strutturati: RequestLoggerWithConfig + slog
 
-    // Gruppi con middleware specifici
-    api := e.Group("/api/v1", middleware.JWT([]byte(os.Getenv("JWT_SECRET"))))
+    // Gruppi con middleware specifici (middleware.JWT rimosso da echo/v4: usare echo-jwt)
+    api := e.Group("/api/v1", echojwt.JWT([]byte(os.Getenv("JWT_SECRET"))))
     api.GET("/items/:id", getItem)
     api.POST("/items", createItem)
 
@@ -251,6 +259,9 @@ func Load() (*Config, error) {
     // Default
     v.SetDefault("server.port", 8080)
     v.SetDefault("server.read_timeout", 30)
+    // Con AutomaticEnv + Unmarshal una chiave è letta da env solo se nota a Viper
+    // (default, file o BindEnv): senza questa riga SERVICE_DATABASE_DSN viene ignorata
+    v.SetDefault("database.dsn", "")
     v.SetDefault("database.max_open_conns", 25)
     v.SetDefault("database.max_idle_conns", 5)
 
@@ -290,8 +301,6 @@ package main
 import (
     "log/slog"
     "os"
-    "net/http"
-    "context"
 )
 
 func main() {
@@ -331,7 +340,10 @@ func main() {
 Zerolog è preferito quando il logging è sul critical path (es. servizi che logano ogni richiesta ad alto RPS). Usa allocation-zero tramite method chaining.
 
 ```go
-import "github.com/rs/zerolog/log"
+import (
+    "github.com/rs/zerolog"
+    "github.com/rs/zerolog/log"
+)
 
 // Setup globale
 zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
@@ -391,7 +403,7 @@ func fetchMultiple(ctx context.Context, ids []string) ([]*Item, error) {
     results := make([]*Item, len(ids))
 
     for i, id := range ids {
-        i, id := i, id  // cattura per goroutine
+        // Go < 1.22 richiedeva `i, id := i, id`; da 1.22 ogni iterazione ha variabili proprie
         g.Go(func() error {
             item, err := fetchItem(ctx, id)
             if err != nil {
@@ -447,12 +459,13 @@ import (
     "os/signal"
     "syscall"
     "time"
-
-    "github.com/gin-gonic/gin"
-    _ "go.uber.org/automaxprocs"
 )
 
 func main() {
+    // Contesto cancellato su SIGTERM (Kubernetes) o SIGINT (Ctrl+C)
+    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+    defer stop()
+
     router := setupRouter()
 
     srv := &http.Server{
@@ -472,10 +485,6 @@ func main() {
         }
     }()
 
-    // Attesa segnale — SIGTERM (Kubernetes) o SIGINT (Ctrl+C)
-    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-    defer stop()
-
     <-ctx.Done()  // blocca fino a segnale
     slog.Info("shutdown signal received")
 
@@ -491,6 +500,9 @@ func main() {
     slog.Info("server stopped gracefully")
 }
 ```
+
+!!! note "Kubernetes: endpoint rimosso in ritardo"
+    Alla terminazione del pod, la rimozione dagli Endpoints e l'invio di SIGTERM avvengono in parallelo: per qualche secondo possono arrivare ancora richieste nuove. Aggiungere un `preStop` con breve `sleep` (o rendere `/readyz` non-ready al segnale e attendere qualche secondo prima di `Shutdown`), e tenere `terminationGracePeriodSeconds` > grace period del server.
 
 ---
 
@@ -526,8 +538,14 @@ package server
 
 import (
     "context"
+    "errors"
+    "net"
+
     userv1 "github.com/myorg/service/api/user/v1"
+    "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+    "google.golang.org/grpc"
     "google.golang.org/grpc/codes"
+    "google.golang.org/grpc/reflection"
     "google.golang.org/grpc/status"
 )
 
@@ -562,13 +580,13 @@ func StartGRPCServer(addr string, svc *UserServiceServer) error {
     }
 
     s := grpc.NewServer(
+        grpc.StatsHandler(otelgrpc.NewServerHandler()),  // OpenTelemetry (interceptor otelgrpc rimossi)
         grpc.ChainUnaryInterceptor(
-            otelgrpc.UnaryServerInterceptor(),  // OpenTelemetry tracing
-            grpc_recovery.UnaryServerInterceptor(),  // panic recovery
+            recoveryInterceptor,  // panic recovery, es. go-grpc-middleware/v2 recovery.UnaryServerInterceptor()
         ),
     )
     userv1.RegisterUserServiceServer(s, svc)
-    reflection.Register(s)  // abilita grpcurl/grpc-gateway in dev
+    reflection.Register(s)  // abilita grpcurl/grpcui (disattivare in prod se non serve)
 
     return s.Serve(lis)
 }
@@ -644,7 +662,7 @@ func TestCalculateDiscount(t *testing.T) {
 
 ### Mocking con Interfacce
 
-Go non ha generics per i mock nella stdlib. Il pattern corretto è definire interfacce locali e implementare mock a mano (o con `mockery`/`gomock` per grandi codebase).
+La stdlib non offre un framework di mocking. Il pattern idiomatico è definire interfacce locali e implementare mock a mano (o con `mockery`/`gomock` per grandi codebase).
 
 ```go
 // Interfaccia definita dove viene USATA, non dove viene implementata
@@ -722,7 +740,7 @@ go tool cover -html=coverage.out  # report HTML
 go test -bench=. -benchmem ./pkg/...
 
 # Generazione mock con mockery (alternativa per interfacce numerose)
-go install github.com/vektra/mockery/v2@latest
+go install github.com/vektra/mockery/v2@latest   # mockery v3 usa .mockery.yml
 mockery --name=UserRepository --outpkg=mocks --output=./internal/mocks
 ```
 
@@ -789,7 +807,7 @@ func TestMain(m *testing.M) { goleak.VerifyTestMain(m) }
 
 **Sintomo:** Latenza p99 >>p50, metriche Kubernetes `container_cpu_cfs_throttled_seconds_total` alta.
 
-**Causa:** `GOMAXPROCS` impostato al numero di CPU del nodo host invece del quota del container (mancanza di `automaxprocs`). Il GC Go schedula goroutine sui thread, e con troppi thread sul runtime Go si genera eccessivo context switching.
+**Causa:** `GOMAXPROCS` pari alle CPU del nodo host invece della quota del container (Go < 1.25 senza `automaxprocs`, o `GOMAXPROCS` fissato a mano). Il GC Go schedula goroutine sui thread, e con troppi thread sul runtime Go si genera eccessivo context switching.
 
 **Soluzione:**
 ```go
@@ -807,7 +825,7 @@ Verificare nel log di avvio: `maxprocs: Updating GOMAXPROCS=2: determined from C
 
 **Causa:** Accesso concorrente non sincronizzato a variabili condivise (map, slice, struct senza mutex).
 
-**Soluzione:** Eseguire sempre i test con `-race`. Per map condivise usare `sync.Map` o proteggere con `sync.RWMutex`. Per contatori usare `sync/atomic`.
+**Soluzione:** Eseguire sempre i test con `-race`. Per map condivise usare di default `sync.RWMutex` con map tipizzata; `sync.Map` conviene solo con chiavi scritte una volta e lette spesso, o set di chiavi disgiunti per goroutine. Per contatori usare `sync/atomic`.
 
 ```go
 // Anti-pattern — map non thread-safe
@@ -823,7 +841,7 @@ mu.Lock()
 cache["key"] = item
 mu.Unlock()
 
-// Soluzione 2 — sync.Map (ottimizzata per molte goroutine)
+// Soluzione 2 — sync.Map (solo per i casi sopra; non tipizzata)
 var cache sync.Map
 cache.Store("key", item)
 val, ok := cache.Load("key")
@@ -831,9 +849,9 @@ val, ok := cache.Load("key")
 
 ---
 
-### Connessioni DB esaurite — `sql: database is closed` o timeout
+### Connessioni DB esaurite — timeout su query
 
-**Sintomo:** Errori `context deadline exceeded` su query DB, `sql: database is closed` sotto carico, connessioni in attesa nel pool.
+**Sintomo:** Errori `context deadline exceeded` su query DB sotto carico, connessioni in attesa nel pool (`db.Stats().WaitCount` in crescita). Nota: `sql: database is closed` indica un `db.Close()` già chiamato, non l'esaurimento del pool.
 
 **Causa:** Pool DB configurato con limiti troppo bassi rispetto al carico, o connessioni non rilasciate (missing `rows.Close()`/`stmt.Close()`).
 
