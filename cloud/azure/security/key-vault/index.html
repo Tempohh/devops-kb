@@ -7091,7 +7091,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7548,7 +7548,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -7944,7 +7944,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -7969,7 +7969,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24945,7 +24945,7 @@
 <tr>
 <td><strong>Premium</strong></td>
 <td>HSM-protected (opzione)</td>
-<td>FIPS 140-2 Level 2</td>
+<td>FIPS 140-2 Level 2 <!-- REVIEW: verificare livello FIPS Premium (Microsoft cita HSM validati FIPS 140-3 Level 3) --></td>
 <td>Chiavi critiche, compliance normativa</td>
 </tr>
 <tr>
@@ -24971,7 +24971,7 @@
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>--enable-soft-delete<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span>--soft-delete-retention-days<span class="w"> </span><span class="m">90</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>--enable-purge-protection<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>--public-network-access<span class="w"> </span>Disabled
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>--public-network-access<span class="w"> </span>Disabled<span class="w">   </span><span class="c1"># accesso solo via Private Endpoint (vedi sotto); da CLI fuori VNet le operazioni data-plane falliranno</span>
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="c1"># Per chiavi HSM-protected (Premium)</span>
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>az<span class="w"> </span>keyvault<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
@@ -24982,6 +24982,10 @@
 </span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">  </span>--enable-rbac-authorization<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">  </span>--enable-purge-protection<span class="w"> </span><span class="nb">true</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Soft-delete sempre attivo</p>
+<p>Dal 2025 il soft-delete è obbligatorio su tutti i vault e non può più essere disabilitato: <code>--enable-soft-delete</code> è di fatto ridondante. Retention configurabile 7–90 giorni (default 90), fissata alla creazione.</p>
+</div>
 <div class="admonition warning">
 <p class="admonition-title">Purge Protection Irreversibile</p>
 <p>Una volta abilitata la purge protection (<code>--enable-purge-protection true</code>), non può essere disabilitata. I segreti eliminati (soft-delete) non possono essere eliminati permanentemente prima dei 90 giorni di retention. Abilita sempre in produzione per proteggere da eliminazioni accidentali o maligne.</p>
@@ -25018,7 +25022,7 @@
 </span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"db-connection-string"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="w">  </span>--output<span class="w"> </span>table
 </span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>
-</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="c1"># Disabilitare versione specifica (soft-delete)</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="c1"># Disabilitare una versione specifica (non la elimina, la rende non utilizzabile)</span>
 </span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>az<span class="w"> </span>keyvault<span class="w"> </span>secret<span class="w"> </span>set-attributes<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="w">  </span>--vault-name<span class="w"> </span><span class="nv">$KV_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"db-connection-string"</span><span class="w"> </span><span class="se">\</span>
@@ -25071,20 +25075,23 @@
 </span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="w">  </span>--vault-name<span class="w"> </span><span class="nv">$KV_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">  </span>--file<span class="w"> </span>signing-key-backup.blob
 </span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a>
-</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="c1"># Importare chiave esistente</span>
-</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a>az<span class="w"> </span>keyvault<span class="w"> </span>key<span class="w"> </span>import<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="w">  </span>--vault-name<span class="w"> </span><span class="nv">$KV_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"imported-key"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="w">  </span>--pem-file<span class="w"> </span>my-private-key.pem<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="w">  </span>--pem-password<span class="w"> </span><span class="s2">"passphrase"</span>
-</span><span id="__span-2-42"><a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a>
-</span><span id="__span-2-43"><a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="c1"># Operazioni crittografiche</span>
-</span><span id="__span-2-44"><a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a>az<span class="w"> </span>keyvault<span class="w"> </span>key<span class="w"> </span>encrypt<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-45"><a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a><span class="w">  </span>--vault-name<span class="w"> </span><span class="nv">$KV_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-46"><a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"signing-key"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-47"><a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a><span class="w">  </span>--algorithm<span class="w"> </span>RSA-OAEP-256<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-48"><a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="w">  </span>--value<span class="w"> </span><span class="s2">"</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span><span class="s1">'data to encrypt'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-49"><a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="w">  </span>--output<span class="w"> </span>json
+</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="c1"># Rotation policy nativa delle chiavi (rinnovo automatico, senza Function)</span>
+</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a>az<span class="w"> </span>keyvault<span class="w"> </span>key<span class="w"> </span>rotation-policy<span class="w"> </span>update<span class="w">   </span>--vault-name<span class="w"> </span><span class="nv">$KV_NAME</span><span class="w">   </span>--name<span class="w"> </span><span class="s2">"signing-key"</span><span class="w">   </span>--value<span class="w"> </span><span class="s1">'{"lifetimeActions":[{"trigger":{"timeAfterCreate":"P90D"},"action":{"type":"Rotate"}}],"attributes":{"expiryTime":"P180D"}}'</span>
+</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a>
+</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="c1"># Importare chiave esistente</span>
+</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a>az<span class="w"> </span>keyvault<span class="w"> </span>key<span class="w"> </span>import<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="w">  </span>--vault-name<span class="w"> </span><span class="nv">$KV_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-42"><a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"imported-key"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-43"><a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="w">  </span>--pem-file<span class="w"> </span>my-private-key.pem<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-44"><a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a><span class="w">  </span>--pem-password<span class="w"> </span><span class="s2">"passphrase"</span>
+</span><span id="__span-2-45"><a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a>
+</span><span id="__span-2-46"><a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a><span class="c1"># Operazioni crittografiche</span>
+</span><span id="__span-2-47"><a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a>az<span class="w"> </span>keyvault<span class="w"> </span>key<span class="w"> </span>encrypt<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-48"><a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="w">  </span>--vault-name<span class="w"> </span><span class="nv">$KV_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-49"><a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"signing-key"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-50"><a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a><span class="w">  </span>--algorithm<span class="w"> </span>RSA-OAEP-256<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-51"><a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a><span class="w">  </span>--value<span class="w"> </span><span class="s2">"</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span><span class="s1">'data to encrypt'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-52"><a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a><span class="w">  </span>--output<span class="w"> </span>json
 </span></code></pre></div>
 <h2 id="gestione-certificati">Gestione Certificati<a class="headerlink" href="#gestione-certificati" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Creare certificato self-signed (per dev/test)</span>
@@ -25232,6 +25239,10 @@
 </span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">  </span>--scope<span class="w"> </span><span class="s2">"</span><span class="nv">$KV_ID</span><span class="s2">/secrets/db-connection-string"</span>
 </span></code></pre></div>
 <h2 id="network-rules-e-private-endpoint">Network Rules e Private Endpoint<a class="headerlink" href="#network-rules-e-private-endpoint" title="Permanent link">&para;</a></h2>
+<div class="admonition warning">
+<p class="admonition-title">Due modelli alternativi</p>
+<p>Con <code>--public-network-access Disabled</code> l'unico accesso è il <strong>Private Endpoint</strong>: le network rules (subnet/IP) non hanno effetto. Le network rules funzionano solo con public access <code>Enabled</code> + <code>--default-action Deny</code> (firewall con service endpoint). Scegli uno dei due modelli; in produzione è preferibile il Private Endpoint.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Aggiungere regola network per subnet VNet specifica</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>az<span class="w"> </span>keyvault<span class="w"> </span>network-rule<span class="w"> </span>add<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
@@ -25262,7 +25273,7 @@
 </span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="w">  </span>--group-ids<span class="w"> </span>vault<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="w">  </span>--connection-name<span class="w"> </span>conn-keyvault-prod
 </span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a>
-</span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="c1"># DNS zona privata per Key Vault</span>
+</span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="c1"># DNS zona privata per Key Vault (la zona va anche collegata al PE con un dns-zone-group)</span>
 </span><span id="__span-5-32"><a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a>az<span class="w"> </span>network<span class="w"> </span>private-dns<span class="w"> </span>zone<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-33"><a id="__codelineno-5-33" name="__codelineno-5-33" href="#__codelineno-5-33"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-34"><a id="__codelineno-5-34" name="__codelineno-5-34" href="#__codelineno-5-34"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"privatelink.vaultcore.azure.net"</span>
@@ -25273,6 +25284,8 @@
 </span><span id="__span-5-39"><a id="__codelineno-5-39" name="__codelineno-5-39" href="#__codelineno-5-39"></a><span class="w">  </span>--name<span class="w"> </span>link-vnet-prod<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-40"><a id="__codelineno-5-40" name="__codelineno-5-40" href="#__codelineno-5-40"></a><span class="w">  </span>--virtual-network<span class="w"> </span>vnet-prod<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-41"><a id="__codelineno-5-41" name="__codelineno-5-41" href="#__codelineno-5-41"></a><span class="w">  </span>--registration-enabled<span class="w"> </span><span class="nb">false</span>
+</span><span id="__span-5-42"><a id="__codelineno-5-42" name="__codelineno-5-42" href="#__codelineno-5-42"></a>
+</span><span id="__span-5-43"><a id="__codelineno-5-43" name="__codelineno-5-43" href="#__codelineno-5-43"></a>az<span class="w"> </span>network<span class="w"> </span>private-endpoint<span class="w"> </span>dns-zone-group<span class="w"> </span>create<span class="w">   </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w">   </span>--endpoint-name<span class="w"> </span>pep-keyvault-prod<span class="w">   </span>--name<span class="w"> </span>default<span class="w">   </span>--private-dns-zone<span class="w"> </span><span class="s2">"privatelink.vaultcore.azure.net"</span><span class="w">   </span>--zone-name<span class="w"> </span>vaultcore
 </span></code></pre></div>
 <h2 id="key-vault-references-per-app-service-functions">Key Vault References per App Service / Functions<a class="headerlink" href="#key-vault-references-per-app-service-functions" title="Permanent link">&para;</a></h2>
 <p>I Key Vault References permettono di referenziare segreti direttamente nelle App Settings senza copia locale del valore.</p>
@@ -25298,7 +25311,7 @@
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Auto-refresh dei Key Vault References</p>
-<p>Quando il segreto viene aggiornato in Key Vault, l'App Service/Functions aggiorna automaticamente il valore <strong>senza necessità di redeploy</strong>. Il refresh avviene entro 24 ore, o immediatamente riavviando l'app.</p>
+<p>Se la reference <strong>non specifica la versione</strong> (URI che termina con <code>/secrets/nome/</code>), l'App Service rilegge il valore periodicamente (entro 24 ore) <strong>senza redeploy</strong>; riavviare l'app forza una nuova lettura. Una reference con versione fissata non segue mai le nuove versioni: usala solo per pinning deliberato.</p>
 </div>
 <h2 id="rotation-automatica-con-eventgrid-functions">Rotation Automatica con EventGrid + Functions<a class="headerlink" href="#rotation-automatica-con-eventgrid-functions" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Azure Function per rotazione automatica di un segreto</span>
@@ -25319,27 +25332,28 @@
 </span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="sd">    """</span>
 </span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>    <span class="n">event_data</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get_json</span><span class="p">()</span>
 </span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>    <span class="n">secret_name</span> <span class="o">=</span> <span class="n">event_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ObjectName"</span><span class="p">)</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>    <span class="n">vault_url</span> <span class="o">=</span> <span class="n">event_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"VaultUrl"</span><span class="p">)</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Rotating secret: </span><span class="si">{</span><span class="n">secret_name</span><span class="si">}</span><span class="s2"> in vault: </span><span class="si">{</span><span class="n">vault_url</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>
-</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>    <span class="n">credential</span> <span class="o">=</span> <span class="n">DefaultAzureCredential</span><span class="p">()</span>
-</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>    <span class="n">client</span> <span class="o">=</span> <span class="n">SecretClient</span><span class="p">(</span><span class="n">vault_url</span><span class="o">=</span><span class="n">vault_url</span><span class="p">,</span> <span class="n">credential</span><span class="o">=</span><span class="n">credential</span><span class="p">)</span>
-</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>
-</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>    <span class="c1"># Generare nuovo valore segreto</span>
-</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>    <span class="n">new_value</span> <span class="o">=</span> <span class="n">generate_secure_password</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span>
-</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>
-</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>    <span class="c1"># Aggiornare il segreto nel Key Vault</span>
-</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>    <span class="n">client</span><span class="o">.</span><span class="n">set_secret</span><span class="p">(</span><span class="n">secret_name</span><span class="p">,</span> <span class="n">new_value</span><span class="p">)</span>
-</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a>
-</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a>    <span class="c1"># Aggiornare anche nel servizio esterno (es: database password)</span>
-</span><span id="__span-7-33"><a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a>    <span class="n">update_database_password</span><span class="p">(</span><span class="n">new_value</span><span class="p">)</span>
-</span><span id="__span-7-34"><a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a>
-</span><span id="__span-7-35"><a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a>    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Secret </span><span class="si">{</span><span class="n">secret_name</span><span class="si">}</span><span class="s2"> rotated successfully"</span><span class="p">)</span>
-</span><span id="__span-7-36"><a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a>
-</span><span id="__span-7-37"><a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_secure_password</span><span class="p">(</span><span class="n">length</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-</span><span id="__span-7-38"><a id="__codelineno-7-38" name="__codelineno-7-38" href="#__codelineno-7-38"></a>    <span class="n">characters</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">ascii_letters</span> <span class="o">+</span> <span class="n">string</span><span class="o">.</span><span class="n">digits</span> <span class="o">+</span> <span class="s2">"!@#$%^&amp;*"</span>
-</span><span id="__span-7-39"><a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a>    <span class="k">return</span> <span class="s1">''</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">SystemRandom</span><span class="p">()</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">characters</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">length</span><span class="p">))</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>    <span class="c1"># Il payload Key Vault espone VaultName (non l'URL)</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>    <span class="n">vault_url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"https://</span><span class="si">{</span><span class="n">event_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'VaultName'</span><span class="p">)</span><span class="si">}</span><span class="s2">.vault.azure.net/"</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Rotating secret: </span><span class="si">{</span><span class="n">secret_name</span><span class="si">}</span><span class="s2"> in vault: </span><span class="si">{</span><span class="n">vault_url</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>    <span class="n">credential</span> <span class="o">=</span> <span class="n">DefaultAzureCredential</span><span class="p">()</span>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>    <span class="n">client</span> <span class="o">=</span> <span class="n">SecretClient</span><span class="p">(</span><span class="n">vault_url</span><span class="o">=</span><span class="n">vault_url</span><span class="p">,</span> <span class="n">credential</span><span class="o">=</span><span class="n">credential</span><span class="p">)</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>    <span class="c1"># Generare nuovo valore segreto</span>
+</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>    <span class="n">new_value</span> <span class="o">=</span> <span class="n">generate_secure_password</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span>
+</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>
+</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>    <span class="c1"># Aggiornare il segreto nel Key Vault</span>
+</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a>    <span class="n">client</span><span class="o">.</span><span class="n">set_secret</span><span class="p">(</span><span class="n">secret_name</span><span class="p">,</span> <span class="n">new_value</span><span class="p">)</span>
+</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a>
+</span><span id="__span-7-33"><a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a>    <span class="c1"># Aggiornare anche nel servizio esterno (es: database password)</span>
+</span><span id="__span-7-34"><a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a>    <span class="n">update_database_password</span><span class="p">(</span><span class="n">new_value</span><span class="p">)</span>
+</span><span id="__span-7-35"><a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a>
+</span><span id="__span-7-36"><a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a>    <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Secret </span><span class="si">{</span><span class="n">secret_name</span><span class="si">}</span><span class="s2"> rotated successfully"</span><span class="p">)</span>
+</span><span id="__span-7-37"><a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a>
+</span><span id="__span-7-38"><a id="__codelineno-7-38" name="__codelineno-7-38" href="#__codelineno-7-38"></a><span class="k">def</span><span class="w"> </span><span class="nf">generate_secure_password</span><span class="p">(</span><span class="n">length</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-7-39"><a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a>    <span class="n">characters</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">ascii_letters</span> <span class="o">+</span> <span class="n">string</span><span class="o">.</span><span class="n">digits</span> <span class="o">+</span> <span class="s2">"!@#$%^&amp;*"</span>
+</span><span id="__span-7-40"><a id="__codelineno-7-40" name="__codelineno-7-40" href="#__codelineno-7-40"></a>    <span class="k">return</span> <span class="s1">''</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">SystemRandom</span><span class="p">()</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">characters</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">length</span><span class="p">))</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Creare Event Grid subscription per notifiche Key Vault</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>az<span class="w"> </span>eventgrid<span class="w"> </span>event-subscription<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
@@ -25386,53 +25400,54 @@
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">azure.keyvault.keys</span><span class="w"> </span><span class="kn">import</span> <span class="n">KeyClient</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">azure.keyvault.certificates</span><span class="w"> </span><span class="kn">import</span> <span class="n">CertificateClient</span>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">azure.identity</span><span class="w"> </span><span class="kn">import</span> <span class="n">DefaultAzureCredential</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># DefaultAzureCredential prova in ordine:</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># 1. EnvironmentCredential (AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="c1"># 2. WorkloadIdentityCredential (AKS Workload Identity)</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="c1"># 3. ManagedIdentityCredential (VM, App Service, Functions)</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># 4. SharedTokenCacheCredential</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># 5. VisualStudioCodeCredential</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="c1"># 6. AzureCliCredential (az login)</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="c1"># 7. AzurePowerShellCredential</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="n">VAULT_URL</span> <span class="o">=</span> <span class="s2">"https://kv-prod-myapp-2026.vault.azure.net/"</span>
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="n">credential</span> <span class="o">=</span> <span class="n">DefaultAzureCredential</span><span class="p">()</span>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>
-</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="c1"># Secrets</span>
-</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="n">secrets_client</span> <span class="o">=</span> <span class="n">SecretClient</span><span class="p">(</span><span class="n">vault_url</span><span class="o">=</span><span class="n">VAULT_URL</span><span class="p">,</span> <span class="n">credential</span><span class="o">=</span><span class="n">credential</span><span class="p">)</span>
-</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a>
-</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="c1"># Lettura semplice</span>
-</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="n">db_password</span> <span class="o">=</span> <span class="n">secrets_client</span><span class="o">.</span><span class="n">get_secret</span><span class="p">(</span><span class="s2">"db-password"</span><span class="p">)</span><span class="o">.</span><span class="n">value</span>
-</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a>
-</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="c1"># Scrittura</span>
-</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="n">secrets_client</span><span class="o">.</span><span class="n">set_secret</span><span class="p">(</span>
-</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a>    <span class="s2">"new-api-key"</span><span class="p">,</span>
-</span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a>    <span class="s2">"super-secret-value"</span><span class="p">,</span>
-</span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a>    <span class="n">expires_on</span><span class="o">=</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2027</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
-</span><span id="__span-10-30"><a id="__codelineno-10-30" name="__codelineno-10-30" href="#__codelineno-10-30"></a><span class="p">)</span>
-</span><span id="__span-10-31"><a id="__codelineno-10-31" name="__codelineno-10-31" href="#__codelineno-10-31"></a>
-</span><span id="__span-10-32"><a id="__codelineno-10-32" name="__codelineno-10-32" href="#__codelineno-10-32"></a><span class="c1"># Listare segreti</span>
-</span><span id="__span-10-33"><a id="__codelineno-10-33" name="__codelineno-10-33" href="#__codelineno-10-33"></a><span class="k">for</span> <span class="n">secret_props</span> <span class="ow">in</span> <span class="n">secrets_client</span><span class="o">.</span><span class="n">list_properties_of_secrets</span><span class="p">():</span>
-</span><span id="__span-10-34"><a id="__codelineno-10-34" name="__codelineno-10-34" href="#__codelineno-10-34"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Name: </span><span class="si">{</span><span class="n">secret_props</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, Enabled: </span><span class="si">{</span><span class="n">secret_props</span><span class="o">.</span><span class="n">enabled</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-</span><span id="__span-10-35"><a id="__codelineno-10-35" name="__codelineno-10-35" href="#__codelineno-10-35"></a>
-</span><span id="__span-10-36"><a id="__codelineno-10-36" name="__codelineno-10-36" href="#__codelineno-10-36"></a><span class="c1"># Keys</span>
-</span><span id="__span-10-37"><a id="__codelineno-10-37" name="__codelineno-10-37" href="#__codelineno-10-37"></a><span class="n">keys_client</span> <span class="o">=</span> <span class="n">KeyClient</span><span class="p">(</span><span class="n">vault_url</span><span class="o">=</span><span class="n">VAULT_URL</span><span class="p">,</span> <span class="n">credential</span><span class="o">=</span><span class="n">credential</span><span class="p">)</span>
-</span><span id="__span-10-38"><a id="__codelineno-10-38" name="__codelineno-10-38" href="#__codelineno-10-38"></a>
-</span><span id="__span-10-39"><a id="__codelineno-10-39" name="__codelineno-10-39" href="#__codelineno-10-39"></a><span class="c1"># Creare chiave</span>
-</span><span id="__span-10-40"><a id="__codelineno-10-40" name="__codelineno-10-40" href="#__codelineno-10-40"></a><span class="n">key</span> <span class="o">=</span> <span class="n">keys_client</span><span class="o">.</span><span class="n">create_rsa_key</span><span class="p">(</span><span class="s2">"my-key"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">4096</span><span class="p">)</span>
-</span><span id="__span-10-41"><a id="__codelineno-10-41" name="__codelineno-10-41" href="#__codelineno-10-41"></a>
-</span><span id="__span-10-42"><a id="__codelineno-10-42" name="__codelineno-10-42" href="#__codelineno-10-42"></a><span class="c1"># Firma e verifica (tramite CryptographyClient)</span>
-</span><span id="__span-10-43"><a id="__codelineno-10-43" name="__codelineno-10-43" href="#__codelineno-10-43"></a><span class="kn">from</span><span class="w"> </span><span class="nn">azure.keyvault.keys.crypto</span><span class="w"> </span><span class="kn">import</span> <span class="n">CryptographyClient</span><span class="p">,</span> <span class="n">SignatureAlgorithm</span>
-</span><span id="__span-10-44"><a id="__codelineno-10-44" name="__codelineno-10-44" href="#__codelineno-10-44"></a>
-</span><span id="__span-10-45"><a id="__codelineno-10-45" name="__codelineno-10-45" href="#__codelineno-10-45"></a><span class="n">crypto_client</span> <span class="o">=</span> <span class="n">CryptographyClient</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">credential</span><span class="o">=</span><span class="n">credential</span><span class="p">)</span>
-</span><span id="__span-10-46"><a id="__codelineno-10-46" name="__codelineno-10-46" href="#__codelineno-10-46"></a><span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
-</span><span id="__span-10-47"><a id="__codelineno-10-47" name="__codelineno-10-47" href="#__codelineno-10-47"></a><span class="n">message</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">"data to sign"</span>
-</span><span id="__span-10-48"><a id="__codelineno-10-48" name="__codelineno-10-48" href="#__codelineno-10-48"></a><span class="n">digest</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">message</span><span class="p">)</span><span class="o">.</span><span class="n">digest</span><span class="p">()</span>
-</span><span id="__span-10-49"><a id="__codelineno-10-49" name="__codelineno-10-49" href="#__codelineno-10-49"></a>
-</span><span id="__span-10-50"><a id="__codelineno-10-50" name="__codelineno-10-50" href="#__codelineno-10-50"></a><span class="n">sign_result</span> <span class="o">=</span> <span class="n">crypto_client</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">SignatureAlgorithm</span><span class="o">.</span><span class="n">rs256</span><span class="p">,</span> <span class="n">digest</span><span class="p">)</span>
-</span><span id="__span-10-51"><a id="__codelineno-10-51" name="__codelineno-10-51" href="#__codelineno-10-51"></a><span class="n">verify_result</span> <span class="o">=</span> <span class="n">crypto_client</span><span class="o">.</span><span class="n">verify</span><span class="p">(</span><span class="n">SignatureAlgorithm</span><span class="o">.</span><span class="n">rs256</span><span class="p">,</span> <span class="n">digest</span><span class="p">,</span> <span class="n">sign_result</span><span class="o">.</span><span class="n">signature</span><span class="p">)</span>
-</span><span id="__span-10-52"><a id="__codelineno-10-52" name="__codelineno-10-52" href="#__codelineno-10-52"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Signature valid: </span><span class="si">{</span><span class="n">verify_result</span><span class="o">.</span><span class="n">is_valid</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># DefaultAzureCredential prova in ordine:</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="c1"># 1. EnvironmentCredential (AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="c1"># 2. WorkloadIdentityCredential (AKS Workload Identity)</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># 3. ManagedIdentityCredential (VM, App Service, Functions)</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># 4. Credenziali di sviluppo: VisualStudioCode, AzureCli (az login),</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="c1">#    AzurePowerShell, AzureDeveloperCli (azd) — l'elenco varia con la versione di azure-identity</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="c1"># In produzione preferire ManagedIdentityCredential/WorkloadIdentityCredential esplicite:</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="c1"># la catena rende il debug meno deterministico e aggiunge latenza.</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="n">VAULT_URL</span> <span class="o">=</span> <span class="s2">"https://kv-prod-myapp-2026.vault.azure.net/"</span>
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="n">credential</span> <span class="o">=</span> <span class="n">DefaultAzureCredential</span><span class="p">()</span>
+</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a>
+</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="c1"># Secrets</span>
+</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="n">secrets_client</span> <span class="o">=</span> <span class="n">SecretClient</span><span class="p">(</span><span class="n">vault_url</span><span class="o">=</span><span class="n">VAULT_URL</span><span class="p">,</span> <span class="n">credential</span><span class="o">=</span><span class="n">credential</span><span class="p">)</span>
+</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a>
+</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="c1"># Lettura semplice</span>
+</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a><span class="n">db_password</span> <span class="o">=</span> <span class="n">secrets_client</span><span class="o">.</span><span class="n">get_secret</span><span class="p">(</span><span class="s2">"db-password"</span><span class="p">)</span><span class="o">.</span><span class="n">value</span>
+</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a>
+</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="c1"># Scrittura</span>
+</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="n">secrets_client</span><span class="o">.</span><span class="n">set_secret</span><span class="p">(</span>
+</span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a>    <span class="s2">"new-api-key"</span><span class="p">,</span>
+</span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a>    <span class="s2">"super-secret-value"</span><span class="p">,</span>
+</span><span id="__span-10-30"><a id="__codelineno-10-30" name="__codelineno-10-30" href="#__codelineno-10-30"></a>    <span class="n">expires_on</span><span class="o">=</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2027</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+</span><span id="__span-10-31"><a id="__codelineno-10-31" name="__codelineno-10-31" href="#__codelineno-10-31"></a><span class="p">)</span>
+</span><span id="__span-10-32"><a id="__codelineno-10-32" name="__codelineno-10-32" href="#__codelineno-10-32"></a>
+</span><span id="__span-10-33"><a id="__codelineno-10-33" name="__codelineno-10-33" href="#__codelineno-10-33"></a><span class="c1"># Listare segreti</span>
+</span><span id="__span-10-34"><a id="__codelineno-10-34" name="__codelineno-10-34" href="#__codelineno-10-34"></a><span class="k">for</span> <span class="n">secret_props</span> <span class="ow">in</span> <span class="n">secrets_client</span><span class="o">.</span><span class="n">list_properties_of_secrets</span><span class="p">():</span>
+</span><span id="__span-10-35"><a id="__codelineno-10-35" name="__codelineno-10-35" href="#__codelineno-10-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Name: </span><span class="si">{</span><span class="n">secret_props</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, Enabled: </span><span class="si">{</span><span class="n">secret_props</span><span class="o">.</span><span class="n">enabled</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</span><span id="__span-10-36"><a id="__codelineno-10-36" name="__codelineno-10-36" href="#__codelineno-10-36"></a>
+</span><span id="__span-10-37"><a id="__codelineno-10-37" name="__codelineno-10-37" href="#__codelineno-10-37"></a><span class="c1"># Keys</span>
+</span><span id="__span-10-38"><a id="__codelineno-10-38" name="__codelineno-10-38" href="#__codelineno-10-38"></a><span class="n">keys_client</span> <span class="o">=</span> <span class="n">KeyClient</span><span class="p">(</span><span class="n">vault_url</span><span class="o">=</span><span class="n">VAULT_URL</span><span class="p">,</span> <span class="n">credential</span><span class="o">=</span><span class="n">credential</span><span class="p">)</span>
+</span><span id="__span-10-39"><a id="__codelineno-10-39" name="__codelineno-10-39" href="#__codelineno-10-39"></a>
+</span><span id="__span-10-40"><a id="__codelineno-10-40" name="__codelineno-10-40" href="#__codelineno-10-40"></a><span class="c1"># Creare chiave</span>
+</span><span id="__span-10-41"><a id="__codelineno-10-41" name="__codelineno-10-41" href="#__codelineno-10-41"></a><span class="n">key</span> <span class="o">=</span> <span class="n">keys_client</span><span class="o">.</span><span class="n">create_rsa_key</span><span class="p">(</span><span class="s2">"my-key"</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">4096</span><span class="p">)</span>
+</span><span id="__span-10-42"><a id="__codelineno-10-42" name="__codelineno-10-42" href="#__codelineno-10-42"></a>
+</span><span id="__span-10-43"><a id="__codelineno-10-43" name="__codelineno-10-43" href="#__codelineno-10-43"></a><span class="c1"># Firma e verifica (tramite CryptographyClient)</span>
+</span><span id="__span-10-44"><a id="__codelineno-10-44" name="__codelineno-10-44" href="#__codelineno-10-44"></a><span class="kn">from</span><span class="w"> </span><span class="nn">azure.keyvault.keys.crypto</span><span class="w"> </span><span class="kn">import</span> <span class="n">CryptographyClient</span><span class="p">,</span> <span class="n">SignatureAlgorithm</span>
+</span><span id="__span-10-45"><a id="__codelineno-10-45" name="__codelineno-10-45" href="#__codelineno-10-45"></a>
+</span><span id="__span-10-46"><a id="__codelineno-10-46" name="__codelineno-10-46" href="#__codelineno-10-46"></a><span class="n">crypto_client</span> <span class="o">=</span> <span class="n">CryptographyClient</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">credential</span><span class="o">=</span><span class="n">credential</span><span class="p">)</span>
+</span><span id="__span-10-47"><a id="__codelineno-10-47" name="__codelineno-10-47" href="#__codelineno-10-47"></a><span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
+</span><span id="__span-10-48"><a id="__codelineno-10-48" name="__codelineno-10-48" href="#__codelineno-10-48"></a><span class="n">message</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">"data to sign"</span>
+</span><span id="__span-10-49"><a id="__codelineno-10-49" name="__codelineno-10-49" href="#__codelineno-10-49"></a><span class="n">digest</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">message</span><span class="p">)</span><span class="o">.</span><span class="n">digest</span><span class="p">()</span>
+</span><span id="__span-10-50"><a id="__codelineno-10-50" name="__codelineno-10-50" href="#__codelineno-10-50"></a>
+</span><span id="__span-10-51"><a id="__codelineno-10-51" name="__codelineno-10-51" href="#__codelineno-10-51"></a><span class="n">sign_result</span> <span class="o">=</span> <span class="n">crypto_client</span><span class="o">.</span><span class="n">sign</span><span class="p">(</span><span class="n">SignatureAlgorithm</span><span class="o">.</span><span class="n">rs256</span><span class="p">,</span> <span class="n">digest</span><span class="p">)</span>
+</span><span id="__span-10-52"><a id="__codelineno-10-52" name="__codelineno-10-52" href="#__codelineno-10-52"></a><span class="n">verify_result</span> <span class="o">=</span> <span class="n">crypto_client</span><span class="o">.</span><span class="n">verify</span><span class="p">(</span><span class="n">SignatureAlgorithm</span><span class="o">.</span><span class="n">rs256</span><span class="p">,</span> <span class="n">digest</span><span class="p">,</span> <span class="n">sign_result</span><span class="o">.</span><span class="n">signature</span><span class="p">)</span>
+</span><span id="__span-10-53"><a id="__codelineno-10-53" name="__codelineno-10-53" href="#__codelineno-10-53"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Signature valid: </span><span class="si">{</span><span class="n">verify_result</span><span class="o">.</span><span class="n">is_valid</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
@@ -25441,12 +25456,13 @@
 <li>Separa Key Vault per ambiente: <code>kv-dev-*</code>, <code>kv-staging-*</code>, <code>kv-prod-*</code></li>
 <li>Imposta sempre <code>--public-network-access Disabled</code> in produzione + Private Endpoint</li>
 <li>Usa il <strong>principio del minimo privilegio</strong>: assegna <code>Key Vault Secrets User</code> (read-only) alle app, <code>Secrets Officer</code> solo dove necessario write</li>
-<li>Non mettere Key Vault in una subscription condivisa con altri tenant: ogni subscription di produzione deve avere il suo Key Vault</li>
+<li>Un vault per applicazione/ambiente/region: limita il blast radius (le quote di throttling sono per vault) e permette RBAC mirato</li>
+<li>Abilita i diagnostic settings (AuditEvent) verso Log Analytics per tracciare ogni accesso</li>
 <li>Configura notifiche EventGrid per <code>SecretNearExpiry</code> per rotation proattiva</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-access-denied-403-da-managed-identity">Scenario 1 — Access Denied (403) da Managed Identity<a class="headerlink" href="#scenario-1-access-denied-403-da-managed-identity" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> L'applicazione riceve <code>403 Forbidden</code> o <code>ForbiddenByPolicy</code> quando tenta di leggere un segreto.</p>
+<p><strong>Sintomo:</strong> L'applicazione riceve <code>403 Forbidden</code> (<code>ForbiddenByRbac</code> con RBAC, <code>ForbiddenByPolicy</code> con Access Policies) quando tenta di leggere un segreto.</p>
 <p><strong>Causa:</strong> La Managed Identity non ha un Role Assignment sul Key Vault, oppure il RBAC non è abilitato e si usa ancora Access Policies senza aggiornamento.</p>
 <p><strong>Soluzione:</strong> Verificare l'assegnazione del ruolo e aggiungerla se mancante.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Ottenere l'object ID della Managed Identity</span>
@@ -25502,10 +25518,13 @@
 </span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"[?contains(value, 'KeyVault')]"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a><span class="w">  </span>--output<span class="w"> </span>table
 </span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a>
-</span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="c1"># 4. Forzare refresh riavviando l'app</span>
-</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a>az<span class="w"> </span>webapp<span class="w"> </span>restart<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a><span class="w">  </span>--resource-group<span class="w"> </span>rg-webapp-prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="w">  </span>--name<span class="w"> </span>myapp-prod
+</span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="c1"># Nota: con identità User-Assigned va indicata esplicitamente la proprietà keyVaultReferenceIdentity</span>
+</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a><span class="c1"># dell'app, altrimenti le reference usano la System-Assigned.</span>
+</span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a>
+</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="c1"># 4. Forzare refresh riavviando l'app</span>
+</span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a>az<span class="w"> </span>webapp<span class="w"> </span>restart<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a><span class="w">  </span>--resource-group<span class="w"> </span>rg-webapp-prod<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a><span class="w">  </span>--name<span class="w"> </span>myapp-prod
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-impossibile-eliminare-permanentemente-un-segreto-purge">Scenario 3 — Impossibile eliminare permanentemente un segreto (purge)<a class="headerlink" href="#scenario-3-impossibile-eliminare-permanentemente-un-segreto-purge" title="Permanent link">&para;</a></h3>
@@ -25545,29 +25564,30 @@
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"properties.networkAcls"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span>--output<span class="w"> </span>json
 </span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># 2. Aggiungere la subnet del caller alle network rules</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>az<span class="w"> </span>keyvault<span class="w"> </span>network-rule<span class="w"> </span>add<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$KV_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">  </span>--vnet-name<span class="w"> </span>vnet-prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">  </span>--subnet<span class="w"> </span>snet-app
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="c1"># 3. Verificare la risoluzione DNS dal pod/VM (deve puntare all'IP privato)</span>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># Da dentro il cluster/VM:</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># nslookup kv-prod-myapp-2026.vault.azure.net</span>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="c1"># Deve restituire un IP in 10.x.x.x (private endpoint IP), non un IP pubblico</span>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="c1"># 4. Verificare che il Private DNS Zone Link sia configurato</span>
-</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a>az<span class="w"> </span>network<span class="w"> </span>private-dns<span class="w"> </span>link<span class="w"> </span>vnet<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">  </span>--zone-name<span class="w"> </span><span class="s2">"privatelink.vaultcore.azure.net"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="w">  </span>--output<span class="w"> </span>table
-</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a>
-</span><span id="__span-14-25"><a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a><span class="c1"># 5. Verificare log diagnostici</span>
-</span><span id="__span-14-26"><a id="__codelineno-14-26" name="__codelineno-14-26" href="#__codelineno-14-26"></a>az<span class="w"> </span>monitor<span class="w"> </span>log-analytics<span class="w"> </span>query<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-27"><a id="__codelineno-14-27" name="__codelineno-14-27" href="#__codelineno-14-27"></a><span class="w">  </span>--workspace<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>monitor<span class="w"> </span>log-analytics<span class="w"> </span>workspace<span class="w"> </span>list<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--query<span class="w"> </span><span class="s2">"[0].id"</span><span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-28"><a id="__codelineno-14-28" name="__codelineno-14-28" href="#__codelineno-14-28"></a><span class="w">  </span>--analytics-query<span class="w"> </span><span class="s2">"AzureDiagnostics | where ResourceType == 'VAULTS' | where OperationName == 'SecretGet' | project TimeGenerated, CallerIPAddress, ResultType | order by TimeGenerated desc | take 20"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-29"><a id="__codelineno-14-29" name="__codelineno-14-29" href="#__codelineno-14-29"></a><span class="w">  </span>--output<span class="w"> </span>table
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># 2. Se public access è Disabled: serve il Private Endpoint (le network rules non bastano).</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="c1">#    Se è Enabled + default-action Deny: aggiungere la subnet del caller (richiede service endpoint Microsoft.KeyVault)</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>az<span class="w"> </span>keyvault<span class="w"> </span>network-rule<span class="w"> </span>add<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$KV_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">  </span>--vnet-name<span class="w"> </span>vnet-prod<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">  </span>--subnet<span class="w"> </span>snet-app
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># 3. Verificare la risoluzione DNS dal pod/VM (deve puntare all'IP privato)</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># Da dentro il cluster/VM:</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="c1"># nslookup kv-prod-myapp-2026.vault.azure.net</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="c1"># Deve restituire un IP in 10.x.x.x (private endpoint IP), non un IP pubblico</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a>
+</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="c1"># 4. Verificare che il Private DNS Zone Link sia configurato</span>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a>az<span class="w"> </span>network<span class="w"> </span>private-dns<span class="w"> </span>link<span class="w"> </span>vnet<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="w">  </span>--zone-name<span class="w"> </span><span class="s2">"privatelink.vaultcore.azure.net"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="w">  </span>--output<span class="w"> </span>table
+</span><span id="__span-14-25"><a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a>
+</span><span id="__span-14-26"><a id="__codelineno-14-26" name="__codelineno-14-26" href="#__codelineno-14-26"></a><span class="c1"># 5. Verificare log diagnostici</span>
+</span><span id="__span-14-27"><a id="__codelineno-14-27" name="__codelineno-14-27" href="#__codelineno-14-27"></a>az<span class="w"> </span>monitor<span class="w"> </span>log-analytics<span class="w"> </span>query<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-28"><a id="__codelineno-14-28" name="__codelineno-14-28" href="#__codelineno-14-28"></a><span class="w">  </span>--workspace<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>monitor<span class="w"> </span>log-analytics<span class="w"> </span>workspace<span class="w"> </span>list<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--query<span class="w"> </span><span class="s2">"[0].id"</span><span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-29"><a id="__codelineno-14-29" name="__codelineno-14-29" href="#__codelineno-14-29"></a><span class="w">  </span>--analytics-query<span class="w"> </span><span class="s2">"AzureDiagnostics | where ResourceType == 'VAULTS' | where OperationName == 'SecretGet' | project TimeGenerated, CallerIPAddress, ResultType | order by TimeGenerated desc | take 20"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-30"><a id="__codelineno-14-30" name="__codelineno-14-30" href="#__codelineno-14-30"></a><span class="w">  </span>--output<span class="w"> </span>table
 </span></code></pre></div>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>

@@ -7091,7 +7091,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7557,7 +7557,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -7582,7 +7582,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -8243,7 +8243,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24964,7 +24964,7 @@
 
 <h1 id="azure-blob-storage">Azure Blob Storage<a class="headerlink" href="#azure-blob-storage" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>Azure Blob Storage è il servizio di object storage di Azure, equivalente ad Amazon S3. Progettato per archiviare quantità massicce di dati non strutturati — file, immagini, video, log, backup, archivi — con durabilità 11 nines (99.999999999%) grazie alla replica automatica. È anche la base di Azure Data Lake Storage Gen2 per analytics.</p>
+<p>Azure Blob Storage è il servizio di object storage di Azure, equivalente ad Amazon S3. Progettato per archiviare quantità massicce di dati non strutturati — file, immagini, video, log, backup, archivi — con durabilità da 11 nines (99.999999999%, LRS) fino a 16 (GRS/GZRS) grazie alla replica automatica. È anche la base di Azure Data Lake Storage Gen2 per analytics.</p>
 <p>Non usare Blob Storage per: dati che richiedono query SQL strutturate (usare Azure SQL), file condivisi tra VM con protocollo SMB/NFS (usare Azure Files), o messaggi a coda (usare Service Bus o Queue Storage).</p>
 <h2 id="storage-account-creazione-e-configurazione">Storage Account: Creazione e Configurazione<a class="headerlink" href="#storage-account-creazione-e-configurazione" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">RG</span><span class="o">=</span><span class="s2">"rg-storage-prod"</span>
@@ -25019,13 +25019,13 @@
 <td>99.9%</td>
 <td>–</td>
 <td>–</td>
-<td>Dev/test, dati ricreable</td>
+<td>Dev/test, dati ricreabili</td>
 </tr>
 <tr>
 <td><strong>ZRS</strong> (Zone Redundant)</td>
 <td>3 sync</td>
 <td>3 zone</td>
-<td>99.99%</td>
+<td>99.9%</td>
 <td>Automatico</td>
 <td>~0</td>
 <td>Produzione, alta disponibilità locale</td>
@@ -25034,40 +25034,48 @@
 <td><strong>GRS</strong> (Geo Redundant)</td>
 <td>6 (3+3)</td>
 <td>2 regioni</td>
-<td>99.99%</td>
-<td>Ore</td>
-<td>&lt;1h</td>
+<td>99.9%</td>
+<td>Ore (failover manuale)</td>
+<td>tipicamente &lt;15 min, nessun SLA</td>
 <td>Disaster recovery, backup cross-region</td>
 </tr>
 <tr>
 <td><strong>GZRS</strong> (Geo+Zone Redundant)</td>
 <td>6 (3z+3)</td>
 <td>2 regioni</td>
-<td>99.99%</td>
-<td>Ore</td>
-<td>&lt;1h</td>
+<td>99.9%</td>
+<td>Ore (failover manuale)</td>
+<td>tipicamente &lt;15 min, nessun SLA</td>
 <td>Best protection, workload critici</td>
 </tr>
 <tr>
 <td><strong>RA-GRS</strong> (Read-Access Geo)</td>
 <td>6 (3+3)</td>
 <td>2 regioni</td>
-<td>99.99%/99.9%</td>
-<td>Automatico lettura</td>
-<td>&lt;1h</td>
-<td>Read scaling cross-region, CDN-like</td>
+<td>99.9% scrittura / 99.99% lettura</td>
+<td>Lettura secondaria sempre disponibile</td>
+<td>tipicamente &lt;15 min, nessun SLA</td>
+<td>Read scaling cross-region</td>
 </tr>
 <tr>
 <td><strong>RA-GZRS</strong> (Read-Access Geo+Zone)</td>
 <td>6</td>
 <td>2 regioni</td>
-<td>99.99%/99.9%</td>
-<td>Automatico lettura</td>
-<td>&lt;1h</td>
+<td>99.9% scrittura / 99.99% lettura</td>
+<td>Lettura secondaria sempre disponibile</td>
+<td>tipicamente &lt;15 min, nessun SLA</td>
 <td>Massima disponibilità + read scaling</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">SLA e RPO</p>
+<p>Gli SLA indicati valgono per il tier Hot (Cool/Cold hanno SLA più bassi). <strong>RTO</strong> = tempo per ripristinare il servizio, <strong>RPO</strong> = dati persi al massimo in caso di disastro. La replica geo è asincrona: l'RPO è un valore tipico, non garantito da SLA. <!-- REVIEW: verificare SLA correnti su https://azure.microsoft.com/support/legal/sla/storage/ --></p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Durabilità</p>
+<p>LRS offre almeno 11 nines di durabilità, ZRS 12, GRS/GZRS 16: più copie indipendenti = minor probabilità di perdita simultanea.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Aggiornare ridondanza storage account esistente</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
@@ -25277,40 +25285,40 @@
 <tr>
 <td><strong>Service SAS</strong></td>
 <td>Container/blob specifico</td>
-<td>Solo ruotando chiave</td>
+<td>Stored access policy, oppure rotazione chiave</td>
 <td>Accesso a risorsa specifica</td>
 </tr>
 <tr>
 <td><strong>User Delegation SAS</strong></td>
 <td>Blob/container</td>
-<td>Sì (revoca identity)</td>
+<td>Sì (revoca la user delegation key o i permessi RBAC dell'identity)</td>
 <td><strong>Preferito</strong>: firmato con credenziali Entra ID</td>
 </tr>
 </tbody>
 </table>
+<p>Account e Service SAS sono firmati con la chiave dell'account: con <code>--allow-shared-key-access false</code> non funzionano più. Solo la User Delegation SAS resta utilizzabile.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># User Delegation SAS (preferito — firmato con Entra ID)</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>az<span class="w"> </span>storage<span class="w"> </span>blob<span class="w"> </span>generate-sas<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--container-name<span class="w"> </span>mycontainer<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--name<span class="w"> </span>report-2026-02.pdf<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--name<span class="w"> </span>report.pdf<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>--permissions<span class="w"> </span>r<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span>--expiry<span class="w"> </span><span class="m">2026</span>-02-28T23:59:59Z<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span>--expiry<span class="w"> </span><span class="k">$(</span>date<span class="w"> </span>-u<span class="w"> </span>-d<span class="w"> </span><span class="s1">'+1 hour'</span><span class="w"> </span><span class="s1">'+%Y-%m-%dT%H:%MZ'</span><span class="k">)</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">  </span>--auth-mode<span class="w"> </span>login<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">  </span>--as-user<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span>--https-only<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>--output<span class="w"> </span>tsv
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># Service SAS per container (upload temporaneo da client esterno)</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># User Delegation SAS per container (upload temporaneo da client esterno)</span>
 </span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>az<span class="w"> </span>storage<span class="w"> </span>container<span class="w"> </span>generate-sas<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">  </span>--name<span class="w"> </span>uploads<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">  </span>--permissions<span class="w"> </span>rwl<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">  </span>--start<span class="w"> </span><span class="m">2026</span>-02-26T00:00:00Z<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">  </span>--expiry<span class="w"> </span><span class="m">2026</span>-02-26T06:00:00Z<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">  </span>--https-only<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">  </span>--auth-mode<span class="w"> </span>login<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">  </span>--as-user<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">  </span>--output<span class="w"> </span>tsv
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">  </span>--expiry<span class="w"> </span><span class="k">$(</span>date<span class="w"> </span>-u<span class="w"> </span>-d<span class="w"> </span><span class="s1">'+6 hours'</span><span class="w"> </span><span class="s1">'+%Y-%m-%dT%H:%MZ'</span><span class="k">)</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">  </span>--https-only<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">  </span>--auth-mode<span class="w"> </span>login<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">  </span>--as-user<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">  </span>--output<span class="w"> </span>tsv
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Best Practice SAS</p>
@@ -25333,21 +25341,22 @@
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">azure.storage.blob</span><span class="w"> </span><span class="kn">import</span> <span class="n">BlobServiceClient</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">azure.identity</span><span class="w"> </span><span class="kn">import</span> <span class="n">DefaultAzureCredential</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">credential</span> <span class="o">=</span> <span class="n">DefaultAzureCredential</span><span class="p">()</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">client</span> <span class="o">=</span> <span class="n">BlobServiceClient</span><span class="p">(</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="n">account_url</span><span class="o">=</span><span class="sa">f</span><span class="s2">"https://</span><span class="si">{</span><span class="n">STORAGE_ACCOUNT_NAME</span><span class="si">}</span><span class="s2">.blob.core.windows.net"</span><span class="p">,</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">credential</span><span class="o">=</span><span class="n">credential</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="p">)</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1"># Upload</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="n">container_client</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_container_client</span><span class="p">(</span><span class="s2">"mycontainer"</span><span class="p">)</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">"local_file.txt"</span><span class="p">,</span> <span class="s2">"rb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">data</span><span class="p">:</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="n">container_client</span><span class="o">.</span><span class="n">upload_blob</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"remote_file.txt"</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="c1"># Download</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="n">blob_client</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_blob_client</span><span class="p">(</span><span class="n">container</span><span class="o">=</span><span class="s2">"mycontainer"</span><span class="p">,</span> <span class="n">blob</span><span class="o">=</span><span class="s2">"remote_file.txt"</span><span class="p">)</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">"downloaded_file.txt"</span><span class="p">,</span> <span class="s2">"wb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">download_file</span><span class="p">:</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>    <span class="n">download_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">blob_client</span><span class="o">.</span><span class="n">download_blob</span><span class="p">()</span><span class="o">.</span><span class="n">readall</span><span class="p">())</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">STORAGE_ACCOUNT_NAME</span> <span class="o">=</span> <span class="s2">"mystorageaccount2026"</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">credential</span> <span class="o">=</span> <span class="n">DefaultAzureCredential</span><span class="p">()</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">client</span> <span class="o">=</span> <span class="n">BlobServiceClient</span><span class="p">(</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">account_url</span><span class="o">=</span><span class="sa">f</span><span class="s2">"https://</span><span class="si">{</span><span class="n">STORAGE_ACCOUNT_NAME</span><span class="si">}</span><span class="s2">.blob.core.windows.net"</span><span class="p">,</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">credential</span><span class="o">=</span><span class="n">credential</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="p">)</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># Upload</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="n">container_client</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_container_client</span><span class="p">(</span><span class="s2">"mycontainer"</span><span class="p">)</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">"local_file.txt"</span><span class="p">,</span> <span class="s2">"rb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">data</span><span class="p">:</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    <span class="n">container_client</span><span class="o">.</span><span class="n">upload_blob</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">"remote_file.txt"</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1"># Download</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">blob_client</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_blob_client</span><span class="p">(</span><span class="n">container</span><span class="o">=</span><span class="s2">"mycontainer"</span><span class="p">,</span> <span class="n">blob</span><span class="o">=</span><span class="s2">"remote_file.txt"</span><span class="p">)</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">"downloaded_file.txt"</span><span class="p">,</span> <span class="s2">"wb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">download_file</span><span class="p">:</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>    <span class="n">download_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">blob_client</span><span class="o">.</span><span class="n">download_blob</span><span class="p">()</span><span class="o">.</span><span class="n">readall</span><span class="p">())</span>
 </span></code></pre></div>
 <h2 id="static-website-hosting">Static Website Hosting<a class="headerlink" href="#static-website-hosting" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Abilitare static website (index.html + 404.html)</span>
@@ -25363,25 +25372,23 @@
 </span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">  </span>--destination<span class="w"> </span><span class="s1">'$web'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">  </span>--source<span class="w"> </span>./dist<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">  </span>--content-type<span class="w"> </span>text/html<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">  </span>--auth-mode<span class="w"> </span>login
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="c1"># Ottenere URL del sito</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"primaryEndpoints.web"</span><span class="w"> </span>-o<span class="w"> </span>tsv
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="c1"># Abbinare Azure CDN per HTTPS custom domain e performance globale</span>
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>az<span class="w"> </span>cdn<span class="w"> </span>endpoint<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="w">  </span>--profile-name<span class="w"> </span>cdn-prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="w">  </span>--name<span class="w"> </span>myapp-cdn<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="w">  </span>--origin<span class="w"> </span>myapp.z6.web.core.windows.net<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="w">  </span>--origin-host-header<span class="w"> </span>myapp.z6.web.core.windows.net<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a><span class="w">  </span>--enable-compression<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="w">  </span>--query-string-caching-behavior<span class="w"> </span>UseQueryString
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">  </span>--auth-mode<span class="w"> </span>login
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="c1"># Ottenere URL del sito</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"primaryEndpoints.web"</span><span class="w"> </span>-o<span class="w"> </span>tsv
 </span></code></pre></div>
+<p><code>upload-batch</code> deduce il <code>Content-Type</code> dall'estensione di ogni file: forzare <code>text/html</code> su tutto romperebbe CSS/JS/immagini.</p>
+<div class="admonition tip">
+<p class="admonition-title">HTTPS con custom domain</p>
+<p>L'endpoint static website supporta HTTPS solo sul dominio <code>*.web.core.windows.net</code>. Per custom domain + TLS + CDN globale mettere <strong>Azure Front Door</strong> davanti all'endpoint web. I profili Azure CDN "classic" sono in dismissione, non usarli per nuovi progetti. <!-- REVIEW: verificare date di retirement Azure CDN classic --></p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Static website e firewall</p>
+<p>L'endpoint <code>$web</code> è pubblico per design: con <code>--default-action Deny</code> non è raggiungibile dal web, a meno di passare da Front Door con Private Link.</p>
+</div>
 <h2 id="azcopy">AzCopy<a class="headerlink" href="#azcopy" title="Permanent link">&para;</a></h2>
 <p>AzCopy è lo strumento CLI ottimizzato per trasferimenti bulk da/verso Azure Storage, con supporto per trasferimenti paralleli, ripresa automatica e ottimizzazione bandwidth.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Login con Entra ID</span>
@@ -25415,7 +25422,7 @@
 </span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a>azcopy<span class="w"> </span>benchmark<span class="w"> </span><span class="s1">'https://mystorageaccount.blob.core.windows.net/mycontainer'</span>
 </span></code></pre></div>
 <h2 id="data-lake-storage-gen2">Data Lake Storage Gen2<a class="headerlink" href="#data-lake-storage-gen2" title="Permanent link">&para;</a></h2>
-<p>Data Lake Storage Gen2 combina Blob Storage con un filesystem gerarchico (Hierarchical Namespace) per analytics, big data e ML. Si abilita al momento della creazione dello storage account.</p>
+<p>Data Lake Storage Gen2 combina Blob Storage con un filesystem gerarchico (Hierarchical Namespace) per analytics, big data e ML. Si abilita di norma alla creazione dello storage account (l'upgrade di un account esistente è possibile ma è una migrazione con vincoli). HNS rende <code>rename</code>/<code>delete</code> di directory operazioni atomiche O(1) invece di copy+delete di ogni blob. Alcune feature (es. object replication) non sono supportate con HNS.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Creare storage account con HNS abilitato (Data Lake Gen2)</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
@@ -25547,7 +25554,7 @@
 <li>Abilita <strong>soft delete</strong> per blob e container (protezione contro eliminazione accidentale)</li>
 <li>Configura <strong>Lifecycle Management</strong> per ottimizzare automaticamente i costi di storage</li>
 <li>Usa <strong>GZRS</strong> per workload critici che richiedono massima durabilità e disponibilità</li>
-<li>Per analytics, usa sempre <strong>Data Lake Gen2</strong> con HNS abilitato</li>
+<li>Per analytics/big data usa <strong>Data Lake Gen2</strong> (HNS), valutando le feature non supportate con HNS</li>
 </ul>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Abilitare soft delete (blob e container)</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>blob-service-properties<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
