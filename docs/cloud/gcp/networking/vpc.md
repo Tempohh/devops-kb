@@ -7,9 +7,10 @@ search_keywords: [GCP VPC, Virtual Private Cloud GCP, VPC globale Google, subnet
 parent: cloud/gcp/networking/_index
 related: [networking/fondamentali/indirizzi-ip-subnetting, networking/load-balancing/layer4-vs-layer7, networking/sicurezza/firewall-waf, cloud/gcp/containers/gke, networking/fondamentali/nat]
 official_docs: https://cloud.google.com/vpc/docs
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-30
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # GCP Networking: VPC, Cloud NAT, Firewall e Load Balancing
@@ -66,7 +67,7 @@ AWS VPC (regionale — confronto)
 | Rischio overlap | Alto in ambienti multi-VPC | Nessuno se pianificato |
 
 !!! warning "Custom Mode in produzione"
-    Usare sempre **Custom Mode** in produzione. Auto Mode crea subnet con range CIDR fissi in tutte le regioni, rendendo impossibile personalizzare l'addressing e causando problemi di overlap quando si aggiungono VPC Peering o connessioni on-premises. Una volta creato un VPC in Auto Mode non è convertibile in Custom Mode — serve ricreare la rete.
+    Usare sempre **Custom Mode** in produzione. Auto Mode crea subnet con range CIDR fissi in tutte le regioni, rendendo impossibile personalizzare l'addressing e causando problemi di overlap quando si aggiungono VPC Peering o connessioni on-premises. Un VPC Auto Mode può essere convertito in Custom Mode (`gcloud compute networks update my-vpc --switch-to-custom-subnet-mode`), ma la conversione è **one-way** e irreversibile: le subnet auto-create restano con i range `/20` fissi, che vanno poi rimpiazzati se confliggono. Per produzione è più pulito partire direttamente in Custom Mode.
 
 ```bash
 # Creare VPC in Custom Mode
@@ -117,7 +118,7 @@ Service Project B (team dati)
 |---|---|---|
 | Centralizzazione | Unico VPC, risorse in progetti diversi | Due VPC separati collegati |
 | Gestione firewall | Centralizzata nel host project | Separata per ogni VPC |
-| Limite | Max 100 service project per host | Peering non transitivo |
+| Limite | Fino a 1000 service project per host (quota, verificare) | Peering non transitivo, max 25 peering per VPC (quota default) |
 | Uso ideale | Organizzazioni con team separati | Connessione a terze parti / SaaS |
 | Route | Un solo routing table | Route esplicite tra VPC |
 
@@ -163,17 +164,17 @@ Si abilita a livello di subnet con il flag `--enable-private-ip-google-access` (
 
 ### Cloud NAT
 
-Cloud NAT fornisce connettività **outbound verso internet** per VM senza IP pubblico. È un NAT managed, scalabile automaticamente, che non introduce un singolo punto di failure (non è una VM NAT).
+Cloud NAT fornisce connettività **outbound verso internet** per VM senza IP pubblico. È un NAT managed e software-defined (implementato nello stack di rete Andromeda, non in una VM né in un proxy): non introduce un singolo punto di failure né colli di bottiglia di banda. Il **Cloud Router** serve solo come contenitore di configurazione (control plane); i pacchetti non lo attraversano.
 
 ```
 VM (10.10.0.5, no IP pubblico)
-  ↓
-Cloud Router (europe-west1)
-  ↓
-Cloud NAT (IP pubblico NAT pool: 34.90.x.x)
+  ↓ (traduzione SNAT a livello di rete virtuale)
+Cloud NAT (config nel Cloud Router europe-west1; IP pubblico pool: 34.90.x.x)
   ↓
 Internet (server esterno vede IP NAT, non IP privato VM)
 ```
+
+Solo connessioni **in uscita** (e relative risposte): Cloud NAT non permette connessioni inbound avviate da internet. Ogni IP NAT offre 64.512 porte, condivise tra le VM in base a `--min-ports-per-vm`: con molte connessioni verso la stessa destinazione si arriva a esaurimento porte (`OUT_OF_RESOURCES`).
 
 ```bash
 # Step 1: creare Cloud Router (prerequisito per Cloud NAT)
@@ -206,11 +207,11 @@ gcloud compute routers nats create nat-static-ip \
 ```
 
 !!! tip "Log Cloud NAT per troubleshooting"
-    Abilitare i log NAT (`--enable-logging`) è essenziale per il debug. I log vengono scritti in Cloud Logging e mostrano ogni connessione NAT con IP sorgente, destinazione, porta, e tipo di operazione (ALLOCATED/DROPPED). Utile quando si investigano connessioni rifiutate da sistemi esterni o esaurimento porte NAT.
+    Abilitare i log NAT (`--enable-logging`) è essenziale per il debug. I log vengono scritti in Cloud Logging e mostrano ogni connessione NAT con IP sorgente, destinazione, porta, e stato di allocazione (`OK`/`DROPPED`). Utile quando si investigano connessioni rifiutate da sistemi esterni o esaurimento porte NAT.
 
 ### Private Service Connect (PSC)
 
-PSC è l'evoluzione di VPC Peering per accedere a **servizi GCP managed** (Cloud SQL, Memorystore, Vertex AI, ecc.) e a **servizi di terze parti** tramite endpoint IP privato nel proprio VPC.
+PSC è l'alternativa moderna a VPC Peering / Private Services Access per accedere a **servizi GCP managed** (Cloud SQL, ecc.) e a **servizi di terze parti** tramite un endpoint IP privato nel proprio VPC. A differenza del peering non richiede range IP non sovrapposti tra consumer e producer, e non crea connettività di rete completa tra i due VPC: espone solo il singolo servizio. Non tutti i servizi managed supportano PSC (alcuni usano ancora Private Services Access): verificare per servizio.
 
 ```
 VPC aziendale (10.10.0.0/16)
@@ -234,6 +235,7 @@ gcloud compute forwarding-rules create psc-cloudsql \
   --region=europe-west1 \
   --network=my-vpc \
   --address=psc-sql-endpoint \
+  --load-balancing-scheme="" \
   --target-service-attachment=SERVICE_ATTACHMENT_URI
 ```
 
@@ -263,16 +265,26 @@ Firewall Rule
 ```
 
 ```bash
-# Regola ingress basata su service account (best practice)
-gcloud compute firewall-rules create allow-lb-to-app \
+# Regola ingress basata su service account (best practice): tier web -> tier app
+gcloud compute firewall-rules create allow-web-to-app \
   --network=my-vpc \
   --direction=INGRESS \
   --priority=1000 \
   --action=ALLOW \
   --rules=tcp:8080 \
-  --source-service-accounts=lb-sa@PROJECT.iam.gserviceaccount.com \
+  --source-service-accounts=web-sa@PROJECT.iam.gserviceaccount.com \
   --target-service-accounts=app-sa@PROJECT.iam.gserviceaccount.com \
-  --description="Load balancer → App backend"
+  --description="Web tier → App backend"
+
+# Traffico da Cloud Load Balancing / health check: i LB NON hanno service account,
+# vanno ammessi per range IP (senza questa regola i backend risultano UNHEALTHY)
+gcloud compute firewall-rules create allow-lb-health-checks \
+  --network=my-vpc \
+  --direction=INGRESS \
+  --action=ALLOW \
+  --rules=tcp:8080 \
+  --source-ranges=130.211.0.0/22,35.191.0.0/16 \
+  --target-service-accounts=app-sa@PROJECT.iam.gserviceaccount.com
 
 # Regola ingress basata su tag (meno sicura ma più semplice)
 gcloud compute firewall-rules create allow-ssh-iap \
@@ -295,22 +307,23 @@ gcloud compute firewall-rules describe allow-lb-to-app
 ```
 
 !!! warning "Tag-based firewall: rischio sicurezza"
-    Le **network tag** sono attributi stringa assegnabili da chiunque abbia `roles/compute.instanceAdmin`. Un utente malevolo con tale ruolo può aggiungere tag a una VM e bypassare regole firewall. Preferire sempre **firewall rules basate su service account** in ambienti di produzione: il SA deve essere esplicitamente assegnato alla VM e richiede `roles/iam.serviceAccountUser`.
+    Le **network tag** sono attributi stringa assegnabili da chiunque abbia `roles/compute.instanceAdmin`. Un utente malevolo con tale ruolo può aggiungere tag a una VM e bypassare regole firewall. Preferire sempre **firewall rules basate su service account** in ambienti di produzione: il SA deve essere esplicitamente assegnato alla VM e richiede `roles/iam.serviceAccountUser`. Alternativa moderna: i **secure tags** (tag IAM-governed, usabili nelle Firewall Policy) che combinano la flessibilità dei tag con un controllo di accesso IAM.
 
 ### Firewall Rules vs Firewall Policy
 
 | Caratteristica | Firewall Rules (legacy) | Firewall Policy |
 |---|---|---|
-| Scope | Singolo VPC | Organizzazione, folder, VPC |
+| Scope | Singolo VPC | Organizzazione, folder (gerarchica) oppure VPC/regione (network firewall policy) |
 | Gestione | Per-VPC | Centralizzata |
-| Delegation | No | Sì (ereditarietà gerarchica) |
+| Delegation | No | Sì (gerarchica: `goto_next` delega ai livelli inferiori) |
 | Stateful | Sì | Sì |
 | FQDN rules | No | Sì (dominio come sorgente/dest) |
 | Geo-based | No | Sì (country filtering) |
 | Raccomandato | Ambienti semplici | **Produzione enterprise** |
 
 ```bash
-# Creare Firewall Policy a livello organizzazione
+# Firewall Policy GERARCHICA (organizzazione/folder). Per policy a livello VPC si usa
+# invece `gcloud compute network-firewall-policies ...` (global/regional network policy).
 gcloud compute firewall-policies create org-baseline-policy \
   --short-name=org-baseline \
   --organization=ORG_ID
@@ -325,10 +338,10 @@ gcloud compute firewall-policies rules create 1000 \
   --src-ip-ranges=0.0.0.0/0 \
   --description="Allow HTTPS inbound"
 
-# Associare la policy a un VPC
+# Associare la policy all'organizzazione (si applica a tutti i VPC sotto di essa;
+# per un folder usare --folder=FOLDER_ID)
 gcloud compute firewall-policies associations create \
   --firewall-policy=POLICY_ID \
-  --network=projects/PROJECT/global/networks/my-vpc \
   --organization=ORG_ID
 ```
 
@@ -343,17 +356,21 @@ GCP offre diversi tipi di load balancer. La scelta dipende dal protocollo, dalla
 ```
 Cloud Load Balancing
 │
-├── Application LB (Layer 7 — HTTP/S)
+├── Application LB (Layer 7 — HTTP/S, proxy)
 │   ├── Global External ALB   → traffico internet globale, anycast, Cloud Armor
 │   ├── Regional External ALB → traffico internet regionale
-│   └── Regional Internal ALB → traffico interno GKE/VM (istio-less mesh)
+│   ├── Regional Internal ALB → traffico interno (VM, GKE), richiede proxy-only subnet
+│   └── Cross-region Internal ALB → interno, multi-regione
 │
-├── Network LB (Layer 4 — TCP/UDP/SSL)
-│   ├── Global External NLB   → pass-through, IP anycast globale
-│   ├── Regional External NLB → pass-through, IP statico regionale
-│   └── Regional Internal NLB → ILB pass-through per traffico interno
+├── Proxy Network LB (Layer 4 — TCP/SSL, proxy)
+│   ├── Global External proxy NLB   → TCP con terminazione, IP anycast globale
+│   ├── Regional External / Internal proxy NLB
 │
-└── [deprecati: Classic HTTP LB, TCP/UDP legacy ILB]
+├── Passthrough Network LB (Layer 4 — TCP/UDP/ICMP, pass-through, solo regionale)
+│   ├── External passthrough NLB → IP statico regionale, preserva IP client
+│   └── Internal passthrough NLB → traffico interno
+│
+└── [legacy: Classic Application LB — da migrare ai nuovi ALB]
 ```
 
 | Tipo | Protocollo | Scope | IP pubblico | Tipico uso |
@@ -361,8 +378,9 @@ Cloud Load Balancing
 | Global External ALB | HTTP/S | Globale | Sì | SaaS, API pubbliche |
 | Regional External ALB | HTTP/S | Regionale | Sì | App regionali |
 | Regional Internal ALB | HTTP/S | Regionale | No | Microservizi interni, GKE |
-| Global External NLB | TCP/UDP | Globale | Sì | Gaming, IoT, VoIP globale |
-| Regional Internal NLB | TCP/UDP | Regionale | No | Database, servizi TCP interni |
+| Global External proxy NLB | TCP (anche TLS) | Globale | Sì | Protocolli TCP non-HTTP globali |
+| External passthrough NLB | TCP/UDP | Regionale | Sì | Gaming, VoIP, UDP, IP client preservato |
+| Internal passthrough NLB | TCP/UDP | Regionale | No | Database, servizi TCP/UDP interni |
 
 ### Struttura Logica del ALB
 
@@ -404,6 +422,9 @@ I NEG sono il modo moderno per integrare il load balancer con GKE, Cloud Run e s
 # NEG per GKE (creato automaticamente dal GKE Ingress controller)
 # Configurazione via annotation sull'Ingress:
 ```
+
+!!! note "Ingress vs Gateway API"
+    Per nuovi cluster GKE, Google raccomanda la **Gateway API** (`gke-l7-global-external-managed`, `gke-l7-rilb`) al posto di Ingress: più espressiva (routing per header, traffic splitting) e con ruoli separati infra/app. Anche l'annotation `kubernetes.io/ingress.class` è la forma legacy: oggi si preferisce `spec.ingressClassName: gce`. L'Ingress interno (`gce-internal`) richiede una **proxy-only subnet** nella regione.
 
 ```yaml
 # Ingress GKE con GCE Ingress class (Global ALB)
@@ -459,8 +480,10 @@ spec:
 ```
 
 ```bash
-# Backend Service via gcloud
+# Backend Service via gcloud (EXTERNAL_MANAGED = Global External ALB moderno;
+# il default EXTERNAL crea un Classic ALB)
 gcloud compute backend-services create api-backend \
+  --load-balancing-scheme=EXTERNAL_MANAGED \
   --protocol=HTTP \
   --port-name=http \
   --health-checks=api-health-check \
@@ -479,11 +502,15 @@ gcloud compute health-checks create http api-health-check \
 gcloud compute url-maps create my-url-map \
   --default-service=api-backend
 
-# Path matcher
+# Path matcher (static-backend è un Backend Bucket: usa --backend-bucket-path-rules)
 gcloud compute url-maps add-path-matcher my-url-map \
   --path-matcher-name=path-matcher \
   --default-service=api-backend \
-  --path-rules=/api/*=api-backend,/static/*=static-backend
+  --path-rules=/api/*=api-backend \
+  --backend-bucket-path-rules=/static/*=static-backend
+
+# Restano da creare (omessi): target-https-proxy (con certificato) e forwarding-rule
+# globale con --load-balancing-scheme=EXTERNAL_MANAGED che puntano all'URL map
 ```
 
 ---
@@ -491,7 +518,7 @@ gcloud compute url-maps add-path-matcher my-url-map \
 ## Best Practices
 
 !!! tip "Pianificazione CIDR: pensare in anticipo"
-    Definire i range CIDR con spazio di crescita **prima** di creare il primo VPC. In GCP i range di subnet possono essere espansi (mai ridotti) ma non è possibile cambiare il range principale. Schema tipico enterprise: `/16` per VPC, `/20` per subnet per-regione (4094 IP), `/16-/22` per secondary ranges GKE (pods/services).
+    Definire i range CIDR con spazio di crescita **prima** di creare il primo VPC. In GCP i range di subnet possono essere espansi (mai ridotti) ma non è possibile cambiare il range principale. Un VPC GCP non ha un CIDR proprio (solo le subnet lo hanno). Schema tipico enterprise: un blocco `/16` pianificato per ambiente, `/20` per subnet per-regione (4092 IP utilizzabili: 4 sono riservati), `/16-/22` per secondary ranges GKE (pods/services).
 
 - **Mai usare Auto Mode in produzione** — impossibile personalizzare CIDR, problemi certi con peering
 - **Preferire service account alle network tag** per le firewall rules — superficie di attacco minore
@@ -574,15 +601,17 @@ gcloud compute routers nats describe nat-europe-west1 \
 **Soluzione:**
 ```bash
 # Usare Connectivity Tests — strumento di diagnosi managed GCP
-gcloud network-connectivity tests create test-vm-to-vm \
-  --source-ip=10.10.0.5 \
-  --destination-ip=10.20.0.8 \
+gcloud network-management connectivity-tests create test-vm-to-vm \
+  --source-ip-address=10.10.0.5 \
+  --source-network=projects/my-project/global/networks/my-vpc \
+  --destination-ip-address=10.20.0.8 \
+  --destination-network=projects/my-project/global/networks/my-vpc \
   --protocol=TCP \
   --destination-port=8080 \
   --project=my-project
 
-# Controllare i risultati
-gcloud network-connectivity tests describe test-vm-to-vm \
+# Controllare i risultati (indica anche la firewall rule che blocca)
+gcloud network-management connectivity-tests describe test-vm-to-vm \
   --format="get(reachabilityDetails)"
 
 # Verificare quale firewall rule si applica effettivamente alla VM
@@ -593,7 +622,7 @@ gcloud compute instances describe my-vm \
 
 ### Symptom: Load balancer restituisce 502/503 intermittenti
 
-**Causa:** Health check fallisce su alcuni backend (configurazione errata, app non risponde sul path/porta dell'health check), oppure timeout Backend Service troppo basso.
+**Causa:** Health check fallisce su alcuni backend (app non risponde sul path/porta dell'health check; **firewall che non ammette i range dei probe/LB `130.211.0.0/22` e `35.191.0.0/16`** — causa più frequente, vedi regola sopra), timeout Backend Service troppo basso, oppure il backend chiude le connessioni keep-alive prima del LB (il timeout keep-alive del server deve superare quello del LB, es. >600s per ALB esterno: tipico 502 intermittente).
 
 ```bash
 # Verificare stato backend nel Backend Service
@@ -613,14 +642,13 @@ gcloud compute backend-services update api-backend \
 ### Firewall Insights — Regole non Usate
 
 ```bash
-# Firewall Insights identifica regole mai utilizzate (richiede abilitazione API)
-gcloud services enable firewallinsights.googleapis.com
-
-# Le insight sono visibili in Console → Network Security → Firewall Insights
-# Via API:
-gcloud beta network-management firewall-insights list \
-  --filter="insightType=SHADOWED_FIREWALL_RULE" \
-  --location=global
+# Firewall Insights identifica regole shadowed/mai usate. Richiede Firewall Rules Logging
+# attivo sulle regole analizzate. Visibile in Console → Network Intelligence Center.
+# Via Recommender API (insight type: regole shadowed):
+gcloud recommender insights list \
+  --insight-type=google.compute.firewall.Insight \
+  --location=global \
+  --project=my-project
 ```
 
 ---
