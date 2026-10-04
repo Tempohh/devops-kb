@@ -7,12 +7,16 @@ search_keywords: [kustomize JSON 6902 patch, kustomize RFC 6902, kustomize compo
 parent: containers/kustomize/_index
 related: [containers/kustomize/_index, containers/helm/_index, containers/openshift/gitops-pipelines, containers/kubernetes/sicurezza]
 official_docs: https://kubectl.docs.kubernetes.io/references/kustomize/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Kustomize Avanzato
+
+<!-- REVIEW: keyword/tag promettono KRM functions, `kustomize openapi` e transformer custom ma nel file non c'è una sezione dedicata: aggiungere (annotation config.kubernetes.io/function, --enable-alpha-plugins, --enable-exec) o rimuovere keyword/tag -->
+<!-- REVIEW: verificare chiavi argocd-cm kustomize.buildOptions.<ver> / kustomize.path.<ver> sulla versione ArgoCD corrente -->
 
 ## JSON 6902 Patch — Chirurgia Precisa sul YAML
 
@@ -141,7 +145,7 @@ patches:
         path: /spec/template/spec/containers/-
         value:
           name: envoy-sidecar
-          image: envoyproxy/envoy:v1.28
+          image: envoyproxy/envoy:v1.34.0
           ports:
             - containerPort: 9901
 ```
@@ -181,18 +185,27 @@ replacements:
         options:
           create: true                       # crea il campo se non esiste
 
-  # Propaga image tag dal Deployment → initContainer (stesso tag)
+  # Propaga SOLO il tag dell'immagine Deployment → initContainer (stesso tag)
   - source:
       kind: Deployment
       name: myapp
       fieldPath: spec.template.spec.containers.[name=myapp].image
+      options:
+        delimiter: ":"                       # spezza "repo/img:tag"...
+        index: 1                             # ...e prende il tag
     targets:
       - select:
           kind: Deployment
           name: myapp
         fieldPaths:
           - spec.template.spec.initContainers.[name=init-migration].image
+        options:
+          delimiter: ":"                     # sostituisce solo la parte dopo ":"
+          index: 1
 ```
+
+!!! note "Delimiter e registry con porta"
+    `delimiter`/`index` spezzano la stringa sul carattere indicato: con un registry con porta (`registry:5000/app:1.0`) il `:` compare due volte e `index: 1` punta alla porta, non al tag. In quel caso usare il campo `images:` oppure `index: 2`.
 
 ---
 
@@ -243,20 +256,23 @@ patches:
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
-patches:
-  # PDB generato dinamicamente per ogni Deployment
-  - target:
-      kind: Deployment
-    patch: |-
-      apiVersion: policy/v1
-      kind: PodDisruptionBudget
-      metadata:
-        name: placeholder            # kustomize usa il nome del Deployment
-      spec:
-        minAvailable: 1
-        selector:
-          matchLabels: {}            # kustomize inietta i selector automaticamente
+resources:
+  - pdb.yaml                         # una patch NON può creare risorse nuove
+
+# pdb.yaml (nel component)
+# apiVersion: policy/v1
+# kind: PodDisruptionBudget
+# metadata:
+#   name: myapp
+# spec:
+#   minAvailable: 1
+#   selector:
+#     matchLabels:
+#       app.kubernetes.io/name: myapp
 ```
+
+!!! warning "Un Component non genera risorse per-Deployment"
+    Kustomize non crea un PDB per ogni Deployment: le `patches` modificano solo risorse esistenti (il `target` seleziona, non genera). Serve un PDB esplicito per workload; per riuso su più app, un component per app oppure `replacements` per propagare nome e label.
 
 ```yaml
 # overlays/production/kustomization.yaml
@@ -316,6 +332,9 @@ commonLabels:
     create: true
 ```
 
+!!! note "commonLabels è deprecato"
+    Nel `kustomization.yaml` il campo `commonLabels` è deprecato in favore di `labels:` (con `includeSelectors` / `includeTemplates`). Il motivo: `commonLabels` inietta le label anche nei selector, che sono **immutabili** su Deployment/StatefulSet, quindi aggiungerle a un'app già deployata fa fallire l'apply. La sezione `commonLabels` di `configurations:` (FieldSpecs) resta il modo per insegnare a Kustomize i path delle CRD.
+
 ---
 
 ## Kustomize + Helm — Helm Inflator
@@ -323,19 +342,16 @@ commonLabels:
 Kustomize può **renderizzare un Helm chart** e poi applicare patch Kustomize sopra, combinando il meglio dei due strumenti.
 
 ```yaml
-# kustomization.yaml (richiede kustomize v5+ o flag --enable-helm)
+# kustomization.yaml (richiede il binario helm nel PATH e il flag --enable-helm)
 helmCharts:
-  - name: ingress-nginx
-    repo: https://kubernetes.github.io/ingress-nginx
-    version: 4.9.0
-    releaseName: ingress-nginx
-    namespace: ingress-nginx
-    valuesFile: values-ingress.yaml
+  - name: metrics-server
+    repo: https://kubernetes-sigs.github.io/metrics-server/
+    version: 3.12.2
+    releaseName: metrics-server
+    namespace: kube-system
+    valuesFile: values-metrics.yaml
     values:
-      controller:
-        replicaCount: 3
-        service:
-          type: LoadBalancer
+      replicas: 2
 
   - name: cert-manager
     repo: https://charts.jetstack.io
@@ -350,16 +366,19 @@ helmCharts:
 patches:
   - target:
       kind: Deployment
-      name: ingress-nginx-controller
+      name: metrics-server
     patch: |-
       - op: add
         path: /spec/template/spec/tolerations
         value:
           - key: "dedicated"
             operator: "Equal"
-            value: "ingress"
+            value: "infra"
             effect: "NoSchedule"
 ```
+
+!!! note "ingress-nginx"
+    Il controller `ingress-nginx` è stato ritirato dal progetto Kubernetes (fine manutenzione marzo 2026): non usarlo come esempio per nuovi deploy; valutare Gateway API o un altro controller.
 
 ```bash
 # Build con Helm charts abilitato
@@ -370,7 +389,8 @@ kubectl kustomize --enable-helm overlays/production | kubectl apply -f -
 ```
 
 !!! warning "Helm Inflator — Considerazioni"
-    - Il rendering Helm avviene a ogni `kustomize build` (nessuna cache locale)
+    - Il rendering Helm avviene a ogni `kustomize build` (`helm template` + pull del chart nella dir `charts/` accanto al `kustomization.yaml`: non committarla, o committala se serve build offline/riproducibili)
+    - `helmCharts` è un'integrazione limitata: niente hook Helm né release tracking (`helm list`/`rollback`) — è solo `helm template`
     - Le modifiche al chart esterno possono essere inaspettate se non si pinnano le versioni
     - Per ArgoCD, abilitare `--enable-helm` nell'ArgoCD configmap: `kustomize.buildOptions: --enable-helm`
 
@@ -428,9 +448,8 @@ spec:
 IMAGE_TAG="sha-$(git rev-parse --short HEAD)"
 IMAGE_REF="registry.company.com/myapp:${IMAGE_TAG}"
 
-# Aggiorna staging
-kustomize edit set image "registry.company.com/myapp=${IMAGE_REF}" \
-    --kustomization overlays/staging/kustomization.yaml
+# Aggiorna staging (kustomize edit opera sulla directory corrente)
+(cd overlays/staging && kustomize edit set image "registry.company.com/myapp=${IMAGE_REF}")
 
 git add overlays/staging/kustomization.yaml
 git commit -m "ci: deploy myapp ${IMAGE_TAG} to staging"
@@ -438,8 +457,7 @@ git push
 
 # ArgoCD rileva il cambio e synca automaticamente staging
 # Dopo validazione QA, promuovi in produzione:
-kustomize edit set image "registry.company.com/myapp=${IMAGE_REF}" \
-    --kustomization overlays/production/kustomization.yaml
+(cd overlays/production && kustomize edit set image "registry.company.com/myapp=${IMAGE_REF}")
 
 git add overlays/production/kustomization.yaml
 git commit -m "chore: promote myapp ${IMAGE_TAG} to production"
@@ -452,18 +470,15 @@ git push
 ## Validazione e Linting
 
 ```bash
-# Validazione statica del kustomization.yaml
-kustomize build overlays/production --dry-run 2>&1
+# Il build stesso è la validazione sintattica del kustomization (non esiste --dry-run)
+kustomize build overlays/production > /dev/null
 
-# Kubeval — valida i manifest generati contro gli schema K8s
-kustomize build overlays/production \
-    | kubeval --strict --schema-location https://kubernetesjsonschema.dev
-
-# Kubeconform (più aggiornato di kubeval)
+# Kubeconform — valida i manifest generati contro gli schema K8s
+# (sostituisce kubeval, non più mantenuto)
 kustomize build overlays/production \
     | kubeconform \
         -strict \
-        -kubernetes-version 1.29.0 \
+        -kubernetes-version 1.34.0 \
         -schema-location default \
         -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
 
@@ -483,7 +498,7 @@ kustomize build overlays/production \
 # - name: Validate kustomize
 #   run: |
 #     kustomize build overlays/production \
-#       | kubeconform -strict -kubernetes-version 1.29.0
+#       | kubeconform -strict -kubernetes-version 1.34.0
 ```
 
 ---
@@ -510,7 +525,7 @@ gitops/
 │       └── overlays/
 └── infrastructure/
     ├── cert-manager/
-    ├── ingress-nginx/
+    ├── external-dns/
     └── monitoring/
 ```
 
@@ -523,7 +538,7 @@ kind: Kustomization
 resources:
   # Infrastruttura
   - ../../infrastructure/cert-manager
-  - ../../infrastructure/ingress-nginx
+  - ../../infrastructure/external-dns
   - ../../infrastructure/monitoring
 
   # Applicazioni (overlay production)
@@ -541,9 +556,11 @@ patches:
         value: 10        # EU ha più traffico → più repliche
 
 # Labels per identificare il cluster nei metrics
-commonLabels:
-  cluster: prod-eu-west-1
-  region: eu-west-1
+# (labels: al posto di commonLabels deprecato; includeSelectors omesso = selector immutabili intatti)
+labels:
+  - pairs:
+      cluster: prod-eu-west-1
+      region: eu-west-1
 ```
 
 ---
@@ -672,7 +689,7 @@ replacements:
 
 ### Scenario 4 — `--enable-helm` richiesto ma non abilitato in ArgoCD
 
-**Sintomo:** ArgoCD mostra errore `helm not enabled` oppure i manifest Helm non vengono renderizzati.
+**Sintomo:** ArgoCD mostra un errore tipo `must specify --enable-helm` oppure i manifest Helm non vengono renderizzati.
 
 **Causa:** L'integrazione Kustomize+Helm richiede il flag `--enable-helm` che non è attivo di default in ArgoCD per motivi di sicurezza.
 
@@ -695,8 +712,8 @@ metadata:
   namespace: argocd
 data:
   kustomize.buildOptions: "--enable-helm"
-  # Per versioni specifiche di kustomize
-  kustomize.version.v5.3.0: "--enable-helm"
+  # Opzioni per una versione specifica di kustomize (registrata con kustomize.path.v5.3.0: <binario>)
+  kustomize.buildOptions.v5.3.0: "--enable-helm"
 ```
 
 ```bash
