@@ -7,9 +7,10 @@ search_keywords: [kafka connect sink, sink connector kafka, elasticsearch sink k
 parent: messaging/kafka/kafka-connect
 related: [messaging/kafka/kafka-connect/source-connectors, messaging/kafka/kafka-connect/debezium-cdc, messaging/kafka/fondamenti/broker-cluster]
 official_docs: https://kafka.apache.org/documentation/#connect
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Sink Connectors
@@ -26,7 +27,9 @@ I **sink connector** esportano dati da topic Kafka verso destinazioni esterne: d
 
 **Idempotency** — I sink connector migliori supportano scritture idempotenti: se un record viene scritto due volte (at-least-once), il risultato è lo stesso di una singola scrittura.
 
-**Exactly-once (sink)** — Alcuni connector (es. JDBC Sink) supportano l'esatto-once tramite transazioni sul lato destinazione.
+**Exactly-once (sink)** — Kafka Connect garantisce di default solo *at-least-once* sul lato sink: gli offset vengono committati dopo la scrittura, quindi un crash causa la riscrittura. L'effetto exactly-once si ottiene rendendo la scrittura idempotente (JDBC: `insert.mode=upsert`; Elasticsearch: `key.ignore=false`, document ID = chiave Kafka) oppure con connector che producono file deterministici (S3 Sink con partitioner deterministico e `flush.size`/rotazione basata su record, non su wall-clock). JDBC Sink **non** offre transazioni exactly-once end-to-end.
+
+**DLQ (Dead Letter Queue)** — Topic Kafka dove il framework Connect scarta i record che falliscono in deserializzazione/conversione o in una SMT (Single Message Transform), invece di fermare il task. Vale solo per i sink.
 
 **Flush** — I record vengono accumulati in buffer e scritti in batch verso la destinazione. La frequenza di flush è controllabile.
 
@@ -42,7 +45,6 @@ curl -X POST http://localhost:8083/connectors \
     "config": {
       "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
       "connection.url": "http://elasticsearch:9200",
-      "type.name": "_doc",
       "topics": "orders",
       "key.ignore": "false",
       "schema.ignore": "true",
@@ -63,6 +65,9 @@ curl -X POST http://localhost:8083/connectors \
   }'
 ```
 
+!!! note "type.name"
+    Le versioni recenti del connector (ES 7+/8) non usano più mapping type: `type.name` è stato rimosso, non impostarlo.
+
 ### S3 Sink Connector (Confluent)
 
 Archivia record Kafka su Amazon S3, organizzandoli in partizioni per tempo o campo.
@@ -80,7 +85,6 @@ curl -X POST http://localhost:8083/connectors \
 
       "topics": "orders,payments",
       "flush.size": "1000",
-      "rotate.interval.ms": "3600000",
       "rotate.schedule.interval.ms": "3600000",
 
       "storage.class": "io.confluent.connect.s3.storage.S3Storage",
@@ -96,17 +100,21 @@ curl -X POST http://localhost:8083/connectors \
   }'
 ```
 
-**Struttura S3 risultante:**
+**Struttura S3 risultante** (prefisso `topics.dir`, default `topics`):
 ```
 s3://my-kafka-archive/
-└── orders/
-    └── year=2026/
-        └── month=02/
-            └── day=23/
-                └── hour=14/
-                    ├── orders+0+0000001000.parquet
-                    └── orders+1+0000001500.parquet
+└── topics/
+    └── orders/
+        └── year=2026/
+            └── month=02/
+                └── day=23/
+                    └── hour=14/
+                        ├── orders+0+0000001000.parquet
+                        └── orders+1+0000001500.parquet
 ```
+
+!!! note "Rotazione e Parquet"
+    `rotate.schedule.interval.ms` chiude i file a intervalli di wall-clock (richiede `timezone`) ma rende l'output non deterministico → perde la semantica exactly-once; `rotate.interval.ms` si basa sul timestamp dei record. `ParquetFormat` richiede record con schema (Avro, JSON Schema, Protobuf o JSON con `schemas.enable=true`), non JSON schemaless.
 
 ### JDBC Sink Connector
 
@@ -121,7 +129,7 @@ curl -X POST http://localhost:8083/connectors \
       "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
       "connection.url": "jdbc:postgresql://db:5432/analytics",
       "connection.user": "writer",
-      "connection.password": "secret",
+      "connection.password": "${file:/opt/secrets/db.properties:password}",
 
       "topics": "orders",
       "table.name.format": "${topic}",
@@ -138,7 +146,12 @@ curl -X POST http://localhost:8083/connectors \
   }'
 ```
 
+!!! note "Segreti"
+    Il placeholder `${file:...}` richiede un `ConfigProvider` sul worker (`config.providers=file` e `config.providers.file.class=org.apache.kafka.common.config.provider.FileConfigProvider`): così la password non finisce in chiaro nella REST API né nel topic `connect-configs`. Lo stesso vale per `${env:...}` (`EnvVarConfigProvider`).
+
 ### HTTP Sink Connector (open source)
+
+<!-- REVIEW: verificare nomi proprietà del connector clescot (http.url, http.headers, ecc.) sulla doc ufficiale; le property potrebbero avere prefisso `config.<nome>.` -->
 
 ```bash
 curl -X POST http://localhost:8083/connectors \
@@ -178,6 +191,9 @@ curl -X POST http://localhost:8083/connectors \
   }'
 ```
 
+!!! warning "Cosa copre la DLQ"
+    Il framework instrada alla DLQ solo gli errori di conversione e di SMT. Gli errori di scrittura verso la destinazione (`put()`) finiscono nella DLQ solo se il connector usa l'*errant record reporter* (es. JDBC, Elasticsearch, S3 per record non validi); un'indisponibilità della destinazione fa invece ritentare e poi fallire il task.
+
 ## Best Practices
 
 !!! tip "Aumentare batch.size per throughput"
@@ -207,10 +223,12 @@ curl -X POST http://localhost:8083/connectors \
 kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
   --group connect-elasticsearch-orders-sink --describe
 
-# Aggiornare la configurazione del connector
-curl -X PUT http://localhost:8083/connectors/elasticsearch-orders-sink/config \
-  -H "Content-Type: application/json" \
-  -d '{"tasks.max": "4", "batch.size": "3000"}'
+# Aggiornare la configurazione: PUT /config SOSTITUISCE l'intera config,
+# quindi va inviata completa (partire da quella attuale)
+curl -s http://localhost:8083/connectors/elasticsearch-orders-sink/config \
+  | jq '. + {"tasks.max": "4", "batch.size": "3000"}' \
+  | curl -X PUT http://localhost:8083/connectors/elasticsearch-orders-sink/config \
+      -H "Content-Type: application/json" -d @-
 ```
 
 ### Scenario 2 — Errori di schema (schema mismatch / deserialization error)
@@ -229,11 +247,12 @@ curl http://localhost:8083/connectors/elasticsearch-orders-sink/status | jq .
 kafka-console-consumer.sh --bootstrap-server kafka:9092 \
   --topic orders --from-beginning --max-messages 1
 
-# Se JSON: usare JsonConverter
-curl -X PUT http://localhost:8083/connectors/elasticsearch-orders-sink/config \
-  -H "Content-Type: application/json" \
-  -d '{"value.converter": "org.apache.kafka.connect.json.JsonConverter",
-       "value.converter.schemas.enable": "false"}'
+# Se JSON: usare JsonConverter (PUT sostituisce tutta la config: si parte da quella attuale)
+curl -s http://localhost:8083/connectors/elasticsearch-orders-sink/config \
+  | jq '. + {"value.converter": "org.apache.kafka.connect.json.JsonConverter",
+             "value.converter.schemas.enable": "false"}' \
+  | curl -X PUT http://localhost:8083/connectors/elasticsearch-orders-sink/config \
+      -H "Content-Type: application/json" -d @-
 ```
 
 ### Scenario 3 — Connector reprocessa record dopo restart
@@ -258,7 +277,7 @@ curl http://localhost:8083/connectors/jdbc-orders-sink/config | \
 
 **Sintomo:** Il connector rimane attivo (stato RUNNING) ma i record non arrivano alla destinazione. Il topic DLQ si riempie di messaggi con header di errore.
 
-**Causa:** `errors.tolerance=all` è configurato e i record falliscono silenziosamente. Causa tipica: record malformati, destinazione non raggiungibile intermittentemente, o trasformazione (SMT) che fallisce.
+**Causa:** `errors.tolerance=all` è configurato e i record falliscono silenziosamente. Causa tipica: record malformati, errore di deserializzazione/converter, trasformazione (SMT) che fallisce, documenti rifiutati dalla destinazione.
 
 **Soluzione:** Ispezionare i record nella DLQ leggendo gli header di errore. Correggere la causa root e riconsiderare `errors.tolerance` se il volume di errori è inatteso.
 
@@ -272,8 +291,10 @@ kafka-console-consumer.sh --bootstrap-server kafka:9092 \
 curl http://localhost:8083/connectors/elasticsearch-sink-with-dlq/status | \
   jq '.tasks[] | {id: .id, state: .state, trace: .trace}'
 
-# Se la destinazione era temporaneamente non raggiungibile: riavviare i task
+# Se un task è FAILED (es. destinazione era non raggiungibile): riavviarlo
 curl -X POST http://localhost:8083/connectors/elasticsearch-sink-with-dlq/tasks/0/restart
+# oppure tutti i task falliti in una volta (Kafka 3.0+)
+curl -X POST "http://localhost:8083/connectors/elasticsearch-sink-with-dlq/restart?includeTasks=true&onlyFailed=true"
 ```
 
 ## Riferimenti
