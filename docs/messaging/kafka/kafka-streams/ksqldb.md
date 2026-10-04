@@ -56,12 +56,11 @@ SELECT * FROM orders_by_customer
 WHERE customerId = 'cust-789';
 ```
 
-<!-- REVIEW: verificare su docs.ksqldb.io quali pull query sono supportate nelle versioni recenti (pull query su STREAM e table scan senza filtro sulla chiave introdotti dopo 0.22) -->
 !!! warning "Pull query: il caso d'uso tipico è la Materialized View"
-    Il caso d'uso classico delle pull query è la lettura puntuale per chiave su una TABLE / MATERIALIZED VIEW (lookup su state store). Le versioni più vecchie rifiutavano le pull query su STREAM; le versioni recenti ampliano il supporto (stream e table scan), ma senza filtro sulla chiave il costo è una scansione completa: verificare i limiti della versione in uso.
+    Il caso d'uso classico delle pull query è la lettura puntuale per chiave su una TABLE / MATERIALIZED VIEW (lookup su state store). Le versioni più vecchie rifiutavano le pull query su STREAM; le versioni recenti le supportano su stream, su tabelle create con `CREATE TABLE AS SELECT` (anche con join e windowed) ma **non** su tabelle create con `CREATE TABLE` semplice. I table scan (query su colonne non-chiave, senza uguaglianza sulla chiave) sono **disabilitati di default**: si abilitano con `ksql.query.pull.table.scan.enabled=true` (server property o sessione CLI) e il costo è una scansione completa.
 
 !!! warning "Stato del progetto (2026)"
-    ksqlDB è sotto Confluent Community License (non open source OSI) e lo sviluppo è rallentato: per nuovi progetti Confluent spinge verso Flink SQL (Confluent Cloud for Apache Flink). Valutare questa traiettoria prima di adottarlo per workload nuovi. <!-- REVIEW: verificare roadmap/stato di ksqlDB e impatto dell'acquisizione Confluent-IBM -->
+    ksqlDB è sotto Confluent Community License (non open source OSI) e lo sviluppo è rallentato: per nuovi progetti Confluent spinge verso Flink SQL (Confluent Cloud for Apache Flink). Valutare questa traiettoria prima di adottarlo per workload nuovi. Nel dicembre 2025 IBM ha annunciato l'acquisizione di Confluent (~11 miliardi di USD, all-cash); Confluent resta un brand distinto, ma non risulta una roadmap pubblica che rilanci ksqlDB.
 
 
 ## Come Funziona / Architettura
@@ -108,17 +107,20 @@ ksqlDB Server è un'applicazione Java che:
 ### Docker Compose per avviare ksqlDB
 
 !!! note "ZooKeeper"
-    L'esempio usa ZooKeeper per semplicità; Kafka 4.0+ funziona solo in modalità KRaft, quindi con broker recenti sostituire `zookeeper` con un broker KRaft (vedi [ZooKeeper vs KRaft](../fondamenti/zookeeper-kraft.md)). <!-- REVIEW: verificare tag immagini cp-* correnti (7.6.0 è vecchio) -->
+    L'esempio usa ZooKeeper per semplicità; Kafka 4.0+ funziona solo in modalità KRaft, quindi con broker recenti sostituire `zookeeper` con un broker KRaft (vedi [ZooKeeper vs KRaft](../fondamenti/zookeeper-kraft.md)).
+
+!!! note "Versioni immagini"
+    Le immagini `cp-*` sono pinnate a 7.9.0, ultima linea Confluent Platform con ZooKeeper. Confluent Platform 8.x (es. 8.2.x) è solo KRaft: con 8.x usare un broker KRaft e il relativo tag.
 
 ```yaml
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.0
+    image: confluentinc/cp-zookeeper:7.9.0
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
 
   kafka:
-    image: confluentinc/cp-kafka:7.6.0
+    image: confluentinc/cp-kafka:7.9.0
     depends_on: [zookeeper]
     environment:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -128,7 +130,7 @@ services:
       - "9092:9092"
 
   schema-registry:
-    image: confluentinc/cp-schema-registry:7.6.0
+    image: confluentinc/cp-schema-registry:7.9.0
     depends_on: [kafka]
     environment:
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
@@ -137,7 +139,7 @@ services:
       - "8081:8081"
 
   ksqldb-server:
-    image: confluentinc/cp-ksqldb-server:7.6.0
+    image: confluentinc/cp-ksqldb-server:7.9.0
     depends_on: [kafka, schema-registry]
     ports:
       - "8088:8088"
@@ -148,7 +150,7 @@ services:
       KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: "true"
 
   ksqldb-cli:
-    image: confluentinc/cp-ksqldb-cli:7.6.0
+    image: confluentinc/cp-ksqldb-cli:7.9.0
     depends_on: [ksqldb-server]
     entrypoint: /bin/sh
     tty: true
@@ -396,12 +398,12 @@ For stream-table joins, the input records for the table must be co-partitioned w
 ```
 
 **Causa:** Stream e Table hanno un numero diverso di partizioni (il join è locale per partizione, quindi serve co-partitioning: stesso numero di partizioni e stessa chiave).
-**Soluzione:** Ricreare uno dei due con `CREATE ... AS SELECT ... WITH (PARTITIONS = N)` allineando le partizioni. ksqlDB non supporta GlobalKTable (nessun `CREATE GLOBAL TABLE`). <!-- REVIEW: verificare testo esatto del messaggio d'errore nella versione corrente -->
+**Soluzione:** Ricreare uno dei due con `CREATE ... AS SELECT ... WITH (PARTITIONS = N)` allineando le partizioni. ksqlDB non supporta GlobalKTable (nessun `CREATE GLOBAL TABLE`). <!-- CURRENCY: testo esatto del messaggio d'errore non verificato (2026-10) — la doc conferma il requisito di co-partitioning (stesso numero di partizioni; unica eccezione i join table-table su foreign key) -->
 
 ### Pull query su stream/table non supportata
 
-**Causa:** In versioni vecchie le pull query erano ammesse solo su TABLE con filtro sulla chiave.
-**Soluzione:** Creare una materialized view (`CREATE TABLE ... AS SELECT ... GROUP BY`) e interrogare quella, oppure aggiornare ksqlDB.
+**Causa:** Pull query su tabella creata con `CREATE TABLE` semplice (non supportata), oppure query senza uguaglianza sulla chiave con table scan disabilitato (default).
+**Soluzione:** Creare una materialized view (`CREATE TABLE ... AS SELECT ... GROUP BY`) e interrogare quella, oppure abilitare `ksql.query.pull.table.scan.enabled=true` accettando la scansione completa.
 
 ## Riferimenti
 
