@@ -7,9 +7,10 @@ search_keywords: [Microsoft Defender for Cloud CSPM CWPP, Secure Score postura s
 parent: cloud/azure/security/_index
 related: [cloud/azure/compute/virtual-machines, cloud/azure/monitoring/monitor-log-analytics, cloud/azure/compute/aks-containers]
 official_docs: https://learn.microsoft.com/azure/defender-for-cloud/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Defender for Cloud & Microsoft Sentinel
@@ -30,13 +31,17 @@ last_updated: 2026-03-29
 |---|---|---|
 | **Foundational CSPM (Free)** | Secure Score, raccomandazioni base, Azure Policy | Gratuito |
 | **Defender CSPM (Paid)** | Attack path analysis, cloud security explorer, agentless scanning | ~$0.01/risorsa/ora |
-| **Defender for Servers P1** | Defender for Endpoint (EDR), JIT Access | ~$0.005/VM/ora |
-| **Defender for Servers P2** | Tutto P1 + vulnerability assessment, file integrity monitoring | ~$0.02/VM/ora |
-| **Defender for SQL** | SQL threat protection (injection, anomaly detection) | ~$0.018/vCore/ora |
-| **Defender for Storage** | Malware scanning, sensitive data threat detection | ~$10/storage account/mese |
-| **Defender for Containers** | AKS runtime protection, image scanning, Kubernetes hardening | ~$7/vCore/ora nodo |
-| **Defender for App Service** | HTTP endpoint protection, anomaly detection | ~$0.018/istanza/ora |
+| **Defender for Servers P1** | Defender for Endpoint (EDR) integrato, vulnerability assessment di base (MDVM), Azure Arc | ~$5/server/mese |
+| **Defender for Servers P2** | Tutto P1 + JIT VM Access, file integrity monitoring, agentless scanning, log retention 500 MB/giorno | ~$15/server/mese |
+| **Defender for SQL** | SQL threat protection (injection, anomaly detection) | ~$15/server/mese |
+| **Defender for Storage** | Malware scanning (a consumo per GB), sensitive data threat detection | ~$10/storage account/mese |
+| **Defender for Containers** | AKS runtime protection, image scanning, Kubernetes hardening | ~$7/vCore/mese |
+| **Defender for App Service** | HTTP endpoint protection, anomaly detection | ~$15/istanza/mese |
 | **Defender for Key Vault** | Anomaly detection accessi Key Vault | ~$0.02/10K operazioni |
+
+<!-- REVIEW: verificare prezzi (pricing page Defender for Cloud) e se Defender for App Service/Key Vault/Resource Manager sono ancora piani separati -->
+!!! note "Prezzi indicativi"
+    I prezzi sono orientativi (USD, list price) e cambiano: usare la [pricing page ufficiale](https://azure.microsoft.com/pricing/details/defender-for-cloud/). Defender CSPM è fatturato per risorsa fatturabile/ora (~$0.01 ≈ $7/mese).
 
 ### Secure Score
 
@@ -52,16 +57,15 @@ az security assessment list \
   --output table
 
 # Dettaglio di una raccomandazione specifica
+#   --name = assessment key (GUID, visibile in `assessment list`)
 az security assessment show \
-  --resource-group $RG \
-  --resource-name myvm \
-  --name "vulnerability-assessment-solution-should-be-installed-on-your-virtual-machines" \
+  --name "<ASSESSMENT_KEY_GUID>" \
   --output json
 
-# Listare risorse non conformi per una policy
+# Listare sub-assessment (es. singole vulnerabilità) di una risorsa
 az security sub-assessment list \
-  --resource-group $RG \
-  --assessed-resource-id /subscriptions/SUB_ID \
+  --assessed-resource-id /subscriptions/SUB_ID/resourceGroups/$RG/providers/Microsoft.Compute/virtualMachines/my-vm \
+  --assessment-name "<ASSESSMENT_KEY_GUID>" \
   --output table
 ```
 
@@ -88,10 +92,12 @@ az security pricing create \
   --name Containers \
   --tier Standard
 
-# Abilitare Defender for Storage con malware scanning
+# Abilitare Defender for Storage (malware scanning e sensitive data discovery
+# sono estensioni del piano, da configurare a parte via portal/ARM)
 az security pricing create \
   --name StorageAccounts \
-  --tier Standard
+  --tier Standard \
+  --subplan DefenderForStorageV2
 
 # Verificare piani attivi
 az security pricing list \
@@ -151,38 +157,41 @@ az security jit-policy initiate \
 
 Defender for Cloud può proteggere anche workload AWS e GCP tramite connettori.
 
-```bash
-# Connettere account AWS per CSPM multi-cloud
-az security aws-connector create \
-  --resource-group $RG \
-  --name "aws-prod-account" \
-  --hierarchy-identifier "123456789012" \
-  --offering cspm
+Non esiste un comando `az security` dedicato per i connettori AWS/GCP: si creano da portal (*Environment settings → Add environment*), con Terraform/ARM o via REST sulla risorsa `Microsoft.Security/securityConnectors`. Il connettore usa un ruolo cross-account (AWS, via OIDC/CloudFormation) o un service account (GCP), senza agent.
 
-# Connettere GCP per CSPM multi-cloud
-az security gcp-project-connector create \
-  --resource-group $RG \
-  --name "gcp-prod-project" \
-  --hierarchy-identifier "my-gcp-project" \
-  --offering cspm
+```bash
+# Listare i connettori multi-cloud esistenti
+az rest --method GET \
+  --url "https://management.azure.com/subscriptions/SUB_ID/providers/Microsoft.Security/securityConnectors?api-version=2023-10-01-preview"
 ```
 
 ### Microsoft Cloud Security Benchmark (MCSB)
 
-MCSB (ex Azure Security Benchmark) definisce best practice di sicurezza per Azure organizzate in domini: Network Security, Identity Management, Privileged Access, Data Protection, Asset Management, Logging and Threat Detection, Incident Response, Posture Management, Endpoint Security, Backup and Recovery, DevOps Security.
+MCSB (ex Azure Security Benchmark) definisce best practice di sicurezza per Azure organizzate in domini: Network Security, Identity Management, Privileged Access, Data Protection, Asset Management, Logging and Threat Detection, Incident Response, Posture and Vulnerability Management, Endpoint Security, Backup and Recovery, DevOps Security, Governance and Strategy.
+
+<!-- REVIEW: verificare se MCSB v2 (con dominio AI Security) è GA e se va citato -->
 
 ```bash
 # Verificare compliance rispetto a MCSB
 az security regulatory-compliance-standards list \
   --output table
 
-# Dettaglio conformità MCSB
+# Controlli dello standard MCSB
+az security regulatory-compliance-controls list \
+  --standard-name "Microsoft-cloud-security-benchmark" \
+  --output table
+
+# Assessment di un controllo (es. NS-1 Network Security)
 az security regulatory-compliance-assessments list \
-  --standard-name "Microsoft cloud security benchmark" \
+  --standard-name "Microsoft-cloud-security-benchmark" \
+  --control-name "NS-1" \
   --output table
 ```
 
 ## Microsoft Sentinel
+
+!!! warning "Sentinel si sposta nel portale Microsoft Defender"
+    Microsoft sta unificando Sentinel con Defender XDR nel **portale Defender** (security.microsoft.com): l'esperienza SIEM nel portale Azure è in dismissione. <!-- REVIEW: verificare data di ritiro del portale Azure per Sentinel (annunciata marzo 2027, prima luglio 2026) --> Nel portale Defender incidenti e alert SIEM+XDR sono correlati in un'unica coda; i nuovi workspace vanno onboardati lì. Esiste inoltre il **Sentinel data lake** per retention a lungo termine a basso costo. <!-- REVIEW: verificare stato GA del data lake -->
 
 ### Architettura
 
@@ -205,17 +214,17 @@ az monitor log-analytics workspace create \
   --location westeurope \
   --retention-time 90
 
-# Abilitare Sentinel sul workspace (tramite estensione)
-az sentinel workspace enable \
-  --resource-group rg-security-prod \
-  --workspace-name law-sentinel-prod
+# Estensione CLI (preview) per i comandi `az sentinel`
+az extension add --name sentinel
 
-# Oppure via REST API / portal (approccio più comune per onboarding iniziale)
-az rest \
-  --method PUT \
-  --url "https://management.azure.com/subscriptions/SUB_ID/resourceGroups/rg-security-prod/providers/Microsoft.OperationsManagement/solutions/SecurityInsights(law-sentinel-prod)?api-version=2015-11-01-preview" \
-  --body '{"location":"westeurope","properties":{"workspaceResourceId":"/subscriptions/SUB_ID/resourceGroups/rg-security-prod/providers/Microsoft.OperationalInsights/workspaces/law-sentinel-prod"},"plan":{"name":"SecurityInsights(law-sentinel-prod)","product":"OMSGallery/SecurityInsights","publisher":"Microsoft","promotionCode":""}}'
+# Abilitare Sentinel sul workspace = creare l'onboarding state "default"
+az sentinel onboarding-state create \
+  --resource-group rg-security-prod \
+  --workspace-name law-sentinel-prod \
+  --name default
 ```
+
+Alternative: portal, Bicep/Terraform (`azurerm_sentinel_log_analytics_workspace_onboarding`).
 
 ### Data Connectors
 
@@ -258,6 +267,10 @@ Connettori comuni disponibili:
 ### Analytics Rules — KQL Queries
 
 Le Analytics Rules definiscono quando creare un Alert/Incident basandosi su query KQL schedulata.
+
+<!-- REVIEW: verificare sintassi esatta di `az sentinel alert-rule create` (estensione preview: usa parametri `--scheduled`, non `--kind`); in produzione preferire Bicep/ARM/Terraform o Sentinel Repositories (CI/CD) -->
+!!! note "Sintassi CLI indicativa"
+    L'estensione `az sentinel` è in preview e la sintassi dei comandi `alert-rule`/`automation-rule` cambia tra versioni: gli esempi seguenti mostrano i parametri logici (frequenza, finestra, soglia, tattiche). Per detection-as-code usare ARM/Bicep/Terraform o **Sentinel Repositories** (sync da GitHub/Azure DevOps).
 
 ```bash
 # Creare Scheduled Analytics Rule
@@ -417,12 +430,15 @@ az sentinel incident update \
 
 UEBA analizza il comportamento normale di utenti ed entità per rilevare anomalie.
 
-```bash
-# Abilitare UEBA
-az sentinel ueba create \
-  --resource-group rg-security-prod \
-  --workspace-name law-sentinel-prod \
-  --data-sources "AuditLogs" "AzureActivity" "SecurityEvent" "SigninLogs"
+UEBA si abilita da portal (*Settings → Entity behavior configuration*: collegare Entra ID come sorgente e scegliere le tabelle di log) oppure via ARM/REST sulla risorsa `Microsoft.SecurityInsights/settings` (kind `Ueba`). Non esiste un comando `az sentinel ueba`. Popola tabelle come `BehaviorAnalytics` e `UserPeerAnalytics`:
+
+```kql
+// Anomalie comportamentali ad alta priorità (ultimi 7 giorni)
+BehaviorAnalytics
+| where TimeGenerated > ago(7d)
+| where InvestigationPriority > 5
+| project TimeGenerated, UserPrincipalName, ActivityType, ActionType, InvestigationPriority
+| order by InvestigationPriority desc
 ```
 
 ### KQL: Hunting Queries
@@ -434,7 +450,7 @@ OfficeActivity
 | where TimeGenerated > ago(7d)
 | where RecordType == "SharePointFileOperation"
 | where Operation == "FileDownloaded"
-| summarize DownloadCount = count(), TotalBytes = sum(toint(SourceFileExtension)) by UserId, ClientIP, bin(TimeGenerated, 1d)
+| summarize DownloadCount = count(), DistinctFiles = dcount(SourceFileName) by UserId, ClientIP, bin(TimeGenerated, 1d)
 | where DownloadCount > 100
 | order by DownloadCount desc
 
@@ -446,10 +462,10 @@ SecurityEvent
 | project TimeGenerated, Computer, AccountName, TaskName
 | order by TimeGenerated desc
 
-// Hunting: lateral movement via WMI
+// Hunting: possibile lateral movement (stesso account, network logon su molti host)
 SecurityEvent
 | where TimeGenerated > ago(24h)
-| where EventID in (4648, 4624)  // Explicit credential use / logon
+| where EventID == 4624  // Logon riuscito
 | where LogonType == 3  // Network logon
 | where AccountName != "SYSTEM" and AccountName != "ANONYMOUS LOGON"
 | summarize Targets = make_set(Computer), TargetCount = dcount(Computer) by AccountName
@@ -461,20 +477,7 @@ SecurityEvent
 
 I Workbooks Sentinel forniscono dashboard interattivi per visualizzare dati di sicurezza.
 
-```bash
-# Listare workbook templates disponibili
-az sentinel source-control list \
-  --resource-group rg-security-prod \
-  --workspace-name law-sentinel-prod
-
-# I workbook built-in includono:
-# - Azure Activity
-# - Azure AD Sign-in logs
-# - Microsoft Defender for Cloud coverage
-# - Identity & Access
-# - Zero Trust (TIC 3.0)
-# - MITRE ATT&CK coverage
-```
+I template si installano dal **Content hub** (*Sentinel → Content management*) e poi si salvano come workbook. Template built-in comuni: Azure Activity, Microsoft Entra ID Sign-in logs, Identity & Access, Zero Trust (TIC 3.0), copertura MITRE ATT&CK.
 
 ### MITRE ATT&CK Integration
 
@@ -505,8 +508,9 @@ az sentinel alert-rule create \
 
 ## Best Practices
 
-- Abilita **Defender for Servers P2** su tutte le VM di produzione per EDR e vulnerability assessment
-- Attiva **JIT Access** su tutte le VM con porte di amministrazione (22, 3389, 5985/5986)
+- Abilita **Defender for Servers P2** sulle VM di produzione (EDR è già in P1; P2 aggiunge JIT, FIM, agentless scanning)
+- Attiva **JIT Access** (richiede P2) su tutte le VM con porte di amministrazione (22, 3389, 5985/5986) e preferisci `allowedSourceAddressPrefix` specifico invece di `*`
+- Concedi al service principal Sentinel il ruolo *Microsoft Sentinel Automation Contributor* sul resource group dei Playbook, altrimenti le Automation Rules non possono lanciarli
 - Per Sentinel, inizia con connettori Microsoft nativi (Entra ID, M365, Azure Activity) prima di aggiungere terze parti
 - Usa **Fusion Detection** (ML-based correlation) — abilitato di default, non disabilitare
 - Configura **Automation Rules** per triage automatico degli Incident di bassa severity
@@ -519,11 +523,14 @@ az sentinel alert-rule create \
 
 **Sintomo:** Dopo aver abilitato un Defender Plan, il Secure Score non cambia e le raccomandazioni non compaiono per ore o giorni.
 
-**Causa:** L'agent (Azure Monitor Agent o MMA legacy) non è installato sulle VM, oppure le policy di iniziativa "Microsoft Defender for Cloud" non sono ancora propagate alla subscription.
+**Causa:** Il piano non è realmente attivo sulla subscription (`az security pricing list`), le policy dell'iniziativa MCSB non sono ancora propagate, oppure sulle VM manca l'estensione/agent richiesto dalla feature (Defender for Endpoint, o Azure Monitor Agent per i log). Il Log Analytics agent (MMA) è ritirato da agosto 2024: non va più usato. Con Defender CSPM/Servers P2 lo **agentless scanning** copre le VM senza agent, ma con latenza di ore.
 
-**Soluzione:** Verificare lo stato dell'agent e forzare la valutazione delle policy.
+**Soluzione:** Verificare piani e agent, poi forzare la valutazione delle policy.
 
 ```bash
+# Verificare che il piano sia attivo
+az security pricing list --output table
+
 # Verificare che AMA sia installato sulle VM
 az vm extension list \
   --resource-group $RG \
@@ -544,7 +551,6 @@ az policy state trigger-scan \
 
 # Controllare lo stato di conformità dopo ~15 minuti
 az security assessment list \
-  --resource-group $RG \
   --output table
 ```
 
@@ -554,7 +560,7 @@ az security assessment list \
 
 **Sintomo:** I log arrivano correttamente nel Log Analytics Workspace (verificabile con query KQL), ma nessuna Analytics Rule produce Incident.
 
-**Causa:** Le Analytics Rules sono disabilitate, il threshold è troppo alto, oppure la Fusion Detection ha silenziato gli alert correlati. In alternativa, la query KQL ha un errore silenzioso (nessun risultato).
+**Causa:** Le Analytics Rules sono disabilitate, il threshold è troppo alto, la finestra (`query-period`) non copre la latenza di ingestion (eventi arrivano dopo l'esecuzione della regola), oppure la query KQL non restituisce risultati (filtri su colonne/valori sbagliati). Controllare anche *Suppression* e il tab *Health* della regola.
 
 **Soluzione:** Validare la query e abilitare le regole.
 
