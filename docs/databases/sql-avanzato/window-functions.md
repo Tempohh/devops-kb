@@ -7,9 +7,10 @@ search_keywords: [window function, over clause, partition by, order by window, r
 parent: databases/sql-avanzato/_index
 related: [databases/sql-avanzato/query-optimizer, databases/sql-avanzato/partitioning]
 official_docs: https://www.postgresql.org/docs/current/tutorial-window.html
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Window Functions
@@ -45,11 +46,24 @@ funzione() OVER (
 Il **frame** (opzionale) definisce l'intervallo di righe relativo alla riga corrente:
 
 ```sql
-ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW    -- Dal primo all'attuale (default per running total)
+ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW    -- Dal primo all'attuale (running total esplicito)
 ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING             -- ±2 righe (media mobile)
 ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING    -- Dall'attuale all'ultimo
-RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW  -- Ultimi 7 giorni
+RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW  -- Ultimi 7 giorni (richiede ORDER BY su data/timestamp)
 ```
+
+### ROWS vs RANGE vs GROUPS
+
+| Modo | Unità del frame | Quando usarlo |
+|---|---|---|
+| `ROWS` | Righe fisiche | Calcoli per posizione; deterministico anche con valori ripetuti |
+| `RANGE` | Valore della colonna di `ORDER BY` (include tutti i *peer*, cioè righe con lo stesso valore) | Finestre temporali/numeriche (`INTERVAL '7 days'`) |
+| `GROUPS` | Gruppi di peer (PostgreSQL 11+) | "N valori distinti precedenti" |
+
+!!! warning "Frame di default"
+    Con `ORDER BY` e senza frame esplicito il default è `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`; senza `ORDER BY` il frame è l'intera partizione. Con `RANGE`, righe con lo stesso valore di `ORDER BY` sono peer e finiscono nello stesso frame: un running total su una colonna con duplicati dà lo stesso valore a tutti i peer. Per un cumulato riga-per-riga usare `ROWS` (e un tie-breaker univoco nell'`ORDER BY`).
+
+Opzioni utili: `EXCLUDE CURRENT ROW | TIES | GROUP` (PostgreSQL 11+) esclude righe dal frame; `FILTER (WHERE ...)` limita le righe aggregate (`COUNT(*) FILTER (WHERE stato = 'ko') OVER (PARTITION BY servizio)`).
 
 ---
 
@@ -137,7 +151,8 @@ data        importo  totale_cumulato
 ### Media Mobile (Moving Average)
 
 ```sql
--- Media mobile a 7 giorni di vendite
+-- Media mobile a 7 righe (= 7 giorni solo se c'è esattamente una riga per giorno;
+-- con giorni mancanti usare RANGE BETWEEN INTERVAL '6 days' PRECEDING AND CURRENT ROW)
 SELECT
     data,
     vendite,
@@ -239,6 +254,9 @@ FROM righe_ordine;
 
 ## Percentili Statistici
 
+!!! note "Non sono window function"
+    `PERCENTILE_CONT` / `PERCENTILE_DISC` sono *ordered-set aggregate*: usano `WITHIN GROUP (ORDER BY ...)` e `GROUP BY`, non `OVER()`. Collassano le righe come un aggregato normale. Per un percentile per riga usare `PERCENT_RANK()` o `CUME_DIST()` (vere window function).
+
 ```sql
 SELECT
     categoria,
@@ -272,7 +290,7 @@ WITH ranked AS (
 SELECT * FROM ranked WHERE rnk <= 10;
 ```
 
-**Ottimizzazione**: se usi più window function con la stessa `OVER()`, PostgreSQL esegue una sola passata. Window function con `OVER()` diversi richiedono passate separate — può essere costoso su tabelle grandi.
+**Ottimizzazione**: se usi più window function con la stessa `OVER()`, PostgreSQL le calcola in un solo nodo `WindowAgg`. `OVER()` diversi richiedono nodi separati, e ognuno può richiedere un nuovo sort (o un Incremental Sort, se l'ordinamento precedente condivide un prefisso) — costoso su tabelle grandi. Un indice su `(PARTITION BY..., ORDER BY...)` può evitare il sort.
 
 ```sql
 -- Una sola passata (stessa window)
@@ -287,7 +305,7 @@ SELECT
     SUM(importo) OVER (PARTITION BY categoria) AS sum_cat,  -- window 1
     SUM(importo) OVER (PARTITION BY regione)   AS sum_reg   -- window 2
 FROM vendite;
--- → considerare materializzare i risultati con CTE se il costo è alto
+-- → due WindowAgg, ciascuno col proprio sort
 ```
 
 ## Troubleshooting
@@ -321,22 +339,24 @@ FROM step1;
 
 **Sintomo:** `LAST_VALUE()` ritorna sempre lo stesso valore della riga corrente invece dell'ultimo elemento della partizione.
 
-**Causa:** Il frame predefinito è `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` — la "finestra" si espande fino alla riga corrente, quindi `LAST_VALUE` corrisponde sempre alla riga attuale.
+**Causa:** Il frame predefinito è `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` — la "finestra" si espande fino alla riga corrente (e ai suoi peer), quindi `LAST_VALUE` corrisponde alla riga attuale (o all'ultimo peer in caso di valori uguali).
 
 **Soluzione:** Specificare un frame esplicito che copra l'intera partizione.
 
 ```sql
 -- SBAGLIATO (frame default)
 SELECT prodotto, prezzo,
-       LAST_VALUE(prodotto) OVER (ORDER BY prezzo) AS prodotto_economico;
--- → restituisce sempre il prodotto della riga corrente
+       LAST_VALUE(prodotto) OVER (ORDER BY prezzo) AS prodotto_ultimo
+FROM prodotti;
+-- → restituisce il prodotto della riga corrente
 
 -- CORRETTO: frame esplicito
 SELECT prodotto, prezzo,
        LAST_VALUE(prodotto) OVER (
            ORDER BY prezzo
            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-       ) AS prodotto_piu_economico;
+       ) AS prodotto_prezzo_max
+FROM prodotti;
 ```
 
 ---
@@ -345,12 +365,12 @@ SELECT prodotto, prezzo,
 
 **Sintomo:** Query con più `OVER()` diversi impiega decine di secondi, `EXPLAIN ANALYZE` mostra più `WindowAgg` node in sequenza.
 
-**Causa:** Ogni `OVER()` distinto richiede una passata separata sui dati (sort + scan). Troppe window con partizioni diverse moltiplicano il costo.
+**Causa:** Ogni `OVER()` distinto genera un nodo `WindowAgg` con il proprio sort. Troppe window con partizioni diverse moltiplicano il costo. Un `WINDOW` alias è solo sintassi: non cambia il piano.
 
-**Soluzione:** Consolidare le window con stessa definizione, usare `WINDOW` alias, e materializzare risultati intermedi con CTE quando la stessa finestra è riutilizzata.
+**Soluzione:** Riusare la stessa definizione di window (stessi `PARTITION BY`/`ORDER BY`) per le funzioni che possono condividerla; creare un indice che copra `PARTITION BY` + `ORDER BY`; aumentare `work_mem` se il sort va su disco (`Sort Method: external merge` in EXPLAIN); ridurre le righe in input con `WHERE` prima della window.
 
 ```sql
--- Diagnostica: verificare quanti WindowAgg node ci sono
+-- Diagnostica: contare i WindowAgg e controllare i Sort
 EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
 SELECT
     SUM(importo) OVER w1,
@@ -359,23 +379,19 @@ SELECT
 FROM vendite
 WINDOW w1 AS (PARTITION BY categoria ORDER BY data),
        w2 AS (PARTITION BY regione);
+-- → 2 WindowAgg (w1, w2) con sort separati
 
--- Se le window sono costose, materializzare con CTE
-WITH base AS (
-    SELECT *, SUM(importo) OVER (PARTITION BY categoria) AS sum_cat
-    FROM vendite
-)
-SELECT *, AVG(importo) OVER (PARTITION BY regione) AS avg_reg
-FROM base;
+-- Indice che permette di saltare il sort di w1
+CREATE INDEX idx_vendite_cat_data ON vendite (categoria, data);
 ```
 
 ---
 
 ### Scenario 4 — NTH_VALUE restituisce NULL per righe fuori dal frame
 
-**Sintomo:** `NTH_VALUE(col, 2)` ritorna `NULL` per molte righe anche quando la partizione ha più di 2 elementi.
+**Sintomo:** `NTH_VALUE(col, 2)` ritorna `NULL` per la prima riga di ogni partizione (e per i suoi peer) anche quando la partizione ha più di 2 elementi.
 
-**Causa:** Con il frame default (`UNBOUNDED PRECEDING AND CURRENT ROW`) le prime righe della partizione non hanno ancora visto il 2° elemento. `NTH_VALUE` è sensibile al frame.
+**Causa:** Con il frame default (`UNBOUNDED PRECEDING AND CURRENT ROW`) la prima riga ha nel frame un solo elemento, quindi il 2° non esiste ancora. `NTH_VALUE` è sensibile al frame.
 
 **Soluzione:** Usare `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING` per garantire che tutte le righe vedano l'intera partizione.
 
