@@ -7,9 +7,10 @@ search_keywords: [tls codice applicativo, mtls applicazione, tls java, java ssl,
 parent: dev/sicurezza/_index
 related: [security/autenticazione/mtls-spiffe, security/pki-certificati/cert-manager, networking/fondamentali/tls-ssl-basics, dev/linguaggi/java-spring-boot, dev/linguaggi/dotnet, dev/linguaggi/go]
 official_docs: https://pkg.go.dev/crypto/tls
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # TLS/mTLS da Codice — Java, .NET, Go
@@ -57,7 +58,7 @@ Bundle binario che contiene cert + chiave privata (protetto da password).
 Usato su: Windows (.pfx), Java recente (default da Java 9+).
 
 JKS (Java KeyStore):
-Formato proprietario Java, legacy. Deprecato da Java 9+ in favore di PKCS12.
+Formato proprietario Java, legacy. Da Java 9+ il tipo di default è PKCS12 (JEP 229).
 Ancora presente in sistemi legacy. Non usare per nuovi progetti.
 ```
 
@@ -166,6 +167,7 @@ public SSLContext buildTrustOnlySSLContext(String caCertPath) throws Exception {
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import reactor.netty.http.client.HttpClient;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
@@ -207,22 +209,62 @@ tls:
   ca-path: /certs/ca.crt      # chiave: ca.crt nel Secret (o ca.pem)
 ```
 
-### Spring Boot — RestTemplate (legacy/bloccante)
+!!! note "Formato della chiave privata"
+    `SslContextBuilder.keyManager(File, File)` di Netty richiede la chiave in **PKCS#8** (`-----BEGIN PRIVATE KEY-----`). Una chiave `-----BEGIN RSA PRIVATE KEY-----` (PKCS#1) o `EC PRIVATE KEY` (SEC1) fallisce. cert-manager supporta `privateKey.encoding: PKCS8` nella risorsa `Certificate`.
+
+### Spring Boot 3.1+ — SSL Bundles (approccio consigliato)
+
+Da Spring Boot 3.1 i certificati si dichiarano come **SSL bundle** e il framework li applica a server e client, con reload automatico quando i file cambiano. Evita di scrivere a mano `SSLContext` e scheduler di reload.
+
+```yaml
+spring:
+  ssl:
+    bundle:
+      pem:
+        internal:
+          reload-on-update: true        # osserva i file e ricarica il bundle
+          keystore:
+            certificate: file:/certs/tls.crt
+            private-key: file:/certs/tls.key
+          truststore:
+            certificate: file:/certs/ca.crt
+server:
+  ssl:
+    bundle: internal
+    client-auth: need                   # mTLS lato server
+```
 
 ```java
+// Client: WebClient / RestClient agganciati al bundle
+@Bean
+WebClient secureWebClient(WebClient.Builder builder, WebClientSsl ssl) {
+    return builder.baseUrl("https://internal-service.svc.cluster.local")
+                  .apply(ssl.fromBundle("internal"))
+                  .build();
+}
+```
+
+Perché: il bundle espone un `SslBundle` osservabile; i client creati con `fromBundle` e il server embedded (Tomcat/Netty/Jetty) si aggiornano al cambio dei file, senza codice di reload custom.
+
+### Spring — RestTemplate (legacy/bloccante)
+
+```java
+// Spring 6 / Boot 3 richiedono Apache HttpClient 5 (org.apache.hc.client5)
 @Bean
 public RestTemplate secureRestTemplate() throws Exception {
     SSLContext sslContext = buildSSLContext(
         certPath, certPassword, trustStorePath, trustStorePassword
     );
-    SSLConnectionSocketFactory socketFactory =
-        new SSLConnectionSocketFactory(sslContext);
-    CloseableHttpClient httpClient = HttpClients.custom()
-        .setSSLSocketFactory(socketFactory)
+    var connManager = PoolingHttpClientConnectionManagerBuilder.create()
+        .setSSLSocketFactory(
+            SSLConnectionSocketFactoryBuilder.create()
+                .setSslContext(sslContext)
+                .build())
         .build();
-    HttpComponentsClientHttpRequestFactory factory =
-        new HttpComponentsClientHttpRequestFactory(httpClient);
-    return new RestTemplate(factory);
+    CloseableHttpClient httpClient = HttpClients.custom()
+        .setConnectionManager(connManager)
+        .build();
+    return new RestTemplate(new HttpComponentsClientHttpRequestFactory(httpClient));
 }
 ```
 
@@ -250,7 +292,8 @@ public class ReloadableSSLContextManager {
         this.currentContext = loadContext();
     }
 
-    // Chiamato ogni N minuti dallo scheduler
+    // Chiamato ogni N minuti dallo scheduler (ricarica sempre; per reload su
+    // modifica effettiva confronta lastModified dei file prima di loadContext())
     @Scheduled(fixedDelayString = "${tls.reload-interval-ms:300000}")
     public void reloadIfChanged() {
         try {
@@ -266,11 +309,15 @@ public class ReloadableSSLContextManager {
     public SSLContext get() { return currentContext; }
 
     private SSLContext loadContext() throws Exception {
-        // usa buildSSLContext() da PEM file
+        // buildSSLContextFromPem: da implementare (es. Netty SslContextBuilder
+        // oppure KeyStore in memoria costruito dai PEM) — non mostrato per brevità
         return buildSSLContextFromPem(certPath, keyPath, caPath);
     }
 }
 ```
+
+!!! warning "Il manager da solo non basta"
+    Un `WebClient`/`HttpClient` costruito con un `SSLContext` lo **cattura una volta**: sostituire `currentContext` non cambia i client già creati. Devi far leggere `get()` ad ogni nuova connessione (es. `SSLSocketFactory` delegante, o ricostruire il client dopo il reload). Su Spring Boot 3.1+ preferisci gli SSL bundle con `reload-on-update`.
 
 !!! warning "Volatile non basta per oggetti complessi"
     `volatile` garantisce visibilità del riferimento, non dell'oggetto. Il pattern sopra è sicuro perché `SSLContext` è immutabile dopo `init()`: creiamo un nuovo oggetto e lo sostituiamo atomicamente. Non tentare di mutare un `SSLContext` esistente.
@@ -301,14 +348,14 @@ string keyPem  = File.ReadAllText("/certs/tls.key");
 var cert = X509Certificate2.CreateFromPem(certPem, keyPem);
 ```
 
-```csharp
-// Caricamento CA bundle personalizzato per validare server con CA privata
-var caCert = new X509Certificate2("/certs/ca.crt");
+!!! warning "Windows: chiave effimera e Schannel"
+    Su Windows, `CreateFromPemFile`/`CreateFromPem` producono un certificato con chiave **effimera** (non persistita) che `SslStream`/Schannel può rifiutare con `AuthenticationException` (errore "No credentials are available in the security package"). Workaround: round-trip via PFX — `new X509Certificate2(cert.Export(X509ContentType.Pfx))`. Su Linux (caso Kubernetes) non serve.
 
-// Aggiungi la CA a uno store temporaneo
-var customCaStore = new X509Store(StoreName.CertificateAuthority, StoreLocation.LocalMachine);
-// ATTENZIONE: modifica lo store permanente del SO — preferire la callback custom
-// Alternativa sicura: validazione custom in HttpClientHandler (vedi sotto)
+```csharp
+// Caricamento CA personalizzata per validare server con CA privata.
+// NON aggiungerla a X509Store(LocalMachine): modificherebbe lo store del SO.
+// Usa X509ChainPolicy.CustomTrustStore in una callback custom (vedi sotto).
+var caCert = new X509Certificate2("/certs/ca.crt");
 ```
 
 ### HttpClient con Certificato Client e CA Privata
@@ -337,6 +384,10 @@ public static HttpClient CreateMtlsClient(
         customChain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
         customChain.ChainPolicy.CustomTrustStore.Add(caCert);
         customChain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+
+        // Il nome host va verificato a parte: la chain non lo controlla
+        if ((errors & SslPolicyErrors.RemoteCertificateNameMismatch) != 0)
+            return false;
 
         bool valid = customChain.Build(new X509Certificate2(cert!));
         if (!valid)
@@ -600,10 +651,18 @@ server := &http.Server{
             cert := cfg.Certificates[0]
             return &cert, nil
         },
-        ClientAuth: tls.RequireAndVerifyClientCert, // mTLS server-side
+        // mTLS server-side: ClientCAs va impostato, altrimenti i client sono
+        // verificati contro il system trust store. GetConfigForClient lo fa ad ogni
+        // handshake con la CA aggiornata.
+        GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+            cfg := watcher.GetTLSConfig().Clone()
+            cfg.ClientCAs = cfg.RootCAs
+            cfg.ClientAuth = tls.RequireAndVerifyClientCert
+            return cfg, nil
+        },
     },
 }
-// NOTA: con GetCertificate configurato, non passare certFile/keyFile a ListenAndServeTLS
+// NOTA: con GetCertificate/GetConfigForClient configurato, non passare certFile/keyFile a ListenAndServeTLS
 server.ListenAndServeTLS("", "")
 ```
 
@@ -632,8 +691,10 @@ func NewGRPCConn(target, certFile, keyFile, caFile string) (*grpc.ClientConn, er
     }
 
     creds := credentials.NewTLS(tlsCfg)
-    return grpc.Dial(target, grpc.WithTransportCredentials(creds))
+    // grpc.Dial è deprecato (grpc-go ≥ 1.63): usa NewClient (connessione lazy)
+    return grpc.NewClient(target, grpc.WithTransportCredentials(creds))
 }
+// Esempio compatto: in produzione gestisci gli errori di LoadX509KeyPair/ReadFile
 ```
 
 ---
@@ -646,17 +707,19 @@ Le immagini container base (distroless, alpine, scratch) includono o meno i CA b
 
 ```
 scratch                →  NESSUN CA bundle — TLS fallisce sempre senza configurazione
-gcr.io/distroless/static  →  NESSUN CA bundle
-gcr.io/distroless/base    →  Include /etc/ssl/certs/ca-certificates.crt
+gcr.io/distroless/static  →  Include ca-certificates (e tzdata)
+gcr.io/distroless/base    →  Include ca-certificates (e glibc)
 alpine                 →  Include ca-certificates se installato esplicitamente
 ubuntu/debian          →  Include ca-certificates
 ```
 
 ```dockerfile
-# Per immagini scratch/distroless/static — copia il CA bundle dall'host
-FROM golang:1.22-alpine AS builder
+# Per immagini scratch — copia il CA bundle dallo stage di build
+FROM golang:1.24-alpine AS builder
 RUN apk add --no-cache ca-certificates
-RUN go build -o /service ./cmd/service
+WORKDIR /src
+COPY . .
+RUN CGO_ENABLED=0 go build -o /service ./cmd/service
 
 FROM scratch
 # Copia CA bundle di sistema per TLS verso endpoint pubblici
@@ -722,7 +785,8 @@ spec:
 
 | Linguaggio | Meccanismo | Note |
 |---|---|---|
-| Java / WebClient | `SslContextBuilder` + rebuild periodico | Netty ricrea le connessioni usando il nuovo SslContext |
+| Java / Spring Boot 3.1+ | SSL bundle con `reload-on-update: true` | Raccomandato: nessun codice custom |
+| Java / WebClient | Ricostruire `HttpClient`/`WebClient` con nuovo `SslContext` | Il `SslContext` è fissato alla creazione del client: va ricreato il client |
 | Java / RestTemplate | Ricrea `HttpClient` + `RestTemplate` periodicamente | Attenzione: le connessioni esistenti usano il vecchio cert |
 | .NET | `IHttpClientFactory` + `HandlerLifetime` | Raccomandato. Ricrea handler ogni N minuti |
 | Go / http.Client | `GetCertificate` / `GetClientCertificate` callback | Chiamata ad ogni TLS handshake — zero downtime |
@@ -730,6 +794,9 @@ spec:
 
 !!! tip "K8s Secret montato come volume"
     Quando cert-manager rinnova un certificato, Kubernetes aggiorna atomicamente i file nel volume montato (tramite symlink). L'applicazione vede i nuovi file alla prossima lettura. **Non è necessario riavviare il pod** — basta che l'applicazione rilegga periodicamente i file.
+
+!!! warning "Volume con `subPath`"
+    I Secret/ConfigMap montati con `subPath` **non** vengono aggiornati da kubelet: monta l'intera directory. L'aggiornamento non è istantaneo (propagazione kubelet, tipicamente fino a 1–2 minuti).
 
 !!! warning "Secret montato come env var"
     Se monti il Secret come variabile d'ambiente (envFrom/env), Kubernetes **non aggiorna automaticamente** le env var quando il Secret cambia. Usa sempre i Secret montati come volumi per i certificati.
@@ -793,16 +860,15 @@ tlsCfg := &tls.Config{
 ### SSLKEYLOGFILE — Decifrare il Traffico con Wireshark
 
 ```bash
-# Applicabile a Go, .NET 5+, e Java (con agent)
 # Genera un file con le chiavi di sessione TLS — usabile da Wireshark per decifrare
-
-# Go — imposta la variabile prima di avviare l'applicazione:
-export SSLKEYLOGFILE=/tmp/tls-keys.log
-# Poi in Go: tls.Config.KeyLogWriter = os.OpenFile(os.Getenv("SSLKEYLOGFILE"), ...)
+# Go: la variabile NON è letta automaticamente, serve KeyLogWriter nel codice (sotto)
+# Java: nessun supporto nativo, serve un agent/libreria esterna
 
 # .NET — imposta la variabile d'ambiente:
 export SSLKEYLOGFILE=/tmp/tls-keys.log
-# .NET legge automaticamente questa variabile (System.Net.Http su .NET 5+)
+# <!-- REVIEW: verificare versione/piattaforma minima in cui .NET legge SSLKEYLOGFILE (non verificato) -->
+
+# Go — vedi blocco successivo
 
 # In Wireshark: Edit → Preferences → Protocols → TLS → (Pre)-Master-Secret log filename
 ```
@@ -842,16 +908,17 @@ tlsCfg := &tls.Config{
 ```
 
 ```java
-// Java — imposta MinVersion e disabilita cipher deboli
-SSLContext ctx = SSLContext.getInstance("TLS");
-ctx.init(...);
-SSLParameters params = ctx.getDefaultSSLParameters();
+// Java — limita i protocolli. Le SSLParameters vanno applicate al socket/engine
+// (o al client HTTP): non modificano il SSLContext.
+SSLParameters params = new SSLParameters();
 params.setProtocols(new String[]{"TLSv1.2", "TLSv1.3"});
-// In alternativa, proprietà di sistema JVM:
-// -Djdk.tls.disabledAlgorithms=SSLv3, TLSv1, TLSv1.1, RC4, DES, MD5withRSA
+sslSocket.setSSLParameters(params);   // oppure HttpClient.newBuilder().sslParameters(params)
+// TLS 1.0/1.1 sono già disabilitati di default nei JDK recenti (security property
+// jdk.tls.disabledAlgorithms in java.security). Non sovrascriverla con un elenco
+// parziale: sostituisce l'intero default e può riattivare algoritmi deboli.
 ```
 
-- **Non disabilitare mai la verifica del server** (`InsecureSkipVerify: true` in Go, `TrustAllCertificates()` in Java/Kotlin). In testing usa un'istanza con CA locale.
+- **Non disabilitare mai la verifica del server** (`InsecureSkipVerify: true` in Go, `TrustManager` "trust-all" o `HostnameVerifier` che ritorna sempre `true` in Java/Kotlin). In testing usa un'istanza con CA locale.
 - **Non hardcodare password KeyStore** nel codice — leggile da variabili d'ambiente o Vault.
 - **Preferire PEM files** ai JKS legacy — portabili su tutti i linguaggi, leggibili, compatibili con cert-manager.
 - **Usare `ServerName`** in `tls.Config` quando il nome nel certificato non corrisponde all'hostname di connessione (es. connessione a IP, SNI customizzato).
@@ -919,8 +986,8 @@ java -Djavax.net.ssl.trustStore=/certs/truststore.jks \
 pool := x509.NewCertPool()
 caPEM, _ := os.ReadFile(caPath)
 ok := pool.AppendCertsFromPEM(caPEM)
-fmt.Printf("CA loaded: %v, pool subjects: %d\n", ok, len(pool.Subjects()))
-// Se len == 0 → il file non contiene PEM validi
+fmt.Printf("CA loaded: %v, bytes: %d\n", ok, len(caPEM))
+// ok == false → il file non contiene PEM validi (pool.Subjects() è deprecato da Go 1.18)
 ```
 
 ### 4. `certificate has expired or is not yet valid`
@@ -942,7 +1009,8 @@ kubectl exec -n mynamespace mypod -- date
 # Se cert-manager emette certificati ma il pod non si aggiorna:
 kubectl describe certificate myservice-cert -n mynamespace
 # Cerca: "Certificate is up to date and has not expired"
-# Se scaduto: kubectl delete certificate myservice-cert (forza rinnovo)
+# Forza il rinnovo: cmctl renew myservice-cert -n mynamespace
+# (non cancellare la risorsa Certificate: elimina la definizione, non rinnova)
 ```
 
 ### 5. Certificato Ruotato ma l'Applicazione Usa Ancora il Vecchio
