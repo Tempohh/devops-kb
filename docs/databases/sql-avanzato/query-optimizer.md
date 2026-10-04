@@ -7,9 +7,10 @@ search_keywords: [explain analyze, query plan, seq scan, index scan, index only 
 parent: databases/sql-avanzato/_index
 related: [databases/fondamentali/indici, databases/postgresql/mvcc-vacuum, databases/sql-avanzato/window-functions, databases/mysql/performance-tuning]
 official_docs: https://www.postgresql.org/docs/current/using-explain.html
-status: complete
+status: reviewed
 difficulty: advanced
 last_updated: 2026-09-27
+last_verified: 2026-10-04
 ---
 
 # Query Optimizer e EXPLAIN
@@ -43,8 +44,8 @@ Limit  (cost=1240.50..1240.53 rows=10 width=40)
                            (actual time=43.200..44.800 rows=4987 loops=1)
               Group Key: u.id
               Batches: 1  Memory Usage: 897kB
-              ->  Hash Left Join  (cost=310.00..912.50 rows=15000 width=16)
-                                  (actual time=8.500..38.200 rows=15000 loops=1)
+              ->  Hash Right Join  (cost=310.00..912.50 rows=15000 width=16)
+                                   (actual time=8.500..38.200 rows=15000 loops=1)
                     Hash Cond: (o.utente_id = u.id)
                     ->  Seq Scan on ordini o  (cost=0.00..450.00 rows=30000 width=8)
                                               (actual time=0.100..15.000 rows=30000 loops=1)
@@ -73,6 +74,15 @@ Tipo Nodo  (cost=startup..total rows=stima width=dimensione_riga)
 | `actual time=X..Y` | Tempo reale (ms): startup..completamento |
 | `actual rows=N` | Righe realmente prodotte |
 | `loops=N` | Quante volte il nodo è stato eseguito |
+
+!!! note "Hash Right Join nell'esempio"
+    Nell'esempio `utenti` è il lato preservato del `LEFT JOIN` ma è anche il lato piccolo da mettere in hash: il planner usa quindi `Hash Right Join` (hash sul lato preservato, probe con `ordini`). `Hash Left Join` si avrebbe hashando `ordini`.
+
+!!! warning "loops > 1"
+    `actual time` e `actual rows` sono **medie per singola esecuzione** del nodo: il totale reale è `valore × loops`. Tipico dell'inner side di un Nested Loop, dove un `actual time=0.05` con `loops=100000` pesa 5 s.
+
+!!! tip "BUFFERS di default"
+    Da PostgreSQL 18 `EXPLAIN ANALYZE` include `BUFFERS` automaticamente; nelle versioni precedenti va richiesto esplicitamente come negli esempi.
 
 **Il segnale di allarme principale**: grande discrepanza tra `rows=stima` e `actual rows=reali`. Significa che le statistiche sono outdated o che la distribuzione dei dati è non uniforme.
 
@@ -139,7 +149,7 @@ Hash Join  (cost=310.00..912.50 rows=15000 width=16)
         ->  Seq Scan on utenti u
 ```
 
-`work_mem` determina quanto memoria può usare l'hash table. Se non basta, usa disk (batches > 1 nell'output = spill to disk).
+`work_mem` (moltiplicato per `hash_mem_multiplier`, PostgreSQL 13+) determina quanto memoria può usare l'hash table. Se non basta, il join procede a "batch" su file temporanei: `Batches: N` con N > 1 sul nodo `Hash` = spill su disco.
 
 ### Merge Join
 
@@ -173,8 +183,8 @@ ANALYZE ordini;
 -- "WHERE citta = 'Milano' AND nazione = 'Italia'" → stima indipendente
 -- ma praticamente tutti i milanesi hanno nazione=Italia
 
--- PostgreSQL 14+: statistiche multicolonna
-CREATE STATISTICS stat_citta_nazione ON citta, nazione FROM indirizzi;
+-- Statistiche estese (PostgreSQL 10+; kind `mcv` da 12, su espressioni da 14)
+CREATE STATISTICS stat_citta_nazione (dependencies, ndistinct, mcv) ON citta, nazione FROM indirizzi;
 ANALYZE indirizzi;
 
 -- Verifica le extended statistics
@@ -211,7 +221,7 @@ FROM pg_stat_database;
 ### pg_stat_statements
 
 ```sql
--- Abilita estensione
+-- Prerequisito: shared_preload_libraries = 'pg_stat_statements' (richiede restart)
 CREATE EXTENSION pg_stat_statements;
 
 -- Query più lente (per total_exec_time)
@@ -226,28 +236,36 @@ FROM pg_stat_statements
 ORDER BY total_exec_time DESC
 LIMIT 20;
 
--- Query con stima righe peggiore
+-- Query con più I/O da disco (candidate a indici mancanti o working set > shared_buffers)
 SELECT
-    query,
+    left(query, 100) AS query,
     calls,
-    rows / calls AS avg_rows,
-    -- rows_examined / rows_returned è un proxy del costo
+    shared_blks_read,
+    shared_blks_hit,
+    round(100.0 * shared_blks_hit / nullif(shared_blks_hit + shared_blks_read, 0), 1) AS hit_pct
 FROM pg_stat_statements
-ORDER BY calls DESC;
+ORDER BY shared_blks_read DESC
+LIMIT 20;
 ```
+
+`pg_stat_statements` dice **quali** query pesano ma non mostra il piano: per quello si usa `EXPLAIN` sulla query isolata o `auto_explain`.
 
 ### auto_explain
 
 Logga automaticamente i piani delle query lente:
 
-```sql
--- In postgresql.conf o ALTER SYSTEM:
+```ini
+# postgresql.conf (shared_preload_libraries richiede restart;
+# in alternativa session_preload_libraries = 'auto_explain' si applica alle nuove sessioni)
 shared_preload_libraries = 'auto_explain'
-auto_explain.log_min_duration = '1s'    -- Log query > 1 secondo
-auto_explain.log_analyze = true
+auto_explain.log_min_duration = '1s'    # Log query > 1 secondo
+auto_explain.log_analyze = true         # Costo: timing per nodo su ogni query -> overhead
 auto_explain.log_buffers = true
 auto_explain.log_nested_statements = true
 ```
+
+!!! warning "Overhead di log_analyze"
+    Con `log_analyze = true` il timing per nodo viene misurato su **tutte** le query, non solo su quelle loggate. Su carichi ad alto QPS valutare `auto_explain.log_timing = off` o `auto_explain.sample_rate`.
 
 ---
 
@@ -273,6 +291,8 @@ SET work_mem = '256MB';  -- Solo per questa sessione
 EXPLAIN ANALYZE SELECT ...;
 ```
 
+PostgreSQL non ha hint nativi (scelta voluta): chi li richiede usa l'estensione `pg_hint_plan`. Meglio correggere statistiche e costi che forzare piani, perché un hint resta valido anche quando i dati cambiano e rendono il piano forzato peggiore.
+
 ### 3. Indice Mancante
 
 ```sql
@@ -283,7 +303,7 @@ CREATE INDEX CONCURRENTLY idx_ordini_status_data ON ordini(status, created_at DE
 
 ### 4. Aumentare work_mem
 
-Se `EXPLAIN ANALYZE` mostra `Batches: N` (N > 1) in un hash join o `Sort Method: external merge Disk`, aumentare `work_mem`:
+Se `EXPLAIN ANALYZE` mostra `Batches: N` (N > 1) su un nodo `Hash` o `Sort Method: external merge Disk`, aumentare `work_mem`. Il limite si applica **per nodo** (sort/hash) e per sessione, non per query:
 
 ```sql
 -- In postgresql.conf
@@ -335,7 +355,7 @@ SET enable_seqscan = on;
 ALTER TABLE ordini ALTER COLUMN status SET STATISTICS 500;
 ANALYZE ordini;
 
--- 2. Per correlazioni tra più colonne (PostgreSQL 14+)
+-- 2. Per correlazioni tra più colonne (extended statistics, PostgreSQL 10+)
 CREATE STATISTICS stat_col1_col2 ON col1, col2 FROM tabella;
 ANALYZE tabella;
 
