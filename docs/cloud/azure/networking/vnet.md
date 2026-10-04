@@ -7,9 +7,10 @@ search_keywords: [Azure VNet, Virtual Network Azure, subnet Azure, NSG Network S
 parent: cloud/azure/networking/_index
 related: [cloud/azure/networking/load-balancing, cloud/azure/networking/connettivita, cloud/azure/security/_index]
 official_docs: https://learn.microsoft.com/azure/virtual-network/
-status: complete
+status: needs-review
 difficulty: intermediate
 last_updated: 2026-03-29
+last_verified: 2026-10-04
 ---
 
 # Azure Virtual Network (VNet)
@@ -69,18 +70,26 @@ az network vnet subnet create \
     --name data-subnet \
     --address-prefix 10.1.3.0/24
 
+# AzureBastionSubnet: NOME FISSO obbligatorio per Azure Bastion, min /26
 az network vnet subnet create \
     --resource-group myapp-rg \
     --vnet-name production-vnet \
-    --name AzureBastionSubnet \        # NOME FISSO obbligatorio per Azure Bastion
-    --address-prefix 10.1.255.0/27     # min /27 richiesto
+    --name AzureBastionSubnet \
+    --address-prefix 10.1.255.0/26
 
+# GatewaySubnet: NOME FISSO obbligatorio per VPN/ExpressRoute Gateway (/27 consigliato)
 az network vnet subnet create \
     --resource-group myapp-rg \
     --vnet-name production-vnet \
-    --name GatewaySubnet \             # NOME FISSO obbligatorio per VPN Gateway
+    --name GatewaySubnet \
     --address-prefix 10.1.254.0/27
 ```
+
+!!! warning "Default outbound access in dismissione"
+    Storicamente le VM senza IP pubblico/NAT/LB uscivano su Internet tramite un IP pubblico implicito
+    ("default outbound access"). Per le **nuove** VNet/subnet (da fine settembre 2025) questo comportamento
+    è disattivato (*private subnet*): serve un'uscita esplicita — **NAT Gateway** (consigliato), Azure Firewall/NVA,
+    Load Balancer con outbound rule o IP pubblico. Un IP implicito non è controllabile né stabile, per questo è stato rimosso.
 
 **Indirizzi riservati Azure per subnet:**
 - `.0` — Network address
@@ -135,7 +144,7 @@ az network nsg rule create \
     --priority 200 \
     --protocol Tcp \
     --direction Inbound \
-    --source-address-prefixes 203.0.113.0/24 \     # IP corporate
+    --source-address-prefixes 203.0.113.0/24 \
     --destination-port-ranges 22 \
     --access Allow
 
@@ -188,8 +197,8 @@ az network nsg rule create \
     --name web-to-app \
     --priority 100 \
     --direction Inbound \
-    --source-asgs asg-web \            # solo VM nel gruppo web
-    --destination-asgs asg-app \       # verso VM nel gruppo app
+    --source-asgs asg-web \
+    --destination-asgs asg-app \
     --destination-port-ranges 8080 \
     --access Allow \
     --protocol Tcp
@@ -206,20 +215,23 @@ az network nic update \
 ## Route Tables (UDR — User Defined Routes)
 
 ```bash
-# Creare route table con forced tunneling (tutto via Azure Firewall)
+# Creare route table che instrada tutto via Azure Firewall
+# --disable-bgp-route-propagation true: non propagare route BGP (apprese da VPN/ExpressRoute Gateway),
+# che altrimenti potrebbero bypassare il firewall
 az network route-table create \
     --resource-group myapp-rg \
     --name app-route-table \
-    --disable-bgp-route-propagation true    # non propagare route BGP da VPN Gateway
+    --disable-bgp-route-propagation true
 
-# Route: instrada tutto il traffico Internet via Azure Firewall
+# Route: instrada tutto il traffico (default route) verso l'IP privato di Azure Firewall
+# (NVA = Network Virtual Appliance, qui il firewall; 10.0.0.4 = IP privato del firewall)
 az network route-table route create \
     --resource-group myapp-rg \
     --route-table-name app-route-table \
     --name default-to-firewall \
     --address-prefix 0.0.0.0/0 \
     --next-hop-type VirtualAppliance \
-    --next-hop-ip-address 10.0.0.4         # IP privato Azure Firewall
+    --next-hop-ip-address 10.0.0.4
 
 # Associare route table alla subnet
 az network vnet subnet update \
@@ -244,7 +256,7 @@ az network vnet peering create \
     --remote-vnet /subscriptions/$SUB_ID/resourceGroups/prod-rg/providers/Microsoft.Network/virtualNetworks/production-vnet \
     --allow-vnet-access true \
     --allow-forwarded-traffic true \
-    --allow-gateway-transit true           # hub espone il VPN Gateway agli spoke
+    --allow-gateway-transit true
 
 az network vnet peering create \
     --resource-group prod-rg \
@@ -253,8 +265,12 @@ az network vnet peering create \
     --remote-vnet /subscriptions/$SUB_ID/resourceGroups/hub-rg/providers/Microsoft.Network/virtualNetworks/hub-vnet \
     --allow-vnet-access true \
     --allow-forwarded-traffic true \
-    --use-remote-gateways true             # spoke usa il VPN Gateway dell'hub
+    --use-remote-gateways true
 ```
+
+`--allow-gateway-transit` (lato hub) espone il VPN/ExpressRoute Gateway agli spoke; `--use-remote-gateways` (lato spoke)
+lo consuma. Funziona solo se nell'hub il gateway esiste già e lo spoke non ha un gateway proprio.
+`--allow-forwarded-traffic` serve perché il traffico spoke→spoke inoltrato dal firewall dell'hub arriva con IP sorgente di un'altra VNet.
 
 !!! warning "VNet Peering non è transitivo"
     Se Hub ↔ Spoke1 e Hub ↔ Spoke2, Spoke1 NON può comunicare direttamente con Spoke2.
@@ -343,15 +359,17 @@ az network bastion create \
     --public-ip-address bastion-pip \
     --vnet-name production-vnet \
     --location italynorth \
-    --sku Standard \          # Basic (SSH/RDP solo), Standard (file transfer, tunneling)
-    --enable-tunneling true   # Standard: permette native RDP/SSH client via tunnel
+    --sku Standard \
+    --enable-tunneling true
+# SKU: Developer (gratuita, condivisa, 1 VM alla volta, solo portale), Basic (SSH/RDP da portale),
+# Standard (native client via tunneling, file transfer, IP-based connection), Premium (session recording, private-only)
 
 # Connettersi a VM via Bastion (dalla CLI — richiede Bastion Standard)
 az network bastion ssh \
     --name production-bastion \
     --resource-group myapp-rg \
     --target-resource-id /subscriptions/.../resourceGroups/myapp-rg/providers/Microsoft.Compute/virtualMachines/myvm \
-    --auth-type "AAD"              # AAD (Entra ID), password, ssh-key
+    --auth-type "AAD"   # valori: AAD (Entra ID), password, ssh-key
 ```
 
 ---
@@ -451,7 +469,7 @@ az network private-endpoint dns-zone-group list \
 
 **Sintomo:** Una connessione legittima tra due subnet o verso un servizio Azure viene bloccata nonostante la regola NSG sembri corretta. I log di NSG mostrano `DenyAllInBound` come regola applicata.
 
-**Causa:** La priorità della regola allow è più alta (numero maggiore) rispetto a una regola deny più specifica, oppure l'NSG è applicato sia alla subnet che alla NIC e la combinazione blocca il traffico in uno dei due punti.
+**Causa:** La regola allow ha un numero di priorità **più alto** (= priorità più bassa) di una regola deny che matcha lo stesso flusso: le regole sono valutate dal numero più basso e la prima che matcha vince. Oppure l'NSG è applicato sia alla subnet che alla NIC e uno dei due blocca il traffico: entrambi devono permetterlo (inbound: prima subnet, poi NIC; outbound: prima NIC, poi subnet).
 
 **Soluzione:** Usare Network Watcher IP Flow Verify per identificare la regola che blocca:
 
@@ -467,11 +485,11 @@ az network watcher test-ip-flow \
     --remote-ip 10.1.1.5 \
     --remote-port 54321
 
-# Abilitare NSG Flow Logs per diagnostica continua
+# Abilitare VNet Flow Logs per diagnostica continua
 az network watcher flow-log create \
     --location italynorth \
-    --name web-nsg-flowlog \
-    --nsg web-nsg \
+    --name production-vnet-flowlog \
+    --vnet production-vnet \
     --storage-account mystorageaccount \
     --enabled true \
     --retention 7
@@ -481,6 +499,15 @@ az network nic list-effective-nsg \
     --resource-group myapp-rg \
     --name myvm-nic
 ```
+
+!!! warning "NSG flow logs in dismissione"
+    Microsoft ha bloccato la creazione di nuovi **NSG flow logs** (da giugno 2025) e ne annuncia il ritiro a settembre 2027:
+    migrare ai **VNet flow logs**, che coprono l'intera VNet/subnet/NIC senza dipendere dal singolo NSG.
+    <!-- REVIEW: verificare date esatte di ritiro NSG flow logs su learn.microsoft.com/azure/network-watcher/nsg-flow-logs-migrate -->
+
+!!! tip "Alternativa a più VNet: Azure Virtual Network Manager"
+    Per molte VNet (hub-spoke su larga scala) **Azure Virtual Network Manager** gestisce centralmente connectivity
+    configuration e security admin rules, evitando di creare a mano decine di peering.
 
 ---
 
