@@ -7,9 +7,10 @@ search_keywords: [transaction isolation level, read uncommitted, read committed,
 parent: databases/fondamentali/_index
 related: [databases/fondamentali/acid-base-cap, databases/postgresql/mvcc-vacuum, databases/sql-avanzato/query-optimizer]
 official_docs: https://www.postgresql.org/docs/current/transaction-iso.html
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Transazioni e Concorrenza
@@ -47,7 +48,7 @@ Stessa query nella stessa transazione restituisce risultati diversi perché un'a
 BEGIN;
 SELECT saldo FROM conti WHERE id = 1;  -- Legge 1000
 
--- Nel frattempo, Transazione B commatta:
+-- Nel frattempo, Transazione B committa:
 UPDATE conti SET saldo = 500 WHERE id = 1;
 
 -- Transazione A
@@ -62,7 +63,7 @@ Una query che usa un range di righe restituisce righe diverse a causa di INSERT/
 -- Transazione A
 SELECT COUNT(*) FROM ordini WHERE status = 'pending';  -- 5
 
--- Transazione B commatta:
+-- Transazione B committa:
 INSERT INTO ordini(status) VALUES('pending');
 
 -- Transazione A
@@ -90,7 +91,9 @@ UPDATE medici SET on_call = false WHERE nome = 'Bob';
 -- Entrambe le transazioni erano "logicamente corrette" isolatamente
 ```
 
-### Lost Update — Un Caso Speciale di Write Skew
+### Lost Update
+
+Anomalia distinta dal write skew (qui le due transazioni scrivono la **stessa** riga, nel write skew righe diverse): un'update sovrascrive quello di un'altra transazione concorrente perché entrambe sono partite dallo stesso valore letto. In PostgreSQL REPEATABLE READ e SERIALIZABLE lo prevengono abortendo la seconda (`could not serialize access due to concurrent update`); READ COMMITTED no, se la logica è read-modify-write applicativo.
 
 ```sql
 -- Classico: counter increment senza locking
@@ -123,6 +126,8 @@ Standard SQL definisce 4 livelli. PostgreSQL implementa i tre utili con MVCC:
 
 Ogni `SELECT` all'interno di una transazione vede uno snapshot aggiornato al momento dell'esecuzione della query (non al BEGIN della transazione). È il default ed è adeguato per la maggior parte delle applicazioni web.
 
+Se un `UPDATE`/`DELETE` trova la riga già modificata da una transazione concorrente, attende il suo commit e **rivaluta il `WHERE` sulla versione aggiornata** della riga (EvalPlanQual). Per questo `SET valore = valore + 1` è sicuro anche in READ COMMITTED, mentre il read-modify-write applicativo no.
+
 ```sql
 BEGIN;  -- snapshot non fissato qui
 SELECT saldo FROM conti WHERE id = 1;  -- snapshot al momento di QUESTA query
@@ -133,7 +138,7 @@ COMMIT;
 
 ### REPEATABLE READ
 
-Lo snapshot è fissato al momento del `BEGIN`. Tutte le query della transazione vedono lo stesso stato del database. PostgreSQL evita anche i phantom read (lo standard SQL non lo richiede a questo livello).
+Lo snapshot è fissato alla **prima query** della transazione (non al `BEGIN` stesso). Tutte le query della transazione vedono lo stesso stato del database. PostgreSQL evita anche i phantom read (lo standard SQL non lo richiede a questo livello).
 
 ```sql
 BEGIN ISOLATION LEVEL REPEATABLE READ;
@@ -142,6 +147,8 @@ SELECT saldo FROM conti WHERE id = 1;  -- Snapshot fissato qui
 SELECT saldo FROM conti WHERE id = 1;  -- Stesso risultato garantito
 COMMIT;
 ```
+
+Se la transazione prova a modificare una riga cambiata e committata da altri dopo il suo snapshot, viene abortita con `ERROR: could not serialize access due to concurrent update` (SQLSTATE `40001`): anche qui serve retry applicativo.
 
 **Quando usarlo**: report di consistenza (snapshot coerente sull'intera query), letture multiple che devono essere consistenti tra loro.
 
@@ -163,30 +170,13 @@ UPDATE medici SET on_call = false WHERE nome = 'Alice';
 COMMIT;  -- O serializza con successo, o abortisce con retry necessario
 ```
 
-**Importante**: SERIALIZABLE richiede retry dell'applicazione. Le transazioni abortite per serialization failure devono essere riprovate.
-
-```python
-import psycopg2
-
-def aggiorna_con_serializable(conn):
-    max_retries = 5
-    for attempt in range(max_retries):
-        try:
-            with conn.transaction():
-                conn.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
-                # ... logica transazione ...
-                return
-        except psycopg2.errors.SerializationFailure:
-            if attempt == max_retries - 1:
-                raise
-            time.sleep(0.1 * (2 ** attempt))  # exponential backoff
-```
+**Importante**: SERIALIZABLE richiede retry dell'applicazione. Le transazioni abortite per serialization failure devono essere riprovate **ripetendo l'intera transazione** (non solo l'ultimo statement). Esempio di retry in [Troubleshooting](#scenario-1-serialization-failure-in-produzione).
 
 ---
 
 ## MVCC — Multi-Version Concurrency Control
 
-PostgreSQL non usa lock per le letture. Usa MVCC: ogni riga ha versioni multiple con timestamp di validità. I lettori vedono le versioni appropriate al loro snapshot senza bloccare i writer (e viceversa).
+PostgreSQL non usa lock per le letture. Usa MVCC: ogni riga ha versioni multiple, marcate con i transaction ID che le hanno create e invalidate. I lettori vedono le versioni appropriate al loro snapshot senza bloccare i writer (e viceversa).
 
 ```
 Riga fisica in storage:
@@ -198,7 +188,7 @@ Riga fisica in storage:
 **xmin**: transaction ID che ha creato la versione
 **xmax**: transaction ID che ha cancellato/aggiornato la versione (0 = ancora valida)
 
-Ogni transazione ha un transaction snapshot che definisce quali xmin/xmax sono visibili. MVCC è il motivo per cui PostgreSQL non ha deadlock tra reader e writer — ma è anche il motivo per cui esiste il problema del bloat (le versioni obsolete non vengono rimosse automaticamente — serve VACUUM).
+Ogni transazione ha un transaction snapshot che definisce quali xmin/xmax sono visibili. MVCC è il motivo per cui PostgreSQL non ha deadlock tra reader e writer — ma è anche il motivo per cui esiste il problema del bloat (le versioni obsolete restano su disco finché VACUUM — normalmente lanciato da autovacuum — non le recupera).
 
 ---
 
@@ -254,9 +244,14 @@ with conn.cursor() as cur:
     cur.execute("SELECT pg_try_advisory_lock(123456)")
     if cur.fetchone()[0]:
         # Siamo l'unica istanza che ha acquisito il lock
-        run_cron_job()
-        # Lock rilasciato alla fine della sessione
+        try:
+            run_cron_job()
+        finally:
+            cur.execute("SELECT pg_advisory_unlock(123456)")
 ```
+
+!!! warning "Advisory lock di sessione e connection pooler"
+    Il lock di sessione appartiene alla connessione, non alla transazione. Con un pool la connessione resta aperta (lock mai rilasciato senza `unlock` esplicito), e con PgBouncer in *transaction pooling* lock e unlock possono finire su connessioni diverse. In quel caso usare `pg_advisory_xact_lock` dentro una transazione.
 
 ---
 
@@ -268,7 +263,7 @@ Un deadlock si verifica quando A aspetta un lock tenuto da B, e B aspetta un loc
 -- Transazione A
 BEGIN;
 UPDATE conti SET saldo = saldo - 100 WHERE id = 1;  -- Locka riga 1
--- aspetta il lock su riga 2...
+UPDATE conti SET saldo = saldo + 100 WHERE id = 2;  -- Aspetta il lock su riga 2 (tenuto da B)!
 
 -- Transazione B (concorrente)
 BEGIN;
@@ -283,18 +278,18 @@ UPDATE conti SET saldo = saldo - 50 WHERE id = 1;   -- Aspetta il lock su riga 1
 **Prevenzione**: accedere sempre agli oggetti nello stesso ordine (A prima poi B, mai B prima poi A). In pratica:
 
 ```sql
--- Pattern sicuro: ordina sempre per ID crescente
-WITH locks AS (
-  SELECT id FROM conti WHERE id IN (1, 2) ORDER BY id FOR UPDATE
-)
+-- Pattern sicuro: lock esplicito in ordine di ID crescente, poi gli UPDATE
+BEGIN;
+SELECT id FROM conti WHERE id IN (1, 2) ORDER BY id FOR UPDATE;
 -- Acquisisce i lock nell'ordine 1, 2 — sempre uguale indipendentemente da chi chiama
 UPDATE conti SET saldo = saldo - 100 WHERE id = 1;
 UPDATE conti SET saldo = saldo + 100 WHERE id = 2;
+COMMIT;
 ```
 
 ```sql
 -- Monitoraggio deadlock in PostgreSQL
-SET deadlock_timeout = '1s';  -- Quanto aspettare prima di controllare per deadlock
+SET deadlock_timeout = '1s';  -- Quanto aspettare prima di controllare per deadlock (richiede superuser o GRANT SET)
 -- Default: 1 secondo — aumentare su sistemi sotto alto carico per ridurre falsi positivi
 
 -- Lock correnti
@@ -344,22 +339,25 @@ WHERE id = 1 AND versione = 5;
 **Soluzione**: Implementare retry con exponential backoff nel codice applicativo. È il comportamento atteso con SERIALIZABLE, non un bug.
 
 ```python
-import psycopg2, time
+import time
+import psycopg
+from psycopg import IsolationLevel
 
 def run_with_retry(conn, fn, max_retries=5):
+    conn.isolation_level = IsolationLevel.SERIALIZABLE  # psycopg 3
     for attempt in range(max_retries):
         try:
             with conn.transaction():
-                conn.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
-                return fn(conn)
-        except psycopg2.errors.SerializationFailure:
+                return fn(conn)  # l'intera transazione viene rieseguita
+        except psycopg.errors.SerializationFailure:  # SQLSTATE 40001
             if attempt == max_retries - 1:
                 raise
             time.sleep(0.05 * (2 ** attempt))  # 50ms, 100ms, 200ms...
 ```
 
 ```sql
--- Verificare frequenza serialization failures
+-- Proxy grezzo: rollback e deadlock cumulativi (le serialization failure
+-- puntuali si contano dai log, SQLSTATE 40001)
 SELECT datname, xact_rollback, deadlocks
 FROM pg_stat_database
 WHERE datname = current_database();
