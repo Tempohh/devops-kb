@@ -54,8 +54,12 @@ SCC vs PSA (Kubernetes)
 | `hostnetwork-v2` | nessuna | Come `hostnetwork` ma con drop ALL capabilities e seccomp |
 | `nonroot` | nessuna | Forza runAsNonRoot ma permette qualsiasi UID non-root |
 | `nonroot-v2` | nessuna | Come `nonroot` ma con drop ALL capabilities e seccomp |
+| `restricted-v3` | nessuna | Dalla 4.20: la più restrittiva tra le predefinite, pensata per i pod con user namespaces (`hostUsers: false`); va concessa esplicitamente |
+| `nested-container` | nessuna | Dalla 4.20: per workload che eseguono container annidati dentro user namespaces (`hostUsers: false`); va concessa esplicitamente |
 
-<!-- REVIEW: verificare se nelle release 4.2x esiste `restricted-v3` (user namespaces) e va aggiunta alla tabella/al default -->
+Dalla 4.20 i **Linux user namespaces** sono GA: con `hostUsers: false` nel pod spec il pod gira in uno user namespace dedicato, isolando UID del container da quelli del nodo. `restricted-v3` e `nested-container` sono le SCC introdotte per questo scenario; `restricted-v2` resta il riferimento per i pod senza user namespace.
+
+<!-- CURRENCY: non verificato (2026-10) — se `restricted-v3` sia concessa a `system:authenticated` / diventi default non confermato dalla doc; si assume `restricted-v2` ancora default -->
 
 Esistono anche `hostaccess` e SCC dedicate a componenti di sistema (`node-exporter`, ecc.). Le SCC `-v2` sono quelle da preferire: impongono `drop ALL` delle capabilities e il seccomp `runtime/default`, in linea con il PSA `restricted`.
 
