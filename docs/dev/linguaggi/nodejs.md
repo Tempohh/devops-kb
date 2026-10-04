@@ -7,9 +7,10 @@ search_keywords: [nodejs, node.js, node js, javascript backend, typescript backe
 parent: dev/linguaggi/_index
 related: [dev/linguaggi/go, dev/linguaggi/python, dev/resilienza/observability-code]
 official_docs: https://nodejs.org/docs/latest/api/
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-09-27
+last_verified: 2026-10-04
 ---
 
 # Node.js per Microservizi
@@ -101,7 +102,7 @@ process.on('uncaughtException', (err) => {
 | Aspetto | Express | Fastify | NestJS |
 |---|---|---|---|
 | Filosofia | Minimalista, unopinionated | Performance-first, schema-based | Opinionated, enterprise (Angular-like) |
-| Performance (req/s) | Base (~15-20k) | Alta (~35-45k, JSON schema compilato) | Media (overhead DI/decoratori, gira su Express o Fastify) |
+| Performance (req/s) | Base (~15-20k) | Alta (~35-45k, JSON schema compilato all'avvio) | Media (overhead DI/decoratori, gira su Express o Fastify) |
 | Validazione input | Manuale (middleware esterni: joi, zod) | Built-in via JSON Schema | Built-in via `class-validator` + DTO |
 | TypeScript | Supportato ma non nativo | Supportato, tipizzazione buona | **Nativo** — TS è il linguaggio di default |
 | Dependency Injection | No (manuale) | No (plugin system) | **Sì** — DI container completo |
@@ -109,7 +110,7 @@ process.on('uncaughtException', (err) => {
 | Ideale per | Prototipi, microservizi semplici | API ad alto throughput, microservizi performance-critical | Applicazioni enterprise, team grandi, architetture modulari |
 
 !!! tip "Scelta per microservizi containerizzati"
-    Per BFF e microservizi I/O-bound con requisiti di performance: **Fastify** (schema JSON validato a compile-time, overhead minimo). Per team enterprise che vogliono struttura simile a Spring/Angular con DI e moduli: **NestJS**. Express resta valido per servizi semplici o quando l'ecosistema di middleware esistente è un vincolo.
+    Per BFF e microservizi I/O-bound con requisiti di performance: **Fastify** (schema JSON compilato in validatore/serializzatore all'avvio con Ajv, overhead minimo per richiesta). Per team enterprise che vogliono struttura simile a Spring/Angular con DI e moduli: **NestJS**. Express resta valido per servizi semplici o quando l'ecosistema di middleware esistente è un vincolo.
 
 ### Fastify — Struttura Base
 
@@ -221,18 +222,21 @@ npm run build        # tsc → compila in dist/
 node dist/server.js  # esecuzione JS compilato, no overhead di transpile runtime
 ```
 
+!!! note "Type stripping nativo"
+    Le versioni recenti di Node.js (22.18+, 24) eseguono direttamente file `.ts` rimuovendo i tipi (*type stripping*), senza `ts-node`/`tsx`. Utile per script e sviluppo, ma non esegue type-check né supporta feature TS che generano codice (enum, namespace): per la produzione si continua a compilare con `tsc`.
+
 ### Containerizzazione — Multi-Stage Dockerfile
 
 ```dockerfile
 # Dockerfile multi-stage — immagine finale minimale, no devDependencies
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci                     # install riproducibile da lockfile
 COPY . .
 RUN npm run build              # compila TypeScript in dist/
 
-FROM node:20-alpine AS production
+FROM node:24-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package*.json ./
@@ -244,6 +248,9 @@ USER node
 EXPOSE 8080
 CMD ["node", "dist/server.js"]
 ```
+
+!!! note "Versione del runtime"
+    Usare sempre una release **LTS** (numero pari, supporto ~30 mesi) e fissarne la major nell'immagine. Node.js 20 è a fine vita da aprile 2026: non usarlo per nuovi servizi. Al momento della review la LTS attiva è la 24; la 22 è in maintenance. Le release dispari (non-LTS) non vanno in produzione.
 
 !!! warning "NODE_ENV=production obbligatorio"
     Senza `NODE_ENV=production`, Express e molti middleware attivano branch di sviluppo (stack trace dettagliati nelle risposte, cache dei template disabilitata, logging verboso) con impatto misurabile su performance e superficie di esposizione di dettagli interni. Impostarlo sempre esplicitamente nell'immagine di produzione, non affidarsi al default del runtime.
@@ -261,18 +268,19 @@ async function gracefulShutdown(signal) {
   isShuttingDown = true;
   logger.info({ signal }, 'shutdown signal received');
 
-  // 1. Smettere di accettare nuove connessioni
-  server.close(() => {
-    logger.info('http server closed');
-  });
-
-  // 2. Readiness probe deve iniziare a fallire SUBITO (rimuove il pod dagli endpoint)
+  // 1. Readiness probe deve iniziare a fallire SUBITO (rimuove il pod dagli endpoint)
   isReady = false;
 
-  // 3. Chiudere risorse (pool DB, connessioni Kafka/Redis) con timeout
+  // 2. Attendere la propagazione della rimozione dagli endpoint (kube-proxy/ingress)
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+
+  // 3. Smettere di accettare nuove connessioni; la Promise si risolve a connessioni drenate
+  const httpClosed = new Promise((resolve) => server.close(resolve));
+
+  // 4. Chiudere risorse (pool DB, connessioni Kafka/Redis) con timeout
   try {
     await Promise.race([
-      Promise.all([dbPool.end(), redisClient.quit()]),
+      Promise.all([httpClosed, dbPool.end(), redisClient.quit()]),
       new Promise((_, reject) => setTimeout(() => reject(new Error('shutdown timeout')), 25000)),
     ]);
     logger.info('resources closed cleanly');
@@ -288,7 +296,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 ```
 
 !!! tip "Readiness probe e connection draining"
-    Impostare `isReady = false` **prima** di chiudere il server HTTP, così la readiness probe Kubernetes fallisce e il pod viene rimosso dagli endpoint del Service prima che smetta di accettare richieste — evita errori 502/connection refused durante il rollout.
+    Impostare `isReady = false` **prima** di chiudere il server HTTP, poi attendere qualche secondo: la rimozione del pod dagli endpoint del Service si propaga ai nodi in modo asincrono rispetto a `SIGTERM`, quindi per un breve intervallo arrivano ancora richieste. Chiudere subito il listener causa errori 502/connection refused durante il rollout. In alternativa all'attesa nel codice si può usare un `preStop` hook (`sleep 5`). Il totale (attesa + drain + chiusura risorse) deve stare dentro `terminationGracePeriodSeconds`; il timeout di 25s dell'esempio assume il default di 30s.
 
 ---
 
@@ -345,17 +353,11 @@ npm install --save @opentelemetry/api @opentelemetry/sdk-node \
 // tracing.js — DEVE essere importato prima di qualsiasi altro modulo applicativo
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { resourceFromAttributes } from '@opentelemetry/resources';
-import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 
+// Exporter, endpoint e nome servizio letti dalle variabili standard OTEL_*
+// (OTEL_SERVICE_NAME, OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318, ...):
+// nessun URL hardcoded, config per ambiente senza toccare il codice.
 const sdk = new NodeSDK({
-  resource: resourceFromAttributes({
-    [ATTR_SERVICE_NAME]: process.env.OTEL_SERVICE_NAME || 'bff-service',
-  }),
-  traceExporter: new OTLPTraceExporter({
-    url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4318/v1/traces',
-  }),
   instrumentations: [getNodeAutoInstrumentations({
     '@opentelemetry/instrumentation-fs': { enabled: false }, // troppo rumoroso
   })],
@@ -363,12 +365,16 @@ const sdk = new NodeSDK({
 
 sdk.start();
 
-process.on('SIGTERM', () => sdk.shutdown().finally(() => process.exit(0)));
+// Esporre lo shutdown per chiamarlo DENTRO il graceful shutdown applicativo, dopo il drain
+// (un process.exit nel proprio handler SIGTERM taglierebbe le richieste ancora in corso).
+export const shutdownTracing = () => sdk.shutdown();
 ```
 
 ```bash
-# Avvio con instrumentation caricata per prima — node -r (require) o import esplicito
+# Avvio con instrumentation caricata per prima (patch dei moduli prima che l'app li importi)
 node --import ./tracing.js dist/server.js
+# Se l'app è ESM, aggiungere l'hook di instrumentation per i moduli ES:
+node --experimental-loader=@opentelemetry/instrumentation/hook.mjs --import ./tracing.js dist/server.js
 ```
 
 L'auto-instrumentation copre automaticamente HTTP, Express/Fastify, driver DB comuni (pg, mysql2, mongodb), Redis, e propaga i trace context (`traceparent`) tra chiamate downstream — fondamentale per BFF che aggregano più servizi, dove la latenza va attribuita al servizio a monte responsabile.
@@ -425,8 +431,9 @@ export const config = envSchema.parse(process.env); // crash immediato se invali
 ```bash
 # Snapshot heap per analisi offline (Chrome DevTools)
 node --inspect dist/server.js
-# In produzione — generare heap snapshot on-demand senza restart
-kill -USR2 <pid>   # richiede libreria heapdump o v8.writeHeapSnapshot()
+# In produzione — heap snapshot on-demand senza ispettore: avviare con il flag
+node --heapsnapshot-signal=SIGUSR2 dist/server.js
+kill -USR2 <pid>   # scrive un file .heapsnapshot nella working dir (alternativa: v8.writeHeapSnapshot())
 ```
 
 **Soluzione:** Usare cache con limite esplicito (`lru-cache`), rimuovere sempre listener registrati dinamicamente (`emitter.off()`), verificare con `--inspect` + Chrome DevTools Memory tab che gli oggetti si liberino tra GC successivi.
