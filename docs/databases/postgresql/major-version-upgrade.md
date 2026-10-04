@@ -7,9 +7,10 @@ search_keywords: [postgresql major upgrade, pg_upgrade, pg_upgrade --link, pg_up
 parent: databases/postgresql/_index
 related: [databases/postgresql/replicazione, databases/postgresql/extensions, databases/postgresql/mvcc-vacuum, databases/kubernetes-cloud/db-su-kubernetes, databases/kubernetes-cloud/managed-databases, databases/replicazione-ha/backup-pitr]
 official_docs: https://www.postgresql.org/docs/current/pgupgrade.html
-status: complete
+status: needs-review
 difficulty: advanced
 last_updated: 2026-10-03
+last_verified: 2026-10-04
 ---
 
 # PostgreSQL Major Version Upgrade
@@ -78,7 +79,7 @@ Limiti noti della logical replication, da affrontare **prima** di sceglierla:
 
 | Limite | Conseguenza | Mitigazione |
 |---|---|---|
-| Le **sequenze** non vengono replicate (fino a PG 18; da PG 19 sono previste) | Dopo il cutover gli `INSERT` falliscono con duplicate key | Sincronizzare con `setval()` al cutover |
+| Le **sequenze** non vengono replicate (fino a PG 18; da PG 19 sono previste) <!-- REVIEW: verificare se PG 19 (autunno 2026) ha rilasciato la replica delle sequenze e se pg_upgrade/stato corrente delle versioni supportate è cambiato --> | Dopo il cutover gli `INSERT` falliscono con duplicate key | Sincronizzare con `setval()` al cutover |
 | Il **DDL non viene replicato** | Una `ALTER TABLE` su blue rompe la subscription | Congelare gli schema change durante la migrazione |
 | I **large object** (`pg_largeobject`) non vengono replicati | Dati mancanti su green | Migrarli con `pg_dump --large-objects` o convertirli in `bytea` |
 | Tabelle senza `PRIMARY KEY` | `UPDATE`/`DELETE` falliscono se non c'è `REPLICA IDENTITY` | `ALTER TABLE ... REPLICA IDENTITY FULL` (costoso) o aggiungere una PK |
@@ -178,9 +179,12 @@ createdb -h new-host mydb
 ### Strategia 2 — pg_upgrade
 
 ```bash
-# 1. Installa i binari 17 accanto ai 15 e crea il nuovo cluster vuoto
+# 1. Installa i binari 17 accanto ai 15 e crea il nuovo cluster vuoto.
+#    Encoding, locale e locale provider DEVONO coincidere con il vecchio cluster
+#    (verifica con: SELECT datname, datcollate, datctype, datlocprovider FROM pg_database;),
+#    altrimenti pg_upgrade --check fallisce. Idem per i data checksums: stessa impostazione.
 sudo -u postgres /usr/lib/postgresql/17/bin/initdb -D /var/lib/postgresql/17/main \
-    --data-checksums --locale-provider=icu --icu-locale=it-IT
+    --encoding=UTF8 --locale=it_IT.UTF-8
 
 # 2. Controllo di compatibilità: NON modifica nulla, si può ripetere a cluster in produzione
 sudo -u postgres /usr/lib/postgresql/17/bin/pg_upgrade \
@@ -191,7 +195,7 @@ sudo -u postgres /usr/lib/postgresql/17/bin/pg_upgrade \
     --link --jobs=8 --check
 ```
 
-Output atteso: `*Clusters are compatible*`. Con `--check` si scoprono i blocchi tipici: prepared transactions, tipi `reg*` nelle tabelle utente, estensioni mancanti, `data checksums` diversi tra i due cluster (devono coincidere nelle versioni più vecchie di PG 18).
+Output atteso: `*Clusters are compatible*`. Con `--check` si scoprono i blocchi tipici: prepared transactions, tipi `reg*` nelle tabelle utente, estensioni mancanti, `data checksums` diversi tra i due cluster (devono coincidere), encoding/locale/locale provider diversi. Attenzione: da PG 18 `initdb` abilita i checksum **di default**; se il vecchio cluster non li ha, creare il nuovo con `initdb --no-data-checksums` (oppure abilitarli prima sul vecchio con `pg_checksums --enable`, a cluster fermo).
 
 ```bash
 # 3. Finestra di manutenzione: ferma l'applicazione e il vecchio cluster
@@ -241,7 +245,7 @@ SELECT srrelid::regclass, srsubstate FROM pg_subscription_rel;
 ```
 
 !!! tip "Alternativa fisica → logica: pg_createsubscriber"
-    Da PG 17, `pg_createsubscriber` converte una **standby fisica** in un subscriber logico, evitando la copia iniziale dei dati (molto più veloce per DB grandi). Va comunque combinata con un upgrade di versione (es. `pg_upgrade` sulla standby promossa) per ottenere un green sulla versione nuova.
+    Da PG 17, `pg_createsubscriber` converte una **standby fisica** (stessa major del primary) in un subscriber logico, evitando la copia iniziale dei dati (molto più veloce per DB grandi). Da solo **non** cambia versione: la standby ha la stessa major del primary. Per arrivare a una major superiore, dopo la conversione si esegue `pg_upgrade` sul subscriber, che da un cluster PG 17+ preserva slot e stato della subscription; quindi il percorso vale per partenze da PG 17 in su.
 
 #### Script di cutover con verifica del lag LSN
 
@@ -275,7 +279,7 @@ echo "4) Sincronizza le sequenze (non replicate)"
 psql "$BLUE" -Atc "SELECT format('SELECT setval(%L, %s, true);', quote_ident(schemaname)||'.'||quote_ident(sequencename), last_value) FROM pg_sequences WHERE last_value IS NOT NULL;" \
   | psql "$GREEN"
 
-echo "5) Rimuovi la subscription (mantieni blue intatto per il rollback)"
+echo "5) Rimuovi la subscription (blue resta intatto per il rollback; lo slot su blue NON viene droppato: eliminarlo a mano quando non serve più, altrimenti trattiene WAL)"
 psql "$GREEN" -c "ALTER SUBSCRIPTION upgrade_sub DISABLE;"
 psql "$GREEN" -c "ALTER SUBSCRIPTION upgrade_sub SET (slot_name = NONE);"
 psql "$GREEN" -c "DROP SUBSCRIPTION upgrade_sub;"
@@ -409,7 +413,7 @@ kubectl get pods -n prod -l cnpg.io/cluster=app-pg15 -w
 - Usa i **binari della versione target** per `pg_dump`, `pg_upgrade`, `vacuumdb`.
 - Esegui `pg_upgrade --check` giorni prima, non il giorno dell'upgrade.
 - Prepara la **configurazione** della nuova versione partendo dal file della nuova versione e riportando i soli parametri custom (non copiare il vecchio `postgresql.conf`).
-- Abilita i **data checksums** sul nuovo cluster (`initdb --data-checksums`): è l'occasione per farlo. Con `pg_upgrade` i due cluster devono avere la stessa impostazione (nelle versioni precedenti a PG 18).
+- I **data checksums** rilevano la corruzione silenziosa dei blocchi su disco. Con `pg_upgrade` i due cluster devono avere la stessa impostazione: per abilitarli nel passaggio usare dump/restore o logical replication (`initdb --data-checksums` sul nuovo), oppure `pg_checksums --enable` sul vecchio cluster fermo prima dell'upgrade.
 - Congela **deploy e migrazioni di schema** durante una migrazione logica.
 - Monitora il lag, il numero di connessioni, `pg_stat_statements` e i tempi p95/p99 per 24–72 h dopo l'upgrade.
 - **Anti-pattern**: upgrade e cambio di OS/glibc nello stesso passo senza REINDEX; omettere `ANALYZE`; spegnere il vecchio cluster il giorno stesso.
