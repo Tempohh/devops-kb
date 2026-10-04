@@ -7,9 +7,10 @@ search_keywords: [rabbitmq java, spring amqp, rabbittemplate, rabbitlistener, si
 parent: dev/integrazioni/_index
 related: [messaging/rabbitmq/architettura, messaging/rabbitmq/affidabilita, dev/linguaggi/java-spring-boot, dev/linguaggi/dotnet, dev/linguaggi/go]
 official_docs: https://www.rabbitmq.com/client-libraries/java-api-guide
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # RabbitMQ da Codice — Java, .NET, Go
@@ -89,9 +90,14 @@ spring:
     password: ${RABBITMQ_PASSWORD}   # mai hardcoded — leggi da env/secret
     virtual-host: /production
     connection-timeout: 5000
-    # Retry connessione iniziale
+    # Senza questo il ConfirmCallback del RabbitTemplate NON viene mai invocato
+    publisher-confirm-type: correlated
+    # Publisher returns: necessari per ReturnsCallback (messaggi non instradabili)
+    publisher-returns: true
     listener:
       simple:
+        # Retry stateless in-process dei listener (NON della connessione):
+        # ritenta la chiamata al metodo @RabbitListener prima di rifiutare il messaggio
         retry:
           enabled: true
           initial-interval: 2s
@@ -99,7 +105,12 @@ spring:
           multiplier: 2
 ```
 
+!!! note "Retry della connessione"
+    La riconnessione al broker è gestita automaticamente da `CachingConnectionFactory` (il client Java ha il connection recovery attivo di default). Le proprietà `listener.simple.retry` riguardano solo l'elaborazione dei messaggi.
+
 ### Dichiarazione Exchange, Queue, Binding via @Bean
+
+<!-- REVIEW: verificare se in Spring AMQP 4.x / Boot 4 (Jackson 3) Jackson2JsonMessageConverter è deprecato in favore di JacksonJsonMessageConverter -->
 
 ```java
 import org.springframework.amqp.core.*;
@@ -162,6 +173,7 @@ public class RabbitConfig {
     }
 
     // Converter JSON: POJO ↔ JSON automatico
+    // In Spring AMQP 4.x (Boot 4 / Jackson 3) potrebbe esistere JacksonJsonMessageConverter al posto di questo
     @Bean
     public Jackson2JsonMessageConverter messageConverter() {
         return new Jackson2JsonMessageConverter();
@@ -176,6 +188,7 @@ public class RabbitConfig {
         // Publisher confirms: attendi conferma dal broker
         template.setConfirmCallback((correlationData, ack, cause) -> {
             if (!ack) {
+                // `log` = logger SLF4J della classe (es. @Slf4j di Lombok)
                 log.error("Messaggio non confermato dal broker: {}", cause);
                 // logica di retry o dead letter applicativa
             }
@@ -242,17 +255,19 @@ import com.rabbitmq.client.Channel;
 @Component
 public class OrderConsumer {
 
-    // Consumer semplice — Spring gestisce ack automaticamente se non ci sono eccezioni
+    // Consumer semplice — con AcknowledgeMode.AUTO (default di Spring) il container
+    // fa ack se il metodo ritorna. NON usare con la factory MANUAL di sotto: nessuno farebbe ack.
     @RabbitListener(queues = "orders.queue", concurrency = "3-10")
     //                                       min-max thread pool dinamico
     public void handleOrder(OrderCreatedEvent event) {
         processOrder(event);
-        // Nessuna eccezione → Spring fa ack automaticamente
-        // Eccezione non gestita → Spring fa nack + requeue (configurabile)
+        // Nessuna eccezione → ack
+        // Eccezione non gestita → nack + requeue (default requeueRejected=true:
+        // rischio loop infinito; MessageConversionException è invece scartata senza requeue)
     }
 
-    // Consumer con ack manuale — massimo controllo
-    @RabbitListener(queues = "orders.queue")
+    // Consumer con ack manuale — massimo controllo (ackMode per-listener, Spring AMQP ≥ 2.3)
+    @RabbitListener(queues = "orders.queue", ackMode = "MANUAL")
     public void handleOrderManualAck(
             OrderCreatedEvent event,
             Channel channel,
@@ -298,20 +313,26 @@ public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
     // Prefetch: quanti messaggi non-acked il broker invia per consumer
     factory.setPrefetchCount(10);
 
-    // Ack manuale: il consumer deve chiamare channel.basicAck/Nack esplicitamente
-    factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
+    // AUTO (default): il container fa ack/nack in base all'esito del metodo.
+    // MANUAL: ogni listener deve chiamare channel.basicAck/Nack, altrimenti i messaggi
+    // restano unacked e il prefetch si satura. Usalo solo se serve controllo fine.
+    factory.setAcknowledgeMode(AcknowledgeMode.AUTO);
 
-    // Retry con backoff esponenziale (prima di nack permanente)
-    RetryInterceptorBuilder.StatefulRetryInterceptorBuilder retryBuilder =
-        RetryInterceptorBuilder.stateful()
-            .maxAttempts(3)
-            .backOffOptions(1000, 2.0, 10000)  // initial, multiplier, max ms
-            .recoverer(new RejectAndDontRequeueRecoverer()); // dopo 3 tentativi → DLQ
+    // Retry stateless con backoff esponenziale, poi scarto verso la DLX.
+    // (Lo stateful richiede un messageId univoco e non si combina con ack MANUAL.)
+    RetryOperationsInterceptor retry = RetryInterceptorBuilder.stateless()
+        .maxAttempts(3)
+        .backOffOptions(1000, 2.0, 10000)  // initial, multiplier, max ms
+        .recoverer(new RejectAndDontRequeueRecoverer()) // dopo 3 tentativi → DLQ
+        .build();
 
-    factory.setAdviceChain(retryBuilder.build());
+    factory.setAdviceChain(retry);
     return factory;
 }
 ```
+
+!!! tip "Quorum queue"
+    Per code nuove preferisci le **quorum queue** (`QueueBuilder.durable(...).quorum()`): sono il tipo replicato raccomandato (il mirroring delle classic queue è stato rimosso in RabbitMQ 4.0) e supportano `x-delivery-limit`, che interrompe i loop di requeue spedendo il messaggio alla DLX dopo N consegne.
 
 ---
 
@@ -321,9 +342,12 @@ public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
 
 ```bash
 dotnet add package MassTransit
-dotnet add package MassTransit.RabbitMQ
-dotnet add package MassTransit.AspNetCore  # integrazione DI ASP.NET Core
+dotnet add package MassTransit.RabbitMQ   # include MassTransit; DI via Microsoft.Extensions.DependencyInjection
 ```
+
+!!! warning "Licenza e versioni"
+    <!-- REVIEW: verificare stato licenza MassTransit v9 (commerciale) e fino a quando v8 resta open source/supportata -->
+    MassTransit v8 è open source (Apache 2.0); la linea v9 è stata annunciata con licenza commerciale. Verifica versione e termini prima di adottarlo in un nuovo progetto. Il codice sotto è per v8.
 
 ### Configurazione con DI ASP.NET Core
 
@@ -335,12 +359,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddMassTransit(x =>
 {
-    // Registra tutti i consumer nella assembly corrente
+    // Registra tutti i consumer nella assembly corrente (alternativa: AddConsumer<T>() uno per uno)
     x.AddConsumers(typeof(Program).Assembly);
-
-    // Registra consumer specifici
-    x.AddConsumer<OrderCreatedConsumer>();
-    x.AddConsumer<OrderConfirmationConsumer>();
 
     // Configura il transport RabbitMQ
     x.UsingRabbitMq((context, cfg) =>
@@ -354,16 +374,18 @@ builder.Services.AddMassTransit(x =>
         // Configura receive endpoint per ogni consumer
         cfg.ReceiveEndpoint("orders-queue", e =>
         {
-            e.ConfigureConsumer<OrderCreatedConsumer>(context);
-
             // Prefetch count
             e.PrefetchCount = 10;
 
-            // Dead letter: invia a orders-queue_error dopo N tentativi
+            // Dopo N tentativi il messaggio va in orders-queue_error.
+            // L'ordine conta: i filtri sono middleware annidati, il retry deve
+            // essere dichiarato PRIMA del consumer per avvolgerlo.
             e.UseMessageRetry(r => r.Exponential(3,
                 TimeSpan.FromSeconds(1),
                 TimeSpan.FromSeconds(30),
                 TimeSpan.FromSeconds(2)));
+
+            e.ConfigureConsumer<OrderCreatedConsumer>(context);
         });
 
         // Configura endpoint automatici per tutti i consumer registrati
@@ -428,8 +450,9 @@ public class OrderService
     // Send: indirizzo diretto a una coda specifica
     public async Task SendToQueue(OrderCreatedEvent evt, CancellationToken ct)
     {
-        var endpoint = await _bus.GetSendEndpoint(
-            new Uri("rabbitmq://rabbitmq.internal/orders-queue"));
+        // "queue:" è l'indirizzo breve relativo al bus (host e virtual host già configurati);
+        // la forma estesa include il vhost: rabbitmq://host/<vhost>/orders-queue
+        var endpoint = await _bus.GetSendEndpoint(new Uri("queue:orders-queue"));
         await endpoint.Send(evt, ct);
     }
 
@@ -531,6 +554,8 @@ public class OrderSaga : MassTransitStateMachine<OrderSagaState>
             x => x.CorrelateById(ctx => ctx.Message.OrderId));
         Event(() => InventoryReserved,
             x => x.CorrelateById(ctx => ctx.Message.OrderId));
+        Event(() => PaymentFailed,
+            x => x.CorrelateById(ctx => ctx.Message.OrderId));
 
         Initially(
             When(OrderCreated)
@@ -556,9 +581,13 @@ public class OrderSaga : MassTransitStateMachine<OrderSagaState>
 }
 
 // Registrazione saga in Program.cs
+// (PaymentConfirmedEvent, InventoryReservedEvent, PaymentFailedEvent: record con OrderId, definiti come OrderCreatedEvent)
+//
 // x.AddSagaStateMachine<OrderSaga, OrderSagaState>()
-//     .InMemoryRepository();  // per test
-//     .EntityFrameworkRepository(r => r.ExistingDbContext<AppDbContext>());  // prod
+//     .InMemoryRepository();                                                    // solo test
+//
+// x.AddSagaStateMachine<OrderSaga, OrderSagaState>()
+//     .EntityFrameworkRepository(r => r.ExistingDbContext<AppDbContext>());     // produzione
 ```
 
 ---
@@ -577,14 +606,15 @@ go get github.com/rabbitmq/amqp091-go
 package rabbitmq
 
 import (
-    "context"
     "log/slog"
+    "sync"
     "time"
 
     amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type Connection struct {
+    mu      sync.RWMutex // protegge conn/channel: reconnectLoop li riscrive da un'altra goroutine
     conn    *amqp.Connection
     channel *amqp.Channel
     url     string
@@ -612,8 +642,10 @@ func (c *Connection) connect() error {
         conn.Close()
         return err
     }
+    c.mu.Lock()
     c.conn = conn
     c.channel = ch
+    c.mu.Unlock()
     slog.Info("AMQP connected")
     return nil
 }
@@ -623,7 +655,10 @@ func (c *Connection) connect() error {
 func (c *Connection) reconnectLoop() {
     for {
         // NotifyClose ritorna un channel che riceve l'errore quando la connessione cade
-        closeCh := c.conn.NotifyClose(make(chan *amqp.Error, 1))
+        c.mu.RLock()
+        conn := c.conn
+        c.mu.RUnlock()
+        closeCh := conn.NotifyClose(make(chan *amqp.Error, 1))
         err := <-closeCh  // blocca finché la connessione è aperta
         if err == nil {
             slog.Info("AMQP connection closed gracefully")
@@ -643,9 +678,16 @@ func (c *Connection) reconnectLoop() {
     }
 }
 
-func (c *Connection) Channel() *amqp.Channel { return c.channel }
-func (c *Connection) Close() { c.conn.Close() }
+func (c *Connection) Channel() *amqp.Channel {
+    c.mu.RLock()
+    defer c.mu.RUnlock()
+    return c.channel
+}
+func (c *Connection) Close() { c.mu.RLock(); defer c.mu.RUnlock(); c.conn.Close() }
 ```
+
+!!! warning "Cosa NON fa questo handler"
+    A differenza di Spring AMQP e MassTransit, **amqp091-go non ha auto-recovery**: dopo la riconnessione devi ridichiarare la topologia (`SetupTopology`) e **ri-registrare i consumer** (il canale `deliveries` vecchio viene chiuso), e i `Producer` che tengono un `*amqp.Channel` vecchio vanno ricreati con `Channel()`. Inoltre un `Close()` volontario produce `err == nil` su `NotifyClose`, quindi il loop termina correttamente.
 
 ### Producer
 
@@ -655,6 +697,7 @@ package rabbitmq
 import (
     "context"
     "encoding/json"
+    "fmt"
     "time"
 
     amqp "github.com/rabbitmq/amqp091-go"
@@ -705,6 +748,7 @@ package rabbitmq
 import (
     "context"
     "encoding/json"
+    "fmt"
     "log/slog"
 
     amqp "github.com/rabbitmq/amqp091-go"
@@ -798,8 +842,11 @@ func (c *Consumer) handleDelivery(d amqp.Delivery) {
 ### Dichiarazione Exchange e Queue
 
 ```go
-// SetupTopology dichiara exchange, code e binding idempotentemente.
+// SetupTopology dichiara exchange, code e binding idempotentemente
+// (import necessari: "fmt" e amqp "github.com/rabbitmq/amqp091-go").
 // Chiamare all'avvio prima di pubblicare o consumare.
+// Idempotente solo se gli argomenti coincidono con quelli esistenti:
+// altrimenti il broker risponde PRECONDITION_FAILED e chiude il canale.
 func SetupTopology(ch *amqp.Channel) error {
     // Dichiara exchange principale
     if err := ch.ExchangeDeclare(
@@ -861,16 +908,16 @@ func SetupTopology(ch *amqp.Channel) error {
     Un messaggio deve contenere tutti i dati necessari all'elaborazione senza che il consumer faccia query al DB del producer. Includi ID, timestamp, e i dati rilevanti. Non includere dati enormi: usa un riferimento (ID) e fai il consumer recuperare i dettagli se necessario.
 
 !!! warning "Idempotenza obbligatoria"
-    I messaggi possono essere consegnati **più di una volta** — il broker può riconsegragli dopo un restart o se il consumer crasha prima dell'ack. Il consumer **deve** essere idempotente: elaborare due volte lo stesso messaggio non deve produrre effetti duplicati. Usa l'ID del messaggio come chiave di deduplicazione.
+    I messaggi possono essere consegnati **più di una volta** — il broker può riconsegnarli dopo un restart o se il consumer crasha prima dell'ack. Il consumer **deve** essere idempotente: elaborare due volte lo stesso messaggio non deve produrre effetti duplicati. Usa l'ID del messaggio come chiave di deduplicazione.
 
 **Pattern consigliati:**
 
 | Pattern | Quando usarlo | Note |
 |---|---|---|
-| **Transactional Outbox** | Vuoi garantire che il messaggio venga pubblicato se e solo se la transazione DB viene committata | Evita la doppia scrittura (DB + broker) non atomica |
+| **Transactional Outbox** | Vuoi garantire che il messaggio venga pubblicato se e solo se la transazione DB viene committata | Evita la doppia scrittura (DB + broker) non atomica. Si scrive il messaggio in una tabella nella stessa transazione e un relay lo pubblica. MassTransit ha un outbox integrato (`AddEntityFrameworkOutbox`); in Spring/Go va implementato a mano o con CDC |
 | **Dead Letter Queue** | Qualsiasi coda che non può permettersi di perdere messaggi | Sempre: monitora la DLQ con alert |
 | **Prefetch = 1 per consumer lenti** | Elaborazione CPU-bound o con dipendenze esterne lente | Garantisce load balancing reale tra istanze |
-| **Publisher Confirms** | Vuoi certezza che il broker abbia ricevuto il messaggio | Performance cost: circa 30-40% di throughput in meno |
+| **Publisher Confirms** | Vuoi certezza che il broker abbia preso in carico il messaggio (per quorum queue: replicato su maggioranza) | Costo alto se attendi la conferma messaggio per messaggio; usa conferme asincrone o in batch |
 | **Heartbeat** | Connessioni long-lived su infrastruttura con firewall/NAT | Default RabbitMQ: 60s; abbassa a 30s se usi NAT aggressivo |
 
 **Anti-pattern da evitare:**
@@ -878,7 +925,7 @@ func SetupTopology(ch *amqp.Channel) error {
 - **Messaggi enormi**: oltre ~64KB rallenta il broker e la rete. Per payload grandi usa object storage (S3/blob) e includi nel messaggio solo il riferimento.
 - **Fire-and-forget senza DLQ**: se non hai una DLQ, i messaggi che falliscono spariscono silenziosamente.
 - **Nack con requeue=true senza limite**: crea loop infiniti su errori permanenti. Usa sempre un retry limit (Spring AMQP: `RetryInterceptor`; MassTransit: `UseMessageRetry`; Go: contatore nel consumer).
-- **Condividere un channel tra goroutine** (Go): ogni goroutine deve avere il proprio `amqp.Channel`. Il `Connection` può essere condiviso.
+- **Condividere un channel tra goroutine** (Go): un `amqp.Channel` non è pensato per uso concorrente (publish interleaved, confirm ambigui). Usa un channel per goroutine; la `Connection` può essere condivisa.
 - **Hardcodare credenziali**: usa variabili d'ambiente, Kubernetes secrets, o Vault.
 
 ---
@@ -891,10 +938,10 @@ func SetupTopology(ch *amqp.Channel) error {
 
 **Causa 1 — Prefetch saturo:** Il consumer ha già N messaggi non-acked e il prefetch count è N.
 ```bash
-# Controlla i messaggi unacked per consumer
-rabbitmqctl list_consumers queue_name
-# Se messages_unacknowledged è uguale al prefetch count → consumer saturo
-rabbitmqctl list_queues name messages_ready messages_unacknowledged
+# Consumer registrati (con prefetch_count e ack_required) sul vhost
+rabbitmqctl list_consumers -p /production
+# Se messages_unacknowledged è uguale al prefetch totale dei consumer → saturi
+rabbitmqctl list_queues -p /production name messages_ready messages_unacknowledged consumers
 ```
 **Soluzione:** Aumenta il prefetch count, oppure verifica che l'elaborazione stia completando e facendo ack.
 
@@ -904,23 +951,24 @@ rabbitmqctl list_bindings | grep orders.queue
 # Se non appare il binding atteso → il producer pubblica su exchange/routing_key sbagliati
 ```
 
-**Causa 3 — Consumer tag duplicato:** Due consumer con lo stesso tag — solo uno è attivo.
+**Causa 3 — Consumer esclusivo o ack mancante:** un altro consumer `exclusive` detiene la coda (il secondo riceve `ACCESS_REFUSED`), oppure con ack MANUAL il listener non chiama mai `basicAck` (stesso sintomo della Causa 1). Un consumer tag duplicato sullo stesso channel viene invece rifiutato dal broker con `NOT_ALLOWED`.
 
 ---
 
 ### Messaggi in DLQ
 
+<!-- REVIEW: verificare flag esatti di rabbitmqadmin v2 (v1 deprecato) -->
 **Sintomo:** La DLQ si riempie, la coda principale si svuota.
 
 **Causa principale:** Il consumer fa `nack` con `requeue=false` (o lancia eccezioni dopo N retry).
 ```bash
-# Leggi il primo messaggio della DLQ senza consumarlo (peek)
+# Peek del primo messaggio della DLQ (sintassi rabbitmqadmin v1; la v2 usa
+# `rabbitmqadmin get messages --queue orders.dlq ...`)
 rabbitmqadmin get queue=orders.dlq count=1 requeue=true
-# Controlla x-death header per il motivo del dead-lettering
+# Controlla l'header x-death per il motivo del dead-lettering
 ```
-**Soluzione:** Correggi il bug nel consumer, poi muovi i messaggi dalla DLQ alla coda originale:
+**Soluzione:** Correggi il bug nel consumer, poi rimetti i messaggi nella coda originale. Per pochi messaggi, ripubblicali a mano; per volumi alti usa uno **Shovel** (plugin) o la funzione "move messages" della management UI:
 ```bash
-# Shovel manuale: sposta messaggi DLQ → coda originale
 rabbitmqadmin publish exchange=orders.exchange routing_key=order.created < message.json
 ```
 
@@ -945,15 +993,15 @@ conn, err := amqp.DialConfig(url, amqp.Config{
 
 **Sintomo:** I messaggi finiscono in DLQ dopo un solo tentativo invece di essere ritentati.
 
-**Causa:** Il consumer lancia `AmqpRejectAndDontRequeueException` (o una sua sottoclasse) che Spring AMQP interpreta come "non fare retry, manda in DLQ".
+**Causa:** Il consumer lancia `AmqpRejectAndDontRequeueException` (o una sua sottoclasse; anche `MessageConversionException` e simili "fatal" sono trattate così) che Spring AMQP interpreta come "non ritentare, rifiuta senza requeue → DLQ".
 ```java
-// SBAGLIATO: questa eccezione bypassan il retry
+// Corretto per errori PERMANENTI (payload malformato): va subito in DLQ, senza sprecare retry
 throw new AmqpRejectAndDontRequeueException("invalid format");
 
-// CORRETTO: lancia un'eccezione normale per sfruttare il retry configurato
-throw new IllegalArgumentException("invalid format");
-// oppure configura esplicitamente quali eccezioni triggerano il dead-letter
+// Per errori TRANSITORI lancia un'eccezione normale: scatta il retry configurato
+throw new IllegalStateException("downstream non disponibile");
 ```
+Se vedi questo comportamento su errori che ritenevi transitori, cerca chi lancia (o wrappa) quell'eccezione.
 
 ---
 
@@ -961,7 +1009,7 @@ throw new IllegalArgumentException("invalid format");
 
 **Sintomo:** I messaggi vanno subito in `queue-name_error` senza i 3 retry attesi.
 
-**Causa:** `UseMessageRetry` deve essere configurato **prima** di `ConfigureConsumer`, altrimenti non viene applicato.
+**Causa:** `UseMessageRetry` deve essere configurato **prima** di `ConfigureConsumer`, altrimenti non avvolge il consumer e non viene applicato (i filtri sono middleware annidati nell'ordine di dichiarazione).
 ```csharp
 // SBAGLIATO
 cfg.ReceiveEndpoint("orders-queue", e =>
