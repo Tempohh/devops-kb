@@ -7,9 +7,10 @@ search_keywords: [docker network bridge, docker overlay network swarm, docker ma
 parent: containers/docker/_index
 related: [containers/docker/architettura-interna, networking/kubernetes/cni, containers/kubernetes/_index]
 official_docs: https://docs.docker.com/engine/network/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Docker Networking
@@ -27,8 +28,12 @@ Driver di Rete Docker
   overlay             → Container su host diversi (Docker Swarm / multi-host)
   macvlan             → Container con MAC/IP propri sulla rete fisica
   ipvlan              → Come macvlan ma condivide MAC dell'host
-  network plugins     → Calico, Weave, Flannel (anche per Kubernetes)
+  network plugins     → driver di terze parti (es. Calico, Cilium); in Kubernetes
+                        il networking dei pod è invece affidato ai CNI
 ```
+
+!!! note "Docker vs CNI"
+    Questi driver sono il modello **libnetwork** di Docker Engine. Kubernetes non li usa: delega a un plugin CNI (vedi [CNI](../../networking/kubernetes/cni.md)). Weave Net non è più mantenuto (Weaveworks ha chiuso nel 2024): non sceglierlo per nuovi progetti.
 
 ---
 
@@ -61,10 +66,14 @@ Bridge Network — Come funziona
   Container A → Container B: A → veth → docker0 → veth → B
   Container A → Internet: A → veth → docker0 → NAT (iptables) → eth0 host
 
-  Nota: la comunicazione tra container sulla STESSA bridge network
-        NON passa per iptables FORWARD in Docker moderno (ottimizzazione):
-        passa direttamente nel kernel via bridge switching.
+  Nota: la comunicazione tra container sulla STESSA bridge network è
+        switching L2 nel bridge. Con br_netfilter attivo (default con Docker)
+        i frame bridged attraversano comunque iptables FORWARD, dove Docker
+        inserisce una regola ACCEPT per `-i br-X -o br-X` (ICC abilitato).
 ```
+
+!!! note "Perché le reti custom"
+    La `docker0` di default non ha DNS per nome e mette tutti i container nello stesso dominio L2 senza isolamento per applicazione. Una rete custom dà DNS embedded, isolamento tra reti (regole `DOCKER-ISOLATION`) e possibilità di connettere/disconnettere container a caldo.
 
 **Ispezione della bridge network:**
 
@@ -84,8 +93,8 @@ docker run -d --name api --network app-network myapi
 
 # Ispezione del bridge Linux sottostante
 docker network inspect app-network | jq '.[0].Options'
-brctl show br-app        # mostra le interfacce collegate al bridge
-ip link show type veth   # lista tutti i veth pair
+ip link show master br-app   # interfacce collegate al bridge (brctl/bridge-utils è obsoleto)
+ip link show type veth       # lista tutti i veth pair
 
 # DNS automatico su network custom:
 # i container si raggiungono per NOME (non per IP)
@@ -116,7 +125,7 @@ iptables Rules — docker run -p 8080:80 nginx
   # Traffico dal container verso l'esterno → maschera con IP host
 
   --- FORWARD ---
-  -A DOCKER -d 172.17.0.2/32 ! -i docker0 -p tcp --dport 80 -j ACCEPT
+  -A DOCKER -d 172.17.0.2/32 ! -i docker0 -o docker0 -p tcp --dport 80 -j ACCEPT
   -A DOCKER-ISOLATION-STAGE-1 -i br-app ! -o br-app -j DOCKER-ISOLATION-STAGE-2
   -A DOCKER-ISOLATION-STAGE-2 -o docker0 -j DROP
   # Impedisce traffico diretto tra bridge diverse (isolamento per rete)
@@ -137,7 +146,19 @@ iptables -t nat -L POSTROUTING -n | grep 172.17
 
 # 3. Testa DNS dal container
 docker run --rm alpine nslookup google.com
-docker run --rm alpine nslookup web app-network  # DNS interno
+# DNS interno: il container deve stare su una rete custom (2° argomento di nslookup = server DNS)
+docker run --rm --network app-network alpine nslookup web
+```
+
+!!! warning "Published port e firewall host (ufw/firewalld)"
+    `-p 8080:80` mette il DNAT in `PREROUTING` della tabella `nat`, **prima** delle chain `INPUT` gestite da ufw/firewalld: il traffico verso la porta pubblicata non viene filtrato dalle loro regole. Per limitare l'accesso inserire regole in `DOCKER-USER` (valutata prima delle regole Docker) oppure pubblicare solo su loopback: `-p 127.0.0.1:8080:80`.
+
+    <!-- REVIEW: verificare se le release recenti di Docker Engine (28+/29) offrono backend nftables e cambiano il filtraggio delle porte pubblicate/accesso diretto ai container da altre reti -->
+
+```bash
+# Esempio: consenti l'accesso alla porta pubblicata solo da una subnet
+# (in DOCKER-USER la destinazione è già tradotta: filtrare con conntrack original dport)
+iptables -I DOCKER-USER -i eth0 ! -s 10.0.0.0/8 -m conntrack --ctorigdstport 8080 --ctdir ORIGINAL -j DROP
 ```
 
 ---
@@ -185,7 +206,8 @@ docker run --network host nginx
 # - Monitoring: container che deve vedere tutte le interfacce dell'host
 # - Applicazioni che usano UDP multicast
 
-# Limitazione: NON funziona su macOS/Windows (la VM host è il Linux sotto Docker Desktop)
+# Limitazione: su Docker Desktop (macOS/Windows) "host" è la VM Linux sottostante, non il
+# PC; il supporto va abilitato esplicitamente nelle impostazioni (versioni recenti).
 ```
 
 ---
@@ -226,8 +248,11 @@ docker swarm init --advertise-addr 10.0.0.1
 docker network create \
     --driver overlay \
     --subnet 172.20.0.0/16 \
-    --opt encrypted \          # VXLAN con AES-128 encryption
+    --opt encrypted \
     prod-overlay
+# --opt encrypted: cifra il traffico dati VXLAN con IPsec ESP (AES-GCM); richiede che il
+# protocollo ESP (IP 50) passi tra gli host e ha un costo di CPU/throughput.
+# Porte Swarm tra i nodi: 2377/tcp (management), 7946/tcp+udp (gossip), 4789/udp (VXLAN).
 
 # I container nei servizi Swarm usano automaticamente overlay
 docker service create \
@@ -263,7 +288,9 @@ Macvlan — Topologia
 
   Container A è raggiungibile dalla rete fisica come qualsiasi host.
   ATTENZIONE: Container A e Host non si raggiungono via macvlan
-              (limitazione macvlan) → usare un bridge macvlan se necessario.
+              (il kernel isola l'host dalle sue sub-interfacce macvlan)
+              → creare sull'host una interfaccia macvlan "shim" con IP proprio
+              e route verso il range dei container (vedi sotto).
 ```
 
 ```bash
@@ -272,17 +299,25 @@ docker network create \
     --driver macvlan \
     --subnet 192.168.1.0/24 \
     --gateway 192.168.1.1 \
-    --ip-range 192.168.1.128/25 \  # pool IP per container (evita conflitti con DHCP)
-    -o parent=eth0 \               # NIC fisica
+    --ip-range 192.168.1.128/25 \
+    -o parent=eth0 \
     macvlan-prod
+# --ip-range: pool IP per i container (evita conflitti con il DHCP della LAN)
+# parent=eth0: NIC fisica
 
-# NIC fisica DEVE essere in modalità promiscua
+# Su VM/hypervisor e alcuni switch la NIC può dover accettare più MAC (promiscuous mode)
 ip link set eth0 promisc on
 
 docker run -d \
     --network macvlan-prod \
     --ip 192.168.1.130 \
     nginx
+
+# Raggiungere i container dall'host: interfaccia macvlan shim
+ip link add macvlan-shim link eth0 type macvlan mode bridge
+ip addr add 192.168.1.250/32 dev macvlan-shim
+ip link set macvlan-shim up
+ip route add 192.168.1.128/25 dev macvlan-shim
 ```
 
 ---
@@ -309,9 +344,9 @@ docker network connect app-network api
 docker run --rm --network app-network nicolaka/netshoot \
     ping -c 3 web
 
-# Verifica che la rete abbia il DNS embedded abilitato
-docker network inspect app-network | jq '.[0].Options'
-# "com.docker.network.bridge.enable_ip_masquerade": "true" deve essere presente
+# Il DNS embedded è attivo su ogni rete custom; Options è spesso vuoto (normale).
+# Controllare driver e container effettivamente collegati:
+docker network inspect app-network | jq '.[0] | {Driver, Internal, Containers}'
 ```
 
 ---
@@ -387,8 +422,9 @@ docker run -d --name api --network app-network myapi
 # Verifica stato nodi Swarm
 docker node ls   # tutti i nodi devono essere "Ready" e "Active"
 
-# Verifica che la porta 4789/UDP sia aperta tra gli host
-# Da host 1 verso host 2:
+# Verifica le porte Swarm tra gli host (2377/tcp, 7946/tcp+udp, 4789/udp)
+# Da host 1 verso host 2 (UDP con nc è solo indicativo: nessuna risposta ≠ aperta):
+nc -zv 10.0.0.2 7946
 nc -zuv 10.0.0.2 4789
 
 # Controlla la rete overlay
