@@ -186,17 +186,27 @@ Per tracciare logica business, aggiungere attributi domain-specific, o gestire e
 
 ```xml
 <!-- pom.xml — solo la API OTel, non l'SDK (l'agent lo porta lui) -->
-<!-- REVIEW: verificare versioni correnti (api, spring-boot-starter, logback-appender); meglio importare il BOM opentelemetry-instrumentation-bom -->
+<!-- Versioni verificate il 2026-10-04 (api 1.66.0, instrumentation 2.32.0): importa il BOM così non le gestisci a mano -->
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>io.opentelemetry.instrumentation</groupId>
+            <artifactId>opentelemetry-instrumentation-bom</artifactId>
+            <version>2.32.0</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
 <dependency>
     <groupId>io.opentelemetry</groupId>
     <artifactId>opentelemetry-api</artifactId>
-    <version>1.36.0</version>
+    <!-- versione gestita dal BOM -->
 </dependency>
-<!-- Con Spring Boot: usa lo starter che configura SDK + exporter -->
+<!-- Con Spring Boot: usa lo starter che configura SDK + exporter (stabile, senza suffisso -alpha) -->
 <dependency>
     <groupId>io.opentelemetry.instrumentation</groupId>
     <artifactId>opentelemetry-spring-boot-starter</artifactId>
-    <version>2.3.0-alpha</version>
 </dependency>
 ```
 
@@ -339,6 +349,7 @@ In .NET, la strumentazione manuale usa le `System.Diagnostics.Activity` (API nat
 
 ```xml
 <!-- .csproj -->
+<!-- CURRENCY: non verificato (2026-10-04) — versioni NuGet 1.8.0 non confrontate con l'ultima release -->
 <PackageReference Include="OpenTelemetry" Version="1.8.0" />
 <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.8.0" />
 <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.8.0" />
@@ -461,21 +472,21 @@ using (_logger.BeginScope(new Dictionary<string, object>
 
 ### Go — Auto-Instrumentation
 
-Go non supporta auto-instrumentation via bytecode (è compilato). Nel modo standard si usano le **instrumentation libraries** OTel che wrappano le librerie (richiede una modifica minima al codice). Esiste anche auto-instrumentation via eBPF (OpenTelemetry Go Auto-Instrumentation, Linux, sidecar/agent privilegiato), meno matura e con meno controllo.
+Go non supporta auto-instrumentation via bytecode (è compilato). Nel modo standard si usano le **instrumentation libraries** OTel che wrappano le librerie (richiede una modifica minima al codice). Esiste anche auto-instrumentation via eBPF (OpenTelemetry Go Auto-Instrumentation, Linux, sidecar/agent privilegiato), meno matura e con meno controllo: il progetto `opentelemetry-go-instrumentation` è ancora pre-1.0 (ultima release v0.24.0, aprile 2026, richiede Go ≥ 1.24).
 
-<!-- REVIEW: verificare versioni correnti dei moduli Go (otel, contrib, semconv) e stato dell'auto-instrumentation eBPF -->
+Versioni verificate il 2026-10-04: `otel` v1.47.0, contrib `otelhttp`/`otelgrpc`/`otelgin` v0.72.0.
 
 ```go
 // go.mod dependencies per auto-instrumentation delle librerie
 require (
-    go.opentelemetry.io/otel v1.26.0
-    go.opentelemetry.io/otel/sdk v1.26.0
-    go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.26.0
+    go.opentelemetry.io/otel v1.47.0
+    go.opentelemetry.io/otel/sdk v1.47.0
+    go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.47.0
 
     // Instrumentation libraries (wrappano automaticamente)
-    go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.51.0
-    go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.51.0
-    go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.51.0
+    go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
+    go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.72.0
+    go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.72.0
 )
 ```
 
@@ -496,7 +507,7 @@ import (
     "go.opentelemetry.io/otel/propagation"
     "go.opentelemetry.io/otel/sdk/resource"
     "go.opentelemetry.io/otel/sdk/trace"
-    semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
+    semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 )
 
 func initTracerProvider(ctx context.Context) (func(context.Context) error, error) {
@@ -890,7 +901,7 @@ Con l'agent il MDC è già popolato (`logback-mdc`); verifica che il pattern/enc
 <dependency>
     <groupId>io.opentelemetry.instrumentation</groupId>
     <artifactId>opentelemetry-logback-appender-1.0</artifactId>
-    <version>2.3.0-alpha</version>
+    <version>2.32.0-alpha</version> <!-- i moduli appender restano -alpha; con il BOM la versione è gestita -->
 </dependency>
 ```
 ```xml
