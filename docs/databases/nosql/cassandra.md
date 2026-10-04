@@ -7,9 +7,10 @@ search_keywords: [apache cassandra, cassandra data modeling, cassandra partition
 parent: databases/nosql/_index
 related: [databases/fondamentali/acid-base-cap, databases/fondamentali/sharding, databases/nosql/mongodb]
 official_docs: https://cassandra.apache.org/doc/latest/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Apache Cassandra
@@ -47,7 +48,7 @@ Replication Factor = 3:
   Una row con partition key hash=100 → B, C, D (3 repliche consecutive)
 ```
 
-Ogni nodo gestisce un range di token. Con Virtual Nodes (vnodes), ogni nodo fisico possiede ~256 token virtuali distribuiti sul ring — bilanciamento automatico anche con nodi eterogenei.
+Ogni nodo gestisce un range di token. Con Virtual Nodes (vnodes), ogni nodo fisico possiede più token distribuiti sul ring (`num_tokens`): il carico si bilancia meglio e aggiungere/rimuovere nodi sposta piccoli range da molti peer invece di un range grande da uno solo. Il default storico era 256; da Cassandra 4.0 è **16**, in combinazione con `allocate_tokens_for_local_replication_factor` (allocazione token ottimizzata). Troppi vnode aumentano il costo di repair e la probabilità che due nodi condividano repliche di molti range.
 
 ### Write Path
 
@@ -114,7 +115,7 @@ CREATE TABLE attivita_per_utente (
     tipo TEXT,
     metadati MAP<TEXT, TEXT>,
     PRIMARY KEY ((user_id), timestamp, id)
--- ↑ partition key     ↑ clustering key (ordine decrescente per default → recenti prima)
+-- ↑ partition key     ↑ clustering key (ordine di default ASC: qui DESC esplicito → recenti prima)
 ) WITH CLUSTERING ORDER BY (timestamp DESC, id DESC);
 
 -- La query ora è efficiente:
@@ -164,9 +165,20 @@ Cassandra permette di scegliere il trade-off CAP per ogni operazione:
 | `LOCAL_QUORUM` | majority (datacenter locale) | majority locale | Multi-DC |
 | `ALL` | tutte | tutte | Consistenza forte, bassa disponibilità |
 
-**Quorum**: con RF=3, quorum=2. Se scivi con `QUORUM` e leggi con `QUORUM`, hai **strong consistency** garantita (i set si sovrappongono).
+Esistono anche `TWO`, `THREE`, `LOCAL_ONE`, `EACH_QUORUM` (solo write, quorum in ogni DC) e `SERIAL`/`LOCAL_SERIAL` (per le LWT).
+
+**Quorum**: con RF=3, quorum=2. Regola generale: se `R + W > RF` (letture + scritture, in numero di repliche) ogni read interseca almeno una replica con l'ultima write → **strong consistency** per singola partizione. Con `QUORUM` in lettura e scrittura la condizione è sempre soddisfatta. Con `LOCAL_QUORUM` vale solo all'interno del datacenter locale.
+
+### Meccanismi di anti-entropy
+
+Una replica che manca una write (nodo down, rete) viene riallineata in tre modi, dal più leggero al più pesante:
+
+1. **Hinted handoff**: il coordinator conserva un *hint* per la replica irraggiungibile e lo riconsegna al ritorno. Copre solo downtime entro `max_hint_window_in_ms` (default 3 h); oltre, gli hint non vengono più accumulati.
+2. **Read repair**: durante una lettura con CL > ONE il coordinator confronta le risposte (digest) e scrive la versione più recente sulle repliche obsolete. Ripara solo i dati effettivamente letti.
+3. **Anti-entropy repair** (`nodetool repair`): confronta alberi Merkle tra repliche e trasferisce le differenze. È l'unico che copre dati non letti e **deve** completarsi su ogni range entro `gc_grace_seconds`, altrimenti una tombstone già purgata su una replica può far "resuscitare" dati cancellati.
 
 ```python
+from datetime import datetime
 from cassandra.cluster import Cluster, ConsistencyLevel
 from cassandra.query import SimpleStatement
 
@@ -215,21 +227,28 @@ DESCRIBE KEYSPACE mio_app;
 ### CQL Essenziali
 
 ```sql
--- Tipi di dato CQL
+-- Tipi di dato CQL (nota: CQL non ha DEFAULT: l'id si genera lato client o con uuid() nell'INSERT)
 CREATE TABLE esempio (
-    id      UUID DEFAULT uuid(),
+    id      UUID,
     nome    TEXT,
-    counter COUNTER,        -- tipo speciale, solo INCR/DECR
     tags    SET<TEXT>,      -- insieme di valori unici
     metadati MAP<TEXT, TEXT>, -- key-value
     storico LIST<TEXT>,     -- lista ordinata
     PRIMARY KEY (id)
 );
 
--- Batch atomico (solo same partition, limitate operazioni)
+-- COUNTER: una tabella con colonne counter può contenere SOLO counter oltre alla primary key
+CREATE TABLE visite_pagina (
+    pagina TEXT PRIMARY KEY,
+    visite COUNTER          -- solo UPDATE ... SET visite = visite + 1
+);
+
+-- Logged batch: atomico (tutto o niente) anche su partizioni/tabelle diverse,
+-- ma NON isolato e costoso (passa dal batchlog su altri nodi).
+-- Uso legittimo: tenere allineate tabelle denormalizzate. NON è un'ottimizzazione di throughput.
 BEGIN BATCH
-    INSERT INTO utenti (id, nome) VALUES (uuid(), 'Alice');
-    INSERT INTO utenti_per_email (email, id) VALUES ('alice@ex.com', uuid());
+    INSERT INTO utenti (id, nome, email) VALUES (f47ac10b-58cc-4372-a567-0e02b2c3d479, 'Alice', 'alice@ex.com');
+    INSERT INTO utenti_per_email (email, id) VALUES ('alice@ex.com', f47ac10b-58cc-4372-a567-0e02b2c3d479);
 APPLY BATCH;
 
 -- Lightweight Transaction (CAS — Compare and Swap)
@@ -247,6 +266,7 @@ IF saldo = 1000;   -- update solo se valore attuale è 1000
 ```sql
 -- STCS (SizeTieredCompactionStrategy) — default
 -- Unisce SSTable di dimensioni simili. Ottimo per write-heavy, ma usa più spazio durante compaction
+-- (in caso peggiore serve spazio libero ~ pari alla tabella) e una row può essere sparsa su molte SSTable
 ALTER TABLE metriche_sensore
     WITH compaction = {'class': 'SizeTieredCompactionStrategy', 'min_threshold': 4};
 
@@ -267,6 +287,9 @@ ALTER TABLE metriche_sensore
     AND default_time_to_live = 7776000;    -- TTL: 90 giorni
 ```
 
+!!! note "Cassandra 5.0 — UCS"
+    Cassandra 5.0 introduce la **Unified Compaction Strategy** (`UnifiedCompactionStrategy`, UCS), che con un solo parametro di scaling copre i comportamenti di STCS (write-heavy) e LCS (read-heavy) e parallelizza meglio la compaction. STCS resta il default; UCS si abilita per tabella con `ALTER TABLE ... WITH compaction = {'class': 'UnifiedCompactionStrategy'}`.
+
 ### nodetool — Operazioni Cluster
 
 ```bash
@@ -282,9 +305,11 @@ nodetool info      # info sul nodo corrente (memoria, cache hit, compaction)
 nodetool tpstats   # thread pool stats (coda operazioni)
 
 # Repair: sincronizza dati tra repliche (eseguire regolarmente)
-nodetool repair mio_keyspace
+# -pr = solo i range primari del nodo: da lanciare su OGNI nodo, senza lavoro duplicato
+nodetool repair -pr mio_keyspace
 
-# Compaction manuale
+# Compaction manuale (major compaction: con STCS produce una SSTable enorme che poi
+# non si compatta più con altre — da evitare in produzione salvo casi specifici)
 nodetool compact mio_keyspace metriche_sensore
 
 # Flush memtable su disco
@@ -314,8 +339,11 @@ SOLUZIONE:
 1. Ridurre gc_grace_seconds su tabelle con molti delete (con attenzione: riduce la finestra di repair)
 2. Usare TTL invece di DELETE quando possibile
 3. Usare TWCS su time series (compaction per finestra temporale elimina tombstone efficientemente)
-4. Monitorare tombstone_warn_threshold e tombstone_fail_threshold in cassandra.yaml
+4. Monitorare tombstone_warn_threshold e tombstone_failure_threshold in cassandra.yaml
 ```
+
+!!! warning "Perché gc_grace_seconds non va abbassato alla leggera"
+    Se una replica era down durante un DELETE e la tombstone viene purgata dalle altre repliche prima che venga fatto un repair, quando la replica torna online riporta il vecchio valore, che non trova più la tombstone a "batterlo": il dato cancellato **risorge** (*zombie data*). Per questo ogni repair completo deve chiudersi entro `gc_grace_seconds`.
 
 ```sql
 -- Imposta TTL per gestire lifecycle dati senza tombstone eccessive
@@ -332,8 +360,8 @@ ALTER TABLE log_eventi WITH default_time_to_live = 2592000;  -- 30 giorni
 
 - **Query-first design è non negoziabile**: creare una tabella per ogni query pattern. La duplicazione dei dati è normale e attesa in Cassandra
 - **Partition size**: tenere partizioni < 100MB e < 100K righe. Partizioni enormi causano hotspot, read lente e problemi di compaction
-- **TWCS per time series**: è l'unica strategia di compaction sensata per dati temporali con TTL
-- **Repair regolare**: senza repair, dopo un nodo down i dati replicati possono divergere (eventual consistency). `nodetool repair` settimanale è la norma
+- **TWCS per time series**: la strategia di compaction più adatta a dati append-only con TTL uniforme (le SSTable di una finestra scadono insieme e vengono scartate intere). Non usarla se si fanno update/delete fuori finestra
+- **Repair regolare**: senza repair, dopo un nodo down i dati replicati possono divergere (eventual consistency). Pianificare un ciclo completo su tutti i range entro `gc_grace_seconds` (10 giorni di default, quindi tipicamente settimanale); si automatizza con [Cassandra Reaper](https://cassandra-reaper.io/)
 - **Evitare ALLOW FILTERING**: `ALLOW FILTERING` forza una full scan di partizione/tabella — pericoloso in produzione su dataset grandi
 
 ## Troubleshooting
@@ -350,15 +378,18 @@ ALTER TABLE log_eventi WITH default_time_to_live = 2592000;  -- 30 giorni
 # Verifica dimensione partizioni e tombstone per tabella
 nodetool tablestats mio_keyspace.metriche_sensore
 
-# Cerca le partizioni più grandi (richiede accesso SSTable)
-nodetool getendpoints mio_keyspace metriche_sensore "sensor-42"
+# Distribuzione di dimensione partizioni (percentili) e celle per partizione
+nodetool tablehistograms mio_keyspace metriche_sensore
+# In tablestats: "Compacted partition maximum bytes" e "Maximum tombstones per slice"
 
-# Analisi tombstone a livello SSTable (offline)
-sstable2json /var/lib/cassandra/data/mio_keyspace/metriche_sensore-*/mc-1-big-Data.db \
-  | python3 -c "import sys,json; [print(r) for r in json.load(sys.stdin) if r.get('deletedAt')]" | head -50
+# Quali nodi ospitano una partition key specifica
+nodetool getendpoints mio_keyspace metriche_sensore "sensor-42:2024-01"
 
-# Aumenta timeout lettura in cassandra.yaml (workaround temporaneo)
-# read_request_timeout_in_ms: 10000   # default 5000ms
+# Ispezione tombstone a livello SSTable (tool offline; sstable2json non esiste più dalla 3.0)
+sstabledump /var/lib/cassandra/data/mio_keyspace/metriche_sensore-*/*-big-Data.db | grep -c deletion_info
+
+# Aumenta timeout lettura in cassandra.yaml (workaround temporaneo, non una soluzione)
+# read_request_timeout_in_ms: 10000   # default 5000ms (da 4.1: read_request_timeout: 10000ms)
 ```
 
 ```sql
@@ -374,7 +405,7 @@ WHERE sensor_id = 'sensor-42' AND bucket = '2024-01';
 
 ### Scenario 2 — TombstoneOverwhelmingException
 
-**Sintomo:** Le query falliscono con `TombstoneOverwhelmingException: Query over table ... has more than 100000 tombstones`. I log mostrano anche warning con soglie inferiori.
+**Sintomo:** Le query falliscono con `TombstoneOverwhelmingException` (nel log: `Scanned over 100001 tombstones during query ...; query aborted`). I log mostrano anche warning a soglie inferiori (`tombstone_warn_threshold`).
 
 **Causa:** DELETE frequenti o TTL su molte righe creano tombstone che la compaction non ha ancora eliminato. Le query range attraversano migliaia di tombstone prima di trovare dati validi.
 
@@ -384,13 +415,14 @@ WHERE sensor_id = 'sensor-42' AND bucket = '2024-01';
 # Vedi tombstone count per tabella
 nodetool tablestats mio_keyspace.metriche_sensore | grep -i tomb
 
-# Forza compaction immediata per liberare tombstone
-nodetool compact mio_keyspace metriche_sensore
+# Elimina tombstone/dati scaduti già oltre gc_grace_seconds senza major compaction
+# (le tombstone più recenti di gc_grace_seconds NON vengono purgate da nessuna compaction)
+nodetool garbagecollect mio_keyspace metriche_sensore
 
 # Controlla i threshold in cassandra.yaml
 grep -i tombstone /etc/cassandra/cassandra.yaml
 # tombstone_warn_threshold: 1000
-# tombstone_fail_threshold: 100000
+# tombstone_failure_threshold: 100000
 ```
 
 ```sql
@@ -432,9 +464,10 @@ nodetool setcompactionthroughput 64   # MB/s (default 64, 0 = illimitato)
 # GC pause: controlla i log Cassandra
 grep -i "gc" /var/log/cassandra/system.log | tail -50
 
-# Verifica heap JVM (da jvm.options o cassandra-env.sh)
-# Regola: heap = min(1/4 RAM, 8GB). Per server con 32GB → MAX_HEAP_SIZE=8G
-grep -i "heap" /etc/cassandra/jvm.options
+# Verifica heap JVM (da 4.0: jvm-server.options + jvm11-server.options/jvm17-server.options;
+# prima: jvm.options / cassandra-env.sh)
+# Regola pratica: 8-16GB (G1 su 4.x/5.0), non oltre ~1/2 RAM: il resto serve alla page cache per le SSTable
+grep -i "Xm[sx]" /etc/cassandra/jvm*-server.options
 
 # I/O stats per identificare saturazione disco
 iostat -x 1 10
@@ -448,7 +481,7 @@ iostat -x 1 10
 
 **Causa:** Durante il downtime, il nodo non ha ricevuto le write indirizzate a lui. L'**hinted handoff** copre solo brevi interruzioni (default: 3h). Se il downtime supera questa finestra, le repliche divergono.
 
-**Soluzione:** Eseguire `nodetool repair` dopo ogni intervento su un nodo. Monitorare il repair coverage regolarmente.
+**Soluzione:** Eseguire `nodetool repair` dopo ogni downtime superiore alla hint window. Monitorare il repair coverage regolarmente.
 
 ```bash
 # Repair sul keyspace specifico (può essere lungo su dataset grandi)
@@ -457,12 +490,12 @@ nodetool repair mio_keyspace
 # Repair su singola tabella (più veloce per test)
 nodetool repair mio_keyspace metriche_sensore
 
-# Repair incrementale (solo cambiamenti dall'ultimo repair — Cassandra 4+)
-nodetool repair --incremental mio_keyspace
+# Da Cassandra 4.0 il repair è incrementale di default; per forzare il confronto completo:
+nodetool repair -full mio_keyspace
 
 # Verifica che l'hinted handoff sia attivo e controlla i pending hint
-nodetool info | grep "Dropped Hints"
-nodetool tpstats | grep "HintedHandoff"
+nodetool statushandoff
+nodetool tpstats | grep -i hint
 
 # Monitora i repair in corso
 nodetool compactionstats  # i repair appaiono come compaction di tipo "VALIDATION"
@@ -471,9 +504,11 @@ nodetool compactionstats  # i repair appaiono come compaction di tipo "VALIDATIO
 ```yaml
 # cassandra.yaml — parametri hinted handoff
 hinted_handoff_enabled: true
-max_hint_window_in_ms: 10800000   # 3 ore (aumentare se downtime frequenti)
+max_hint_window_in_ms: 10800000   # 3 ore (da 4.1: max_hint_window: 3h; i vecchi nomi restano accettati)
 hinted_handoff_throttle_in_kb: 1024
 ```
+
+Aumentare la hint window allunga il tempo senza repair ma accumula più hint sui coordinator (disco e carico alla riconsegna).
 
 ---
 
@@ -492,10 +527,11 @@ nodetool status mio_keyspace
 # Verifica distribuzione token (output esteso con ownership)
 nodetool ring mio_keyspace | head -40
 
-# Se distribuzione sbilanciata dopo aggiunta di nodi → ribalancia
-nodetool rebalance   # Cassandra 4.1+
+# Dopo aver aggiunto nodi: sui nodi PRECEDENTI rimuovere i dati dei range ceduti
+# (non c'è un comando "rebalance": lo streaming avviene al bootstrap del nuovo nodo)
+nodetool cleanup mio_keyspace
 
-# Token aware policy nel driver Python (write diretta al nodo proprietario)
+# Token aware policy nel driver Python (write diretta a una replica)
 ```
 
 ```python
@@ -508,9 +544,37 @@ cluster = Cluster(
         DCAwareRoundRobinPolicy(local_dc='datacenter1')
     )
 )
-# Token-aware routing: il coordinator è il nodo proprietario della partizione
-# → elimina un hop di rete, riduce latenza write del 30-50%
+# Token-aware routing: il coordinator è una replica della partizione
+# → elimina un hop di rete tra coordinator e replica, riducendo latenza e carico
+# (con driver recenti si configura via execution profile; il Java driver 4.x è token-aware di default)
 ```
+
+## Novità di Cassandra 5.0
+
+- **Storage-Attached Index (SAI)**: nuovo secondary index, molto più efficiente dei vecchi indici per query su colonne non-key, anche range e combinazioni (AND); sostituisce l'uso dei secondary index classici nella maggior parte dei casi. Resta una query ad hoc: non sostituisce il query-first design
+- **Tipo `VECTOR` e ricerca ANN** (approximate nearest neighbor) su SAI, per use case di embedding/RAG
+- **Unified Compaction Strategy** (vedi sopra), **trie memtables / trie SSTable** (meno memoria e I/O)
+- **Dynamic data masking**, nuove funzioni matematiche/collection, supporto JDK 17
+
+!!! warning "Materialized Views"
+    Le Materialized View sono marcate **experimental** dal progetto da Cassandra 4.0 e sconsigliate in produzione (problemi di consistenza e repair). Preferire tabelle denormalizzate mantenute dall'applicazione (eventualmente via logged batch) o SAI.
+
+## Relazioni
+
+??? info "ACID, BASE e CAP — Approfondimento"
+    Cassandra è un sistema AP con consistenza *tunable* per operazione (CL). Con `QUORUM` si avvicina a CP per singola partizione, senza transazioni multi-partizione.
+
+    **Approfondimento completo →** [ACID, BASE e CAP](../fondamentali/acid-base-cap.md)
+
+??? info "Sharding — Approfondimento"
+    La partition key + consistent hashing è uno sharding nativo e automatico: nessun resharding manuale, i range si ridistribuiscono al join/leave dei nodi.
+
+    **Approfondimento completo →** [Sharding](../fondamentali/sharding.md)
+
+??? info "MongoDB — Approfondimento"
+    Alternativa document-oriented con query più flessibili (indici secondari, aggregation) ma modello primary/secondary; Cassandra vince su write throughput e multi-DC active-active.
+
+    **Approfondimento completo →** [MongoDB](mongodb.md)
 
 ## Riferimenti
 
