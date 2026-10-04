@@ -7,9 +7,10 @@ search_keywords: [schema migration, database migration, versioned migration, dec
 parent: databases/fondamentali/_index
 related: [databases/fondamentali/transazioni-concorrenza, dev/integrazioni/database-patterns, ci-cd/gitops/argocd]
 official_docs: https://atlasgo.io/docs
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-09-27
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Schema Migrations — Flyway, Liquibase, Atlas, golang-migrate
@@ -27,7 +28,7 @@ Uno schema migration tool applica in modo controllato e ripetibile i cambi di st
 
 - **Migration idempotente**: può essere eseguita più volte senza produrre errori o doppi effetti (es. `CREATE TABLE IF NOT EXISTS`). Fondamentale quando le migration girano da init container Kubernetes che può ripartire dopo un crash parziale — vedi [Database Patterns — Init Container](../../dev/integrazioni/database-patterns.md).
 - **Locking**: meccanismo che impedisce a due processi di applicare la stessa migration in parallelo (es. due pod che partono contemporaneamente). Senza locking, una migration `ADD COLUMN` può essere tentata due volte in race e fallire con errori inconsistenti tra i pod.
-- **Drift detection**: rilevare che lo schema reale del database si è discostato da quello atteso (es. una modifica manuale fatta a mano da un DBA in produzione, non passata dal tool). Solo gli strumenti declarativi con introspection nativa (Atlas) lo fanno in automatico; con Flyway/golang-migrate serve tooling esterno o disciplina operativa.
+- **Drift detection**: rilevare che lo schema reale del database si è discostato da quello atteso (es. una modifica manuale fatta a mano da un DBA in produzione, non passata dal tool). Atlas lo fa nativamente (introspection + diff semantico); Liquibase lo copre manualmente via `diff`; con Flyway Community/golang-migrate serve tooling esterno o disciplina operativa.
 - **Rollback (migration "down")**: la capacità di annullare una migration applicata. È il punto di maggiore trade-off tra i tool, approfondito sotto.
 
 ## Architettura / Come Funziona
@@ -37,7 +38,7 @@ Tutti i tool versioned condividono lo stesso schema concettuale:
 1. Una tabella di controllo nel database stesso (es. `flyway_schema_history`, `schema_migrations`, `atlas_schema_revisions`) registra quali migration sono state applicate, con checksum e timestamp.
 2. All'avvio, il tool confronta i file di migration presenti con le righe della tabella di controllo.
 3. Applica solo le migration mancanti, in ordine di versione, ciascuna dentro una transazione (dove il DB lo supporta — DDL transazionale è nativo in PostgreSQL, non in MySQL).
-4. Se una migration fallisce a metà, lo stato viene marcato come "failed" (Flyway) o la transazione viene rollbackata (PostgreSQL) — MySQL invece può lasciare uno stato parziale perché molte DDL fanno commit implicito.
+4. Se una migration fallisce a metà, su PostgreSQL la transazione viene rollbackata e lo schema resta pulito — MySQL invece può lasciare uno stato parziale perché molte DDL fanno commit implicito. In quel caso Flyway registra la riga come `failed` (da sistemare con `flyway repair` dopo aver ripulito a mano lo schema) e golang-migrate marca il database **dirty**, rifiutando ulteriori `up` finché non si corregge lo schema e si usa `migrate force <versione>`.
 
 Atlas inverte il flusso: non parte dai file storici ma calcola sempre il diff tra **stato desiderato** (schema HCL/SQL dichiarato) e **stato reale** (introspezione live del database), poi genera il piano di migrazione al volo. Questo elimina la deriva tra "quello che pensiamo sia lo schema" e "quello che è davvero" — ma richiede più fiducia nel motore di diffing per DDL complesse (rename ambigui, split di colonne).
 
@@ -52,7 +53,7 @@ Declarative (Atlas)
 ```
 
 !!! warning "Locking non è garantito ovunque"
-    Flyway usa un lock a livello di tabella di controllo (advisory lock su PostgreSQL) di default. golang-migrate NON ha locking robusto su tutti i backend — su alcuni driver due processi paralleli possono correre in race. Se le migration girano da più pod contemporaneamente (rolling deploy con più repliche che partono insieme), verificare esplicitamente il comportamento di lock del tool scelto o serializzare l'esecuzione con un init container unico / Kubernetes Job con `parallelism: 1`.
+    Flyway usa un lock a livello di tabella di controllo (advisory lock su PostgreSQL) di default. golang-migrate implementa il lock per driver (es. advisory lock su PostgreSQL, `GET_LOCK` su MySQL) ma non in modo uniforme su tutti i backend — dove manca, due processi paralleli possono correre in race. Se le migration girano da più pod contemporaneamente (rolling deploy con più repliche che partono insieme), verificare esplicitamente il comportamento di lock del tool scelto o serializzare l'esecuzione con un init container unico / Kubernetes Job con `parallelism: 1`.
 
 ## Configurazione & Pratica
 
@@ -83,6 +84,9 @@ flyway -url=jdbc:postgresql://localhost:5432/app info
 # flyway.conf
 flyway.url=jdbc:postgresql://localhost:5432/app
 flyway.locations=filesystem:./sql/migrations
+# baselineOnMigrate: serve SOLO per adottare Flyway su un DB già popolato
+# (crea la baseline alla prima esecuzione). Su DB nuovi lasciarlo false:
+# con true, un DB non vuoto senza history verrebbe "adottato" senza errori.
 flyway.baselineOnMigrate=true
 ```
 
@@ -117,7 +121,9 @@ liquibase --changelog-file=changelog/db.changelog-master.yaml update
 
 # Rollback dell'ultimo changeset applicato — supportato nativamente
 # SE il rollback è stato dichiarato esplicitamente nel changeset (come sopra)
-liquibase rollback-one-changeset --changeset-id=004-add-status --changeset-author=andrea
+liquibase --changelog-file=changelog/db.changelog-master.yaml rollback-count 1
+# (rollback-one-changeset esiste solo in edizione Pro; in Community usare
+#  rollback-count N, rollback --tag=X oppure rollback-to-date)
 
 # Modalità diff (stato-based, opzionale): genera un changelog dal confronto
 # tra due database o tra un database e uno schema di riferimento
@@ -131,6 +137,8 @@ liquibase diff-changelog \
 
 ```hcl
 # schema.hcl — stato DESIDERATO, non uno script incrementale
+schema "public" {}
+
 table "users" {
   schema = schema.public
   column "id" {
@@ -160,9 +168,11 @@ atlas schema apply \
   --url "postgres://app:***@localhost:5432/app?sslmode=disable" \
   --to "file://schema.hcl"
 
-# Drift detection: confronta lo stato reale con l'ultima versione tracciata
-atlas schema inspect --url "postgres://app:***@localhost:5432/app" > current.hcl
-diff current.hcl schema.hcl   # differenze = drift, es. modifiche manuali non tracciate
+# Drift detection: diff semantico tra stato reale e schema dichiarato
+# (output vuoto / "Schemas are synced" = nessun drift)
+atlas schema diff \
+  --from "postgres://app:***@localhost:5432/app?sslmode=disable" \
+  --to "file://schema.hcl"
 
 # "Rollback" in Atlas = riapplicare uno schema.hcl precedente (versionato in git)
 git checkout HEAD~1 -- schema.hcl
@@ -196,13 +206,15 @@ migrate -path ./migrations -database "postgres://..." down 1
 
 - **Migration additive prima, distruttive dopo (expand & contract)**: per zero-downtime, separare "aggiungi colonna nullable" (deploy 1) da "rendi NOT NULL e rimuovi la vecchia colonna" (deploy successivo, dopo che tutto il traffico usa la nuova colonna). Questo evita che un vecchio pod, ancora in rolling update, scriva contro uno schema che non conosce.
 - **Mai modificare una migration già applicata in produzione**: se un file versioned cambia dopo essere stato eseguito, il checksum non corrisponde più e Flyway/golang-migrate falliscono (comportamento corretto, non un bug da bypassare con `repair` senza capire perché).
-- **Serializzare l'esecuzione in Kubernetes**: init container con `replicas: 1` implicito nel Job, oppure lock applicativo esplicito (advisory lock PostgreSQL) se più pod potrebbero partire in parallelo — vedi [Database Patterns](../../dev/integrazioni/database-patterns.md).
+- **Serializzare l'esecuzione in Kubernetes**: eseguire le migration in un singolo `Job` (`completions: 1`, `parallelism: 1`) prima del rollout, oppure usare un lock applicativo esplicito (advisory lock PostgreSQL) se più pod potrebbero partire in parallelo — vedi [Database Patterns](../../dev/integrazioni/database-patterns.md).
+- **DDL a basso impatto di lock (PostgreSQL)**: `ALTER TABLE` richiede `ACCESS EXCLUSIVE` e si accoda dietro query lunghe, bloccando tutte le successive. Impostare `SET lock_timeout = '5s'` nella migration per fallire in fretta invece di bloccare il traffico. `SET NOT NULL` su tabelle grandi fa una scansione completa sotto lock: da PG 12 aggiungere prima `CHECK (col IS NOT NULL) NOT VALID`, poi `VALIDATE CONSTRAINT` (lock leggero), poi `SET NOT NULL` (che riusa il check). Un `ADD COLUMN ... DEFAULT <costante>` è invece solo metadata da PG 11.
 - **Committare `schema.hcl` (Atlas) o le directory `migrations/` in git insieme al codice applicativo**: la versione dello schema deve essere tracciabile allo stesso commit del codice che la richiede.
 
 !!! tip "Scegliere in base al rollback che serve davvero"
     Se il rollback automatico è un requisito hard (compliance, cambio frequente di piani), Liquibase con rollback dichiarati esplicitamente o Flyway Teams sono le uniche opzioni pronte all'uso senza scrivere script "down" a mano. Se il team è disciplinato nello scrivere `.down.sql` per ogni migration, golang-migrate è la scelta più leggera. Se serve drift detection continuo su ambienti dove qualcuno potrebbe intervenire manualmente sul DB, solo Atlas lo copre nativamente.
 
 !!! warning "Flyway Community non fa rollback automatico"
+    <!-- REVIEW: verificare edizioni Flyway attuali (Redgate ha riorganizzato le edizioni; "Teams" potrebbe non esistere più con questo nome) e quale edizione include `flyway undo` -->
     È il trade-off più sottovalutato: un team che sceglie Flyway (community, gratuito) assumendo di poter fare `flyway undo` come con Liquibase scopre solo in un incidente che quel comando è a pagamento (Teams edition). Il piano di rollback per Flyway Community è sempre "scrivi e applica una nuova migration forward che inverte l'effetto" — va progettato PRIMA, non improvvisato durante un incidente.
 
 ## Troubleshooting
@@ -211,7 +223,7 @@ migrate -path ./migrations -database "postgres://..." down 1
 
 **Sintomo**: errore `duplicate column` o `relation already exists` durante un rolling deploy con più repliche, migration falliscono in modo intermittente.
 
-**Causa**: più init container/pod partono nella stessa finestra temporale e tentano di applicare le migration pendenti senza lock effettivo (tipico con golang-migrate su driver che non implementano advisory lock).
+**Causa**: più init container/pod partono nella stessa finestra temporale e tentano di applicare le migration pendenti senza lock effettivo (tipico con golang-migrate su driver senza lock, o con tool/script custom che non ne usano).
 
 **Soluzione**: spostare l'esecuzione della migration in un `Job` Kubernetes dedicato con `completions: 1`, eseguito come step separato prima del rollout del Deployment, invece che in ogni init container di ogni pod.
 
@@ -252,9 +264,12 @@ flyway info -url=jdbc:postgresql://localhost/app   # verificare stato dopo il re
 
 **Soluzione**: con Atlas, eseguire `atlas schema inspect` periodicamente (o in CI) e confrontare con lo schema dichiarato per rilevare drift; con Flyway/golang-migrate, introdurre un controllo esterno (script di introspection schedulato) perché il drift detection non è nativo.
 
+Il `diff` testuale tra output di `inspect` e `schema.hcl` genera falsi positivi (ordine/formattazione): usare il diff semantico di Atlas.
+
 ```bash
-atlas schema inspect --url "postgres://app:***@prod-host:5432/app" > /tmp/prod-actual.hcl
-diff /tmp/prod-actual.hcl schema.hcl && echo "no drift" || echo "DRIFT RILEVATO"
+atlas schema diff \
+  --from "postgres://app:***@prod-host:5432/app?sslmode=disable" \
+  --to "file://schema.hcl"
 ```
 
 ### Scenario 4 — Migration NOT NULL fallisce su tabella con dati esistenti
