@@ -7,9 +7,10 @@ search_keywords: [pgbouncer, connection pool, connection pooling postgresql, tra
 parent: databases/postgresql/_index
 related: [databases/postgresql/replicazione, databases/postgresql/mvcc-vacuum, databases/kubernetes-cloud/db-su-kubernetes]
 official_docs: https://www.pgbouncer.org/config.html
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Connection Pooling — PgBouncer
@@ -21,7 +22,7 @@ PostgreSQL usa un processo separato per ogni connessione client (architettura pr
 **PgBouncer** è un connection pooler leggero (scritto in C, ~1MB RAM idle) che si posiziona tra l'applicazione e PostgreSQL, riutilizzando le connessioni al server. L'applicazione vede un PostgreSQL normale sulla porta 5432 (o 6432); PgBouncer mantiene un pool ridotto di connessioni reali al server.
 
 !!! warning "PgBouncer non è opzionale in produzione"
-    Su istanze con >100 connessioni simultanee, PgBouncer (o equivalent) è praticamente obbligatorio. AWS RDS, Aurora e la maggior parte dei managed service lo raccomandano esplicitamente. RDS Proxy è essenzialmente PgBouncer as-a-service.
+    Su istanze con >100 connessioni simultanee, PgBouncer (o equivalent) è praticamente obbligatorio. AWS RDS, Aurora e la maggior parte dei managed service lo raccomandano esplicitamente. RDS Proxy è un servizio di pooling gestito equivalente nello scopo (non è PgBouncer).
 
 ## Concetti Chiave
 
@@ -38,7 +39,8 @@ PostgreSQL usa un processo separato per ogni connessione client (architettura pr
 **Limitazioni di Transaction Mode:**
 - `SET` e variabili di sessione (es. `SET search_path = myschema`) non sopravvivono tra transazioni — la connessione potrebbe andare a un client diverso
 - `LISTEN/NOTIFY` richiede session mode
-- Prepared statements: richiedono configurazione specifica (`max_prepared_statements`)
+- Prepared statements: richiedono configurazione specifica (`max_prepared_statements`, PgBouncer ≥ 1.21)
+- Advisory lock di sessione (`pg_advisory_lock`), tabelle `TEMP` e `WITH HOLD` cursor: legati alla connessione server, non sicuri tra transazioni
 - `DECLARE CURSOR` senza `HOLD` non funziona cross-transaction
 
 ### Anatomia del Pool
@@ -52,7 +54,7 @@ App Pod 4 (20 connessioni) ─┘
                               max_client_conn=200  default_pool_size=10
 ```
 
-Se tutte le 10 connessioni server sono occupate, i client vengono messi in coda (fino a `server_connect_timeout`). PgBouncer non rifiuta richieste — le serializza.
+Se tutte le 10 connessioni server sono occupate, i client vengono messi in coda (fino a `query_wait_timeout`, poi errore al client). PgBouncer non rifiuta subito le richieste — le accoda.
 
 ### Pool Size — Formula
 
@@ -68,7 +70,9 @@ pool_size = 16 * 4 = 64 connessioni al server
 max_client_conn = 10 * 50 = 500 connessioni client
 ```
 
-La formula di PostgreSQL per il massimo teorico: `max_connections = (RAM - shared_buffers) / (work_mem * average_concurrent_queries)`. In pratica, `max_connections = 100-400` è il range comune.
+**Perché questo range:** oltre qualche connessione per core le query concorrenti competono per CPU, I/O e lock, e il throughput non cresce più (anzi cala per context switch). Il pool piccolo + coda lato PgBouncer è più veloce di tante connessioni attive.
+
+`default_pool_size` vale **per coppia (database, user)**: la somma di tutti i pool deve restare sotto `max_connections` di PostgreSQL (meno `superuser_reserved_connections`). Per un tetto globale per database usare `max_db_connections`. In pratica `max_connections = 100-400` è il range comune.
 
 ---
 
@@ -138,16 +142,19 @@ log_pooler_errors = 1
 # pgbouncer.ini — abilita prepared statement caching
 max_prepared_statements = 100      # 0 = disabilita, >0 = PgBouncer fa il tracking
 
-# Con max_prepared_statements > 0, PgBouncer trasla i named prepared statement
-# (es. "stmt_1") in statement anonimi server-side, rendendoli compatibili con
-# il pool mode transaction. Richiede PostgreSQL 14+.
+# Con max_prepared_statements > 0 (PgBouncer >= 1.21) PgBouncer intercetta i
+# prepared statement del protocollo esteso (Parse/Bind), li rinomina e li
+# prepara al bisogno sulla connessione server effettiva, rendendoli compatibili
+# con transaction mode. Non gestisce i comandi SQL PREPARE/EXECUTE testuali.
+# Nessun requisito di versione lato PostgreSQL.
 ```
 
 ```python
-# Python psycopg3 — prepared statements funzionano con PgBouncer
-# (psycopg3 gestisce il lato client, non usa named server-side prepared statements)
-conn = psycopg3.connect(dsn, prepare_threshold=5)
-# Dopo 5 esecuzioni, la query viene preparata automaticamente
+# Python psycopg (v3): dopo prepare_threshold esecuzioni usa prepared statement
+# server-side (named). Con PgBouncer >= 1.21 + max_prepared_statements funziona;
+# con versioni precedenti disabilitare con prepare_threshold=None.
+import psycopg
+conn = psycopg.connect(dsn, prepare_threshold=5)
 ```
 
 ### Docker Compose / Kubernetes
@@ -155,6 +162,7 @@ conn = psycopg3.connect(dsn, prepare_threshold=5)
 ```yaml
 # docker-compose.yml
 pgbouncer:
+  # <!-- REVIEW: verificare immagine e nomi variabili: POSTGRESQL_*/PGBOUNCER_* sono dell'immagine Bitnami (deprecata/spostata nel 2025); tag 1.22 superato -->
   image: pgbouncer/pgbouncer:1.22
   environment:
     POSTGRESQL_HOST: postgres
@@ -271,14 +279,14 @@ RESUME;
 ```yaml
 # pgbouncer_exporter — espone metriche PgBouncer per Prometheus
 # https://github.com/prometheus-community/pgbouncer_exporter
+# Nota: la connessione si passa con --pgBouncer.connectionString (non con le
+# variabili DATA_SOURCE_* di postgres_exporter).
 
 # docker-compose
 pgbouncer_exporter:
   image: prometheuscommunity/pgbouncer-exporter:latest
-  environment:
-    DATA_SOURCE_URI: "localhost:5432/pgbouncer?sslmode=disable"
-    DATA_SOURCE_USER: monitoring
-    DATA_SOURCE_PASS: ${MONITORING_PASSWORD}
+  command:
+    - "--pgBouncer.connectionString=postgres://monitoring:${MONITORING_PASSWORD}@pgbouncer:5432/pgbouncer?sslmode=disable"
   ports:
     - "9127:9127"
 ```
@@ -315,7 +323,7 @@ groups:
 - **pool_size = num_CPU * 2-4**: non aumentare pool_size oltre questo range — più connessioni = più context switch = peggioramento. Il bottleneck è PostgreSQL, non PgBouncer
 - **2 istanze PgBouncer per HA (High Availability)**: PgBouncer è stateless — 2 repliche davanti allo stesso PostgreSQL garantiscono HA senza complessità. In Kubernetes usare un Service con 2 pod
 - **Sidecar vs deployment dedicato**: sidecar (PgBouncer nel pod dell'app) massimizza il controllo per pod; deployment dedicato riduce i processi. In Kubernetes il deployment dedicato è più comune
-- **Non usare PgBouncer per PostgreSQL gestito (RDS, Cloud SQL)**: AWS RDS Proxy, Cloud SQL Auth Proxy e simili integrano già il connection pooling — aggiungere PgBouncer davanti crea doppio pooling senza benefici
+- **Managed service (RDS, Cloud SQL)**: PgBouncer resta valido (molti lo usano su RDS/Aurora). Alternative gestite: RDS Proxy, pooler gestito di Cloud SQL. Non impilare due pooler in cascata: aggiunge latenza e rende opaco il debug. Nota: Cloud SQL Auth Proxy è un tunnel TLS/IAM, **non** un pooler
 
 ## Troubleshooting
 
@@ -391,8 +399,8 @@ reserve_pool_size = 10
 -- Verifica connessioni client correnti
 psql -h localhost -p 5432 -U pgbouncer_admin pgbouncer -c "SHOW CLIENTS;"
 
--- Quante connessioni apre ogni pod applicativo?
-psql -h localhost -p 5432 -U pgbouncer_admin pgbouncer -c "SHOW STATS;"
+-- Quante connessioni apre ogni pod applicativo? Raggruppare per indirizzo (colonna addr)
+psql -h localhost -p 5432 -U pgbouncer_admin pgbouncer -c "SHOW CLIENTS;"
 ```
 
 ```ini
