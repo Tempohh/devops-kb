@@ -7,7 +7,7 @@ search_keywords: [kubernetes architecture deep dive, kubernetes control plane co
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/workloads, containers/kubernetes/operators-crd]
 official_docs: https://kubernetes.io/docs/concepts/overview/components/
-status: needs-review
+status: reviewed
 difficulty: expert
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -86,11 +86,7 @@ Request Lifecycle — kubectl apply -f deployment.yaml
      Modificano l'oggetto (eseguiti in serie):
        - DefaultStorageClass (aggiunge storageClass di default)
        - MutatingAdmissionWebhook (webhook custom, es. sidecar injection)
-       - MutatingAdmissionPolicy (CEL, senza webhook) <!-- REVIEW: verificare versione/stato GA di MutatingAdmissionPolicy -->
-       <!-- REVIEW: verificare che kernel >= 5.13 sia il requisito attuale di kube-proxy nftables -->
-       <!-- REVIEW: verificare che KMS v2 sia stabile dalla 1.29 -->
-       <!-- REVIEW: verificare che il restore con etcdctl sia deprecato da etcd 3.6 -->
-       <!-- (marker non renderizzati; il lifecycle li passa a currency) -->
+       - MutatingAdmissionPolicy (CEL, senza webhook, GA dalla 1.36)
        - NamespaceLifecycle, LimitRanger, ServiceAccount
 
     |
