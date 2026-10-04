@@ -13015,7 +13015,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13276,7 +13276,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13301,7 +13301,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13442,6 +13442,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Consistency Levels">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#meccanismi-di-anti-entropy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Meccanismi di anti-entropy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -13601,6 +13618,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#novita-di-cassandra-50" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Novità di Cassandra 5.0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relazioni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relazioni
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#riferimenti" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -13644,7 +13683,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24714,6 +24753,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Consistency Levels">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#meccanismi-di-anti-entropy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Meccanismi di anti-entropy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -24868,6 +24924,28 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#novita-di-cassandra-50" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Novità di Cassandra 5.0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relazioni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relazioni
+      
+    </span>
+  </a>
   
 </li>
       
@@ -25039,7 +25117,7 @@
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>Replication Factor = 3:
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  Una row con partition key hash=100 → B, C, D (3 repliche consecutive)
 </span></code></pre></div>
-<p>Ogni nodo gestisce un range di token. Con Virtual Nodes (vnodes), ogni nodo fisico possiede ~256 token virtuali distribuiti sul ring — bilanciamento automatico anche con nodi eterogenei.</p>
+<p>Ogni nodo gestisce un range di token. Con Virtual Nodes (vnodes), ogni nodo fisico possiede più token distribuiti sul ring (<code>num_tokens</code>): il carico si bilancia meglio e aggiungere/rimuovere nodi sposta piccoli range da molti peer invece di un range grande da uno solo. Il default storico era 256; da Cassandra 4.0 è <strong>16</strong>, in combinazione con <code>allocate_tokens_for_local_replication_factor</code> (allocazione token ottimizzata). Troppi vnode aumentano il costo di repair e la probabilità che due nodi condividano repliche di molti range.</p>
 <h3 id="write-path">Write Path<a class="headerlink" href="#write-path" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>1. Client scrive su qualsiasi nodo (Coordinator)
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>2. Coordinator calcola: hash(partition_key) → nodo responsabile
@@ -25093,7 +25171,7 @@
 </span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">    </span><span class="n">tipo</span><span class="w"> </span><span class="nb">TEXT</span><span class="p">,</span>
 </span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">    </span><span class="n">metadati</span><span class="w"> </span><span class="k">MAP</span><span class="o">&lt;</span><span class="nb">TEXT</span><span class="p">,</span><span class="w"> </span><span class="nb">TEXT</span><span class="o">&gt;</span><span class="p">,</span>
 </span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">    </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="p">((</span><span class="n">user_id</span><span class="p">),</span><span class="w"> </span><span class="k">timestamp</span><span class="p">,</span><span class="w"> </span><span class="n">id</span><span class="p">)</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="c1">-- ↑ partition key     ↑ clustering key (ordine decrescente per default → recenti prima)</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="c1">-- ↑ partition key     ↑ clustering key (ordine di default ASC: qui DESC esplicito → recenti prima)</span>
 </span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="p">)</span><span class="w"> </span><span class="k">WITH</span><span class="w"> </span><span class="n">CLUSTERING</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="p">(</span><span class="k">timestamp</span><span class="w"> </span><span class="k">DESC</span><span class="p">,</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="k">DESC</span><span class="p">);</span>
 </span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>
 </span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="c1">-- La query ora è efficiente:</span>
@@ -25170,26 +25248,35 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Quorum</strong>: con RF=3, quorum=2. Se scivi con <code>QUORUM</code> e leggi con <code>QUORUM</code>, hai <strong>strong consistency</strong> garantita (i set si sovrappongono).</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cassandra.cluster</span><span class="w"> </span><span class="kn">import</span> <span class="n">Cluster</span><span class="p">,</span> <span class="n">ConsistencyLevel</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cassandra.query</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimpleStatement</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">cluster</span> <span class="o">=</span> <span class="n">Cluster</span><span class="p">([</span><span class="s1">'cassandra1'</span><span class="p">,</span> <span class="s1">'cassandra2'</span><span class="p">,</span> <span class="s1">'cassandra3'</span><span class="p">])</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">session</span> <span class="o">=</span> <span class="n">cluster</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">'mio_keyspace'</span><span class="p">)</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># Write con quorum</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">insert</span> <span class="o">=</span> <span class="n">SimpleStatement</span><span class="p">(</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="s2">"INSERT INTO metriche_sensore (sensor_id, bucket, timestamp, valore) VALUES (</span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">)"</span><span class="p">,</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="n">consistency_level</span><span class="o">=</span><span class="n">ConsistencyLevel</span><span class="o">.</span><span class="n">LOCAL_QUORUM</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="p">)</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">insert</span><span class="p">,</span> <span class="p">(</span><span class="s1">'sensor-42'</span><span class="p">,</span> <span class="s1">'2024-01'</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(),</span> <span class="mf">73.2</span><span class="p">))</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="c1"># Read con quorum</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="n">select</span> <span class="o">=</span> <span class="n">SimpleStatement</span><span class="p">(</span>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="s2">"SELECT * FROM metriche_sensore WHERE sensor_id=</span><span class="si">%s</span><span class="s2"> AND bucket=</span><span class="si">%s</span><span class="s2"> LIMIT 100"</span><span class="p">,</span>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>    <span class="n">consistency_level</span><span class="o">=</span><span class="n">ConsistencyLevel</span><span class="o">.</span><span class="n">LOCAL_QUORUM</span>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="p">)</span>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="n">rows</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">select</span><span class="p">,</span> <span class="p">(</span><span class="s1">'sensor-42'</span><span class="p">,</span> <span class="s1">'2024-01'</span><span class="p">))</span>
+<p>Esistono anche <code>TWO</code>, <code>THREE</code>, <code>LOCAL_ONE</code>, <code>EACH_QUORUM</code> (solo write, quorum in ogni DC) e <code>SERIAL</code>/<code>LOCAL_SERIAL</code> (per le LWT).</p>
+<p><strong>Quorum</strong>: con RF=3, quorum=2. Regola generale: se <code>R + W &gt; RF</code> (letture + scritture, in numero di repliche) ogni read interseca almeno una replica con l'ultima write → <strong>strong consistency</strong> per singola partizione. Con <code>QUORUM</code> in lettura e scrittura la condizione è sempre soddisfatta. Con <code>LOCAL_QUORUM</code> vale solo all'interno del datacenter locale.</p>
+<h3 id="meccanismi-di-anti-entropy">Meccanismi di anti-entropy<a class="headerlink" href="#meccanismi-di-anti-entropy" title="Permanent link">&para;</a></h3>
+<p>Una replica che manca una write (nodo down, rete) viene riallineata in tre modi, dal più leggero al più pesante:</p>
+<ol>
+<li><strong>Hinted handoff</strong>: il coordinator conserva un <em>hint</em> per la replica irraggiungibile e lo riconsegna al ritorno. Copre solo downtime entro <code>max_hint_window_in_ms</code> (default 3 h); oltre, gli hint non vengono più accumulati.</li>
+<li><strong>Read repair</strong>: durante una lettura con CL &gt; ONE il coordinator confronta le risposte (digest) e scrive la versione più recente sulle repliche obsolete. Ripara solo i dati effettivamente letti.</li>
+<li><strong>Anti-entropy repair</strong> (<code>nodetool repair</code>): confronta alberi Merkle tra repliche e trasferisce le differenze. È l'unico che copre dati non letti e <strong>deve</strong> completarsi su ogni range entro <code>gc_grace_seconds</code>, altrimenti una tombstone già purgata su una replica può far "resuscitare" dati cancellati.</li>
+</ol>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cassandra.cluster</span><span class="w"> </span><span class="kn">import</span> <span class="n">Cluster</span><span class="p">,</span> <span class="n">ConsistencyLevel</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cassandra.query</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimpleStatement</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">cluster</span> <span class="o">=</span> <span class="n">Cluster</span><span class="p">([</span><span class="s1">'cassandra1'</span><span class="p">,</span> <span class="s1">'cassandra2'</span><span class="p">,</span> <span class="s1">'cassandra3'</span><span class="p">])</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">session</span> <span class="o">=</span> <span class="n">cluster</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s1">'mio_keyspace'</span><span class="p">)</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Write con quorum</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">insert</span> <span class="o">=</span> <span class="n">SimpleStatement</span><span class="p">(</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    <span class="s2">"INSERT INTO metriche_sensore (sensor_id, bucket, timestamp, valore) VALUES (</span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">)"</span><span class="p">,</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="n">consistency_level</span><span class="o">=</span><span class="n">ConsistencyLevel</span><span class="o">.</span><span class="n">LOCAL_QUORUM</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="p">)</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">insert</span><span class="p">,</span> <span class="p">(</span><span class="s1">'sensor-42'</span><span class="p">,</span> <span class="s1">'2024-01'</span><span class="p">,</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(),</span> <span class="mf">73.2</span><span class="p">))</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="c1"># Read con quorum</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="n">select</span> <span class="o">=</span> <span class="n">SimpleStatement</span><span class="p">(</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>    <span class="s2">"SELECT * FROM metriche_sensore WHERE sensor_id=</span><span class="si">%s</span><span class="s2"> AND bucket=</span><span class="si">%s</span><span class="s2"> LIMIT 100"</span><span class="p">,</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>    <span class="n">consistency_level</span><span class="o">=</span><span class="n">ConsistencyLevel</span><span class="o">.</span><span class="n">LOCAL_QUORUM</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="p">)</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="n">rows</span> <span class="o">=</span> <span class="n">session</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">select</span><span class="p">,</span> <span class="p">(</span><span class="s1">'sensor-42'</span><span class="p">,</span> <span class="s1">'2024-01'</span><span class="p">))</span>
 </span></code></pre></div>
 <hr />
 <h2 id="configurazione-e-operazioni">Configurazione e Operazioni<a class="headerlink" href="#configurazione-e-operazioni" title="Permanent link">&para;</a></h2>
@@ -25211,54 +25298,66 @@
 </span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="k">DESCRIBE</span><span class="w"> </span><span class="n">KEYSPACE</span><span class="w"> </span><span class="n">mio_app</span><span class="p">;</span>
 </span></code></pre></div>
 <h3 id="cql-essenziali">CQL Essenziali<a class="headerlink" href="#cql-essenziali" title="Permanent link">&para;</a></h3>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">-- Tipi di dato CQL</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">-- Tipi di dato CQL (nota: CQL non ha DEFAULT: l'id si genera lato client o con uuid() nell'INSERT)</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">esempio</span><span class="w"> </span><span class="p">(</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="n">id</span><span class="w">      </span><span class="n">UUID</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="n">uuid</span><span class="p">(),</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="n">id</span><span class="w">      </span><span class="n">UUID</span><span class="p">,</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="n">nome</span><span class="w">    </span><span class="nb">TEXT</span><span class="p">,</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="n">counter</span><span class="w"> </span><span class="n">COUNTER</span><span class="p">,</span><span class="w">        </span><span class="c1">-- tipo speciale, solo INCR/DECR</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="n">tags</span><span class="w">    </span><span class="k">SET</span><span class="o">&lt;</span><span class="nb">TEXT</span><span class="o">&gt;</span><span class="p">,</span><span class="w">      </span><span class="c1">-- insieme di valori unici</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="n">metadati</span><span class="w"> </span><span class="k">MAP</span><span class="o">&lt;</span><span class="nb">TEXT</span><span class="p">,</span><span class="w"> </span><span class="nb">TEXT</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="c1">-- key-value</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span><span class="n">storico</span><span class="w"> </span><span class="n">LIST</span><span class="o">&lt;</span><span class="nb">TEXT</span><span class="o">&gt;</span><span class="p">,</span><span class="w">     </span><span class="c1">-- lista ordinata</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="p">(</span><span class="n">id</span><span class="p">)</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="p">);</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1">-- Batch atomico (solo same partition, limitate operazioni)</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="k">BEGIN</span><span class="w"> </span><span class="n">BATCH</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">    </span><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">utenti</span><span class="w"> </span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">nome</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="n">uuid</span><span class="p">(),</span><span class="w"> </span><span class="s1">'Alice'</span><span class="p">);</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">utenti_per_email</span><span class="w"> </span><span class="p">(</span><span class="n">email</span><span class="p">,</span><span class="w"> </span><span class="n">id</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="s1">'alice@ex.com'</span><span class="p">,</span><span class="w"> </span><span class="n">uuid</span><span class="p">());</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="n">APPLY</span><span class="w"> </span><span class="n">BATCH</span><span class="p">;</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="c1">-- Lightweight Transaction (CAS — Compare and Swap)</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="c1">-- Solo quando strettamente necessario: ha overhead (~4x)</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">sessioni</span><span class="w"> </span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">user_id</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="n">uuid</span><span class="p">(),</span><span class="w"> </span><span class="s1">'user-1'</span><span class="p">)</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="p">;</span><span class="w">   </span><span class="c1">-- atomico, nessun duplicato</span>
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>
-</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="k">UPDATE</span><span class="w"> </span><span class="n">account</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">saldo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">900</span>
-</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'acc-1'</span>
-</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="k">IF</span><span class="w"> </span><span class="n">saldo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1000</span><span class="p">;</span><span class="w">   </span><span class="c1">-- update solo se valore attuale è 1000</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="n">tags</span><span class="w">    </span><span class="k">SET</span><span class="o">&lt;</span><span class="nb">TEXT</span><span class="o">&gt;</span><span class="p">,</span><span class="w">      </span><span class="c1">-- insieme di valori unici</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="n">metadati</span><span class="w"> </span><span class="k">MAP</span><span class="o">&lt;</span><span class="nb">TEXT</span><span class="p">,</span><span class="w"> </span><span class="nb">TEXT</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="c1">-- key-value</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="n">storico</span><span class="w"> </span><span class="n">LIST</span><span class="o">&lt;</span><span class="nb">TEXT</span><span class="o">&gt;</span><span class="p">,</span><span class="w">     </span><span class="c1">-- lista ordinata</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="p">(</span><span class="n">id</span><span class="p">)</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="p">);</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1">-- COUNTER: una tabella con colonne counter può contenere SOLO counter oltre alla primary key</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">visite_pagina</span><span class="w"> </span><span class="p">(</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">    </span><span class="n">pagina</span><span class="w"> </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="p">,</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">    </span><span class="n">visite</span><span class="w"> </span><span class="n">COUNTER</span><span class="w">          </span><span class="c1">-- solo UPDATE ... SET visite = visite + 1</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="p">);</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1">-- Logged batch: atomico (tutto o niente) anche su partizioni/tabelle diverse,</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="c1">-- ma NON isolato e costoso (passa dal batchlog su altri nodi).</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="c1">-- Uso legittimo: tenere allineate tabelle denormalizzate. NON è un'ottimizzazione di throughput.</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="k">BEGIN</span><span class="w"> </span><span class="n">BATCH</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">    </span><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">utenti</span><span class="w"> </span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">nome</span><span class="p">,</span><span class="w"> </span><span class="n">email</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="n">f47ac10b</span><span class="o">-</span><span class="mi">58</span><span class="n">cc</span><span class="o">-</span><span class="mi">4372</span><span class="o">-</span><span class="n">a567</span><span class="o">-</span><span class="mi">0</span><span class="n">e02b2c3d479</span><span class="p">,</span><span class="w"> </span><span class="s1">'Alice'</span><span class="p">,</span><span class="w"> </span><span class="s1">'alice@ex.com'</span><span class="p">);</span>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">    </span><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">utenti_per_email</span><span class="w"> </span><span class="p">(</span><span class="n">email</span><span class="p">,</span><span class="w"> </span><span class="n">id</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="s1">'alice@ex.com'</span><span class="p">,</span><span class="w"> </span><span class="n">f47ac10b</span><span class="o">-</span><span class="mi">58</span><span class="n">cc</span><span class="o">-</span><span class="mi">4372</span><span class="o">-</span><span class="n">a567</span><span class="o">-</span><span class="mi">0</span><span class="n">e02b2c3d479</span><span class="p">);</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="n">APPLY</span><span class="w"> </span><span class="n">BATCH</span><span class="p">;</span>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="c1">-- Lightweight Transaction (CAS — Compare and Swap)</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="c1">-- Solo quando strettamente necessario: ha overhead (~4x)</span>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">sessioni</span><span class="w"> </span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">user_id</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="n">uuid</span><span class="p">(),</span><span class="w"> </span><span class="s1">'user-1'</span><span class="p">)</span>
+</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="p">;</span><span class="w">   </span><span class="c1">-- atomico, nessun duplicato</span>
+</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>
+</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="k">UPDATE</span><span class="w"> </span><span class="n">account</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">saldo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">900</span>
+</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'acc-1'</span>
+</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a><span class="k">IF</span><span class="w"> </span><span class="n">saldo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1000</span><span class="p">;</span><span class="w">   </span><span class="c1">-- update solo se valore attuale è 1000</span>
 </span></code></pre></div>
 <h3 id="compaction-strategies">Compaction Strategies<a class="headerlink" href="#compaction-strategies" title="Permanent link">&para;</a></h3>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">-- STCS (SizeTieredCompactionStrategy) — default</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1">-- Unisce SSTable di dimensioni simili. Ottimo per write-heavy, ma usa più spazio durante compaction</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">metriche_sensore</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="k">WITH</span><span class="w"> </span><span class="n">compaction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">{</span><span class="s1">'class'</span><span class="p">:</span><span class="w"> </span><span class="s1">'SizeTieredCompactionStrategy'</span><span class="p">,</span><span class="w"> </span><span class="s1">'min_threshold'</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="err">}</span><span class="p">;</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1">-- LCS (LeveledCompactionStrategy)</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1">-- Mantiene i dati in livelli dimensionati. Meglio per read-heavy, overhead I/O costante</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">catalogo_prodotti</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span><span class="k">WITH</span><span class="w"> </span><span class="n">compaction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">{</span><span class="s1">'class'</span><span class="p">:</span><span class="w"> </span><span class="s1">'LeveledCompactionStrategy'</span><span class="p">,</span><span class="w"> </span><span class="s1">'sstable_size_in_mb'</span><span class="p">:</span><span class="w"> </span><span class="mi">160</span><span class="err">}</span><span class="p">;</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1">-- TWCS (TimeWindowCompactionStrategy) — per time series</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1">-- Crea una finestra di compaction per ogni periodo temporale (minuti, ore, giorni)</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1">-- Elimina efficientemente dati scaduti (TTL) senza dover leggere SSTable misti</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">metriche_sensore</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">    </span><span class="k">WITH</span><span class="w"> </span><span class="n">compaction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">{</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">        </span><span class="s1">'class'</span><span class="p">:</span><span class="w"> </span><span class="s1">'TimeWindowCompactionStrategy'</span><span class="p">,</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">        </span><span class="s1">'compaction_window_unit'</span><span class="p">:</span><span class="w"> </span><span class="s1">'DAYS'</span><span class="p">,</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">        </span><span class="s1">'compaction_window_size'</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="w">        </span><span class="c1">-- una finestra per giorno</span>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">    </span><span class="err">}</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">    </span><span class="k">AND</span><span class="w"> </span><span class="n">default_time_to_live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">7776000</span><span class="p">;</span><span class="w">    </span><span class="c1">-- TTL: 90 giorni</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1">-- (in caso peggiore serve spazio libero ~ pari alla tabella) e una row può essere sparsa su molte SSTable</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">metriche_sensore</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="k">WITH</span><span class="w"> </span><span class="n">compaction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">{</span><span class="s1">'class'</span><span class="p">:</span><span class="w"> </span><span class="s1">'SizeTieredCompactionStrategy'</span><span class="p">,</span><span class="w"> </span><span class="s1">'min_threshold'</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="err">}</span><span class="p">;</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1">-- LCS (LeveledCompactionStrategy)</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1">-- Mantiene i dati in livelli dimensionati. Meglio per read-heavy, overhead I/O costante</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">catalogo_prodotti</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span><span class="k">WITH</span><span class="w"> </span><span class="n">compaction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">{</span><span class="s1">'class'</span><span class="p">:</span><span class="w"> </span><span class="s1">'LeveledCompactionStrategy'</span><span class="p">,</span><span class="w"> </span><span class="s1">'sstable_size_in_mb'</span><span class="p">:</span><span class="w"> </span><span class="mi">160</span><span class="err">}</span><span class="p">;</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1">-- TWCS (TimeWindowCompactionStrategy) — per time series</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="c1">-- Crea una finestra di compaction per ogni periodo temporale (minuti, ore, giorni)</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1">-- Elimina efficientemente dati scaduti (TTL) senza dover leggere SSTable misti</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">metriche_sensore</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">    </span><span class="k">WITH</span><span class="w"> </span><span class="n">compaction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">{</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">        </span><span class="s1">'class'</span><span class="p">:</span><span class="w"> </span><span class="s1">'TimeWindowCompactionStrategy'</span><span class="p">,</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">        </span><span class="s1">'compaction_window_unit'</span><span class="p">:</span><span class="w"> </span><span class="s1">'DAYS'</span><span class="p">,</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">        </span><span class="s1">'compaction_window_size'</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="w">        </span><span class="c1">-- una finestra per giorno</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">    </span><span class="err">}</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">    </span><span class="k">AND</span><span class="w"> </span><span class="n">default_time_to_live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">7776000</span><span class="p">;</span><span class="w">    </span><span class="c1">-- TTL: 90 giorni</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Cassandra 5.0 — UCS</p>
+<p>Cassandra 5.0 introduce la <strong>Unified Compaction Strategy</strong> (<code>UnifiedCompactionStrategy</code>, UCS), che con un solo parametro di scaling copre i comportamenti di STCS (write-heavy) e LCS (read-heavy) e parallelizza meglio la compaction. STCS resta il default; UCS si abilita per tabella con <code>ALTER TABLE ... WITH compaction = {'class': 'UnifiedCompactionStrategy'}</code>.</p>
+</div>
 <h3 id="nodetool-operazioni-cluster">nodetool — Operazioni Cluster<a class="headerlink" href="#nodetool-operazioni-cluster" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Stato del cluster</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>nodetool<span class="w"> </span>status
@@ -25272,19 +25371,21 @@
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>nodetool<span class="w"> </span>tpstats<span class="w">   </span><span class="c1"># thread pool stats (coda operazioni)</span>
 </span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>
 </span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># Repair: sincronizza dati tra repliche (eseguire regolarmente)</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>nodetool<span class="w"> </span>repair<span class="w"> </span>mio_keyspace
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="c1"># Compaction manuale</span>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>nodetool<span class="w"> </span>compact<span class="w"> </span>mio_keyspace<span class="w"> </span>metriche_sensore
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="c1"># Flush memtable su disco</span>
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a>nodetool<span class="w"> </span>flush
-</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>
-</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="c1"># Decommission nodo (rimuovi gracefully dal cluster)</span>
-</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>nodetool<span class="w"> </span>decommission
-</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>
-</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="c1"># Diagnostica tombstone</span>
-</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a>nodetool<span class="w"> </span>tablestats<span class="w"> </span>mio_keyspace.metriche_sensore<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"Tombstone"</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="c1"># -pr = solo i range primari del nodo: da lanciare su OGNI nodo, senza lavoro duplicato</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>nodetool<span class="w"> </span>repair<span class="w"> </span>-pr<span class="w"> </span>mio_keyspace
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="c1"># Compaction manuale (major compaction: con STCS produce una SSTable enorme che poi</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="c1"># non si compatta più con altre — da evitare in produzione salvo casi specifici)</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>nodetool<span class="w"> </span>compact<span class="w"> </span>mio_keyspace<span class="w"> </span>metriche_sensore
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="c1"># Flush memtable su disco</span>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>nodetool<span class="w"> </span>flush
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="c1"># Decommission nodo (rimuovi gracefully dal cluster)</span>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a>nodetool<span class="w"> </span>decommission
+</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a>
+</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="c1"># Diagnostica tombstone</span>
+</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a>nodetool<span class="w"> </span>tablestats<span class="w"> </span>mio_keyspace.metriche_sensore<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"Tombstone"</span>
 </span></code></pre></div>
 <hr />
 <h2 id="tombstone-e-garbage-collection">Tombstone e Garbage Collection<a class="headerlink" href="#tombstone-e-garbage-collection" title="Permanent link">&para;</a></h2>
@@ -25299,8 +25400,12 @@
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>1. Ridurre gc_grace_seconds su tabelle con molti delete (con attenzione: riduce la finestra di repair)
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>2. Usare TTL invece di DELETE quando possibile
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>3. Usare TWCS su time series (compaction per finestra temporale elimina tombstone efficientemente)
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>4. Monitorare tombstone_warn_threshold e tombstone_fail_threshold in cassandra.yaml
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>4. Monitorare tombstone_warn_threshold e tombstone_failure_threshold in cassandra.yaml
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Perché gc_grace_seconds non va abbassato alla leggera</p>
+<p>Se una replica era down durante un DELETE e la tombstone viene purgata dalle altre repliche prima che venga fatto un repair, quando la replica torna online riporta il vecchio valore, che non trova più la tombstone a "batterlo": il dato cancellato <strong>risorge</strong> (<em>zombie data</em>). Per questo ogni repair completo deve chiudersi entro <code>gc_grace_seconds</code>.</p>
+</div>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">-- Imposta TTL per gestire lifecycle dati senza tombstone eccessive</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">INSERT</span><span class="w"> </span><span class="k">INTO</span><span class="w"> </span><span class="n">sessioni</span><span class="w"> </span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">user_id</span><span class="p">,</span><span class="w"> </span><span class="k">data</span><span class="p">)</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="p">(</span><span class="n">uuid</span><span class="p">(),</span><span class="w"> </span><span class="s1">'u1'</span><span class="p">,</span><span class="w"> </span><span class="s1">'...'</span><span class="p">)</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="k">USING</span><span class="w"> </span><span class="n">TTL</span><span class="w"> </span><span class="mi">86400</span><span class="p">;</span><span class="w">   </span><span class="c1">-- scade dopo 24h</span>
@@ -25313,8 +25418,8 @@
 <ul>
 <li><strong>Query-first design è non negoziabile</strong>: creare una tabella per ogni query pattern. La duplicazione dei dati è normale e attesa in Cassandra</li>
 <li><strong>Partition size</strong>: tenere partizioni &lt; 100MB e &lt; 100K righe. Partizioni enormi causano hotspot, read lente e problemi di compaction</li>
-<li><strong>TWCS per time series</strong>: è l'unica strategia di compaction sensata per dati temporali con TTL</li>
-<li><strong>Repair regolare</strong>: senza repair, dopo un nodo down i dati replicati possono divergere (eventual consistency). <code>nodetool repair</code> settimanale è la norma</li>
+<li><strong>TWCS per time series</strong>: la strategia di compaction più adatta a dati append-only con TTL uniforme (le SSTable di una finestra scadono insieme e vengono scartate intere). Non usarla se si fanno update/delete fuori finestra</li>
+<li><strong>Repair regolare</strong>: senza repair, dopo un nodo down i dati replicati possono divergere (eventual consistency). Pianificare un ciclo completo su tutti i range entro <code>gc_grace_seconds</code> (10 giorni di default, quindi tipicamente settimanale); si automatizza con <a href="https://cassandra-reaper.io/">Cassandra Reaper</a></li>
 <li><strong>Evitare ALLOW FILTERING</strong>: <code>ALLOW FILTERING</code> forza una full scan di partizione/tabella — pericoloso in produzione su dataset grandi</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -25325,15 +25430,18 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Verifica dimensione partizioni e tombstone per tabella</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>nodetool<span class="w"> </span>tablestats<span class="w"> </span>mio_keyspace.metriche_sensore
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Cerca le partizioni più grandi (richiede accesso SSTable)</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>nodetool<span class="w"> </span>getendpoints<span class="w"> </span>mio_keyspace<span class="w"> </span>metriche_sensore<span class="w"> </span><span class="s2">"sensor-42"</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Analisi tombstone a livello SSTable (offline)</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>sstable2json<span class="w"> </span>/var/lib/cassandra/data/mio_keyspace/metriche_sensore-*/mc-1-big-Data.db<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s2">"import sys,json; [print(r) for r in json.load(sys.stdin) if r.get('deletedAt')]"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-50
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Distribuzione di dimensione partizioni (percentili) e celle per partizione</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>nodetool<span class="w"> </span>tablehistograms<span class="w"> </span>mio_keyspace<span class="w"> </span>metriche_sensore
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># In tablestats: "Compacted partition maximum bytes" e "Maximum tombstones per slice"</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Quali nodi ospitano una partition key specifica</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>nodetool<span class="w"> </span>getendpoints<span class="w"> </span>mio_keyspace<span class="w"> </span>metriche_sensore<span class="w"> </span><span class="s2">"sensor-42:2024-01"</span>
 </span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="c1"># Aumenta timeout lettura in cassandra.yaml (workaround temporaneo)</span>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="c1"># read_request_timeout_in_ms: 10000   # default 5000ms</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="c1"># Ispezione tombstone a livello SSTable (tool offline; sstable2json non esiste più dalla 3.0)</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>sstabledump<span class="w"> </span>/var/lib/cassandra/data/mio_keyspace/metriche_sensore-*/*-big-Data.db<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span>deletion_info
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="c1"># Aumenta timeout lettura in cassandra.yaml (workaround temporaneo, non una soluzione)</span>
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="c1"># read_request_timeout_in_ms: 10000   # default 5000ms (da 4.1: read_request_timeout: 10000ms)</span>
 </span></code></pre></div>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1">-- Diagnostica: quante righe ha una partizione specifica?</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">metriche_sensore</span>
@@ -25344,19 +25452,20 @@
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-tombstoneoverwhelmingexception">Scenario 2 — TombstoneOverwhelmingException<a class="headerlink" href="#scenario-2-tombstoneoverwhelmingexception" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> Le query falliscono con <code>TombstoneOverwhelmingException: Query over table ... has more than 100000 tombstones</code>. I log mostrano anche warning con soglie inferiori.</p>
+<p><strong>Sintomo:</strong> Le query falliscono con <code>TombstoneOverwhelmingException</code> (nel log: <code>Scanned over 100001 tombstones during query ...; query aborted</code>). I log mostrano anche warning a soglie inferiori (<code>tombstone_warn_threshold</code>).</p>
 <p><strong>Causa:</strong> DELETE frequenti o TTL su molte righe creano tombstone che la compaction non ha ancora eliminato. Le query range attraversano migliaia di tombstone prima di trovare dati validi.</p>
 <p><strong>Soluzione:</strong> Intervenire sulla strategia di compaction (TWCS per time series), ridurre <code>gc_grace_seconds</code> con cautela, e monitorare le soglie.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Vedi tombstone count per tabella</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>nodetool<span class="w"> </span>tablestats<span class="w"> </span>mio_keyspace.metriche_sensore<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>tomb
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Forza compaction immediata per liberare tombstone</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>nodetool<span class="w"> </span>compact<span class="w"> </span>mio_keyspace<span class="w"> </span>metriche_sensore
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Controlla i threshold in cassandra.yaml</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>grep<span class="w"> </span>-i<span class="w"> </span>tombstone<span class="w"> </span>/etc/cassandra/cassandra.yaml
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="c1"># tombstone_warn_threshold: 1000</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># tombstone_fail_threshold: 100000</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Elimina tombstone/dati scaduti già oltre gc_grace_seconds senza major compaction</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># (le tombstone più recenti di gc_grace_seconds NON vengono purgate da nessuna compaction)</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>nodetool<span class="w"> </span>garbagecollect<span class="w"> </span>mio_keyspace<span class="w"> </span>metriche_sensore
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="c1"># Controlla i threshold in cassandra.yaml</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>grep<span class="w"> </span>-i<span class="w"> </span>tombstone<span class="w"> </span>/etc/cassandra/cassandra.yaml
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># tombstone_warn_threshold: 1000</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="c1"># tombstone_failure_threshold: 100000</span>
 </span></code></pre></div>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1">-- Passa a TWCS per time series: compatta per finestra temporale,</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1">-- le tombstone vengono eliminate intera finestra alla volta</span>
@@ -25389,39 +25498,41 @@
 </span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="c1"># GC pause: controlla i log Cassandra</span>
 </span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"gc"</span><span class="w"> </span>/var/log/cassandra/system.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-50
 </span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>
-</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="c1"># Verifica heap JVM (da jvm.options o cassandra-env.sh)</span>
-</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="c1"># Regola: heap = min(1/4 RAM, 8GB). Per server con 32GB → MAX_HEAP_SIZE=8G</span>
-</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"heap"</span><span class="w"> </span>/etc/cassandra/jvm.options
-</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>
-</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="c1"># I/O stats per identificare saturazione disco</span>
-</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a>iostat<span class="w"> </span>-x<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">10</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="c1"># Verifica heap JVM (da 4.0: jvm-server.options + jvm11-server.options/jvm17-server.options;</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="c1"># prima: jvm.options / cassandra-env.sh)</span>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="c1"># Regola pratica: 8-16GB (G1 su 4.x/5.0), non oltre ~1/2 RAM: il resto serve alla page cache per le SSTable</span>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"Xm[sx]"</span><span class="w"> </span>/etc/cassandra/jvm*-server.options
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>
+</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="c1"># I/O stats per identificare saturazione disco</span>
+</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a>iostat<span class="w"> </span>-x<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">10</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-dati-inconsistenti-dopo-nodo-down">Scenario 4 — Dati inconsistenti dopo nodo down<a class="headerlink" href="#scenario-4-dati-inconsistenti-dopo-nodo-down" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Dopo che un nodo è stato down per un periodo, le letture con <code>LOCAL_QUORUM</code> restituiscono dati obsoleti o mancanti. Oppure <code>nodetool repair</code> mostra differenze tra repliche.</p>
 <p><strong>Causa:</strong> Durante il downtime, il nodo non ha ricevuto le write indirizzate a lui. L'<strong>hinted handoff</strong> copre solo brevi interruzioni (default: 3h). Se il downtime supera questa finestra, le repliche divergono.</p>
-<p><strong>Soluzione:</strong> Eseguire <code>nodetool repair</code> dopo ogni intervento su un nodo. Monitorare il repair coverage regolarmente.</p>
+<p><strong>Soluzione:</strong> Eseguire <code>nodetool repair</code> dopo ogni downtime superiore alla hint window. Monitorare il repair coverage regolarmente.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Repair sul keyspace specifico (può essere lungo su dataset grandi)</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>nodetool<span class="w"> </span>repair<span class="w"> </span>mio_keyspace
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Repair su singola tabella (più veloce per test)</span>
 </span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>nodetool<span class="w"> </span>repair<span class="w"> </span>mio_keyspace<span class="w"> </span>metriche_sensore
 </span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="c1"># Repair incrementale (solo cambiamenti dall'ultimo repair — Cassandra 4+)</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>nodetool<span class="w"> </span>repair<span class="w"> </span>--incremental<span class="w"> </span>mio_keyspace
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="c1"># Da Cassandra 4.0 il repair è incrementale di default; per forzare il confronto completo:</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>nodetool<span class="w"> </span>repair<span class="w"> </span>-full<span class="w"> </span>mio_keyspace
 </span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>
 </span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="c1"># Verifica che l'hinted handoff sia attivo e controlla i pending hint</span>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>nodetool<span class="w"> </span>info<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"Dropped Hints"</span>
-</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>nodetool<span class="w"> </span>tpstats<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"HintedHandoff"</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>nodetool<span class="w"> </span>statushandoff
+</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>nodetool<span class="w"> </span>tpstats<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>hint
 </span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>
 </span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="c1"># Monitora i repair in corso</span>
 </span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>nodetool<span class="w"> </span>compactionstats<span class="w">  </span><span class="c1"># i repair appaiono come compaction di tipo "VALIDATION"</span>
 </span></code></pre></div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># cassandra.yaml — parametri hinted handoff</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nt">hinted_handoff_enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="nt">max_hint_window_in_ms</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10800000</span><span class="w">   </span><span class="c1"># 3 ore (aumentare se downtime frequenti)</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="nt">max_hint_window_in_ms</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10800000</span><span class="w">   </span><span class="c1"># 3 ore (da 4.1: max_hint_window: 3h; i vecchi nomi restano accettati)</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="nt">hinted_handoff_throttle_in_kb</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1024</span>
 </span></code></pre></div>
+<p>Aumentare la hint window allunga il tempo senza repair ma accumula più hint sui coordinator (disco e carico alla riconsegna).</p>
 <hr />
 <h3 id="scenario-5-write-latenza-alta-e-hotspot">Scenario 5 — Write latenza alta e hotspot<a class="headerlink" href="#scenario-5-write-latenza-alta-e-hotspot" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Le write latenze aumentano su specifiche partizioni, mentre altre partizioni rimangono veloci. <code>nodetool status</code> mostra distribuzione sbilanciata del load.</p>
@@ -25433,10 +25544,11 @@
 </span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Verifica distribuzione token (output esteso con ownership)</span>
 </span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>nodetool<span class="w"> </span>ring<span class="w"> </span>mio_keyspace<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-40
 </span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># Se distribuzione sbilanciata dopo aggiunta di nodi → ribalancia</span>
-</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>nodetool<span class="w"> </span>rebalance<span class="w">   </span><span class="c1"># Cassandra 4.1+</span>
-</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>
-</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="c1"># Token aware policy nel driver Python (write diretta al nodo proprietario)</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># Dopo aver aggiunto nodi: sui nodi PRECEDENTI rimuovere i dati dei range ceduti</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="c1"># (non c'è un comando "rebalance": lo streaming avviene al bootstrap del nuovo nodo)</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>nodetool<span class="w"> </span>cleanup<span class="w"> </span>mio_keyspace
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="c1"># Token aware policy nel driver Python (write diretta a una replica)</span>
 </span></code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cassandra.cluster</span><span class="w"> </span><span class="kn">import</span> <span class="n">Cluster</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cassandra.policies</span><span class="w"> </span><span class="kn">import</span> <span class="n">TokenAwarePolicy</span><span class="p">,</span> <span class="n">DCAwareRoundRobinPolicy</span>
@@ -25447,9 +25559,37 @@
 </span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>        <span class="n">DCAwareRoundRobinPolicy</span><span class="p">(</span><span class="n">local_dc</span><span class="o">=</span><span class="s1">'datacenter1'</span><span class="p">)</span>
 </span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>    <span class="p">)</span>
 </span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="p">)</span>
-</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="c1"># Token-aware routing: il coordinator è il nodo proprietario della partizione</span>
-</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="c1"># → elimina un hop di rete, riduce latenza write del 30-50%</span>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="c1"># Token-aware routing: il coordinator è una replica della partizione</span>
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="c1"># → elimina un hop di rete tra coordinator e replica, riducendo latenza e carico</span>
+</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="c1"># (con driver recenti si configura via execution profile; il Java driver 4.x è token-aware di default)</span>
 </span></code></pre></div>
+<h2 id="novita-di-cassandra-50">Novità di Cassandra 5.0<a class="headerlink" href="#novita-di-cassandra-50" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Storage-Attached Index (SAI)</strong>: nuovo secondary index, molto più efficiente dei vecchi indici per query su colonne non-key, anche range e combinazioni (AND); sostituisce l'uso dei secondary index classici nella maggior parte dei casi. Resta una query ad hoc: non sostituisce il query-first design</li>
+<li><strong>Tipo <code>VECTOR</code> e ricerca ANN</strong> (approximate nearest neighbor) su SAI, per use case di embedding/RAG</li>
+<li><strong>Unified Compaction Strategy</strong> (vedi sopra), <strong>trie memtables / trie SSTable</strong> (meno memoria e I/O)</li>
+<li><strong>Dynamic data masking</strong>, nuove funzioni matematiche/collection, supporto JDK 17</li>
+</ul>
+<div class="admonition warning">
+<p class="admonition-title">Materialized Views</p>
+<p>Le Materialized View sono marcate <strong>experimental</strong> dal progetto da Cassandra 4.0 e sconsigliate in produzione (problemi di consistenza e repair). Preferire tabelle denormalizzate mantenute dall'applicazione (eventualmente via logged batch) o SAI.</p>
+</div>
+<h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
+<details class="info">
+<summary>ACID, BASE e CAP — Approfondimento</summary>
+<p>Cassandra è un sistema AP con consistenza <em>tunable</em> per operazione (CL). Con <code>QUORUM</code> si avvicina a CP per singola partizione, senza transazioni multi-partizione.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../../fondamentali/acid-base-cap/">ACID, BASE e CAP</a></p>
+</details>
+<details class="info">
+<summary>Sharding — Approfondimento</summary>
+<p>La partition key + consistent hashing è uno sharding nativo e automatico: nessun resharding manuale, i range si ridistribuiscono al join/leave dei nodi.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../../fondamentali/sharding/">Sharding</a></p>
+</details>
+<details class="info">
+<summary>MongoDB — Approfondimento</summary>
+<p>Alternativa document-oriented con query più flessibili (indici secondari, aggregation) ma modello primary/secondary; Cassandra vince su write throughput e multi-DC active-active.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../mongodb/">MongoDB</a></p>
+</details>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://cassandra.apache.org/doc/latest/">Apache Cassandra Documentation</a></li>

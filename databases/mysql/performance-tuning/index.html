@@ -13024,7 +13024,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13049,7 +13049,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13570,7 +13570,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13605,7 +13605,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24953,6 +24953,10 @@
 <h1 id="mysql-performance-tuning-e-query-optimizer">MySQL — Performance Tuning e Query Optimizer<a class="headerlink" href="#mysql-performance-tuning-e-query-optimizer" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
 <p>Questa pagina copre come diagnosticare e risolvere query lente su MySQL/MariaDB con InnoDB: lettura di <code>EXPLAIN</code> e <code>EXPLAIN FORMAT=JSON</code>, ispezione delle decisioni del planner con <code>optimizer_trace</code>, differenze tra clustered index (PK) e indici secondari, algoritmi di join disponibili (nested loop, hash join da 8.0.18), tuning del buffer pool InnoDB e triage con slow query log / <code>pt-query-digest</code>. Il modello di costo e gli strumenti di analisi di MySQL sono strutturalmente diversi da Postgres — vedi <a href="../../sql-avanzato/query-optimizer/">Query Optimizer e EXPLAIN</a> per il confronto lato Postgres — perché l'ottimizzatore InnoDB ragiona su un clustered index invece che su un heap indipendente dagli indici. Non copre architettura InnoDB o replicazione, già trattate in <a href="../architettura-replicazione/">Architettura e Replicazione</a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Versioni: 8.0 è EOL, riferirsi a 8.4 LTS</p>
+<p>MySQL 8.0 ha raggiunto l'end of life ad aprile 2026; la release LTS corrente è <strong>8.4</strong> (link <code>official_docs</code> aggiornato). Tutto ciò che riguarda <code>EXPLAIN</code>, hash join e <code>optimizer_trace</code> vale invariato in 8.4. Cambiano alcuni default (es. <code>innodb_adaptive_hash_index</code>, vedi sezione buffer pool). MariaDB ha un optimizer diverso: non ha <code>EXPLAIN ANALYZE</code> in formato ad albero come MySQL, usa <code>ANALYZE FORMAT=JSON</code>.</p>
+</div>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <div class="admonition note">
 <p class="admonition-title">Il piano di query non è opzionale da leggere</p>
@@ -24962,7 +24966,7 @@
 <li><strong>Clustered index è la tabella</strong>: in InnoDB i dati sono fisicamente ordinati per Primary Key (o da una PK implicita a 6 byte se non dichiarata — da evitare sempre). Non esiste un heap separato come in Postgres.</li>
 <li><strong>Secondary index lookup a due passi</strong>: un indice secondario contiene il valore della PK, non un puntatore fisico alla riga. Una query che filtra su un indice secondario e recupera colonne non coperte richiede un secondo accesso al clustered index per ogni riga trovata ("bookmark lookup").</li>
 <li><strong><code>rows</code> in EXPLAIN è una stima, non un conteggio</strong>: rappresenta quante righe l'optimizer <em>si aspetta</em> di esaminare per ottenere il risultato, basata su statistiche degli indici — non il numero di righe restituite.</li>
-<li><strong><code>filtered</code></strong>: percentuale stimata di righe che sopravvivono ai filtri aggiuntivi dopo l'accesso via indice. <code>rows × filtered / 100</code> = stima righe effettivamente processate dal nodo successivo del piano.</li>
+<li><strong><code>filtered</code></strong> (colonna dell'<code>EXPLAIN</code> tabellare, omessa dall'esempio sotto per leggibilità): percentuale stimata di righe che sopravvivono ai filtri aggiuntivi dopo l'accesso via indice. <code>rows × filtered / 100</code> = stima righe effettivamente processate dal nodo successivo del piano.</li>
 <li><strong>Extra è dove si nascondono i problemi</strong>: <code>Using filesort</code> (ordinamento non risolto da un indice), <code>Using temporary</code> (tabella temporanea per GROUP BY/DISTINCT), <code>Using index</code> (covering index, nessun accesso al clustered index) sono i segnali più diagnostici dell'intero output.</li>
 </ul>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
@@ -25017,7 +25021,7 @@
 </tr>
 <tr>
 <td><code>filtered</code></td>
-<td>% stimata di righe sopravvissute ai filtri extra (visibile con <code>EXPLAIN FORMAT=TREE</code> o <code>EXTENDED</code>)</td>
+<td>% stimata di righe sopravvissute ai filtri extra (colonna sempre presente in 8.0+; non mostrata nell'esempio sopra)</td>
 </tr>
 <tr>
 <td><code>Extra</code></td>
@@ -25027,7 +25031,7 @@
 </table>
 <div class="admonition warning">
 <p class="admonition-title"><code>type: ALL</code> su tabelle grandi è quasi sempre un problema</p>
-<p>A differenza di Postgres, dove un Seq Scan può essere la scelta corretta anche su tabelle grandi (&gt;20-30% di righe lette), su InnoDB un <code>type: ALL</code> in produzione va quasi sempre indagato: il costo del full scan è dominato dal fatto che le pagine potrebbero non essere in buffer pool, a differenza di un ambiente Postgres ben tarato con <code>effective_cache_size</code>.</p>
+<p>Su una tabella grande <code>type: ALL</code> va sempre indagato: su InnoDB un full scan scorre l'intero clustered index e, se il working set non sta nel buffer pool, genera letture da disco ed evizioni che penalizzano anche le altre query. Può comunque essere la scelta giusta quando la query legge una frazione elevata della tabella (indice poco selettivo: vedi Scenario 1) — come su Postgres, la domanda è se il piano è quello atteso, non se contiene uno scan.</p>
 </div>
 <h3 id="explain-formatjson-dettaglio-completo">EXPLAIN FORMAT=JSON — Dettaglio Completo<a class="headerlink" href="#explain-formatjson-dettaglio-completo" title="Permanent link">&para;</a></h3>
 <p><code>EXPLAIN</code> tradizionale nasconde informazioni sul costo stimato per singolo nodo. <code>FORMAT=JSON</code> le espone:</p>
@@ -25078,7 +25082,7 @@
 </span><span id="__span-3-37"><a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a><span class="w">  </span><span class="p">}</span>
 </span><span id="__span-3-38"><a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a><span class="p">}</span>
 </span></code></pre></div>
-<p><code>cost_info.query_cost</code> è il numero che l'optimizer usa per confrontare piani alternativi — analogo concettuale al <code>cost</code> di Postgres, ma calibrato su costanti diverse (<code>optimizer_switch</code>, <code>mysql.server_cost</code>, <code>mysql.engine_cost</code>).</p>
+<p><code>cost_info.query_cost</code> è il numero che l'optimizer usa per confrontare piani alternativi — analogo concettuale al <code>cost</code> di Postgres, ma calibrato su costanti diverse (tabelle <code>mysql.server_cost</code> e <code>mysql.engine_cost</code>, modificabili; <code>optimizer_switch</code> governa invece quali strategie sono ammesse).</p>
 <h3 id="explain-analyze-numeri-reali-mysql-8018">EXPLAIN ANALYZE — Numeri Reali (MySQL 8.0.18+)<a class="headerlink" href="#explain-analyze-numeri-reali-mysql-8018" title="Permanent link">&para;</a></h3>
 <p>A differenza di Postgres, dove <code>EXPLAIN ANALYZE</code> è disponibile da sempre, MySQL lo ha introdotto solo in 8.0.18, con un formato ad albero testuale invece che tabellare:</p>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">ANALYZE</span>
@@ -25169,9 +25173,9 @@
 <div class="language-ini highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># my.cnf — parametri buffer pool per throughput OLTP</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="k">[mysqld]</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="na">innodb_buffer_pool_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">24G</span><span class="w">           </span><span class="c1"># 70-80% RAM su istanza dedicata; deve contenere il working set</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="na">innodb_buffer_pool_instances</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">16</span><span class="w">       </span><span class="c1"># 1 istanza per GB fino a un massimo pratico di 16-32; riduce mutex contention</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="na">innodb_buffer_pool_instances</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">16</span><span class="w">       </span><span class="c1"># Riduce mutex contention; default calcolato (1 se pool &lt;= 1GB, altrimenti dipende da pool/chunk e CPU, max 64). Impostare a mano solo se serve</span>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="na">innodb_buffer_pool_chunk_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">128M</span><span class="w">    </span><span class="c1"># innodb_buffer_pool_size deve essere multiplo di instances*chunk_size</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="na">innodb_adaptive_hash_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">ON</span><span class="w">         </span><span class="c1"># Hash index automatico su pagine "calde" — vedi warning sotto</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="na">innodb_adaptive_hash_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">OFF</span><span class="w">        </span><span class="c1"># Default OFF da 8.4 (ON in 8.0): riattivare solo se misurato un beneficio — vedi warning sotto</span>
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="na">innodb_stats_persistent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">ON</span><span class="w">            </span><span class="c1"># Statistiche persistenti su disco invece che ricalcolate ad ogni restart</span>
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="na">innodb_stats_persistent_sample_pages</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">128</span><span class="w">  </span><span class="c1"># Più campioni = stime più precise, più costo su ANALYZE TABLE</span>
 </span></code></pre></div>
@@ -25197,7 +25201,7 @@
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Adaptive Hash Index può peggiorare le performance sotto certi workload</p>
-<p>L'Adaptive Hash Index (AHI) costruisce automaticamente una hash table in-memory per le pagine più accedute, utile per lookup puntuali ripetuti. Su workload con molte query concorrenti che competono per il lock dell'AHI (<code>btr_search_latch</code>), o con pattern di accesso molto variabili (nessuna pagina "calda" stabile), l'AHI diventa overhead puro. Se <code>SHOW ENGINE INNODB STATUS</code> mostra un hit rate basso per l'AHI insieme a contention visibile, disabilitarlo e misurare: <code>SET GLOBAL innodb_adaptive_hash_index = OFF;</code> (richiede test A/B, non è una scelta universale).</p>
+<p>Dalla 8.4 l'AHI è <strong>disattivato di default</strong> (in 8.0 era ON), perché in molti workload è overhead. L'Adaptive Hash Index (AHI) costruisce automaticamente una hash table in-memory per le pagine più accedute, utile per lookup puntuali ripetuti. Su workload con molte query concorrenti che competono per il lock dell'AHI (<code>btr_search_latch</code>), o con pattern di accesso molto variabili (nessuna pagina "calda" stabile), l'AHI diventa overhead puro. Se <code>SHOW ENGINE INNODB STATUS</code> mostra un hit rate basso per l'AHI insieme a contention visibile, su 8.0 disabilitarlo e misurare: <code>SET GLOBAL innodb_adaptive_hash_index = OFF;</code> (richiede test A/B, non è una scelta universale); su 8.4 attivarlo solo se un test A/B mostra beneficio su lookup puntuali ripetuti.</p>
 </div>
 <h3 id="slow-query-log-e-pt-query-digest">Slow Query Log e pt-query-digest<a class="headerlink" href="#slow-query-log-e-pt-query-digest" title="Permanent link">&para;</a></h3>
 <div class="language-ini highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># my.cnf — abilitare slow query log</span>
@@ -25206,6 +25210,8 @@
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="na">slow_query_log_file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">/var/log/mysql/slow.log</span>
 </span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="na">long_query_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">1</span><span class="w">                    </span><span class="c1"># Soglia in secondi</span>
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="na">log_queries_not_using_indexes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">ON</span><span class="w">     </span><span class="c1"># Logga anche query veloci ma senza indice (utile per triage preventivo)</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="na">log_throttle_queries_not_using_indexes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">60</span><span class="w">  </span><span class="c1"># Max 60 di queste righe al minuto: evita di inondare il log</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="na">min_examined_row_limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">1000</span><span class="w">          </span><span class="c1"># Ignora query che esaminano poche righe</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Percona Toolkit — aggregare lo slow log per pattern di query (non singola query)</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>pt-query-digest<span class="w"> </span>/var/log/mysql/slow.log<span class="w"> </span>&gt;<span class="w"> </span>digest_report.txt
@@ -25219,8 +25225,9 @@
 </span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>pt-query-digest<span class="w"> </span>--since<span class="w"> </span><span class="s1">'2026-09-27 00:00:00'</span><span class="w"> </span>--until<span class="w"> </span><span class="s1">'2026-09-27 06:00:00'</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">  </span>/var/log/mysql/slow.log
 </span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="c1"># Analizzare direttamente da performance_schema invece che dal file di log</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>pt-query-digest<span class="w"> </span>--processlist<span class="w"> </span><span class="nv">h</span><span class="o">=</span>localhost,u<span class="o">=</span>monitor_user,p<span class="o">=</span>password
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="c1"># Campionare SHOW FULL PROCESSLIST invece di leggere un file (cattura solo le query in esecuzione</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="c1"># al momento del poll: preferire lo slow log). Evitare la password in riga di comando: usare ~/.my.cnf</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>pt-query-digest<span class="w"> </span>--processlist<span class="w"> </span><span class="nv">h</span><span class="o">=</span>localhost,u<span class="o">=</span>monitor_user
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">log_queries_not_using_indexes va acceso solo temporaneamente</p>
@@ -25240,18 +25247,20 @@
 </span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="c1">-- type: index_merge</span>
 </span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="c1">-- Extra: Using union(idx_stato,idx_cliente_id); Using where</span>
 </span></code></pre></div>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1">-- Verificare indici inutilizzati (candidati alla rimozione — riducono write cost)</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">SELECT</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="n">object_schema</span><span class="p">,</span><span class="w"> </span><span class="n">object_name</span><span class="p">,</span><span class="w"> </span><span class="n">index_name</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">FROM</span><span class="w"> </span><span class="n">performance_schema</span><span class="p">.</span><span class="n">table_io_waits_summary_by_index_usage</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">index_name</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">  </span><span class="k">AND</span><span class="w"> </span><span class="n">count_star</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">  </span><span class="k">AND</span><span class="w"> </span><span class="n">object_schema</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'mydb'</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">object_schema</span><span class="p">,</span><span class="w"> </span><span class="n">object_name</span><span class="p">;</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1">-- Verificare indici inutilizzati (candidati alla rimozione — riducono write cost).</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1">-- ATTENZIONE: i contatori si azzerano al restart; valutare dopo un ciclo di business completo.</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1">-- Equivalente pronto: SELECT * FROM sys.schema_unused_indexes;</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">SELECT</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="n">object_schema</span><span class="p">,</span><span class="w"> </span><span class="n">object_name</span><span class="p">,</span><span class="w"> </span><span class="n">index_name</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="k">FROM</span><span class="w"> </span><span class="n">performance_schema</span><span class="p">.</span><span class="n">table_io_waits_summary_by_index_usage</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">index_name</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">  </span><span class="k">AND</span><span class="w"> </span><span class="n">count_star</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">  </span><span class="k">AND</span><span class="w"> </span><span class="n">object_schema</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'mydb'</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">object_schema</span><span class="p">,</span><span class="w"> </span><span class="n">object_name</span><span class="p">;</span>
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Preferire pochi indici compositi ben scelti a molti indici singola-colonna</strong>: ogni indice aggiuntivo raddoppia il costo di scrittura su InnoDB (mantenimento clustered + secondario), più che su Postgres dove tutti gli indici hanno lo stesso costo relativo all'heap.</li>
+<li><strong>Preferire pochi indici compositi ben scelti a molti indici singola-colonna</strong>: ogni indice aggiuntivo va aggiornato a ogni INSERT/DELETE (e UPDATE delle colonne indicizzate) e occupa buffer pool; un indice composito (a, b) serve anche le query sul solo prefisso <code>a</code>, rendendo ridondante un indice separato su <code>a</code>.</li>
 <li><strong><code>EXPLAIN FORMAT=JSON</code> per capire il costo reale</strong>, non solo <code>EXPLAIN</code> tabellare — la vista tradizionale nasconde <code>cost_info</code> per nodo.</li>
 <li><strong>Usare <code>optimizer_trace</code> solo per query specifiche in debug</strong>, mai abilitato globalmente per l'overhead.</li>
 <li><strong>Monitorare <code>log_queries_not_using_indexes</code> a finestre</strong>, non permanentemente.</li>
@@ -25275,12 +25284,15 @@
 </span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="k">ANALYZE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">ordini</span><span class="p">;</span>
 </span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>
 </span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1">-- 3. Verificare mismatch di tipo (causa comune e silenziosa)</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1">-- Se cliente_id è INT ma la query filtra con stringa:</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">ordini</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">cliente_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'42'</span><span class="p">;</span><span class="w">  </span><span class="c1">-- conversione implicita, indice ignorato</span>
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">ordini</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">cliente_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">42</span><span class="p">;</span><span class="w">    </span><span class="c1">-- corretto</span>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>
-</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="c1">-- 4. Forzare l'uso dell'indice per confermare il sospetto (solo debug)</span>
-</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">ordini</span><span class="w"> </span><span class="k">FORCE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="p">(</span><span class="n">idx_stato_data</span><span class="p">)</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">stato</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'spedito'</span><span class="p">;</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1">-- Colonna stringa (es. codice VARCHAR) confrontata con un numero: MySQL converte</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="c1">-- OGNI valore della colonna in numero, quindi l'indice non è utilizzabile</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">ordini</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">codice</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">42</span><span class="p">;</span><span class="w">    </span><span class="c1">-- type: ALL (conversione implicita)</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">ordini</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">codice</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'42'</span><span class="p">;</span><span class="w">  </span><span class="c1">-- corretto</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="c1">-- (il caso inverso, colonna INT confrontata con '42', usa l'indice: è la costante a essere convertita.</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="c1">--  Problemi analoghi: join tra colonne con charset/collation diversi, funzioni sulla colonna indicizzata)</span>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="c1">-- 4. Forzare l'uso dell'indice per confermare il sospetto (solo debug)</span>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">ordini</span><span class="w"> </span><span class="k">FORCE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="p">(</span><span class="n">idx_stato_data</span><span class="p">)</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">stato</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'spedito'</span><span class="p">;</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="scenario-2-using-filesort-su-query-con-order-by-e-limit">Scenario 2 — <code>Using filesort</code> su query con ORDER BY e LIMIT<a class="headerlink" href="#scenario-2-using-filesort-su-query-con-order-by-e-limit" title="Permanent link">&para;</a></h3>
@@ -25295,7 +25307,7 @@
 </span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">stato</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'spedito'</span>
 </span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">totale</span><span class="w"> </span><span class="k">DESC</span>
 </span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="k">LIMIT</span><span class="w"> </span><span class="mi">20</span><span class="p">;</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="c1">-- Extra: Using index condition  ← filesort eliminato</span>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="c1">-- Extra senza 'Using filesort'  ← l'ordinamento è fornito dall'indice</span>
 </span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>
 </span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="c1">-- 2. Se il filesort è inevitabile (ordinamento su colonna non indicizzabile),</span>
 </span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="c1">--    aumentare sort_buffer_size per la sessione</span>
@@ -25336,16 +25348,17 @@
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1">-- 1. Se una stima è accettabile (dashboard, capacity planning), usare le statistiche</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">TABLE_ROWS</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">information_schema</span><span class="p">.</span><span class="n">TABLES</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">TABLE_SCHEMA</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'mydb'</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="k">TABLE_NAME</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'ordini'</span><span class="p">;</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1">-- Approssimato, aggiornato da ANALYZE TABLE o automaticamente</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="c1">-- 2. Se serve un conteggio esatto e frequente, mantenere un contatore applicativo</span>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1">--    (tabella separata aggiornata via trigger o transazione) invece di COUNT(*) ripetuto</span>
-</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>
-</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="c1">-- 3. Se il conteggio è filtrato, assicurarsi che il filtro sia coperto da un</span>
-</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="c1">--    indice stretto (covering) per minimizzare le pagine lette</span>
-</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">idx_stato_covering</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">ordini</span><span class="w"> </span><span class="p">(</span><span class="n">stato</span><span class="p">);</span>
-</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">ordini</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">stato</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'spedito'</span><span class="p">;</span>
-</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="c1">-- Extra: Using index  ← scan del solo indice, non del clustered index intero</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1">-- Approssimato; in 8.0+ i valori sono in cache per information_schema_stats_expiry (default 86400s):</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="c1">-- per dati freschi eseguire ANALYZE TABLE o SET SESSION information_schema_stats_expiry = 0</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1">-- 2. Se serve un conteggio esatto e frequente, mantenere un contatore applicativo</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="c1">--    (tabella separata aggiornata via trigger o transazione) invece di COUNT(*) ripetuto</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="c1">-- 3. Se il conteggio è filtrato, assicurarsi che il filtro sia coperto da un</span>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="c1">--    indice stretto (covering) per minimizzare le pagine lette</span>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">idx_stato_covering</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">ordini</span><span class="w"> </span><span class="p">(</span><span class="n">stato</span><span class="p">);</span>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">ordini</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">stato</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'spedito'</span><span class="p">;</span>
+</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a><span class="c1">-- Extra: Using index  ← scan del solo indice, non del clustered index intero</span>
 </span></code></pre></div></p>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">

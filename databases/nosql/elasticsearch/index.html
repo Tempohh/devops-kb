@@ -13015,7 +13015,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13267,7 +13267,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13311,7 +13311,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13336,7 +13336,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25226,7 +25226,7 @@
 - Write ad alto throughput stabile (Cassandra o Kafka sono più adatti)</p>
 <div class="admonition note">
 <p class="admonition-title">Elasticsearch vs OpenSearch</p>
-<p>Nel 2021 Amazon ha forkato Elasticsearch (v7.10) creando OpenSearch sotto licenza Apache 2.0. Le API sono quasi identiche, ma le versioni recenti di Elasticsearch (8.x+) hanno introdotto funzionalità non presenti in OpenSearch. In questo documento si fa riferimento a Elasticsearch OSS/SSPL.</p>
+<p>Nel 2021 Elastic ha cambiato licenza (da Apache 2.0 a ELv2/SSPL) e Amazon ha forkato la 7.10 creando OpenSearch (Apache 2.0, oggi sotto la Linux Foundation). Da agosto 2024 Elastic ha aggiunto AGPLv3 come terza opzione di licenza (ELv2 / SSPL / AGPLv3), quindi il codice è di nuovo open source secondo OSI. Le API restano simili ma divergono sempre più (es. ES|QL, <code>semantic_text</code> esistono solo in Elasticsearch). Questo documento descrive Elasticsearch 8.x/9.x.</p>
 </div>
 <hr />
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
@@ -25248,7 +25248,7 @@
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>"prestazioni" → [doc1, doc3]
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>"display"     → [doc1, doc8]
 </span></code></pre></div>
-<p>Questo permette query full-text in O(1) invece di O(n) (no full scan).</p>
+<p>Il lookup di un termine nel dizionario (struttura FST in memoria, costo legato alla lunghezza del termine) restituisce subito la posting list: non serve scansionare tutti i documenti (O(n)). Il costo dipende dal numero di termini/documenti coinvolti, non dalla dimensione totale dell'indice.</p>
 <h3 id="sharding-e-replica">Sharding e Replica<a class="headerlink" href="#sharding-e-replica" title="Permanent link">&para;</a></h3>
 <p>Ogni indice è suddiviso in <strong>primary shards</strong> (default: 1 in ES 7.x+, storicamente 5). Ogni shard è un'istanza Lucene indipendente. I <strong>replica shards</strong> sono copie dei primary per alta disponibilità e read scaling.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Indice "logs" con 3 primary shards e 1 replica:
@@ -25259,7 +25259,7 @@
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Il numero di primary shard è immutabile</p>
-<p>Una volta creato l'indice, il numero di primary shard non può essere modificato (solo con reindex). Pianifica la capacità prima della creazione. Per workload che crescono usa <strong>index aliases</strong> + <strong>reindex</strong> + <strong>ILM</strong>.</p>
+<p>Una volta creato l'indice, il numero di primary shard non può essere modificato in place: si crea un nuovo indice con <strong>reindex</strong>, oppure si usano le API <code>_split</code> (moltiplica gli shard) e <code>_shrink</code> (li riduce, solo a divisori) che producono comunque un nuovo indice. Pianifica la capacità prima della creazione. Per workload che crescono usa <strong>index aliases</strong> + <strong>reindex</strong> + <strong>ILM</strong>.</p>
 </div>
 <h3 id="mapping">Mapping<a class="headerlink" href="#mapping" title="Permanent link">&para;</a></h3>
 <p>Il <strong>mapping</strong> definisce i tipi di campo di un documento — equivalente allo schema. Il dynamic mapping crea automaticamente i mapping all'inserimento del primo documento; quello esplicito offre controllo preciso.</p>
@@ -25364,66 +25364,75 @@
 <td>Nodi economici per dati storici (searchable snapshots)</td>
 </tr>
 <tr>
+<td><code>data_content</code></td>
+<td>Dati non time-series (es. catalogo prodotti), non migrano tra tier</td>
+</tr>
+<tr>
 <td><code>ingest</code></td>
 <td>Pipeline di pre-processamento documenti</td>
 </tr>
 <tr>
 <td><code>coordinating</code></td>
-<td>Solo routing query (no dati), bilancimento del carico</td>
+<td>Solo routing query (no dati), bilanciamento del carico (ogni nodo lo fa comunque di default)</td>
 </tr>
 </tbody>
 </table>
 <p>In produzione, separare sempre i ruoli master-eligible dai data nodes.</p>
 <h3 id="routing-dei-documenti">Routing dei Documenti<a class="headerlink" href="#routing-dei-documenti" title="Permanent link">&para;</a></h3>
 <p>Quando un documento viene indicizzato, Elasticsearch calcola su quale shard inviarlo:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>shard = hash(_id) % numero_primary_shards
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>shard = hash(_routing) % numero_primary_shards    # _routing = _id di default
 </span></code></pre></div>
+<p>Per questo il numero di primary shard è fisso: cambiarlo cambierebbe la destinazione di ogni documento già indicizzato. Con <code>?routing=&lt;chiave&gt;</code> si possono co-locare documenti correlati su uno shard e interrogare un solo shard.</p>
 <p>Per query, il nodo coordinatore fa <strong>scatter-gather</strong>: distribuisce la query su tutti i shard, raccoglie i risultati, merge e restituisce.</p>
 <h3 id="processo-di-indicizzazione">Processo di Indicizzazione<a class="headerlink" href="#processo-di-indicizzazione" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Client → REST API → Coordinating Node
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>                         ↓
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>                    Routing → Primary Shard
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>                         ↓
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>                    Translog (durabilità)
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>                    In-memory buffer (refresh)
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>                         ↓
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>                    Replica Shards (async)
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>                         ↓
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>                    Segment merge (background)
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>                    In-memory buffer + Translog (durabilità)
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>                         ↓
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>                    Replica Shards (in parallelo, in-sync copies)
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>                         ↓
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>                    ACK al client
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>                    (poi, in background: refresh → segmenti, merge)
 </span></code></pre></div>
-<p>Il <strong>refresh</strong> (default ogni 1s) rende i documenti ricercabili scrivendo i buffer su segmenti Lucene. Il <strong>flush</strong> scrive i segmenti su disco e svuota il translog.</p>
+<p>La replica è <strong>sincrona</strong>: il primary inoltra l'operazione alle copie in-sync e risponde al client solo dopo la loro conferma (con <code>wait_for_active_shards</code> si controlla il minimo di copie attive). Il <strong>translog</strong> è un write-ahead log: permette di recuperare i documenti non ancora persistiti in segmenti dopo un crash.</p>
+<p>Il <strong>refresh</strong> (default ogni 1s, solo su indici interrogati di recente) rende i documenti ricercabili scrivendo il buffer in un nuovo segmento Lucene (near-real-time search). Il <strong>flush</strong> esegue un commit Lucene su disco e svuota il translog.</p>
 <hr />
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="deploy-con-docker-compose-sviluppo">Deploy con Docker Compose (sviluppo)<a class="headerlink" href="#deploy-con-docker-compose-sviluppo" title="Permanent link">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">'3.8'</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">services</span><span class="p">:</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">elasticsearch</span><span class="p">:</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">docker.elastic.co/elasticsearch/elasticsearch:8.12.0</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">discovery.type=single-node</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ELASTIC_PASSWORD=changeme</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xpack.security.enabled=true</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xpack.security.http.ssl.enabled=false</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"ES_JAVA_OPTS=-Xms1g</span><span class="nv"> </span><span class="s">-Xmx1g"</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"9200:9200"</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">esdata:/usr/share/elasticsearch/data</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">  </span><span class="nt">kibana</span><span class="p">:</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">docker.elastic.co/kibana/kibana:8.12.0</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ELASTICSEARCH_HOSTS=http://elasticsearch:9200</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ELASTICSEARCH_USERNAME=kibana_system</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ELASTICSEARCH_PASSWORD=changeme</span>
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
-</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"5601:5601"</span>
-</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span>
-</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">elasticsearch</span>
-</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>
-</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="nt">volumes</span><span class="p">:</span>
-</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="w">  </span><span class="nt">esdata</span><span class="p">:</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">services</span><span class="p">:</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">elasticsearch</span><span class="p">:</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">docker.elastic.co/elasticsearch/elasticsearch:9.0.0</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">discovery.type=single-node</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ELASTIC_PASSWORD=changeme</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xpack.security.enabled=true</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xpack.security.http.ssl.enabled=false</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"ES_JAVA_OPTS=-Xms1g</span><span class="nv"> </span><span class="s">-Xmx1g"</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"9200:9200"</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">esdata:/usr/share/elasticsearch/data</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">  </span><span class="nt">kibana</span><span class="p">:</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">docker.elastic.co/kibana/kibana:9.0.0</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ELASTICSEARCH_HOSTS=http://elasticsearch:9200</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ELASTICSEARCH_USERNAME=kibana_system</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ELASTICSEARCH_PASSWORD=changeme</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"5601:5601"</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">elasticsearch</span>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="nt">volumes</span><span class="p">:</span>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="w">  </span><span class="nt">esdata</span><span class="p">:</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Utente kibana_system</p>
+<p><code>ELASTIC_PASSWORD</code> imposta solo la password dell'utente <code>elastic</code>. Prima di avviare Kibana con <code>kibana_system</code> va impostata la sua password (<code>POST /_security/user/kibana_system/_password</code>), altrimenti Kibana non si autentica. Usa tag di versione correnti e identici tra Elasticsearch e Kibana. Questa configurazione (HTTP senza TLS, password banale) è solo per sviluppo.</p>
+</div>
 <h3 id="query-dsl">Query DSL<a class="headerlink" href="#query-dsl" title="Permanent link">&para;</a></h3>
 <p>Il Query DSL distingue tra <strong>query context</strong> (influenza il relevance score) e <strong>filter context</strong> (sì/no, cacheable):</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="err">GET</span><span class="w"> </span><span class="err">/prodo</span><span class="kc">tt</span><span class="err">i/_search</span>
@@ -25556,12 +25565,12 @@
 </tr>
 <tr>
 <td><strong>Pipeline</strong></td>
-<td><code>moving_avg</code>, <code>derivative</code>, <code>bucket_sort</code></td>
+<td><code>moving_fn</code>, <code>derivative</code>, <code>bucket_sort</code></td>
 </tr>
 </tbody>
 </table>
 <h3 id="index-lifecycle-management-ilm">Index Lifecycle Management (ILM)<a class="headerlink" href="#index-lifecycle-management-ilm" title="Permanent link">&para;</a></h3>
-<p>ILM automatizza la gestione del ciclo di vita degli indici (tipico per log):</p>
+<p>ILM automatizza la gestione del ciclo di vita degli indici (tipico per log). Il rollover evita shard giganti; shrink/forcemerge riducono overhead sui dati non più scritti; la fase cold con <code>searchable_snapshot</code> sposta i dati su object storage (richiede licenza Enterprise).</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="err">PUT</span><span class="w"> </span><span class="err">_ilm/policy/logs</span><span class="mi">-</span><span class="err">policy</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="p">{</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">"policy"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
@@ -25671,7 +25680,7 @@
 <li>Usa sempre <strong>filter context</strong> per filtri non-relevance (range, term, exists)</li>
 <li>Evita <code>wildcard</code> e <code>regex</code> su campi ad alta cardinalità — sono O(n)</li>
 <li>Usa <code>keyword</code> per aggregazioni, non <code>text</code></li>
-<li>Limita <code>from</code> + <code>size</code> per deep pagination — usa <code>search_after</code> per grandi dataset</li>
+<li>Limita <code>from</code> + <code>size</code> (max 10.000, <code>index.max_result_window</code>) — per deep pagination usa <code>search_after</code> con un Point in Time (PIT)</li>
 <li>Abilita <code>request_cache</code> per query aggregate ripetute</li>
 </ul>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="err">GET</span><span class="w"> </span><span class="err">/logs/_search?reques</span><span class="kc">t</span><span class="err">_cache=</span><span class="kc">true</span>
@@ -25688,25 +25697,25 @@
 <li>Monitora: <code>JVM heap used %</code>, <code>search latency p99</code>, <code>indexing rate</code>, <code>shard count</code></li>
 </ul>
 <h3 id="alias-per-zero-downtime-reindex">Alias per Zero-Downtime Reindex<a class="headerlink" href="#alias-per-zero-downtime-reindex" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Crea indice v2 con nuovo mapping</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>PUT<span class="w"> </span>/prodotti-v2
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="o">{</span><span class="w"> </span>...<span class="w"> </span><span class="o">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="err">#</span><span class="w"> </span><span class="err">Crea</span><span class="w"> </span><span class="err">i</span><span class="kc">n</span><span class="err">dice</span><span class="w"> </span><span class="err">v</span><span class="mi">2</span><span class="w"> </span><span class="err">co</span><span class="kc">n</span><span class="w"> </span><span class="kc">nu</span><span class="err">ovo</span><span class="w"> </span><span class="err">mappi</span><span class="kc">n</span><span class="err">g</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="err">PUT</span><span class="w"> </span><span class="err">/prodo</span><span class="kc">tt</span><span class="err">i</span><span class="mi">-</span><span class="err">v</span><span class="mi">2</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="p">{</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># Reindex da v1 a v2</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>POST<span class="w"> </span>_reindex
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="o">{</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">  </span><span class="s2">"source"</span>:<span class="w"> </span><span class="o">{</span><span class="w"> </span><span class="s2">"index"</span>:<span class="w"> </span><span class="s2">"prodotti-v1"</span><span class="w"> </span><span class="o">}</span>,
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">  </span><span class="s2">"dest"</span>:<span class="w">   </span><span class="o">{</span><span class="w"> </span><span class="s2">"index"</span>:<span class="w"> </span><span class="s2">"prodotti-v2"</span><span class="w"> </span><span class="o">}</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="o">}</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="err">#</span><span class="w"> </span><span class="err">Rei</span><span class="kc">n</span><span class="err">dex</span><span class="w"> </span><span class="err">da</span><span class="w"> </span><span class="err">v</span><span class="mi">1</span><span class="w"> </span><span class="err">a</span><span class="w"> </span><span class="err">v</span><span class="mi">2</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="err">POST</span><span class="w"> </span><span class="err">_rei</span><span class="kc">n</span><span class="err">dex</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="p">{</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">  </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"index"</span><span class="p">:</span><span class="w"> </span><span class="s2">"prodotti-v1"</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">  </span><span class="nt">"dest"</span><span class="p">:</span><span class="w">   </span><span class="p">{</span><span class="w"> </span><span class="nt">"index"</span><span class="p">:</span><span class="w"> </span><span class="s2">"prodotti-v2"</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="p">}</span>
 </span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="c1"># Sposta alias atomicamente</span>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>POST<span class="w"> </span>_aliases
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="o">{</span>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="w">  </span><span class="s2">"actions"</span>:<span class="w"> </span><span class="o">[</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="w">    </span><span class="o">{</span><span class="w"> </span><span class="s2">"remove"</span>:<span class="w"> </span><span class="o">{</span><span class="w"> </span><span class="s2">"index"</span>:<span class="w"> </span><span class="s2">"prodotti-v1"</span>,<span class="w"> </span><span class="s2">"alias"</span>:<span class="w"> </span><span class="s2">"prodotti"</span><span class="w"> </span><span class="o">}</span><span class="w"> </span><span class="o">}</span>,
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">    </span><span class="o">{</span><span class="w"> </span><span class="s2">"add"</span>:<span class="w">    </span><span class="o">{</span><span class="w"> </span><span class="s2">"index"</span>:<span class="w"> </span><span class="s2">"prodotti-v2"</span>,<span class="w"> </span><span class="s2">"alias"</span>:<span class="w"> </span><span class="s2">"prodotti"</span><span class="w"> </span><span class="o">}</span><span class="w"> </span><span class="o">}</span>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">  </span><span class="o">]</span>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="o">}</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="err">#</span><span class="w"> </span><span class="err">Spos</span><span class="kc">ta</span><span class="w"> </span><span class="err">alias</span><span class="w"> </span><span class="err">a</span><span class="kc">t</span><span class="err">omicame</span><span class="kc">nte</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="err">POST</span><span class="w"> </span><span class="err">_aliases</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="p">{</span>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="w">  </span><span class="nt">"actions"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">"remove"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"index"</span><span class="p">:</span><span class="w"> </span><span class="s2">"prodotti-v1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"alias"</span><span class="p">:</span><span class="w"> </span><span class="s2">"prodotti"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">"add"</span><span class="p">:</span><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">"index"</span><span class="p">:</span><span class="w"> </span><span class="s2">"prodotti-v2"</span><span class="p">,</span><span class="w"> </span><span class="nt">"alias"</span><span class="p">:</span><span class="w"> </span><span class="s2">"prodotti"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">  </span><span class="p">]</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="p">}</span>
 </span></code></pre></div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -25747,10 +25756,10 @@
 </tbody>
 </table>
 <h3 id="disk-watermark">Disk Watermark<a class="headerlink" href="#disk-watermark" title="Permanent link">&para;</a></h3>
-<p>Elasticsearch blocca l'indicizzazione quando il disco supera le soglie:</p>
+<p>Elasticsearch protegge il nodo dal disco pieno: oltre <code>low</code> non assegna nuovi shard, oltre <code>high</code> sposta shard altrove, oltre <code>flood_stage</code> rende read-only (<code>read_only_allow_delete</code>) gli indici con shard sul nodo; il blocco viene rimosso automaticamente quando lo spazio torna sotto soglia. Default: 85/90/95%.</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="err">PUT</span><span class="w"> </span><span class="err">_clus</span><span class="kc">ter</span><span class="err">/se</span><span class="kc">tt</span><span class="err">i</span><span class="kc">n</span><span class="err">gs</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="p">{</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nt">"transient"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nt">"persistent"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">    </span><span class="nt">"cluster.routing.allocation.disk.watermark.low"</span><span class="p">:</span><span class="w">  </span><span class="s2">"85%"</span><span class="p">,</span>
 </span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="nt">"cluster.routing.allocation.disk.watermark.high"</span><span class="p">:</span><span class="w"> </span><span class="s2">"90%"</span><span class="p">,</span>
 </span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">    </span><span class="nt">"cluster.routing.allocation.disk.watermark.flood_stage"</span><span class="p">:</span><span class="w"> </span><span class="s2">"95%"</span>
@@ -25777,7 +25786,7 @@
 <li>Riduci il numero di shard (merge indici piccoli con <code>_shrink</code> o <code>reindex</code>)</li>
 <li>Aumenta heap (fino al 31 GB max)</li>
 <li>Controlla aggregazioni su campi <code>text</code> (convertile in <code>keyword</code>)</li>
-<li>Abilita <code>indices.breaker.total.limit</code> per evitare OOM</li>
+<li>I circuit breaker (<code>indices.breaker.total.limit</code>) sono attivi di default: se scattano (<code>CircuitBreakingException</code>) riduci la query/aggregazione invece di alzare il limite</li>
 </ul>
 <h3 id="problemi-di-reindexing-lento">Problemi di Reindexing Lento<a class="headerlink" href="#problemi-di-reindexing-lento" title="Permanent link">&para;</a></h3>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="err">POST</span><span class="w"> </span><span class="err">_rei</span><span class="kc">n</span><span class="err">dex?wai</span><span class="kc">t</span><span class="err">_</span><span class="kc">f</span><span class="err">or_comple</span><span class="kc">t</span><span class="err">io</span><span class="kc">n</span><span class="err">=</span><span class="kc">false</span>
@@ -25828,7 +25837,7 @@
 </tr>
 <tr>
 <td><strong>Elastic Agent</strong></td>
-<td>Agent unificato (sostituisce tutti i Beats)</td>
+<td>Agent unificato, successore strategico dei Beats (gestito via Fleet)</td>
 </tr>
 <tr>
 <td><strong>Fleet</strong></td>
@@ -25838,6 +25847,10 @@
 </table>
 <p><strong>Alternativa cloud-native (log):</strong> Grafana Loki è significativamente più economico per pure log aggregation perché non indicizza il contenuto — Elasticsearch indicizza tutto e offre full-text search ma a costo di storage e risorse molto più elevati.</p>
 <hr />
+<div class="admonition tip">
+<p class="admonition-title">ES|QL</p>
+<p>Da 8.11 (GA in 8.14) esiste <strong>ES|QL</strong>, un linguaggio a pipeline (<code>FROM logs-* | WHERE level == "ERROR" | STATS count() BY service.name</code>) per esplorazione e analytics, complementare al Query DSL.</p>
+</div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
 <summary>Apache Cassandra — Confronto per write-heavy</summary>
@@ -25851,14 +25864,14 @@
 </details>
 <details class="info">
 <summary>Sharding — Fondamentali distribuzione dati</summary>
-<p>Il concetto di sharding di Elasticsearch segue gli stessi principi del sharding nei database relazionali — con la differenza che in ES il routing è automatico basato sull'<code>_id</code>.</p>
+<p>Il concetto di sharding di Elasticsearch segue gli stessi principi del sharding nei database relazionali — con la differenza che in ES il routing è automatico (hash di <code>_routing</code>, di default l'<code>_id</code>).</p>
 <p><strong>Approfondimento →</strong> <a href="../../fondamentali/sharding/">Sharding</a></p>
 </details>
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html">Elasticsearch Reference</a> — documentazione ufficiale completa</li>
-<li><a href="https://www.elastic.co/guide/en/elasticsearch/guide/master/index.html">Elasticsearch: The Definitive Guide</a> — guida concettuale (ES 2.x ma ancora valida concettualmente)</li>
+<li><a href="https://www.elastic.co/guide/en/elasticsearch/guide/master/index.html">Elasticsearch: The Definitive Guide</a> — guida storica (ES 2.x, <strong>obsoleta</strong> per API e sintassi; utile solo per i concetti)</li>
 <li><a href="https://www.elastic.co/blog/found-sizing-elasticsearch">Elastic Blog — Sizing Guide</a> — dimensionamento cluster</li>
 <li><a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html">Query DSL Reference</a> — riferimento completo Query DSL</li>
 <li><a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/index-lifecycle-management.html">ILM Reference</a> — gestione ciclo di vita indici</li>
