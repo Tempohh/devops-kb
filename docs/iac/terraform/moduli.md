@@ -7,7 +7,7 @@ search_keywords: [terraform modules, moduli terraform, riuso iac, terraform regi
 parent: iac/terraform/_index
 related: [iac/terraform/fondamentali, iac/terraform/state-management]
 official_docs: https://developer.hashicorp.com/terraform/language/modules
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -245,7 +245,7 @@ resource "aws_eks_cluster" "main" {
 # Modulo ufficiale AWS VPC — uno dei più usati
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 5.1" # <!-- REVIEW: verificare se la major corrente è 6.x e le variazioni di input -->
+  version = "~> 6.0" # major 6.x (richiede AWS provider >= 6.0); gli input usati qui restano invariati rispetto alla 5.x
 
   name = "prod-vpc"
   cidr = "10.0.0.0/16"
@@ -267,14 +267,14 @@ module "vpc" {
 # Modulo EKS
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.0" # <!-- REVIEW: verificare major corrente (v21 rinomina input, es. name/kubernetes_version) -->
+  version = "~> 21.0" # v21: richiede Terraform >= 1.5.7 e AWS provider >= 6.0; input senza prefisso cluster_ (in v20: cluster_name, cluster_version, cluster_endpoint_public_access)
 
-  cluster_name    = "prod-eks"
-  cluster_version = "1.33" # usare una versione Kubernetes ancora supportata da EKS
+  name               = "prod-eks"
+  kubernetes_version = "1.33" # usare una versione Kubernetes ancora supportata da EKS
 
-  vpc_id                         = module.vpc.vpc_id
-  subnet_ids                     = module.vpc.private_subnets
-  cluster_endpoint_public_access = true
+  vpc_id                 = module.vpc.vpc_id
+  subnet_ids             = module.vpc.private_subnets
+  endpoint_public_access = true
 
   eks_managed_node_groups = {
     general = {
