@@ -7,9 +7,10 @@ search_keywords: [Cloud Run, serverless container GCP, container serverless Goog
 parent: cloud/gcp/compute/_index
 related: [cloud/gcp/containers/gke, cloud/gcp/fondamentali/panoramica]
 official_docs: https://cloud.google.com/run/docs
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-25
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Cloud Run
@@ -30,8 +31,8 @@ Il modello operativo è request-driven: i container ricevono richieste HTTP/gRPC
 **Quando scegliere alternative:**
 - Workload con stato persistente su disco locale → **GKE** (volume PersistentVolumeClaim)
 - Necessità di DaemonSet, sidecar avanzati, o Service Mesh → **GKE**
-- Latenza ultra-bassa senza cold start accettabile → GKE con min replicas sempre attive
-- Protocolli non HTTP (TCP raw, UDP, WebSocket long-lived senza HTTP) → **GKE**
+- Latenza ultra-bassa con cold start non tollerabile → `min-instances` ≥ 1 su Cloud Run; GKE solo se servono anche altre funzioni (vedi sopra)
+- Protocolli non HTTP (TCP raw, UDP) → **GKE**. WebSocket/SSE/gRPC streaming sono supportati (upgrade HTTP) ma restano soggetti al timeout di richiesta (max 60 min): client con riconnessione obbligatoria
 
 **Le tre forme di Cloud Run:**
 
@@ -62,8 +63,10 @@ Cloud Run Frontend (routing per revision e traffic split)
         ├── Scarica immagine dal registry (Artifact Registry)
         ├── Avvia container (entrypoint / CMD)
         ├── Attende che la porta sia in ascolto
-        └── Inoltro richiesta (timeout di avvio: default 4 min, max 60 min)
+        └── Inoltro richiesta
 ```
+
+Il tempo concesso all'avvio è governato dalla **startup probe**: di default un check TCP sulla porta del container con finestra di 240 s; con una `startupProbe` esplicita la finestra è `initialDelaySeconds + periodSeconds × failureThreshold`. Il timeout di 60 min (default 5 min) riguarda invece la **singola richiesta**, non l'avvio.
 
 Il container **deve** avviare un server HTTP sulla porta configurata (default `PORT=8080`, variabile iniettata automaticamente). Cloud Run invia richieste a quella porta e considera il container pronto quando la porta è in ascolto.
 
@@ -89,17 +92,20 @@ Istanza Cloud Run (es. 1 vCPU, 512 MiB)
 ├── Richiesta 1 (in elaborazione)
 ├── Richiesta 2 (in elaborazione)
 ├── Richiesta 3 (in elaborazione)
-└── ... fino a maxConcurrentRequests (default: 80, max: 1000)
+└── ... fino a `concurrency` (flag `--concurrency`, campo YAML `containerConcurrency`; default 80, max 1000)
 ```
 
-Quando tutte le istanze sono sature al 100% della concorrenza configurata, Cloud Run avvia nuove istanze. La formula per stimare il numero di istanze:
+Cloud Run non attende la saturazione: aggiunge istanze quando la concorrenza media o l'utilizzo CPU superano circa il **60%** del target, quindi scala in anticipo. Stima di partenza (legge di Little):
 
 ```
-istanze_necessarie = ceil(RPS / (concurrency * requestsPerSecond_per_vCPU))
+richieste_in_volo = RPS × latenza_media_secondi
+istanze_necessarie ≈ ceil(richieste_in_volo / (concurrency × 0.6))
 ```
+
+Il valore reale può essere maggiore se la CPU satura prima della concorrenza: validare con load test.
 
 !!! warning "Concorrenza e thread-safety"
-    Se la tua applicazione non è thread-safe (es. variabili globali mutabili), abbassare `maxConcurrentRequests` a 1 — ogni istanza gestirà una sola richiesta alla volta, come una Lambda. Questo aumenta i costi ma garantisce isolamento.
+    Se la tua applicazione non è thread-safe (es. variabili globali mutabili), abbassare `--concurrency` a 1 — ogni istanza gestirà una sola richiesta alla volta, come una Lambda. Questo aumenta i costi ma garantisce isolamento.
 
 ### CPU Allocation
 
@@ -107,8 +113,8 @@ Cloud Run offre due modalità di allocazione CPU:
 
 | Modalità | Quando la CPU è attiva | Costo | Use case |
 |---|---|---|---|
-| **CPU throttled** (default) | Solo durante richieste HTTP | Più basso | Servizi HTTP stateless standard |
-| **CPU always-on** | Sempre (anche tra richieste) | Più alto | Background tasks, caching in memoria, websocket |
+| **CPU throttled** (request-based billing, default) | Solo durante richieste HTTP | Più basso | Servizi HTTP stateless standard |
+| **CPU always-on** (instance-based billing, `--no-cpu-throttling`) | Sempre (anche tra richieste) | Più alto | Background tasks, caching in memoria, websocket |
 
 Con CPU throttled, i processi in background (goroutine, thread, timer) vengono **congelati** tra una richiesta e l'altra — non eseguono istruzioni finché non arriva una nuova richiesta.
 
@@ -246,13 +252,14 @@ gcloud run services describe my-service \
 I **Cloud Run Jobs** eseguono container fino al completamento (non server HTTP):
 
 ```bash
-# Creare un job
+# Creare un job: --tasks = task totali (parallelismo con --parallelism),
+# --max-retries = retry per task fallito, --task-timeout = timeout per task (1 ora)
 gcloud run jobs create my-batch-job \
     --image=europe-west8-docker.pkg.dev/my-project/my-repo/batch-worker:latest \
     --region=europe-west8 \
-    --tasks=10 \                     # numero di task paralleli
-    --max-retries=3 \                # retry per task fallito
-    --task-timeout=3600 \            # timeout per task (1 ora)
+    --tasks=10 \
+    --max-retries=3 \
+    --task-timeout=3600 \
     --cpu=2 \
     --memory=2Gi \
     --set-env-vars="BATCH_ID=run-001"
@@ -342,8 +349,9 @@ gcloud run services update my-service \
 ### Connessione a Cloud SQL
 
 ```bash
-# Metodo 1: Cloud SQL Proxy (via socket Unix — raccomandato)
-# Il proxy viene iniettato come container sidecar automaticamente
+# Metodo 1: integrazione Cloud SQL built-in (socket Unix in /cloudsql — raccomandato)
+# Nessun proxy/sidecar da gestire: Cloud Run monta il socket e autentica via IAM
+# (il SA del servizio richiede roles/cloudsql.client)
 gcloud run services update my-service \
     --add-cloudsql-instances=my-project:europe-west8:my-db \
     --set-env-vars="DB_SOCKET_PATH=/cloudsql/my-project:europe-west8:my-db"
@@ -383,6 +391,8 @@ Per chiamare un servizio Cloud Run autenticato, il caller deve aggiungere un **O
 
 ```bash
 # Ottenere un token OIDC per chiamare il servizio (da CLI)
+# --audiences funziona solo con credenziali di service account (o --impersonate-service-account);
+# con un account utente: gcloud auth print-identity-token (senza --audiences)
 TOKEN=$(gcloud auth print-identity-token \
     --audiences=https://my-service-xxxx-xx.a.run.app)
 curl -H "Authorization: Bearer $TOKEN" \
@@ -431,10 +441,10 @@ gcloud projects add-iam-policy-binding my-project \
 ## Best Practices
 
 !!! tip "Impostare min-instances=1 per servizi critici"
-    Con `min-instances=0` (default), ogni periodo di inattività produce un **cold start** alla richiesta successiva. Per servizi con SLA di latenza, impostare `--min-instances=1`: un'istanza sempre calda elimina il cold start al costo di ~1 vCPU/ora anche in idle.
+    Con `min-instances=0` (default), ogni periodo di inattività produce un **cold start** alla richiesta successiva. Per servizi con SLA di latenza, impostare `--min-instances=1`: un'istanza sempre calda elimina il cold start. Costo: le istanze minime inattive sono fatturate a una tariffa idle ridotta (con CPU throttled), a tariffa piena con CPU always-on — vedere [Pricing](https://cloud.google.com/run/pricing).
 
-!!! warning "Timeout richieste e cold start"
-    Il timeout di Cloud Run include il cold start. Se un container impiega 3 secondi ad avviarsi e il timeout è 5 secondi, alcune richieste scadranno durante i cold start. Dimensionare il timeout tenendo conto del tempo di avvio: `timeout > startup_time + max_request_time`.
+!!! warning "Richieste in coda durante lo scale-out"
+    Se non ci sono istanze con capacità libera, la richiesta resta in coda mentre parte una nuova istanza; se l'avvio è troppo lento o `max-instances` è raggiunto, il client riceve `429`/`503`. Il timeout di richiesta (`--timeout`) limita la durata dell'elaborazione, non compensa un avvio lento: ridurre il tempo di avvio (startup CPU boost, immagine leggera, lazy init) è la leva giusta.
 
 ```bash
 # Struttura Dockerfile ottimizzata per cold start rapidi
@@ -444,8 +454,8 @@ gcloud projects add-iam-policy-binding my-project \
 ```
 
 ```dockerfile
-# Esempio: Go service con immagine distroless (cold start < 100ms)
-FROM golang:1.22-alpine AS builder
+# Esempio: Go service con immagine distroless (binario statico, immagine minima)
+FROM golang:1.25-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -490,10 +500,10 @@ gcloud run services update my-service \
     --region=europe-west8 \
     --min-instances=1
 
-# Soluzione 2: aumentare il timeout per dare tempo al cold start
+# Soluzione 2: startup CPU boost (più CPU durante l'avvio)
 gcloud run services update my-service \
     --region=europe-west8 \
-    --timeout=60
+    --cpu-boost
 
 # Soluzione 3: ottimizzare il container (vedere Dockerfile sopra)
 # Verificare il startup time reale dai log
@@ -605,13 +615,17 @@ gcloud run services update my-service \
     --region=europe-west8 \
     --concurrency=200  # aumentare se l'app è thread-safe
 
-# Soluzione 2: usare startup CPU boost (gen2) per ridurre i cold start
-# In YAML:
-#   run.googleapis.com/startup-cpu-boost: "true"
-
-# Soluzione 3: pre-warm con min-instances
+# Soluzione 2: startup CPU boost per ridurre i cold start
 gcloud run services update my-service \
-    --min-instances=5 \   # 5 istanze pronte ad assorbire il traffico iniziale
+    --region=europe-west8 \
+    --cpu-boost
+# In YAML: run.googleapis.com/startup-cpu-boost: "true"
+
+# Soluzione 3: pre-warm con min-instances (5 istanze pronte ad assorbire il picco)
+# e max-instances adeguato (se raggiunto, le richieste in eccesso ricevono 429)
+gcloud run services update my-service \
+    --region=europe-west8 \
+    --min-instances=5 \
     --max-instances=200
 ```
 
