@@ -5,11 +5,12 @@ category: dev
 tags: [java, spring-boot, kubernetes, microservizi, actuator, testcontainers, buildpacks]
 search_keywords: [spring boot, spring boot 3, spring boot kubernetes, spring boot microservizi, spring boot k8s, application.yml, spring profiles, spring cloud kubernetes, configurationproperties, actuator, health check, readiness probe, liveness probe, metriche prometheus, micrometer, testcontainers, integration test, layered jar, buildpacks, cloud native buildpacks, spring initializr, spring boot docker, spring boot container, spring boot native, graalvm native, resilience4j, spring kafka, java microservizi, jvm microservizi, spring framework, spring mvc, spring webflux, reactive spring, spring data jpa, spring security, spring cloud, kubernetes config, configmap spring, secret spring, java 21, virtual threads, loom]
 parent: dev/linguaggi/_index
-related: [messaging/kafka/sviluppo/spring-kafka, dev/linguaggi/java-quarkus]
+related: [messaging/kafka/sviluppo/spring-kafka, dev/linguaggi/java-quarkus, dev/runtime/jvm-tuning, dev/resilienza/circuit-breaker]
 official_docs: https://docs.spring.io/spring-boot/docs/current/reference/html/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Java Spring Boot 3.x per Kubernetes
@@ -34,8 +35,11 @@ Quando usare Spring Boot: team Java esistente, necessità di un ecosistema matur
 | Virtual Threads (Loom) | 3.2 | Throughput HTTP senza pool tuning |
 | `@HttpExchange` declarative client | 3.0 | Alternativa a Feign Client |
 | `RestClient` (blocante, fluent) | 3.2 | Sostituisce `RestTemplate` |
-| `ProblemDetail` (RFC 9457) | 3.0 | Error responses standardizzate |
+| `ProblemDetail` (RFC 9457, ex RFC 7807) | 3.0 | Error responses standardizzate |
 | AOT (Ahead-of-Time) compilation | 3.0 | Riduce startup anche senza Native |
+
+!!! warning "Versioni: 3.x è la linea precedente"
+    Spring Boot 4.0 (Spring Framework 7, baseline Jakarta EE 11) è uscito a fine 2025 e porta starter modularizzati, Jackson 3 e null-safety JSpecify; la linea 3.5 è l'ultima 3.x e il suo supporto open source è terminato nel 2026. Il contenuto di questa pagina (pattern Kubernetes, Actuator, probe, immagini) resta valido, ma per nuovi progetti partire da Boot 4 e verificare la guida di migrazione: cambiano alcuni nomi di starter/moduli di test e Testcontainers passa alla 2.x (artifact `testcontainers-postgresql`). Java 25 (LTS) è supportato dalle versioni recenti; Java 21 resta un baseline valido. <!-- REVIEW: verificare date EOL Boot 3.5 e dettagli migrazione Boot 4 (starter, Testcontainers 2.x) su spring.io/projects/spring-boot#support -->
 
 ### Struttura Progetto Standard
 
@@ -154,10 +158,15 @@ Dipendenze raccomandate per un microservizio Kubernetes standard:
         <artifactId>spring-cloud-starter-kubernetes-client-config</artifactId>
     </dependency>
 
-    <!-- Resilience4j — circuit breaker, retry, rate limiter -->
+    <!-- Resilience4j — circuit breaker, retry, rate limiter (annotazioni @CircuitBreaker/@Retry).
+         Richiede anche spring-boot-starter-aop (o aspectj) per il proxy delle annotazioni -->
     <dependency>
-        <groupId>org.springframework.cloud</groupId>
-        <artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+        <groupId>io.github.resilience4j</groupId>
+        <artifactId>resilience4j-spring-boot3</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-aop</artifactId>
     </dependency>
 
     <!-- Database (esempio PostgreSQL) -->
@@ -189,13 +198,14 @@ Dipendenze raccomandate per un microservizio Kubernetes standard:
     </dependency>
 </dependencies>
 
-<!-- Spring Cloud BOM — allinea le versioni -->
+<!-- Spring Cloud BOM — allinea le versioni. La release train DEVE essere compatibile
+     con la versione di Boot (2025.0.x ↔ Boot 3.5; 2023.0.x ↔ Boot 3.3 e 3.2): vedi matrice su spring.io/projects/spring-cloud -->
 <dependencyManagement>
     <dependencies>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-dependencies</artifactId>
-            <version>2023.0.3</version>
+            <version>2025.0.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -280,9 +290,14 @@ management:
 
 Con `spring-cloud-starter-kubernetes-client-config`, i ConfigMap Kubernetes vengono automaticamente mappati come `PropertySource` nell'ambiente Spring.
 
+!!! note "Import esplicito, niente bootstrap"
+    Dal ciclo Spring Cloud 2020.0 il `bootstrap.yml` è disattivato: i ConfigMap si caricano dichiarando `spring.config.import: "kubernetes:"` in `application.yml`. Senza questa riga le property del ConfigMap non vengono lette (causa frequente del troubleshooting più sotto). Alternativa senza dipendenza né RBAC: montare ConfigMap/Secret come volume e usare `spring.config.import: "optional:configtree:/etc/config/"`, oppure iniettarli come env var.
+
 ```yaml
-# bootstrap.yml (o application.yml con spring.config.import)
+# application.yml
 spring:
+  config:
+    import: "kubernetes:"      # abilita il caricamento di ConfigMap/Secret via API server
   cloud:
     kubernetes:
       config:
@@ -431,11 +446,12 @@ spec:
             failureThreshold: 3
           resources:
             requests:
-              memory: "256Mi"
+              memory: "768Mi"      # memoria: request = limit (la JVM non rilascia heap, evita eviction)
               cpu: "250m"
             limits:
-              memory: "512Mi"
+              memory: "768Mi"      # con MaxRAMPercentage=75 → heap ~576Mi, ~190Mi per metaspace/thread/buffer
               cpu: "1000m"
+      terminationGracePeriodSeconds: 60   # > preStop (5s) + timeout-per-shutdown-phase (30s)
 ```
 
 ```yaml
@@ -591,7 +607,7 @@ class OrderEventIT {
 
 ```dockerfile
 # Dockerfile — multi-stage con layered JAR
-FROM eclipse-temurin:21-jdk-alpine AS builder
+FROM maven:3.9-eclipse-temurin-21 AS builder
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
@@ -618,11 +634,12 @@ COPY --from=layers /app/application/ ./
 
 EXPOSE 8080 8081
 ENTRYPOINT ["java", \
-  "-XX:+UseContainerSupport", \
   "-XX:MaxRAMPercentage=75.0", \
-  "-Djava.security.egd=file:/dev/./urandom", \
   "org.springframework.boot.loader.launch.JarLauncher"]
 ```
+
+!!! note "Dettagli versione"
+    `builder` usa l'immagine `maven` perché `eclipse-temurin` non contiene Maven. Il launcher `org.springframework.boot.loader.launch.JarLauncher` vale da Boot 3.2 (prima: `org.springframework.boot.loader.JarLauncher`). Da Boot 3.3 `-Djarmode=layertools` è deprecato in favore di `-Djarmode=tools extract --layers --launcher`. `UseContainerSupport` è già attivo di default sulle JVM moderne.
 
 **Opzione 2: Cloud Native Buildpacks** — zero Dockerfile
 
@@ -637,9 +654,7 @@ ENTRYPOINT ["java", \
             <!-- Builder Paketo — default Spring Boot -->
             <builder>paketobuildpacks/builder-jammy-base</builder>
             <env>
-                <!-- JVM flags via Buildpack env var -->
-                <JAVA_TOOL_OPTIONS>-XX:MaxRAMPercentage=75</JAVA_TOOL_OPTIONS>
-                <!-- Forza Java 21 -->
+                <!-- Variabili BP_* = configurazione di BUILD. Forza Java 21 -->
                 <BP_JVM_VERSION>21</BP_JVM_VERSION>
             </env>
         </image>
@@ -657,6 +672,8 @@ docker push my-registry/order-service:1.0.0
 
 !!! tip "Buildpacks vs Dockerfile"
     Buildpacks gestiscono automaticamente: layering ottimale, security patches (rebasing senza rebuild), SBOM (Software Bill of Materials), e configurazione JVM container-aware. Preferire Buildpacks quando il team non ha esigenze specifiche di Dockerfile personalizzati.
+
+    Le variabili `BP_*` nel `pom.xml` valgono solo a build time. I flag JVM a runtime (es. `JAVA_TOOL_OPTIONS`) si impostano come `env` nel Deployment; il *memory calculator* Paketo calcola già `-Xmx` e le altre aree dal limit del container, quindi non sovrapporvi `MaxRAMPercentage` senza motivo.
 
 ---
 
@@ -702,7 +719,7 @@ spring:
     timeout-per-shutdown-phase: 30s  # Tempo massimo per lo shutdown
 ```
 
-Il `preStop` hook Kubernetes dovrebbe aspettare qualche secondo prima di SIGTERM per permettere a kube-proxy di aggiornare le regole iptables:
+Il `preStop` hook Kubernetes dovrebbe aspettare qualche secondo prima di SIGTERM per permettere a kube-proxy/Ingress di rimuovere il Pod dagli endpoint (la rimozione è asincrona rispetto all'avvio della terminazione: senza attesa arrivano richieste a un Pod che sta già chiudendo):
 
 ```yaml
 # Deployment — lifecycle hook
@@ -712,19 +729,23 @@ lifecycle:
       command: ["/bin/sh", "-c", "sleep 5"]
 ```
 
+Il tempo totale (`preStop` + `timeout-per-shutdown-phase`) deve stare dentro `terminationGracePeriodSeconds` (default 30s), altrimenti il kubelet invia SIGKILL a metà shutdown. Le immagini senza shell (Paketo `tiny`, distroless) non possono usare `exec sleep`: usare l'azione nativa `preStop.sleep.seconds` (Kubernetes ≥ 1.30). <!-- REVIEW: verificare stato GA di preStop sleep nella versione K8s target -->
+
+!!! note "Mantieni il collegamento con le probe"
+    In shutdown graceful Spring Boot porta `readiness` a `REFUSING_TRAFFIC` mentre completa le richieste in corso: è il segnale che toglie il Pod dal routing.
+
 ### JVM Tuning per Container
 
 ```bash
 # JVM flags raccomandate per container Kubernetes
 JAVA_TOOL_OPTIONS="\
-  -XX:+UseContainerSupport \
   -XX:MaxRAMPercentage=75.0 \
   -XX:InitialRAMPercentage=50.0 \
-  -XX:+UseG1GC \
-  -XX:MaxGCPauseMillis=200 \
-  -Djava.security.egd=file:/dev/./urandom \
-  -Dfile.encoding=UTF-8"
+  -XX:+UseG1GC"
 ```
+
+!!! warning "Garbage collector scelto dalla JVM"
+    Con meno di 2 CPU o meno di ~1.8 GB di memoria visibili la JVM seleziona **SerialGC**, non G1: un Pod con `limits.cpu: 1` o memoria 512–768Mi gira quindi in Serial salvo `-XX:+UseG1GC` esplicito. Serial è spesso adeguato per Pod piccoli (meno overhead); G1 serve con heap/CPU maggiori. `UseContainerSupport` e `MaxGCPauseMillis=200` sono già i default. Dettagli: [JVM Tuning](../runtime/jvm-tuning.md).
 
 !!! tip "Virtual Threads (Java 21 + Spring Boot 3.2)"
     Abilitare Virtual Threads elimina la necessità di tuning del thread pool per applicazioni I/O-bound:
@@ -734,7 +755,7 @@ JAVA_TOOL_OPTIONS="\
         virtual:
           enabled: true   # Abilita Loom Virtual Threads per Tomcat e task scheduler
     ```
-    Con Virtual Threads, ogni richiesta HTTP usa un virtual thread (leggero) invece di un OS thread — il pool Tomcat non è più un collo di bottiglia.
+    Con Virtual Threads, ogni richiesta HTTP usa un virtual thread (leggero) invece di un OS thread — il pool Tomcat non è più un collo di bottiglia. Il collo si sposta sulle risorse a valle: il pool Hikari (dimensionato sul DB, non sui thread) limita comunque la concorrenza reale. Su Java 21 i blocchi `synchronized` che fanno I/O "inchiodano" (*pin*) il carrier thread; il problema è risolto da Java 24 (JEP 491).
 
 ---
 
@@ -768,20 +789,18 @@ livenessProbe:
 
 **Sintomo:** `kubectl describe pod` mostra `OOMKilled`; `kubectl top pod` mostra memoria vicina al limit.
 
-**Causa:** `MaxRAMPercentage` troppo alto o limite container troppo basso. La JVM usa memoria extra per metaspace, code cache, direct buffers.
+**Causa:** `MaxRAMPercentage` troppo alto o limite container troppo basso. Oltre all'heap la JVM usa memoria nativa: metaspace, code cache, stack dei thread, direct buffer. Il container viene ucciso dal kernel (non dalla JVM) quando heap + non-heap supera il limit, quindi non compare un `OutOfMemoryError` Java nei log.
 
 **Soluzione:**
 ```bash
-# Regola empirica: limit container = heap JVM * 1.5
-# Se MaxRAMPercentage=75 e memory limit=512Mi:
-#   Heap = 512 * 0.75 = 384Mi
-#   Extra JVM overhead ~150Mi
-#   Container limit dovrebbe essere 512Mi+
+# Regola empirica: il non-heap vale ~150-300Mi per un servizio Spring tipico.
+# Con memory limit=512Mi e MaxRAMPercentage=75: heap = 384Mi, restano solo 128Mi → rischio OOMKilled.
+# Opzioni: alzare il limit (768Mi → heap 576Mi, 192Mi non-heap) oppure abbassare MaxRAMPercentage a ~60.
 
-# Verifica consumo reale
+# Verifica heap massimo calcolato dalla JVM
 kubectl exec -it <pod> -- java -XX:+PrintFlagsFinal -version 2>&1 | grep MaxHeapSize
-
-# Aggiusta il limit
+```
+```yaml
 resources:
   limits:
     memory: "768Mi"   # Aumenta se OOMKilled
@@ -807,6 +826,8 @@ spring:
 ### Spring Cloud Kubernetes — ConfigMap non letto
 
 **Sintomo:** Le property del ConfigMap non vengono iniettate; log: `Unable to load config maps`
+
+**Causa 0:** manca `spring.config.import: "kubernetes:"` (vedi sezione ConfigMap).
 
 **Causa 1:** ServiceAccount senza permessi RBAC.
 
@@ -865,10 +886,14 @@ Spring Boot 3.x è il punto di integrazione con molti altri argomenti della KB:
     **Approfondimento completo →** [Spring Kafka](../../messaging/kafka/sviluppo/spring-kafka.md)
 
 ??? info "Resilience4j — Circuit Breaker & Retry"
-    `spring-cloud-starter-circuitbreaker-resilience4j` integra Resilience4j con Spring Boot: annotazioni `@CircuitBreaker`, `@Retry`, `@RateLimiter` sulle chiamate HTTP, configurazione in `application.yml` con profili, e metriche automatiche su Micrometer/Prometheus.
+    `resilience4j-spring-boot3` (+ AOP) abilita le annotazioni `@CircuitBreaker`, `@Retry`, `@RateLimiter`, `@Bulkhead` con configurazione in `application.yml` per profilo e metriche automatiche su Micrometer/Prometheus. `spring-cloud-starter-circuitbreaker-resilience4j` offre invece l'astrazione programmatica `CircuitBreakerFactory`.
+
+    **Approfondimento completo →** [Circuit Breaker](../resilienza/circuit-breaker.md)
 
 ??? info "JVM Tuning — Ottimizzazione Runtime"
-    I parametri JVM descritti in questa sezione (MaxRAMPercentage, G1GC, Virtual Threads) sono approfonditi nel documento dedicato al tuning JVM per container Kubernetes.
+    Parametri JVM per container (MaxRAMPercentage, scelta del GC, memoria non-heap) e il loro impatto su OOMKilled.
+
+    **Approfondimento completo →** [JVM Tuning](../runtime/jvm-tuning.md)
 
 ---
 
