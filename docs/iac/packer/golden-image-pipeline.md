@@ -7,9 +7,10 @@ search_keywords: [packer, hashicorp packer, golden image, golden ami, immutable 
 parent: iac/_index
 related: [iac/terraform/fondamentali, iac/terraform/ci-cd, iac/ansible/fondamentali, cloud/aws/compute/ec2-autoscaling, cloud/aws/compute/ec2, security/supply-chain/image-scanning, ci-cd/github-actions/workflow-avanzati]
 official_docs: https://developer.hashicorp.com/packer/docs
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-02
+last_verified: 2026-10-04
 ---
 
 # Packer — Golden Image Pipeline
@@ -138,10 +139,25 @@ packer {
 
 ```hcl
 # variables.pkr.hcl
-variable "region"      { type = string  default = "eu-west-1" }
-variable "subnet_id"   { type = string }
-variable "git_sha"     { type = string  default = "local" }
-variable "kms_key_id"  { type = string  default = "" }
+variable "region" {
+  type    = string
+  default = "eu-west-1"
+}
+
+variable "subnet_id" {
+  type = string
+}
+
+variable "git_sha" {
+  type    = string
+  default = "local"
+}
+
+variable "kms_key_id" {
+  type    = string
+  default = ""
+}
+
 variable "copy_regions" {
   type    = list(string)
   default = ["eu-central-1"]
@@ -180,7 +196,9 @@ source "amazon-ebs" "web" {
   encrypt_boot = true
   kms_key_id   = var.kms_key_id != "" ? var.kms_key_id : null
 
-  # IMDSv2 obbligatorio, anche nell'istanza di build
+  # IMDSv2 (Instance Metadata Service v2, accesso ai metadata solo con token di sessione,
+  # mitiga il furto di credenziali via SSRF): obbligatorio di default per le istanze
+  # lanciate dall'AMI (imds_support) e già nell'istanza di build (metadata_options)
   imds_support = "v2.0"
   metadata_options {
     http_endpoint               = "enabled"
@@ -188,8 +206,10 @@ source "amazon-ebs" "web" {
     http_put_response_hop_limit = 1
   }
 
-  # Distribuzione cross-region
+  # Distribuzione cross-region. Una KMS key è regionale: con una CMK custom serve
+  # una chiave per ogni region di destinazione, altrimenti la copia fallisce
   ami_regions = var.copy_regions
+  # region_kms_key_ids = { "eu-central-1" = "alias/golden-image" }
 
   tags = {
     Name       = local.ami_name
@@ -255,7 +275,9 @@ jq -r '.builds[-1].artifact_id | split(":")[1]' manifest.json
 # scripts/10-hardening.sh — baseline minima (adattare al benchmark CIS scelto)
 set -euo pipefail
 
-# Aggiornamenti di sicurezza
+# Aggiornamenti di sicurezza.
+# Su AL2023 i repo sono versionati (deterministici): senza --releasever=latest si
+# ottengono solo i pacchetti della release della base AMI, quindi tieni la base aggiornata
 dnf -y upgrade --security
 
 # SSH: no password, no root
@@ -283,6 +305,7 @@ dnf -y install audit && systemctl enable auditd
 set -euo pipefail
 
 rm -f  /home/*/.ssh/authorized_keys /root/.ssh/authorized_keys
+rm -f  /etc/ssh/ssh_host_*             # host key uniche per istanza: rigenerate al primo boot
 rm -rf /tmp/* /var/tmp/*
 rm -f  /var/log/*.log /var/log/messages
 find /var/log -type f -exec truncate -s 0 {} \;
@@ -323,7 +346,7 @@ jobs:
           role-to-assume: arn:aws:iam::123456789012:role/packer-build
           aws-region: eu-west-1
 
-      - uses: hashicorp/setup-packer@main
+      - uses: hashicorp/setup-packer@v3     # mai @main: supply chain della pipeline
         with:
           version: "1.11.2"
 
@@ -353,7 +376,7 @@ jobs:
             --tags Key=stage,Value=approved
 ```
 
-La trust policy del ruolo `packer-build` deve limitare il `sub` del token OIDC al repo e branch corretti (`repo:org/images:ref:refs/heads/main`). Permessi minimi: `ec2:RunInstances`, `CreateImage`, `CopyImage`, `CreateTags`, `CreateKeyPair`, `CreateSecurityGroup` e relative operazioni di cleanup (vedi documentazione plugin amazon).
+**OIDC** (OpenID Connect) permette a GitHub di ottenere credenziali AWS temporanee assumendo un ruolo IAM, senza access key di lunga durata salvate nei secret. La trust policy del ruolo `packer-build` deve limitare il `sub` del token OIDC al repo e branch corretti (`repo:org/images:ref:refs/heads/main`). Permessi minimi: `ec2:RunInstances`, `CreateImage`, `CopyImage`, `CreateTags`, `CreateKeyPair`, `CreateSecurityGroup` e relative operazioni di cleanup (vedi documentazione plugin amazon).
 
 ### Test dell'immagine prima della promozione
 
@@ -368,12 +391,14 @@ describe sshd_config do
   its('PermitRootLogin')        { should eq 'no' }
 end
 
-describe file('/etc/ssh/ssh_host_rsa_key') do
-  it { should exist }   # rigenerata al boot? verificare policy
+# Le host key SSH non devono essere bakeate: ogni istanza genera le proprie al boot
+describe command('ls /etc/ssh/ssh_host_* 2>/dev/null | wc -l') do
+  its('stdout.strip') { should eq '0' }   # da eseguire su istanza lanciata prima di sshd, o su volume montato
 end
 
-describe command('curl -s -o /dev/null -w "%{http_code}" -X PUT http://169.254.169.254/latest/api/token') do
-  its('stdout') { should_not eq '200' }   # senza header TTL fallisce → IMDSv2 attivo
+# IMDSv2 obbligatorio: una GET senza token di sessione deve essere rifiutata (401)
+describe command('curl -s -o /dev/null -w "%{http_code}" http://169.254.169.254/latest/meta-data/') do
+  its('stdout') { should eq '401' }
 end
 ```
 
@@ -551,7 +576,7 @@ export PACKER_PLUGIN_PATH="$HOME/.config/packer/plugins"
 export PACKER_GITHUB_API_TOKEN=<token>       # evita il rate limit di GitHub in CI
 ```
 
-### Build riuscita ma istanze con `UnauthorizedOperation` o credenziali residue
+### Build riuscita ma istanze con chiavi residue o host key duplicate
 
 **Causa**: cleanup incompleto, `authorized_keys` effimera rimasta, `machine-id` o host key duplicati tra istanze.
 
