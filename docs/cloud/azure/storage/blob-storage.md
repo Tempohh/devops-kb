@@ -7,16 +7,17 @@ search_keywords: [Azure Blob Storage, object storage Azure, storage account, LRS
 parent: cloud/azure/storage/_index
 related: [cloud/azure/security/key-vault, cloud/azure/compute/aks-containers, cloud/azure/monitoring/monitor-log-analytics]
 official_docs: https://learn.microsoft.com/azure/storage/blobs/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Azure Blob Storage
 
 ## Panoramica
 
-Azure Blob Storage è il servizio di object storage di Azure, equivalente ad Amazon S3. Progettato per archiviare quantità massicce di dati non strutturati — file, immagini, video, log, backup, archivi — con durabilità 11 nines (99.999999999%) grazie alla replica automatica. È anche la base di Azure Data Lake Storage Gen2 per analytics.
+Azure Blob Storage è il servizio di object storage di Azure, equivalente ad Amazon S3. Progettato per archiviare quantità massicce di dati non strutturati — file, immagini, video, log, backup, archivi — con durabilità da 11 nines (99.999999999%, LRS) fino a 16 (GRS/GZRS) grazie alla replica automatica. È anche la base di Azure Data Lake Storage Gen2 per analytics.
 
 Non usare Blob Storage per: dati che richiedono query SQL strutturate (usare Azure SQL), file condivisi tra VM con protocollo SMB/NFS (usare Azure Files), o messaggi a coda (usare Service Bus o Queue Storage).
 
@@ -58,12 +59,18 @@ az storage account show \
 
 | Tipo | Repliche | Regioni | Availability SLA | RTO | RPO | Use Case |
 |---|---|---|---|---|---|---|
-| **LRS** (Locally Redundant) | 3 sync | 1 datacenter | 99.9% | – | – | Dev/test, dati ricreable |
-| **ZRS** (Zone Redundant) | 3 sync | 3 zone | 99.99% | Automatico | ~0 | Produzione, alta disponibilità locale |
-| **GRS** (Geo Redundant) | 6 (3+3) | 2 regioni | 99.99% | Ore | <1h | Disaster recovery, backup cross-region |
-| **GZRS** (Geo+Zone Redundant) | 6 (3z+3) | 2 regioni | 99.99% | Ore | <1h | Best protection, workload critici |
-| **RA-GRS** (Read-Access Geo) | 6 (3+3) | 2 regioni | 99.99%/99.9% | Automatico lettura | <1h | Read scaling cross-region, CDN-like |
-| **RA-GZRS** (Read-Access Geo+Zone) | 6 | 2 regioni | 99.99%/99.9% | Automatico lettura | <1h | Massima disponibilità + read scaling |
+| **LRS** (Locally Redundant) | 3 sync | 1 datacenter | 99.9% | – | – | Dev/test, dati ricreabili |
+| **ZRS** (Zone Redundant) | 3 sync | 3 zone | 99.9% | Automatico | ~0 | Produzione, alta disponibilità locale |
+| **GRS** (Geo Redundant) | 6 (3+3) | 2 regioni | 99.9% | Ore (failover manuale) | tipicamente <15 min, nessun SLA | Disaster recovery, backup cross-region |
+| **GZRS** (Geo+Zone Redundant) | 6 (3z+3) | 2 regioni | 99.9% | Ore (failover manuale) | tipicamente <15 min, nessun SLA | Best protection, workload critici |
+| **RA-GRS** (Read-Access Geo) | 6 (3+3) | 2 regioni | 99.9% scrittura / 99.99% lettura | Lettura secondaria sempre disponibile | tipicamente <15 min, nessun SLA | Read scaling cross-region |
+| **RA-GZRS** (Read-Access Geo+Zone) | 6 | 2 regioni | 99.9% scrittura / 99.99% lettura | Lettura secondaria sempre disponibile | tipicamente <15 min, nessun SLA | Massima disponibilità + read scaling |
+
+!!! note "SLA e RPO"
+    Gli SLA indicati valgono per il tier Hot (Cool/Cold hanno SLA più bassi). **RTO** = tempo per ripristinare il servizio, **RPO** = dati persi al massimo in caso di disastro. La replica geo è asincrona: l'RPO è un valore tipico, non garantito da SLA. <!-- REVIEW: verificare SLA correnti su https://azure.microsoft.com/support/legal/sla/storage/ -->
+
+!!! tip "Durabilità"
+    LRS offre almeno 11 nines di durabilità, ZRS 12, GRS/GZRS 16: più copie indipendenti = minor probabilità di perdita simultanea.
 
 ```bash
 # Aggiornare ridondanza storage account esistente
@@ -234,29 +241,30 @@ I SAS token forniscono accesso delegato a risorse storage con permessi e scadenz
 | Tipo | Scope | Revoca | Use Case |
 |---|---|---|---|
 | **Account SAS** | Intero account | Solo ruotando chiave | Accesso multi-servizio temporaneo |
-| **Service SAS** | Container/blob specifico | Solo ruotando chiave | Accesso a risorsa specifica |
-| **User Delegation SAS** | Blob/container | Sì (revoca identity) | **Preferito**: firmato con credenziali Entra ID |
+| **Service SAS** | Container/blob specifico | Stored access policy, oppure rotazione chiave | Accesso a risorsa specifica |
+| **User Delegation SAS** | Blob/container | Sì (revoca la user delegation key o i permessi RBAC dell'identity) | **Preferito**: firmato con credenziali Entra ID |
+
+Account e Service SAS sono firmati con la chiave dell'account: con `--allow-shared-key-access false` non funzionano più. Solo la User Delegation SAS resta utilizzabile.
 
 ```bash
 # User Delegation SAS (preferito — firmato con Entra ID)
 az storage blob generate-sas \
   --account-name $SA_NAME \
   --container-name mycontainer \
-  --name report-2026-02.pdf \
+  --name report.pdf \
   --permissions r \
-  --expiry 2026-02-28T23:59:59Z \
+  --expiry $(date -u -d '+1 hour' '+%Y-%m-%dT%H:%MZ') \
   --auth-mode login \
   --as-user \
   --https-only \
   --output tsv
 
-# Service SAS per container (upload temporaneo da client esterno)
+# User Delegation SAS per container (upload temporaneo da client esterno)
 az storage container generate-sas \
   --account-name $SA_NAME \
   --name uploads \
   --permissions rwl \
-  --start 2026-02-26T00:00:00Z \
-  --expiry 2026-02-26T06:00:00Z \
+  --expiry $(date -u -d '+6 hours' '+%Y-%m-%dT%H:%MZ') \
   --https-only \
   --auth-mode login \
   --as-user \
@@ -287,6 +295,7 @@ az role assignment create \
 from azure.storage.blob import BlobServiceClient
 from azure.identity import DefaultAzureCredential
 
+STORAGE_ACCOUNT_NAME = "mystorageaccount2026"
 credential = DefaultAzureCredential()
 client = BlobServiceClient(
     account_url=f"https://{STORAGE_ACCOUNT_NAME}.blob.core.windows.net",
@@ -320,7 +329,6 @@ az storage blob upload-batch \
   --account-name $SA_NAME \
   --destination '$web' \
   --source ./dist \
-  --content-type text/html \
   --auth-mode login
 
 # Ottenere URL del sito
@@ -329,16 +337,15 @@ az storage account show \
   --name $SA_NAME \
   --query "primaryEndpoints.web" -o tsv
 
-# Abbinare Azure CDN per HTTPS custom domain e performance globale
-az cdn endpoint create \
-  --resource-group $RG \
-  --profile-name cdn-prod \
-  --name myapp-cdn \
-  --origin myapp.z6.web.core.windows.net \
-  --origin-host-header myapp.z6.web.core.windows.net \
-  --enable-compression \
-  --query-string-caching-behavior UseQueryString
 ```
+
+`upload-batch` deduce il `Content-Type` dall'estensione di ogni file: forzare `text/html` su tutto romperebbe CSS/JS/immagini.
+
+!!! tip "HTTPS con custom domain"
+    L'endpoint static website supporta HTTPS solo sul dominio `*.web.core.windows.net`. Per custom domain + TLS + CDN globale mettere **Azure Front Door** davanti all'endpoint web. I profili Azure CDN "classic" sono in dismissione, non usarli per nuovi progetti. <!-- REVIEW: verificare date di retirement Azure CDN classic -->
+
+!!! note "Static website e firewall"
+    L'endpoint `$web` è pubblico per design: con `--default-action Deny` non è raggiungibile dal web, a meno di passare da Front Door con Private Link.
 
 ## AzCopy
 
@@ -378,7 +385,7 @@ azcopy benchmark 'https://mystorageaccount.blob.core.windows.net/mycontainer'
 
 ## Data Lake Storage Gen2
 
-Data Lake Storage Gen2 combina Blob Storage con un filesystem gerarchico (Hierarchical Namespace) per analytics, big data e ML. Si abilita al momento della creazione dello storage account.
+Data Lake Storage Gen2 combina Blob Storage con un filesystem gerarchico (Hierarchical Namespace) per analytics, big data e ML. Si abilita di norma alla creazione dello storage account (l'upgrade di un account esistente è possibile ma è una migrazione con vincoli). HNS rende `rename`/`delete` di directory operazioni atomiche O(1) invece di copy+delete di ogni blob. Alcune feature (es. object replication) non sono supportate con HNS.
 
 ```bash
 # Creare storage account con HNS abilitato (Data Lake Gen2)
@@ -522,7 +529,7 @@ az network private-dns record-set a add-record \
 - Abilita **soft delete** per blob e container (protezione contro eliminazione accidentale)
 - Configura **Lifecycle Management** per ottimizzare automaticamente i costi di storage
 - Usa **GZRS** per workload critici che richiedono massima durabilità e disponibilità
-- Per analytics, usa sempre **Data Lake Gen2** con HNS abilitato
+- Per analytics/big data usa **Data Lake Gen2** (HNS), valutando le feature non supportate con HNS
 
 ```bash
 # Abilitare soft delete (blob e container)
