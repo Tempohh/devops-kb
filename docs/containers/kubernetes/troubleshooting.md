@@ -7,9 +7,10 @@ search_keywords: [kubernetes troubleshooting, kubectl debug ephemeral container,
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/workloads, containers/kubernetes/scheduling-avanzato, containers/kubernetes/architettura]
 official_docs: https://kubernetes.io/docs/tasks/debug/
-status: complete
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-03
+last_verified: 2026-10-04
 ---
 
 # Troubleshooting Kubernetes
@@ -62,7 +63,7 @@ Pod Status → Causa Probabile
 
   CrashLoopBackOff
   ├── Applicazione crasha all'avvio  → kubectl logs --previous
-  ├── Readiness probe fallisce       → kubectl describe pod → Liveness probe failed
+  ├── Liveness probe fallisce        → kubectl describe pod → Liveness probe failed (il kubelet riavvia il container; una readiness probe fallita NON causa restart, toglie solo il pod dagli endpoint)
   ├── OOM kill                       → kubectl describe pod: "OOMKilled"
   └── Mancano variabili d'ambiente  → verifica env e secret referenziati
 
@@ -78,7 +79,9 @@ Pod Status → Causa Probabile
   Evicted
   ├── Node memory pressure          → kubectl describe node → Conditions: MemoryPressure
   ├── Node disk pressure            → DiskPressure
-  └── PriorityClass bassa           → evicted per far posto a pod con priorità alta
+  └── PriorityClass bassa           → sotto pressione il kubelet sceglie le vittime anche per priority
+                                      (distinto dalla preemption dello scheduler, che rimuove pod a bassa
+                                      priorità per far posto a uno Pending: eventi "Preempted", non "Evicted")
 ```
 
 ---
@@ -88,7 +91,7 @@ Pod Status → Causa Probabile
 ```bash
 # ── Overview rapida del cluster ────────────────────────────
 kubectl get nodes -o wide                          # stato nodi
-kubectl top nodes                                  # CPU/mem usage nodi
+kubectl top nodes                                  # CPU/mem usage nodi (richiede metrics-server)
 kubectl top pods -A --sort-by=memory | head -20   # pod per consumo mem
 
 # ── Pod status in dettaglio ────────────────────────────────
@@ -116,6 +119,8 @@ kubectl logs <pod> -n <ns> --since-time=2026-02-25T10:00:00Z
 kubectl logs -l app=api -n <ns> --prefix           # log da tutti i pod con label
 
 # ── Events ────────────────────────────────────────────────
+kubectl events -n <ns>                             # kubectl 1.26+: già ordinato per tempo
+kubectl events -n <ns> --for pod/<pod> --watch     # eventi di un oggetto, in streaming
 kubectl get events -n <ns> --sort-by='.lastTimestamp'
 kubectl get events -n <ns> --field-selector reason=BackOff
 kubectl get events -n <ns> --field-selector involvedObject.name=<pod>
@@ -139,14 +144,14 @@ kubectl resource-capacity --pods                   # plugin krew
 
 ## Ephemeral Debug Containers
 
-I **debug container** (Kubernetes 1.23+) iniettano un container temporaneo in un pod esistente, anche se il pod è `read_only` o usa `distroless`.
+I **debug container** (*ephemeral containers*, GA da Kubernetes 1.25) iniettano un container temporaneo in un pod già in esecuzione, senza riavviarlo. Servono quando l'immagine è `distroless`/minimale (nessuna shell né tool) o ha `readOnlyRootFilesystem`: non si può fare `exec` di una shell che non esiste, né installare pacchetti. Il container effimero non ha probe né resources e non può essere rimosso dal pod finché il pod vive.
 
 ```bash
 # Debug un pod con distroless (nessuna shell)
-kubectl debug <pod> -n <ns> \
-    -it \
-    --image=nicolaka/netshoot \   # immagine ricca di tool di rete
-    --target=<main-container>    # condivide il process namespace con il container target
+# --image: immagine ricca di tool di rete; --target: condivide il process namespace col container target
+kubectl debug <pod> -n <ns> -it \
+    --image=nicolaka/netshoot \
+    --target=<main-container>
 
 # Il debug container può vedere:
 # - Filesystem del container target (via /proc/<pid>/root/)
@@ -157,18 +162,20 @@ kubectl debug <pod> -n <ns> \
 kubectl describe pod <pod> | grep -A5 "Ephemeral Containers"
 
 # Debug un nodo (crea un pod privilegiato sul nodo)
-kubectl debug node/worker-1 \
-    -it \
-    --image=ubuntu:22.04
-# → mount /host per accedere al filesystem del nodo
-# → usa crictl, journalctl, ps aux per diagnostica
+kubectl debug node/worker-1 -it \
+    --image=ubuntu:24.04 \
+    --profile=sysadmin
+# → il filesystem del nodo è montato in /host (chroot /host per usare i binari del nodo)
+# → senza --profile (default "legacy") il pod NON è privilegiato: per crictl/journalctl/ps
+#   serve --profile=sysadmin (privileged); --profile=general o netadmin per permessi più ridotti
+# → il pod di debug va cancellato a mano a fine lavoro (kubectl delete pod node-debugger-...)
 
 # Debug con copia del pod (modifica il comando)
-kubectl debug <pod> -n <ns> \
-    -it \
+kubectl debug <pod> -n <ns> -it \
     --copy-to=debug-pod \
     --container=<container> \
-    --image=ubuntu:22.04 \
+    --image=ubuntu:24.04 \
+    --share-processes \
     -- /bin/bash
 # Crea un nuovo pod copia (non modifica il pod originale)
 # Utile per debug senza disturbare il pod in produzione
@@ -188,8 +195,10 @@ kubectl run curl-test --image=nicolaka/netshoot --rm -it -- \
     curl -v http://api-service.production.svc.cluster.local:8080/health
 
 # Ispeziona endpoints di un service
+# Nota: l'API Endpoints è deprecata da 1.33 in favore di EndpointSlice (discovery.k8s.io/v1);
+# funziona ancora, ma gli slice sono la fonte reale (e contengono lo stato ready/serving/terminating)
+kubectl get endpointslices -n <ns> -l kubernetes.io/service-name=<service>
 kubectl get endpoints <service> -n <ns>
-kubectl describe endpoints <service> -n <ns>
 
 # Problema: service non risponde
 # Verifica che i pod siano nel endpoint:
@@ -202,8 +211,9 @@ kubectl get pods -n <ns> -l <selector-labels>
 
 # Debug NetworkPolicy
 # Tool: Cilium hubble (se usi Cilium come CNI)
-hubble observe --pod <pod> --follow
-# Oppure: policy-tester offline
+hubble observe --pod <pod> --verdict DROPPED --follow
+# Senza Cilium: ispeziona le policy che selezionano il pod (una NetworkPolicy è deny-by-default
+# solo per i pod selezionati, e solo se il CNI la implementa: Flannel puro la ignora)
 kubectl get netpol -n <ns> -o yaml
 
 # Traccia connessione end-to-end
@@ -270,6 +280,7 @@ cat /proc/meminfo | grep -E "MemAvailable|Cached"
 ps aux --sort=-%mem | head -20
 
 # CPU throttling
+# (cgroup v2; nr_throttled / throttled_usec alti = limit CPU troppo basso)
 cat /sys/fs/cgroup/kubepods.slice/kubepods-burstable.slice/*/cpu.stat | grep throttled
 ```
 
@@ -331,17 +342,12 @@ kubectl drain <node> \
 # https://krew.sigs.k8s.io/docs/user-guide/setup/install/
 
 # Plugin essenziali per troubleshooting
-kubectl krew install \
-    ctx \        # cambia context rapidamente (kubectx)
-    ns \         # cambia namespace (kubens)
-    top \        # enhanced top
-    neat \       # rimuove campi managed fields dall'output yaml
-    images \     # lista immagini per pod
-    resource-capacity \  # mostra capacità cluster con usage
-    tree \       # mostra gerarchia degli oggetti (owner references)
-    stern \      # multi-pod log tailing
-    konfig \     # merge kubeconfig files
-    deprecations  # trova API deprecate nel cluster
+# ctx/ns: cambio rapido context/namespace (kubectx, kubens)
+# neat: toglie managedFields e rumore dall'output yaml
+# images: immagini per pod; resource-capacity: capacità/usage per nodo
+# tree: gerarchia via owner references; stern: tail multi-pod
+# konfig: merge kubeconfig; deprecations: API deprecate usate nel cluster
+kubectl krew install ctx ns neat images resource-capacity tree stern konfig deprecations
 
 # Uso
 kubectl ctx                          # lista context
