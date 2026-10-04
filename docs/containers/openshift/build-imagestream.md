@@ -7,9 +7,10 @@ search_keywords: [openshift BuildConfig, S2I source to image, openshift ImageStr
 parent: containers/openshift/_index
 related: [containers/openshift/gitops-pipelines, containers/registry/_index]
 official_docs: https://docs.openshift.com/container-platform/latest/cicd/builds/understanding-buildconfigs.html
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Build e ImageStream
@@ -41,7 +42,7 @@ S2I Build Process
   Vantaggi S2I:
   ✓ Developer non deve conoscere Docker/Dockerfile
   ✓ Builder image gestita centralmente dal platform team
-  ✓ Security: build non esegue come root
+  ✓ Security: lo script assemble gira come utente non-root della builder image
   ✓ Riproducibilità: stesso builder → stesso risultato
 ```
 
@@ -106,8 +107,8 @@ spec:
     pushSecret:
       name: registry-secret
     imageLabels:
-      - name: build-date
-        value: ""             # popolato dinamicamente dal builder
+      - name: team
+        value: platform       # label OCI statica aggiunta all'immagine prodotta
 
   # ── Trigger ───────────────────────────────────────────
   triggers:
@@ -116,10 +117,12 @@ spec:
     - type: ConfigChange      # rebuild quando questo BuildConfig cambia
     - type: GitHub
       github:
-        secret: webhook-secret
+        secretReference:
+          name: webhook-secret   # Secret con chiave WebHookSecretKey (il campo `secret` in chiaro è deprecato)
     - type: Generic
       generic:
-        secret: webhook-secret
+        secretReference:
+          name: webhook-secret
         allowEnv: true        # permette di passare env vars via webhook
 
   # ── Post-Build Hook ───────────────────────────────────
@@ -178,11 +181,15 @@ oc start-build myapp \
     --from-file=./Dockerfile \
     --follow
 
-# Build con override dell'immagine di destinazione
+# Build con variabile d'ambiente / build-arg di override (Docker strategy)
 oc start-build myapp \
     --from-dir=./src \
-    --to=myregistry.company.com/myapp:dev
+    --env=APP_ENV=dev \
+    --build-arg=APP_VERSION=1.0.1
 ```
+
+!!! note "BuildConfig vs Builds for OpenShift (Shipwright)"
+    `BuildConfig` (API `build.openshift.io/v1`) resta supportato, ma l'evoluzione della piattaforma è **Builds for Red Hat OpenShift** (basato su Shipwright: `Build`/`BuildRun` con strategie `buildah`, `source-to-image`) e OpenShift Pipelines. Per nuovi progetti valuta queste alternative; `BuildConfig` è ancora comune nei cluster esistenti.
 
 ---
 
@@ -242,7 +249,10 @@ oc import-image myapp:v1.2.0 \
     --confirm \
     -n production
 
-# Policy di importazione periodica (ogni 15m)
+# Import periodico di un tag (intervallo di default del cluster: 15 min)
+oc tag quay.io/company/myapp:latest myapp:latest --scheduled -n production
+
+# Permette di usare il nome dell'IS direttamente nei Pod (lookupPolicy.local)
 oc set image-lookup myapp -n production
 
 # Lista i build che hanno generato un'immagine
@@ -267,10 +277,12 @@ Image Promotion Pipeline
      oc tag myapp:staging myapp:production
   7. Deployment in production con rollout automatico
 
-  Promozione via tag (immutabile tramite digest):
-  SOURCE_DIGEST=$(oc get istag myapp:staging -o jsonpath='{.image.dockerImageReference}')
-  oc tag --source=docker $SOURCE_DIGEST myapp:production
-  # → production punta esattamente allo stesso digest di staging
+  Promozione immutabile (per digest):
+  DIGEST=$(oc get istag myapp:staging -o jsonpath='{.image.metadata.name}')
+  oc tag myapp@$DIGEST myapp:production
+  # → production punta esattamente allo stesso digest di staging.
+  # Anche "oc tag myapp:staging myapp:production" copia il digest corrente,
+  # ma NON segue staging in futuro (a meno di --alias): è una promozione puntuale.
 ```
 
 ---
@@ -326,8 +338,11 @@ spec:
     - name: promote-image
       runAfter: [build-image]
       taskRef:
-        kind: ClusterTask
-        name: openshift-client
+        resolver: cluster       # ClusterTask è deprecato/rimosso nelle versioni recenti di OpenShift Pipelines
+        params:
+          - {name: kind, value: task}
+          - {name: name, value: openshift-client}
+          - {name: namespace, value: openshift-pipelines}
       params:
         - name: SCRIPT
           value: |
@@ -401,9 +416,9 @@ oc logs build/myapp-1 -n production --follow
 # Verifica le env vars configurate nel BuildConfig
 oc get bc myapp -o jsonpath='{.spec.strategy.sourceStrategy.env}' -n production
 
-# Avvia un build con override della builder image per test
+# Avvia un build con override di una variabile d'ambiente per test
 oc start-build myapp \
-    --build-env PIP_INDEX_URL=https://pypi.org/simple \
+    --env=PIP_INDEX_URL=https://pypi.org/simple \
     --follow -n production
 
 # Debug interattivo: esegui un pod con la builder image per testare assemble
@@ -417,15 +432,18 @@ oc run debug-s2i --image=registry.access.redhat.com/ubi9/python-312 \
 
 **Sintomo:** Dopo `oc tag myapp:staging myapp:production`, il Deployment non fa rollout automatico. I pod continuano a girare con la vecchia immagine.
 
-**Causa:** Il Deployment non ha un `ImageChange` trigger configurato, oppure il trigger punta a un nome ImageStreamTag errato. Con Deployment (non DeploymentConfig), il trigger va configurato esplicitamente.
+**Causa:** Il Deployment non ha un trigger ImageStream configurato, oppure il trigger punta a un nome ImageStreamTag errato. Con `Deployment` il trigger è l'annotation `image.openshift.io/triggers` e va configurato esplicitamente. `DeploymentConfig` è deprecato (dalla 4.14): per i nuovi workload usa `Deployment`.
 
 **Soluzione:**
 
 ```bash
-# Verifica i trigger sul DeploymentConfig
-oc get dc myapp -o jsonpath='{.spec.triggers}' -n production | python3 -m json.tool
+# Verifica l'annotation di trigger sul Deployment
+oc get deploy myapp -o jsonpath='{.metadata.annotations.image\.openshift\.io/triggers}' -n production
 
-# Per Deployment standard: aggiungi l'annotation di trigger ImageStream
+# (solo legacy) trigger su un DeploymentConfig
+oc get dc myapp -o jsonpath='{.spec.triggers}' -n production
+
+# Per Deployment standard: imposta il trigger ImageStream (scrive l'annotation)
 oc set triggers deploy/myapp \
     --from-image=myapp:production \
     --containers=myapp \
@@ -436,35 +454,34 @@ oc get istag myapp:production -n production \
     -o jsonpath='{.image.metadata.name}'
 
 # Forza rollout manuale se necessario
-oc rollout latest dc/myapp -n production
-# oppure per Deployment:
 oc rollout restart deploy/myapp -n production
+# (legacy DeploymentConfig: oc rollout latest dc/myapp)
 ```
 
 ---
 
 ### Scenario 4 — Pipeline Tekton fallisce con errore `permission denied` su Buildah
 
-**Sintomo:** Il task `buildah` nella Tekton Pipeline fallisce con `Error: error creating build container: Error response from daemon: permission denied` o `error mounting /proc`.
+**Sintomo:** Il task `buildah` nella Tekton Pipeline fallisce con errori tipo `error creating build container: ... permission denied` o `error mounting /proc` (Buildah non usa un daemon: l'errore viene dal runtime nel pod).
 
-**Causa:** Il ServiceAccount della Pipeline non ha i privilegi necessari per eseguire build privilegiate, oppure manca la SCC `privileged` (o `anyuid`) nel namespace.
+**Causa:** Il ServiceAccount della PipelineRun non ha una SCC che consenta al task di girare con le capability richieste (es. `SETFCAP`). Il SA `pipeline`, creato dall'operator in ogni namespace, di norma ha già la SCC dedicata `pipelines-scc`; il problema compare con un SA custom o con SCC modificate.
 
 **Soluzione:**
 
 ```bash
 # Verifica il ServiceAccount usato dalla Pipeline
-oc get pipelinerun myapp-run-1 -o jsonpath='{.spec.serviceAccountName}' -n production
+oc get pipelinerun myapp-run-1 -o jsonpath='{.spec.taskRunTemplate.serviceAccountName}' -n production
 
-# Concedi la SCC privileged al service account della pipeline
-oc adm policy add-scc-to-user privileged \
-    -z pipeline \
-    -n production
+# Preferibile: concedi la SCC dedicata di OpenShift Pipelines al SA custom
+oc adm policy add-scc-to-user pipelines-scc -z my-pipeline-sa -n production
 
-# Alternativa: usa buildah in modalità rootless con overlay storage
-# Nel task Buildah, aggiungi:
+# Ultima risorsa (ampia superficie d'attacco, evitare in produzione):
+# oc adm policy add-scc-to-user privileged -z my-pipeline-sa -n production
+
+# Se l'overlay storage non funziona, nel task Buildah:
 # params:
 #   - name: STORAGE_DRIVER
-#     value: vfs   # usa vfs invece di overlay se non c'è kernel support
+#     value: vfs   # più lento, ma non richiede supporto kernel overlay
 
 # Verifica che OpenShift Pipelines operator sia aggiornato
 oc get csv -n openshift-pipelines | grep pipelines
