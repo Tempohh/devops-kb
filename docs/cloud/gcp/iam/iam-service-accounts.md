@@ -7,9 +7,10 @@ search_keywords: [GCP IAM, Google Cloud IAM, Identity Access Management, Service
 parent: cloud/gcp/iam/_index
 related: [cloud/gcp/fondamentali/panoramica, cloud/gcp/containers/gke, security/network/zero-trust]
 official_docs: https://cloud.google.com/iam/docs
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-30
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # GCP IAM e Service Account
@@ -103,7 +104,7 @@ Custom roles (quando i predefined non bastano)
 | Gestito da | Google Workspace / Google Account | Google Cloud IAM |
 | Uso in pipeline CI/CD | Sconsigliato (credenziali personali) | Corretto — nessuna persona coinvolta |
 | Impersonation | Non supportata | Supportata (`iam.serviceAccounts.actAs`) |
-| Limite per project | N/A | 100 SA per project |
+| Limite per project | N/A | 100 SA per project di default (quota, aumentabile su richiesta) |
 
 ### Tipi di Service Account
 
@@ -114,20 +115,23 @@ Service Account GCP
 │   ├── Email: sa-name@PROJECT_ID.iam.gserviceaccount.com
 │   └── Uso: applicazioni custom, pipeline CI/CD, workload GKE
 │
-├── Google-managed SA
-│   ├── Creati automaticamente quando si abilita un servizio GCP
-│   ├── Email: PROJECT_NUMBER@cloudservices.gserviceaccount.com (Cloud APIs)
-│   │         PROJECT_NUMBER-compute@developer.gserviceaccount.com (default Compute)
-│   └── NON modificare i ruoli dei Google-managed SA — rischi di rompere il servizio
+├── Google-managed SA (service agent)
+│   ├── Creati e posseduti da Google; ricevono ruoli sul tuo project
+│   ├── Email: PROJECT_NUMBER@cloudservices.gserviceaccount.com (Google APIs Service Agent)
+│   │         service-PROJECT_NUMBER@gcp-sa-<servizio>.iam.gserviceaccount.com (service agent per servizio)
+│   └── NON modificare i ruoli dei service agent — rischi di rompere il servizio
 │
-└── Default SA (caso speciale del Google-managed)
-    ├── "Default Compute Engine SA" — creato automaticamente con roles/editor (!)
+└── Default SA (user-managed, creati automaticamente da alcuni servizi)
+    ├── "Default Compute Engine SA" PROJECT_NUMBER-compute@developer.gserviceaccount.com
+    ├── Storicamente creato con roles/editor (!); vedi warning sotto per le org recenti
     ├── Tutte le VM e i Pod GKE lo usano se non si specifica diversamente
     └── ANTI-PATTERN: mai usarlo per applicazioni → usa SA dedicati
 ```
 
 !!! warning "Default Compute SA con roles/editor"
-    Il Default Compute Service Account (`PROJECT_NUMBER-compute@developer.gserviceaccount.com`) viene creato automaticamente con `roles/editor` sul project. Qualsiasi VM o Pod GKE che lo usa può leggere/scrivere quasi tutte le risorse del project. Creare sempre SA dedicati con soli i permessi necessari.
+    Il Default Compute Service Account (`PROJECT_NUMBER-compute@developer.gserviceaccount.com`) viene creato automaticamente quando si abilita Compute Engine, storicamente con `roles/editor` sul project. Qualsiasi VM o Pod GKE che lo usa può leggere/scrivere quasi tutte le risorse del project. Creare sempre SA dedicati con soli i permessi necessari.
+
+    Le Organization create dopo maggio 2024 hanno di default il vincolo `iam.automaticIamGrantsForDefaultServiceAccounts` attivo, che **non** assegna più `roles/editor` ai default SA. Org e project preesistenti però conservano il grant: verificare con `gcloud projects get-iam-policy`.
 
 ---
 
@@ -139,6 +143,7 @@ Una policy IAM è una lista di **binding**: ogni binding associa un ruolo a una 
 
 ```json
 {
+  "version": 3,
   "bindings": [
     {
       "role": "roles/storage.objectViewer",
@@ -175,16 +180,18 @@ Richiesta API → Cloud Endpoint
   Ha un token OAuth2/OIDC valido per questo scope?                   │
       │ sì                                                            │ no → 401 Unauthorized
       ▼                                                               │
-  Esiste una IAM policy che concede la permission                     │
+  Esiste una Deny policy che nega questa permission?                  │
+      │ no                                                            │ sì → 403 (Deny, prevale su tutto)
+      ▼                                                               │
+  Esiste una IAM policy (allow) che concede la permission             │
   richiesta a questa identity su questa risorsa                       │
   (incluse risorse parent nella gerarchia)?                           │
       │ sì                                                            │ no → 403 Permission Denied
-      ▼                                                               │
-  Esiste una Deny policy che nega questa permission?  ───────────────┘
-      │ no                                                            │ sì → 403 (Deny)
       ▼
   Richiesta Autorizzata ✓
 ```
+
+Le **Deny policy** vengono valutate *prima* delle allow policy e hanno sempre la precedenza: nessun ruolo concesso le aggira. Le Org Policy sono un controllo separato, applicato sulla configurazione delle risorse.
 
 ### Workload Identity — Architettura
 
@@ -197,10 +204,11 @@ Pod GKE
 
 Flusso token:
 1. Pod richiede token al metadata server GKE (http://metadata.google.internal/...)
-2. GKE genera un token OIDC firmato per il KSA
-3. Le librerie client GCP (ADC) scambiano il token OIDC con un access token IAM
-4. Il token IAM è valido 1 ora, rotazione automatica
-5. Con il token IAM il Pod chiama l'API GCP (GCS, CloudSQL, Pub/Sub...)
+2. Il GKE metadata server (attivo quando il node pool è in modalità GKE_METADATA)
+   identifica il KSA del Pod e scambia la sua identità tramite Security Token Service
+3. Il metadata server restituisce un access token OAuth2 del GSA collegato (via binding workloadIdentityUser)
+4. Le librerie client GCP (ADC) usano il token in modo trasparente; validità 1 ora, rinnovo automatico
+5. Con il token il Pod chiama l'API GCP (GCS, CloudSQL, Pub/Sub...)
 
 Non serve nessuna chiave JSON — zero secret da gestire
 ```
@@ -252,10 +260,11 @@ gcloud projects get-iam-policy my-project-id \
     --format="table(bindings.role, bindings.members)" \
     --filter="bindings.members:my-app-sa"
 
-# Test esplicito: questo SA può fare questa azione?
-gcloud iam list-testable-permissions \
+# Test esplicito: questo SA ha questa permission su questa risorsa? (Policy Troubleshooter)
+gcloud policy-intelligence troubleshoot-policy iam \
     //cloudresourcemanager.googleapis.com/projects/my-project-id \
-    --filter="name:storage"
+    --principal-email=my-app-sa@my-project-id.iam.gserviceaccount.com \
+    --permission=storage.objects.get
 ```
 
 ### SA Keys vs Keyless Authentication
@@ -306,7 +315,7 @@ gcloud iam service-accounts add-iam-policy-binding \
 
 ### Service Account Impersonation
 
-L'**impersonation** permette di agire temporaneamente come un SA senza avere le sue chiavi. Richiede il permesso `roles/iam.serviceAccountTokenCreator` sul SA target.
+L'**impersonation** permette di agire temporaneamente come un SA senza avere le sue chiavi. Richiede il ruolo `roles/iam.serviceAccountTokenCreator` sul SA target (include `iam.serviceAccounts.getAccessToken`).
 
 ```bash
 # Impersonare un SA per un singolo comando
@@ -338,10 +347,11 @@ gcloud iam service-accounts add-iam-policy-binding \
 
 ```bash
 # ── PREREQUISITI ─────────────────────────────────────────────────────
-# 1. Abilitare Workload Identity sul cluster (flag --workload-pool alla creazione)
+# 1. Abilitare Workload Identity sul cluster (flag --workload-pool alla creazione).
+#    I cluster Autopilot lo hanno già abilitato di default.
 gcloud container clusters create my-cluster \
     --region=europe-west8 \
-    --workload-pool=my-project-id.svc.id.goog \
+    --workload-pool=my-project-id.svc.id.goog
     # ... altri parametri
 
 # Su cluster esistente (richiede aggiornamento anche dei node pool)
@@ -433,6 +443,11 @@ kubectl exec -it deploy/my-app -n production -- \
 # Output atteso: my-app-gsa@my-project-id.iam.gserviceaccount.com
 ```
 
+!!! tip "Alternativa: Workload Identity Federation for GKE (senza GSA)"
+    Si possono concedere i ruoli direttamente al principal del KSA, senza creare un GSA né annotare il KSA:
+    `principal://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/PROJECT_ID.svc.id.goog/subject/ns/NAMESPACE/sa/KSA_NAME`
+    (o `principalSet://` con `/namespace/NAMESPACE` per un intero namespace). Meno oggetti da gestire; alcuni servizi però non supportano ancora i principal federati e richiedono il GSA.
+
 ---
 
 ## Organization Policies
@@ -445,9 +460,9 @@ Le **Organization Policies** sono vincoli preventivi che si applicano all'intera
 gcloud org-policies list-available-constraints \
     --organization=ORGANIZATION_ID | head -40
 
-# Vedere le policy effettive su un project (incluse quelle ereditate)
+# Vedere la policy effettiva su un project (incluse quelle ereditate)
 gcloud org-policies describe constraints/iam.disableServiceAccountKeyCreation \
-    --project=my-project-id
+    --effective --project=my-project-id
 
 # ── APPLICARE UN VINCOLO (richiede roles/orgpolicy.policyAdmin) ───────
 # Disabilitare la creazione di chiavi SA (forza keyless auth)
@@ -467,7 +482,8 @@ spec:
   - enforce: true
 EOF
 
-# Vietare risorse pubbliche (allUsers/allAuthenticatedUsers) su GCS
+# Domain restricted sharing: solo identity del proprio dominio nelle policy IAM
+# (di fatto impedisce allUsers/allAuthenticatedUsers)
 gcloud org-policies set-policy - << 'EOF'
 name: organizations/ORGANIZATION_ID/policies/iam.allowedPolicyMemberDomains
 spec:
@@ -482,7 +498,7 @@ EOF
 
 | Constraint | Cosa impone | Quando usarlo |
 |---|---|---|
-| `iam.disableServiceAccountKeyCreation` | Vieta creazione chiavi JSON per SA | Ambienti con Workload Identity disponibile |
+| `iam.disableServiceAccountKeyCreation` | Vieta creazione chiavi JSON per SA (attivo di default nelle org create dopo maggio 2024) | Ambienti con Workload Identity disponibile |
 | `iam.disableServiceAccountCreation` | Vieta creazione di nuovi SA | Solo per project molto ristretti |
 | `compute.requireShieldedVm` | Tutte le VM devono usare Shielded VM | Compliance, workload sensibili |
 | `compute.vmExternalIpAccess` | Nessun IP pubblico sulle VM | VPC privato, accesso solo tramite VPN/IAP |
@@ -490,7 +506,7 @@ EOF
 | `gcp.resourceLocations` | Limita le regioni GCP utilizzabili | Compliance data residency (GDPR) |
 | `iam.allowedPolicyMemberDomains` | Solo identity del dominio aziendale nelle policy | Vieta `allUsers`/`allAuthenticatedUsers` |
 
-!!! tip "Custom Org Policy (GA dal 2024)"
+!!! tip "Custom Org Policy"
     Da metà 2024 le **Custom Organization Policies** permettono di scrivere vincoli CEL personalizzati sulle proprietà delle risorse GCP (non solo vincoli booleani predefiniti). Esempio: imporre che tutti i bucket GCS abbiano retention lock abilitato, o che le VM abbiano un tag specifico.
 
 ```bash
@@ -508,6 +524,14 @@ displayName: "Richiedi uniform bucket-level access"
 description: "Tutti i bucket GCS devono avere uniform bucket-level access abilitato"
 EOF
 gcloud org-policies set-custom-constraint /tmp/custom-policy.yaml
+
+# Il custom constraint va poi attivato con una policy (enforce: true)
+gcloud org-policies set-policy - << 'EOF'
+name: organizations/ORGANIZATION_ID/policies/custom.requireUniformBucketAccess
+spec:
+  rules:
+  - enforce: true
+EOF
 ```
 
 ---
@@ -518,14 +542,15 @@ Le **IAM Conditions** aggiungono un livello di granularità alle policy IAM: un 
 
 ```bash
 # ── ACCESSO TEMPORANEO CON DATE CONDITION ────────────────────────────
-# Permetti al consulente di accedere solo fino al 30 aprile 2026
+# Permetti al consulente di accedere solo fino al 31 dicembre 2026
 gcloud projects add-iam-policy-binding my-project-id \
     --member="user:consultant@external.com" \
     --role="roles/viewer" \
-    --condition='expression=request.time < timestamp("2026-04-30T23:59:59Z"),title=Accesso temporaneo consulente,description=Scade il 30 aprile 2026'
+    --condition='expression=request.time < timestamp("2026-12-31T23:59:59Z"),title=Accesso temporaneo consulente,description=Scade il 31 dicembre 2026'
 
 # ── CONDITION SU RESOURCE ATTRIBUTE ──────────────────────────────────
 # SA può scrivere solo nel prefisso "uploads/" del bucket
+# (le condition su bucket GCS richiedono uniform bucket-level access)
 gcloud storage buckets add-iam-policy-binding gs://my-bucket \
     --member="serviceAccount:uploader@my-project-id.iam.gserviceaccount.com" \
     --role="roles/storage.objectCreator" \
@@ -539,10 +564,10 @@ gcloud projects add-iam-policy-binding my-project-id \
     --condition='expression=resource.labels["environment"] == "dev",title=Solo istanze dev'
 ```
 
-```yaml
-# Esempio di policy IAM con condizione — formato JSON equivalente
-# (utile in Terraform o quando si modifica la policy completa)
+```json
+// Esempio di policy IAM con condizione (version 3 obbligatoria con le condition)
 {
+  "version": 3,
   "bindings": [
     {
       "role": "roles/storage.objectAdmin",
@@ -561,7 +586,7 @@ gcloud projects add-iam-policy-binding my-project-id \
 
 | Attributo | Tipo | Esempio |
 |---|---|---|
-| `request.time` | timestamp | `request.time < timestamp("2026-06-01T00:00:00Z")` |
+| `request.time` | timestamp | `request.time < timestamp("2027-01-01T00:00:00Z")` |
 | `resource.name` | string | `resource.name.startsWith("projects/_/buckets/my-bucket/objects/restricted/")` |
 | `resource.type` | string | `resource.type == "storage.googleapis.com/Bucket"` |
 | `resource.labels` | map | `resource.labels["env"] == "prod"` |
@@ -669,10 +694,17 @@ kubectl exec -it my-pod -- \
 
 # Causa 3: Org Policy che blocca (ha precedenza su IAM)
 gcloud org-policies describe constraints/iam.disableServiceAccountKeyCreation \
-    --project=my-project-id
+    --effective --project=my-project-id
 
-# Causa 4: Deny policy che esplicita nega (nuova feature IAM)
-gcloud iam policies list --attachment-point=cloudresourcemanager.googleapis.com/projects/my-project-id
+# Causa 4: Deny policy che nega esplicitamente
+gcloud iam policies list --kind=denypolicies \
+    --attachment-point=cloudresourcemanager.googleapis.com/projects/my-project-id
+
+# Qualunque causa: Policy Troubleshooter indica quale policy concede/nega
+gcloud policy-intelligence troubleshoot-policy iam \
+    //cloudresourcemanager.googleapis.com/projects/my-project-id \
+    --principal-email=my-app-sa@my-project-id.iam.gserviceaccount.com \
+    --permission=storage.objects.get
 ```
 
 **Problema: Workload Identity non funziona — Pod usa il default SA invece del GSA**
@@ -707,7 +739,7 @@ gcloud container clusters describe my-cluster --region=europe-west8 \
 # di "usare" il SA target del deployment
 # Questo permesso è necessario quando un SA deve agire come un altro SA
 
-# Esempio: Cloud Build SA non può deployare un Cloud Run service con my-app-sa
+# Esempio: il SA usato da Cloud Build (Compute default SA o SA legacy cloudbuild, a seconda dell'età del project) non può deployare un Cloud Run service con my-app-sa
 # Soluzione: concedere iam.serviceAccountUser al deployer SA
 gcloud iam service-accounts add-iam-policy-binding \
     my-app-sa@my-project-id.iam.gserviceaccount.com \
@@ -723,7 +755,7 @@ gcloud iam service-accounts add-iam-policy-binding \
 
 # Visualizzare la policy effettiva sul project
 gcloud org-policies describe constraints/compute.requireShieldedVm \
-    --project=my-project-id
+    --effective --project=my-project-id
 
 # Opzione 1: allineare la risorsa al vincolo (preferita)
 # → aggiungere --shielded-secure-boot --shielded-vtpm alla creazione VM
@@ -739,18 +771,22 @@ EOF
 
 **Problema: SA creati ma inutilizzati accumulano chiavi — audit fallisce**
 ```bash
-# Trovare SA con chiavi non usate da più di 90 giorni
-# Usare Cloud Asset Inventory per export di massa
+# Inventario di massa di tutte le chiavi SA (Cloud Asset Inventory)
 gcloud asset export \
     --project=my-project-id \
     --asset-types="iam.googleapis.com/ServiceAccountKey" \
     --output-path="gs://my-audit-bucket/iam-keys-$(date +%Y%m%d).json"
 
+# SA/chiavi non usate: Policy Intelligence (Service Account Insights) riporta l'ultimo utilizzo
+gcloud recommender insights list \
+    --project=my-project-id --location=global \
+    --insight-type=google.iam.serviceAccount.Insight
+
 # Disabilitare un SA senza eliminarlo (reversibile)
 gcloud iam service-accounts disable \
     unused-sa@my-project-id.iam.gserviceaccount.com
 
-# Eliminare definitivamente un SA (irreversibile — attendere 30 giorni per undelete)
+# Eliminare definitivamente un SA (recuperabile con `gcloud iam service-accounts undelete` solo entro ~30 giorni e non sempre: considerarlo irreversibile)
 gcloud iam service-accounts delete \
     unused-sa@my-project-id.iam.gserviceaccount.com
 ```
