@@ -7135,7 +7135,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7160,7 +7160,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7181,6 +7181,17 @@
       Indice
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#panoramica" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Panoramica
+      
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#azure-load-balancer" class="md-nav__link">
@@ -7295,6 +7306,28 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relazioni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relazioni
+      
+    </span>
+  </a>
   
 </li>
       
@@ -24425,6 +24458,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#panoramica" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Panoramica
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#azure-load-balancer" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -24537,6 +24581,28 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relazioni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relazioni
+      
+    </span>
+  </a>
   
 </li>
       
@@ -24702,7 +24768,63 @@
 
 
 <h1 id="azure-load-balancing">Azure Load Balancing<a class="headerlink" href="#azure-load-balancing" title="Permanent link">&para;</a></h1>
-<p>Azure offre quattro servizi di load balancing complementari per scenari diversi:</p>
+<h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
+<p>Azure non ha un unico load balancer: ne ha quattro, che lavorano a livelli diversi dello stack e si <strong>combinano</strong> (es. Front Door davanti a più Application Gateway regionali, ciascuno davanti a un pool di VM). La scelta si fa su due domande: il traffico è HTTP(S) o generico TCP/UDP? Serve bilanciare dentro una region o tra region?</p>
+<ul>
+<li><strong>Load Balancer</strong> (L4): inoltra pacchetti TCP/UDP senza ispezionarli, latenza minima, nessun WAF. Adatto a traffico non-HTTP (database, protocolli custom) e a tier interni.</li>
+<li><strong>Application Gateway</strong> (L7 regionale): termina TLS e legge URL/header, quindi può instradare per path/host e applicare un WAF.</li>
+<li><strong>Front Door</strong> (L7 globale): punto d'ingresso Anycast sui POP Microsoft; accelera, cachea e fa failover tra region.</li>
+<li><strong>Traffic Manager</strong> (DNS): non vede il traffico, risponde solo alle query DNS con l'endpoint migliore; funziona anche per endpoint non-HTTP o fuori Azure, ma il failover dipende dal TTL e dalla cache dei client.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Servizi correlati</p>
+<p>Per Kubernetes esiste <strong>Application Gateway for Containers</strong> (evoluzione di AGIC, supporta Gateway API) e per appliance di rete <strong>Gateway Load Balancer</strong>; non trattati qui.</p>
+</div>
+<table>
+<thead>
+<tr>
+<th>Servizio</th>
+<th>Layer</th>
+<th>Scope</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Azure Load Balancer</strong></td>
+<td>4 (TCP/UDP)</td>
+<td>Regionale</td>
+<td>VM, VMSS — traffico interno e esterno</td>
+</tr>
+<tr>
+<td><strong>Application Gateway</strong></td>
+<td>7 (HTTP/HTTPS)</td>
+<td>Regionale</td>
+<td>Web app, API con WAF</td>
+</tr>
+<tr>
+<td><strong>Azure Front Door</strong></td>
+<td>7 (HTTP/HTTPS)</td>
+<td>Globale</td>
+<td>App globali, CDN, WAF globale</td>
+</tr>
+<tr>
+<td><strong>Traffic Manager</strong></td>
+<td>DNS</td>
+<td>Globale</td>
+<td>Routing DNS tra region/endpoint</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">Dismissioni da conoscere (stato 2026)</p>
+<ul>
+<li><strong>Basic Load Balancer</strong> e Basic Public IP: ritirati il 30/09/2025 — usare solo SKU <strong>Standard</strong>.</li>
+<li><strong>Application Gateway v1</strong>: ritirato il 28/04/2026 — usare solo SKU v2 (<code>Standard_v2</code>/<code>WAF_v2</code>).</li>
+<li><strong>Front Door (classic)</strong>: ritiro previsto il 31/03/2027 — migrare a Standard/Premium.</li>
+<li>Standard LB/Public IP sono <em>secure by default</em>: il traffico in ingresso è bloccato finché un NSG non lo consente.</li>
+</ul>
+</div>
 <table>
 <thead>
 <tr>
@@ -24748,62 +24870,64 @@
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span>--name<span class="w"> </span>myapp-pip<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span>--sku<span class="w"> </span>Standard<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span>--allocation-method<span class="w"> </span>Static<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span>--zone<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="se">\ </span><span class="w">                 </span><span class="c1"># Zone-redundant</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span>--zone<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># Creare Load Balancer Standard</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="nv">LB_ID</span><span class="o">=</span><span class="k">$(</span>az<span class="w"> </span>network<span class="w"> </span>lb<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">    </span>--name<span class="w"> </span>myapp-lb<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span>--sku<span class="w"> </span>Standard<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span>--public-ip-address<span class="w"> </span>myapp-pip<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span>--frontend-ip-name<span class="w"> </span>FrontendIP<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span>--backend-pool-name<span class="w"> </span>BackendPool<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">    </span>--query<span class="w"> </span>loadBalancer.id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="c1"># Creare Health Probe</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>az<span class="w"> </span>network<span class="w"> </span>lb<span class="w"> </span>probe<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">    </span>--lb-name<span class="w"> </span>myapp-lb<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">    </span>--name<span class="w"> </span>healthprobe<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">    </span>--protocol<span class="w"> </span>Http<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">    </span>--port<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">    </span>--path<span class="w"> </span>/health<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">    </span>--interval<span class="w"> </span><span class="m">15</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">    </span>--threshold<span class="w"> </span><span class="m">2</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="c1"># Creare Load Balancing Rule</span>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>az<span class="w"> </span>network<span class="w"> </span>lb<span class="w"> </span>rule<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">    </span>--lb-name<span class="w"> </span>myapp-lb<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">    </span>--name<span class="w"> </span>http-rule<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">    </span>--protocol<span class="w"> </span>Tcp<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">    </span>--frontend-port<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="w">    </span>--backend-port<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="w">    </span>--frontend-ip-name<span class="w"> </span>FrontendIP<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="w">    </span>--backend-pool-name<span class="w"> </span>BackendPool<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="w">    </span>--probe-name<span class="w"> </span>healthprobe<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="w">    </span>--idle-timeout<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="w">    </span>--enable-tcp-reset<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="w">    </span>--disable-outbound-snat<span class="w"> </span><span class="nb">false</span>
-</span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a>
-</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a><span class="c1"># Creare NAT Rule (accesso diretto a VM specifica)</span>
-</span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a>az<span class="w"> </span>network<span class="w"> </span>lb<span class="w"> </span>inbound-nat-rule<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a><span class="w">    </span>--lb-name<span class="w"> </span>myapp-lb<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a><span class="w">    </span>--name<span class="w"> </span>ssh-vm1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a><span class="w">    </span>--protocol<span class="w"> </span>Tcp<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a><span class="w">    </span>--frontend-port<span class="w"> </span><span class="m">2222</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a><span class="w">    </span>--backend-port<span class="w"> </span><span class="m">22</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a><span class="w">    </span>--frontend-ip-name<span class="w"> </span>FrontendIP
-</span><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55" href="#__codelineno-0-55"></a>
-</span><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56" href="#__codelineno-0-56"></a><span class="c1"># Aggiungere VM al Backend Pool (tramite NIC)</span>
-</span><span id="__span-0-57"><a id="__codelineno-0-57" name="__codelineno-0-57" href="#__codelineno-0-57"></a>az<span class="w"> </span>network<span class="w"> </span>nic<span class="w"> </span>ip-config<span class="w"> </span>address-pool<span class="w"> </span>add<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58" href="#__codelineno-0-58"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59" href="#__codelineno-0-59"></a><span class="w">    </span>--nic-name<span class="w"> </span>myvm1-nic<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60" href="#__codelineno-0-60"></a><span class="w">    </span>--ip-config-name<span class="w"> </span>ipconfig1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61" href="#__codelineno-0-61"></a><span class="w">    </span>--lb-name<span class="w"> </span>myapp-lb<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62" href="#__codelineno-0-62"></a><span class="w">    </span>--address-pool<span class="w"> </span>BackendPool
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># --zone 1 2 3 = IP zone-redundant</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1"># Creare Load Balancer Standard</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="nv">LB_ID</span><span class="o">=</span><span class="k">$(</span>az<span class="w"> </span>network<span class="w"> </span>lb<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span>--name<span class="w"> </span>myapp-lb<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span>--sku<span class="w"> </span>Standard<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">    </span>--public-ip-address<span class="w"> </span>myapp-pip<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span>--frontend-ip-name<span class="w"> </span>FrontendIP<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">    </span>--backend-pool-name<span class="w"> </span>BackendPool<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">    </span>--query<span class="w"> </span>loadBalancer.id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1"># Creare Health Probe</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>az<span class="w"> </span>network<span class="w"> </span>lb<span class="w"> </span>probe<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">    </span>--lb-name<span class="w"> </span>myapp-lb<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">    </span>--name<span class="w"> </span>healthprobe<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">    </span>--protocol<span class="w"> </span>Http<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">    </span>--port<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">    </span>--path<span class="w"> </span>/health<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">    </span>--interval<span class="w"> </span><span class="m">15</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">    </span>--threshold<span class="w"> </span><span class="m">2</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="c1"># Creare Load Balancing Rule</span>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>az<span class="w"> </span>network<span class="w"> </span>lb<span class="w"> </span>rule<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">    </span>--lb-name<span class="w"> </span>myapp-lb<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">    </span>--name<span class="w"> </span>http-rule<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">    </span>--protocol<span class="w"> </span>Tcp<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-38"><a id="__codelineno-0-38" name="__codelineno-0-38" href="#__codelineno-0-38"></a><span class="w">    </span>--frontend-port<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-39"><a id="__codelineno-0-39" name="__codelineno-0-39" href="#__codelineno-0-39"></a><span class="w">    </span>--backend-port<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-40"><a id="__codelineno-0-40" name="__codelineno-0-40" href="#__codelineno-0-40"></a><span class="w">    </span>--frontend-ip-name<span class="w"> </span>FrontendIP<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-41"><a id="__codelineno-0-41" name="__codelineno-0-41" href="#__codelineno-0-41"></a><span class="w">    </span>--backend-pool-name<span class="w"> </span>BackendPool<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-42"><a id="__codelineno-0-42" name="__codelineno-0-42" href="#__codelineno-0-42"></a><span class="w">    </span>--probe-name<span class="w"> </span>healthprobe<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-43"><a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a><span class="w">    </span>--idle-timeout<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-44"><a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="w">    </span>--enable-tcp-reset<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-45"><a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a><span class="w">    </span>--disable-outbound-snat<span class="w"> </span><span class="nb">false</span>
+</span><span id="__span-0-46"><a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a>
+</span><span id="__span-0-47"><a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a><span class="c1"># Creare NAT Rule (accesso diretto a VM specifica)</span>
+</span><span id="__span-0-48"><a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a><span class="c1"># Attenzione: esporre SSH/RDP su IP pubblico è sconsigliato — preferire Azure Bastion</span>
+</span><span id="__span-0-49"><a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a>az<span class="w"> </span>network<span class="w"> </span>lb<span class="w"> </span>inbound-nat-rule<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-50"><a id="__codelineno-0-50" name="__codelineno-0-50" href="#__codelineno-0-50"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-51"><a id="__codelineno-0-51" name="__codelineno-0-51" href="#__codelineno-0-51"></a><span class="w">    </span>--lb-name<span class="w"> </span>myapp-lb<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-52"><a id="__codelineno-0-52" name="__codelineno-0-52" href="#__codelineno-0-52"></a><span class="w">    </span>--name<span class="w"> </span>ssh-vm1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-53"><a id="__codelineno-0-53" name="__codelineno-0-53" href="#__codelineno-0-53"></a><span class="w">    </span>--protocol<span class="w"> </span>Tcp<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-54"><a id="__codelineno-0-54" name="__codelineno-0-54" href="#__codelineno-0-54"></a><span class="w">    </span>--frontend-port<span class="w"> </span><span class="m">2222</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-55"><a id="__codelineno-0-55" name="__codelineno-0-55" href="#__codelineno-0-55"></a><span class="w">    </span>--backend-port<span class="w"> </span><span class="m">22</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-56"><a id="__codelineno-0-56" name="__codelineno-0-56" href="#__codelineno-0-56"></a><span class="w">    </span>--frontend-ip-name<span class="w"> </span>FrontendIP
+</span><span id="__span-0-57"><a id="__codelineno-0-57" name="__codelineno-0-57" href="#__codelineno-0-57"></a>
+</span><span id="__span-0-58"><a id="__codelineno-0-58" name="__codelineno-0-58" href="#__codelineno-0-58"></a><span class="c1"># Aggiungere VM al Backend Pool (tramite NIC)</span>
+</span><span id="__span-0-59"><a id="__codelineno-0-59" name="__codelineno-0-59" href="#__codelineno-0-59"></a>az<span class="w"> </span>network<span class="w"> </span>nic<span class="w"> </span>ip-config<span class="w"> </span>address-pool<span class="w"> </span>add<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-60"><a id="__codelineno-0-60" name="__codelineno-0-60" href="#__codelineno-0-60"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-61"><a id="__codelineno-0-61" name="__codelineno-0-61" href="#__codelineno-0-61"></a><span class="w">    </span>--nic-name<span class="w"> </span>myvm1-nic<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-62"><a id="__codelineno-0-62" name="__codelineno-0-62" href="#__codelineno-0-62"></a><span class="w">    </span>--ip-config-name<span class="w"> </span>ipconfig1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-63"><a id="__codelineno-0-63" name="__codelineno-0-63" href="#__codelineno-0-63"></a><span class="w">    </span>--lb-name<span class="w"> </span>myapp-lb<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-64"><a id="__codelineno-0-64" name="__codelineno-0-64" href="#__codelineno-0-64"></a><span class="w">    </span>--address-pool<span class="w"> </span>BackendPool
 </span></code></pre></div>
 <p><strong>Internal Load Balancer (ILB)</strong> — per traffico privato tra tier:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>az<span class="w"> </span>network<span class="w"> </span>lb<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
@@ -24812,10 +24936,15 @@
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span>--sku<span class="w"> </span>Standard<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span>--vnet-name<span class="w"> </span>production-vnet<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>--subnet<span class="w"> </span>app-subnet<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span>--private-ip-address<span class="w"> </span><span class="m">10</span>.1.2.100<span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># IP privato fisso</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span>--private-ip-address<span class="w"> </span><span class="m">10</span>.1.2.100<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span>--frontend-ip-name<span class="w"> </span>FrontendIP<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span>--backend-pool-name<span class="w"> </span>BackendPool
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># --private-ip-address = IP privato fisso del frontend</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Outbound</p>
+<p>Dal 30/09/2025 le nuove VNet non hanno più <em>default outbound access</em>: per l'uscita verso Internet usare <strong>NAT Gateway</strong> (consigliato) o outbound rules del Standard LB.</p>
+</div>
 <hr />
 <h2 id="application-gateway">Application Gateway<a class="headerlink" href="#application-gateway" title="Permanent link">&para;</a></h2>
 <p><strong>Application Gateway</strong> è il reverse proxy L7 di Azure con WAF, SSL termination e URL routing:</p>
@@ -24838,8 +24967,8 @@
 </span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">    </span>--name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">    </span>--location<span class="w"> </span>italynorth<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span>--sku<span class="w"> </span>WAF_v2<span class="w"> </span><span class="se">\ </span><span class="w">                     </span><span class="c1"># Standard_v2 (no WAF) o WAF_v2</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span>--capacity<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\ </span><span class="w">                     </span><span class="c1"># istanze fisse o auto-scale</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span>--sku<span class="w"> </span>WAF_v2<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span>--capacity<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">    </span>--vnet-name<span class="w"> </span>production-vnet<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">    </span>--subnet<span class="w"> </span>AppGwSubnet<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">    </span>--public-ip-address<span class="w"> </span>appgw-pip<span class="w"> </span><span class="se">\</span>
@@ -24849,61 +24978,78 @@
 </span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">    </span>--frontend-port<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="w">    </span>--routing-rule-type<span class="w"> </span>Basic<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">    </span>--priority<span class="w"> </span><span class="m">100</span>
-</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a>
-</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="c1"># Aggiungere backend pool (VM o VMSS o FQDN)</span>
-</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>address-pool<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">    </span>--gateway-name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">    </span>--name<span class="w"> </span>appGatewayBackendPool<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">    </span>--servers<span class="w"> </span><span class="m">10</span>.1.2.10<span class="w"> </span><span class="m">10</span>.1.2.11<span class="w"> </span><span class="m">10</span>.1.2.12
-</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a>
-</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="c1"># Aggiungere HTTPS listener con certificato</span>
-</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>ssl-cert<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-42"><a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a><span class="w">    </span>--gateway-name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-43"><a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="w">    </span>--name<span class="w"> </span>myapp-cert<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-44"><a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a><span class="w">    </span>--key-vault-secret-id<span class="w"> </span><span class="s2">"https://myvault.vault.azure.net/secrets/myapp-tls"</span>
-</span><span id="__span-2-45"><a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a>
-</span><span id="__span-2-46"><a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>frontend-port<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-47"><a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-48"><a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="w">    </span>--gateway-name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-49"><a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="w">    </span>--name<span class="w"> </span>port443<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-50"><a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a><span class="w">    </span>--port<span class="w"> </span><span class="m">443</span>
-</span><span id="__span-2-51"><a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a>
-</span><span id="__span-2-52"><a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>http-listener<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-53"><a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-54"><a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a><span class="w">    </span>--gateway-name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-55"><a id="__codelineno-2-55" name="__codelineno-2-55" href="#__codelineno-2-55"></a><span class="w">    </span>--name<span class="w"> </span>https-listener<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-56"><a id="__codelineno-2-56" name="__codelineno-2-56" href="#__codelineno-2-56"></a><span class="w">    </span>--frontend-port<span class="w"> </span>port443<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-57"><a id="__codelineno-2-57" name="__codelineno-2-57" href="#__codelineno-2-57"></a><span class="w">    </span>--ssl-cert<span class="w"> </span>myapp-cert<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-58"><a id="__codelineno-2-58" name="__codelineno-2-58" href="#__codelineno-2-58"></a><span class="w">    </span>--host-name<span class="w"> </span><span class="s2">"myapp.company.com"</span>
-</span><span id="__span-2-59"><a id="__codelineno-2-59" name="__codelineno-2-59" href="#__codelineno-2-59"></a>
-</span><span id="__span-2-60"><a id="__codelineno-2-60" name="__codelineno-2-60" href="#__codelineno-2-60"></a><span class="c1"># Path-based routing (URL routing)</span>
-</span><span id="__span-2-61"><a id="__codelineno-2-61" name="__codelineno-2-61" href="#__codelineno-2-61"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>url-path-map<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-62"><a id="__codelineno-2-62" name="__codelineno-2-62" href="#__codelineno-2-62"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-63"><a id="__codelineno-2-63" name="__codelineno-2-63" href="#__codelineno-2-63"></a><span class="w">    </span>--gateway-name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-64"><a id="__codelineno-2-64" name="__codelineno-2-64" href="#__codelineno-2-64"></a><span class="w">    </span>--name<span class="w"> </span>url-routing<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-65"><a id="__codelineno-2-65" name="__codelineno-2-65" href="#__codelineno-2-65"></a><span class="w">    </span>--paths<span class="w"> </span><span class="s2">"/api/*"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-66"><a id="__codelineno-2-66" name="__codelineno-2-66" href="#__codelineno-2-66"></a><span class="w">    </span>--address-pool<span class="w"> </span>api-backend<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-67"><a id="__codelineno-2-67" name="__codelineno-2-67" href="#__codelineno-2-67"></a><span class="w">    </span>--http-settings<span class="w"> </span>api-settings<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-68"><a id="__codelineno-2-68" name="__codelineno-2-68" href="#__codelineno-2-68"></a><span class="w">    </span>--default-address-pool<span class="w"> </span>web-backend<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-69"><a id="__codelineno-2-69" name="__codelineno-2-69" href="#__codelineno-2-69"></a><span class="w">    </span>--default-http-settings<span class="w"> </span>web-settings
-</span><span id="__span-2-70"><a id="__codelineno-2-70" name="__codelineno-2-70" href="#__codelineno-2-70"></a>
-</span><span id="__span-2-71"><a id="__codelineno-2-71" name="__codelineno-2-71" href="#__codelineno-2-71"></a><span class="c1"># Abilitare WAF Policy</span>
-</span><span id="__span-2-72"><a id="__codelineno-2-72" name="__codelineno-2-72" href="#__codelineno-2-72"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>waf-policy<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-73"><a id="__codelineno-2-73" name="__codelineno-2-73" href="#__codelineno-2-73"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-74"><a id="__codelineno-2-74" name="__codelineno-2-74" href="#__codelineno-2-74"></a><span class="w">    </span>--name<span class="w"> </span>myapp-waf-policy<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-75"><a id="__codelineno-2-75" name="__codelineno-2-75" href="#__codelineno-2-75"></a><span class="w">    </span>--type<span class="w"> </span>OWASP<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-76"><a id="__codelineno-2-76" name="__codelineno-2-76" href="#__codelineno-2-76"></a><span class="w">    </span>--version<span class="w"> </span><span class="m">3</span>.2
-</span><span id="__span-2-77"><a id="__codelineno-2-77" name="__codelineno-2-77" href="#__codelineno-2-77"></a>
-</span><span id="__span-2-78"><a id="__codelineno-2-78" name="__codelineno-2-78" href="#__codelineno-2-78"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>waf-config<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-79"><a id="__codelineno-2-79" name="__codelineno-2-79" href="#__codelineno-2-79"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-80"><a id="__codelineno-2-80" name="__codelineno-2-80" href="#__codelineno-2-80"></a><span class="w">    </span>--gateway-name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-81"><a id="__codelineno-2-81" name="__codelineno-2-81" href="#__codelineno-2-81"></a><span class="w">    </span>--enabled<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-82"><a id="__codelineno-2-82" name="__codelineno-2-82" href="#__codelineno-2-82"></a><span class="w">    </span>--firewall-mode<span class="w"> </span>Prevention<span class="w"> </span><span class="se">\ </span><span class="w">        </span><span class="c1"># Detection (log only) o Prevention (block)</span>
-</span><span id="__span-2-83"><a id="__codelineno-2-83" name="__codelineno-2-83" href="#__codelineno-2-83"></a><span class="w">    </span>--rule-set-type<span class="w"> </span>OWASP<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-84"><a id="__codelineno-2-84" name="__codelineno-2-84" href="#__codelineno-2-84"></a><span class="w">    </span>--rule-set-version<span class="w"> </span><span class="m">3</span>.2
+</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="c1"># --sku: Standard_v2 (senza WAF) o WAF_v2; --capacity: istanze fisse (in alternativa autoscaling con --min-capacity/--max-capacity)</span>
+</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="c1"># Aggiungere backend pool (VM o VMSS o FQDN)</span>
+</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>address-pool<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a><span class="w">    </span>--gateway-name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="w">    </span>--name<span class="w"> </span>appGatewayBackendPool<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="w">    </span>--servers<span class="w"> </span><span class="m">10</span>.1.2.10<span class="w"> </span><span class="m">10</span>.1.2.11<span class="w"> </span><span class="m">10</span>.1.2.12
+</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a>
+</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a><span class="c1"># Aggiungere HTTPS listener con certificato</span>
+</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>ssl-cert<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-42"><a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-43"><a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="w">    </span>--gateway-name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-44"><a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a><span class="w">    </span>--name<span class="w"> </span>myapp-cert<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-45"><a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a><span class="w">    </span>--key-vault-secret-id<span class="w"> </span><span class="s2">"https://myvault.vault.azure.net/secrets/myapp-tls"</span>
+</span><span id="__span-2-46"><a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a><span class="c1"># Richiede una managed identity user-assigned associata al gateway, con permesso di lettura dei secret su Key Vault</span>
+</span><span id="__span-2-47"><a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a>
+</span><span id="__span-2-48"><a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>frontend-port<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-49"><a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-50"><a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a><span class="w">    </span>--gateway-name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-51"><a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a><span class="w">    </span>--name<span class="w"> </span>port443<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-52"><a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a><span class="w">    </span>--port<span class="w"> </span><span class="m">443</span>
+</span><span id="__span-2-53"><a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a>
+</span><span id="__span-2-54"><a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>http-listener<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-55"><a id="__codelineno-2-55" name="__codelineno-2-55" href="#__codelineno-2-55"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-56"><a id="__codelineno-2-56" name="__codelineno-2-56" href="#__codelineno-2-56"></a><span class="w">    </span>--gateway-name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-57"><a id="__codelineno-2-57" name="__codelineno-2-57" href="#__codelineno-2-57"></a><span class="w">    </span>--name<span class="w"> </span>https-listener<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-58"><a id="__codelineno-2-58" name="__codelineno-2-58" href="#__codelineno-2-58"></a><span class="w">    </span>--frontend-port<span class="w"> </span>port443<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-59"><a id="__codelineno-2-59" name="__codelineno-2-59" href="#__codelineno-2-59"></a><span class="w">    </span>--ssl-cert<span class="w"> </span>myapp-cert<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-60"><a id="__codelineno-2-60" name="__codelineno-2-60" href="#__codelineno-2-60"></a><span class="w">    </span>--host-name<span class="w"> </span><span class="s2">"myapp.company.com"</span>
+</span><span id="__span-2-61"><a id="__codelineno-2-61" name="__codelineno-2-61" href="#__codelineno-2-61"></a>
+</span><span id="__span-2-62"><a id="__codelineno-2-62" name="__codelineno-2-62" href="#__codelineno-2-62"></a><span class="c1"># Path-based routing (URL routing)</span>
+</span><span id="__span-2-63"><a id="__codelineno-2-63" name="__codelineno-2-63" href="#__codelineno-2-63"></a><span class="c1"># Nota: la regola creata sopra è Basic; per usare la path map serve una rule di tipo PathBasedRouting</span>
+</span><span id="__span-2-64"><a id="__codelineno-2-64" name="__codelineno-2-64" href="#__codelineno-2-64"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>url-path-map<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-65"><a id="__codelineno-2-65" name="__codelineno-2-65" href="#__codelineno-2-65"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-66"><a id="__codelineno-2-66" name="__codelineno-2-66" href="#__codelineno-2-66"></a><span class="w">    </span>--gateway-name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-67"><a id="__codelineno-2-67" name="__codelineno-2-67" href="#__codelineno-2-67"></a><span class="w">    </span>--name<span class="w"> </span>url-routing<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-68"><a id="__codelineno-2-68" name="__codelineno-2-68" href="#__codelineno-2-68"></a><span class="w">    </span>--paths<span class="w"> </span><span class="s2">"/api/*"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-69"><a id="__codelineno-2-69" name="__codelineno-2-69" href="#__codelineno-2-69"></a><span class="w">    </span>--address-pool<span class="w"> </span>api-backend<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-70"><a id="__codelineno-2-70" name="__codelineno-2-70" href="#__codelineno-2-70"></a><span class="w">    </span>--http-settings<span class="w"> </span>api-settings<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-71"><a id="__codelineno-2-71" name="__codelineno-2-71" href="#__codelineno-2-71"></a><span class="w">    </span>--default-address-pool<span class="w"> </span>web-backend<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-72"><a id="__codelineno-2-72" name="__codelineno-2-72" href="#__codelineno-2-72"></a><span class="w">    </span>--default-http-settings<span class="w"> </span>web-settings
+</span><span id="__span-2-73"><a id="__codelineno-2-73" name="__codelineno-2-73" href="#__codelineno-2-73"></a>
+</span><span id="__span-2-74"><a id="__codelineno-2-74" name="__codelineno-2-74" href="#__codelineno-2-74"></a><span class="c1"># WAF Policy (modello attuale; waf-config set è la configurazione legacy)</span>
+</span><span id="__span-2-75"><a id="__codelineno-2-75" name="__codelineno-2-75" href="#__codelineno-2-75"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>waf-policy<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-76"><a id="__codelineno-2-76" name="__codelineno-2-76" href="#__codelineno-2-76"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-77"><a id="__codelineno-2-77" name="__codelineno-2-77" href="#__codelineno-2-77"></a><span class="w">    </span>--name<span class="w"> </span>myapp-waf-policy
+</span><span id="__span-2-78"><a id="__codelineno-2-78" name="__codelineno-2-78" href="#__codelineno-2-78"></a>
+</span><span id="__span-2-79"><a id="__codelineno-2-79" name="__codelineno-2-79" href="#__codelineno-2-79"></a><span class="c1"># Modalità: Detection (solo log) o Prevention (blocca)</span>
+</span><span id="__span-2-80"><a id="__codelineno-2-80" name="__codelineno-2-80" href="#__codelineno-2-80"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>waf-policy<span class="w"> </span>policy-setting<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-81"><a id="__codelineno-2-81" name="__codelineno-2-81" href="#__codelineno-2-81"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-82"><a id="__codelineno-2-82" name="__codelineno-2-82" href="#__codelineno-2-82"></a><span class="w">    </span>--policy-name<span class="w"> </span>myapp-waf-policy<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-83"><a id="__codelineno-2-83" name="__codelineno-2-83" href="#__codelineno-2-83"></a><span class="w">    </span>--state<span class="w"> </span>Enabled<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-84"><a id="__codelineno-2-84" name="__codelineno-2-84" href="#__codelineno-2-84"></a><span class="w">    </span>--mode<span class="w"> </span>Prevention
+</span><span id="__span-2-85"><a id="__codelineno-2-85" name="__codelineno-2-85" href="#__codelineno-2-85"></a>
+</span><span id="__span-2-86"><a id="__codelineno-2-86" name="__codelineno-2-86" href="#__codelineno-2-86"></a><span class="c1"># Rule set gestito: Default Rule Set 2.1 (successore di OWASP CRS 3.2)</span>
+</span><span id="__span-2-87"><a id="__codelineno-2-87" name="__codelineno-2-87" href="#__codelineno-2-87"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>waf-policy<span class="w"> </span>managed-rule<span class="w"> </span>rule-set<span class="w"> </span>add<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-88"><a id="__codelineno-2-88" name="__codelineno-2-88" href="#__codelineno-2-88"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-89"><a id="__codelineno-2-89" name="__codelineno-2-89" href="#__codelineno-2-89"></a><span class="w">    </span>--policy-name<span class="w"> </span>myapp-waf-policy<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-90"><a id="__codelineno-2-90" name="__codelineno-2-90" href="#__codelineno-2-90"></a><span class="w">    </span>--type<span class="w"> </span>Microsoft_DefaultRuleSet<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-91"><a id="__codelineno-2-91" name="__codelineno-2-91" href="#__codelineno-2-91"></a><span class="w">    </span>--version<span class="w"> </span><span class="m">2</span>.1
+</span><span id="__span-2-92"><a id="__codelineno-2-92" name="__codelineno-2-92" href="#__codelineno-2-92"></a>
+</span><span id="__span-2-93"><a id="__codelineno-2-93" name="__codelineno-2-93" href="#__codelineno-2-93"></a><span class="c1"># Associare la policy al gateway</span>
+</span><span id="__span-2-94"><a id="__codelineno-2-94" name="__codelineno-2-94" href="#__codelineno-2-94"></a>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-95"><a id="__codelineno-2-95" name="__codelineno-2-95" href="#__codelineno-2-95"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-96"><a id="__codelineno-2-96" name="__codelineno-2-96" href="#__codelineno-2-96"></a><span class="w">    </span>--name<span class="w"> </span>production-appgw<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-97"><a id="__codelineno-2-97" name="__codelineno-2-97" href="#__codelineno-2-97"></a><span class="w">    </span>--set<span class="w"> </span>firewallPolicy.id<span class="o">=</span><span class="k">$(</span>az<span class="w"> </span>network<span class="w"> </span>application-gateway<span class="w"> </span>waf-policy<span class="w"> </span>show<span class="w"> </span>-g<span class="w"> </span>myapp-rg<span class="w"> </span>-n<span class="w"> </span>myapp-waf-policy<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
 </span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Perché la WAF Policy</p>
+<p>La policy è una risorsa separata dal gateway: si riusa su più gateway/listener, permette regole per-listener o per-path e supporta bot protection e rate limiting. La vecchia <code>waf-config</code> è per-gateway e non ha queste funzioni.</p>
+</div>
 <hr />
 <h2 id="azure-front-door">Azure Front Door<a class="headerlink" href="#azure-front-door" title="Permanent link">&para;</a></h2>
 <p><strong>Azure Front Door</strong> è il load balancer globale L7 — distribuisce traffico tra region Azure, con CDN e WAF globale:</p>
@@ -24911,64 +25057,70 @@
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>az<span class="w"> </span>afd<span class="w"> </span>profile<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-afd<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span>--sku<span class="w"> </span>Premium_AzureFrontDoor<span class="w">       </span><span class="c1"># Standard_AzureFrontDoor o Premium_AzureFrontDoor (WAF avanzato)</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Creare endpoint</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>az<span class="w"> </span>afd<span class="w"> </span>endpoint<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-afd<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span>--endpoint-name<span class="w"> </span>myapp<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span>--enabled-state<span class="w"> </span>Enabled
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="c1"># Creare origin group (backend pool multi-region)</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>az<span class="w"> </span>afd<span class="w"> </span>origin-group<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-afd<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">    </span>--origin-group-name<span class="w"> </span>production-origins<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">    </span>--probe-request-type<span class="w"> </span>GET<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">    </span>--probe-protocol<span class="w"> </span>Https<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">    </span>--probe-interval-in-seconds<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="w">    </span>--probe-path<span class="w"> </span>/health<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="w">    </span>--sample-size<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="w">    </span>--successful-samples-required<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">    </span>--additional-latency-in-milliseconds<span class="w"> </span><span class="m">50</span>
-</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>
-</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="c1"># Aggiungere origini (regioni diverse)</span>
-</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>az<span class="w"> </span>afd<span class="w"> </span>origin<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-afd<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a><span class="w">    </span>--origin-group-name<span class="w"> </span>production-origins<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a><span class="w">    </span>--origin-name<span class="w"> </span>italy-north<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-33"><a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a><span class="w">    </span>--host-name<span class="w"> </span><span class="s2">"myapp-italynorth.azurewebsites.net"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-34"><a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a><span class="w">    </span>--http-port<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-35"><a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a><span class="w">    </span>--https-port<span class="w"> </span><span class="m">443</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-36"><a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a><span class="w">    </span>--origin-host-header<span class="w"> </span><span class="s2">"myapp-italynorth.azurewebsites.net"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-37"><a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a><span class="w">    </span>--priority<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-38"><a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a><span class="w">    </span>--weight<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-39"><a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a><span class="w">    </span>--enabled-state<span class="w"> </span>Enabled
-</span><span id="__span-3-40"><a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a>
-</span><span id="__span-3-41"><a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a>az<span class="w"> </span>afd<span class="w"> </span>origin<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-42"><a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-43"><a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-afd<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-44"><a id="__codelineno-3-44" name="__codelineno-3-44" href="#__codelineno-3-44"></a><span class="w">    </span>--origin-group-name<span class="w"> </span>production-origins<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-45"><a id="__codelineno-3-45" name="__codelineno-3-45" href="#__codelineno-3-45"></a><span class="w">    </span>--origin-name<span class="w"> </span>west-europe<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-46"><a id="__codelineno-3-46" name="__codelineno-3-46" href="#__codelineno-3-46"></a><span class="w">    </span>--host-name<span class="w"> </span><span class="s2">"myapp-westeurope.azurewebsites.net"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-47"><a id="__codelineno-3-47" name="__codelineno-3-47" href="#__codelineno-3-47"></a><span class="w">    </span>--priority<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\ </span><span class="w">                    </span><span class="c1"># failover — usato solo se italy-north non disponibile</span>
-</span><span id="__span-3-48"><a id="__codelineno-3-48" name="__codelineno-3-48" href="#__codelineno-3-48"></a><span class="w">    </span>--weight<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-49"><a id="__codelineno-3-49" name="__codelineno-3-49" href="#__codelineno-3-49"></a><span class="w">    </span>--enabled-state<span class="w"> </span>Enabled
-</span><span id="__span-3-50"><a id="__codelineno-3-50" name="__codelineno-3-50" href="#__codelineno-3-50"></a>
-</span><span id="__span-3-51"><a id="__codelineno-3-51" name="__codelineno-3-51" href="#__codelineno-3-51"></a><span class="c1"># Creare route</span>
-</span><span id="__span-3-52"><a id="__codelineno-3-52" name="__codelineno-3-52" href="#__codelineno-3-52"></a>az<span class="w"> </span>afd<span class="w"> </span>route<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-53"><a id="__codelineno-3-53" name="__codelineno-3-53" href="#__codelineno-3-53"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-54"><a id="__codelineno-3-54" name="__codelineno-3-54" href="#__codelineno-3-54"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-afd<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-55"><a id="__codelineno-3-55" name="__codelineno-3-55" href="#__codelineno-3-55"></a><span class="w">    </span>--endpoint-name<span class="w"> </span>myapp<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-56"><a id="__codelineno-3-56" name="__codelineno-3-56" href="#__codelineno-3-56"></a><span class="w">    </span>--route-name<span class="w"> </span>default-route<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-57"><a id="__codelineno-3-57" name="__codelineno-3-57" href="#__codelineno-3-57"></a><span class="w">    </span>--origin-group<span class="w"> </span>production-origins<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-58"><a id="__codelineno-3-58" name="__codelineno-3-58" href="#__codelineno-3-58"></a><span class="w">    </span>--supported-protocols<span class="w"> </span>Https<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-59"><a id="__codelineno-3-59" name="__codelineno-3-59" href="#__codelineno-3-59"></a><span class="w">    </span>--https-redirect<span class="w"> </span>Enabled<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-60"><a id="__codelineno-3-60" name="__codelineno-3-60" href="#__codelineno-3-60"></a><span class="w">    </span>--forwarding-protocol<span class="w"> </span>HttpsOnly<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-61"><a id="__codelineno-3-61" name="__codelineno-3-61" href="#__codelineno-3-61"></a><span class="w">    </span>--patterns-to-match<span class="w"> </span><span class="s2">"/*"</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span>--sku<span class="w"> </span>Premium_AzureFrontDoor
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Standard_AzureFrontDoor: WAF solo con custom rules; Premium_AzureFrontDoor: managed rule set + bot protection + Private Link verso le origin</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># Creare endpoint</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>az<span class="w"> </span>afd<span class="w"> </span>endpoint<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-afd<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span>--endpoint-name<span class="w"> </span>myapp<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span>--enabled-state<span class="w"> </span>Enabled
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="c1"># Creare origin group (backend pool multi-region)</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>az<span class="w"> </span>afd<span class="w"> </span>origin-group<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-afd<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">    </span>--origin-group-name<span class="w"> </span>production-origins<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">    </span>--probe-request-type<span class="w"> </span>GET<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">    </span>--probe-protocol<span class="w"> </span>Https<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="w">    </span>--probe-interval-in-seconds<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="w">    </span>--probe-path<span class="w"> </span>/health<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="w">    </span>--sample-size<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">    </span>--successful-samples-required<span class="w"> </span><span class="m">3</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">    </span>--additional-latency-in-milliseconds<span class="w"> </span><span class="m">50</span>
+</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="c1"># Aggiungere origini (regioni diverse)</span>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>az<span class="w"> </span>afd<span class="w"> </span>origin<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-afd<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a><span class="w">    </span>--origin-group-name<span class="w"> </span>production-origins<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-33"><a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a><span class="w">    </span>--origin-name<span class="w"> </span>italy-north<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-34"><a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a><span class="w">    </span>--host-name<span class="w"> </span><span class="s2">"myapp-italynorth.azurewebsites.net"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-35"><a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a><span class="w">    </span>--http-port<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-36"><a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a><span class="w">    </span>--https-port<span class="w"> </span><span class="m">443</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-37"><a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a><span class="w">    </span>--origin-host-header<span class="w"> </span><span class="s2">"myapp-italynorth.azurewebsites.net"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-38"><a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a><span class="w">    </span>--priority<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-39"><a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a><span class="w">    </span>--weight<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-40"><a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a><span class="w">    </span>--enabled-state<span class="w"> </span>Enabled
+</span><span id="__span-3-41"><a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a>
+</span><span id="__span-3-42"><a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a>az<span class="w"> </span>afd<span class="w"> </span>origin<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-43"><a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-44"><a id="__codelineno-3-44" name="__codelineno-3-44" href="#__codelineno-3-44"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-afd<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-45"><a id="__codelineno-3-45" name="__codelineno-3-45" href="#__codelineno-3-45"></a><span class="w">    </span>--origin-group-name<span class="w"> </span>production-origins<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-46"><a id="__codelineno-3-46" name="__codelineno-3-46" href="#__codelineno-3-46"></a><span class="w">    </span>--origin-name<span class="w"> </span>west-europe<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-47"><a id="__codelineno-3-47" name="__codelineno-3-47" href="#__codelineno-3-47"></a><span class="w">    </span>--host-name<span class="w"> </span><span class="s2">"myapp-westeurope.azurewebsites.net"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-48"><a id="__codelineno-3-48" name="__codelineno-3-48" href="#__codelineno-3-48"></a><span class="w">    </span>--origin-host-header<span class="w"> </span><span class="s2">"myapp-westeurope.azurewebsites.net"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-49"><a id="__codelineno-3-49" name="__codelineno-3-49" href="#__codelineno-3-49"></a><span class="w">    </span>--http-port<span class="w"> </span><span class="m">80</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-50"><a id="__codelineno-3-50" name="__codelineno-3-50" href="#__codelineno-3-50"></a><span class="w">    </span>--https-port<span class="w"> </span><span class="m">443</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-51"><a id="__codelineno-3-51" name="__codelineno-3-51" href="#__codelineno-3-51"></a><span class="w">    </span>--priority<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-52"><a id="__codelineno-3-52" name="__codelineno-3-52" href="#__codelineno-3-52"></a><span class="w">    </span>--weight<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-53"><a id="__codelineno-3-53" name="__codelineno-3-53" href="#__codelineno-3-53"></a><span class="w">    </span>--enabled-state<span class="w"> </span>Enabled
+</span><span id="__span-3-54"><a id="__codelineno-3-54" name="__codelineno-3-54" href="#__codelineno-3-54"></a>
+</span><span id="__span-3-55"><a id="__codelineno-3-55" name="__codelineno-3-55" href="#__codelineno-3-55"></a><span class="c1"># Creare route</span>
+</span><span id="__span-3-56"><a id="__codelineno-3-56" name="__codelineno-3-56" href="#__codelineno-3-56"></a>az<span class="w"> </span>afd<span class="w"> </span>route<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-57"><a id="__codelineno-3-57" name="__codelineno-3-57" href="#__codelineno-3-57"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-58"><a id="__codelineno-3-58" name="__codelineno-3-58" href="#__codelineno-3-58"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-afd<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-59"><a id="__codelineno-3-59" name="__codelineno-3-59" href="#__codelineno-3-59"></a><span class="w">    </span>--endpoint-name<span class="w"> </span>myapp<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-60"><a id="__codelineno-3-60" name="__codelineno-3-60" href="#__codelineno-3-60"></a><span class="w">    </span>--route-name<span class="w"> </span>default-route<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-61"><a id="__codelineno-3-61" name="__codelineno-3-61" href="#__codelineno-3-61"></a><span class="w">    </span>--origin-group<span class="w"> </span>production-origins<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-62"><a id="__codelineno-3-62" name="__codelineno-3-62" href="#__codelineno-3-62"></a><span class="w">    </span>--supported-protocols<span class="w"> </span>Https<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-63"><a id="__codelineno-3-63" name="__codelineno-3-63" href="#__codelineno-3-63"></a><span class="w">    </span>--https-redirect<span class="w"> </span>Enabled<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-64"><a id="__codelineno-3-64" name="__codelineno-3-64" href="#__codelineno-3-64"></a><span class="w">    </span>--forwarding-protocol<span class="w"> </span>HttpsOnly<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-65"><a id="__codelineno-3-65" name="__codelineno-3-65" href="#__codelineno-3-65"></a><span class="w">    </span>--patterns-to-match<span class="w"> </span><span class="s2">"/*"</span>
+</span><span id="__span-3-66"><a id="__codelineno-3-66" name="__codelineno-3-66" href="#__codelineno-3-66"></a><span class="c1"># priority 2 sull'origin west-europe = failover: usato solo se italy-north è unhealthy</span>
 </span></code></pre></div>
+<p>Perché si usano le probe con <code>sample-size</code>/<code>successful-samples-required</code>: un'origin è <em>healthy</em> se almeno <code>successful-samples-required</code> delle ultime <code>sample-size</code> probe sono riuscite. Valori più alti di <code>successful-samples-required</code> → l'origin viene dichiarata unhealthy <strong>prima</strong> (più sensibile, più falsi positivi).</p>
 <hr />
 <h2 id="traffic-manager">Traffic Manager<a class="headerlink" href="#traffic-manager" title="Permanent link">&para;</a></h2>
 <p><strong>Traffic Manager</strong> è un load balancer DNS globale — indirizza gli utenti all'endpoint migliore basandosi su profili di routing:</p>
@@ -25010,29 +25162,31 @@
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>az<span class="w"> </span>network<span class="w"> </span>traffic-manager<span class="w"> </span>profile<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span>--name<span class="w"> </span>myapp-tm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span>--routing-method<span class="w"> </span>Performance<span class="w"> </span><span class="se">\ </span><span class="w">     </span><span class="c1"># o Priority, Weighted, Geographic</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span>--unique-dns-name<span class="w"> </span>myapp-global<span class="w"> </span><span class="se">\ </span><span class="w">   </span><span class="c1"># myapp-global.trafficmanager.net</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span>--routing-method<span class="w"> </span>Performance<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span>--unique-dns-name<span class="w"> </span>myapp-global<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span>--monitor-protocol<span class="w"> </span>HTTPS<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span>--monitor-port<span class="w"> </span><span class="m">443</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">    </span>--monitor-path<span class="w"> </span>/health<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">    </span>--ttl<span class="w"> </span><span class="m">30</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1"># Aggiungere endpoint (Azure App Service)</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>az<span class="w"> </span>network<span class="w"> </span>traffic-manager<span class="w"> </span>endpoint<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-tm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">    </span>--name<span class="w"> </span>endpoint-eu<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">    </span>--type<span class="w"> </span>azureEndpoints<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">    </span>--target-resource-id<span class="w"> </span>/subscriptions/<span class="nv">$SUB_ID</span>/.../sites/myapp-italynorth<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">    </span>--endpoint-status<span class="w"> </span>Enabled
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>
-</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>az<span class="w"> </span>network<span class="w"> </span>traffic-manager<span class="w"> </span>endpoint<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-tm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">    </span>--name<span class="w"> </span>endpoint-us<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">    </span>--type<span class="w"> </span>azureEndpoints<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">    </span>--target-resource-id<span class="w"> </span>/subscriptions/<span class="nv">$SUB_ID</span>/.../sites/myapp-eastus<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">    </span>--endpoint-status<span class="w"> </span>Enabled
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="c1"># --routing-method alternative: Priority, Weighted, Geographic, Multivalue, Subnet</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1"># --unique-dns-name myapp-global → myapp-global.trafficmanager.net</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="c1"># Aggiungere endpoint (Azure App Service)</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>az<span class="w"> </span>network<span class="w"> </span>traffic-manager<span class="w"> </span>endpoint<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-tm<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">    </span>--name<span class="w"> </span>endpoint-eu<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">    </span>--type<span class="w"> </span>azureEndpoints<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">    </span>--target-resource-id<span class="w"> </span>/subscriptions/<span class="nv">$SUB_ID</span>/.../sites/myapp-italynorth<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">    </span>--endpoint-status<span class="w"> </span>Enabled
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>az<span class="w"> </span>network<span class="w"> </span>traffic-manager<span class="w"> </span>endpoint<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">    </span>--profile-name<span class="w"> </span>myapp-tm<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">    </span>--name<span class="w"> </span>endpoint-us<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">    </span>--type<span class="w"> </span>azureEndpoints<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="w">    </span>--target-resource-id<span class="w"> </span>/subscriptions/<span class="nv">$SUB_ID</span>/.../sites/myapp-eastus<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="w">    </span>--endpoint-status<span class="w"> </span>Enabled
 </span></code></pre></div>
 <hr />
 <h2 id="confronto-load-balancing">Confronto Load Balancing<a class="headerlink" href="#confronto-load-balancing" title="Permanent link">&para;</a></h2>
@@ -25064,8 +25218,8 @@
 <tr>
 <td>WAF</td>
 <td>No</td>
-<td>Sì (v2)</td>
-<td>Sì (Premium)</td>
+<td>Sì (WAF_v2)</td>
+<td>Sì (Standard: custom rules; Premium: managed rules)</td>
 <td>No</td>
 </tr>
 <tr>
@@ -25116,8 +25270,8 @@
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-health-probe-fallisce-backend-pool-vuoto">Scenario 1 — Health probe fallisce, backend pool vuoto<a class="headerlink" href="#scenario-1-health-probe-fallisce-backend-pool-vuoto" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il Load Balancer o Application Gateway mostra tutti i backend come "unhealthy"; il traffico non viene instradato.</p>
-<p><strong>Causa:</strong> La health probe non riceve risposta HTTP 200 dal path configurato, oppure il NSG blocca le sonde (Azure Load Balancer usa IP <code>168.63.129.16</code>).</p>
-<p><strong>Soluzione:</strong> Verificare che il NSG consenta il traffico dal tag <code>AzureLoadBalancer</code> e che l'endpoint di health risponda correttamente.</p>
+<p><strong>Causa:</strong> La health probe non riceve risposta HTTP 200 dal path configurato, oppure il NSG blocca le sonde. Le probe del Load Balancer partono dall'IP <code>168.63.129.16</code> (tag <code>AzureLoadBalancer</code>); quelle di Application Gateway v2 partono invece dagli IP della <strong>subnet del gateway</strong> (il NSG del backend deve consentire quella subnet, e il NSG della subnet gateway deve consentire <code>GatewayManager</code> su 65200-65535).</p>
+<p><strong>Soluzione:</strong> Verificare che il NSG consenta la sorgente corretta per il servizio in uso e che l'endpoint di health risponda correttamente.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Verificare lo stato dei backend nel Load Balancer</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>az<span class="w"> </span>network<span class="w"> </span>lb<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
@@ -25169,8 +25323,8 @@
 <hr />
 <h3 id="scenario-3-front-door-non-fa-failover-sullorigin-di-backup">Scenario 3 — Front Door non fa failover sull'origin di backup<a class="headerlink" href="#scenario-3-front-door-non-fa-failover-sullorigin-di-backup" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Quando l'origin primario è down, Front Door non reindirizza il traffico all'origin secondario; i client ricevono errori.</p>
-<p><strong>Causa:</strong> Il <code>successful-samples-required</code> è impostato troppo alto, oppure il <code>probe-interval-in-seconds</code> è troppo lungo — Front Door non ha ancora dichiarato unhealthy l'origin primario.</p>
-<p><strong>Soluzione:</strong> Abbassare la soglia di failure detection o aumentare la frequenza delle probe. Verificare anche che l'origin secondario risponda alle probe.</p>
+<p><strong>Causa:</strong> Il <code>probe-interval-in-seconds</code> è troppo lungo, oppure <code>successful-samples-required</code> è troppo basso rispetto a <code>sample-size</code> (es. 1 su 4: basta una probe riuscita per restare healthy) — Front Door non dichiara unhealthy l'origin primario. Altre cause: il path <code>/health</code> risponde 200 anche con backend degradato, oppure le probe sono disabilitate (con una sola origin nel gruppo Front Door non esegue probe).</p>
+<p><strong>Soluzione:</strong> Ridurre l'intervallo delle probe e alzare <code>successful-samples-required</code> (es. 3 su 4) per rilevare prima il guasto; far sì che <code>/health</code> verifichi le dipendenze reali. Verificare anche che l'origin secondario risponda alle probe.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Controllare lo stato attuale delle origini</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>az<span class="w"> </span>afd<span class="w"> </span>origin<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span>--resource-group<span class="w"> </span>myapp-rg<span class="w"> </span><span class="se">\</span>
@@ -25185,7 +25339,7 @@
 </span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span>--origin-group-name<span class="w"> </span>production-origins<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">    </span>--probe-interval-in-seconds<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">    </span>--sample-size<span class="w"> </span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span>--successful-samples-required<span class="w"> </span><span class="m">2</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span>--successful-samples-required<span class="w"> </span><span class="m">3</span>
 </span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
 </span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1"># Forzare disable di un'origin per test failover</span>
 </span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>az<span class="w"> </span>afd<span class="w"> </span>origin<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
@@ -25229,6 +25383,29 @@
 </span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>nslookup<span class="w"> </span>myapp-global.trafficmanager.net
 </span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a>dig<span class="w"> </span>myapp-global.trafficmanager.net
 </span></code></pre></div>
+<hr />
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Scegli per layer e scope</strong>: L4 → Load Balancer; HTTP regionale → Application Gateway; HTTP multi-region → Front Door; DNS/non-HTTP multi-region → Traffic Manager.</li>
+<li><strong>Sempre SKU Standard/v2</strong> e IP zone-redundant: sopravvive al guasto di una Availability Zone e non dipende dalle SKU ritirate.</li>
+<li><strong>Health endpoint significativo</strong>: <code>/health</code> deve verificare le dipendenze critiche e rispondere 200 solo se il nodo può servire traffico; no redirect 301/302.</li>
+<li><strong>Subnet dedicata</strong> per Application Gateway, con NSG che consenta <code>GatewayManager</code> (65200-65535) e il traffico client.</li>
+<li><strong>WAF in Detection → Prevention</strong>: partire in Detection per individuare falsi positivi, poi passare a Prevention con esclusioni mirate.</li>
+<li><strong>Front Door + Application Gateway/origin privati</strong>: limitare l'accesso alle origin al solo Front Door (header <code>X-Azure-FDID</code>, service tag <code>AzureFrontDoor.Backend</code> o Private Link con Premium).</li>
+<li><strong>TTL basso</strong> su Traffic Manager (10-30 s) se il failover è un requisito, sapendo che alcuni resolver non rispettano il TTL.</li>
+</ul>
+<hr />
+<h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
+<details class="info">
+<summary>VNet — Approfondimento</summary>
+<p>Load Balancer interno e Application Gateway vivono in subnet della VNet; NSG e NAT Gateway ne regolano ingresso e uscita.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../vnet/">VNet</a></p>
+</details>
+<details class="info">
+<summary>DNS e CDN — Approfondimento</summary>
+<p>Traffic Manager è un servizio DNS; Front Door integra il CDN e usa domini custom con record CNAME/alias.</p>
+<p><strong>Approfondimento completo →</strong> <a href="../dns-cdn/">DNS e CDN</a></p>
+</details>
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
