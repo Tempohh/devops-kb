@@ -7,16 +7,17 @@ search_keywords: [postgresql extensions, pgvector vector search, timescaledb tim
 parent: databases/postgresql/_index
 related: [databases/sql-avanzato/partitioning, databases/fondamentali/modelli-dati, databases/nosql/redis]
 official_docs: https://www.postgresql.org/docs/current/contrib.html
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # PostgreSQL Extensions
 
 ## Panoramica
 
-PostgreSQL è estensibile by design: le estensioni aggiungono tipi di dati, funzioni, operatori, metodi di accesso agli indici e perfino esecutori di query — tutto senza fork del codice sorgente. Il catalogo ufficiale [PGXN](https://pgxn.org/) conta oltre 1000 estensioni; AWS RDS, Google Cloud SQL e Azure Database supportano un sottoinsieme selezionato.
+PostgreSQL è estensibile by design: le estensioni aggiungono tipi di dati, funzioni, operatori, metodi di accesso agli indici e perfino esecutori di query — tutto senza fork del codice sorgente. Il registro comunitario [PGXN](https://pgxn.org/) raccoglie centinaia di estensioni; AWS RDS, Google Cloud SQL e Azure Database supportano un sottoinsieme selezionato.
 
 Le estensioni più rilevanti in un contesto DevOps/backend si dividono in categorie:
 
@@ -27,29 +28,30 @@ Le estensioni più rilevanti in un contesto DevOps/backend si dividono in catego
 | Geospaziale | `postgis` |
 | Manutenzione partizioni | `pg_partman` |
 | Job scheduling | `pg_cron` |
-| Monitoring | `pg_stat_statements`, `pg_activity` |
+| Monitoring | `pg_stat_statements` |
 | Full-text search | `pg_trgm`, built-in `tsvector` |
 | Utility | `uuid-ossp`, `hstore`, `ltree`, `pgcrypto` |
 
 ```sql
--- Installa un'estensione (richiede superuser o pg_extension_owner)
-CREATE EXTENSION pgvector;
+-- Installa un'estensione (superuser, oppure CREATE sul database se l'estensione è "trusted", PG13+;
+-- il nome è quello del file .control: per pgvector è `vector`, non `pgvector`)
+CREATE EXTENSION vector;
 
 -- Lista estensioni installate
 SELECT extname, extversion FROM pg_extension;
 
 -- Aggiorna un'estensione
-ALTER EXTENSION pgvector UPDATE TO '0.7.0';
+ALTER EXTENSION vector UPDATE;   -- porta alla versione dei binari installati
 ```
 
 ---
 
 ## pgvector — Ricerca Vettoriale
 
-[pgvector](https://github.com/pgml/pgvector) aggiunge il tipo `vector` e indici per nearest-neighbor search. Permette di fare semantic search, recommendation e RAG direttamente su PostgreSQL, senza un vector database separato (Pinecone, Weaviate, ecc.).
+[pgvector](https://github.com/pgvector/pgvector) aggiunge il tipo `vector` e indici per nearest-neighbor search. Permette di fare semantic search, recommendation e RAG direttamente su PostgreSQL, senza un vector database separato (Pinecone, Weaviate, ecc.).
 
 ```sql
--- Crea tabella con embedding a 1536 dimensioni (OpenAI ada-002)
+-- Crea tabella con embedding a 1536 dimensioni (es. OpenAI text-embedding-3-small)
 CREATE TABLE documenti (
     id        BIGSERIAL PRIMARY KEY,
     testo     TEXT,
@@ -85,7 +87,7 @@ CREATE INDEX ON documenti USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);   -- sqrt(num_rows) è un buon punto di partenza
 
 -- HNSW: grafo navigabile su small world — recall migliore di IVFFlat, build più lenta
--- Preferito per uso generale (PostgreSQL 16+ / pgvector 0.5+)
+-- Preferito per uso generale (richiede pgvector 0.5+; indipendente dalla versione di PostgreSQL)
 CREATE INDEX ON documenti USING hnsw (embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 64);
 -- m = connessioni per nodo (trade-off recall/memoria)
@@ -104,7 +106,7 @@ def semantic_search(query: str, limit: int = 5):
     # Genera embedding della query
     response = openai.embeddings.create(
         input=query,
-        model="text-embedding-ada-002"
+        model="text-embedding-3-small"   # 1536 dimensioni di default
     )
     query_embedding = response.data[0].embedding
 
@@ -157,12 +159,15 @@ ALTER TABLE metriche SET (
     timescaledb.compress_orderby = 'time DESC'
 );
 
--- Abilita retention policy: comprimi chunk > 7 giorni
+-- Policy: comprimi automaticamente i chunk più vecchi di 7 giorni
 SELECT add_compression_policy('metriche', INTERVAL '7 days');
 
--- Drop automatico chunk vecchi (retention)
+-- Retention: drop automatico dei chunk più vecchi di 90 giorni
 SELECT add_retention_policy('metriche', INTERVAL '90 days');
 ```
+
+!!! note "Licenza e managed service"
+    La compressione fa parte dell'edizione Community con Timescale License (non Apache 2.0). AWS RDS/Aurora non offrono TimescaleDB: serve Timescale Cloud o self-hosting. Dalla 2.18 la compressione è presentata come *columnstore* (nuove API `add_columnstore_policy` ecc.); le funzioni usate qui restano come alias retrocompatibili.
 
 ---
 
@@ -204,6 +209,8 @@ CREATE INDEX idx_negozi_posizione ON negozi USING GIST (posizione);
 
 Vedi [Partitioning](../sql-avanzato/partitioning.md) per la trattazione completa.
 
+La tabella padre deve già essere partizionata nativamente (`PARTITION BY RANGE`): da pg_partman 5.x il partizionamento basato su trigger non esiste più.
+
 ```sql
 CREATE EXTENSION pg_partman SCHEMA partman;
 
@@ -212,7 +219,7 @@ SELECT partman.create_parent(
     p_parent_table => 'public.log_eventi',
     p_control      => 'timestamp',
     p_type         => 'range',
-    p_interval     => 'monthly',
+    p_interval     => '1 month',   -- pg_partman 5.x: solo intervalli testuali, non più 'monthly'
     p_premake      => 3
 );
 
@@ -316,7 +323,7 @@ SELECT pg_stat_statements_reset();
 ## Utility Extensions
 
 ```sql
--- uuid-ossp: genera UUID v1/v4
+-- uuid-ossp: genera UUID v1/v4 (per UUID v7 time-ordered PostgreSQL 18 offre uuidv7() built-in)
 CREATE EXTENSION "uuid-ossp";
 SELECT uuid_generate_v4();   -- UUID casuale
 -- Preferire gen_random_uuid() built-in (PostgreSQL 13+, nessuna estensione)
@@ -337,7 +344,7 @@ SELECT 'IT.Backend'::ltree @> 'IT.Backend.PostgreSQL'::ltree;  -- true (è anten
 
 -- pg_trgm: trigram similarity per fuzzy search e LIKE veloce
 CREATE EXTENSION pg_trgm;
-SELECT similarity('postgresql', 'postresql');  -- ~0.53 (typo)
+SELECT similarity('postgresql', 'postresql');  -- ~0.62 (typo)
 CREATE INDEX idx_nome_trgm ON prodotti USING GIN (nome gin_trgm_ops);
 SELECT * FROM prodotti WHERE nome % 'postgresq';  -- fuzzy match
 SELECT * FROM prodotti WHERE nome ILIKE '%postg%';  -- LIKE veloce con indice trgm
@@ -347,10 +354,10 @@ SELECT * FROM prodotti WHERE nome ILIKE '%postg%';  -- LIKE veloce con indice tr
 
 ## Best Practices
 
-- **Preferire built-in a estensioni quando possibile**: `gen_random_uuid()`, `jsonb`, `tsvector` sono built-in da PG13+. Le estensioni hanno overhead di installazione/aggiornamento
+- **Preferire built-in a estensioni quando possibile**: `gen_random_uuid()` (PG13+), `jsonb` e `tsvector` sono built-in. Le estensioni hanno overhead di installazione/aggiornamento
 - **Verificare supporto su managed service**: non tutte le estensioni sono disponibili su RDS/Cloud SQL. Verificare prima dell'architettura
 - **`shared_preload_libraries` richiede restart**: le estensioni che usano questo parametro (pg_stat_statements, pg_cron, timescaledb) richiedono restart di PostgreSQL per l'installazione iniziale
-- **pgvector: scegliere le dimensioni con cura**: vettori a 1536 dim (OpenAI) pesano 6KB per riga — con 1M righe = 6GB solo per gli embedding. Considerare quantizzazione o dimensioni ridotte
+- **pgvector: scegliere le dimensioni con cura**: vettori a 1536 dim (OpenAI) pesano 6KB per riga — con 1M righe = 6GB solo per gli embedding. Considerare `halfvec` (float16, pgvector 0.7+), quantizzazione o dimensioni ridotte
 - **TimescaleDB e pg_partman non coesistono**: non usare entrambi sulla stessa tabella — TimescaleDB gestisce il proprio partizionamento interno
 
 ## Troubleshooting
@@ -382,8 +389,8 @@ aws rds describe-db-parameters \
 
 **Sintomo:** Query `ORDER BY embedding <=> $1 LIMIT 10` impiega secondi su tabelle da centinaia di migliaia di righe, anche con indice HNSW creato.
 
-**Causa 1:** L'indice è stato creato prima di popolare la tabella — un indice HNSW/IVFFlat costruito su poche righe non beneficia le query su milioni di righe.
-**Causa 2:** `hnsw.ef_search` troppo basso, oppure l'indice IVFFlat ha `lists` sottodimensionato.
+**Causa 1:** Indice IVFFlat creato prima di popolare la tabella — i centroidi (`lists`) sono calcolati sui dati presenti al build, quindi su poche righe risultano inadatti. (HNSW non ha questo problema: si aggiorna in modo incrementale.)
+**Causa 2:** Il planner non usa l'indice (verificare con `EXPLAIN`), oppure `hnsw.ef_search` / `ivfflat.probes` sono mal tarati. Con filtri `WHERE` l'indice approssimato può restituire meno risultati del `LIMIT`.
 
 **Soluzione:**
 
@@ -392,8 +399,8 @@ aws rds describe-db-parameters \
 EXPLAIN (ANALYZE, BUFFERS)
 SELECT id FROM documenti ORDER BY embedding <=> $1 LIMIT 10;
 
--- Ricostruisci l'indice dopo il caricamento bulk
-REINDEX INDEX CONCURRENTLY idx_documenti_hnsw;
+-- IVFFlat: ricostruisci l'indice dopo il caricamento bulk
+REINDEX INDEX CONCURRENTLY idx_documenti_ivfflat;
 
 -- Aumenta ef_search per migliorare recall (a scapito della latenza)
 SET hnsw.ef_search = 200;
@@ -445,7 +452,7 @@ LIMIT 20;
 
 ### Scenario 4 — TimescaleDB: la compressione non riduce lo spazio
 
-**Sintomo:** `add_compression_policy` è attivo ma lo spazio su disco non diminuisce. `select_tablespace` mostra chunk non compressi.
+**Sintomo:** `add_compression_policy` è attivo ma lo spazio su disco non diminuisce. `chunk_compression_stats` non mostra chunk compressi.
 
 **Causa:** La compression policy si attiva solo sui chunk che soddisfano l'intervallo minimo (`compress_after`). Chunk recenti non vengono mai compressi. Oppure la policy è definita ma il job di background TimescaleDB è disabilitato.
 
@@ -465,7 +472,8 @@ FROM show_chunks('metriche', older_than => INTERVAL '8 days') c;
 SELECT chunk_name,
        pg_size_pretty(before_compression_total_bytes) AS before,
        pg_size_pretty(after_compression_total_bytes)  AS after,
-       compression_ratio
+       round(before_compression_total_bytes::numeric
+             / NULLIF(after_compression_total_bytes, 0), 1) AS ratio
 FROM chunk_compression_stats('metriche')
 ORDER BY chunk_name;
 
@@ -491,7 +499,7 @@ WHERE proc_name = 'policy_compression';
 
 ## Riferimenti
 
-- [pgvector — Vector Similarity Search](https://github.com/pgml/pgvector)
+- [pgvector — Vector Similarity Search](https://github.com/pgvector/pgvector)
 - [TimescaleDB Documentation](https://docs.timescale.com/)
 - [PostGIS Documentation](https://postgis.net/documentation/)
 - [pg_cron — Job Scheduling](https://github.com/citusdata/pg_cron)
