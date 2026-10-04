@@ -7,9 +7,10 @@ search_keywords: [GCP shared responsibility model, responsabilità condivisa GCP
 parent: cloud/gcp/fondamentali/_index
 related: [cloud/gcp/fondamentali/panoramica, cloud/aws/fondamentali/shared-responsibility, cloud/azure/fondamentali/shared-responsibility]
 official_docs: https://cloud.google.com/architecture/framework/security/shared-responsibility
-status: complete
+status: needs-review
 difficulty: beginner
 last_updated: 2026-03-29
+last_verified: 2026-10-04
 ---
 
 # GCP Shared Responsibility Model
@@ -18,6 +19,9 @@ Il **Modello di Responsabilità Condivisa** (Shared Responsibility Model) è il 
 
 > **Google** è responsabile della sicurezza **del** cloud ("security OF the cloud").
 > **Il cliente** è responsabile della sicurezza **nel** cloud ("security IN the cloud").
+
+!!! note "Shared Fate"
+    Google presenta oggi il modello come **shared fate**: oltre a dividere i compiti, fornisce blueprint sicuri, landing zone, Assured Workloads e policy preconfigurate, e si dichiara partner nel successo (e negli incidenti) del cliente. La divisione di responsabilità descritta sotto resta valida; shared fate aggiunge supporto, non sposta i confini.
 
 ```
 SHARED RESPONSIBILITY MODEL — GCP
@@ -120,7 +124,7 @@ La responsabilità del cliente **cambia significativamente** in base al modello 
     # Verificare lo stato patch compliance tramite OS Config
     gcloud compute os-config patch-jobs list
 
-    # Creare un Patch Job per applicare patch a tutte le VM con tag specifico
+    # Creare un Patch Job per applicare patch a tutte le VM del progetto
     gcloud compute os-config patch-jobs execute \
         --instance-filter-all \
         --description="Monthly security patching" \
@@ -207,7 +211,7 @@ Alcune aree richiedono azioni **sia da parte di Google che del cliente**:
 | **Identity** | Fornisce Cloud IAM | Configurare policy, MFA, ruoli granulari |
 | **Patch infrastruttura** | Patch hypervisor, managed services | Patch OS sulle VM, patch container image |
 | **Encryption key management** | Gestisce le chiavi di default | Può portare proprie chiavi con CMEK (Cloud KMS) |
-| **DDoS protection** | Google Cloud Armor a livello rete | Configurare Cloud Armor policies per le proprie applicazioni |
+| **DDoS protection** | Protezione di rete/L3-L4 di base dell'infrastruttura Google (Google Front End) | Configurare policy Cloud Armor (WAF, rate limiting; servizio a pagamento) per le proprie applicazioni |
 
 ---
 
@@ -291,7 +295,7 @@ Google mantiene un programma di compliance esteso. Le certificazioni di Google a
 | **SOC 3** | Report pubblico SOC 2 | Versione pubblica del SOC 2 |
 | **PCI DSS Level 1** | Payment Card Industry | Applicazioni che gestiscono pagamenti |
 | **HIPAA** | Sanità USA | Con Business Associate Agreement (BAA) |
-| **FedRAMP** | US Government | Google Cloud GovCloud per PA americana |
+| **FedRAMP** | US Government | Servizi autorizzati (High/Moderate); workload regolamentati con Assured Workloads |
 | **GDPR** | Protezione dati EU | Google come Data Processor; cliente come Data Controller |
 | **C5** | Bundesamt für Sicherheit in der Informationstechnik | Mercato tedesco/europeo |
 | **ENS** | Esquema Nacional de Seguridad | Pubblica amministrazione spagnola |
@@ -306,9 +310,11 @@ Data Controller (Cliente)              Data Processor (Google)
 - Definisce le finalità del            - Tratta i dati su istruzione
   trattamento dei dati                   del controller
 - Garantisce la base giuridica         - Non usa i dati per propri fini
-- Risponde agli interessati            - Notifica breach entro 72h a Google
-  (diritti GDPR)                       - Fornisce DPA (Data Processing
-- Configura retention e deletion         Agreement) su richiesta
+- Risponde agli interessati            - Notifica al cliente senza ritardo
+  (diritti GDPR)                         i data breach (il controller ha
+- Configura retention e deletion         72h per avvisare il Garante)
+                                       - Fornisce DPA (Data Processing
+                                         Agreement) nei termini di servizio
 - Sceglie la regione di                - Mantiene Standard Contractual
   residenza dei dati                     Clauses per trasferimenti extra-UE
 ```
@@ -340,9 +346,9 @@ gcloud org-policies describe constraints/gcp.resourceLocations \
 
     ```bash
     # Applicare policy per limitare le risorse alle sole regioni EU
-    gcloud org-policies set-policy eu-residency-policy.yaml \
-        --organization=ORGANIZATION_ID
-    # dove eu-residency-policy.yaml specifica in.allowedValues: ["in:europe-locations"]
+    gcloud org-policies set-policy eu-residency-policy.yaml
+    # il file contiene name: organizations/ORGANIZATION_ID/policies/gcp.resourceLocations
+    # e spec.rules[].values.allowedValues: ["in:europe-locations"] (vedi Scenario 4)
     ```
 
 ---
@@ -356,18 +362,18 @@ gcloud org-policies describe constraints/gcp.resourceLocations \
 | **Report compliance** | AWS Artifact | Microsoft Service Trust Portal | Compliance Reports Manager |
 | **CMEK** | AWS KMS | Azure Key Vault (CMK) | Cloud KMS |
 | **Security posture tool** | AWS Security Hub | Microsoft Defender for Cloud | Security Command Center |
-| **Data residency control** | AWS Regions + SCP | Azure Policy + Blueprints | Organization Policy |
+| **Data residency control** | AWS Regions + SCP | Azure Policy | Organization Policy |
 | **IaaS OS patching** | Cliente (EC2) | Cliente (VM) | Cliente (Compute Engine) |
 | **PaaS OS patching** | Google/AWS (RDS, Lambda) | Microsoft (App Service, Azure SQL) | Google (Cloud SQL, Cloud Run) |
-| **DDoS protection base** | AWS Shield Standard (gratis) | Azure DDoS Basic (gratis) | Google Cloud Armor (base gratis) |
-| **IAM tool** | AWS IAM | Azure Active Directory + RBAC | Cloud IAM |
+| **DDoS protection base** | AWS Shield Standard (gratis) | Azure DDoS infrastructure protection (gratis) | Protezione di infrastruttura Google (inclusa; Cloud Armor è a pagamento) |
+| **IAM tool** | AWS IAM | Microsoft Entra ID + Azure RBAC | Cloud IAM |
 
 ---
 
 ## Best Practices
 
 !!! tip "Abilitare Cloud Audit Logs su tutti i servizi"
-    Cloud Audit Logs registra chi ha fatto cosa e quando. Abilitare **Data Access Logs** (disabilitati di default perché generano volume) per servizi critici come Cloud Storage e BigQuery. Senza i log, il cliente non può dimostrare di aver agito correttamente in caso di audit.
+    Cloud Audit Logs registra chi ha fatto cosa e quando. Abilitare **Data Access Logs** (disabilitati di default perché generano volume; eccezione: BigQuery, dove sono sempre attivi) per servizi critici come Cloud Storage e Cloud SQL. Senza i log, il cliente non può dimostrare di aver agito correttamente in caso di audit.
 
     ```bash
     # Abilitare Data Access Logs a livello di progetto
@@ -385,7 +391,8 @@ gcloud org-policies describe constraints/gcp.resourceLocations \
 !!! warning "Cloud Storage: bloccare l'accesso pubblico per default"
     Contrariamente ad S3 (dove il blocco pubblico è ora di default), in GCP è il cliente a dover configurare IAM correttamente. Abilitare **Uniform Bucket-Level Access** ed evitare `allUsers`/`allAuthenticatedUsers` nei binding IAM, a meno di non gestire contenuto pubblico intenzionalmente.
 
-- **Abilitare Security Command Center** almeno al tier Standard per ricevere findings di misconfiguration automatici
+- **Abilitare Security Command Center** per ricevere findings di misconfiguration automatici <!-- REVIEW: verificare tier SCC attuali (Standard/Premium/Enterprise) e sintassi `gcloud scc findings list` (v2, parametro --source/--location) -->
+- **Nota GKE Standard**: Google fornisce il Control Plane e le immagini dei nodi, ma l'upgrade dei nodi segue il release channel/maintenance window scelti dal cliente; su Autopilot l'onere è quasi interamente di Google
 - **Usare VPC Service Controls** per creare perimetri di sicurezza attorno ai servizi managed (previene data exfiltration)
 - **Configurare Organization Policy** per limitare regioni, tipi di macchine, e comportamenti non conformi
 - **Ruotare regolarmente le chiavi Cloud KMS** — configurare la rotazione automatica ogni 90-365 giorni
