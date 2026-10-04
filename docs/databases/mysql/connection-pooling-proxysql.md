@@ -71,10 +71,10 @@ ProxySQL non elegge un primary da solo. Si integra con:
 
 - **Replica asincrona + `mysql_replication_hostgroups`**: il monitor di ProxySQL interroga periodicamente `read_only` su ogni backend; il nodo con `read_only=0` va nel writer hostgroup, quelli con `read_only=1` nel reader hostgroup. Quindi dopo una promozione (manuale o via Orchestrator) basta che il nuovo primary abbia `read_only=0` e il vecchio `read_only=1`: ProxySQL sposta i nodi da solo entro `mysql-monitor_read_only_interval`. Serve un utente di monitoring sul backend (`mysql-monitor_username`/`mysql-monitor_password`).
 - **Orchestrator**: monitora la topologia, promuove un nuovo primary in caso di failure e (hook `PostFailoverProcesses`) può aggiornare `mysql_servers` di ProxySQL, utile per ridurre la finestra rispetto al polling di `read_only`.
-- **MySQL Group Replication / InnoDB Cluster**: ProxySQL ha supporto nativo (`mysql_group_replication_hostgroups`): il monitor legge lo stato del nodo dalla vista `sys.gr_member_routing_candidate_status` (da installare sul backend con lo script `addition_to_sys` fornito da ProxySQL per MySQL < 8.0.x; l'utente di monitoring deve avere `SELECT` su di essa) e aggiorna writer/reader automaticamente, senza script esterni.
+- **MySQL Group Replication / InnoDB Cluster**: ProxySQL ha supporto nativo (`mysql_group_replication_hostgroups`): il monitor legge lo stato del nodo dalla vista `sys.gr_member_routing_candidate_status` (da installare sul backend con lo script `addition_to_sys` fornito da ProxySQL — la vista non è fornita da MySQL stesso; l'utente di monitoring deve avere `SELECT` su di essa) e aggiorna writer/reader automaticamente, senza script esterni.
 - **Galera / Percona XtraDB Cluster**: health check nativo tramite la tabella `mysql_galera_hostgroups`, che instrada scritture verso un solo nodo alla volta per evitare conflitti di certificazione multi-master.
 
-<!-- REVIEW: verificare se la vista sys.gr_member_routing_candidate_status richieda ancora lo script addition_to_sys su MySQL 8.4 (bullet Group Replication sopra) -->
+<!-- CURRENCY: non verificato (2026-10) — compatibilità di addition_to_sys con MySQL 8.4 non confermata dalle fonti consultate; usare la versione dello script allegata alla release ProxySQL in uso -->
 
 
 Tutti i meccanismi funzionano solo se i server sono già inseriti in `mysql_servers` (con l'hostgroup iniziale scelto): ProxySQL li riassegna agli hostgroup definiti nella tabella di integrazione.
@@ -164,10 +164,9 @@ SAVE MYSQL SERVERS TO DISK;
 
 ### Docker Compose
 
-<!-- REVIEW: verificare ultima release stabile ProxySQL (2.7.x vs linea 3.x) e aggiornare i tag immagine qui e nel Deployment K8s -->
 ```yaml
 proxysql:
-  image: proxysql/proxysql:2.7.3   # pinnare sempre una versione
+  image: proxysql/proxysql:3.0.11   # pinnare sempre una versione
   volumes:
     - ./proxysql.cnf:/etc/proxysql.cnf:ro   # admin_credentials, monitor user e server iniziali qui
   ports:
@@ -195,7 +194,7 @@ spec:
     spec:
       containers:
       - name: proxysql
-        image: proxysql/proxysql:2.7.3
+        image: proxysql/proxysql:3.0.11
         ports:
         - containerPort: 6033
         - containerPort: 6032
