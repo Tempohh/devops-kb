@@ -7,9 +7,10 @@ search_keywords: [secrets da codice, kubernetes secrets developer, env var vs vo
 parent: dev/sicurezza/_index
 related: [security/secret-management/kubernetes-secrets, security/secret-management/vault, dev/linguaggi/java-spring-boot, dev/linguaggi/dotnet, dev/linguaggi/go]
 official_docs: https://kubernetes.io/docs/concepts/configuration/secret/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Secrets e Config da Codice — Kubernetes, Vault, Cloud SDK
@@ -32,10 +33,10 @@ La scelta fondamentale è **come iniettare il segreto nel processo**: come varia
 | Criterio | Variabile d'Ambiente | File Montato (Volume) |
 |---|---|---|
 | **Hot reload** | Impossibile senza restart del pod | Possibile con watcher del filesystem |
-| **Visibilità** | `kubectl describe pod`, `/proc/PID/environ`, log di errore | Solo chi può leggere il filesystem del container |
-| **Dimensione massima** | ~1MB (limite etcd) | Illimitata praticamente |
+| **Visibilità** | `/proc/PID/environ`, core dump, `docker inspect`/CRI, dump di env nei crash report e nei log di errore (`kubectl describe pod` mostra solo il riferimento `secretKeyRef`, non il valore; con `value:` letterale invece sì) | Solo chi può leggere il filesystem del container |
+| **Dimensione massima** | 1 MiB per Secret/ConfigMap (limite etcd); il limite di env è più basso nella pratica | 1 MiB per Secret (stesso limite, il volume è lo stesso oggetto) |
 | **Formato** | Stringa flat | Qualsiasi formato (JSON, PEM, properties) |
-| **Rotazione** | Richiede rolling restart | Il file viene aggiornato automaticamente da kubelet |
+| **Rotazione** | Richiede rolling restart | Il file viene aggiornato automaticamente da kubelet (non con `subPath`, vedi sotto) |
 | **Debugging** | Facile (visibile in env) | Richiede `kubectl exec` nel container |
 | **Rischio accidentale** | Alto: visibile in core dump, stack trace, log | Basso: solo path nel log, non il valore |
 
@@ -72,22 +73,28 @@ spec:
         - name: api-key
           mountPath: /etc/secrets/api
           readOnly: true
+      securityContext:
+        runAsUser: 10001
+        fsGroup: 10001          # Il gruppo dei file montati diventa 10001
       volumes:
       - name: db-credentials
         secret:
           secretName: orders-db-credentials
-          defaultMode: 0400   # Lettura solo dal owner (uid del processo app)
+          defaultMode: 0440   # I file sono di root:fsGroup: serve il bit di gruppo
       - name: api-key
         secret:
           secretName: stripe-api-key
-          defaultMode: 0400
+          defaultMode: 0440
 ```
+
+!!! warning "`defaultMode: 0400` con utente non-root"
+    I file di un Secret montato appartengono a `root`. Con `0400` solo root può leggerli: un'app che gira come non-root (`runAsUser`) riceve `permission denied`. Il pattern corretto è `fsGroup` + `defaultMode: 0440` (kubelet imposta il gruppo dei file a `fsGroup`), così il processo legge ma gli altri utenti del nodo/container no.
 
 ```yaml
 # EVITARE per segreti critici: env var dirette
 # Questo è accettabile per ambienti di sviluppo, non produzione
 env:
-- name: DB_PASSWORD  # ❌ Visibile in kubectl describe pod, /proc, core dump
+- name: DB_PASSWORD  # ❌ Visibile in /proc/PID/environ, core dump, dump di env nei crash report
   valueFrom:
     secretKeyRef:
       name: orders-db-credentials
@@ -96,7 +103,7 @@ env:
 
 ### Come Kubernetes Aggiorna i Secret Montati
 
-Quando il valore di un Kubernetes Secret viene aggiornato (o quando l'External Secrets Operator ne sincronizza una nuova versione), kubelet aggiorna automaticamente i file montati nel pod entro il `syncPeriod` (default: 1 minuto). I file vengono scritti atomicamente tramite symlink.
+Quando il valore di un Kubernetes Secret viene aggiornato (o quando l'External Secrets Operator ne sincronizza una nuova versione), kubelet aggiorna automaticamente i file montati nel pod al sync successivo (`syncFrequency`, default 1 minuto, più il ritardo della cache locale dei Secret: in pratica fino a 1–2 minuti). I file vengono scritti atomicamente tramite symlink.
 
 ```
 Aggiornamento Secret in etcd
@@ -120,6 +127,9 @@ Aggiornamento Secret in etcd
 ```
 
 **Le variabili d'ambiente NON vengono mai aggiornate** — sono impostate all'avvio del processo e rimangono fisse per tutta la vita del container. L'unico modo per aggiornare un segreto in una env var è ricreare il pod.
+
+!!! warning "`subPath` disabilita l'aggiornamento"
+    Un Secret montato con `subPath` (per mettere un singolo file in una directory esistente) **non viene mai aggiornato** da kubelet: il bind mount punta al file originale, non al symlink `..data`. Per avere hot reload montare l'intera directory del volume, senza `subPath`.
 
 ---
 
@@ -159,7 +169,12 @@ spring:
         mode: polling            # oppure: event (watch API Kubernetes)
         period: 15000            # ms — controlla ogni 15 secondi (solo per polling)
         strategy: refresh        # oppure: restart_context, shutdown
+        monitoring-config-maps: true
+        monitoring-secrets: true # Default false: senza questo i Secret NON vengono monitorati
 ```
+
+!!! note "Requisiti del reload"
+    Con `strategy: refresh` l'endpoint Actuator `refresh` deve essere disponibile (`management.endpoints.web.exposure.include: refresh` se lo si vuole anche chiamare a mano). La strategia `refresh` ricarica solo i bean `@RefreshScope` e `@ConfigurationProperties`; per cambiare altro serve `restart_context` o `shutdown` (il pod riparte).
 
 ```java
 // Bean con valori ricaricabili — richiede @RefreshScope
@@ -249,7 +264,10 @@ In .NET il pattern nativo per configurazione ricaricabile è `IOptionsMonitor<T>
 // Program.cs — configurazione del provider
 var builder = WebApplication.CreateBuilder(args);
 
-// Aggiunge lettura da file montato Kubernetes (ricaricato automaticamente)
+// Aggiunge lettura da file montato Kubernetes (ricaricato automaticamente).
+// Ogni file è una chiave: il NOME del file è la chiave di config e "__" diventa ":",
+// quindi per popolare Stripe:ApiKey il file deve chiamarsi "Stripe__ApiKey"
+// (nel Secret Kubernetes: chiave "Stripe__ApiKey").
 builder.Configuration.AddKeyPerFile(
     directoryPath: "/etc/secrets/app",   // Percorso del volume Kubernetes
     optional: false,
@@ -309,6 +327,8 @@ public class PaymentService
     - `IOptionsSnapshot<T>`: scoped, ricarica a ogni request HTTP — buono per web app
     - `IOptionsMonitor<T>`: singleton con callback OnChange — il migliore per background services e hot reload con notifica
 
+    Non copiare `CurrentValue` in un campo del costruttore: si perde l'aggiornamento. Leggerlo a ogni uso.
+
 ### Go con viper.WatchConfig
 
 ```go
@@ -318,7 +338,6 @@ package config
 import (
     "log"
     "sync"
-    "time"
 
     "github.com/fsnotify/fsnotify"
     "github.com/spf13/viper"
@@ -344,13 +363,15 @@ func NewAppConfig(configPath string) *AppConfig {
     cfg := &AppConfig{viper: v}
 
     // Abilita il filesystem watcher — si aggiorna quando il file cambia
-    v.WatchConfig()
+    // Nota: viper rilegge il file PRIMA di chiamare la callback, quindi un mutex
+    // preso dentro la callback non protegge i lettori concorrenti. Per un accesso
+    // davvero thread-safe, rileggere con un viper.New() separato e scambiare il
+    // puntatore sotto lock (o usare atomic.Pointer), come in startPolling sotto.
     v.OnConfigChange(func(e fsnotify.Event) {
-        cfg.mu.Lock()
-        defer cfg.mu.Unlock()
         log.Printf("Config reloaded: %s", e.Name)
         // Non loggare valori sensibili qui
     })
+    v.WatchConfig() // Dopo OnConfigChange, per non perdere il primo evento
 
     return cfg
 }
@@ -385,7 +406,7 @@ func main() {
 ```
 
 !!! warning "viper.WatchConfig e volume Kubernetes"
-    Kubernetes aggiorna i file montati tramite atomic symlink swap (il path `..data` viene rimpiazzato). Alcuni filesystem watcher non rilevano questo tipo di aggiornamento perché tracciano l'inode originale, non il path. Se `OnConfigChange` non si attiva, verificare che `fsnotify` supporti il sistema operativo del container (Linux: inotify, sì supportato). In caso di problemi, usare polling con un ticker invece del watcher.
+    Kubernetes aggiorna i file montati tramite atomic symlink swap (il path `..data` viene rimpiazzato). Un watcher ingenuo su un singolo file perde questo evento perché traccia l'inode originale. Viper gestisce esplicitamente il caso: osserva la **directory** del file e confronta il path risolto (`filepath.EvalSymlinks`), quindi `WatchConfig` funziona con ConfigMap/Secret montati **se `SetConfigFile` punta al file nel mount** (non a una copia). Non funziona con `subPath` (il file non viene mai aggiornato) né se il file di config è un symlink verso fuori dal volume. In caso di problemi, usare polling con un ticker invece del watcher.
 
 ---
 
@@ -503,7 +524,7 @@ L'External Secrets Operator (ESO) è configurato dall'infrastruttura, ma il deve
 
 ```yaml
 # Cosa l'infrastruttura crea (ExternalSecret) — il developer NON tocca questo
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1   # v1beta1 è deprecata nelle release ESO recenti
 kind: ExternalSecret
 metadata:
   name: orders-secrets
@@ -568,8 +589,11 @@ In alcuni scenari è preferibile leggere il segreto dall'SDK cloud anziché affi
 import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
 import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueResponse;
+import software.amazon.awssdk.regions.Region;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
 
 @Component
 public class AwsSecretsLoader {
@@ -591,7 +615,9 @@ public class AwsSecretsLoader {
         this.objectMapper = new ObjectMapper();
     }
 
-    public synchronized String getStripeApiKey() {
+    // AWS offre anche una libreria di caching ufficiale (aws-secretsmanager-caching-java)
+    // che gestisce TTL e refresh; qui la cache è manuale per mostrare il meccanismo.
+    public synchronized String getStripeApiKey() throws JsonProcessingException {   // com.fasterxml.jackson.core
         if (Instant.now().isAfter(cacheExpiry)) {
             GetSecretValueRequest request = GetSecretValueRequest.builder()
                 .secretId("production/orders/stripe")
@@ -612,7 +638,8 @@ public class AwsSecretsLoader {
 ### Azure Key Vault — .NET
 
 ```csharp
-// NuGet: Azure.Security.KeyVault.Secrets, Azure.Identity
+// NuGet: Azure.Security.KeyVault.Secrets, Azure.Identity,
+//        Azure.Extensions.AspNetCore.Configuration.Secrets (per AddAzureKeyVault)
 
 using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
@@ -625,10 +652,12 @@ public class AzureKeyVaultSecretService
 
     public AzureKeyVaultSecretService(IMemoryCache cache)
     {
-        // DefaultAzureCredential prova in ordine:
-        // 1. Managed Identity (in Azure) / Workload Identity (in AKS)
-        // 2. Azure CLI (sviluppo locale)
-        // 3. Visual Studio (sviluppo locale)
+        // DefaultAzureCredential prova in catena:
+        // 1. Variabili d'ambiente (service principal)
+        // 2. Workload Identity (AKS) / Managed Identity (in Azure)
+        // 3. Strumenti di sviluppo locale (Visual Studio, Azure CLI, azd...)
+        // In produzione preferire una credenziale esplicita (es. WorkloadIdentityCredential)
+        // per evitare tentativi e latenza della catena.
         var credential = new DefaultAzureCredential();
 
         _client = new SecretClient(
@@ -639,12 +668,13 @@ public class AzureKeyVaultSecretService
 
     public async Task<string> GetSecretAsync(string secretName)
     {
-        // Cache con sliding expiration per ridurre le chiamate API
+        // Cache con scadenza ASSOLUTA: con sliding expiration un segreto letto di continuo
+        // non scadrebbe mai e una rotazione non verrebbe mai vista.
         return await _cache.GetOrCreateAsync(
             $"kv:{secretName}",
             async entry =>
             {
-                entry.SlidingExpiration = TimeSpan.FromMinutes(10);
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
                 KeyVaultSecret secret = await _client.GetSecretAsync(secretName);
                 return secret.Value;
             });
@@ -660,7 +690,9 @@ public class AzureKeyVaultSecretService
 builder.Configuration.AddAzureKeyVault(
     new Uri("https://mycompany-kv.vault.azure.net/"),
     new DefaultAzureCredential(),
-    new KeyVaultSecretManager());  // Usa il mapping di default: secret-name → Secret:Name
+    new KeyVaultSecretManager());  // Mapping di default: "--" nel nome del secret → ":" nella chiave
+// Il provider carica i segreti una volta all'avvio: per rilevare le rotazioni
+// impostare AzureKeyVaultConfigurationOptions.ReloadInterval (polling).
 
 // Poi nel servizio:
 public class MyService
@@ -671,7 +703,8 @@ public class MyService
 
     public void DoWork()
     {
-        var apiKey = _config["Stripe--ApiKey"];  // Legge da Key Vault (-- → :)
+        // Secret "Stripe--ApiKey" in Key Vault (i nomi non ammettono ':') → chiave "Stripe:ApiKey"
+        var apiKey = _config["Stripe:ApiKey"];
     }
 }
 ```
@@ -871,16 +904,19 @@ Log.Logger = new LoggerConfiguration()
     .CreateLogger();
 ```
 
+!!! note "Il destructuring si applica solo con `@`"
+    La policy scatta solo se l'oggetto è loggato con l'operatore di destructuring (`Log.Information("Config {@Options}", opts)`). Con `{Options}` Serilog usa `ToString()` e il mascheramento viene ignorato.
+
 ```csharp
-// Oppure: usare [SensitiveData] attribute con una policy personalizzata
-// (richiede la libreria Destructurama.Attributed)
+// Oppure: attributi con la libreria Destructurama.Attributed
+// Program.cs: .Destructure.UsingAttributes()
 
 public class StripeOptions
 {
-    [SensitiveData]  // ← Serilog lo maschera automaticamente
+    [NotLogged]  // ← escluso dal log (alternativa: [LogMasked] per mostrare "***")
     public string ApiKey { get; set; } = string.Empty;
 
-    [SensitiveData]
+    [NotLogged]
     public string WebhookSecret { get; set; } = string.Empty;
 
     public bool EnableTestMode { get; set; }
@@ -941,12 +977,13 @@ private String apiKey;
 **Causa A (env var):** I segreti iniettati come env var non vengono mai aggiornati — sono fissati all'avvio del processo.
 ```bash
 # Verifica se il segreto è in una env var:
-kubectl describe pod <pod-name> | grep -A5 "Environment:"
-# → Se vedi il valore direttamente (non dal volume), è una env var → richiede restart
+kubectl describe pod <pod-name> | grep -A8 "Environment:"
+# → Una riga "<set to the key 'password' in secret '...'>" indica una env var da secretKeyRef
+#   (il valore non è mostrato) → richiede restart. Controllare anche se il mount usa subPath.
 kubectl rollout restart deployment <deployment-name>
 ```
 
-**Causa B (volume, kubelet lag):** Il kubelet aggiorna i file con un ritardo fino a `syncPeriod` (default 60s).
+**Causa B (volume, kubelet lag):** Il kubelet aggiorna i file con un ritardo fino a `syncFrequency` (default 60s) più la cache locale.
 ```bash
 # Verifica quando è stato aggiornato il file nel container:
 kubectl exec <pod-name> -- ls -la /etc/secrets/db/
@@ -966,30 +1003,30 @@ kubectl exec <pod-name> -- curl -s http://localhost:8080/actuator/refresh -XPOST
 
 **Sintomo:** La configurazione viene ricaricata (log di Spring Cloud Kubernetes lo confermano), ma il servizio continua a usare il vecchio valore.
 
-**Causa:** Il bean non ha `@RefreshScope`, oppure viene iniettato in un bean non-refresh-scope che lo tiene in cache.
+**Cause tipiche:**
+
+1. Il bean che legge il valore non ha `@RefreshScope` (né è un `@ConfigurationProperties`).
+2. Il valore è copiato in un oggetto a vita lunga al momento della costruzione (es. password passata a un `DataSource` o a un client HTTP creati una volta sola): il bean `@RefreshScope` si rigenera, ma la copia no.
+3. `monitoring-secrets: true` mancante (i Secret non sono monitorati) oppure RBAC senza `watch`/`list` su `secrets`.
+
 ```java
-// ❌ Questo non si aggiorna: DatabaseService è singleton, tiene il riferimento al vecchio bean
-@Service  // Singleton — si aggiorna solo se ha @RefreshScope
-public class OrderService {
-    private final DatabaseService db;  // DatabaseService ha @RefreshScope, ma...
+// Un bean @RefreshScope è iniettato come scoped proxy: il riferimento resta valido
+// e delega all'istanza corrente. Il problema è copiare il valore, non il bean.
 
-    public OrderService(DatabaseService db) {
-        this.db = db;  // ...questo riferimento punta al vecchio proxy
-    }
-}
-
-// ✅ Corretto: iniettare tramite ApplicationContext o usare @Lookup
+// ❌ Il valore viene copiato nel costruttore: dopo il refresh resta quello vecchio
 @Service
 public class OrderService {
-    private final ApplicationContext ctx;
+    private final String apiKey;
+    public OrderService(PaymentConfig cfg) { this.apiKey = cfg.getApiKey(); }
+}
 
-    public OrderService(ApplicationContext ctx) { this.ctx = ctx; }
+// ✅ Tenere il riferimento al bean refreshable e leggere il valore a ogni uso
+@Service
+public class OrderService {
+    private final PaymentConfig cfg;   // @RefreshScope → proxy
+    public OrderService(PaymentConfig cfg) { this.cfg = cfg; }
 
-    public void process() {
-        // Ottiene sempre il bean corrente dal contesto (post-refresh)
-        DatabaseService db = ctx.getBean(DatabaseService.class);
-        db.query(...);
-    }
+    public void process() { callApi(cfg.getApiKey()); }
 }
 ```
 
@@ -997,21 +1034,26 @@ public class OrderService {
 
 **Sintomo:** Go con viper, il file viene aggiornato da kubelet, ma `OnConfigChange` non viene chiamato.
 
-**Causa:** Atomic symlink swap di Kubernetes non viene rilevato da alcuni filesystem watcher.
+**Causa:** `subPath` (il file non cambia mai), file di config che non sta nel volume montato, o il watcher non vede l'evento (es. volumi di rete). Verificare prima con `kubectl exec ... ls -la` che il file cambi davvero.
 ```go
 // Soluzione: polling manuale con ticker come fallback
+// (campo configPath da aggiungere ad AppConfig; imports: os, time)
 func (c *AppConfig) startPolling(interval time.Duration) {
     go func() {
         ticker := time.NewTicker(interval)
+        defer ticker.Stop()
         var lastMod time.Time
         for range ticker.C {
-            info, err := os.Stat(c.configPath)
+            info, err := os.Stat(c.configPath) // Stat segue i symlink: vede il nuovo file
             if err != nil {
                 continue
             }
             if info.ModTime().After(lastMod) {
                 lastMod = info.ModTime()
-                if err := c.viper.ReadInConfig(); err == nil {
+                c.mu.Lock()
+                err := c.viper.ReadInConfig()
+                c.mu.Unlock()
+                if err == nil {
                     log.Printf("Config reloaded via polling")
                 }
             }
@@ -1039,12 +1081,13 @@ kubectl logs <pod-name> --previous | grep -n "<parte-del-segreto>"
 
 **Sintomo:** .NET, il file viene aggiornato, ma `OnChange` non viene chiamato.
 
-**Causa:** Il path di configurazione usa symlink (Kubernetes) e `AddKeyPerFile` non segue i symlink per il FileSystemWatcher.
-```csharp
-// Soluzione: usare AddJsonFile con reloadOnChange su path risolto
-var resolvedPath = Path.GetFullPath("/etc/secrets/app/config.json");
-builder.Configuration.AddJsonFile(resolvedPath, optional: false, reloadOnChange: true);
+**Causa:** I file montati da Kubernetes sono symlink (`..data`) e l'`inotify` del `FileSystemWatcher` può non vedere lo swap atomico. Il fix affidabile è il polling del file provider, abilitato da variabile d'ambiente (nessuna modifica al codice):
+```yaml
+env:
+- name: DOTNET_USE_POLLING_FILE_WATCHER
+  value: "true"    # PhysicalFileProvider usa polling invece di inotify
 ```
+Verificare anche che il mount non usi `subPath` e che i nomi dei file corrispondano alle chiavi attese (`Stripe__ApiKey`).
 
 ---
 
