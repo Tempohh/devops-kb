@@ -7,9 +7,10 @@ search_keywords: [Cloud KMS, Google Cloud KMS, GCP Key Management Service, Secre
 parent: cloud/gcp/security/_index
 related: [security/secret-management/vault, cloud/gcp/iam/iam-service-accounts, cloud/aws/security/kms-secrets, cloud/gcp/containers/gke]
 official_docs: https://cloud.google.com/kms/docs
-status: complete
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-02
+last_verified: 2026-10-04
 ---
 
 # Cloud KMS e Secret Manager
@@ -244,8 +245,8 @@ def encrypt_data(plaintext: bytes) -> dict:
         request={"name": key_name, "plaintext": dek}
     )
 
-    # 4. Pulire la DEK in chiaro dalla memoria
-    dek = b"\x00" * len(dek)
+    # 4. Rilasciare il riferimento alla DEK (best effort: i bytes Python sono
+    #    immutabili, non si può azzerare davvero la memoria)
     del dek
 
     return {
@@ -265,7 +266,6 @@ def decrypt_data(encrypted_data: bytes, encrypted_dek: bytes) -> bytes:
     nonce, ciphertext = encrypted_data[:12], encrypted_data[12:]
     plaintext = aesgcm.decrypt(nonce, ciphertext, None)
 
-    dek = b"\x00" * len(dek)
     del dek
     return plaintext
 ```
@@ -307,12 +307,21 @@ echo -n "MySecurePassword123!" | gcloud secrets create prod-db-password-eu \
     --replication-policy="user-managed" \
     --locations="europe-west1,europe-west3"
 
-# Secret cifrato con CMEK invece della chiave Google-managed di default
+# Secret cifrato con CMEK invece della chiave Google-managed di default.
+# Con replica automatic la chiave KMS deve stare in location `global`;
+# --kms-key-name NON è valido con replica user-managed.
+# Prerequisito: service agent Secret Manager
+# (service-PROJECT_NUMBER@gcp-sa-secretmanager.iam.gserviceaccount.com)
+# con roles/cloudkms.cryptoKeyEncrypterDecrypter sulla chiave.
 echo -n "MySecurePassword123!" | gcloud secrets create prod-db-password-cmek \
     --data-file=- \
-    --replication-policy="user-managed" \
-    --locations="europe-west8" \
-    --kms-key-name="projects/my-project-id/locations/europe-west8/keyRings/prod-keyring/cryptoKeys/app-encryption-key"
+    --replication-policy="automatic" \
+    --kms-key-name="projects/my-project-id/locations/global/keyRings/prod-keyring-global/cryptoKeys/secrets-key"
+
+# CMEK + user-managed: una chiave per ogni location, via file di policy
+# (replication.json: {"userManaged":{"replicas":[{"location":"europe-west8",
+#   "customerManagedEncryption":{"kmsKeyName":"projects/.../locations/europe-west8/keyRings/.../cryptoKeys/..."}}]}})
+# gcloud secrets create prod-db-password-eu-cmek --data-file=- --replication-policy-file=replication.json
 
 # ── AGGIUNGERE UNA NUOVA VERSION (rotazione manuale) ─────────────────
 echo -n "NewSecurePassword456!" | gcloud secrets versions add prod-db-password \
@@ -357,7 +366,7 @@ spec:
   provider: gcp
   parameters:
     secrets: |
-      - resourceName: "projects/my-project-id/secrets/prod-db-password/versions/latest"
+      - resourceName: "projects/my-project-id/secrets/prod-db-password/versions/2"   # version fissata (non latest) in produzione
         path: "db-password"
       - resourceName: "projects/my-project-id/secrets/prod-api-key/versions/3"
         path: "api-key"
@@ -503,7 +512,7 @@ gcloud kms keys versions enable VERSION_ID \
 ```
 
 !!! warning "DESTROYED è irreversibile"
-    A differenza di `DISABLED`, una Key Version in stato `DESTROYED` elimina il materiale crittografico in modo permanente dopo un periodo di grazia configurabile (default 24h, fino a 30 giorni). Qualsiasi dato cifrato solo con quella version diventa definitivamente irrecuperabile ("crypto-shredding").
+    A differenza di `DISABLED`, una Key Version in stato `DESTROYED` elimina il materiale crittografico in modo permanente. La distruzione passa prima per `DESTROY_SCHEDULED` (ripristinabile con `gcloud kms keys versions restore`) per un periodo di grazia fissato alla creazione della Crypto Key (`--destroy-scheduled-duration`, default 30 giorni, minimo 24h, non modificabile dopo). Scaduto il periodo, qualsiasi dato cifrato solo con quella version diventa definitivamente irrecuperabile ("crypto-shredding").
 
 ### Scenario 4 — CSI Driver non monta il secret nel Pod
 
@@ -552,7 +561,7 @@ kubectl logs -n kube-system -l app=csi-secrets-store --tail=100
     **Approfondimento completo →** [GCP IAM e Service Account](../iam/iam-service-accounts.md)
 
 ??? info "AWS KMS e Secrets Manager — Confronto"
-    AWS espone concetti equivalenti (CMK, envelope encryption, rotazione, Secrets Manager con rotazione automatica via Lambda). La differenza principale: AWS Secrets Manager supporta rotazione automatica nativa per RDS/Redshift/DocumentDB, GCP Secret Manager è versioning-only (la rotazione va orchestrata esternamente, es. con Cloud Scheduler + Cloud Functions, o delegata a Vault).
+    AWS espone concetti equivalenti (CMK, envelope encryption, rotazione, Secrets Manager con rotazione automatica via Lambda). La differenza principale: AWS Secrets Manager supporta rotazione automatica nativa per RDS/Redshift/DocumentDB. GCP Secret Manager non ruota i valori da solo: offre solo uno schedule di rotazione (`--rotation-period`, `--next-rotation-time`) che pubblica una notifica su un topic Pub/Sub; la logica che genera la nuova version (`gcloud secrets versions add`) va scritta da te, es. con Cloud Run functions in ascolto sul topic, o delegata a Vault.
 
     **Approfondimento completo →** [AWS KMS, Secrets Manager, ACM](../../aws/security/kms-secrets.md)
 
