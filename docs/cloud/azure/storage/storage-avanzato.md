@@ -1,15 +1,16 @@
 ---
 title: "Azure Storage Avanzato"
-slug: storage-avanzato-azure
+slug: storage-avanzato
 category: cloud
 tags: [azure, azure-files, managed-disks, table-storage, queue-storage, nfs, smb]
 search_keywords: [Azure Files SMB NFS, Azure File Sync, Premium File Shares SSD, Managed Disks Premium SSD Ultra Disk, Queue Storage message queue, Table Storage NoSQL key-value, storage firewall network rules, customer-managed keys CMK, storage access keys rotation, Azure File Sync hybrid cloud]
 parent: cloud/azure/storage/_index
 related: [cloud/azure/compute/virtual-machines, cloud/azure/security/key-vault, cloud/azure/compute/aks-containers]
 official_docs: https://learn.microsoft.com/azure/storage/files/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Azure Storage Avanzato
@@ -20,25 +21,28 @@ Oltre a Blob Storage, Azure offre servizi storage specializzati per scenari spec
 
 ## Azure Files
 
-Azure Files offre file share gestiti nel cloud accessibili via protocollo SMB 3.0 e NFS 4.1. Può sostituire server NAS on-premises e si monta su Windows, Linux e macOS.
+Azure Files offre file share gestiti nel cloud accessibili via protocollo SMB (3.x) e NFS 4.1. Può sostituire server NAS on-premises e si monta su Windows, Linux e macOS (NFS solo Linux).
 
 ### Tipi di File Share
 
-| Tipo | Protocollo | Storage | IOPS Max | Use Case |
+| Tipo | Protocollo | Redundancy | IOPS Max (per share) | Use Case |
 |---|---|---|---|---|
-| **Standard** (HDD) | SMB, NFS | LRS/GRS/ZRS | 10.000 | Home directory, dev/test, archivi |
-| **Premium** (SSD) | SMB, NFS | ZRS/LRS | 100.000 | Database file, ERP, workload I/O intensivi |
+| **Standard** (HDD) | solo SMB (e REST) | LRS/ZRS/GRS/GZRS | ~20.000 | Home directory, dev/test, archivi |
+| **Premium** (SSD, `FileStorage`) | SMB, NFS | LRS/ZRS | ~100.000 | Database file, ERP, workload I/O intensivi |
+
+!!! warning "NFS solo su Premium"
+    NFS 4.1 richiede uno storage account `FileStorage` Premium. NFS non supporta cifratura in transito né autenticazione utente: l'accesso va limitato con Private Endpoint o Service Endpoint (rete come unico perimetro) e `secure transfer required` va disabilitato sull'account.
 
 ```bash
 RG="rg-storage-prod"
 SA_NAME="mystorageaccount2026"
 
 # Creare file share SMB Standard
-az storage share create \
-  --account-name $SA_NAME \
+az storage share-rm create \
+  --resource-group $RG \
+  --storage-account $SA_NAME \
   --name myfileshare \
-  --quota 1024 \
-  --auth-mode login
+  --quota 1024
 
 # Creare file share NFS (richiede Premium tier storage account)
 az storage account create \
@@ -47,7 +51,7 @@ az storage account create \
   --location westeurope \
   --sku Premium_LRS \
   --kind FileStorage \
-  --https-only false  # NFS non usa HTTPS ma transport-level security
+  --https-only false  # obbligatorio per NFS: niente encryption in transit, proteggere via rete
 
 az storage share-rm create \
   --resource-group $RG \
@@ -86,9 +90,15 @@ sudo mount -t cifs \
   /mnt/azurefiles \
   -o vers=3.0,username=$SA_NAME,password=$STORAGE_KEY,dir_mode=0777,file_mode=0777,serverino
 
-# Mount persistente in /etc/fstab
-echo "//$SA_NAME.file.core.windows.net/myfileshare /mnt/azurefiles cifs vers=3.0,username=$SA_NAME,password=$STORAGE_KEY,dir_mode=0777,file_mode=0777,serverino 0 0" | sudo tee -a /etc/fstab
+# Mount persistente in /etc/fstab: credenziali in file dedicato (non in chiaro in fstab)
+sudo mkdir -p /etc/smbcredentials
+printf "username=%s\npassword=%s\n" "$SA_NAME" "$STORAGE_KEY" | sudo tee /etc/smbcredentials/$SA_NAME.cred > /dev/null
+sudo chmod 600 /etc/smbcredentials/$SA_NAME.cred
+echo "//$SA_NAME.file.core.windows.net/myfileshare /mnt/azurefiles cifs nofail,vers=3.0,credentials=/etc/smbcredentials/$SA_NAME.cred,dir_mode=0770,file_mode=0660,serverino 0 0" | sudo tee -a /etc/fstab
 ```
+
+!!! warning "Permessi e chiave"
+    `0777` espone i file a ogni utente locale e la storage key dà accesso completo all'account: in produzione preferisci autenticazione identity-based (Microsoft Entra Kerberos / AD DS) e permessi restrittivi.
 
 ### Mount su Windows (SMB)
 
@@ -114,8 +124,8 @@ Azure File Sync sincronizza file share on-premises con Azure Files, creando un t
 ```
 On-Premises Windows Server
 ├── File Server con Azure File Sync Agent
-│   ├── Hot files → mantiene copia locale (stub)
-│   └── Cold files → solo stub, contenuto su Azure Files
+│   ├── Hot files → contenuto completo in locale
+│   └── Cold files → solo stub (reparse point), contenuto su Azure Files
 │
 Azure Files (cloud share completo)
 │   └── Tutti i file (hot + cold)
@@ -126,7 +136,7 @@ Architettura installazione:
 2. Installare agente File Sync su Windows Server
 3. Registrare il server nel Storage Sync Service
 4. Creare Sync Group (collega Azure File Share al server endpoint)
-5. Configurare Cloud Tiering (es: mantieni ultimi 30 giorni localmente)
+5. Creare il Server Endpoint e configurare Cloud Tiering (policy *volume free space* e/o *date*, es: tieni in locale solo i file acceduti negli ultimi 30 giorni)
 
 ```bash
 # Creare Storage Sync Service
@@ -147,7 +157,8 @@ az storagesync sync-group cloud-endpoint create \
   --storage-sync-service myfilesyncsvc \
   --sync-group-name sync-group-prod \
   --name cloud-endpoint \
-  --storage-account-resource-id $(az storage account show --resource-group $RG --name $SA_NAME --query id -o tsv) \
+  --storage-account $(az storage account show --resource-group $RG --name $SA_NAME --query id -o tsv) \
+  --storage-account-tenant-id $(az account show --query tenantId -o tsv) \
   --azure-file-share-name myfileshare
 ```
 
@@ -163,7 +174,10 @@ I Managed Disks sono volumi di block storage per Azure VM, gestiti da Azure (no 
 | **Standard SSD** | 750 | 100 | 6000 | 750 | Web server, light database |
 | **Premium SSD v1** | 3000-7500 | 200-900 | 20000 | 900 | Database enterprise, workload I/O |
 | **Premium SSD v2** | Configurabile | Configurabile | 80000 | 1200 | Database mission-critical, SAP, Redis |
-| **Ultra Disk** | Configurabile | Configurabile | 160000 | 4000 | HPC, database ultra-performance |
+| **Ultra Disk** | Configurabile | Configurabile | 400000 | 10000 | HPC, database ultra-performance |
+
+!!! note "Limiti indicativi"
+    I massimi dipendono da dimensione disco e dalla size della VM (che ha propri cap di IOPS/throughput): verifica la pagina *Disk types* prima di dimensionare. Premium SSD v2 e Ultra Disk non supportano host caching.
 
 ```bash
 # Creare disco Premium SSD v2 (IOPS/throughput configurabili indipendentemente dalla dimensione)
@@ -177,7 +191,7 @@ az disk create \
   --zone 1 \
   --location westeurope
 
-# Creare Ultra Disk (richiede zona specifica)
+# Creare Ultra Disk (richiede zona specifica; la VM deve essere creata/aggiornata con --ultra-ssd-enabled true nella stessa zona)
 az disk create \
   --resource-group $RG \
   --name disk-ultra-db \
@@ -248,8 +262,8 @@ Azure Queue Storage è un servizio di accodamento messaggi semplice per il disac
 
 Caratteristiche:
 - Massimo 64 KB per messaggio
-- Massimo 500 TB per queue (storage account standard)
-- TTL default 7 giorni (configurabile fino a 7 giorni o -1 per infinito)
+- Capacità totale limitata dal solo storage account (500 TiB), non da un tetto per queue
+- TTL default 7 giorni (configurabile a qualsiasi valore positivo, oppure -1 per nessuna scadenza)
 - Visibility timeout: un messaggio è invisibile dopo il get per N secondi (worker lock)
 - At-least-once delivery (deduplication non garantita — idempotenza nel consumer)
 
@@ -260,7 +274,7 @@ az storage queue create \
   --name task-queue \
   --auth-mode login
 
-# Inviare messaggio (base64 automatico con --encode true)
+# Inviare messaggio (il contenuto è testo; se il consumer si aspetta base64, codificalo prima)
 az storage message put \
   --account-name $SA_NAME \
   --queue-name task-queue \
@@ -371,7 +385,7 @@ az storage account update \
   --default-action Deny \
   --bypass AzureServices Logging Metrics
 
-# Aggiungere subnet VNet specifica
+# Aggiungere subnet VNet specifica (richiede Service Endpoint Microsoft.Storage sulla subnet)
 az storage account network-rule add \
   --resource-group $RG \
   --account-name $SA_NAME \
@@ -409,8 +423,7 @@ Per default, Azure cripta i dati at-rest con chiavi gestite da Microsoft (SSE - 
 az keyvault create \
   --resource-group $RG \
   --name mykeyvault-cmk \
-  --enable-soft-delete true \
-  --enable-purge-protection true
+  --enable-purge-protection true  # soft-delete è sempre attivo sui nuovi vault
 
 # Creare chiave RSA in Key Vault
 az keyvault key create \
@@ -434,24 +447,23 @@ STORAGE_MI=$(az storage account show \
 
 # Assegnare ruolo Key Vault Crypto Service Encryption User
 az role assignment create \
-  --assignee $STORAGE_MI \
+  --assignee-object-id $STORAGE_MI \
+  --assignee-principal-type ServicePrincipal \
   --role "Key Vault Crypto Service Encryption User" \
   --scope $(az keyvault show --name mykeyvault-cmk --query id -o tsv)
 
-# Abilitare CMK sullo storage account
-KEY_URI=$(az keyvault key show \
-  --vault-name mykeyvault-cmk \
-  --name storage-encryption-key \
-  --query key.kid -o tsv)
-
+# Abilitare CMK sullo storage account (identità system-assigned: nessun identity id da passare)
+# Senza --encryption-key-version Storage usa sempre l'ultima versione (auto-rotation della chiave)
 az storage account update \
   --resource-group $RG \
   --name $SA_NAME \
   --encryption-key-source Microsoft.Keyvault \
-  --encryption-key-uri $KEY_URI \
   --encryption-key-vault https://mykeyvault-cmk.vault.azure.net/ \
-  --key-vault-user-identity $(az storage account show --resource-group $RG --name $SA_NAME --query identity.principalId -o tsv)
+  --encryption-key-name storage-encryption-key
 ```
+
+!!! note "User-assigned identity"
+    Con una user-assigned managed identity aggiungi `--key-vault-user-identity-id <resourceId dell'identità>`. È utile per assegnare il ruolo sul Key Vault *prima* di creare l'account.
 
 ## Storage Access Keys: Rotation Best Practice
 
@@ -481,16 +493,20 @@ az storage account keys renew \
 ```
 
 !!! tip "Key Vault Reference per Connection String"
-    Memorizza la connection string dello storage in Key Vault e usa Key Vault References nelle App Service/Functions. Quando ruoti la chiave e aggiorni il segreto in Key Vault, le applicazioni ricevono automaticamente la nuova connection string senza redeploy.
+    Memorizza la connection string dello storage in Key Vault e usa Key Vault References (senza versione) nelle App Service/Functions. Quando aggiorni il segreto dopo la rotation, le app lo rileggono entro circa 24 ore senza redeploy (per applicarlo subito, riavvia l'app o aggiorna il riferimento).
+
+!!! tip "Meglio: niente chiavi"
+    Il rimedio più forte alla rotation è eliminare le chiavi: usa Microsoft Entra ID con RBAC (`Storage Blob Data Contributor`, `Storage Queue Data Contributor`, ecc.) e imposta `--allow-shared-key-access false` sull'account. Imposta anche una *key expiration policy* per avere alert di rotation.
 
 ## Diagnostics e Monitoring
 
 ```bash
-# Abilitare diagnostics log e metriche per lo storage account
+# I log (StorageRead/Write/Delete) si configurano per servizio (blob, file, queue, table),
+# non sulla risorsa account: qui il servizio blob. Metriche: stesso resource ID del servizio.
+SA_ID=$(az storage account show --resource-group $RG --name $SA_NAME --query id -o tsv)
+
 az monitor diagnostic-settings create \
-  --resource-group $RG \
-  --resource $SA_NAME \
-  --resource-type Microsoft.Storage/storageAccounts \
+  --resource "$SA_ID/blobServices/default" \
   --name diag-storage-prod \
   --workspace $(az monitor log-analytics workspace show --resource-group rg-monitoring --workspace-name law-prod --query id -o tsv) \
   --logs '[
@@ -498,8 +514,10 @@ az monitor diagnostic-settings create \
     {"category": "StorageWrite", "enabled": true},
     {"category": "StorageDelete", "enabled": true}
   ]' \
-  --metrics '[{"category": "Transaction", "enabled": true}, {"category": "Capacity", "enabled": true}]'
+  --metrics '[{"category": "Transaction", "enabled": true}]'
 ```
+
+Ripeti con `fileServices/default`, `queueServices/default`, `tableServices/default` per gli altri servizi (in quel caso le tabelle KQL sono `StorageFileLogs`, `StorageQueueLogs`, `StorageTableLogs`).
 
 Query KQL utili per analisi storage:
 
@@ -539,7 +557,7 @@ az storage account keys list \
   --account-name $SA_NAME \
   --query "[0].value" -o tsv
 
-# Se la porta è bloccata, usare VPN o Azure File Sync come alternativa
+# Se la porta è bloccata, usare VPN (P2S/S2S) / ExpressRoute con Private Endpoint, o Azure File Sync come alternativa
 # Verificare che il servizio sia abilitato per il protocollo SMB
 az storage account show \
   --resource-group $RG \
@@ -600,7 +618,8 @@ az storage account show \
 # Riassegnare il ruolo se mancante
 STORAGE_MI=$(az storage account show --resource-group $RG --name $SA_NAME --query identity.principalId -o tsv)
 az role assignment create \
-  --assignee $STORAGE_MI \
+  --assignee-object-id $STORAGE_MI \
+  --assignee-principal-type ServicePrincipal \
   --role "Key Vault Crypto Service Encryption User" \
   --scope $(az keyvault show --name mykeyvault-cmk --query id -o tsv)
 
@@ -669,12 +688,15 @@ az storage queue create \
   --auth-mode login
 ```
 
+!!! note "Poison queue con Azure Functions"
+    Queue Storage non ha una DLQ nativa (a differenza di Service Bus). Il trigger queue di Azure Functions però sposta da solo i messaggi dopo 5 tentativi (`maxDequeueCount`) in una queue `<nome>-poison`: il codice sopra serve per consumer custom.
+
 ## Best Practices
 
 - Usa sempre **Private Endpoint** invece di Service Endpoint per isolamento rete completo
 - Abilita **Soft Delete** per file share e blob (protezione contro eliminazione accidentale)
 - Per Managed Disks in produzione, usa sempre **Premium SSD v1** minimo, **Premium SSD v2** per database
-- Imposta `--caching None` per dischi database (data files) e `ReadOnly` per OS disk
+- Host caching (solo Premium SSD v1/Standard): `ReadWrite` di default per OS disk; `ReadOnly` per data disk con carichi read-heavy (es. data file SQL Server); `None` per log file e dischi write-heavy
 - Usa **Disk Access** con Private Endpoint per esportare dischi sicuramente senza esposizione Internet
 - Per Queue Storage, implementa sempre logica di idempotenza nel consumer (at-least-once delivery)
 
