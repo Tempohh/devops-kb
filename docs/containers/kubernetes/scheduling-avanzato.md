@@ -7,9 +7,10 @@ search_keywords: [kubernetes HPA, kubernetes VPA, KEDA kubernetes, pod affinity 
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/workloads, containers/kubernetes/architettura]
 official_docs: https://kubernetes.io/docs/concepts/scheduling-eviction/
-status: complete
+status: needs-review
 difficulty: expert
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Scheduling Avanzato
@@ -111,7 +112,7 @@ spec:
 
 ```yaml
 spec:
-  # ── NodeSelector (semplice, deprecato in favore di affinity) ──
+  # ── NodeSelector (semplice, solo match esatto AND di label; non deprecato) ──
   nodeSelector:
     kubernetes.io/arch: amd64
     node-type: compute
@@ -158,6 +159,7 @@ spec:
     # ── Pod Anti-Affinity: spread su nodi diversi ────────────
     podAntiAffinity:
       # HARD: non schedula se c'è già un pod con app=api sul NODO
+      # (attenzione: repliche > nodi → pod Pending; per spread tollerante preferire topologySpreadConstraints)
       requiredDuringSchedulingIgnoredDuringExecution:
         - labelSelector:
             matchLabels:
@@ -196,13 +198,13 @@ spec:
     # Distribuisce uniformemente per AZ (max 1 pod di differenza)
     - maxSkew: 1
       topologyKey: topology.kubernetes.io/zone
-      whenUnsatisfiable: DoNotSchedule   # FailTolerate | ScheduleAnyway
+      whenUnsatisfiable: DoNotSchedule   # oppure ScheduleAnyway
       labelSelector:
         matchLabels:
           app: api
       matchLabelKeys:
         - pod-template-hash              # considera solo i pod dello stesso RS
-      minDomains: 3                      # richiede almeno 3 AZ disponibili
+      minDomains: 3                      # se esistono < 3 zone, il minimo globale vale 0 → i pod oltre maxSkew restano Pending (solo con DoNotSchedule); utile per far scattare lo scale-up del cluster autoscaler
 
     # Distribuisce per nodo (max 2 pod per nodo)
     - maxSkew: 2
@@ -243,7 +245,9 @@ spec:
       operator: Exists
       effect: NoSchedule
 
-    # Tolera node not-ready per 300s (eviction delay)
+    # Tolera node not-ready per 300s (eviction delay). Nota: l'admission controller
+    # DefaultTolerationSeconds aggiunge già questi due toleration (300s) a ogni pod che non li definisce
+    # (nota: il valore 300s è il default; qui è esplicitato per poterlo cambiare)
     - key: node.kubernetes.io/not-ready
       operator: Exists
       effect: NoExecute
@@ -281,7 +285,8 @@ kubectl drain worker-1 \
 L'**HPA** scala automaticamente il numero di pod in base a metriche.
 
 ```yaml
-# HPA con metriche CPU e custom (KEDA-style multi-metric)
+# HPA multi-metrica: con più metriche calcola le repliche per ciascuna e usa la MAX.
+# Richiede metrics-server (Resource), prometheus-adapter o simili (Pods/Object), un adapter external (External)
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -356,7 +361,7 @@ spec:
 
 ## VPA — Vertical Pod Autoscaler
 
-Il **VPA** aggiorna automaticamente i resource requests/limits dei container.
+Il **VPA** aggiorna automaticamente i resource requests/limits dei container. Non è parte del core Kubernetes: si installa a parte (CRD + recommender/updater/admission-controller dal repo `kubernetes/autoscaler`) e usa le metriche storiche per calcolare i valori.
 
 ```yaml
 apiVersion: autoscaling.k8s.io/v1
@@ -370,11 +375,13 @@ spec:
     kind: Deployment
     name: api
   updatePolicy:
-    updateMode: "Auto"    # Off | Initial | Recreate | Auto
+    updateMode: "Recreate"    # Off | Initial | Recreate | Auto (+ InPlaceOrRecreate nelle versioni recenti)
     # Off:        solo raccomandazioni, nessun update automatico
     # Initial:    applica al pod creation, non a quelli esistenti
     # Recreate:   evicts e ricrea i pod per applicare i nuovi valori
-    # Auto:       come Recreate + in-place update quando supportato
+    # Auto:       oggi equivale a Recreate (modalità in via di deprecazione)
+    # InPlaceOrRecreate: prova il resize in-place, altrimenti evict <!-- REVIEW: verificare nome, stato (alpha/beta) e versione VPA che introduce InPlaceOrRecreate e deprecazione di Auto -->
+    # Nota: Recreate/Auto evictano i pod → servono PodDisruptionBudget e ≥2 repliche
   resourcePolicy:
     containerPolicies:
       - containerName: api
@@ -412,7 +419,10 @@ kubectl describe vpa api-vpa
 
 ## KEDA — Event-Driven Autoscaling
 
-**KEDA** (Kubernetes Event-Driven Autoscaler) estende l'HPA con scale-to-zero e decine di trigger supportati.
+**KEDA** (Kubernetes Event-Driven Autoscaler) estende l'HPA con scale-to-zero e decine di trigger supportati. Meccanismo: per ogni `ScaledObject` KEDA crea e gestisce un HPA (per 1→N repliche, esponendo le metriche esterne come external metrics) e attiva/disattiva direttamente il workload per 0↔1.
+
+!!! warning "KEDA + HPA"
+    Non definire un HPA manuale sullo stesso Deployment di uno `ScaledObject`: i due controller entrano in conflitto. Per metriche aggiuntive usare più trigger nello stesso `ScaledObject`.
 
 ```yaml
 # KEDA ScaledObject — scala basandosi su una coda Kafka
@@ -605,7 +615,7 @@ kubectl describe vpa debug-vpa -n <namespace>
 
 **Sintomo:** Pod in stato `Evicted`. Il cluster ha node pressure (DiskPressure, MemoryPressure).
 
-**Causa:** Il nodo ha esaurito le risorse (disco o memoria). Il kubelet evicts i pod con QoS class `BestEffort` prima, poi `Burstable`, poi `Guaranteed`.
+**Causa:** Il nodo ha esaurito le risorse (disco o memoria). Per la node-pressure eviction il kubelet ordina i pod candidati prima per "usa più del proprio request?" (BestEffort e Burstable oltre request per primi), poi per priorità (`PriorityClass`), poi per consumo rispetto al request. I pod `Guaranteed` sono i meno esposti, non immuni. Distinto dalla *preemption* dello scheduler, che sfratta pod a bassa priorità per far posto a uno pending.
 
 **Soluzione:** Assegnare resource requests/limits corretti per garantire QoS `Guaranteed`, e monitorare la pressione sui nodi.
 
