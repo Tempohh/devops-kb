@@ -7,7 +7,7 @@ search_keywords: [pgbouncer, connection pool, connection pooling postgresql, tra
 parent: databases/postgresql/_index
 related: [databases/postgresql/replicazione, databases/postgresql/mvcc-vacuum, databases/kubernetes-cloud/db-su-kubernetes]
 official_docs: https://www.pgbouncer.org/config.html
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -162,17 +162,19 @@ conn = psycopg.connect(dsn, prepare_threshold=5)
 ```yaml
 # docker-compose.yml
 pgbouncer:
-  # <!-- REVIEW: verificare immagine e nomi variabili: POSTGRESQL_*/PGBOUNCER_* sono dell'immagine Bitnami (deprecata/spostata nel 2025); tag 1.22 superato -->
-  image: pgbouncer/pgbouncer:1.22
+  # Il progetto PgBouncer non pubblica un'immagine ufficiale: questa è community
+  # (edoburu/pgbouncer). Fissare un tag di versione esplicito dal registry
+  # (PgBouncer 1.26.0 è l'ultima stabile al 2026-10); evitare `latest` in produzione.
+  image: edoburu/pgbouncer:<tag>
   environment:
-    POSTGRESQL_HOST: postgres
-    POSTGRESQL_PORT: 5432
-    POSTGRESQL_DATABASE: myapp_db
-    POSTGRESQL_USERNAME: myapp_user
-    POSTGRESQL_PASSWORD: ${DB_PASSWORD}
-    PGBOUNCER_POOL_MODE: transaction
-    PGBOUNCER_MAX_CLIENT_CONN: 500
-    PGBOUNCER_DEFAULT_POOL_SIZE: 25
+    DB_HOST: postgres
+    DB_USER: myapp_user
+    DB_PASSWORD: ${DB_PASSWORD}
+    DB_NAME: myapp_db
+    POOL_MODE: transaction
+    MAX_CLIENT_CONN: 500
+    DEFAULT_POOL_SIZE: 25
+    AUTH_TYPE: scram-sha-256
   ports:
     - "5432:5432"
   depends_on:
@@ -198,7 +200,7 @@ spec:
     spec:
       containers:
       - name: pgbouncer
-        image: pgbouncer/pgbouncer:1.22
+        image: edoburu/pgbouncer:<tag>   # immagine community, tag fissato (vedi nota Docker Compose)
         ports:
         - containerPort: 5432
         envFrom:
