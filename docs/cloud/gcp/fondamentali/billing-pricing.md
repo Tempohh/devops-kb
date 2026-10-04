@@ -73,9 +73,8 @@ Esempio per la famiglia **N1** (lo sconto massimo è il più alto):
 
 **Caratteristiche SUD:**
 - Applicati automaticamente — nessuna configurazione necessaria
-- Valgono solo per famiglie "legacy": N1 e M1/M2 (fino a ~30%), N2, N2D, C2, C2D (fino a ~20%); si applicano anche ai nodi GKE perché sono VM Compute Engine
-- **Non si applicano** a: E2, famiglie di nuova generazione (es. C3, N4), Spot VM, Preemptible VM, App Engine flexible, Cloud SQL
-<!-- REVIEW: verificare elenco famiglie con SUD e percentuali massime su cloud.google.com/compute/docs/sustained-use-discounts -->
+- Valgono solo per famiglie "legacy": N1, M1/M2, `f1-micro`/`g1-small` e GPU collegate a N1 (fino a ~30%); N2, N2D, C2 (fino a ~20%); si applicano anche ai nodi GKE perché sono VM Compute Engine
+- **Non si applicano** a: E2, T2D, A2/A3, H3, famiglie di nuova generazione (es. C3, N4), Spot VM, Preemptible VM, App Engine, Dataflow, Cloud SQL
 - Il contatore SUD aggrega l'uso per **famiglia di macchine e regione** (non per singola istanza): cambiare dimensione nella stessa famiglia non azzera lo sconto
 - GCP calcola l'utilizzo per **tipo di macchina** nella stessa regione — se cambi tipo ma stai nella stessa famiglia, il contatore SUD può accumularsi
 
@@ -88,15 +87,13 @@ I **CUD** richiedono un impegno contrattuale di 1 o 3 anni su una quantità di r
 
 | Risorsa | Sconto 1 anno | Sconto 3 anni |
 |---------|--------------|--------------|
-| vCPU generale (N1, N2, N2D) | 37% | 55% |
-| RAM generale | 37% | 55% |
-| vCPU compute-optimized (C2, C2D) | 37% | 55% |
-| vCPU memory-optimized (M1, M2) | 41% | 63% |
-| GPU (A100, V100) | 40% | 55% |
+| Serie general-purpose / compute-optimized / altre | 37% (indicativo) | fino a 55% |
+| Memory-optimized | 41% (indicativo) | fino a 70% |
+| GPU | varia per modello | varia per modello |
 
-<!-- REVIEW: verificare percentuali CUD (in particolare memory-optimized 3 anni e GPU) e la migrazione ai Compute Flexible CUD multi-price (2025-2026) -->
+<!-- CURRENCY: non verificato (2026-10) — percentuali a 1 anno e GPU: la doc ufficiale riporta solo i massimi (55% / 70% memory-optimized a 3 anni); consultare la pagina prezzi per serie -->
 
-I **Flexible CUD** (spend-based) coprono la spesa Compute Engine su più famiglie e regioni con sconti inferiori ai resource-based, ma senza vincolo di macchina.
+I **Compute Flexible CUD** (spend-based) coprono la spesa su Compute Engine, GKE e Cloud Run, su più famiglie, regioni e project dello stesso billing account, senza vincolo di macchina. Sconti di esempio dalla doc: general-purpose 28% (1 anno) / 46% (3 anni); memory-optimized nessuno a 1 anno / 63% a 3 anni; Local SSD 28% / 46%.
 
 **Tipi di CUD:**
 
@@ -221,12 +218,12 @@ bq query \
 
 | Edition | Fatturazione | Use case |
 |---------|-------------|---------|
-| **Standard** | Slot-ora, solo autoscaling (nessun commitment) | Workload standard, dev/test |
-| **Enterprise** | Slot-ora (autoscaling) + commitment 1/3 anni opzionali | Feature enterprise, governance, BI Engine |
-| **Enterprise Plus** | Come Enterprise | Workload mission-critical, requisiti di compliance/DR avanzati |
+| **Standard** | Slot-ora, solo autoscaling (nessun commitment), minimo 1 minuto; max 1.600 slot per reservation; SLO 99,9%; senza BigQuery ML né continuous query | Workload standard, dev/test |
+| **Enterprise** | Slot-ora (autoscaling + baseline) + commitment 1/3 anni opzionali (sconti ~20-40%); SLO 99,99%; BigQuery ML, continuous query, BI Engine | Feature enterprise, governance |
+| **Enterprise Plus** | Come Enterprise + managed disaster recovery, Assured Workloads, export verso Bigtable/Spanner/AlloyDB | Workload mission-critical, requisiti di compliance/DR avanzati |
 
-Gli slot autoscalati sono fatturati per slot-ora con incrementi di 50 slot; una **baseline** opzionale riserva slot sempre attivi.
-<!-- REVIEW: verificare incrementi autoscaling, minimi e feature per edition su cloud.google.com/bigquery/docs/editions-intro -->
+Gli slot autoscalati sono fatturati per slot-ora; una **baseline** opzionale riserva slot sempre attivi.
+<!-- CURRENCY: non verificato (2026-10) — incremento di autoscaling (storicamente 50 slot) non confermato dalla pagina editions-intro -->
 
 Perché scegliere capacity: il costo diventa prevedibile e limitato dagli slot, invece di crescere con i byte scansionati.
 
@@ -512,10 +509,10 @@ Risorse sempre gratuite entro i limiti mensili:
 |---------|------------|
 | **Compute Engine** | 1 × e2-micro VM (us-east1, us-west1, us-central1) |
 | **Cloud Storage** | 5 GB nella regione us |
-| **Cloud Functions** | 2M invocazioni/mese + 400K GB-sec |
+| **Cloud Run functions** | 2M invocazioni/mese + 400K GB-sec |
 | **Cloud Run** | 2M request/mese + 180K vCPU-sec + 360K GiB-sec |
 | **BigQuery** | 10 GB storage + 1 TB query/mese |
-| **Cloud Build** | Minuti build mensili gratuiti (e2-standard-2) <!-- REVIEW: verificare quota corrente (storicamente 120 min/giorno, poi 2.500 min/mese) --> |
+| **Cloud Build** | 2.500 minuti build/mese (e2-standard-2) |
 | **Pub/Sub** | 10 GB messaggi/mese |
 | **Cloud Logging** | 50 GB log/mese |
 | **Secret Manager** | 6 versioni attive + 10K accessi/mese |
@@ -533,7 +530,7 @@ Risorse sempre gratuite entro i limiti mensili:
 | Sconto con impegno | **CUD** 1/3yr (37-63%) | Reserved Instances / Savings Plans (fino a 72%) | Reserved VM (fino a 72%) |
 | VM interrompibili | **Spot VM** (fino a 91%) | Spot Instances (fino a 90%) | Spot VMs (fino a 90%) |
 | Free tier permanente | Sì (e2-micro, BigQuery 1TB, ecc.) | Sì (t2.micro, Lambda 1M req, ecc.) | Sì (B1S VM 12 mesi, Functions 1M, ecc.) |
-| Free trial | $300 per 90 giorni | Free Plan per nuovi account (crediti fino a ~$200, 6 mesi) + Always Free <!-- REVIEW: verificare condizioni attuali AWS Free Plan --> | $200 per 30 giorni |
+| Free trial | $300 per 90 giorni | Free Plan per nuovi account ($100 di crediti + fino a $100 extra, max 6 mesi o fino a esaurimento crediti; poi chiusura a meno di upgrade a Paid plan) + Always Free | $200 per 30 giorni |
 | Billing export nativo | BigQuery (granulare) | S3 + CUR (granulare) | Storage Account (granulare) |
 | Cost management tool | Billing Console + Recommender | Cost Explorer + Trusted Advisor | Azure Cost Management |
 | Impegno minimo CUD | vCPU/RAM (resource-based) | Istanza specifica o spesa $/hr | vCPU/RAM (più flessibile) |
