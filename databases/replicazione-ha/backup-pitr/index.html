@@ -12765,7 +12765,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12835,7 +12835,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13482,7 +13482,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13526,7 +13526,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13551,7 +13551,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13641,10 +13641,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#schedule-con-pg_cron" class="md-nav__link">
+  <a href="#schedule-con-cron-di-sistema" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Schedule con pg_cron
+        Schedule con cron di sistema
       
     </span>
   </a>
@@ -24607,10 +24607,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#schedule-con-pg_cron" class="md-nav__link">
+  <a href="#schedule-con-cron-di-sistema" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Schedule con pg_cron
+        Schedule con cron di sistema
       
     </span>
   </a>
@@ -24952,67 +24952,78 @@
 <p>Il <strong>Point-in-Time Recovery (PITR)</strong> combina un base backup + WAL archiviati per ripristinare il database esattamente a un istante nel tempo (es. 5 minuti prima del <code>DROP TABLE</code> accidentale).</p>
 <h2 id="backup-logico-pg_dump">Backup Logico — pg_dump<a class="headerlink" href="#backup-logico-pg_dump" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Backup di un singolo database (formato custom, compresso)</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pg_dump<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--host<span class="o">=</span>localhost<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--username<span class="o">=</span>postgres<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>--format<span class="o">=</span>custom<span class="w"> </span><span class="se">\ </span><span class="w">    </span><span class="c1"># custom = compresso, selettivo in restore</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span>--compress<span class="o">=</span><span class="m">9</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span>--file<span class="o">=</span>mydb_20240115.dump<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span>mydb
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># Restore da dump custom</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>pg_restore<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>--host<span class="o">=</span>localhost<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span>--username<span class="o">=</span>postgres<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>--dbname<span class="o">=</span>mydb_restored<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>--jobs<span class="o">=</span><span class="m">4</span><span class="w"> </span><span class="se">\ </span><span class="w">           </span><span class="c1"># parallelo su 4 worker</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span>mydb_20240115.dump
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="c1"># Backup di tutte le tabelle tranne quelle di log (esclusione)</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>pg_dump<span class="w"> </span>--exclude-table<span class="o">=</span><span class="s1">'log_*'</span><span class="w"> </span>mydb<span class="w"> </span>&gt;<span class="w"> </span>mydb_no_logs.sql
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1"># Backup solo schema (no dati)</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>pg_dump<span class="w"> </span>--schema-only<span class="w"> </span>mydb<span class="w"> </span>&gt;<span class="w"> </span>schema.sql
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="c1"># Backup tutti i database + ruoli + tablespace (cluster-wide)</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>pg_dumpall<span class="w"> </span>--file<span class="o">=</span>cluster_backup.sql
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># (custom = compresso, restore selettivo)</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pg_dump<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--host<span class="o">=</span>localhost<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>--username<span class="o">=</span>postgres<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span>--format<span class="o">=</span>custom<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span>--compress<span class="o">=</span><span class="m">9</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span>--file<span class="o">=</span>mydb_20240115.dump<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span>mydb
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1"># Restore da dump custom (il DB di destinazione deve esistere: createdb mydb_restored)</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># --jobs=4 = parallelo su 4 worker</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>pg_restore<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>--host<span class="o">=</span>localhost<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>--username<span class="o">=</span>postgres<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span>--dbname<span class="o">=</span>mydb_restored<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">  </span>--jobs<span class="o">=</span><span class="m">4</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span>mydb_20240115.dump
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="c1"># Backup di tutte le tabelle tranne quelle di log (esclusione)</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>pg_dump<span class="w"> </span>--exclude-table<span class="o">=</span><span class="s1">'log_*'</span><span class="w"> </span>mydb<span class="w"> </span>&gt;<span class="w"> </span>mydb_no_logs.sql
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="c1"># Backup solo schema (no dati)</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>pg_dump<span class="w"> </span>--schema-only<span class="w"> </span>mydb<span class="w"> </span>&gt;<span class="w"> </span>schema.sql
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="c1"># Backup tutti i database + ruoli + tablespace (cluster-wide)</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>pg_dumpall<span class="w"> </span>--file<span class="o">=</span>cluster_backup.sql
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">pg_dump non è sufficiente per la produzione</p>
-<p><code>pg_dump</code> è un backup point-in-time: blocca le transazioni durante la lettura (in modalità <code>--serializable-deferrable</code>) o produce un backup leggermente inconsistente. Non permette PITR. Per produzione, usare backup fisico + WAL archiving.</p>
+<p><code>pg_dump</code> è consistente (usa uno snapshot MVCC singolo e non blocca scritture/letture normali), ma fotografa <strong>un solo istante</strong>: tutto ciò che è successo dopo è perso (RPO = intervallo fra dump), non permette PITR e il restore è lento (replay SQL + rebuild indici). Tiene però una transazione lunga aperta, che ritarda il vacuum. Per produzione, usare backup fisico + WAL archiving; <code>pg_dump</code> resta utile per migrazioni e upgrade major.</p>
 </div>
 <hr />
 <h2 id="pg_basebackup-backup-fisico">pg_basebackup — Backup Fisico<a class="headerlink" href="#pg_basebackup-backup-fisico" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Backup fisico completo del cluster PostgreSQL</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pg_basebackup<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--host<span class="o">=</span>localhost<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--username<span class="o">=</span>replicator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--pgdata<span class="o">=</span>/backup/base/20240115<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>--format<span class="o">=</span>tar<span class="w"> </span><span class="se">\ </span><span class="w">         </span><span class="c1"># comprime in .tar.gz</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span>--compress<span class="o">=</span><span class="m">9</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span>--wal-method<span class="o">=</span>stream<span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># include WAL durante il backup (coerente senza archivio separato)</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span>--checkpoint<span class="o">=</span>fast<span class="w"> </span><span class="se">\ </span><span class="w">    </span><span class="c1"># forza checkpoint immediato invece di aspettare</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span>--progress<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span>--verbose
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># Dimensione del backup (utile per pianificare lo storage)</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>du<span class="w"> </span>-sh<span class="w"> </span>/backup/base/20240115/
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># --format=tar        un .tar per tablespace (con --compress=gzip:9 → .tar.gz; PG15+ accetta anche lz4/zstd)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># --wal-method=stream include i WAL generati durante il backup → il backup è autoconsistente</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># --checkpoint=fast   checkpoint immediato invece di attendere lo spread</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>pg_basebackup<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>--host<span class="o">=</span>localhost<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span>--username<span class="o">=</span>replicator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span>--pgdata<span class="o">=</span>/backup/base/20240115<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span>--format<span class="o">=</span>tar<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span>--compress<span class="o">=</span>gzip:9<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">  </span>--wal-method<span class="o">=</span>stream<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span>--checkpoint<span class="o">=</span>fast<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">  </span>--progress<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">  </span>--verbose
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># Dimensione del backup (utile per pianificare lo storage)</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>du<span class="w"> </span>-sh<span class="w"> </span>/backup/base/20240115/
 </span></code></pre></div>
+<p><strong>PostgreSQL 17+ — backup incrementale nativo:</strong> <code>pg_basebackup --incremental=&lt;backup_manifest del precedente&gt;</code> salva solo i blocchi modificati (richiede <code>summarize_wal = on</code>); il restore si ottiene combinando la catena con <code>pg_combinebackup</code>. Per cluster grandi riduce tempo e spazio, ma <code>pg_basebackup</code> non gestisce retention, cifratura né repository remoti: per questo servono pgBackRest o Barman.</p>
 <hr />
 <h2 id="wal-archiving-continuous-archiving">WAL Archiving — Continuous Archiving<a class="headerlink" href="#wal-archiving-continuous-archiving" title="Permanent link">&para;</a></h2>
 <p>Il WAL archiving conserva ogni file WAL generato su storage esterno. Combinato con un base backup, permette il PITR a qualsiasi secondo dall'ultimo base backup.</p>
-<div class="language-ini highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># postgresql.conf</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="na">archive_mode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">on</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="na">archive_command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'aws s3 cp %p s3://my-wal-archive/wal/%f'</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># %p = path completo del file WAL</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="c1"># %f = nome del file WAL (senza path)</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Verifica che il comando ha successo (exit code 0)</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="na">archive_status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'check'</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Alternativa: pgBackRest gestisce l'archivio direttamente</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="na">archive_command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'pgbackrest --stanza=mydb archive-push %p'</span>
+<div class="language-ini highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># postgresql.conf  (archive_mode richiede RIAVVIO; archive_command solo reload)</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="na">wal_level</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">replica</span><span class="w">          </span><span class="c1"># minimo necessario per archiviare</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="na">archive_mode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">on</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="na">archive_timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">60</span><span class="w">         </span><span class="c1"># forza lo switch del WAL ogni 60s → limita la perdita (RPO) nei periodi di basso traffico</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="na">archive_command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'aws s3 cp %p s3://my-wal-archive/wal/%f'</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># %p = path completo del file WAL</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># %f = nome del file WAL (senza path)</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># Il comando DEVE restituire 0 solo se il file è stato archiviato con successo:</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># se ≠ 0 PostgreSQL ritenta e il WAL non viene riciclato (pg_wal si riempie).</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># Alternativa raccomandata: pgBackRest gestisce l'archivio (verifica, retry, compressione, async)</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># archive_command = 'pgbackrest --stanza=mydb archive-push %p'</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Perché non un semplice <code>aws s3 cp</code></p>
+<p>Un comando "fatto in casa" non verifica la sovrascrittura di un file già presente, non fa fsync/checksum, non è parallelo e non conosce lo stanza/versione del cluster. pgBackRest <code>archive-push</code> fa tutto questo (opzione <code>archive-async=y</code> per alti volumi di WAL). In PG15+ in alternativa si può usare un <code>archive_library</code> (modulo C) al posto di <code>archive_command</code>.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Verifica che l'archivio funzioni</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>psql<span class="w"> </span>-c<span class="w"> </span><span class="s2">"SELECT * FROM pg_stat_archiver;"</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Se archived_count non cresce → problema con archive_command</span>
@@ -25028,25 +25039,27 @@
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="na">repo1-type</span><span class="o">=</span><span class="s">s3</span>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="na">repo1-s3-bucket</span><span class="o">=</span><span class="s">my-postgres-backups</span>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="na">repo1-s3-region</span><span class="o">=</span><span class="s">us-east-1</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="na">repo1-s3-key</span><span class="o">=</span><span class="s">AKIA...</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="na">repo1-s3-key-secret</span><span class="o">=</span><span class="s">...</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="na">repo1-retention-full</span><span class="o">=</span><span class="s">2</span><span class="w">                  </span><span class="c1"># Mantieni 2 backup full</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="na">repo1-retention-diff</span><span class="o">=</span><span class="s">7</span><span class="w">                  </span><span class="c1"># Mantieni 7 backup differenziali</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="na">repo1-cipher-type</span><span class="o">=</span><span class="s">aes-256-cbc</span><span class="w">          </span><span class="c1"># Cifratura del backup</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="na">repo1-cipher-pass</span><span class="o">=</span><span class="s">secure-passphrase</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="c1"># Compressione</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="na">compress-type</span><span class="o">=</span><span class="s">lz4</span><span class="w">                       </span><span class="c1"># lz4 (veloce) o zst (migliore compressione)</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="na">compress-level</span><span class="o">=</span><span class="s">3</span>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>
-</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="k">[mydb]</span>
-</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="na">pg1-path</span><span class="o">=</span><span class="s">/var/lib/postgresql/17/main</span>
-</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="na">pg1-port</span><span class="o">=</span><span class="s">5432</span>
-</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="na">pg1-user</span><span class="o">=</span><span class="s">postgres</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="na">repo1-s3-endpoint</span><span class="o">=</span><span class="s">s3.us-east-1.amazonaws.com</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># Preferire credenziali da IAM role (niente chiavi nel file):</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="na">repo1-s3-key-type</span><span class="o">=</span><span class="s">auto</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1"># Solo se non si usa un ruolo: repo1-s3-key-type=shared + repo1-s3-key / repo1-s3-key-secret</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="na">repo1-retention-full</span><span class="o">=</span><span class="s">2</span><span class="w">                  </span><span class="c1"># Mantieni 2 backup full</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="na">repo1-retention-diff</span><span class="o">=</span><span class="s">7</span><span class="w">                  </span><span class="c1"># Mantieni 7 backup differenziali</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="na">repo1-cipher-type</span><span class="o">=</span><span class="s">aes-256-cbc</span><span class="w">          </span><span class="c1"># Cifratura del backup</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="na">repo1-cipher-pass</span><span class="o">=</span><span class="s">secure-passphrase</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="c1"># Compressione</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="na">compress-type</span><span class="o">=</span><span class="s">lz4</span><span class="w">                       </span><span class="c1"># lz4 (veloce) o zst (migliore compressione)</span>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="na">compress-level</span><span class="o">=</span><span class="s">3</span>
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="k">[mydb]</span>
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="na">pg1-path</span><span class="o">=</span><span class="s">/var/lib/postgresql/17/main</span>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="na">pg1-port</span><span class="o">=</span><span class="s">5432</span>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="na">pg1-user</span><span class="o">=</span><span class="s">postgres</span>
 </span></code></pre></div>
 <h3 id="comandi-pgbackrest">Comandi pgBackRest<a class="headerlink" href="#comandi-pgbackrest" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Inizializza lo stanza (prima volta)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Inizializza lo stanza (prima volta; PostgreSQL attivo, archive_command già configurato)</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span>stanza-create
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Backup completo</span>
@@ -25061,23 +25074,22 @@
 </span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># Lista dei backup disponibili</span>
 </span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span>info
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1"># Verifica integrità del backup</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1"># Verifica configurazione stanza e funzionamento di archive-push (forza uno switch WAL)</span>
 </span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span>check
 </span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="c1"># Restore (PostgreSQL deve essere fermo)</span>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>systemctl<span class="w"> </span>stop<span class="w"> </span>postgresql
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span>--delta<span class="w"> </span>restore<span class="w">   </span><span class="c1"># --delta riusa file non cambiati</span>
-</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>systemctl<span class="w"> </span>start<span class="w"> </span>postgresql
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="c1"># Verifica checksum dei file nel repository</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span>verify
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="c1"># Restore (PostgreSQL deve essere fermo)</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>systemctl<span class="w"> </span>stop<span class="w"> </span>postgresql
+</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span>--delta<span class="w"> </span>restore<span class="w">   </span><span class="c1"># --delta riusa file non cambiati</span>
+</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>systemctl<span class="w"> </span>start<span class="w"> </span>postgresql
 </span></code></pre></div>
-<h3 id="schedule-con-pg_cron">Schedule con pg_cron<a class="headerlink" href="#schedule-con-pg_cron" title="Permanent link">&para;</a></h3>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1">-- Backup automatici schedulati (da pg_cron)</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1">-- Full il domenica, differenziale ogni giorno, WAL ogni minuto</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">cron</span><span class="p">.</span><span class="n">schedule</span><span class="p">(</span><span class="s1">'full-backup'</span><span class="p">,</span><span class="w">  </span><span class="s1">'0 2 * * 0'</span><span class="p">,</span><span class="w"> </span><span class="s1">'SELECT pg_catalog.pg_switch_wal()'</span><span class="p">);</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1">-- ↑ In realtà il backup viene schedulato sul sistema operativo con cron di sistema</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1">-- /etc/cron.d/pgbackrest</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1">-- 0  2  *  *  0   postgres  pgbackrest --stanza=mydb --type=full backup</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1">-- 0  2  *  *  1-6 postgres  pgbackrest --stanza=mydb --type=diff backup</span>
+<h3 id="schedule-con-cron-di-sistema">Schedule con cron di sistema<a class="headerlink" href="#schedule-con-cron-di-sistema" title="Permanent link">&para;</a></h3>
+<p>I backup si schedulano dal sistema operativo (cron o systemd timer), non da <code>pg_cron</code> (che gira dentro PostgreSQL). Il WAL non va schedulato: lo spedisce <code>archive_command</code> in continuo.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># /etc/cron.d/pgbackrest — full la domenica, differenziale lun-sab</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="m">0</span><span class="w">  </span><span class="m">2</span><span class="w">  </span>*<span class="w">  </span>*<span class="w">  </span><span class="m">0</span><span class="w">    </span>postgres<span class="w">  </span>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span>--type<span class="o">=</span>full<span class="w"> </span>backup
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="m">0</span><span class="w">  </span><span class="m">2</span><span class="w">  </span>*<span class="w">  </span>*<span class="w">  </span><span class="m">1</span>-6<span class="w">  </span>postgres<span class="w">  </span>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span>--type<span class="o">=</span>diff<span class="w"> </span>backup
 </span></code></pre></div>
 <hr />
 <h2 id="pitr-point-in-time-recovery">PITR — Point-in-Time Recovery<a class="headerlink" href="#pitr-point-in-time-recovery" title="Permanent link">&para;</a></h2>
@@ -25085,48 +25097,60 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># 1. Ferma PostgreSQL</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>systemctl<span class="w"> </span>stop<span class="w"> </span>postgresql
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># 2. Ripristina il base backup più recente</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">           </span>--target<span class="o">=</span><span class="s2">"2024-01-15 14:31:59"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">           </span>--target-action<span class="o">=</span>promote<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">           </span>restore
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># pgBackRest automaticamente:</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1"># a. Ripristina il backup fisico più recente prima del target</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># b. Configura recovery_target_time in postgresql.auto.conf</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># c. Usa il WAL archiviato per replay fino al target</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="c1"># 3. Avvia PostgreSQL — esegue il WAL replay automaticamente</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>systemctl<span class="w"> </span>start<span class="w"> </span>postgresql
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="c1"># PostgreSQL loga il progresso del recovery:</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="c1"># LOG: starting point-in-time recovery to 2024-01-15 14:31:59+00</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="c1"># LOG: restored log file "000000010000000000000042" from archive</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="c1"># LOG: consistent recovery state reached at 0/42000028</span>
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="c1"># LOG: recovery stopping before commit of transaction 5429, time 2024-01-15 14:32:05+00</span>
-</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="c1"># LOG: pausing at the end of recovery</span>
-</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="c1"># HINT: execute pg_wal_replay_resume() to promote</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># 2. Ripristina il base backup più recente prima del target</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># --type=time è OBBLIGATORIO: senza, pgBackRest ignora --target e fa replay fino alla fine del WAL</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># --delta riusa i file già presenti nel data directory (che non è vuoto)</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># --target-action=pause: ci si ferma al target per VERIFICARE i dati prima di promuovere</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span>--delta<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">           </span>--type<span class="o">=</span><span class="nb">time</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">           </span>--target<span class="o">=</span><span class="s2">"2024-01-15 14:31:59+00"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">           </span>--target-action<span class="o">=</span>pause<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">           </span>restore
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="c1"># pgBackRest automaticamente:</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="c1"># a. Ripristina il backup fisico più recente prima del target</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="c1"># b. Configura recovery_target_time + restore_command in postgresql.auto.conf e crea recovery.signal</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1"># c. PostgreSQL usa il WAL archiviato per replay fino al target</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="c1"># 3. Avvia PostgreSQL — esegue il WAL replay automaticamente</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>systemctl<span class="w"> </span>start<span class="w"> </span>postgresql
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="c1"># PostgreSQL loga il progresso del recovery (esempio):</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="c1"># LOG: starting point-in-time recovery to 2024-01-15 14:31:59+00</span>
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="c1"># LOG: restored log file "000000010000000000000042" from archive</span>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="c1"># LOG: consistent recovery state reached at 0/42000028</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="c1"># LOG: recovery stopping before commit of transaction 5429, time 2024-01-15 14:32:05+00</span>
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="c1"># LOG: pausing at the end of recovery</span>
+</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="c1"># HINT: Execute pg_wal_replay_resume() to promote.</span>
+</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>
+</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="c1"># 4. Verifica i dati (la tabella esiste?). Se OK → promuovi; se il target era troppo tardi/presto</span>
+</span><span id="__span-7-31"><a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a><span class="c1">#    ripeti il restore con un altro target (la promozione è irreversibile sulla timeline).</span>
+</span><span id="__span-7-32"><a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a>psql<span class="w"> </span>-c<span class="w"> </span><span class="s2">"SELECT pg_wal_replay_resume();"</span>
 </span></code></pre></div>
 <h3 id="target-di-recovery">Target di Recovery<a class="headerlink" href="#target-di-recovery" title="Permanent link">&para;</a></h3>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">-- Tipi di target (configurati in postgresql.conf o postgresql.auto.conf):</span>
+<div class="language-ini highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Tipi di target (postgresql.conf / postgresql.auto.conf). Se ne può impostare UNO solo.</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1">-- Per timestamp (il più comune)</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">recovery_target_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'2024-01-15 14:31:59'</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># Per timestamp (il più comune; specificare il fuso orario)</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="na">recovery_target_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'2024-01-15 14:31:59+00'</span>
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1">-- Per LSN (Log Sequence Number — preciso al byte)</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="n">recovery_target_lsn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'0/42000020'</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># Per LSN (Log Sequence Number — preciso al byte)</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="na">recovery_target_lsn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'0/42000020'</span>
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1">-- Per transaction ID (XID)</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="n">recovery_target_xid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'5428'</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># Per transaction ID (XID)</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="na">recovery_target_xid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'5428'</span>
 </span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1">-- Per named restore point (creato prima con pg_create_restore_point())</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="n">recovery_target_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'before-migration'</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># Per named restore point (creato prima con SELECT pg_create_restore_point('before-migration'))</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="na">recovery_target_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'before-migration'</span>
 </span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1">-- Azione dopo aver raggiunto il target</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="n">recovery_target_action</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'promote'</span><span class="w">    </span><span class="o">#</span><span class="w"> </span><span class="n">promuovi</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="k">primary</span><span class="w"> </span><span class="p">(</span><span class="k">default</span><span class="p">)</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="n">recovery_target_action</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'pause'</span><span class="w">      </span><span class="o">#</span><span class="w"> </span><span class="n">fermati</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="n">aspetta</span><span class="w"> </span><span class="n">istruzione</span><span class="w"> </span><span class="n">manuale</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="n">recovery_target_action</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'shutdown'</span><span class="w">   </span><span class="o">#</span><span class="w"> </span><span class="n">fermati</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="n">aspetta</span><span class="w"> </span><span class="n">riavvio</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1"># Inclusivo o no del target (default on = include la transazione al target)</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="na">recovery_target_inclusive</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">on</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="c1"># Azione dopo aver raggiunto il target (default: pause)</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="na">recovery_target_action</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'pause'</span><span class="w">      </span><span class="c1"># fermati in read-only e aspetta pg_wal_replay_resume()</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="c1"># recovery_target_action = 'promote'  # promuovi subito a primary</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="c1"># recovery_target_action = 'shutdown' # spegni il server</span>
 </span></code></pre></div>
+<p>Con pgBackRest gli equivalenti sono <code>--type=time|lsn|xid|name|immediate</code> e <code>--target=...</code>. Dopo la promozione PostgreSQL apre una <strong>nuova timeline</strong>: i WAL della vecchia timeline restano nell'archivio e, per un secondo PITR, si può selezionare la timeline con <code>--target-timeline</code>.</p>
 <hr />
 <h2 id="backup-su-managed-services">Backup su Managed Services<a class="headerlink" href="#backup-su-managed-services" title="Permanent link">&para;</a></h2>
 <h3 id="aws-rds">AWS RDS<a class="headerlink" href="#aws-rds" title="Permanent link">&para;</a></h3>
@@ -25135,25 +25159,28 @@
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Configura retention window</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>aws<span class="w"> </span>rds<span class="w"> </span>modify-db-instance<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--db-instance-identifier<span class="w"> </span>mydb<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span>--backup-retention-period<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="se">\ </span><span class="w">        </span><span class="c1"># 30 giorni di WAL + snapshot giornalieri</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span>--backup-retention-period<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span>--preferred-backup-window<span class="w"> </span><span class="s2">"02:00-03:00"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span>--apply-immediately
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Restore a punto nel tempo (AWS Console o CLI)</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>aws<span class="w"> </span>rds<span class="w"> </span>restore-db-instance-to-point-in-time<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">  </span>--source-db-instance-identifier<span class="w"> </span>mydb<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">  </span>--target-db-instance-identifier<span class="w"> </span>mydb-restored<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">  </span>--restore-time<span class="w"> </span><span class="s2">"2024-01-15T14:31:59Z"</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="c1"># Crea snapshot manuale</span>
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>aws<span class="w"> </span>rds<span class="w"> </span>create-db-snapshot<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">  </span>--db-instance-identifier<span class="w"> </span>mydb<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">  </span>--db-snapshot-identifier<span class="w"> </span>mydb-before-migration
-</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>
-</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="c1"># Restore da snapshot</span>
-</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>aws<span class="w"> </span>rds<span class="w"> </span>restore-db-instance-from-db-snapshot<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="w">  </span>--db-instance-identifier<span class="w"> </span>mydb-from-snapshot<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="w">  </span>--db-snapshot-identifier<span class="w"> </span>mydb-before-migration
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1"># retention 1-35 giorni (0 = backup disabilitati): snapshot giornalieri + WAL continui per PITR</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># Restore a punto nel tempo (AWS Console o CLI)</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>aws<span class="w"> </span>rds<span class="w"> </span>restore-db-instance-to-point-in-time<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">  </span>--source-db-instance-identifier<span class="w"> </span>mydb<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">  </span>--target-db-instance-identifier<span class="w"> </span>mydb-restored<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">  </span>--restore-time<span class="w"> </span><span class="s2">"2024-01-15T14:31:59Z"</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="c1"># (oppure --use-latest-restorable-time). Il restore crea SEMPRE una nuova istanza</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="c1"># con nuovo endpoint: l'applicazione va ripuntata.</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="c1"># Crea snapshot manuale</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>aws<span class="w"> </span>rds<span class="w"> </span>create-db-snapshot<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="w">  </span>--db-instance-identifier<span class="w"> </span>mydb<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="w">  </span>--db-snapshot-identifier<span class="w"> </span>mydb-before-migration
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="c1"># Restore da snapshot</span>
+</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a>aws<span class="w"> </span>rds<span class="w"> </span>restore-db-instance-from-db-snapshot<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="w">  </span>--db-instance-identifier<span class="w"> </span>mydb-from-snapshot<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="w">  </span>--db-snapshot-identifier<span class="w"> </span>mydb-before-migration
 </span></code></pre></div>
 <hr />
 <h2 id="backup-testing-fondamentale">Backup Testing — Fondamentale<a class="headerlink" href="#backup-testing-fondamentale" title="Permanent link">&para;</a></h2>
@@ -25200,7 +25227,8 @@
 <li><strong>Testare restore ogni settimana</strong>: automatizzare il test restore su un'istanza separata, verificare l'integrità dei dati</li>
 <li><strong>Cifrare il backup</strong>: <code>pgbackrest</code> supporta AES-256 nativo — i backup contengono dati sensibili</li>
 <li><strong>Monitorare il WAL archivio</strong>: se <code>pg_stat_archiver.last_failed_wal</code> cresce o <code>archive_command</code> fallisce → PITR non funzionerà → alert immediato</li>
-<li><strong>RPO = retention WAL</strong>: il PITR è disponibile fino a <code>backup_retention_period</code> (RDS) o finché il WAL esiste nell'archivio. Se WAL viene eliminato → PITR impossibile per quel periodo</li>
+<li><strong>RPO e finestra PITR sono cose diverse</strong>: l'RPO dipende dal ritardo dell'archiviazione WAL (<code>archive_timeout</code>, o replica sincrona per RPO≈0); la finestra di PITR dipende dalla retention (<code>backup_retention_period</code> su RDS, <code>repo1-retention-*</code> su pgBackRest). Se un WAL viene eliminato → PITR impossibile oltre quel punto</li>
+<li><strong>Barman</strong> è l'alternativa a pgBackRest (server di backup dedicato, supporto a <code>pg_receivewal</code> per RPO≈0 in streaming); stesse regole: stanza/server dedicato, retention, <code>barman check</code>, restore testati</li>
 </ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-pitr-si-ferma-prima-del-target">Scenario 1 — PITR si ferma prima del target<a class="headerlink" href="#scenario-1-pitr-si-ferma-prima-del-target" title="Permanent link">&para;</a></h3>
@@ -25224,20 +25252,18 @@
 <hr />
 <h3 id="scenario-2-archive_command-fallisce-silenziosamente">Scenario 2 — <code>archive_command</code> fallisce silenziosamente<a class="headerlink" href="#scenario-2-archive_command-fallisce-silenziosamente" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>pg_stat_archiver.failed_count</code> cresce, <code>last_failed_wal</code> aggiornato di recente, ma nessun alert ha notificato il problema. Il PITR risulterà incompleto se si tenta un restore.</p>
-<p><strong>Causa:</strong> L'<code>archive_command</code> configurato in <code>postgresql.conf</code> restituisce exit code 0 anche quando il trasferimento non avviene (es. script bash con <code>|| true</code> implicito, permessi S3 scaduti, bucket pieno).</p>
+<p><strong>Causa:</strong> <code>failed_count</code> cresce perché <code>archive_command</code> esce con codice ≠ 0 (credenziali/permessi S3 scaduti, bucket irraggiungibile, rete). Il pericolo è doppio: PostgreSQL non ricicla i WAL non archiviati, quindi <code>pg_wal</code> cresce fino a riempire il disco (e il primary si ferma), e il PITR ha un buco. Il caso opposto — comando che esce 0 senza aver copiato (es. wrapper con <code>|| true</code>) — non è rilevabile da <code>pg_stat_archiver</code> ed è il motivo per cui serve <code>pgbackrest check</code>/restore test.</p>
 <p><strong>Soluzione:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Testa manualmente l'archive_command con un WAL reale</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nv">WAL_FILE</span><span class="o">=</span><span class="k">$(</span>ls<span class="w"> </span>/var/lib/postgresql/17/main/pg_wal/*.history<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1<span class="k">)</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># Simula il comando (sostituisci %p e %f)</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>aws<span class="w"> </span>s3<span class="w"> </span>cp<span class="w"> </span><span class="s2">"</span><span class="nv">$WAL_FILE</span><span class="s2">"</span><span class="w"> </span>s3://my-wal-archive/wal/test-wal<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"OK: exit </span><span class="nv">$?</span><span class="s2">"</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"FAIL: exit </span><span class="nv">$?</span><span class="s2">"</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># Verifica permessi IAM per l'utente che esegue PostgreSQL</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>aws<span class="w"> </span>sts<span class="w"> </span>get-caller-identity
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>aws<span class="w"> </span>s3api<span class="w"> </span>put-object<span class="w"> </span>--bucket<span class="w"> </span>my-wal-archive<span class="w"> </span>--key<span class="w"> </span>wal/test<span class="w"> </span>--body<span class="w"> </span>/dev/null
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="c1"># Reset contatore errori dopo fix (richiede pg_reload_conf)</span>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>psql<span class="w"> </span>-c<span class="w"> </span><span class="s2">"SELECT pg_reload_conf();"</span>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>psql<span class="w"> </span>-c<span class="w"> </span><span class="s2">"SELECT pg_stat_reset_shared('archiver');"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Testa manualmente l'archive_command come utente postgres con un file reale</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>sudo<span class="w"> </span>-u<span class="w"> </span>postgres<span class="w"> </span>aws<span class="w"> </span>s3<span class="w"> </span>cp<span class="w"> </span>/var/lib/postgresql/17/main/PG_VERSION<span class="w"> </span>s3://my-wal-archive/wal/test-wal<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"OK: exit 0"</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"FAIL"</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># Verifica identità/permessi IAM dell'utente che esegue PostgreSQL</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>sudo<span class="w"> </span>-u<span class="w"> </span>postgres<span class="w"> </span>aws<span class="w"> </span>sts<span class="w"> </span>get-caller-identity
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Dopo il fix l'archiver riprende da solo i WAL pendenti (nessun reload necessario</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># se il comando non è cambiato). Opzionale: azzera i contatori per il monitoraggio</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>psql<span class="w"> </span>-c<span class="w"> </span><span class="s2">"SELECT pg_stat_reset_shared('archiver');"</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-pg_basebackup-fallisce-con-could-not-connect">Scenario 3 — pg_basebackup fallisce con "could not connect"<a class="headerlink" href="#scenario-3-pg_basebackup-fallisce-con-could-not-connect" title="Permanent link">&para;</a></h3>
@@ -25267,18 +25293,19 @@
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span>info
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Restore parallelo con più processi</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">           </span>--process-max<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\ </span><span class="w">         </span><span class="c1"># usa 8 thread paralleli</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">           </span>--delta<span class="w"> </span><span class="se">\ </span><span class="w">                  </span><span class="c1"># riusa file locali non cambiati</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">           </span>restore
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># Aggiungi process-max come default nel config per futuri restore</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="c1"># /etc/pgbackrest/pgbackrest.conf</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="c1"># [global]</span>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="c1"># process-max=8</span>
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># Monitora velocità durante il restore</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>watch<span class="w"> </span>-n<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="s1">'du -sh /var/lib/postgresql/17/main/'</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># --process-max=8 = 8 processi paralleli; --delta = riusa file locali non cambiati</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>pgbackrest<span class="w"> </span>--stanza<span class="o">=</span>mydb<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">           </span>--process-max<span class="o">=</span><span class="m">8</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">           </span>--delta<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">           </span>restore
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="c1"># Aggiungi process-max come default nel config per futuri backup/restore</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="c1"># /etc/pgbackrest/pgbackrest.conf</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="c1"># [global]</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="c1"># process-max=8</span>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># Monitora velocità durante il restore</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>watch<span class="w"> </span>-n<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="s1">'du -sh /var/lib/postgresql/17/main/'</span>
 </span></code></pre></div>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>

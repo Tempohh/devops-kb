@@ -12765,7 +12765,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12844,7 +12844,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12869,7 +12869,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13829,7 +13829,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13864,7 +13864,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25139,9 +25139,9 @@
 </thead>
 <tbody>
 <tr>
-<td>Le <strong>sequenze</strong> non vengono replicate (fino a PG 18; da PG 19 sono previste) <!-- REVIEW: verificare se PG 19 (autunno 2026) ha rilasciato la replica delle sequenze e se pg_upgrade/stato corrente delle versioni supportate è cambiato --></td>
+<td>Le <strong>sequenze</strong> non replicano le modifiche incrementali (PG 19, in beta a ottobre 2026 e non ancora GA, aggiunge solo la sincronizzazione puntuale con <code>ALTER SUBSCRIPTION ... REFRESH SEQUENCES</code>, che richiede un publisher PG 19+)</td>
 <td>Dopo il cutover gli <code>INSERT</code> falliscono con duplicate key</td>
-<td>Sincronizzare con <code>setval()</code> al cutover</td>
+<td>Sincronizzare con <code>setval()</code> al cutover (o <code>REFRESH SEQUENCES</code> se il publisher è PG 19+)</td>
 </tr>
 <tr>
 <td>Il <strong>DDL non viene replicato</strong></td>
