@@ -7,9 +7,10 @@ search_keywords: [kafka streams topology, topologia, processor topology, KStream
 parent: messaging/kafka/kafka-streams
 related: [messaging/kafka/kafka-streams/ksqldb, messaging/kafka/kafka-streams/windowing]
 official_docs: https://kafka.apache.org/documentation/streams/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-02-23
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Topologie in Kafka Streams
@@ -18,7 +19,7 @@ last_updated: 2026-02-23
 
 Kafka Streams è una libreria client Java per il processing di stream in modo stateful o stateless, senza richiedere un cluster di processing separato (come Flink o Spark). Ogni applicazione Kafka Streams è un normale processo JVM che legge da uno o più topic Kafka, applica trasformazioni e scrive i risultati su altri topic. La logica di processing è espressa come una **topologia**: un grafo orientato aciclico (DAG) di processori connessi da stream.
 
-A differenza di altri framework di stream processing, Kafka Streams è embeddato nell'applicazione come libreria, garantisce esattamente-una-volta la semantica (exactly-once semantics), e scala orizzontalmente semplicemente avviando più istanze della stessa applicazione.
+A differenza di altri framework di stream processing, Kafka Streams è embeddato nell'applicazione come libreria, supporta la semantica exactly-once (opt-in via `processing.guarantee`), e scala orizzontalmente semplicemente avviando più istanze della stessa applicazione.
 
 ## Concetti Chiave
 
@@ -49,7 +50,7 @@ Sono 3 eventi separati, tutti significativi
 KTable: key=ord1 → stato corrente DELIVERED (i valori precedenti sono obsoleti)
 ```
 
-**GlobalKTable** — come KTable ma completamente replicata su ogni istanza dell'applicazione. Usata per lookup di dati di riferimento (configurazione, mappings) da fare join senza partitioning.
+**GlobalKTable** — come KTable ma completamente replicata su ogni istanza dell'applicazione. Usata per lookup di dati di riferimento (configurazione, mappings) per join senza vincolo di co-partitioning (ogni istanza ha tutti i dati, quindi la chiave di join può anche essere un campo del value). Costo: l'intero topic va replicato su ogni istanza, quindi solo per dataset piccoli.
 
 ### Operazioni Stateless vs Stateful
 
@@ -58,7 +59,7 @@ KTable: key=ord1 → stato corrente DELIVERED (i valori precedenti sono obsoleti
 | `filter` / `filterNot` | Stateless | Scarta record basandosi su una predicate |
 | `map` / `mapValues` | Stateless | Trasforma key o value |
 | `flatMap` / `flatMapValues` | Stateless | Produce 0 o più record da 1 record |
-| `selectKey` | Stateless | Cambia la chiave (causa repartitioning) |
+| `selectKey` | Stateless | Cambia la chiave e marca lo stream come "da ripartizionare": il repartition avviene alla prima operazione stateful successiva (join, aggregate) |
 | `aggregate` | Stateful | Accumula stato per chiave |
 | `count` | Stateful | Conta record per chiave |
 | `reduce` | Stateful | Combina valori per chiave |
@@ -70,7 +71,7 @@ KTable: key=ord1 → stato corrente DELIVERED (i valori precedenti sono obsoleti
 Le operazioni stateful usano uno **state store** per mantenere lo stato locale. Per default, Kafka Streams usa **RocksDB** come implementazione persistente dello state store. RocksDB è un key-value store embedded, ottimizzato per SSD, sviluppato da Facebook.
 
 !!! note "State store e changelog topic"
-    Ogni state store ha un **changelog topic** interno su Kafka che replica ogni aggiornamento. In caso di failure o restart dell'applicazione, il state store viene ricostituito dal changelog topic. Questo garantisce fault tolerance senza coordinator esterni.
+    Ogni state store ha un **changelog topic** interno su Kafka che replica ogni aggiornamento. In caso di failure o restart dell'applicazione, il state store viene ricostituito dal changelog topic. Questo garantisce fault tolerance senza coordinator esterni. Il restore può richiedere molto tempo su store grandi: `num.standby.replicas` > 0 mantiene repliche calde su altre istanze e riduce il failover a secondi.
 
 ### Thread Model e Tasks
 
@@ -86,7 +87,7 @@ Applicazione Kafka Streams
 
 - Ogni **task** è assegnato a un insieme di partizioni e processa i record in modo sequenziale
 - Ogni **thread** può gestire più task (configurabile via `num.stream.threads`)
-- Il numero di task è determinato dal numero massimo di partizioni tra tutti i topic sorgente
+- Il numero di task per ogni sub-topology è il massimo numero di partizioni tra i suoi topic sorgente; il totale dell'applicazione è la somma sulle sub-topology. I task sono l'unità di parallelismo e vengono distribuiti tra tutte le istanze (stesso `application.id`)
 
 ## Come Funziona / Architettura
 
@@ -143,7 +144,7 @@ config.put(StreamsConfig.APPLICATION_ID_CONFIG, "order-processor");
 config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
 config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-// Exactly-once semantics (richiede Kafka 2.5+)
+// Exactly-once semantics v2 (richiede broker 2.5+)
 config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
 // Numero di thread per istanza
 config.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 4);
@@ -176,7 +177,9 @@ KStream<String, OrderEvent> createdOrders = ordersStream
 // Stateless: cambia la chiave da orderId a customerId per il join
 KStream<String, OrderEvent> byCustomer = createdOrders
     .selectKey((orderId, order) -> order.getCustomerId());
-    // Nota: selectKey causa un repartitioning implicito
+    // Nota: il repartitioning implicito scatta al join successivo.
+    // Il topic customers deve avere lo stesso numero di partizioni del repartition topic (co-partitioning).
+    // Il join è inner: ordini senza customer corrispondente vengono scartati (usa leftJoin per mantenerli).
 
 // Stateful: join KStream con KTable (lookup del customer)
 KStream<String, EnrichedOrder> enrichedOrders = byCustomer
@@ -223,11 +226,13 @@ KafkaStreams streams = new KafkaStreams(topology, config);
 // Gestione graceful shutdown
 Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
 
-streams.cleanUp(); // Pulisce stato locale (solo in dev/test)
+// streams.cleanUp(); // SOLO dev/test: cancella lo stato locale e forza un restore completo dal changelog a ogni avvio
 streams.start();
 ```
 
 ### Output di `topology.describe()`
+
+Output indicativo e troncato: numeri dei nodi e nomi dei topic interni variano con la topologia (i repartition topic hanno prefisso `<application.id>-`). Assegna nomi espliciti (`Named`, `Grouped`, `Materialized`) così che aggiungere un operatore non rinumeri i nodi e non rompa la compatibilità dello stato e dei topic interni.
 
 ```
 Topologies:
@@ -243,7 +248,7 @@ Topologies:
     Processor: KSTREAM-KEY-SELECT-0000000003 (stores: [])
       --> KSTREAM-SINK-0000000004
       <-- KSTREAM-PEEK-0000000002
-    Sink: KSTREAM-SINK-0000000004 (topic: orders-KSTREAM-JOIN-0000000007-repartition)
+    Sink: KSTREAM-SINK-0000000004 (topic: order-processor-KSTREAM-KEY-SELECT-0000000003-repartition)
       <-- KSTREAM-KEY-SELECT-0000000003
 
    Sub-topology: 1
@@ -299,10 +304,10 @@ topology.addSource("orders-source", "orders")
 ## Best Practices
 
 - **Preferisci la Streams DSL** alla Processor API: è più leggibile, mantenibile e viene ottimizzata automaticamente. Usa la Processor API solo quando la DSL non è sufficiente.
-- **Attenzione a `selectKey`**: cambiare la chiave causa un repartitioning implicito (scrittura su un topic interno e rilettura). Pianifica le chiavi fin dall'inizio del design della topologia.
-- **Imposta `exactly-once` solo in produzione**: ha un overhead di performance del 10-20% rispetto ad `at-least-once`.
-- **Dimensiona i thread correttamente**: `num.stream.threads` non deve superare il numero di partizioni del topic con più partizioni. Thread aggiuntivi rimarranno idle.
-- **Usa `suppress` per ridurre l'output delle KTable**: senza `suppress`, ogni aggiornamento intermedio viene emesso. `suppress(Suppressed.untilTimeLimit(...))` emette solo l'aggiornamento finale per finestra.
+- **Attenzione a `selectKey`**: cambiare la chiave causa un repartitioning (scrittura su un topic interno e rilettura) alla prima operazione stateful successiva. Pianifica le chiavi fin dall'inizio del design della topologia.
+- **Scegli la garanzia consapevolmente**: `exactly_once_v2` aggiunge overhead (transazioni, commit più frequenti, latenza end-to-end maggiore) rispetto ad `at_least_once`; abilitalo dove i duplicati non sono tollerabili e testa con la stessa configurazione di produzione. Non usare `EXACTLY_ONCE` (v1): deprecato e rimosso nelle versioni recenti.
+- **Dimensiona i thread correttamente**: il parallelismo massimo totale è il numero di task; thread oltre il numero di task (sommati su tutte le istanze) restano idle.
+- **Usa `suppress` per ridurre l'output delle KTable**: senza `suppress`, vengono emessi gli aggiornamenti intermedi (il record cache ne riduce già una parte). `suppress(Suppressed.untilWindowCloses(...))` su KTable finestrata emette solo il risultato finale per finestra; `untilTimeLimit` si limita a rate-limitare gli update. Dettagli in [Windowing](windowing.md).
 - **Monitora il lag del consumer group** con `kafka-consumer-groups.sh --describe`. Se il lag cresce, l'applicazione non riesce a stare al passo con il rate di produzione.
 - **Usa `Materialized.as(...)` esplicitamente** quando vuoi interrogare lo state store via Interactive Queries.
 
@@ -310,17 +315,17 @@ topology.addSource("orders-source", "orders")
 
 ### Applicazione bloccata in REBALANCING
 
-**Causa:** L'applicazione sta ribilanciando le partizioni tra le istanze. Può durare da secondi a minuti.
-**Soluzione:** Verificare che tutte le istanze siano raggiungibili. Controllare `session.timeout.ms` e `heartbeat.interval.ms`. Se il rebalancing è frequente, aumentare `session.timeout.ms`.
+**Causa:** L'applicazione sta ribilanciando le partizioni tra le istanze. Lo stato resta REBALANCING anche durante il restore degli state store dal changelog: può durare da secondi a ore su store grandi.
+**Soluzione:** Verificare che tutte le istanze siano raggiungibili. Controllare `session.timeout.ms`, `heartbeat.interval.ms` e `max.poll.interval.ms` (processing lento tra due poll espelle l'istanza dal gruppo). Se il rebalancing è frequente, aumentare i timeout; `group.instance.id` (static membership) evita rebalance ai restart rapidi, `num.standby.replicas` accelera il failover.
 
-### State store corrotto dopo crash
+### InvalidStateStoreException durante Interactive Queries
 
 ```
 org.apache.kafka.streams.errors.InvalidStateStoreException:
 The state store may have migrated to another instance
 ```
 
-**Causa:** L'istanza non era il proprietario di quella partizione al momento della query.
+**Causa:** L'istanza non è (o non è più) proprietaria della partizione al momento della query, oppure lo store è ancora in restore/rebalancing.
 **Soluzione:** Usare le Interactive Queries con discovery (`streams.queryMetadataForKey(...)`) per trovare l'istanza corretta.
 
 ### Performance degradata con RocksDB
@@ -345,7 +350,7 @@ config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksDBConfig
 ## Riferimenti
 
 - [Kafka Streams Developer Guide](https://kafka.apache.org/documentation/streams/developer-guide/)
-- [Kafka Streams API Javadoc](https://kafka.apache.org/36/javadoc/org/apache/kafka/streams/package-summary.html)
+- [Kafka Streams API Javadoc](https://kafka.apache.org/documentation/streams/developer-guide/write-streams.html)
 - [Confluent — Kafka Streams Architecture](https://docs.confluent.io/platform/current/streams/architecture.html)
 - [RocksDB Tuning Guide](https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide)
 - [Confluent — Interactive Queries](https://docs.confluent.io/platform/current/streams/developer-guide/interactive-queries.html)
