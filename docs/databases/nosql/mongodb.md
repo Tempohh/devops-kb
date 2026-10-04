@@ -9,7 +9,7 @@ related: [databases/fondamentali/modelli-dati, databases/fondamentali/sharding, 
 official_docs: https://www.mongodb.com/docs/
 status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
 last_verified: 2026-10-04
 ---
 
@@ -324,8 +324,232 @@ Dal 5.0 la shard key si può cambiare con `reshardCollection` (online, ma costos
 
 ---
 
+## Sicurezza
+
+Una installazione self-managed parte **senza autenticazione**: va abilitata esplicitamente. Atlas la abilita sempre.
+
+### Autenticazione
+
+| Meccanismo | Edizione | Uso tipico |
+|---|---|---|
+| `SCRAM-SHA-256` | Community/Enterprise | Default per utenti applicativi (SCRAM-SHA-1 solo per compatibilità) |
+| `x.509` | Community/Enterprise | Autenticazione client e membership interna del cluster via certificati |
+| `LDAP`, `Kerberos` | Solo Enterprise | Integrazione con directory aziendale |
+| `OIDC` (workforce/workload) | Solo Enterprise (da 7.0) | SSO / identità di workload cloud |
+
+```yaml
+# mongod.conf — hardening minimo
+security:
+  authorization: enabled            # abilita RBAC (richiede utenti)
+  keyFile: /etc/mongo/keyfile       # auth interna replica set (alternativa: x509 con clusterAuthMode)
+net:
+  bindIp: 10.0.0.12                 # mai 0.0.0.0 senza firewall
+  tls:
+    mode: requireTLS
+    certificateKeyFile: /etc/mongo/tls/server.pem
+    CAFile: /etc/mongo/tls/ca.pem
+```
+
+!!! warning "Localhost exception"
+    Con `authorization: enabled` e nessun utente, MongoDB accetta da localhost la creazione del **primo** utente admin. Crearlo subito: dopo, l'eccezione si chiude.
+
+### RBAC
+
+```javascript
+use admin
+db.createUser({
+    user: "admin",
+    pwd: passwordPrompt(),            // non scrivere la password in chiaro nello storico
+    roles: [{ role: "userAdminAnyDatabase", db: "admin" }, "readWriteAnyDatabase"]
+})
+
+// Principio del minimo privilegio: ruolo custom per un servizio
+use ecommerce
+db.createRole({
+    role: "ordiniWriter",
+    privileges: [
+        { resource: { db: "ecommerce", collection: "ordini" }, actions: ["find", "insert", "update"] }
+    ],
+    roles: []
+})
+db.createUser({ user: "svc-ordini", pwd: passwordPrompt(), roles: ["ordiniWriter"] })
+```
+
+Ruoli built-in utili: `read`, `readWrite`, `dbAdmin`, `userAdmin`, `clusterMonitor` (per exporter Prometheus), `backup`, `restore`. Evitare `root` per le applicazioni.
+
+### Encryption at rest e in use
+
+- **Encryption at rest nativa**: WiredTiger encryption (AES-256) è **solo Enterprise/Atlas**, con chiavi gestite da KMIP. Su Community: cifrare il volume (LUKS, dm-crypt, EBS/Azure Disk encryption).
+- **Client-Side Field Level Encryption (CSFLE)**: il driver cifra campi specifici prima dell'invio; il server non vede mai il plaintext.
+- **Queryable Encryption**: evoluzione di CSFLE che permette query su dati cifrati. Equality GA da 7.0, **range query** da 8.0. Le chiavi (DEK) stanno in una key vault collection, protette da una CMK in KMS esterno (AWS KMS, Azure Key Vault, GCP KMS, KMIP).
+- **Auditing**: Enterprise (`auditLog`); su Community usare i log del processo e Percona Server for MongoDB, che include audit.
+
+---
+
+## Backup e Restore
+
+| Strategia | Consistenza | Note |
+|---|---|---|
+| `mongodump`/`mongorestore` | Logica, point-in-time con `--oplog` | Adatta a dataset piccoli/medi; non cattura gli indici come dati (li ricostruisce) |
+| Snapshot di volume (EBS, LVM, CSI `VolumeSnapshot`) | Crash-consistent | Con journal sullo stesso volume del dbPath lo snapshot è consistente; su sharded cluster serve coordinamento |
+| Atlas Backup | Cloud backup + **Continuous PITR** | Gestito, restore a un timestamp arbitrario |
+| Ops Manager / Cloud Manager | PITR | Enterprise self-managed |
+| Percona Backup for MongoDB (PBM) | PITR anche su sharded cluster | Open source, oplog slicing su object storage |
+
+```bash
+# Dump consistente di un replica set (include l'oplog durante il dump)
+mongodump --uri="mongodb://backup:secret@mongo1:27017/?replicaSet=rs0&authSource=admin" \
+          --oplog --gzip --archive=/backup/rs0-$(date +%F).archive
+
+# Restore con replay dell'oplog
+mongorestore --uri="mongodb://admin:secret@mongo1:27017/?authSource=admin" \
+             --gzip --archive=/backup/rs0-2026-10-04.archive --oplogReplay
+
+# Point-in-time: ferma il replay a un timestamp (formato <secondi epoch>:<ordinale>)
+mongorestore --oplogReplay --oplogLimit=1759560000:1 --gzip --archive=...
+```
+
+!!! warning "Limiti di mongodump"
+    `--oplog` non è compatibile con `--db`/`--collection` e non produce uno snapshot coerente su un **sharded cluster** (shard e config server vanno fermati in modo coordinato o si usa PBM/Ops Manager). Un backup mai ripristinato non è un backup: schedulare restore test periodici e misurare RTO.
+
+---
+
+## Time Series Collection
+
+Da 5.0: collection ottimizzate per misurazioni (metriche, IoT, log). I documenti vengono raggruppati internamente in bucket per `metaField` e tempo, con forte compressione.
+
+```javascript
+db.createCollection("metriche", {
+    timeseries: {
+        timeField: "ts",               // obbligatorio, tipo Date
+        metaField: "host",             // identifica la serie (non cambia nel tempo)
+        granularity: "seconds"         // seconds | minutes | hours
+    },
+    expireAfterSeconds: 2592000        // retention automatica: 30 giorni
+})
+
+db.metriche.insertOne({ ts: new Date(), host: { name: "web-1", dc: "mi1" }, cpu: 0.42 })
+
+// Query tipica: media a finestre di 5 minuti
+db.metriche.aggregate([
+    { $match: { "host.name": "web-1", ts: { $gte: ISODate("2026-10-04T00:00:00Z") } } },
+    { $group: {
+        _id: { $dateTrunc: { date: "$ts", unit: "minute", binSize: 5 } },
+        cpu_avg: { $avg: "$cpu" }
+    }},
+    { $sort: { _id: 1 } }
+])
+```
+
+Limiti da conoscere: la `timeField`/`metaField` non si cambiano dopo la creazione; update e delete sono limitati rispetto a una collection normale; la scelta di `metaField` a bassa cardinalità e stabile è critica per l'efficienza dei bucket.
+
+---
+
+## Atlas Search e Vector Search
+
+Funzionalità di **MongoDB Atlas** (cloud) basate su Apache Lucene, eseguite dal processo `mongot` accanto a `mongod`. Non fanno parte del server MongoDB Community standard: il text index nativo (sopra) resta l'alternativa self-managed.
+
+```javascript
+// Atlas Search: full-text con fuzzy, autocomplete, facet (stage $search)
+db.articoli.aggregate([
+    { $search: {
+        index: "default",
+        text: { query: "kubernetes operator", path: ["titolo", "contenuto"], fuzzy: { maxEdits: 1 } }
+    }},
+    { $limit: 10 },
+    { $project: { titolo: 1, score: { $meta: "searchScore" } } }
+])
+
+// Atlas Vector Search: similarità su embedding (stage $vectorSearch), base per RAG
+db.documenti.aggregate([
+    { $vectorSearch: {
+        index: "vector_index",
+        path: "embedding",
+        queryVector: [0.12, -0.03, /* ... */],
+        numCandidates: 200,           // candidati ANN da valutare
+        limit: 5
+    }}
+])
+```
+
+I search index si definiscono via API/UI Atlas (o `createSearchIndex`), non con `createIndex`. Il supporto a Search/Vector Search per deployment self-managed è in evoluzione: verificare la documentazione ufficiale della versione in uso prima di basarvi un design.
+
+---
+
+## Novità della serie 8.x
+
+La 8.0 (ottobre 2024) è la major corrente; le release 8.x successive seguono il nuovo ciclo di rilasci rapidi.
+
+- **Performance**: miglioramenti di throughput su read/write e bulk insert, e query time series più rapide, dichiarati da MongoDB rispetto alla 7.0 (misurare sul proprio workload).
+- **Queryable Encryption**: range query su dati cifrati.
+- **Sharding**: `moveCollection` e `unshardCollection` per spostare/riportare collection senza downtime applicativo; config server utilizzabile anche come shard (*embedded config server*) per ridurre i nodi minimi.
+- **`bulkWrite` a livello di cluster**: un solo round-trip per scritture su più collection/namespace.
+- **`defaultMaxTimeMS`**: timeout di default a livello cluster per proteggere da query runaway.
+- **Upgrade**: passare per una major alla volta (7.0 → 8.0), verificare `featureCompatibilityVersion` e impostarla alla nuova versione solo dopo la validazione (`setFeatureCompatibilityVersion`).
+
+```javascript
+db.adminCommand({ getParameter: 1, featureCompatibilityVersion: 1 })
+// Dopo l'upgrade dei binari e la validazione:
+db.adminCommand({ setFeatureCompatibilityVersion: "8.0", confirm: true })
+```
+
+---
+
+## MongoDB su Kubernetes
+
+Opzioni principali:
+
+| Operator | CRD | Note |
+|---|---|---|
+| MongoDB Community Operator | `MongoDBCommunity` | Open source, replica set con SCRAM/TLS; nessun sharding |
+| MongoDB Enterprise Kubernetes Operator | `MongoDB`, `MongoDBMultiCluster` | Richiede Ops Manager/Cloud Manager; sharding, multi-cluster |
+| MongoDB Atlas Kubernetes Operator | `AtlasDeployment` | Gestisce risorse Atlas (cloud) da manifest |
+| Percona Operator for MongoDB | `PerconaServerMongoDB` | Open source, include sharding e PBM integrato |
+
+MongoDB sta consolidando i primi due in un operator unico (*MongoDB Controllers for Kubernetes*): verificare lo stato nella documentazione ufficiale prima di scegliere.
+
+```yaml
+apiVersion: mongodbcommunity.mongodb.com/v1
+kind: MongoDBCommunity
+metadata:
+  name: mongo-rs
+spec:
+  members: 3
+  type: ReplicaSet
+  version: "8.0.4"
+  security:
+    authentication:
+      modes: ["SCRAM"]
+  users:
+    - name: app
+      db: admin
+      passwordSecretRef:
+        name: app-password            # Secret con chiave "password"
+      roles:
+        - name: readWrite
+          db: ecommerce
+      scramCredentialsSecretName: app-scram
+  statefulSet:
+    spec:
+      volumeClaimTemplates:
+        - metadata:
+            name: data-volume
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            storageClassName: fast-ssd
+            resources:
+              requests:
+                storage: 100Gi
+```
+
+!!! tip "Regole per database stateful su K8s"
+    PVC su storage a bassa latenza, `podAntiAffinity` per distribuire i membri su nodi/zone diversi, PodDisruptionBudget (`maxUnavailable: 1`), resource `requests=limits` (cache WiredTiger dimensionata sulla memoria del container), backup su object storage fuori dal cluster.
+---
+
 ## Best Practices
 
+- **Sicurezza non opzionale**: `authorization: enabled`, TLS `requireTLS`, `bindIp` ristretto, ruoli a minimo privilegio, mai MongoDB esposto su Internet (le istanze aperte sono bersaglio continuo di ransomware)
+- **Backup testati**: PITR attivo e restore verificato a intervalli regolari; per sharded cluster usare strumenti coordinati (Atlas, Ops Manager, PBM)
 - **Schema design prima di tutto**: a differenza di SQL, lo schema errato in MongoDB è costoso da cambiare. Modellare in base ai pattern di accesso, non alla struttura dati
 - **Embedded per default, referencing quando necessario**: embedding → 1 lettura, referencing → 2 letture. Eccezioni: documento > 16MB (limite BSON), array che crescono senza limite, entità lette spesso da sole
 - **Write concern majority in produzione**: `w:1` rischia perdita di dati in caso di failover — non accettabile per dati critici
@@ -468,7 +692,89 @@ db.ordini.aggregate(
 // Cercare: queryPlanner.winningPlan — deve essere IXSCAN non COLLSCAN
 ```
 
-<!-- REVIEW: mancano sezioni promesse dalle search_keywords e utili a un DevOps: sicurezza (auth SCRAM/x509, RBAC, TLS, encryption at rest/Queryable Encryption), backup/restore (mongodump, snapshot, PITR), time series collection, Atlas Search, versioni correnti (8.x) e deploy su Kubernetes. Vedi proposta di follow-up. -->
+### Scenario 5 — `Authentication failed` / `not authorized`
+
+**Sintomo:** `MongoServerError: Authentication failed` al login, oppure `not authorized on <db> to execute command` dopo il login.
+
+**Causa:** `authSource` errato (l'utente è definito in `admin` ma si autentica sul database applicativo), meccanismo non supportato dall'utente (creato con SCRAM-SHA-1 vs client che richiede SHA-256), oppure ruolo mancante sul database/collection target.
+
+**Soluzione:**
+
+```bash
+# 1. Specificare authSource corretto
+mongosh "mongodb://app:secret@mongo1:27017/ecommerce?authSource=admin&replicaSet=rs0"
+```
+
+```javascript
+// 2. Verificare ruoli e privilegi effettivi della sessione corrente
+db.runCommand({ connectionStatus: 1, showPrivileges: true })
+
+// 3. Verificare l'utente (da admin) e concedere il ruolo mancante
+use admin
+db.getUser("app")
+db.grantRolesToUser("app", [{ role: "readWrite", db: "ecommerce" }])
+```
+
+---
+
+### Scenario 6 — Errori TLS (`SSL handshake failed`, `certificate verify failed`)
+
+**Sintomo:** i client non si connettono dopo `requireTLS`; nei log di `mongod` compare `SSL peer certificate validation failed`.
+
+**Causa:** CA non fidata dal client, hostname non presente nei SAN del certificato (si usa l'IP o un alias), certificato scaduto, oppure `certificateKeyFile` senza chiave privata nel PEM.
+
+**Soluzione:**
+
+```bash
+# Ispezionare SAN e scadenza del certificato server
+openssl x509 -in /etc/mongo/tls/server.pem -noout -subject -ext subjectAltName -enddate
+
+# Testare handshake con la CA corretta
+openssl s_client -connect mongo1:27017 -CAfile /etc/mongo/tls/ca.pem </dev/null
+
+# Connessione con CA esplicita
+mongosh --tls --tlsCAFile /etc/mongo/tls/ca.pem --host mongo1 -u admin --authenticationDatabase admin
+```
+
+Il nome host usato dal client deve comparire nei SAN. Evitare `--tlsAllowInvalidCertificates` fuori dai test.
+
+---
+
+### Scenario 7 — Restore fallito o incompleto
+
+**Sintomo:** `mongorestore` termina con errori `duplicate key`, utenti/ruoli mancanti dopo il restore, o dati non allineati al momento atteso.
+
+**Causa:** restore su collection già popolate senza `--drop`; dump di un singolo database che non include `admin` (utenti e ruoli); dump senza `--oplog` quindi non point-in-time; versioni di `mongodump`/`mongorestore` incompatibili con il server.
+
+**Soluzione:**
+
+```bash
+# Ripristino pulito: elimina le collection esistenti prima di reinserirle
+mongorestore --drop --gzip --archive=/backup/rs0.archive --oplogReplay
+
+# Includere utenti/ruoli: dump del database admin con le collection di sistema
+mongodump --db=admin --collection=system.users --archive=/backup/users.archive
+mongorestore --nsInclude="admin.*" --archive=/backup/users.archive
+
+# Verifica post-restore
+mongosh --eval 'db.getSiblingDB("ecommerce").ordini.countDocuments({})'
+```
+
+Usare tool della stessa versione major del server e provare sempre il restore su un ambiente isolato prima di un incidente reale.
+
+---
+
+## Relazioni
+
+??? info "Redis — Approfondimento"
+    Redis è un key-value in-memory: complementare a MongoDB come cache e store di sessioni davanti al document store.
+
+    **Approfondimento completo →** [Redis](redis.md)
+
+??? info "Sharding — Approfondimento"
+    I principi di scelta della shard key e di distribuzione dei dati valgono per MongoDB come per altri datastore.
+
+    **Approfondimento completo →** [Sharding](../fondamentali/sharding.md)
 
 ## Riferimenti
 
