@@ -10262,7 +10262,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10297,7 +10297,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10402,7 +10402,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -11461,7 +11461,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -11486,7 +11486,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -11576,10 +11576,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#scenario-1-gvisor-container-non-si-avvia-con-exec-format-error-o-syscall-non-supportata" class="md-nav__link">
+  <a href="#scenario-1-gvisor-container-crasha-per-syscall-non-supportata" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scenario 1 — gVisor: container non si avvia con exec format error o syscall non supportata
+        Scenario 1 — gVisor: container crasha per syscall non supportata
       
     </span>
   </a>
@@ -24501,10 +24501,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#scenario-1-gvisor-container-non-si-avvia-con-exec-format-error-o-syscall-non-supportata" class="md-nav__link">
+  <a href="#scenario-1-gvisor-container-crasha-per-syscall-non-supportata" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scenario 1 — gVisor: container non si avvia con exec format error o syscall non supportata
+        Scenario 1 — gVisor: container crasha per syscall non supportata
       
     </span>
   </a>
@@ -24743,32 +24743,38 @@
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>  Sentry (gVisor kernel) — processo user-space
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>  +------------------------------------------+
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>  |  Implementa POSIX syscall interface       |
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>  |  ~ 200 syscall supportate (subset Linux)  |
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>  |  Written in Go (memory-safe)              |
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>  |  Gestisce:                                |
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>  |  - Filesystem (via Gofer)                 |
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>  |  - Network (netstack Golang)              |
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>  |  - Process management                     |
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>  |  - Memory management                      |
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>  +------------------------------------------+
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>       |
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>       | solo syscall necessarie al Sentry
-</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>       v
-</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>  Linux Kernel (HOST) — ridotta superficie
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>  |  Subset delle syscall Linux (no io_uring, |
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>  |  bpf, perf_event_open)                    |
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>  |  Written in Go (memory-safe)              |
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>  |  Gestisce:                                |
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>  |  - Filesystem (via Gofer)                 |
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>  |  - Network (netstack Golang)              |
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>  |  - Process management                     |
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>  |  - Memory management                      |
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>  +------------------------------------------+
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>       |
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>       | solo syscall necessarie al Sentry
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>       v
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>  Linux Kernel (HOST) — ridotta superficie
 </span></code></pre></div>
-<p><strong>Due modalità di intercettazione:</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ptrace mode (default, non richiede KVM):
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  - Sentry usa ptrace() per intercettare le syscall del container
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  - Maggiore portabilità (funziona su qualsiasi Linux)
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  - Performance peggiore (ptrace ha overhead significativo)
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  - Utile per: ambienti senza virtualizzazione hardware (VM cloud annidate)
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>KVM mode (raccomandato per produzione):
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  - Sentry gira come una VM leggera (usa KVM direttamente)
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>  - Migliore isolamento (hardware boundary)
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>  - Performance migliore rispetto a ptrace
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>  - Richiede: accesso a /dev/kvm (nested virt su cloud o bare metal)
+<p><strong>Platform di intercettazione</strong> (come il Sentry cattura le syscall dell'app):</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>systrap (default dal 2023, non richiede KVM):
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  - seccomp SECCOMP_RET_TRAP + signal handler: l'app notifica il Sentry
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  - Funziona su qualsiasi Linux, anche in VM cloud senza nested virt
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  - Overhead molto inferiore a ptrace: scelta consigliata nella maggior parte dei casi
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>KVM:
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>  - Il Sentry usa KVM per far girare l'app in un address space guest
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  - Costo di syscall/context switch più basso su bare metal
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>  - Richiede /dev/kvm; su VM cloud con nested virt può risultare PIÙ lento di systrap
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>ptrace (legacy, deprecata):
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>  - Overhead alto; mantenuta solo per compatibilità, non usarla per nuovi deployment
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Perché un kernel user-space</p>
+<p>Il Sentry è scritto in Go (memory-safe) e gestisce le syscall al posto del kernel host: un bug nell'implementazione di una syscall compromette il Sentry, non l'host. Il Sentry stesso gira con un filtro seccomp stretto, quindi verso l'host espone solo una piccola parte della superficie syscall.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Installazione runsc (gVisor runtime)</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://gvisor.dev/archive.key<span class="w"> </span><span class="p">|</span><span class="w"> </span>gpg<span class="w"> </span>--dearmor<span class="w"> </span>-o<span class="w"> </span>/usr/share/keyrings/gvisor-archive-keyring.gpg
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"deb [arch=</span><span class="k">$(</span>dpkg<span class="w"> </span>--print-architecture<span class="k">)</span><span class="s2"> signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] \</span>
@@ -24784,13 +24790,12 @@
 </span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
 </span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="c1"># /etc/containerd/runsc.toml</span>
 </span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="c1"># [runsc_config]</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1">#   platform = "kvm"       # kvm | ptrace | systrap</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1">#   platform = "systrap"   # systrap (default) | kvm | ptrace (deprecata)</span>
 </span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="c1">#   file-access = "shared" # per performance I/O (shared host filesystem)</span>
 </span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
 </span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="c1"># Verifica</span>
 </span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>runsc<span class="w"> </span>--version
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="c1"># runsc version release-20240212.0</span>
-</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="c1"># spec: 1.0.2-dev</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="c1"># runsc version release-&lt;data&gt;   (le release sono datate, es. release-20260105.0)</span>
 </span></code></pre></div>
 <p><strong>Performance gVisor:</strong></p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>gVisor Performance Trade-offs
@@ -24817,7 +24822,7 @@
 </span></code></pre></div>
 <hr />
 <h2 id="kata-containers-vm-based-containers">Kata Containers — VM-Based Containers<a class="headerlink" href="#kata-containers-vm-based-containers" title="Permanent link">&para;</a></h2>
-<p><strong>Kata Containers</strong> (OpenStack Foundation) esegue ogni pod in una VM leggera (QEMU, Firecracker, Cloud Hypervisor). Combina la velocità dei container con l'isolamento delle VM.</p>
+<p><strong>Kata Containers</strong> (OpenInfra Foundation) esegue ogni pod in una VM leggera (QEMU, Firecracker, Cloud Hypervisor). Combina la velocità dei container con l'isolamento delle VM.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Kata Containers Architecture
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>  Pod Kubernetes
@@ -24846,30 +24851,32 @@
 </span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>  (come nel modello standard K8s, ma la VM è l'unità di isolamento)
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Installazione Kata Containers</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># 1. Install Kata packages</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>dnf<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>kata-containers
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># oppure:</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/kata-containers/kata-containers/releases/latest/download/kata-operator.yaml
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># 2. Verifica che nested virtualization sia disponibile</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>cat<span class="w"> </span>/proc/cpuinfo<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"vmx|svm"</span><span class="w">   </span><span class="c1"># vmx=Intel, svm=AMD</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>ls<span class="w"> </span>/dev/kvm<span class="w">    </span><span class="c1"># deve esistere</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="c1"># 3. Configura containerd per Kata</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="c1"># [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu]</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1">#   runtime_type = "io.containerd.kata.v2"</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1">#   pod_annotations = ["io.katacontainers.*"]</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="c1">#   container_annotations = ["io.katacontainers.*"]</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="c1">#   [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu.options]</span>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="c1">#     ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-qemu.toml"</span>
-</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="c1"># Verifica</span>
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>kata-runtime<span class="w"> </span>check<span class="w">    </span><span class="c1"># verifica i requisiti HW</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>kata-runtime<span class="w"> </span>kata-env<span class="w"> </span><span class="c1"># mostra la configurazione</span>
-</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>
-</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="c1"># Test: run un container con Kata</span>
-</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>docker<span class="w"> </span>run<span class="w"> </span>--runtime<span class="w"> </span>io.containerd.kata.v2<span class="w"> </span>ubuntu:22.04<span class="w"> </span>uname<span class="w"> </span>-r
-</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="c1"># 5.15.0-kata-containers  ← diverso dal kernel host!</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># 1. Installa Kata</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># Su host: pacchetti della distro o release tarball (kata-static) da GitHub</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Su Kubernetes: kata-deploy (Helm chart: DaemonSet che installa il runtime e registra le RuntimeClass).</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1">#   Il vecchio kata-operator è deprecato.</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>helm<span class="w"> </span>install<span class="w"> </span>kata-deploy<span class="w"> </span>oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span>--namespace<span class="w"> </span>kube-system<span class="w">   </span><span class="c1"># verificare chart/valori nella doc ufficiale</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># 2. Verifica che nested virtualization sia disponibile</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>cat<span class="w"> </span>/proc/cpuinfo<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"vmx|svm"</span><span class="w">   </span><span class="c1"># vmx=Intel, svm=AMD</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>ls<span class="w"> </span>/dev/kvm<span class="w">    </span><span class="c1"># deve esistere</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># 3. Configura containerd per Kata</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1"># [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu]</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="c1">#   runtime_type = "io.containerd.kata.v2"</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="c1">#   pod_annotations = ["io.katacontainers.*"]</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="c1">#   container_annotations = ["io.katacontainers.*"]</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="c1">#   [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu.options]</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="c1">#     ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-qemu.toml"</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="c1"># Verifica</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>kata-runtime<span class="w"> </span>check<span class="w">    </span><span class="c1"># verifica i requisiti HW</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>kata-runtime<span class="w"> </span>kata-env<span class="w"> </span><span class="c1"># mostra la configurazione</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a><span class="c1"># Test: run un container con Kata</span>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>docker<span class="w"> </span>run<span class="w"> </span>--runtime<span class="w"> </span>io.containerd.kata.v2<span class="w"> </span>ubuntu:22.04<span class="w"> </span>uname<span class="w"> </span>-r
+</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="c1"># &lt;versione kernel guest Kata&gt;  ← diverso dal kernel host!</span>
 </span></code></pre></div>
 <p><strong>Comparazione QEMU vs Firecracker per Kata:</strong></p>
 <table>
@@ -24894,7 +24901,7 @@
 <tr>
 <td><strong>Compatibilità</strong></td>
 <td>Massima (emula HW completo)</td>
-<td>Limitata (no USB, no serial)</td>
+<td>Limitata (no USB/PCI/GPU, no virtio-fs: serve block device, es. snapshotter devmapper)</td>
 </tr>
 <tr>
 <td><strong>Features</strong></td>
@@ -24904,7 +24911,7 @@
 <tr>
 <td><strong>Usato da</strong></td>
 <td>Default Kata</td>
-<td>AWS Lambda, Fargate</td>
+<td>AWS Lambda, Fargate (hypervisor diretto, non via Kata)</td>
 </tr>
 <tr>
 <td><strong>Miglior uso</strong></td>
@@ -24919,9 +24926,9 @@
 <div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Firecracker MicroVM
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>  Caratteristiche:
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>  - ~5ms per creare una microVM (record di velocità)
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>  - ~5MB overhead di memoria
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>  - No dispositivi legacy (no serial, no USB, no BIOS)
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>  - Boot di una microVM in ~125ms
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>  - ~5MB overhead di memoria per microVM
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>  - Device model minimale (no USB, no PCI passthrough, no BIOS: boot diretto del kernel)
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>  - Solo KVM (nessun emulazione software)
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>  - Scritto in Rust (memory-safe)
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>  - API REST per la gestione (no monitor QEMU)
@@ -24937,17 +24944,18 @@
 </span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>  - AWS Lambda
 </span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>  - AWS Fargate
 </span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>  - Fly.io (isolamento tenant)
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>  - Cloudflare Workers (sperimentale)
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>  - Sandbox per codice generato da agenti AI (es. E2B)
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Firecracker + containerd (via firecracker-containerd)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Firecracker + containerd (via firecracker-containerd, progetto poco attivo)</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># https://github.com/firecracker-microvm/firecracker-containerd</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Con Kata + Firecracker:</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># /opt/kata/share/defaults/kata-containers/configuration-fc.toml</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># [hypervisor.firecracker]</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># path = "/usr/local/bin/firecracker"</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># kernel = "/opt/kata/share/kata-containers/vmlinux-5.15.kata"</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># initrd = "/opt/kata/share/kata-containers/kata-initrd.img"</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># In pratica si usa Kata + Firecracker (richiede snapshotter devmapper, no virtio-fs)</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Con Kata + Firecracker:</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># /opt/kata/share/defaults/kata-containers/configuration-fc.toml</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># [hypervisor.firecracker]</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># path = "/usr/local/bin/firecracker"</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># kernel = "/opt/kata/share/kata-containers/vmlinux-5.15.kata"</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="c1"># initrd = "/opt/kata/share/kata-containers/kata-initrd.img"</span>
 </span></code></pre></div>
 <hr />
 <h2 id="quando-usare-cosa-decision-matrix">Quando Usare Cosa — Decision Matrix<a class="headerlink" href="#quando-usare-cosa-decision-matrix" title="Permanent link">&para;</a></h2>
@@ -24973,92 +24981,114 @@
 </span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>  → Mix: runc per workloads trusted, gVisor per untrusted,
 </span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>         RuntimeClass per selezione per namespace/pod
 </span></code></pre></div>
+<p>In Kubernetes la <code>RuntimeClass</code> mappa un nome all'handler configurato in containerd; <code>scheduling.nodeSelector</code> limita ai nodi che hanno quel runtime.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">node.k8s.io/v1</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RuntimeClass</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gvisor</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="nt">handler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runsc</span><span class="w">          </span><span class="c1"># nome del runtime in containerd</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="nt">scheduling</span><span class="p">:</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span><span class="nt">nodeSelector</span><span class="p">:</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="nt">sandbox.gvisor/enabled</span><span class="p">:</span><span class="w"> </span><span class="s">"true"</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="nn">---</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pod</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">untrusted-job</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">  </span><span class="nt">runtimeClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gvisor</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">  </span><span class="nt">containers</span><span class="p">:</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">app</span>
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">      </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">busybox:1.37</span>
+</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="w">      </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"sleep"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"3600"</span><span class="p p-Indicator">]</span>
+</span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Servizi gestiti e confidential computing</p>
+<p>GKE Sandbox è gVisor gestito. Kata è la base dei Confidential Containers (CNCF CoCo) per TEE hardware (AMD SEV-SNP, Intel TDX).</p>
+</div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<h3 id="scenario-1-gvisor-container-non-si-avvia-con-exec-format-error-o-syscall-non-supportata">Scenario 1 — gVisor: container non si avvia con <code>exec format error</code> o syscall non supportata<a class="headerlink" href="#scenario-1-gvisor-container-non-si-avvia-con-exec-format-error-o-syscall-non-supportata" title="Permanent link">&para;</a></h3>
+<h3 id="scenario-1-gvisor-container-crasha-per-syscall-non-supportata">Scenario 1 — gVisor: container crasha per syscall non supportata<a class="headerlink" href="#scenario-1-gvisor-container-crasha-per-syscall-non-supportata" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il container si avvia ma crasha immediatamente con errori tipo <code>Function not implemented</code> o <code>invalid argument</code>.</p>
-<p><strong>Causa:</strong> Il workload usa syscall non implementate dal Sentry gVisor (implementa ~200 syscall su ~350+ del kernel Linux). Spesso: <code>io_uring</code>, <code>perf_event_open</code>, <code>bpf</code>.</p>
+<p><strong>Causa:</strong> Il workload usa syscall non implementate dal Sentry gVisor (implementa solo un sottoinsieme delle syscall Linux). Spesso: <code>io_uring</code>, <code>perf_event_open</code>, <code>bpf</code>.</p>
 <p><strong>Soluzione:</strong> Verificare quali syscall mancano, valutare se usare Kata invece di gVisor per quel workload.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Abilitare strace-like logging in gVisor per identificare le syscall non supportate</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># /etc/containerd/runsc.toml</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># [runsc_config]</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1">#   strace = true</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1">#   strace-syscalls = ""   # "" = tutte</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># Oppure avviare il container con debug logging</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>runsc<span class="w"> </span>--debug<span class="w"> </span>--debug-log<span class="o">=</span>/tmp/gvisor-debug.log<span class="w"> </span>run<span class="w"> </span>&lt;container-id&gt;
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="c1"># Cercare le syscall fallite nei log</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"unimplemented\|not implemented\|ENOSYS"</span><span class="w"> </span>/tmp/gvisor-debug.log
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="c1"># Lista ufficiale syscall supportate</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>curl<span class="w"> </span>-s<span class="w"> </span>https://gvisor.dev/docs/user_guide/compatibility/linux/amd64/<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"Full support"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Abilitare strace-like logging in gVisor per identificare le syscall non supportate</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># /etc/containerd/runsc.toml</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># [runsc_config]</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1">#   strace = true</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1">#   strace-syscalls = ""   # "" = tutte</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Oppure avviare il container con debug logging</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>runsc<span class="w"> </span>--debug<span class="w"> </span>--debug-log<span class="o">=</span>/tmp/gvisor-debug.log<span class="w"> </span>run<span class="w"> </span>&lt;container-id&gt;
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># Cercare le syscall fallite nei log</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"unimplemented\|not implemented\|ENOSYS"</span><span class="w"> </span>/tmp/gvisor-debug.log
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="c1"># Tabelle ufficiali syscall supportate:</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="c1"># https://gvisor.dev/docs/user_guide/compatibility/linux/amd64/</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-kata-containers-kata-runtime-check-fallisce-con-kvm-non-disponibile">Scenario 2 — Kata Containers: <code>kata-runtime check</code> fallisce con KVM non disponibile<a class="headerlink" href="#scenario-2-kata-containers-kata-runtime-check-fallisce-con-kvm-non-disponibile" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>kata-runtime check</code> restituisce <code>ERROR: kernel module kvm requires root privileges</code> o <code>could not access /dev/kvm</code>.</p>
-<p><strong>Causa:</strong> Nested virtualization non abilitata sul nodo (comune su VM cloud), oppure il modulo KVM non è caricato.</p>
-<p><strong>Soluzione:</strong> Abilitare nested virt sul cloud provider o sul hypervisor host, oppure configurare Kata in modalità QEMU-TCG (più lento, senza KVM).</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Verifica moduli KVM</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>lsmod<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>kvm
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>cat<span class="w"> </span>/proc/cpuinfo<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"vmx|svm"</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># Caricamento moduli (Intel / AMD)</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>modprobe<span class="w"> </span>kvm_intel<span class="w">   </span><span class="c1"># Intel</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>modprobe<span class="w"> </span>kvm_amd<span class="w">     </span><span class="c1"># AMD</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="c1"># AWS: abilitare nested virt sulla istanza EC2</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># L'istanza deve essere di tipo .metal o supportare nested virt</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="c1"># Verifica completa dell'ambiente Kata</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>kata-runtime<span class="w"> </span>kata-env
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>kata-runtime<span class="w"> </span>check<span class="w"> </span>--verbose
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1"># Alternativa: QEMU TCG (no KVM, solo per test)</span>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="c1"># configuration-qemu.toml: machine_type = "q35" + disable_nesting_checks = true</span>
+<p><strong>Causa:</strong> Nested virtualization non abilitata sul nodo (comune su VM cloud), oppure il modulo KVM non è caricato. Kata richiede sempre KVM.</p>
+<p><strong>Soluzione:</strong> Abilitare nested virt sul cloud provider o sull'hypervisor host, oppure usare nodi bare metal. Se KVM non è disponibile, usare gVisor con platform systrap (non lo richiede).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Verifica moduli KVM</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>lsmod<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>kvm
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>cat<span class="w"> </span>/proc/cpuinfo<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"vmx|svm"</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># Caricamento moduli (Intel / AMD)</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>modprobe<span class="w"> </span>kvm_intel<span class="w">   </span><span class="c1"># Intel</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>modprobe<span class="w"> </span>kvm_amd<span class="w">     </span><span class="c1"># AMD</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># AWS: abilitare nested virt sulla istanza EC2</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="c1"># L'istanza deve essere di tipo .metal o supportare nested virt</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="c1"># Verifica completa dell'ambiente Kata</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>kata-runtime<span class="w"> </span>kata-env
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>kata-runtime<span class="w"> </span>check<span class="w"> </span>--verbose
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-runtimeclass-non-trovata-o-pod-rimane-in-pending">Scenario 3 — RuntimeClass non trovata o pod rimane in <code>Pending</code><a class="headerlink" href="#scenario-3-runtimeclass-non-trovata-o-pod-rimane-in-pending" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il pod resta in <code>Pending</code> con evento <code>Failed to create pod sandbox: no runtime for "kata-qemu" is configured</code>.</p>
 <p><strong>Causa:</strong> La RuntimeClass è definita in Kubernetes ma il nodo non ha il runtime corrispondente configurato in containerd, oppure il nodo non ha il label corretto per il node selector.</p>
 <p><strong>Soluzione:</strong> Verificare la configurazione containerd su tutti i nodi target e aggiungere node selector alla RuntimeClass.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Verifica che la RuntimeClass esista</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runtimeclass
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># Descrivi la RuntimeClass per vedere il node selector</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>runtimeclass<span class="w"> </span>kata-qemu
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Verifica la configurazione containerd sul nodo</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Sul nodo:</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>cat<span class="w"> </span>/etc/containerd/config.toml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A5<span class="w"> </span><span class="s2">"kata"</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="c1"># Riavvia containerd dopo modifiche</span>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>systemctl<span class="w"> </span>restart<span class="w"> </span>containerd
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="c1"># Testa direttamente il runtime</span>
-</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>ctr<span class="w"> </span>run<span class="w"> </span>--runtime<span class="w"> </span>io.containerd.kata.v2<span class="w"> </span>--rm<span class="w"> </span>docker.io/library/busybox:latest<span class="w"> </span><span class="nb">test</span><span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"uname -r"</span>
-</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>
-</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="c1"># Evento del pod per il debug</span>
-</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A10<span class="w"> </span><span class="s2">"Events:"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Verifica che la RuntimeClass esista</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runtimeclass
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Descrivi la RuntimeClass per vedere il node selector</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>runtimeclass<span class="w"> </span>kata-qemu
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1"># Verifica la configurazione containerd sul nodo</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="c1"># Sul nodo:</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>cat<span class="w"> </span>/etc/containerd/config.toml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A5<span class="w"> </span><span class="s2">"kata"</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="c1"># Riavvia containerd dopo modifiche</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>systemctl<span class="w"> </span>restart<span class="w"> </span>containerd
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="c1"># Testa direttamente il runtime</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>ctr<span class="w"> </span>run<span class="w"> </span>--runtime<span class="w"> </span>io.containerd.kata.v2<span class="w"> </span>--rm<span class="w"> </span>docker.io/library/busybox:latest<span class="w"> </span><span class="nb">test</span><span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"uname -r"</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="c1"># Evento del pod per il debug</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A10<span class="w"> </span><span class="s2">"Events:"</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-performance-degradate-con-gvisor-su-io-intensivo">Scenario 4 — Performance degradate con gVisor su I/O intensivo<a class="headerlink" href="#scenario-4-performance-degradate-con-gvisor-su-io-intensivo" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Workload con I/O elevato (database, log processing) è 5-10x più lento con gVisor rispetto a runc.</p>
 <p><strong>Causa:</strong> Il filesystem Gofer in gVisor introduce overhead significativo per ogni operazione I/O. La modalità <code>shared</code> riduce l'overhead ma aumenta la superficie.</p>
 <p><strong>Soluzione:</strong> Ottimizzare la configurazione del file-access oppure escludere i workloads I/O-intensivi da gVisor usando RuntimeClass selettive.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># /etc/containerd/runsc.toml — opzioni per ridurre overhead I/O</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># [runsc_config]</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1">#   file-access = "shared"    # shared = meno safe ma più veloce (default: exclusive)</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1">#   overlay = false           # disabilita overlay per ridurre syscall</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1">#   network = "host"          # network=host elimina il netstack overhead (richiede trust)</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1"># Benchmark per confrontare runc vs gVisor</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--runtime<span class="w"> </span>io.containerd.runc.v2<span class="w"> </span>ubuntu<span class="w"> </span>dd<span class="w"> </span><span class="k">if</span><span class="o">=</span>/dev/zero<span class="w"> </span><span class="nv">of</span><span class="o">=</span>/tmp/test<span class="w"> </span><span class="nv">bs</span><span class="o">=</span>1M<span class="w"> </span><span class="nv">count</span><span class="o">=</span><span class="m">512</span><span class="w"> </span><span class="nv">oflag</span><span class="o">=</span>dsync
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--runtime<span class="w"> </span>io.containerd.runsc.v1<span class="w"> </span>ubuntu<span class="w"> </span>dd<span class="w"> </span><span class="k">if</span><span class="o">=</span>/dev/zero<span class="w"> </span><span class="nv">of</span><span class="o">=</span>/tmp/test<span class="w"> </span><span class="nv">bs</span><span class="o">=</span>1M<span class="w"> </span><span class="nv">count</span><span class="o">=</span><span class="m">512</span><span class="w"> </span><span class="nv">oflag</span><span class="o">=</span>dsync
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="c1"># Usa RuntimeClass diversi per namespace differenti</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>untrusted-workloads<span class="w"> </span><span class="nv">sandbox</span><span class="o">=</span>gvisor
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="c1"># Poi usa un admission webhook o RuntimeClass nel workload spec</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># /etc/containerd/runsc.toml — opzioni per ridurre overhead I/O</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># [runsc_config]</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1">#   file-access = "shared"    # shared = meno safe ma più veloce (default: exclusive)</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1">#   overlay2 = "root:self"    # overlay del rootfs (default); "none" lo disabilita</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1">#   network = "host"          # network=host elimina il netstack overhead (richiede trust)</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Benchmark per confrontare runc vs gVisor</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--runtime<span class="w"> </span>io.containerd.runc.v2<span class="w"> </span>ubuntu<span class="w"> </span>dd<span class="w"> </span><span class="k">if</span><span class="o">=</span>/dev/zero<span class="w"> </span><span class="nv">of</span><span class="o">=</span>/tmp/test<span class="w"> </span><span class="nv">bs</span><span class="o">=</span>1M<span class="w"> </span><span class="nv">count</span><span class="o">=</span><span class="m">512</span><span class="w"> </span><span class="nv">oflag</span><span class="o">=</span>dsync
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--runtime<span class="w"> </span>io.containerd.runsc.v1<span class="w"> </span>ubuntu<span class="w"> </span>dd<span class="w"> </span><span class="k">if</span><span class="o">=</span>/dev/zero<span class="w"> </span><span class="nv">of</span><span class="o">=</span>/tmp/test<span class="w"> </span><span class="nv">bs</span><span class="o">=</span>1M<span class="w"> </span><span class="nv">count</span><span class="o">=</span><span class="m">512</span><span class="w"> </span><span class="nv">oflag</span><span class="o">=</span>dsync
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="c1"># Usa RuntimeClass diversi per namespace differenti</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>untrusted-workloads<span class="w"> </span><span class="nv">sandbox</span><span class="o">=</span>gvisor
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="c1"># Poi usa un admission webhook o RuntimeClass nel workload spec</span>
 </span></code></pre></div>
 <hr />
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>

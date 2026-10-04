@@ -10271,7 +10271,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10296,7 +10296,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10517,7 +10517,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10622,7 +10622,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -11672,7 +11672,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24803,7 +24803,7 @@
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>                v
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  +--------------------------+
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>  |  Docker Daemon (dockerd)  |
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  |  gRPC server             |
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  |  REST API (Engine API)   |
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>  |  Image management        |
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>  |  Volume management       |
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>  |  Network management      |
@@ -24841,8 +24841,8 @@
 <p><strong>Perché questo layering?</strong></p>
 <ul>
 <li><code>containerd</code> può essere usato direttamente (Kubernetes non usa dockerd)</li>
-<li>Il shim isola il ciclo di vita del container da quello del daemon: riavviare <code>dockerd</code> non termina i container</li>
-<li><code>runc</code> è intercambiabile (gVisor, Kata, Railcar implementano la stessa OCI Runtime Spec)</li>
+<li>Il shim isola il ciclo di vita del container da quello del daemon: con <code>live-restore: true</code> in <code>daemon.json</code> riavviare <code>dockerd</code> non termina i container (senza, lo stop del daemon li ferma comunque)</li>
+<li><code>runc</code> è intercambiabile (<code>crun</code>, <code>youki</code>, gVisor <code>runsc</code>, Kata sono compatibili con la OCI Runtime Spec)</li>
 </ul>
 <hr />
 <h2 id="linux-namespaces-isolamento-dei-processi">Linux Namespaces — Isolamento dei Processi<a class="headerlink" href="#linux-namespaces-isolamento-dei-processi" title="Permanent link">&para;</a></h2>
@@ -24902,19 +24902,21 @@
 </span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>ls<span class="w"> </span>/proc/1/ns/net<span class="w">   </span><span class="c1"># namespace PID 1 = init = host</span>
 </span></code></pre></div>
 <p><strong>Il namespace USER</strong> — Fondamento per Rootless Docker:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Con User Namespaces (rootless Docker):</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># UID 0 (root) dentro il container → mappato a UID 100000+ sull'host</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># /proc/$CONTAINER_PID/uid_map:</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># 0 100000 65536</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># └─┬──┘ └──┬──┘ └──┬──┘</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1">#   0 in    100000  65536 IDs</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1">#   container  sull'host  mappati</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Verifica: un container "root" non è root sull'host</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>alpine<span class="w"> </span>id<span class="w">         </span><span class="c1"># uid=0(root)</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>docker<span class="w"> </span>inspect<span class="w"> </span>--format<span class="w"> </span><span class="s1">'{{.State.Pid}}'</span><span class="w"> </span>&lt;container&gt;
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>cat<span class="w"> </span>/proc/&lt;PID&gt;/status<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>Uid<span class="w"> </span><span class="c1"># Uid: 100000 100000 100000 100000</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Con User Namespaces (rootless Docker o `userns-remap` in daemon.json):</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># UID 0 (root) dentro il container → mappato a un UID non privilegiato sull'host</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># (range da /etc/subuid; con userns-remap tipicamente 100000+,</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1">#  in rootless UID 0 = utente che ha avviato il daemon)</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># /proc/$CONTAINER_PID/uid_map:</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># 0 100000 65536</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># └─┬──┘ └──┬──┘ └──┬──┘</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1">#   0 in    100000  65536 IDs</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1">#   container  sull'host  mappati</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="c1"># Verifica: un container "root" non è root sull'host</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>alpine<span class="w"> </span>id<span class="w">         </span><span class="c1"># uid=0(root)</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>docker<span class="w"> </span>inspect<span class="w"> </span>--format<span class="w"> </span><span class="s1">'{{.State.Pid}}'</span><span class="w"> </span>&lt;container&gt;
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>cat<span class="w"> </span>/proc/&lt;PID&gt;/status<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>Uid<span class="w"> </span><span class="c1"># Uid: 100000 100000 100000 100000</span>
 </span></code></pre></div>
 <hr />
 <h2 id="cgroups-v2-resource-accounting-e-limiting">cgroups v2 — Resource Accounting e Limiting<a class="headerlink" href="#cgroups-v2-resource-accounting-e-limiting" title="Permanent link">&para;</a></h2>
@@ -24933,27 +24935,34 @@
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>          └── cgroup.procs     [7421, 7422]  (PIDs nel gruppo)
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># docker run con resource limits → cgroups v2</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>docker<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span>--cpus<span class="o">=</span><span class="s2">"1.5"</span><span class="w"> </span><span class="se">\ </span><span class="w">          </span><span class="c1"># 1.5 core → cpu.max = "150000 100000"</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span>--cpu-shares<span class="o">=</span><span class="m">512</span><span class="w"> </span><span class="se">\ </span><span class="w">      </span><span class="c1"># peso relativo → cpu.weight</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span>--memory<span class="o">=</span><span class="s2">"256m"</span><span class="w"> </span><span class="se">\ </span><span class="w">       </span><span class="c1"># memory.max</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span>--memory-swap<span class="o">=</span><span class="s2">"256m"</span><span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># memory + swap = 256m → nessun swap extra</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span>--pids-limit<span class="o">=</span><span class="m">100</span><span class="w"> </span><span class="se">\ </span><span class="w">      </span><span class="c1"># pids.max</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span>--blkio-weight<span class="o">=</span><span class="m">500</span><span class="w"> </span><span class="se">\ </span><span class="w">    </span><span class="c1"># io.weight</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span>nginx
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1"># Leggi live resource usage</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>cat<span class="w"> </span>/sys/fs/cgroup/system.slice/docker-&lt;id&gt;.scope/cpu.stat
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1"># usage_usec 1234567      ← CPU usata in microsecondi</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="c1"># user_usec  987654</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="c1"># system_usec 246913</span>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1"># nr_throttled 0          ← quante volte è stato throttlato</span>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="c1"># throttled_usec 0</span>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="c1"># Memory pressure</span>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>cat<span class="w"> </span>/sys/fs/cgroup/system.slice/docker-&lt;id&gt;.scope/memory.pressure
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="c1"># some avg10=0.00 avg60=0.00 avg300=0.00 total=0</span>
-</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="c1"># full avg10=0.00 avg60=0.00 avg300=0.00 total=0</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># --cpus=1.5          → cpu.max = "150000 100000"</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># --cpu-shares=512    → peso relativo (cpu.weight)</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># --memory=256m       → memory.max</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># --memory-swap=256m  → memory + swap = 256m → nessun swap extra</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1"># --pids-limit=100    → pids.max</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># --blkio-weight=500  → io.weight</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>docker<span class="w"> </span>run<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span>--cpus<span class="o">=</span><span class="s2">"1.5"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span>--cpu-shares<span class="o">=</span><span class="m">512</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span>--memory<span class="o">=</span><span class="s2">"256m"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span>--memory-swap<span class="o">=</span><span class="s2">"256m"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span>--pids-limit<span class="o">=</span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">    </span>--blkio-weight<span class="o">=</span><span class="m">500</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">    </span>nginx
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="c1"># Leggi live resource usage</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="c1"># (path col cgroup driver systemd; con driver cgroupfs: /sys/fs/cgroup/docker/&lt;id&gt;/)</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>cat<span class="w"> </span>/sys/fs/cgroup/system.slice/docker-&lt;id&gt;.scope/cpu.stat
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="c1"># usage_usec 1234567      ← CPU usata in microsecondi</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="c1"># user_usec  987654</span>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="c1"># system_usec 246913</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="c1"># nr_throttled 0          ← quante volte è stato throttlato</span>
+</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="c1"># throttled_usec 0</span>
+</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>
+</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="c1"># Memory pressure</span>
+</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>cat<span class="w"> </span>/sys/fs/cgroup/system.slice/docker-&lt;id&gt;.scope/memory.pressure
+</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="c1"># some avg10=0.00 avg60=0.00 avg300=0.00 total=0</span>
+</span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="c1"># full avg10=0.00 avg60=0.00 avg300=0.00 total=0</span>
 </span></code></pre></div>
 <p><strong>Differenze cgroups v1 vs v2:</strong></p>
 <table>
@@ -24993,7 +25002,7 @@
 <tr>
 <td><strong>Support Docker</strong></td>
 <td>Default su sistemi vecchi</td>
-<td>Default da Docker 20.10+</td>
+<td>Supportato da Docker 20.10+; è default se la distro host monta v2 (la maggior parte di quelle recenti)</td>
 </tr>
 </tbody>
 </table>
@@ -25057,6 +25066,10 @@
 </span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="c1"># sha256... 2 weeks    COPY nginx.conf ...       1.2kB</span>
 </span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a><span class="c1"># sha256... 2 weeks    RUN apt-get install...    89.3MB</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">containerd image store</p>
+<p>Con il <em>containerd image store</em> (opt-in nelle versioni precedenti, default sulle installazioni nuove di quelle recenti) immagini e snapshot sono gestiti da containerd con lo snapshotter <code>overlayfs</code> sotto <code>/var/lib/containerd/</code>, non da <code>/var/lib/docker/overlay2/</code>. Il meccanismo overlayfs è identico; cambiano path e output di <code>GraphDriver</code>.</p>
+</div>
 <p><strong>Copy-on-Write (CoW):</strong></p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Scrittura in un container (CoW):
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
@@ -25185,18 +25198,21 @@
 </span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a>     ├─► Configura cgroups (/sys/fs/cgroup/...)
 </span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a>     ├─► Applica seccomp profile
 </span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a>     ├─► Drop capabilities
-</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a>     ├─► execve("/usr/sbin/nginx", ...)  → il processo container parte
-</span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a>     └─► runc termina (il shim rimane come monitor)
-</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a>
-</span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a>  6. Il container è in esecuzione
-</span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a>     PID 1 nel container = nginx
-</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a>     PID 7421 sull'host  = nginx (visibile da /proc)
+</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a>     └─► `runc create` termina: l'init del container resta in attesa
+</span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a>
+</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a>  5b. shim: runc start
+</span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a>     └─► execve("/usr/sbin/nginx", ...)  → il processo container parte
+</span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a>         (il shim rimane come monitor)
+</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a>
+</span><span id="__span-12-32"><a id="__codelineno-12-32" name="__codelineno-12-32" href="#__codelineno-12-32"></a>  6. Il container è in esecuzione
+</span><span id="__span-12-33"><a id="__codelineno-12-33" name="__codelineno-12-33" href="#__codelineno-12-33"></a>     PID 1 nel container = nginx
+</span><span id="__span-12-34"><a id="__codelineno-12-34" name="__codelineno-12-34" href="#__codelineno-12-34"></a>     PID 7421 sull'host  = nginx (visibile da /proc)
 </span></code></pre></div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-container-oom-killed-senza-avviso-chiaro">Scenario 1 — Container OOM-killed senza avviso chiaro<a class="headerlink" href="#scenario-1-container-oom-killed-senza-avviso-chiaro" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il container si riavvia ciclicamente; <code>docker ps</code> mostra <code>Restarting</code> o <code>Exited (137)</code>. Il codice di uscita 137 = 128 + SIGKILL.</p>
-<p><strong>Causa:</strong> Il processo ha superato il <code>memory.max</code> del cgroup e il kernel OOM killer ha terminato il processo. Questo accade spesso quando il limite memoria è troppo basso o l'applicazione ha un memory leak.</p>
+<p><strong>Causa:</strong> 137 indica solo SIGKILL (può venire anche da <code>docker kill</code>): conferma con <code>docker inspect --format '{{.State.OOMKilled}}' my-container</code>. Il processo ha superato il <code>memory.max</code> del cgroup e il kernel OOM killer ha terminato il processo. Questo accade spesso quando il limite memoria è troppo basso o l'applicazione ha un memory leak.</p>
 <p><strong>Soluzione:</strong> Verificare il kill OOM nei log del kernel e aumentare il limite o correggere il leak.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Conferma OOM kill</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>dmesg<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"oom"</span>
@@ -25224,7 +25240,7 @@
 <p><strong>Soluzione:</strong></p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Verifica che docker0 esista sull'host</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>ip<span class="w"> </span>link<span class="w"> </span>show<span class="w"> </span>docker0
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># Se assente: sudo systemctl restart docker</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># Se assente: sudo systemctl restart docker  (senza live-restore ferma i container in esecuzione)</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>
 </span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># Controlla le regole iptables Docker</span>
 </span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>sudo<span class="w"> </span>iptables<span class="w"> </span>-t<span class="w"> </span>nat<span class="w"> </span>-L<span class="w"> </span>DOCKER<span class="w"> </span>--line-numbers
