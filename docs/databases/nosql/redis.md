@@ -7,9 +7,10 @@ search_keywords: [redis cache, redis data structures, redis strings, redis hashe
 parent: databases/nosql/_index
 related: [databases/fondamentali/modelli-dati, networking/api-gateway/rate-limiting, databases/nosql/mongodb]
 official_docs: https://redis.io/docs/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Redis
@@ -19,6 +20,9 @@ last_updated: 2026-03-29
 Redis (Remote Dictionary Server) è un data store in-memory che opera su strutture dati native: stringhe, hash, liste, set, sorted set, stream e altri tipi specializzati. La latenza tipica è 0.1-1ms — ordini di grandezza inferiore a qualsiasi database disco-based.
 
 Redis non è solo un cache: è un building block per pattern architetturali comuni — rate limiting, session store, leaderboard, queue, Pub/Sub, stream processing — con semantica atomica e operazioni composte native.
+
+!!! note "Licenza e fork: Valkey, KeyDB, Dragonfly"
+    Da Redis 7.4 (2024) il codice non è più BSD ma RSALv2/SSPLv1 (source-available); Redis 8 ha aggiunto AGPLv3 come terza opzione. In reazione la Linux Foundation ha creato **Valkey**, fork BSD di Redis 7.2 (supportato da AWS, Google Cloud e altri; è il motore dietro ElastiCache/Memorystore for Valkey). Valkey, KeyDB e Dragonfly parlano il protocollo RESP: i client e i comandi di questa pagina valgono in larga parte anche per loro, ma moduli e feature recenti divergono. Prima di scegliere il motore verificare licenza e compatibilità con la versione che si usa.
 
 !!! warning "Single-threaded per il core"
     Il loop di comando principale di Redis è single-threaded (I/O è multithread da Redis 6). Questo garantisce atomicità di ogni operazione senza lock, ma significa che operazioni lente (es. `KEYS *`, `LRANGE` su liste enormi) bloccano tutti i client. Evitare operazioni O(n) su dataset grandi in produzione.
@@ -114,6 +118,18 @@ XREADGROUP GROUP worker-group consumer-1 COUNT 10 BLOCK 2000 STREAMS sensori:tem
 XACK sensori:temperatura worker-group <message-id>
 ```
 
+### Pub/Sub
+
+Messaggistica fire-and-forget: i subscriber connessi ricevono i messaggi pubblicati sul canale; nessuna persistenza né ack.
+
+```bash
+SUBSCRIBE notifiche:ordini          # terminale 1 (resta in ascolto)
+PUBLISH notifiche:ordini "ordine 42 creato"   # terminale 2 → ritorna il numero di subscriber
+```
+
+!!! warning "Pub/Sub non è una coda affidabile"
+    Un subscriber disconnesso perde i messaggi. Se serve delivery garantita, replay o consumer group usare gli **Streams** (sopra).
+
 ---
 
 ## Persistenza
@@ -124,6 +140,8 @@ Redis offre due meccanismi di persistenza (possono coesistere):
 |------------|-------------|-----|--------|
 | **RDB (snapshot)** | Dump binario del dataset a intervalli | File compatto, restore veloce | Perde dati dall'ultimo snapshot |
 | **AOF (Append-Only File)** | Log di ogni operazione di scrittura | Durabilità max con `fsync always` | File più grande, replay più lento |
+
+Con entrambi attivi, al riavvio Redis carica l'AOF (più completo dell'RDB). Da Redis 7 l'AOF è "multi part" (un RDB/AOF base + file incrementali in `appenddirname`). Per una cache pura si può disabilitare entrambi; per dati che non si possono rigenerare usare AOF `everysec` (+ RDB per backup).
 
 ```bash
 # redis.conf
@@ -163,10 +181,11 @@ maxmemory-policy allkeys-lru   # Policy più comune per cache
 # Policy disponibili:
 # noeviction         — restituisce errore quando pieno (non-cache use case)
 # allkeys-lru        — elimina la chiave meno recentemente usata (cache generale)
-# allkeys-lfu        — elimina la chiave meno frequentemente usata (PG 4+)
-# volatile-lru       — LRU solo su chiavi con TTL (misto cache+persistent)
+# allkeys-lfu        — elimina la chiave meno frequentemente usata (Redis 4.0+)
+# volatile-lru/lfu   — come sopra ma solo su chiavi con TTL (misto cache+persistent)
 # volatile-ttl       — elimina la chiave con TTL più basso (prossima a scadere)
 # allkeys-random     — elimina casuale (per lo più inutile)
+# Nota: le policy volatile-* con nessuna chiave con TTL si comportano come noeviction
 ```
 
 ---
@@ -284,26 +303,27 @@ else
 end
 ```
 
-### Distributed Lock (Redlock)
+### Distributed Lock
+
+Lock singola istanza: `SET ... NX EX` per acquisire, rilascio con script Lua che verifica il proprietario (altrimenti si rischia di cancellare il lock di un altro client dopo la scadenza del proprio TTL):
 
 ```python
-# Con redlock-py
-import redlock
+import uuid
 
-dlm = redlock.Redlock([
-    {"host": "redis-1", "port": 6379},
-    {"host": "redis-2", "port": 6379},
-    {"host": "redis-3", "port": 6379},
-])
-
-lock = dlm.lock("resource-name", 10000)  # TTL 10s
-if lock:
+token = str(uuid.uuid4())
+if r.set("lock:risorsa", token, nx=True, ex=30):
     try:
-        # sezione critica
-        pass
+        pass  # sezione critica (deve durare meno del TTL)
     finally:
-        dlm.unlock(lock)
+        # rilascio atomico: cancella solo se il token è il nostro
+        r.eval(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then "
+            "return redis.call('del', KEYS[1]) else return 0 end",
+            1, "lock:risorsa", token,
+        )
 ```
+
+**Redlock** estende l'idea a N istanze Redis indipendenti (maggioranza di N/2+1) per tollerare il crash di un nodo; usare una libreria mantenuta del proprio linguaggio (es. Redisson per Java). Il suo modello di sicurezza è controverso (clock drift, pause GC): se la correttezza dipende dal lock, aggiungere un *fencing token* verificato dalla risorsa protetta, oppure usare un sistema di consenso (etcd, ZooKeeper). Per lock "efficienza" (evitare lavoro duplicato) il lock singolo basta.
 
 ### Cache-Aside
 
@@ -338,7 +358,7 @@ redis-cli SLOWLOG GET 10
 
 # Analisi memoria per tipo di chiave
 redis-cli --bigkeys    # trova le chiavi più grandi
-redis-cli --memkeys    # analisi memoria per prefisso (Redis 7+)
+redis-cli --memkeys    # come --bigkeys ma per memoria effettiva (usa MEMORY USAGE)
 
 # Metriche Prometheus: redis_exporter
 # https://github.com/oliver006/redis_exporter
@@ -384,7 +404,7 @@ redis-cli CLIENT LIST
 
 **Sintomo:** `redis-cli INFO memory` mostra `used_memory` in crescita costante; OOM killer o eviction error (`OOM command not allowed when used memory > maxmemory`).
 
-**Causa:** Chiavi senza TTL accumulate nel tempo (tipico di session store o cache senza scadenza), oppure `maxmemory` non configurato e policy `noeviction` (default).
+**Causa:** Chiavi senza TTL accumulate nel tempo (tipico di session store o cache senza scadenza), oppure `maxmemory` non configurato (default: 0 = illimitato, il processo cresce fino all'OOM killer del SO); con `maxmemory` impostato e policy `noeviction` (default) le scritture falliscono con l'errore OOM.
 
 **Soluzione:** Impostare TTL sui nuovi oggetti, configurare `maxmemory` e policy di eviction, analizzare le chiavi più pesanti.
 
@@ -404,13 +424,11 @@ redis-cli INFO keyspace
 redis-cli CONFIG SET maxmemory 4gb
 redis-cli CONFIG SET maxmemory-policy allkeys-lru
 
-# Imposta TTL su chiavi esistenti senza scadenza (operazione batch con SCAN)
+# Imposta TTL su chiavi esistenti senza scadenza (batch con SCAN, non bloccante)
 # Esempio: aggiunge TTL di 7 giorni a tutte le chiavi "sessione:*" senza TTL
-redis-cli SCAN 0 MATCH "sessione:*" COUNT 500 | while read cursor keys; do
-  for key in $keys; do
-    redis-cli TTL "$key" | grep -q "^-1$" && redis-cli EXPIRE "$key" 604800
-  done
-  [ "$cursor" = "0" ] && break
+# --scan itera il cursor da solo e stampa una chiave per riga
+redis-cli --scan --pattern "sessione:*" | while read -r key; do
+  [ "$(redis-cli TTL "$key")" = "-1" ] && redis-cli EXPIRE "$key" 604800
 done
 ```
 
@@ -422,15 +440,16 @@ done
 
 **Causa:** Il client non è cluster-aware: invia il comando al nodo sbagliato invece di seguire il redirect verso il nodo che gestisce l'hash slot della chiave.
 
-**Soluzione:** Usare un client con supporto cluster nativo; per operazioni multi-key usare hash tag per forare le chiavi sullo stesso slot.
+**Soluzione:** Usare un client con supporto cluster nativo; per operazioni multi-key usare hash tag per forzare le chiavi sullo stesso slot.
 
 ```bash
 # Verifica quale slot appartiene a una chiave
 redis-cli CLUSTER KEYSLOT "utente:1001"
 # → 13645
 
-# Verifica quale nodo gestisce quel slot
-redis-cli -c CLUSTER NODES | grep "13645"
+# Verifica quale nodo gestisce quello slot (CLUSTER NODES elenca range, non slot singoli:
+# cercare il range che contiene 13645, es. 10923-16383)
+redis-cli -c CLUSTER NODES | grep master
 
 # Con redis-cli -c il redirect è automatico
 redis-cli -c -h node1 -p 6379 GET "utente:1001"
