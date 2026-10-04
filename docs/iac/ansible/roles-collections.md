@@ -7,9 +7,10 @@ search_keywords: [ansible roles, ansible collections, ansible galaxy, ansible va
 parent: iac/ansible/_index
 related: [iac/ansible/fondamentali, iac/terraform/fondamentali, ci-cd/github-actions/_index, security/secret-management/vault]
 official_docs: https://docs.ansible.com/ansible/latest/user_guide/playbooks_reuse_roles.html
-status: complete
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-04-03
+last_verified: 2026-10-04
 ---
 
 # Ansible — Roles, Collections e Pattern Enterprise
@@ -32,7 +33,7 @@ I **role** sono l'unità fondamentale di riuso in Ansible: incapsulano task, var
 | Import | `roles:` in playbook | `collections:` in playbook o `ansible.cfg` |
 
 !!! note "La Collection è il formato moderno"
-    Red Hat ha introdotto le collection con Ansible 2.9. Tutti i nuovi moduli sono distribuiti come collection, non come moduli built-in. `ansible.builtin.*` rimane stabile, ma tutto il resto (community.docker, kubernetes.core, amazon.aws) vive in collection separate. Per i role custom interni, il formato role rimane la scelta corretta.
+    Le collection sono apparse come tech preview in Ansible 2.8/2.9 e sono diventate il formato standard con Ansible 2.10, quando il pacchetto è stato diviso in `ansible-core` (solo `ansible.builtin.*`) e pacchetto `ansible` (core + collection selezionate). I moduli non-builtin sono distribuiti come collection, non più dentro il core. `ansible.builtin.*` rimane stabile, ma tutto il resto (community.docker, kubernetes.core, amazon.aws) vive in collection separate. Per i role custom interni, il formato role rimane la scelta corretta.
 
 ### `defaults/` vs `vars/` — Differenza Critica
 
@@ -43,7 +44,7 @@ I **role** sono l'unità fondamentale di riuso in Ansible: incapsulano task, var
 # roles/nginx/defaults/main.yml
 # ✅ Override consentito — l'utente del role può cambiare questi valori
 ---
-nginx_version: "1.24.*"
+nginx_version: ""             # vuoto = ultima versione del repo; es. "1.24.*" per pin (apt)
 nginx_port: 80
 nginx_ssl_port: 443
 nginx_worker_processes: "auto"
@@ -73,7 +74,9 @@ nginx_pid_file: /var/run/nginx.pid
 # Genera la struttura con ansible-galaxy
 ansible-galaxy role init roles/nginx
 
-# Output — struttura creata automaticamente:
+# Struttura finale (init crea defaults, vars, tasks/main.yml, handlers, meta,
+# templates, files, tests, README; install.yml, configure.yml e debian.yml
+# sono file aggiunti a mano):
 roles/nginx/
 ├── defaults/
 │   └── main.yml          # Variabili con bassa priorità — override-friendly
@@ -104,7 +107,7 @@ roles/nginx/
 # roles/nginx/tasks/main.yml
 ---
 - name: Include task specifici per OS
-  ansible.builtin.include_tasks: "{{ ansible_os_family | lower }}.yml"
+  ansible.builtin.include_tasks: "{{ ansible_facts['os_family'] | lower }}.yml"
 
 - name: Include task di installazione
   ansible.builtin.import_tasks: install.yml
@@ -118,7 +121,7 @@ roles/nginx/
 ---
 - name: Assicura che Nginx sia installato
   ansible.builtin.package:
-    name: "nginx={{ nginx_version }}"
+    name: "nginx{{ ('=' ~ nginx_version) if nginx_version | length > 0 else '' }}"
     state: present
     update_cache: true
   notify: restart nginx
@@ -253,7 +256,7 @@ dependencies:
 # ── ROLE SINGOLO ──────────────────────────────────────────────────
 # Installa un singolo role da Galaxy
 ansible-galaxy role install geerlingguy.nginx
-ansible-galaxy role install geerlingguy.postgresql --version 3.5.0
+ansible-galaxy role install geerlingguy.postgresql,3.5.0   # sintassi nome,versione
 
 # I role vengono installati in roles/ (o in ~/.ansible/roles se globale)
 # Struttura: roles/geerlingguy.nginx/tasks/main.yml, ecc.
@@ -310,12 +313,15 @@ roles:
 ```
 
 ```bash
-# Installazione completa delle dipendenze
+# Installazione completa: dalla 2.10 un solo comando installa sia roles: che collections:
 ansible-galaxy install -r requirements.yml
-ansible-galaxy collection install -r requirements.yml
 
-# Oppure in un unico comando (Ansible >= 2.10)
-ansible-galaxy install -r requirements.yml --roles-path ./roles
+# Destinazioni esplicite (role e collection in path separati)
+ansible-galaxy install -r requirements.yml --roles-path ./roles -p ./collections
+
+# Solo uno dei due tipi
+ansible-galaxy role install -r requirements.yml
+ansible-galaxy collection install -r requirements.yml
 
 # Verifica cosa è installato
 ansible-galaxy collection list
@@ -451,8 +457,11 @@ jobs:
         run: ansible-galaxy install -r requirements.yml
 
       - name: Scrivi vault password da secret CI
-        run: echo "${{ secrets.ANSIBLE_VAULT_PASS }}" > /tmp/.vault-pass
-        # File temporaneo — non viene committato
+        env:
+          VAULT_PASS: ${{ secrets.ANSIBLE_VAULT_PASS }}
+        run: (umask 077; printf '%s' "$VAULT_PASS" > /tmp/.vault-pass)
+        # Il secret passa da env (non interpolato nello script shell: evita injection)
+        # e il file è 0600, temporaneo, non committato
 
       - name: Dry run (check + diff)
         env:
@@ -528,8 +537,8 @@ ansible-project/
   roles:
     - common
 
-- import_playbook: playbooks/webservers.yml
-- import_playbook: playbooks/databases.yml
+- ansible.builtin.import_playbook: playbooks/webservers.yml
+- ansible.builtin.import_playbook: playbooks/databases.yml
 ```
 
 ### Group Vars e Host Vars — Gerarchia Override
@@ -637,7 +646,9 @@ ansible-playbook -i inventories/production/ site.yml --list-tags
 
 ```bash
 # Installa Molecule con driver Docker
-pip install molecule molecule-docker ansible-lint
+# (dalla v6 i driver non sono più nel core: stanno in molecule-plugins;
+#  il vecchio pacchetto molecule-docker è deprecato)
+pip install molecule "molecule-plugins[docker]" ansible-lint
 
 # Crea scenario di test per un role esistente
 cd roles/nginx
@@ -678,6 +689,9 @@ platforms:
     pre_build_image: true
     command: /lib/systemd/systemd
     privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
 
 provisioner:
   name: ansible
@@ -721,9 +735,9 @@ verifier:
     - name: Assert che nginx.service sia active
       ansible.builtin.assert:
         that:
-          - "'nginx' in services"
-          - "services['nginx'].state == 'running'"
-          - "services['nginx'].status == 'enabled'"
+          - "'nginx.service' in services"   # con systemd le chiavi hanno suffisso .service
+          - "services['nginx.service'].state == 'running'"
+          - "services['nginx.service'].status == 'enabled'"
         fail_msg: "Nginx non è in esecuzione o non è abilitato"
 
     - name: Verifica che la porta 80 risponda
@@ -747,7 +761,7 @@ molecule test
 # molecule create       → Crea i container
 # molecule prepare      → Esegue prepare.yml (opzionale)
 # molecule converge     → Esegue converge.yml (applica il role)
-# molecule idempotency  → Esegue converge.yml una seconda volta (0 changed?)
+# molecule idempotence  → Esegue converge.yml una seconda volta (0 changed?)
 # molecule verify       → Esegue verify.yml (asserzioni)
 # molecule destroy      → Distrugge i container
 
@@ -802,7 +816,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Installa dipendenze
-        run: pip install ansible molecule molecule-docker
+        run: pip install ansible molecule "molecule-plugins[docker]"
       - name: Esegui Molecule
         working-directory: roles/${{ matrix.role }}
         run: molecule test
@@ -828,8 +842,8 @@ tasks:
     tags: install
 
   # Include — risolto a runtime, per OS-specific o condizionali
-  - ansible.builtin.include_tasks: "{{ ansible_os_family | lower }}.yml"
-    when: ansible_os_family in ['Debian', 'RedHat']
+  - ansible.builtin.include_tasks: "{{ ansible_facts['os_family'] | lower }}.yml"
+    when: ansible_facts['os_family'] in ['Debian', 'RedHat']
 ```
 
 ### Idempotency Check in CI
@@ -882,8 +896,7 @@ ansible-galaxy role install geerlingguy.nginx -p ./roles/
 # ERROR! Decryption failed (no vault secrets would decrypt)
 
 # Causa 1: password errata o file password vuoto
-cat ~/.vault-pass      # Verifica che non sia vuoto
-echo -n "" | wc -c    # 0 = file vuoto — problema!
+wc -c ~/.vault-pass    # 0 byte = file vuoto — problema!
 
 # Causa 2: vault-id label non corrisponde
 # Il ciphertext ha label "prod" ma stai usando vault-id "staging"
@@ -923,7 +936,7 @@ molecule converge 2>&1 | grep -E "changed|TASK"
 
 # 2. Template che aggiunge timestamp nell'output
 {# Evita: #}
-# Generated at {{ ansible_date_time.iso8601 }}
+# Generated at {{ ansible_facts['date_time']['iso8601'] }}
 {# Il timestamp cambia ad ogni esecuzione → sempre "changed" #}
 
 # 3. File copiati con permessi che cambiano
