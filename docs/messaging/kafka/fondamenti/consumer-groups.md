@@ -7,9 +7,10 @@ search_keywords: [kafka consumer group, consumer group kafka, rebalancing, rebal
 parent: messaging/kafka/fondamenti
 related: [messaging/kafka/fondamenti/consumatori, messaging/kafka/fondamenti/topics-partizioni, messaging/kafka/fondamenti/architettura, messaging/kafka/fondamenti/broker-cluster]
 official_docs: https://kafka.apache.org/documentation/#intro_consumers
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Consumer Groups
@@ -22,7 +23,7 @@ Il **consumer group** è il meccanismo fondamentale di Kafka per il consumo para
 
 ### Assegnazione delle Partizioni
 
-Ogni partizione viene assegnata a **esattamente uno** consumer nel gruppo. Se il gruppo ha più consumer dei topic, i consumer in eccesso non ricevono partizioni e restano idle. Se il gruppo ha meno consumer delle partizioni, alcuni consumer leggono da più partizioni.
+Ogni partizione viene assegnata a **esattamente uno** consumer nel gruppo. Se il gruppo ha più consumer delle partizioni, i consumer in eccesso non ricevono partizioni e restano idle. Se il gruppo ha meno consumer delle partizioni, alcuni consumer leggono da più partizioni.
 
 ```
 Topic "orders" con 6 partizioni:
@@ -75,7 +76,7 @@ Il **partition assignor** è il componente che calcola come distribuire le parti
 
 | Assignor | Comportamento | Quando usarlo |
 |---|---|---|
-| `RangeAssignor` | Assegna range contigui di partizioni per topic. Può causare distribuzione sbilanciata con più topic. | Default (legacy) |
+| `RangeAssignor` | Assegna range contigui di partizioni per topic. Può causare distribuzione sbilanciata con più topic. | Legacy; dal 3.0 il default è la lista `[RangeAssignor, CooperativeStickyAssignor]` (usa Range, ma permette la migrazione a cooperative senza downtime) |
 | `RoundRobinAssignor` | Distribuzione round-robin di tutte le partizioni tra tutti i consumer. | Distribuzione uniforme con topic multipli |
 | `StickyAssignor` | Tenta di mantenere le assegnazioni precedenti durante il rebalancing (riduce il movimento di partizioni). | Ridurre l'impatto del rebalancing |
 | `CooperativeStickyAssignor` | Come StickyAssignor ma con rebalancing cooperativo (no Stop The World). | **Raccomandato in produzione** |
@@ -97,6 +98,10 @@ Problema: anche le partizioni che non cambiano proprietario vengono temporaneame
 4. Le partizioni che non si muovono non vengono mai interrotte
 
 Vantaggio: i consumer che non cambiano assegnazione continuano a consumare durante il rebalancing.
+
+### Nuovo Protocollo Consumer (KIP-848)
+
+Da Kafka 4.0 il nuovo protocollo di rebalancing **KIP-848** è GA (`group.protocol=consumer` lato client). La logica passa dal client (group leader) al **Group Coordinator** sul broker: i rebalance sono incrementali per costruzione, senza barriera globale "stop the world", e gli assignor sono configurati lato broker (`group.consumer.assignors`, default `uniform` e `range`) invece di `partition.assignment.strategy`. Il default resta il protocollo `classic` (descritto in questa pagina) finché non si abilita esplicitamente il nuovo. <!-- REVIEW: verificare default group.protocol e proprietà (session.timeout.ms/heartbeat lato broker) nella versione Kafka corrente -->
 
 ## Architettura / Come Funziona
 
@@ -176,20 +181,22 @@ sequenceDiagram
     participant C2 as Consumer 2
     participant GC as Group Coordinator
 
+    participant C3 as Consumer 3 (nuovo)
+
     Note over C1,C2: Stato iniziale: C1 → P0,P1,P2 | C2 → P3,P4,P5
 
-    Note over C1: Nuovo Consumer 3 si unisce
-    C1->>GC: JoinGroup (con assegnazione corrente)
-    C2->>GC: JoinGroup (con assegnazione corrente)
-    GC-->>C1: SyncGroup → Revoca solo P2
-    GC-->>C2: SyncGroup → Nessuna revoca
+    Note over C3: Consumer 3 si unisce
+    C1->>GC: JoinGroup (con partizioni possedute)
+    C2->>GC: JoinGroup (con partizioni possedute)
+    C3->>GC: JoinGroup
+    GC-->>C1: SyncGroup → revocare P2
+    GC-->>C2: SyncGroup → revocare P5
+    Note over C1,C2: C1 continua su P0,P1 | C2 continua su P3,P4
 
-    C1->>GC: LeavePartition(P2) - revoca P2
-    Note over C1,C2: C1 continua su P0,P1 | C2 continua su P3,P4,P5
-
-    GC-->>C1: JoinGroup Round 2
-    GC-->>C2: JoinGroup Round 2
-    GC->>C3: SyncGroup → Assegna P2,P5
+    C1->>GC: JoinGroup Round 2 (P2 rilasciata)
+    C2->>GC: JoinGroup Round 2 (P5 rilasciata)
+    C3->>GC: JoinGroup Round 2
+    GC-->>C3: SyncGroup → Assegna P2,P5
 
     Note over C1,C2,C3: Finale: C1→P0,P1 | C2→P3,P4 | C3→P2,P5
 ```
@@ -241,9 +248,12 @@ Il broker aspetta `session.timeout.ms` prima di considerare un membro statico co
 ```java
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.common.TopicPartition;
+import java.time.Duration;
 import java.util.Collection;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 public class RebalanceAwareConsumer {
 
@@ -261,9 +271,14 @@ public class RebalanceAwareConsumer {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
                 System.out.println("Revoca partizioni: " + partitions);
-                // Commit degli offset prima della revoca per non perdere progresso
-                consumer.commitSync(currentOffsets);
-                currentOffsets.clear();
+                // Commit SOLO delle partizioni revocate: con il rebalancing cooperativo
+                // le altre restano assegnate e il loro tracking non va perso
+                Map<TopicPartition, OffsetAndMetadata> toCommit = new HashMap<>();
+                for (TopicPartition tp : partitions) {
+                    OffsetAndMetadata om = currentOffsets.remove(tp);
+                    if (om != null) toCommit.put(tp, om);
+                }
+                if (!toCommit.isEmpty()) consumer.commitSync(toCommit);
             }
 
             // Chiamato DOPO che le nuove partizioni sono state assegnate
@@ -273,7 +288,8 @@ public class RebalanceAwareConsumer {
                 // Eventuale seek a posizione desiderata
             }
 
-            // Solo con CooperativeStickyAssignor: partizioni perse durante rebalancing incrementale
+            // Partizioni perse senza revoca ordinata (es. session timeout, fencing):
+            // il default delegherebbe a onPartitionsRevoked, qui lo evitiamo di proposito
             @Override
             public void onPartitionsLost(Collection<TopicPartition> partitions) {
                 System.out.println("Partizioni perse (rebalancing anomalo): " + partitions);
@@ -334,7 +350,8 @@ kafka-consumer-groups.sh \
   --all-groups
 
 # Resettare gli offset di un gruppo (diversi modi)
-# IMPORTANTE: il consumer deve essere fermo
+# IMPORTANTE: il gruppo deve essere Empty (consumer fermi).
+# Senza --execute il comando è un dry-run (--dry-run è il default): mostra i nuovi offset senza applicarli.
 
 # Reset all'inizio
 kafka-consumer-groups.sh \
@@ -461,7 +478,7 @@ Se il CURRENT-OFFSET non avanza ma il consumer è attivo:
 
 ### Consumer Group in Stato "Dead"
 
-Un gruppo senza consumer attivi è in stato `Empty` o `Dead`. In stato `Dead`, gli offset possono essere eliminati dopo `offsets.retention.minutes` (default: 7 giorni). Se il gruppo viene riavviato dopo questa finestra, `auto.offset.reset` determina il comportamento.
+Un gruppo senza consumer attivi è in stato `Empty` (ha ancora offset committati) e poi `Dead` (metadata rimossi dal coordinator). Gli offset di un gruppo `Empty` vengono eliminati dopo `offsets.retention.minutes` (default: 7 giorni). Se il gruppo viene riavviato dopo questa finestra, `auto.offset.reset` determina il comportamento.
 
 ```bash
 # Verificare lo stato del gruppo
