@@ -7,9 +7,10 @@ search_keywords: [ingress controller kubernetes, nginx ingress, traefik kubernet
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/networking, containers/kubernetes/sicurezza, containers/kubernetes/workloads]
 official_docs: https://kubernetes.io/docs/concepts/services-networking/ingress/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-25
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Kubernetes Ingress
@@ -23,6 +24,12 @@ La risorsa Ingress da sola **non fa nulla**: richiede un **Ingress Controller** 
 **Quando usare Ingress:** applicazioni HTTP/HTTPS che necessitano di routing per host o path, TLS termination centralizzata, rate limiting, autenticazione.
 
 **Quando NON usare Ingress:** protocolli non-HTTP (TCP/UDP raw → usare Service `LoadBalancer` o `NodePort`), service mesh avanzato con mTLS bidirezionale (→ Istio/Linkerd), ambienti on-premise senza accesso a cloud LB (valutare MetalLB + Ingress).
+
+!!! danger "ingress-nginx è stato ritirato (marzo 2026)"
+    Il progetto **ingress-nginx** (`kubernetes/ingress-nginx`) è stato dichiarato in pensione da Kubernetes SIG Network e Security Response Committee: dopo marzo 2026 niente più release, bugfix né patch di sicurezza. Le installazioni esistenti continuano a funzionare, ma non ricevono più fix per nuove CVE. Per nuovi cluster scegliere un controller mantenuto (Traefik, HAProxy, Envoy-based, controller del cloud provider) oppure la **Gateway API**; per i cluster esistenti pianificare la migrazione (strumento di supporto: `ingress2gateway`). Gli esempi NGINX sotto restano utili come riferimento per l'installato, ma non vanno adottati per nuovi progetti. <!-- REVIEW: verificare stato attuale del repo ingress-nginx e di eventuali fork/successori -->
+
+!!! note "Ingress API congelata"
+    La risorsa Ingress (`networking.k8s.io/v1`) è stabile ma **feature-frozen**: nuove funzionalità (traffic splitting, header manipulation, TCP/gRPC route) vivono nella [Gateway API](https://gateway-api.sigs.k8s.io/), che separa i ruoli (infra: `GatewayClass`/`Gateway`; sviluppatori: `HTTPRoute`) ed evita la dipendenza da annotations proprietarie.
 
 ---
 
@@ -161,6 +168,10 @@ metadata:
     # Redirect automatico HTTP → HTTPS
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # I path con regex richiedono use-regex; rewrite-target usa i capture group
+    # (/v1/users → /users sul backend)
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
   ingressClassName: nginx
 
@@ -213,9 +224,9 @@ metadata:
   name: api-ingress-ratelimited
   namespace: production
   annotations:
-    # Limite per connessioni al secondo per IP
+    # Limite di richieste al secondo per IP
     nginx.ingress.kubernetes.io/limit-rps: "20"
-    # Limite per connessioni al minuto per IP
+    # Limite di richieste al minuto per IP
     nginx.ingress.kubernetes.io/limit-rpm: "300"
     # Numero massimo di connessioni simultanee per IP
     nginx.ingress.kubernetes.io/limit-connections: "10"
@@ -239,7 +250,7 @@ spec:
 ```
 
 !!! tip "Rate limit per URL specifica"
-    Per applicare rate limit solo a endpoint sensibili (es. `/auth/login`) creare Ingress separati con lo stesso host: uno per `/auth/login` con rate limit, uno per il resto senza. I controller elaborano le regole in ordine di specificità.
+    Per applicare rate limit solo a endpoint sensibili (es. `/auth/login`) creare Ingress separati con lo stesso host: uno per `/auth/login` con rate limit, uno per il resto senza. Il match vince sul path più lungo/specifico, quindi `/auth/login` prevale su `/`. Nota: le annotation valgono per l'intero Ingress, per questo servono due oggetti distinti.
 
 ### Autenticazione — Basic Auth e OAuth2
 
@@ -382,7 +393,8 @@ helm install traefik traefik/traefik \
 
 ```yaml
 # IngressRoute (CRD Traefik) — più espressivo del Ingress standard
-apiVersion: traefik.containo.us/v1alpha1
+# Traefik v3: group traefik.io/v1alpha1 (traefik.containo.us è rimosso in v3)
+apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
   name: app-route
@@ -408,7 +420,7 @@ spec:
     certResolver: letsencrypt
 ---
 # Middleware Traefik — rate limiting
-apiVersion: traefik.containo.us/v1alpha1
+apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: rate-limit
@@ -548,9 +560,8 @@ kubectl describe certificate company-tls-wildcard -n production
 kubectl get certificaterequest -n production
 kubectl get order -n production
 
-# Forzare il rinnovo manuale (cert-manager)
-kubectl annotate certificate company-tls-wildcard -n production \
-  cert-manager.io/issuer-kind=ClusterIssuer  # no-op, forza riconciliazione
+# Forzare il rinnovo manuale (cert-manager) con cmctl
+cmctl renew company-tls-wildcard -n production
 # oppure: eliminare il Secret (cert-manager lo ricrea)
 kubectl delete secret company-tls-wildcard -n production
 ```
