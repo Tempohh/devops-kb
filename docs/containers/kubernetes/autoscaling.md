@@ -7,9 +7,10 @@ search_keywords: [horizontal pod autoscaler, vertical pod autoscaler, KEDA, clus
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/workloads, containers/kubernetes/scheduling-avanzato, containers/kubernetes/resource-management, monitoring/tools/prometheus]
 official_docs: https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Kubernetes Autoscaling
@@ -178,6 +179,8 @@ spec:
 
 ### VPA — Vertical Pod Autoscaler
 
+Il VPA **non è incluso** in Kubernetes: si installa a parte (CRD + tre componenti: `recommender`, `updater`, `admission-controller`) dal repo `kubernetes/autoscaler` o tramite chart della community. Il recommender calcola i valori dallo storico d'uso; l'updater evict i pod fuori range; l'admission controller riscrive i `requests` dei pod alla creazione.
+
 ```yaml
 apiVersion: autoscaling.k8s.io/v1
 kind: VerticalPodAutoscaler
@@ -189,8 +192,10 @@ spec:
     kind: Deployment
     name: web-app
   updatePolicy:
-    updateMode: "Auto"    # Auto | Initial | Recreate | Off
-    # Auto: evict e ricrea pod con nuove risorse
+    updateMode: "Auto"    # Auto | Initial | Recreate | Off (+ InPlaceOrRecreate nelle release recenti)
+    # Auto: evict e ricrea pod con nuove risorse (oggi equivale a Recreate)
+    # InPlaceOrRecreate: prova il resize in-place del pod, altrimenti evict (richiede
+    #   supporto in-place resize nel cluster: verificare la matrice versioni VPA/Kubernetes)
     # Initial: applica solo ai nuovi pod
     # Off: solo raccomandazioni, nessuna modifica automatica
   resourcePolicy:
@@ -224,7 +229,7 @@ kubectl describe vpa web-app-vpa
 
 ### KEDA — Event-Driven Autoscaling
 
-KEDA estende l'HPA con 50+ scalers (Kafka, RabbitMQ, Redis, AWS SQS, Cron, HTTP, Prometheus, ecc.) e supporta lo **scale-to-zero** (minReplicas: 0).
+KEDA estende l'HPA con decine di scalers (Kafka, RabbitMQ, Redis, AWS SQS, Cron, Prometheus, ecc.; catalogo nei Riferimenti) e supporta lo **scale-to-zero** (`minReplicaCount: 0`). Meccanismo: per ogni `ScaledObject` KEDA crea e gestisce un HPA e gli espone le metriche via `external.metrics.k8s.io`; la transizione 0↔1 è gestita da KEDA stesso (l'HPA non sa scalare a zero), quella 1↔N dall'HPA. Non creare un HPA manuale sullo stesso Deployment.
 
 ```bash
 # Installazione
@@ -273,7 +278,6 @@ spec:
   - type: prometheus
     metadata:
       serverAddress: http://prometheus-operated.monitoring:9090
-      metricName: active_jobs
       threshold: "10"
       query: sum(active_jobs{namespace="production"})
 ```
@@ -288,9 +292,10 @@ spec:
   jobTargetRef:
     template:
       spec:
+        restartPolicy: Never   # obbligatorio per i Job (Never | OnFailure)
         containers:
         - name: report
-          image: report-generator:latest
+          image: report-generator:1.0.0   # tag immutabile, evitare :latest
   minReplicaCount: 0
   maxReplicaCount: 10
   triggers:
@@ -298,7 +303,8 @@ spec:
     metadata:
       host: amqp://rabbitmq.production:5672
       queueName: reports
-      queueLength: "1"    # 1 job per messaggio in coda
+      mode: QueueLength
+      value: "1"          # 1 job per messaggio in coda
 ```
 
 ### Cluster Autoscaler — AWS EKS
@@ -324,6 +330,9 @@ rbac:
     annotations:
       eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/ClusterAutoscalerRole
 ```
+
+!!! tip "Alternativa: Karpenter"
+    Su AWS (EKS) e altri provider, **Karpenter** (progetto SIG Autoscaling, API `v1` GA) sostituisce spesso il Cluster Autoscaler. Differenza di meccanismo: il CA ragiona su node group predefiniti (ASG), Karpenter osserva i pod `Pending` e crea direttamente istanze dimensionate sul loro fabbisogno (`NodePool` + `EC2NodeClass`), con consolidamento attivo dei nodi sottoutilizzati. Risultato: provisioning più rapido e meno node group da gestire, ma i due non vanno attivi sugli stessi nodi.
 
 ```yaml
 # Annotazione sui POD (non sui nodi): permette al CA di evictarli
@@ -363,7 +372,7 @@ cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
 
 **KEDA per workload event-driven**
 - Preferire KEDA a HPA custom quando il driver dello scaling è una coda, un topic, o un evento esterno.
-- KEDA gestisce automaticamente il fallback a HPA nativo e supporta scale-to-zero nativamente.
+- KEDA supporta scale-to-zero nativamente (l'HPA puro no) e offre una sezione `fallback` per fissare un numero di repliche se lo scaler fallisce ripetutamente.
 
 **Cluster Autoscaler + node groups specializzati**
 - Configurare node groups separati per workload diversi (general-purpose, GPU, memory-optimized).
