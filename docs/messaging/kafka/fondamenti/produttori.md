@@ -7,9 +7,10 @@ search_keywords: [kafka producer, produttore kafka, acks, acknowledgment, idempo
 parent: messaging/kafka/fondamenti
 related: [messaging/kafka/fondamenti/architettura, messaging/kafka/fondamenti/topics-partizioni, messaging/kafka/fondamenti/consumatori, messaging/kafka/fondamenti/broker-cluster]
 official_docs: https://kafka.apache.org/documentation/#producerconfigs
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-02-23
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Produttori (Producer)
@@ -39,14 +40,17 @@ Il **partitioner** decide in quale partizione del topic viene scritto il record:
 
 1. **Partizione esplicita:** se il `ProducerRecord` specifica la partizione, viene usata quella.
 2. **Key-based (hash):** se la key non è null, la partizione è `murmur2(key) % numPartitions`. Stesso key → stessa partizione (ordinamento garantito per quella key).
-3. **Round-robin (sticky):** se la key è null, Kafka usa lo **Sticky Partitioner** (default da Kafka 2.4): riempie un batch su una partizione prima di passare alla successiva, migliorando l'efficienza del batching.
+3. **Sticky (key null):** se la key è null, il partitioner built-in (sticky, introdotto in Kafka 2.4) riempie un batch su una partizione prima di passare alla successiva: batch più grandi, meno richieste. Da Kafka 3.3 (KIP-794) la scelta è *adattiva*: le partizioni più lente ricevono meno record (`partitioner.adaptive.partitioning.enable=true` di default), evitando che un broker lento accumuli backlog.
+
+!!! note "Partitioner custom"
+    Da Kafka 4.0 le classi `DefaultPartitioner` e `UniformStickyPartitioner` sono rimosse: la logica sopra è built-in nel producer. `partitioner.class` serve solo per logiche custom.
 
 ### Batching
 
 Il producer non invia ogni record singolarmente: li accumula in un **batch** per partizione prima di spedirli al broker. I parametri chiave:
 
 - `batch.size` (default: 16384 byte / 16 KB): dimensione massima del batch per partizione. Batch inviato quando è pieno.
-- `linger.ms` (default: 0): attesa aggiuntiva prima di inviare un batch non pieno. Aumentare per migliorare il throughput a scapito della latenza.
+- `linger.ms` (default: 0 fino a Kafka 3.x, **5 ms da Kafka 4.0** — KIP-1030): attesa aggiuntiva prima di inviare un batch non pieno. Aumentare per migliorare il throughput a scapito della latenza: batch più grandi = meno richieste e migliore compressione. Con 0, i record si accumulano comunque se il sender è occupato.
 - `buffer.memory` (default: 33554432 / 32 MB): memoria totale del buffer del producer. Se pieno, il producer si blocca per `max.block.ms`.
 
 ### Garanzie acks
@@ -55,7 +59,7 @@ Il parametro `acks` controlla quante repliche devono confermare la scrittura:
 
 | acks | Garanzia | Rischio | Throughput |
 |---|---|---|---|
-| `0` | Nessuna (fire & forget) | Perdita dati garantita se broker cade | Massimo |
+| `0` | Nessuna (fire & forget) | Perdita silenziosa se broker cade o cambia leader; nessun offset restituito | Massimo |
 | `1` | Leader ha scritto sul log locale | Perdita dati se leader cade prima della replica | Alto |
 | `all` (o `-1`) | Tutte le ISR hanno scritto | Nessuna perdita dati (con min.insync.replicas >= 2) | Moderato |
 
@@ -66,7 +70,10 @@ Il parametro `acks` controlla quante repliche devono confermare la scrittura:
 
 Con `enable.idempotence=true`, il producer assegna a ogni record un **Producer ID (PID)** e un **sequence number**. Il broker verifica che ogni sequence number sia esattamente uno in più rispetto all'ultimo ricevuto. Se un retry invia lo stesso record due volte (stesso PID + sequence), il broker deduplica e l'effetto è **exactly-once** per singola sessione del producer.
 
-L'idempotenza implica automaticamente: `acks=all`, `retries=Integer.MAX_VALUE`, `max.in.flight.requests.per.connection <= 5`.
+L'idempotenza richiede/implica: `acks=all`, `retries=Integer.MAX_VALUE`, `max.in.flight.requests.per.connection <= 5` (con ≤5 richieste in volo il broker riesce a verificare l'ordine delle sequence e i retry non riordinano i record).
+
+!!! note "Default dal Kafka 3.0"
+    Dal client 3.0 `enable.idempotence=true` e `acks=all` sono già il default. Se si imposta esplicitamente un valore incompatibile (es. `acks=1`) senza toccare `enable.idempotence`, l'idempotenza viene disabilitata silenziosamente; se si impostano esplicitamente entrambi in conflitto, il client lancia `ConfigException`.
 
 ### Retry e Backoff
 
@@ -76,7 +83,7 @@ In caso di errore temporaneo (leader non disponibile, errore di rete), il produc
 - `delivery.timeout.ms` (default: 120000 ms / 2 min): timeout complessivo per un record (inclusi retry)
 
 Errori **retriable**: `LEADER_NOT_AVAILABLE`, `NOT_LEADER_OR_FOLLOWER`, `NETWORK_EXCEPTION`
-Errori **non-retriable**: `MESSAGE_TOO_LARGE`, `INVALID_TOPIC_EXCEPTION`, `OFFSET_OUT_OF_RANGE`
+Errori **non-retriable**: `RecordTooLargeException` (`MESSAGE_TOO_LARGE`), `INVALID_TOPIC_EXCEPTION`, `TOPIC_AUTHORIZATION_FAILED`, errori di serializzazione
 
 ## Architettura / Come Funziona
 
@@ -289,9 +296,10 @@ acks=1                  # accettabile se i dati sono ricostruibili
 ```properties
 # Ottimizzato per minimizzare la latenza
 linger.ms=0
-batch.size=1
+# batch.size lasciato al default: batch.size=0/1 disabilita di fatto il batching
+# e peggiora latenza e throughput (ogni record fuori dal pool di buffer)
 compression.type=none
-acks=1
+acks=1                  # accettabile solo se la perdita è tollerabile; disabilita l'idempotenza se non esplicitata
 ```
 
 ### Configurazione per Zero Data Loss
@@ -314,7 +322,7 @@ delivery.timeout.ms=300000  # 5 minuti
 - **Creare un producer per ogni messaggio:** il `KafkaProducer` è thread-safe e costoso da inizializzare. Creare un'istanza singleton e condividerla.
 - **Ignorare il callback:** senza un callback o senza chiamare `.get()` sul future, gli errori di produzione passano silenti.
 - **Non chiamare `close()` al termine:** il producer non effettua il flush del buffer automaticamente alla chiusura JVM. Usare uno shutdown hook o try-with-resources.
-- **Usare `linger.ms=0` con `batch.size` grande:** non ha senso. Se si vuole bassa latenza, usare batch.size piccolo.
+- **Ridurre `batch.size` per ottenere bassa latenza:** la latenza dipende da `linger.ms`, non dalla dimensione massima del batch. Un `batch.size` troppo piccolo frammenta le richieste e danneggia il throughput; per bassa latenza basta `linger.ms=0`.
 
 ## Troubleshooting
 
@@ -349,8 +357,10 @@ kafka-topics.sh --bootstrap-server localhost:9092 --list
 
 L'idempotenza del producer protegge solo durante la sessione di vita del producer. Se il producer viene riavviato, riceve un nuovo PID e un retry di un record precedente può creare un duplicato. Per exactly-once end-to-end (producer + consumer) usare le **Kafka Transactions**.
 
+Le transazioni richiedono un `transactional.id` stabile e univoco per istanza logica (implica idempotenza): al riavvio, lo stesso id permette al broker di fare *fencing* delle istanze zombie e completare/abortire transazioni pendenti. I consumer devono usare `isolation.level=read_committed` per non leggere record abortiti.
+
 ```java
-// Exactly-once con transazioni
+// Exactly-once con transazioni (props: transactional.id=orders-producer-1)
 producer.initTransactions();
 try {
     producer.beginTransaction();
