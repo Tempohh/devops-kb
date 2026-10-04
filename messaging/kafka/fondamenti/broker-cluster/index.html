@@ -15753,7 +15753,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16966,7 +16966,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -16991,7 +16991,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24782,25 +24782,25 @@
 <p><strong>Quando aggiungere broker:</strong> quando il cluster raggiunge i limiti di throughput I/O, storage o quando il replication lag è sistematicamente alto.</p>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <p><strong>Broker ID</strong> — Ogni broker ha un identificativo numerico univoco nel cluster (<code>broker.id</code> in <code>server.properties</code>). In KRaft mode, è chiamato <code>node.id</code>.</p>
-<p><strong>Controller</strong> — Un broker speciale che gestisce lo stato del cluster: elezioni del leader, registrazione dei broker, aggiornamenti dei metadati. In KRaft ci sono più controller in un quorum.</p>
+<p><strong>Controller</strong> — Il nodo che gestisce lo stato del cluster: elezioni del leader, registrazione dei broker, aggiornamenti dei metadati. In KRaft (unica modalità da Kafka 4.0, che ha rimosso ZooKeeper) i controller formano un quorum Raft (tipicamente 3 o 5 nodi): uno è il leader attivo, gli altri sono hot standby. Possono essere dedicati (<code>process.roles=controller</code>) o combinati con il broker (<code>broker,controller</code>, solo per cluster piccoli/dev).</p>
 <p><strong>Leader</strong> — Per ogni partizione, un broker è designato <strong>leader</strong>: gestisce tutte le letture e le scritture per quella partizione.</p>
 <p><strong>Follower</strong> — Gli altri broker che replicano la partizione dal leader. Non servono richieste client direttamente.</p>
 <p><strong>ISR (In-Sync Replicas)</strong> — L'insieme dei follower che sono allineati con il leader entro una certa soglia (<code>replica.lag.time.max.ms</code>). Solo le repliche ISR possono diventare leader.</p>
 <p><strong>Preferred Leader</strong> — La replica originalmente designata come leader per una partizione. Kafka tenta di ribilanciare la leadership verso il preferred leader.</p>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart TB
-    subgraph Cluster["Cluster Kafka (3 broker)"]
+    subgraph Cluster["Cluster Kafka (3 broker + quorum KRaft)"]
         direction LR
-        B1["Broker 1\n(Controller)"]
+        B1["Broker 1"]
         B2["Broker 2"]
         B3["Broker 3"]
     end
 
     subgraph TopicA["Topic 'orders' — RF=3"]
         direction LR
-        P0["Partition 0\nLeader: B1\nFollower: B2, B3"]
-        P1["Partition 1\nLeader: B2\nFollower: B1, B3"]
-        P2["Partition 2\nLeader: B3\nFollower: B1, B2"]
+        P0["Partition 0&lt;br/&gt;Leader: B1&lt;br/&gt;Follower: B2, B3"]
+        P1["Partition 1&lt;br/&gt;Leader: B2&lt;br/&gt;Follower: B1, B3"]
+        P2["Partition 2&lt;br/&gt;Leader: B3&lt;br/&gt;Follower: B1, B2"]
     end
 
     B1 --- P0
@@ -24810,60 +24810,67 @@
 1. Il producer invia un record al broker <strong>leader</strong> della partizione target
 2. Il leader scrive il record nel proprio log e incrementa l'offset
 3. I broker follower eseguono il <strong>fetch</strong> dal leader (replicazione pull-based)
-4. Quando tutte le ISR hanno replicato, il broker conferma al producer (se <code>acks=all</code>)</p>
+4. Quando tutte le repliche ISR hanno replicato (il record supera l'<em>high watermark</em>), il leader conferma al producer (se <code>acks=all</code>)</p>
 <p><strong>Flusso di lettura:</strong>
 - I consumer leggono sempre dal <strong>leader</strong> (default)
 - Con <code>client.rack</code> configurato, i consumer possono leggere dai follower nella stessa AZ (Availability Zone), riducendo il traffico e i costi cross-zona (rack-aware fetching)</p>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="serverproperties-configurazioni-critiche">server.properties — Configurazioni critiche<a class="headerlink" href="#serverproperties-configurazioni-critiche" title="Permanent link">&para;</a></h3>
-<div class="language-properties highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Identificativo del broker nel cluster</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="na">broker.id</span><span class="o">=</span><span class="s">1</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Directory dati (usare dischi separati per performance)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="na">log.dirs</span><span class="o">=</span><span class="s">/data/kafka-logs,/data2/kafka-logs</span>
+<div class="language-properties highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># KRaft: ruolo e identità del nodo (node.id sostituisce broker.id)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="na">process.roles</span><span class="o">=</span><span class="s">broker</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="na">node.id</span><span class="o">=</span><span class="s">1</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="na">controller.quorum.bootstrap.servers</span><span class="o">=</span><span class="s">ctrl1:9093,ctrl2:9093,ctrl3:9093</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="na">controller.listener.names</span><span class="o">=</span><span class="s">CONTROLLER</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Rete</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="na">listeners</span><span class="o">=</span><span class="s">PLAINTEXT://:9092</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="na">advertised.listeners</span><span class="o">=</span><span class="s">PLAINTEXT://broker1.example.com:9092</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1"># Performance I/O</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="na">num.io.threads</span><span class="o">=</span><span class="s">8</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="na">num.network.threads</span><span class="o">=</span><span class="s">3</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Directory dati (usare dischi separati per performance)</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="na">log.dirs</span><span class="o">=</span><span class="s">/data/kafka-logs,/data2/kafka-logs</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># Rete</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="na">listeners</span><span class="o">=</span><span class="s">PLAINTEXT://:9092</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="na">inter.broker.listener.name</span><span class="o">=</span><span class="s">PLAINTEXT</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="na">advertised.listeners</span><span class="o">=</span><span class="s">PLAINTEXT://broker1.example.com:9092</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="c1"># Replica</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="na">default.replication.factor</span><span class="o">=</span><span class="s">3</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="na">min.insync.replicas</span><span class="o">=</span><span class="s">2</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="na">offsets.topic.replication.factor</span><span class="o">=</span><span class="s">3</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="na">transaction.state.log.replication.factor</span><span class="o">=</span><span class="s">3</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="na">transaction.state.log.min.isr</span><span class="o">=</span><span class="s">2</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="c1"># Retention</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="na">log.retention.hours</span><span class="o">=</span><span class="s">168</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="na">log.segment.bytes</span><span class="o">=</span><span class="s">1073741824</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="na">log.retention.check.interval.ms</span><span class="o">=</span><span class="s">300000</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="c1"># Replica lag</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="na">replica.lag.time.max.ms</span><span class="o">=</span><span class="s">30000</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="c1"># Performance I/O</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="na">num.io.threads</span><span class="o">=</span><span class="s">8</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="na">num.network.threads</span><span class="o">=</span><span class="s">3</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="c1"># Replica</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="na">default.replication.factor</span><span class="o">=</span><span class="s">3</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="na">min.insync.replicas</span><span class="o">=</span><span class="s">2</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="na">offsets.topic.replication.factor</span><span class="o">=</span><span class="s">3</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="na">transaction.state.log.replication.factor</span><span class="o">=</span><span class="s">3</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="na">transaction.state.log.min.isr</span><span class="o">=</span><span class="s">2</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="c1"># Retention</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="na">log.retention.hours</span><span class="o">=</span><span class="s">168</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="na">log.segment.bytes</span><span class="o">=</span><span class="s">1073741824</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="na">log.retention.check.interval.ms</span><span class="o">=</span><span class="s">300000</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="c1"># Replica lag</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="na">replica.lag.time.max.ms</span><span class="o">=</span><span class="s">30000</span>
 </span></code></pre></div>
 <h3 id="verifica-stato-del-cluster">Verifica stato del cluster<a class="headerlink" href="#verifica-stato-del-cluster" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Listare tutti i broker del cluster</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Stato del quorum KRaft (leader, epoch, voter, observer)</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>kafka-metadata-quorum.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>describe<span class="w"> </span>--status
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Verificare la distribuzione delle partizioni</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>kafka-topics.sh<span class="w"> </span>--describe<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span>--topic<span class="w"> </span>orders
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Output esempio:</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Topic: orders  Partition: 0  Leader: 1  Replicas: 1,2,3  Isr: 1,2,3</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1"># Topic: orders  Partition: 1  Leader: 2  Replicas: 2,3,1  Isr: 2,3,1</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Topic: orders  Partition: 2  Leader: 3  Replicas: 3,1,2  Isr: 3,1,2</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># Ribilanciare i preferred leader</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>kafka-leader-election.sh<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">  </span>--election-type<span class="w"> </span>preferred<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">  </span>--all-topic-partitions
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Listare i broker raggiungibili (una riga "(id: &lt;node.id&gt; ...)" per broker)</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>kafka-broker-api-versions.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"\(id: "</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Verificare la distribuzione delle partizioni</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>kafka-topics.sh<span class="w"> </span>--describe<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span>--topic<span class="w"> </span>orders
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Output esempio:</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># Topic: orders  Partition: 0  Leader: 1  Replicas: 1,2,3  Isr: 1,2,3</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># Topic: orders  Partition: 1  Leader: 2  Replicas: 2,3,1  Isr: 2,3,1</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1"># Topic: orders  Partition: 2  Leader: 3  Replicas: 3,1,2  Isr: 3,1,2</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="c1"># Ribilanciare i preferred leader</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>kafka-leader-election.sh<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">  </span>--election-type<span class="w"> </span>preferred<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">  </span>--all-topic-partitions
 </span></code></pre></div>
 <h3 id="partizioni-under-replicated">Partizioni under-replicated<a class="headerlink" href="#partizioni-under-replicated" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Trovare partizioni under-replicated (follower non allineati)</span>
@@ -24877,11 +24884,11 @@
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
 <p class="admonition-title">Distribuire le partizioni uniformemente</p>
-<p>Kafka bilancia automaticamente le partizioni, ma dopo aggiungere/rimuovere broker è necessario eseguire <code>kafka-reassign-partitions.sh</code> per ribilanciare il carico.</p>
+<p>Kafka distribuisce le repliche solo alla creazione del topic: le partizioni esistenti <strong>non</strong> migrano su broker nuovi. Dopo aver aggiunto/rimosso broker è necessario eseguire <code>kafka-reassign-partitions.sh</code> per ribilanciare il carico.</p>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Rack awareness</p>
-<p>Configurare <code>broker.rack</code> su ogni broker e <code>replica.assignment.strategy=org.apache.kafka.common.replica.RackAwareReplicaSelector</code> per distribuire le repliche tra availability zone diverse.</p>
+<p>Configurare <code>broker.rack</code> su ogni broker (es. l'AZ): alla creazione del topic Kafka distribuisce le repliche su rack diversi, così la perdita di una AZ non azzera l'ISR. Per il fetch dai follower vicini (KIP-392) aggiungere sul broker <code>replica.selector.class=org.apache.kafka.common.replica.RackAwareReplicaSelector</code> e <code>client.rack</code> sul consumer.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Non ridurre min.insync.replicas in produzione</p>
@@ -24941,8 +24948,8 @@
 <hr />
 <h3 id="scenario-2-broker-non-rientra-nel-cluster-dopo-restart">Scenario 2 — Broker non rientra nel cluster dopo restart<a class="headerlink" href="#scenario-2-broker-non-rientra-nel-cluster-dopo-restart" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il broker si avvia ma non appare nella lista dei broker attivi; i log mostrano errori di connessione al controller.</p>
-<p><strong>Causa:</strong> <code>broker.id</code> duplicato, indirizzo <code>advertised.listeners</code> non raggiungibile dagli altri broker, oppure ZooKeeper/KRaft quorum non disponibile.</p>
-<p><strong>Soluzione:</strong> Verificare unicità del <code>broker.id</code>, controllare la resoluzione DNS di <code>advertised.listeners</code>, confermare la raggiungibilità del quorum KRaft o di ZooKeeper.</p>
+<p><strong>Causa:</strong> <code>node.id</code> duplicato, <code>cluster.id</code> non corrispondente (storage non formattato con <code>kafka-storage.sh format</code>), indirizzo <code>advertised.listeners</code> non raggiungibile dagli altri broker, oppure quorum KRaft non disponibile.</p>
+<p><strong>Soluzione:</strong> Verificare unicità del <code>node.id</code>, controllare la risoluzione DNS di <code>advertised.listeners</code>, confermare la raggiungibilità del quorum KRaft.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Verificare log del broker</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>tail<span class="w"> </span>-100<span class="w"> </span>/var/log/kafka/server.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"ERROR|WARN|controller"</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
@@ -24950,13 +24957,13 @@
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>kafka-metadata-quorum.sh<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>describe<span class="w"> </span>--status
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Verificare broker registrati (ZooKeeper legacy)</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Cluster pre-4.0 ancora su ZooKeeper (legacy)</span>
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>zookeeper-shell.sh<span class="w"> </span>localhost:2181<span class="w"> </span>ls<span class="w"> </span>/brokers/ids
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-leader-non-bilanciati-tra-i-broker">Scenario 3 — Leader non bilanciati tra i broker<a class="headerlink" href="#scenario-3-leader-non-bilanciati-tra-i-broker" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Un broker gestisce una percentuale sproporzionata di partition leader; le metriche mostrano I/O asimmetrico.</p>
-<p><strong>Causa:</strong> Dopo un failover, Kafka può eleggere leader non-preferred. I preferred leader non vengono riassegnati automaticamente se <code>auto.leader.rebalance.enable=false</code>.</p>
+<p><strong>Causa:</strong> Dopo un failover, Kafka elegge leader non-preferred (un follower ISR). Il ritorno al preferred leader è automatico (<code>auto.leader.rebalance.enable=true</code>, default; controllo ogni <code>leader.imbalance.check.interval.seconds</code>=300 s, soglia <code>leader.imbalance.per.broker.percentage</code>=10) ma non avviene se disabilitato o se il preferred replica non è ancora in ISR.</p>
 <p><strong>Soluzione:</strong> Eseguire l'elezione manuale dei preferred leader. Se il bilanciamento non migliora, ribilanciare le partizioni con <code>kafka-reassign-partitions.sh</code>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Elezione preferred leader su tutti i topic</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kafka-leader-election.sh<span class="w"> </span><span class="se">\</span>
@@ -24971,13 +24978,13 @@
 <hr />
 <h3 id="scenario-4-partizioni-unavailable-nessun-leader">Scenario 4 — Partizioni unavailable (nessun leader)<a class="headerlink" href="#scenario-4-partizioni-unavailable-nessun-leader" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>kafka-topics.sh --describe --unavailable-partitions</code> restituisce risultati; i producer ricevono <code>NOT_LEADER_OR_FOLLOWER</code> o <code>LEADER_NOT_AVAILABLE</code>.</p>
-<p><strong>Causa:</strong> Tutti i broker con repliche ISR per quella partizione sono offline, oppure il numero di ISR è sceso sotto <code>min.insync.replicas</code> con <code>acks=all</code>.</p>
+<p><strong>Causa:</strong> Tutti i broker con repliche ISR per quella partizione sono offline, oppure le repliche rimaste sono tutte fuori ISR. Se invece l'ISR è sceso solo sotto <code>min.insync.replicas</code>, la partizione ha ancora un leader (le letture funzionano) ma le scritture con <code>acks=all</code> falliscono con <code>NOT_ENOUGH_REPLICAS</code>.</p>
 <p><strong>Soluzione:</strong> Riportare online almeno un broker dell'ISR. In scenari di emergenza (perdita accettabile) è possibile abilitare l'elezione di repliche non-ISR con <code>unclean.leader.election.enable=true</code> (solo temporaneamente).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Identificare partizioni senza leader</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--describe<span class="w"> </span>--unavailable-partitions
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Controllare quale broker aveva la replica (da ZooKeeper/KRaft metadata)</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Stato dei voter KRaft (log end offset e lag) per verificare la salute del quorum</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>kafka-metadata-quorum.sh<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>describe<span class="w"> </span>--replication
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>

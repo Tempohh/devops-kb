@@ -15768,7 +15768,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15793,7 +15793,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -17261,7 +17261,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24935,7 +24935,7 @@
 <p>Il modello mentale: ogni directory con un <code>terragrunt.hcl</code> è una <strong>unit</strong> (un root module + il suo state); una collezione di unit è uno <strong>stack</strong> (implicito = albero di directory, esplicito = file <code>terragrunt.stack.hcl</code>).</p>
 <div class="admonition note">
 <p class="admonition-title">Versioni di riferimento</p>
-<p>Documentazione allineata alla <strong>CLI redesign</strong> (comando <code>run</code>, flag senza prefisso <code>--terragrunt-</code>, default che non inoltra più comandi sconosciuti a OpenTofu dalla v0.88). Le feature <code>stack</code> e <code>--filter</code> evolvono rapidamente: verificare le release notes su <a href="https://docs.terragrunt.com/">https://docs.terragrunt.com/</a> prima di copiare i comandi in CI.</p>
+<p>Documentazione allineata alla <strong>CLI redesign</strong> (comando <code>run</code>, flag senza prefisso <code>--terragrunt-</code>, default che non inoltra più comandi sconosciuti a OpenTofu dalla v0.88). <strong>Terragrunt 1.0</strong> (30 marzo 2026) è la prima release con impegno di retrocompatibilità: flag CLI, output di <code>find</code>, configurazione HCL stabili per tutta la serie 1.x; ultima 1.0.5 al momento della verifica. <code>--filter</code> è GA. Verificare le release notes su <a href="https://docs.terragrunt.com/">https://docs.terragrunt.com/</a> prima di aggiornare il pin in CI.</p>
 </div>
 <h3 id="quando-non-serve">Quando NON serve<a class="headerlink" href="#quando-non-serve" title="Permanent link">&para;</a></h3>
 <table>
@@ -25055,7 +25055,7 @@
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">}</span>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Versioni minime: evita il drift tra sviluppatori e CI</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="na">terragrunt_version_constraint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"&gt;= 0.88, &lt; 1.0"</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="na">terragrunt_version_constraint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"&gt;= 1.0, &lt; 2.0"</span>
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="na">terraform_version_constraint</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">"&gt;= 1.10"</span><span class="c1">   # richiesto da use_lockfile</span>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="nb">remote_state</span><span class="w"> </span><span class="p">{</span>
@@ -25185,12 +25185,12 @@
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>terragrunt<span class="w"> </span>run<span class="w"> </span>--all<span class="w"> </span>plan
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>terragrunt<span class="w"> </span>run<span class="w"> </span>--all<span class="w"> </span>apply<span class="w"> </span>--non-interactive<span class="w"> </span>--parallelism<span class="w"> </span><span class="m">4</span>
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1"># Filtrare le unit (query sintassi --filter; verificare i dettagli nella versione in uso)</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># &lt;!-- REVIEW: verificare in quale versione di Terragrunt --filter è stabile (la CI sotto pinna 0.88.0) e la sintassi 'eks...' --&gt;</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># &lt;!-- REVIEW: verificare che 'dag graph', 'find --dag' e '--backend-bootstrap' esistano in 0.88 e che il no-forwarding parta da 0.88 --&gt;</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>terragrunt<span class="w"> </span>run<span class="w"> </span>--all<span class="w"> </span>--filter<span class="w"> </span><span class="s1">'./eu-west-1/**'</span><span class="w"> </span>plan
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>terragrunt<span class="w"> </span>run<span class="w"> </span>--all<span class="w"> </span>--filter<span class="w"> </span><span class="s1">'eks...'</span><span class="w"> </span>plan<span class="w">     </span><span class="c1"># eks + dipendenze (sintassi grafo)</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1"># Filtrare le unit con --filter (GA: l'esperimento filter-flag è completato; stabile in 1.x).</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># --filter implica --all. Non usarlo con pin &lt; 1.0 (in 0.88 era ancora sperimentale).</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>terragrunt<span class="w"> </span>run<span class="w"> </span>--all<span class="w"> </span>--filter<span class="w"> </span><span class="s1">'./eu-west-1/**'</span><span class="w"> </span>plan
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>terragrunt<span class="w"> </span>run<span class="w"> </span>--all<span class="w"> </span>--filter<span class="w"> </span><span class="s1">'eks...'</span><span class="w"> </span>plan<span class="w">     </span><span class="c1"># eks + sue dipendenze</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>terragrunt<span class="w"> </span>run<span class="w"> </span>--all<span class="w"> </span>--filter<span class="w"> </span><span class="s1">'...vpc'</span><span class="w"> </span>plan<span class="w">     </span><span class="c1"># vpc + chi dipende da vpc</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>terragrunt<span class="w"> </span>run<span class="w"> </span>--all<span class="w"> </span>--filter<span class="w"> </span><span class="s1">'./prod/** | name=eks'</span><span class="w"> </span>plan<span class="w">   </span><span class="c1"># intersezione con |</span>
 </span></code></pre></div>
 <p><strong>Migrazione dai flag legacy</strong> (i vecchi funzionano ancora con warning di deprecazione, ma verranno rimossi):</p>
 <table>
@@ -25321,7 +25321,7 @@
 </span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> tofu_version</span><span class="p">:</span><span class="w"> </span><span class="s">"1.10.x"</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gruntwork-io/terragrunt-action@v3</span>
 </span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
-</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="w">          </span><span class="nt">tg_version</span><span class="p">:</span><span class="w"> </span><span class="s">"0.88.0"</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="w">          </span><span class="nt">tg_version</span><span class="p">:</span><span class="w"> </span><span class="s">"1.0.5"</span>
 </span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="w">          </span><span class="nt">tofu_version</span><span class="p">:</span><span class="w"> </span><span class="s">"1.10.x"</span>
 </span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="w">          </span><span class="nt">tg_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">live/prod</span>
 </span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="w">          </span><span class="nt">tg_command</span><span class="p">:</span><span class="w"> </span><span class="s">"run</span><span class="nv"> </span><span class="s">--all</span><span class="nv"> </span><span class="s">plan"</span>
