@@ -7,9 +7,10 @@ search_keywords: [elasticsearch, elastic search, ES, ELK stack, elastic stack, o
 parent: databases/nosql/_index
 related: [databases/nosql/cassandra, databases/fondamentali/sharding, databases/fondamentali/modelli-dati, monitoring/tools/loki]
 official_docs: https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Elasticsearch
@@ -34,7 +35,7 @@ Il modello di dati è **document-oriented**: i dati vengono salvati come documen
 - Write ad alto throughput stabile (Cassandra o Kafka sono più adatti)
 
 !!! note "Elasticsearch vs OpenSearch"
-    Nel 2021 Amazon ha forkato Elasticsearch (v7.10) creando OpenSearch sotto licenza Apache 2.0. Le API sono quasi identiche, ma le versioni recenti di Elasticsearch (8.x+) hanno introdotto funzionalità non presenti in OpenSearch. In questo documento si fa riferimento a Elasticsearch OSS/SSPL.
+    Nel 2021 Elastic ha cambiato licenza (da Apache 2.0 a ELv2/SSPL) e Amazon ha forkato la 7.10 creando OpenSearch (Apache 2.0, oggi sotto la Linux Foundation). Da agosto 2024 Elastic ha aggiunto AGPLv3 come terza opzione di licenza (ELv2 / SSPL / AGPLv3), quindi il codice è di nuovo open source secondo OSI. Le API restano simili ma divergono sempre più (es. ES|QL, `semantic_text` esistono solo in Elasticsearch). Questo documento descrive Elasticsearch 8.x/9.x.
 
 ---
 
@@ -66,7 +67,7 @@ termine       → documenti
 "display"     → [doc1, doc8]
 ```
 
-Questo permette query full-text in O(1) invece di O(n) (no full scan).
+Il lookup di un termine nel dizionario (struttura FST in memoria, costo legato alla lunghezza del termine) restituisce subito la posting list: non serve scansionare tutti i documenti (O(n)). Il costo dipende dal numero di termini/documenti coinvolti, non dalla dimensione totale dell'indice.
 
 ### Sharding e Replica
 
@@ -81,7 +82,7 @@ Nodo 3: P2, R0, R1
 ```
 
 !!! warning "Il numero di primary shard è immutabile"
-    Una volta creato l'indice, il numero di primary shard non può essere modificato (solo con reindex). Pianifica la capacità prima della creazione. Per workload che crescono usa **index aliases** + **reindex** + **ILM**.
+    Una volta creato l'indice, il numero di primary shard non può essere modificato in place: si crea un nuovo indice con **reindex**, oppure si usano le API `_split` (moltiplica gli shard) e `_shrink` (li riduce, solo a divisori) che producono comunque un nuovo indice. Pianifica la capacità prima della creazione. Per workload che crescono usa **index aliases** + **reindex** + **ILM**.
 
 ### Mapping
 
@@ -138,8 +139,9 @@ Un cluster Elasticsearch è composto da uno o più nodi. Ogni nodo può avere un
 | `data_hot` | Nodi ad alte performance per dati recenti |
 | `data_warm` | Nodi a basso costo per dati meno recenti |
 | `data_cold` | Nodi economici per dati storici (searchable snapshots) |
+| `data_content` | Dati non time-series (es. catalogo prodotti), non migrano tra tier |
 | `ingest` | Pipeline di pre-processamento documenti |
-| `coordinating` | Solo routing query (no dati), bilancimento del carico |
+| `coordinating` | Solo routing query (no dati), bilanciamento del carico (ogni nodo lo fa comunque di default) |
 
 In produzione, separare sempre i ruoli master-eligible dai data nodes.
 
@@ -148,8 +150,10 @@ In produzione, separare sempre i ruoli master-eligible dai data nodes.
 Quando un documento viene indicizzato, Elasticsearch calcola su quale shard inviarlo:
 
 ```
-shard = hash(_id) % numero_primary_shards
+shard = hash(_routing) % numero_primary_shards    # _routing = _id di default
 ```
+
+Per questo il numero di primary shard è fisso: cambiarlo cambierebbe la destinazione di ogni documento già indicizzato. Con `?routing=<chiave>` si possono co-locare documenti correlati su uno shard e interrogare un solo shard.
 
 Per query, il nodo coordinatore fa **scatter-gather**: distribuisce la query su tutti i shard, raccoglie i risultati, merge e restituisce.
 
@@ -160,15 +164,17 @@ Client → REST API → Coordinating Node
                          ↓
                     Routing → Primary Shard
                          ↓
-                    Translog (durabilità)
-                    In-memory buffer (refresh)
+                    In-memory buffer + Translog (durabilità)
                          ↓
-                    Replica Shards (async)
+                    Replica Shards (in parallelo, in-sync copies)
                          ↓
-                    Segment merge (background)
+                    ACK al client
+                    (poi, in background: refresh → segmenti, merge)
 ```
 
-Il **refresh** (default ogni 1s) rende i documenti ricercabili scrivendo i buffer su segmenti Lucene. Il **flush** scrive i segmenti su disco e svuota il translog.
+La replica è **sincrona**: il primary inoltra l'operazione alle copie in-sync e risponde al client solo dopo la loro conferma (con `wait_for_active_shards` si controlla il minimo di copie attive). Il **translog** è un write-ahead log: permette di recuperare i documenti non ancora persistiti in segmenti dopo un crash.
+
+Il **refresh** (default ogni 1s, solo su indici interrogati di recente) rende i documenti ricercabili scrivendo il buffer in un nuovo segmento Lucene (near-real-time search). Il **flush** esegue un commit Lucene su disco e svuota il translog.
 
 ---
 
@@ -177,10 +183,9 @@ Il **refresh** (default ogni 1s) rende i documenti ricercabili scrivendo i buffe
 ### Deploy con Docker Compose (sviluppo)
 
 ```yaml
-version: '3.8'
 services:
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.0.0
     environment:
       - discovery.type=single-node
       - ELASTIC_PASSWORD=changeme
@@ -193,7 +198,7 @@ services:
       - esdata:/usr/share/elasticsearch/data
 
   kibana:
-    image: docker.elastic.co/kibana/kibana:8.12.0
+    image: docker.elastic.co/kibana/kibana:9.0.0
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - ELASTICSEARCH_USERNAME=kibana_system
@@ -206,6 +211,9 @@ services:
 volumes:
   esdata:
 ```
+
+!!! warning "Utente kibana_system"
+    `ELASTIC_PASSWORD` imposta solo la password dell'utente `elastic`. Prima di avviare Kibana con `kibana_system` va impostata la sua password (`POST /_security/user/kibana_system/_password`), altrimenti Kibana non si autentica. Usa tag di versione correnti e identici tra Elasticsearch e Kibana. Questa configurazione (HTTP senza TLS, password banale) è solo per sviluppo.
 
 ### Query DSL
 
@@ -295,11 +303,11 @@ GET /logs-2026-03/_search
 |------|--------|
 | **Bucket** | `terms`, `date_histogram`, `range`, `geohash_grid` |
 | **Metric** | `avg`, `sum`, `min`, `max`, `percentiles`, `cardinality` |
-| **Pipeline** | `moving_avg`, `derivative`, `bucket_sort` |
+| **Pipeline** | `moving_fn`, `derivative`, `bucket_sort` |
 
 ### Index Lifecycle Management (ILM)
 
-ILM automatizza la gestione del ciclo di vita degli indici (tipico per log):
+ILM automatizza la gestione del ciclo di vita degli indici (tipico per log). Il rollover evita shard giganti; shrink/forcemerge riducono overhead sui dati non più scritti; la fase cold con `searchable_snapshot` sposta i dati su object storage (richiede licenza Enterprise).
 
 ```json
 PUT _ilm/policy/logs-policy
@@ -419,7 +427,7 @@ POST logs-myapp/_doc?pipeline=logs-parse
 - Usa sempre **filter context** per filtri non-relevance (range, term, exists)
 - Evita `wildcard` e `regex` su campi ad alta cardinalità — sono O(n)
 - Usa `keyword` per aggregazioni, non `text`
-- Limita `from` + `size` per deep pagination — usa `search_after` per grandi dataset
+- Limita `from` + `size` (max 10.000, `index.max_result_window`) — per deep pagination usa `search_after` con un Point in Time (PIT)
 - Abilita `request_cache` per query aggregate ripetute
 
 ```json
@@ -438,7 +446,7 @@ GET /logs/_search?request_cache=true
 
 ### Alias per Zero-Downtime Reindex
 
-```bash
+```json
 # Crea indice v2 con nuovo mapping
 PUT /prodotti-v2
 { ... }
@@ -485,12 +493,12 @@ GET _cluster/allocation/explain
 
 ### Disk Watermark
 
-Elasticsearch blocca l'indicizzazione quando il disco supera le soglie:
+Elasticsearch protegge il nodo dal disco pieno: oltre `low` non assegna nuovi shard, oltre `high` sposta shard altrove, oltre `flood_stage` rende read-only (`read_only_allow_delete`) gli indici con shard sul nodo; il blocco viene rimosso automaticamente quando lo spazio torna sotto soglia. Default: 85/90/95%.
 
 ```json
 PUT _cluster/settings
 {
-  "transient": {
+  "persistent": {
     "cluster.routing.allocation.disk.watermark.low":  "85%",
     "cluster.routing.allocation.disk.watermark.high": "90%",
     "cluster.routing.allocation.disk.watermark.flood_stage": "95%"
@@ -521,7 +529,7 @@ GET /indice/_search
 - Riduci il numero di shard (merge indici piccoli con `_shrink` o `reindex`)
 - Aumenta heap (fino al 31 GB max)
 - Controlla aggregazioni su campi `text` (convertile in `keyword`)
-- Abilita `indices.breaker.total.limit` per evitare OOM
+- I circuit breaker (`indices.breaker.total.limit`) sono attivi di default: se scattano (`CircuitBreakingException`) riduci la query/aggregazione invece di alzare il limite
 
 ### Problemi di Reindexing Lento
 
@@ -561,12 +569,15 @@ K8s             → Elastic Agent       →
 | **Kibana** | Dashboard, Discover, Lens, Maps, Alerting |
 | **Logstash** | ETL pesante: parse, transform, filter, multiple output |
 | **Beats** | Agent leggero: Filebeat (log), Metricbeat (metrics), Packetbeat (network) |
-| **Elastic Agent** | Agent unificato (sostituisce tutti i Beats) |
+| **Elastic Agent** | Agent unificato, successore strategico dei Beats (gestito via Fleet) |
 | **Fleet** | Gestione centralizzata degli Elastic Agent |
 
 **Alternativa cloud-native (log):** Grafana Loki è significativamente più economico per pure log aggregation perché non indicizza il contenuto — Elasticsearch indicizza tutto e offre full-text search ma a costo di storage e risorse molto più elevati.
 
 ---
+
+!!! tip "ES|QL"
+    Da 8.11 (GA in 8.14) esiste **ES|QL**, un linguaggio a pipeline (`FROM logs-* | WHERE level == "ERROR" | STATS count() BY service.name`) per esplorazione e analytics, complementare al Query DSL.
 
 ## Relazioni
 
@@ -581,7 +592,7 @@ K8s             → Elastic Agent       →
     **Approfondimento →** [Grafana Loki](../../monitoring/tools/loki.md)
 
 ??? info "Sharding — Fondamentali distribuzione dati"
-    Il concetto di sharding di Elasticsearch segue gli stessi principi del sharding nei database relazionali — con la differenza che in ES il routing è automatico basato sull'`_id`.
+    Il concetto di sharding di Elasticsearch segue gli stessi principi del sharding nei database relazionali — con la differenza che in ES il routing è automatico (hash di `_routing`, di default l'`_id`).
 
     **Approfondimento →** [Sharding](../fondamentali/sharding.md)
 
@@ -590,7 +601,7 @@ K8s             → Elastic Agent       →
 ## Riferimenti
 
 - [Elasticsearch Reference](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html) — documentazione ufficiale completa
-- [Elasticsearch: The Definitive Guide](https://www.elastic.co/guide/en/elasticsearch/guide/master/index.html) — guida concettuale (ES 2.x ma ancora valida concettualmente)
+- [Elasticsearch: The Definitive Guide](https://www.elastic.co/guide/en/elasticsearch/guide/master/index.html) — guida storica (ES 2.x, **obsoleta** per API e sintassi; utile solo per i concetti)
 - [Elastic Blog — Sizing Guide](https://www.elastic.co/blog/found-sizing-elasticsearch) — dimensionamento cluster
 - [Query DSL Reference](https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl.html) — riferimento completo Query DSL
 - [ILM Reference](https://www.elastic.co/guide/en/elasticsearch/reference/current/index-lifecycle-management.html) — gestione ciclo di vita indici
