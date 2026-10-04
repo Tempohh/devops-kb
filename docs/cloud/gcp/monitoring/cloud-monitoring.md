@@ -7,9 +7,10 @@ search_keywords: [GCP Cloud Monitoring, Stackdriver, Stackdriver Monitoring, Clo
 parent: cloud/gcp/monitoring/_index
 related: [cloud/gcp/containers/gke, cloud/gcp/compute/cloud-run, monitoring/tools/prometheus, monitoring/fondamentali/opentelemetry, monitoring/sre/slo-sla-sli, monitoring/alerting/alertmanager, monitoring/tools/otel-collector-kubernetes]
 official_docs: https://cloud.google.com/monitoring/docs
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-04-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # GCP Cloud Monitoring
@@ -70,9 +71,12 @@ Cloud Monitoring gestisce tre famiglie di metriche con namespace distinti:
 
 | Tipo | Prefisso | Fonte | Latenza |
 |------|----------|-------|---------|
-| **GCP System Metrics** | `compute.googleapis.com/`, `k8s.io/`, `run.googleapis.com/` | Auto-raccolta da infra GCP | 30-60s |
+| **GCP System Metrics** | `compute.googleapis.com/`, `kubernetes.io/`, `run.googleapis.com/` | Auto-raccolta da infra GCP | 30-60s |
 | **Custom Metrics** | `custom.googleapis.com/` | API Monitoring o agent (Ops Agent) | ~1min |
-| **External Metrics** | `external.googleapis.com/prometheus/` | Prometheus via MSP o scraping | ~2min |
+| **Prometheus Metrics (MSP)** | `prometheus.googleapis.com/<nome>/<tipo>` | Managed Service for Prometheus / OTEL | variabile |
+
+!!! note "`external.googleapis.com/prometheus/`"
+    Prefisso legacy del vecchio sidecar *Stackdriver Prometheus*, non usato da MSP. Le metriche MSP vivono sotto `prometheus.googleapis.com/` (es. `prometheus.googleapis.com/http_requests_total/counter`) e si interrogano in PromQL col nome originale.
 
 **Esempi di metriche GCP system più usate:**
 
@@ -148,11 +152,15 @@ gcloud logging sinks list --project=my-project
 gcloud logging sinks describe prod-logs-bq --format="value(writerIdentity)"
 # Output: serviceAccount:p123456789-123456@gcp-sa-logging.iam.gserviceaccount.com
 
-# Assegnare roles/bigquery.dataEditor al SA sul dataset BigQuery
-gcloud projects add-iam-policy-binding my-project \
-  --member="serviceAccount:p123456789-123456@gcp-sa-logging.iam.gserviceaccount.com" \
-  --role="roles/bigquery.dataEditor"
+# Assegnare roles/bigquery.dataEditor al SA sul solo dataset di destinazione
+# (least privilege: un binding a livello progetto darebbe accesso a TUTTI i dataset)
+bq show --format=prettyjson my-project:logs_dataset > dataset.json
+# aggiungere in "access": {"role":"WRITER","userByEmail":"p123456789-123456@gcp-sa-logging.iam.gserviceaccount.com"}
+bq update --source dataset.json my-project:logs_dataset
 ```
+
+!!! tip "Partizionamento BigQuery"
+    Aggiungere `--use-partitioned-tables` al `sinks create` verso BigQuery: le tabelle sono partizionate per giorno e le query con filtro temporale scansionano (e costano) molto meno.
 
 ### Log-based Metrics
 
@@ -231,11 +239,24 @@ AND timestamp>="2026-04-01T00:00:00Z"
 
 ## Configurazione & Pratica
 
-### Metric Explorer e MQL
+### Metric Explorer, PromQL e MQL
 
-Il **Metric Explorer** ha due modalità di query:
+Il **Metric Explorer** ha tre modalità di query:
 - **Builder UI** (default): seleziona risorsa, metrica, aggregazione tramite dropdown
-- **MQL (Monitoring Query Language)**: linguaggio di query dichiarativo per analisi avanzate
+- **PromQL**: sintassi Prometheus su *tutte* le metriche di Cloud Monitoring (anche system e custom). È il linguaggio raccomandato da Google per query e alert nuovi
+- **MQL (Monitoring Query Language)**: linguaggio proprietario Google, **in deprecazione** a favore di PromQL <!-- REVIEW: verificare date/stato deprecazione MQL (creazione nuove alerting policy MQL da console, fine supporto) su cloud.google.com/monitoring/mql -->
+
+!!! warning "MQL è legacy"
+    Per nuove query, dashboard e alerting policy preferire PromQL (`conditionPrometheusQueryLanguage` nelle alert policy). Gli esempi MQL sotto servono a leggere query esistenti.
+
+```promql
+# PromQL su metrica GCP: il nome con '.' e '/' si scrive come selettore UTF-8 quotato
+# (in alternativa la forma convertita run_googleapis_com:request_count)
+# Rate errori 5xx Cloud Run per revision
+sum by (service_name, revision_name) (
+  rate({"__name__"="run.googleapis.com/request_count", "monitored_resource"="cloud_run_revision", "response_code_class"="5xx"}[5m])
+)
+```
 
 ```
 # MQL: utilizzo CPU medio per namespace GKE negli ultimi 30 minuti
@@ -272,7 +293,9 @@ Alerting Policy
 │   ├── Metric threshold — soglia su metrica aggregata
 │   ├── Metric absence — metrica assente per N minuti (servizio down)
 │   ├── Log-based metric — threshold su metrica da log
-│   ├── Uptime check — endpoint HTTP/TCP risponde?
+│   ├── Uptime check — soglia su `monitoring.googleapis.com/uptime_check/check_passed`
+│   ├── Log match — alert diretto su una entry di log (senza passare da una metrica)
+│   ├── PromQL — condizione espressa come query Prometheus
 │   └── SLO — burn rate troppo elevato
 ├── Notification Channels (dove notificare)
 │   ├── Email, SMS
@@ -298,8 +321,8 @@ gcloud alpha monitoring policies create \
 ```
 
 ```json
-// alert-cpu-high.json — CPU GKE node > 80% per 5 minuti
 {
+  "_comment": "alert-cpu-high.json — rimuovere questo campo prima dell'uso. CPU GKE node > 80% per 5 minuti",
   "displayName": "GKE Node CPU > 80%",
   "conditions": [{
     "displayName": "CPU utilization alta",
@@ -398,19 +421,15 @@ Cloud Monitoring supporta la definizione di **SLO nativi** direttamente sulla pi
 | **Request-based** (good/total ratio) | API con metriche request_count | Cloud Run, GKE con metriche custom |
 | **Window-based** (availability) | Uptime check o metriche booleane | Qualsiasi servizio con uptime check |
 
-```bash
-# Creare un SLO request-based per Cloud Run (99.5% richieste buone su 30 giorni)
-# Con "buona" = latenza < 500ms AND status 2xx
-gcloud alpha monitoring services create \
-  --service-id=my-api-service \
-  --display-name="My API Service" \
-  --project=my-project
-
-# Il SLO si crea più facilmente via Terraform o Console UI
-# per la complessità della struttura JSON richiesta da gcloud
-```
+Gli SLO si definiscono su un **Service** di Cloud Monitoring (Cloud Run, GKE e App Engine ne hanno uno auto-rilevato; altrimenti si crea un *custom service*). Il modo più pratico è Terraform o Console: il JSON dell'API è verboso.
 
 ```hcl
+# Service custom a cui agganciare lo SLO
+resource "google_monitoring_custom_service" "api" {
+  service_id   = "my-api-service"
+  display_name = "My API Service"
+}
+
 # SLO Terraform: 99.5% availability su 30 giorni rolling
 resource "google_monitoring_slo" "api_availability" {
   service      = google_monitoring_custom_service.api.service_id
@@ -427,7 +446,9 @@ resource "google_monitoring_slo" "api_availability" {
   }
 }
 
-# Burn rate alert: automatico dal SLO (5x burn rate su 1h O 2x su 6h)
+# Burn rate alert: 5x burn rate su 1h (fast) O 2x su 6h (slow)
+# Soglie da tarare sul budget: lo SRE Workbook usa 14.4x/1h e 6x/6h per SLO a 30 giorni
+# Il lookback in select_slo_burn_rate va passato come stringa quotata
 resource "google_monitoring_alert_policy" "slo_burn_rate" {
   display_name = "API SLO Burn Rate Alert"
   combiner     = "OR"
@@ -435,7 +456,7 @@ resource "google_monitoring_alert_policy" "slo_burn_rate" {
   conditions {
     display_name = "Burn rate 5x su 1h"
     condition_threshold {
-      filter     = "select_slo_burn_rate(\"${google_monitoring_slo.api_availability.name}\", 3600s)"
+      filter     = "select_slo_burn_rate(\"${google_monitoring_slo.api_availability.name}\", \"3600s\")"
       comparison = "COMPARISON_GT"
       threshold_value = 5.0
       duration   = "0s"
@@ -445,7 +466,7 @@ resource "google_monitoring_alert_policy" "slo_burn_rate" {
   conditions {
     display_name = "Burn rate 2x su 6h"
     condition_threshold {
-      filter     = "select_slo_burn_rate(\"${google_monitoring_slo.api_availability.name}\", 21600s)"
+      filter     = "select_slo_burn_rate(\"${google_monitoring_slo.api_availability.name}\", \"21600s\")"
       comparison = "COMPARISON_GT"
       threshold_value = 2.0
       duration   = "0s"
@@ -457,7 +478,7 @@ resource "google_monitoring_alert_policy" "slo_burn_rate" {
 ```
 
 !!! tip "Burn rate alert multi-finestra"
-    GCP genera automaticamente burn rate alert su 2 finestre (1h fast-burn + 6h slow-burn) se usi la UI Console → SLO → "Add alert". Questo copre sia degradi rapidi (che esauriscono il budget in ore) sia degradi lenti (che passerebbero inosservati su finestre brevi). Replicare questo pattern in Terraform come nell'esempio sopra.
+    Un solo burn rate alert non basta: una finestra breve (1h, *fast burn*) cattura i degradi che esauriscono il budget in ore, una lunga (6h, *slow burn*) quelli che sulle finestre brevi passerebbero inosservati. La Console (SLO → "Create SLO alert") crea la policy con una soglia e un lookback a scelta: per il multi-finestra servono due condizioni, come nell'esempio Terraform sopra.
 
 ---
 
@@ -465,7 +486,10 @@ resource "google_monitoring_alert_policy" "slo_burn_rate" {
 
 ### Managed Service for Prometheus (MSP)
 
-**Managed Service for Prometheus** permette di raccogliere metriche Prometheus-native da GKE senza gestire un'infrastruttura Prometheus (storage, HA, sharding). Le metriche finiscono in Cloud Monitoring come `external.googleapis.com/prometheus/` e sono accessibili tramite PromQL nativo via API compatibile Prometheus.
+**Managed Service for Prometheus** permette di raccogliere metriche Prometheus-native da GKE senza gestire un'infrastruttura Prometheus (storage, HA, sharding). Le metriche finiscono in Cloud Monitoring sotto `prometheus.googleapis.com/` e sono accessibili tramite PromQL nativo via API compatibile Prometheus. Il modello è un DaemonSet `collector` per nodo che fa scraping e scrive su Monarch (il backend globale di Google), pilotato dall'operator via CRD.
+
+!!! note "Default sui cluster nuovi"
+    I cluster GKE recenti (Standard e Autopilot) hanno MSP abilitato di default: verificare prima di eseguire l'update. <!-- REVIEW: verificare versione GKE da cui MSP è default -->
 
 ```bash
 # Abilitare MSP su cluster GKE esistente
@@ -475,7 +499,8 @@ gcloud container clusters update my-cluster \
 
 # Verificare che i componenti MSP siano running
 kubectl get pods -n gmp-system
-# Deve mostrare: gmp-operator, rule-evaluator, alertmanager (se configurato)
+# Deve mostrare: gmp-operator, collector (DaemonSet), rule-evaluator
+# (alertmanager solo se configurato)
 ```
 
 ```yaml
@@ -525,7 +550,7 @@ curl -H "Authorization: Bearer $(gcloud auth print-access-token)" \
 ```
 
 !!! tip "MSP vs Self-managed Prometheus su GKE"
-    Con MSP elimini: storage Prometheus (PVC), HA setup (2+ repliche), compaction, TSDB management. Il costo è simile a un'istanza Prometheus medio-grande. Per cluster con <1000 serie temporali, MSP può costare leggermente di più rispetto a Prometheus self-hosted su e2-small; per cluster enterprise con milioni di serie, MSP è quasi sempre più economico dell'overhead operativo.
+    Con MSP elimini: storage Prometheus (PVC), HA setup (2+ repliche), compaction, TSDB management. Il costo **non dipende dalla taglia di un'istanza** ma dal numero di *sample* ingeriti: scala con serie × frequenza di scrape. Per tenerlo sotto controllo: scrape `interval` di 60s dove 30s non serve, `metricRelabeling` per scartare metriche ad alta cardinalità, `filter` sul collector. Per pochi target un Prometheus self-hosted può costare meno; su larga scala MSP evita l'overhead operativo di sharding e storage a lungo termine.
 
 ### Metriche GKE System Auto-raccolte
 
@@ -553,7 +578,8 @@ kubernetes.io/pod/volume/total_bytes              → dimensione PVC
 **Cloud Trace** raccoglie trace distribuiti senza infra dedicata. Su GKE si integra tramite librerie client o OTEL.
 
 ```python
-# Python — traccia automatica con libreria cloud-trace
+# Python — spans manuali con OTEL → Cloud Trace
+# pip install opentelemetry-sdk opentelemetry-exporter-gcp-trace
 from opentelemetry import trace
 from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 from opentelemetry.sdk.trace import TracerProvider
@@ -650,7 +676,7 @@ spec:
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: "http://localhost:4317"
       - name: otel-collector
-        image: otel/opentelemetry-collector-contrib:latest
+        image: otel/opentelemetry-collector-contrib:0.x.y   # pinnare una versione, mai :latest
         args: ["--config=/etc/otel/config.yaml"]
         volumeMounts:
         - name: otel-config
@@ -675,17 +701,15 @@ spec:
     Le metriche distribution (con value extractor) vengono campionate da ogni log entry corrispondente. Su servizi ad alto volume (migliaia di req/s) possono diventare costose. Aggiungere sempre un filtro specifico nel `--log-filter` per limitare il volume. Le metriche counter sono molto meno costose.
 
 ```bash
-# Verificare il volume di log per servizio (utile per ottimizzare costi)
+# Verificare il volume di log ingerito (utile per ottimizzare costi)
+# Metric Explorer → logging.googleapis.com/billing/bytes_ingested
+# raggruppata per resource_type / log, oppure Logging → Log Analytics / Logs Storage
 gcloud logging metrics list --project=my-project
-gcloud logging read "resource.type=k8s_container" \
-  --freshness=1h \
-  --project=my-project \
-  | wc -l  # stima delle entry nell'ultima ora
 ```
 
 **Checklist osservabilità GCP:**
 
-- [ ] **Managed Prometheus abilitato** su tutti i cluster GKE con PodMonitoring per app custom
+- [ ] **Managed Prometheus verificato/abilitato** su tutti i cluster GKE con PodMonitoring per app custom
 - [ ] **Log Router sink** verso BigQuery per log con retention >30 giorni
 - [ ] **Alerting policy** su metriche critiche: CPU nodo >80%, memory >85%, pod restart_count >5
 - [ ] **Uptime check** su endpoint pubblici critici (latency + availability)
@@ -741,7 +765,7 @@ kubectl get pods -n production -l app=my-app -o yaml \
 kubectl get pods -n production --show-labels | grep my-app
 
 # Log del scraper MSP
-kubectl logs -n gmp-system -l app=collector | grep ERROR
+kubectl logs -n gmp-system -l app.kubernetes.io/name=collector -c prometheus | grep -i error
 ```
 
 **Problema: alert non scatta nonostante la metrica supera la soglia**
