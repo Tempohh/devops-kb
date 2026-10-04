@@ -1,20 +1,27 @@
 ---
-title: "Google Cloud Architecture Framework"
+title: "Google Cloud Well-Architected Framework"
 slug: well-architected
 category: cloud/gcp
 tags: [gcp, architecture-framework, well-architected, pillars, reliability, security, cost-optimization, operational-excellence, system-design, performance]
-search_keywords: [Google Cloud Architecture Framework, GCAF, GCP well-architected, framework architettura GCP, 6 pillars GCP, system design GCP, operational excellence GCP, security GCP framework, reliability GCP, cost optimization GCP, performance optimization GCP, Architecture Center GCP, Google Cloud best practices, WAF GCP, well-architected GCP, framework cloud GCP, design principles GCP, GCP architecture review, Google architecture pillars, pilastri architettura Google Cloud, GCP maturity model, cloud architecture framework confronto, AWS WAF GCP, Azure Well-Architected GCP]
+search_keywords: [Google Cloud Well-Architected Framework, Google Cloud Architecture Framework, GCAF, GCP well-architected, framework architettura GCP, 6 pillars GCP, system design GCP, operational excellence GCP, security GCP framework, reliability GCP, cost optimization GCP, performance optimization GCP, Architecture Center GCP, Google Cloud best practices, WAF GCP, well-architected GCP, framework cloud GCP, design principles GCP, GCP architecture review, Google architecture pillars, pilastri architettura Google Cloud, GCP maturity model, cloud architecture framework confronto, AWS WAF GCP, Azure Well-Architected GCP]
 parent: cloud/gcp/fondamentali/_index
 related: [cloud/aws/fondamentali/well-architected, cloud/azure/fondamentali/well-architected, cloud/gcp/fondamentali/panoramica, cloud/gcp/fondamentali/shared-responsibility]
 official_docs: https://cloud.google.com/architecture/framework
-status: complete
+status: needs-review
 difficulty: beginner
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
-# Google Cloud Architecture Framework
+# Google Cloud Well-Architected Framework
 
-Il **Google Cloud Architecture Framework** (GCAF) è la guida ufficiale di Google per progettare e valutare workload cloud **sicuri, affidabili, performanti e ottimizzati nei costi**. Analogo all'AWS Well-Architected Framework e all'Azure Well-Architected Framework, il GCAF si articola in **6 pilastri** e fornisce principi di design, best practice e strumenti di assessment.
+Il **Google Cloud Well-Architected Framework** (WAF GCP, in passato **Architecture Framework** / GCAF) è la guida ufficiale di Google per progettare e valutare workload cloud **sicuri, affidabili, performanti e ottimizzati nei costi**. Analogo all'AWS e all'Azure Well-Architected Framework, si articola in una categoria fondativa (**System Design**) più **5 pilastri**, e fornisce principi di design e raccomandazioni operative. Include anche prospettive trasversali (es. AI/ML).
+
+<!-- REVIEW: verificare struttura attuale del framework (pilastri, prospettive AI/ML, eventuale sustainability) su cloud.google.com/architecture/framework -->
+<!-- REVIEW: verificare percentuali CUD/Spot/SUD e famiglie VM con SUD su cloud.google.com/compute/docs/instances/signing-up-committed-use-discounts -->
+
+!!! note "Perché esiste e come si usa"
+    Un framework dà un **vocabolario comune** e una checklist: invece di discutere "è un buon design?", si verifica pilastro per pilastro dove ci sono gap e li si prioritizza. Non è prescrittivo: i pilastri entrano in tensione (più affidabilità = più costo), e va documentato quale trade-off si sceglie.
 
 **Quando usare il GCAF:**
 - Prima di progettare una nuova architettura su GCP — come checklist guida
@@ -26,33 +33,33 @@ Il **Google Cloud Architecture Framework** (GCAF) è la guida ufficiale di Googl
 
 ---
 
-## I 6 Pilastri
+## System Design + 5 Pilastri
 
 ```
-Google Cloud Architecture Framework — 6 Pillars
+Google Cloud Well-Architected Framework
 
-  1. System Design     2. Operational       3. Security,
-                          Excellence            Privacy &
-                                               Compliance
-  ┌────────────┐      ┌────────────┐       ┌────────────┐
-  │ Architettu-│      │ Operazioni │       │ Sicurezza  │
-  │ ra solida, │      │ automatiz.,│       │ a tutti i  │
-  │ scalabile  │      │ osservabil.│       │ livelli    │
-  │ e modulare │      │ continua   │       │            │
-  └────────────┘      └────────────┘       └────────────┘
+  Fondamenta: 1. System Design (principi architetturali di base)
+  ─────────────────────────────────────────────────────────────
+  2. Operational    3. Security,        4. Reliability
+     Excellence        Privacy &
+                       Compliance
+  ┌────────────┐   ┌────────────┐     ┌────────────┐
+  │ Operazioni │   │ Sicurezza  │     │ Resilienza,│
+  │ automatiz.,│   │ a tutti i  │     │ HA e       │
+  │ osservabil.│   │ livelli    │     │ disaster   │
+  │ continua   │   │            │     │ recovery   │
+  └────────────┘   └────────────┘     └────────────┘
 
-  4. Reliability       5. Cost               6. Performance
-                          Optimization          Optimization
-  ┌────────────┐      ┌────────────┐       ┌────────────┐
-  │ Resilienza,│      │ Eliminare  │       │ Latenza    │
-  │ HA e       │      │ sprechi,   │       │ bassa,     │
-  │ disaster   │      │ right-size │       │ throughput │
-  │ recovery   │      │ continuo   │       │ ottimale   │
-  └────────────┘      └────────────┘       └────────────┘
+  5. Cost Optimization        6. Performance Optimization
+  ┌────────────────┐          ┌────────────────┐
+  │ Eliminare      │          │ Latenza bassa, │
+  │ sprechi,       │          │ throughput     │
+  │ right-size     │          │ ottimale       │
+  └────────────────┘          └────────────────┘
 ```
 
 !!! note "Differenza rispetto ad AWS WAF"
-    Il GCAF separa **System Design** come pilastro autonomo (principi architetturali di base come modularità, loose coupling, disasterproof design), mentre AWS lo tratta come trasversale ai pilastri. GCP chiama **Performance Optimization** ciò che AWS chiama *Performance Efficiency*. La struttura a 6 pilastri rimane però analoga nelle intenzioni.
+    Il framework GCP tratta **System Design** come categoria fondativa (modularità, loose coupling, design for failure), mentre AWS ha 6 pilastri (incluso *Sustainability*) e non ha una categoria equivalente. GCP chiama **Performance Optimization** ciò che AWS chiama *Performance Efficiency*. Nel resto del documento la numerazione 1–6 segue le sezioni, non una gerarchia ufficiale.
 
 ---
 
@@ -74,17 +81,22 @@ Il pilastro **System Design** riguarda le scelte architetturali fondamentali: co
 | Pattern | Servizi GCP | Quando usarlo |
 |---------|-------------|---------------|
 | **Microservizi** | Cloud Run, GKE, Pub/Sub | Sistemi complessi con team autonomi |
-| **Event-driven** | Pub/Sub, Eventarc, Cloud Functions | Integrazione asincrona, disaccoppiamento |
+| **Event-driven** | Pub/Sub, Eventarc, Cloud Run functions | Integrazione asincrona, disaccoppiamento |
 | **CQRS + Event Sourcing** | Pub/Sub, Firestore, BigQuery | Write-heavy + read-heavy separati |
-| **Serverless** | Cloud Functions, Cloud Run | Workload burst-y, costo per esecuzione |
+| **Serverless** | Cloud Run (services/functions) | Workload burst-y, costo per esecuzione |
 | **Data-intensive** | BigQuery, Dataflow, Dataproc | Pipeline analytics, ML a larga scala |
 
-```yaml
+```hcl
 # Esempio: architettura event-driven con Pub/Sub
 # Pub/Sub topic per ordini
 resource "google_pubsub_topic" "orders" {
   name = "orders-topic"
   message_retention_duration = "86400s"  # 24h
+}
+
+# Dead-letter topic: raccoglie i messaggi non processabili dopo 5 tentativi
+resource "google_pubsub_topic" "orders_dlq" {
+  name = "orders-dlq"
 }
 
 # Subscription per il servizio di processing
@@ -215,7 +227,7 @@ options:
 | **Secret Manager** | Secrets management (equivalente AWS Secrets Manager) |
 | **VPC Service Controls** | Perimetro di sicurezza che impedisce data exfiltration tra project |
 | **Binary Authorization** | Garantisce che solo immagini container firmate e approvate vengano deployate su GKE |
-| **Chronicle SIEM** | SIEM cloud-native per threat detection avanzata |
+| **Google Security Operations (ex Chronicle)** | SIEM/SOAR cloud-native per threat detection avanzata |
 
 ```bash
 # Abilitare Security Command Center standard
@@ -321,12 +333,11 @@ gcloud iam service-accounts add-iam-policy-binding deploy-sa@my-project.iam.gser
 gcloud sql instances create my-db-replica \
     --master-instance-name=my-db-primary \
     --region=europe-west3 \
-    --database-version=POSTGRES_15 \
-    --tier=db-n1-standard-2
+    --tier=db-custom-2-7680
 
-# Verificare stato replica
+# Verificare stato replica (la versione DB è ereditata dal primary)
 gcloud sql instances describe my-db-replica \
-    --format="value(replicaConfiguration.mysqlReplicaConfiguration)"
+    --format="value(state,instanceType,masterInstanceName)"
 
 # Promuovere replica a primary (failover manuale)
 gcloud sql instances promote-replica my-db-replica
@@ -395,9 +406,9 @@ spec:
 
 | Meccanismo | Dettaglio | Risparmio |
 |-----------|-----------|-----------|
-| **Sustained Use Discounts (SUD)** | Automatico per VM usate > 25% del mese su Compute Engine | Fino al 30% |
-| **Committed Use Discounts (CUD)** | Impegno 1 o 3 anni su vCPU/memoria o servizi specifici | Fino al 57% (1yr) / 70% (3yr) |
-| **Spot VMs** | VM interrompibili con preavviso 30s (ex Preemptible) | Fino all'88% |
+| **Sustained Use Discounts (SUD)** | Automatico per VM usate > 25% del mese, solo su alcune famiglie Compute Engine (es. N1, N2; non le generazioni più recenti) | Fino al 30% |
+| **Committed Use Discounts (CUD)** | Impegno 1 o 3 anni: resource-based (vCPU/memoria) o flexible (spesa oraria) | Circa 28-37% (1yr) / 46-55% (3yr), fino al 70% su memory-optimized |
+| **Spot VMs** | VM interrompibili con preavviso 30s (ex Preemptible), nessuna scadenza max a 24h | Fino al 60-91% |
 | **Cloud Run** | Billing per ms di CPU/memoria effettiva, scale-to-zero | Ideale per traffic burst-y |
 | **Committed Use (BigQuery)** | Slot commitments per query analytics intense | Variabile vs on-demand |
 | **Coldline / Archive Storage** | Per dati raramente accessibili in Cloud Storage | Fino a 95% vs Standard |
@@ -447,7 +458,7 @@ gcloud billing budgets list \
 ```
 
 !!! tip "Labels obbligatorie come policy org"
-    Imposta un **Organization Policy** (`constraints/compute.requireLabels`) per richiedere label specifiche (es. `team`, `environment`, `cost-center`) su ogni risorsa. Senza questa policy, i costi diventano difficili da attribuire a team o workload specifici.
+    Rendi obbligatorie label specifiche (es. `team`, `environment`, `cost-center`) su ogni risorsa: non esiste un constraint predefinito "requireLabels", quindi usa **custom Organization Policy** dove il servizio lo supporta, oppure policy-as-code (Terraform + OPA/Sentinel, validazione in CI). Senza label, i costi diventano difficili da attribuire a team o workload.
 
 !!! warning "Attenzione ai costi nascosti di rete"
     Il **network egress** è spesso la sorpresa più grande in fattura: traffico dati da GCP verso internet, tra regioni diverse, o verso altri cloud provider. Usare **Premium Network Tier** solo dove necessario; **Standard Tier** per workload non latency-sensitive riduce i costi di rete.
@@ -534,8 +545,8 @@ spec:
             periodSeconds: 20
 ```
 
-!!! tip "Graviton equivalent su GCP: T2A (Arm) e C3 (custom Intel)"
-    Per workload CPU-intensive, le istanze **C3** (Intel Sapphire Rapids) e **T2A** (Arm Ampere Altra) offrono il miglior rapporto prezzo/performance. Le T2A sono ideali per workload containerizzati e web serving. Testare sempre con il proprio workload prima di migrare in produzione.
+!!! tip "Equivalente Graviton su GCP: C4A (Axion) e T2A (Arm)"
+    Per workload CPU-intensive, le istanze Arm **C4A** (Google Axion) e **T2A** (Ampere Altra), oltre alle Intel **C3/C4**, offrono ottimi rapporti prezzo/performance. Le Arm sono ideali per workload containerizzati e web serving, ma richiedono immagini multi-arch. Testare sempre con il proprio workload prima di migrare in produzione.
 
 !!! warning "BigQuery slot allocation"
     Query BigQuery in **on-demand** pagano per byte processato — ottimo per query occasionali. Con query frequenti e pesanti, i **reservations** (slot commitments) danno throughput prevedibile e spesso costano meno. Analizzare il pattern di utilizzo prima di scegliere il modello.
@@ -553,22 +564,19 @@ spec:
 
 ### Framework Assessment
 
-Google mette a disposizione strumenti per condurre assessment formali:
+Processo di architecture review consigliato (manuale, usando le raccomandazioni di ogni pilastro come checklist):
 
-```bash
-# Architecture Review — processo consigliato:
-# 1. Identificare il workload da revisionare
-# 2. Mappare ogni componente ai 6 pilastri
-# 3. Per ogni pilastro: identificare gap rispetto alle best practice
-# 4. Prioritizzare i gap per impatto e sforzo di remediation
-# 5. Creare un improvement plan con milestone e owner
+1. Identificare il workload da revisionare
+2. Mappare ogni componente a System Design e ai 5 pilastri
+3. Per ogni pilastro: identificare gap rispetto alle raccomandazioni
+4. Prioritizzare i gap per impatto e sforzo di remediation
+5. Creare un improvement plan con milestone e owner
 
-# Lo strumento formale è accessibile via Google Cloud Console:
-# Console → Architecture → Framework Assessment
-# (disponibile per clienti con supporto Enhanced/Premium)
-```
+Per review formali su workload mission-critical o pre-migrazione ci si può appoggiare al team Google Cloud o a partner.
 
-**Well-Architected Partners:** Google ha un programma di partner certificati per condurre architecture review formali — utile per workload mission-critical o revisioni pre-migrazione.
+<!-- REVIEW: verificare se esiste un assessment tool ufficiale self-service per il framework (rimossa la citazione "Console → Framework Assessment", non verificabile) -->
+
+Strumenti nativi complementari: **Recommender** e **Active Assist** (rightsizing, IAM, costi), **Security Command Center** (postura di sicurezza), **Cloud Monitoring** (osservabilità).
 
 ---
 
@@ -576,11 +584,11 @@ Google mette a disposizione strumenti per condurre assessment formali:
 
 | Aspetto | GCP Architecture Framework | AWS Well-Architected | Azure Well-Architected |
 |---------|---------------------------|---------------------|------------------------|
-| **Numero pilastri** | 6 | 6 | 5 + 2 trasversali |
-| **Pilastro unico GCP** | System Design (architettura modulare) | — | — |
-| **Tool di review** | Console (Enhanced/Premium support) | Gratuito via Console | Azure Advisor + Gratuito |
+| **Struttura** | System Design (fondativa) + 5 pilastri | 6 pilastri (incl. Sustainability) | 5 pilastri |
+| **Elemento distintivo GCP** | System Design come categoria autonoma | — | — |
+| **Tool di review** | Checklist/raccomandazioni nella documentazione | AWS Well-Architected Tool (gratuito in Console) | Azure Well-Architected Review + Azure Advisor |
 | **Reference Architectures** | Architecture Center | AWS Architecture Center | Azure Architecture Center |
-| **Specializzazioni** | Data/ML, Kubernetes, Enterprise | 10+ Lenses (Serverless, SaaS, ML...) | Industry specifici (FSI, Health) |
+| **Specializzazioni** | Prospettive (es. AI/ML) | Lenses (Serverless, SaaS, ML...) | Workload guides (es. AI, SAP, AKS) |
 | **SRE integration** | Forte (principi SRE Google interni) | Moderata | Moderata |
 
 !!! note "Origini SRE"
@@ -599,7 +607,7 @@ Google mette a disposizione strumenti per condurre assessment formali:
 !!! warning "Non trascurare System Design per workload piccoli"
     Anche applicazioni piccole traggono beneficio dai principi di loose coupling e design for failure. Un monolite ben progettato è migliore di microservizi accoppiati male. Il pilastro System Design si applica a tutti i workload, non solo quelli enterprise.
 
-- **Usare Infrastructure as Code** (Terraform o Cloud Deployment Manager) per ogni risorsa — il GCAF considera IaC fondamentale per Operational Excellence e per auditabilità
+- **Usare Infrastructure as Code** (Terraform/OpenTofu o Infrastructure Manager; Deployment Manager è dismesso) per ogni risorsa — il GCAF considera IaC fondamentale per Operational Excellence e per auditabilità
 - **Abilitare Organization Policies** appropriate prima di creare risorse (es. `constraints/iam.disableServiceAccountKeyCreation`, `constraints/compute.requireShieldedVm`)
 - **Revisione periodica degli SLO** — gli obiettivi di affidabilità devono evolvere con il business e la maturità del sistema
 - **Tagging/labeling sistematico** — essential per Cost Optimization e per correlazione di log/metriche nei pilastri di Observability
@@ -624,8 +632,10 @@ gcloud scc findings list \
     --format="table(category,resourceName,severity,eventTime)" \
     --sort-by="severity"
 
-# Verificare che MFA sia abilitata per tutti gli utenti dell'org
+# Verificare chi ha il ruolo primitivo Owner sull'org (da minimizzare)
+# Nota: l'MFA non si verifica da qui, ma in Cloud Identity / Workspace (2-Step Verification)
 gcloud organizations get-iam-policy ORG_ID \
+    --flatten="bindings[].members" \
     --filter="bindings.role:roles/owner" \
     --format="table(bindings.members)"
 ```
@@ -649,14 +659,10 @@ gcloud organizations get-iam-policy ORG_ID \
 # FROM `billing.gcp_billing_export_v1_*`
 # GROUP BY 1 ORDER BY current_month DESC LIMIT 10
 
-# Verificare dischi Persistent Disk non collegati a VM
+# Dischi Persistent Disk orfani: senza users[] (non collegati a nessuna VM)
 gcloud compute disks list \
-    --filter="users:*" \
-    --format="table(name,sizeGb,status,zone)" | head -20
-
-# I dischi SENZA users[] sono orfani (la condizione "users:*" include solo quelli con VM)
-gcloud compute disks list \
-    --format="table(name,sizeGb,status,zone,users)"
+    --filter="-users:*" \
+    --format="table(name,sizeGb,status,zone)"
 ```
 
 ---
@@ -675,15 +681,9 @@ gcloud run services update my-service \
     --region=europe-west8 \
     --min-instances=1 \
     --cpu-boost  # CPU extra durante il cold start
-
-# Verificare la latenza p99 del servizio
-gcloud monitoring metrics-scopes list
-
-# Analizzare startup time con Cloud Trace
-gcloud trace list --project=my-project \
-    --filter="displayName:POST /api/" \
-    --limit=20
 ```
+
+Per verificare la latenza p99 e il numero di istanze (`run.googleapis.com/container/instance_count`, `request_latencies`) usare Metrics Explorer in Cloud Monitoring; per il dettaglio per richiesta, Cloud Trace nella console.
 
 ---
 
@@ -720,12 +720,12 @@ kubectl rollout status deployment/my-deployment -n <namespace>
 ## Relazioni
 
 ??? info "AWS Well-Architected Framework — Confronto"
-    Il GCAF e l'AWS WAF condividono la stessa struttura a 6 pilastri con obiettivi analoghi. La differenza principale è che GCP separa **System Design** come pilastro autonomo, mentre AWS include questi principi trasversalmente. Il GCP Architecture Framework ha una forte impronta **SRE** (error budget, SLO) derivante dalle pratiche interne di Google.
+    Il framework GCP e l'AWS WAF hanno obiettivi analoghi e pilastri in larga parte sovrapponibili. La differenza principale è che GCP separa **System Design** come categoria fondativa, mentre AWS ha *Sustainability* come pilastro. Il framework GCP ha una forte impronta **SRE** (error budget, SLO) derivante dalle pratiche interne di Google.
 
     **Approfondimento →** [AWS Well-Architected Framework](../../aws/fondamentali/well-architected.md)
 
 ??? info "Azure Well-Architected Framework — Confronto"
-    Azure WAF ha 5 pilastri (Reliability, Security, Cost Optimization, Operational Excellence, Performance Efficiency) più 2 trasversali (Sustainability e Application Design). L'Assessment Tool di Azure è gratuito e integrato in Azure Portal, mentre il GCP tool è disponibile per clienti con supporto Enhanced/Premium.
+    Azure WAF ha 5 pilastri (Reliability, Security, Cost Optimization, Operational Excellence, Performance Efficiency), molto vicini a quelli GCP. Azure offre inoltre un Well-Architected Review self-service e Azure Advisor per raccomandazioni automatiche.
 
     **Approfondimento →** [Azure Well-Architected Framework](../../azure/fondamentali/well-architected.md)
 
