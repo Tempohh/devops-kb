@@ -7,9 +7,10 @@ search_keywords: [pulumi, infrastructure as code, iac, python iac, typescript ia
 parent: iac/pulumi/_index
 related: [iac/terraform/fondamentali, iac/terraform/state-management, iac/terraform/moduli, iac/ansible/fondamentali]
 official_docs: https://www.pulumi.com/docs/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Pulumi — Fondamentali
@@ -29,7 +30,7 @@ Pulumi è **complementare**, non sostitutivo, di Terraform: la scelta dipende da
 
 **Quando NON usare Pulumi (preferire Terraform):**
 - Team con consolidata esperienza HCL e ampio Terraform Registry già utilizzato
-- Organizzazioni con governance centralizzata su Terraform Cloud/Enterprise
+- Organizzazioni con governance centralizzata su HCP Terraform / Terraform Enterprise (o su OpenTofu)
 - Necessità di leggere infrastruttura esistente via `terraform import` senza refactoring
 
 ---
@@ -65,14 +66,15 @@ Le **Resources** sono gli oggetti cloud che Pulumi gestisce. Ogni provider espon
 import pulumi_aws as aws
 
 bucket = aws.s3.Bucket("my-bucket",
-    acl="private",
-    versioning=aws.s3.BucketVersioningArgs(enabled=True),
     tags={"Environment": "prod"}
 )
 ```
 
+!!! note "Argomenti inline del bucket S3"
+    Gli argomenti inline `acl` e `versioning` di `aws.s3.Bucket` sono deprecati nei provider AWS recenti (stessa scelta del provider Terraform AWS v4+): ACL, versioning e simili si configurano con risorse dedicate (`aws.s3.BucketVersioning`, `aws.s3.BucketAclV2`, ...). Il nome logico (`"my-bucket"`) è l'identificatore nello state; Pulumi aggiunge un suffisso casuale al nome fisico (auto-naming) per permettere sostituzioni senza collisioni.
+
 ### Outputs
-Gli **Output** sono valori che dipendono dall'esecuzione (es. ARN, IP, URL). In Pulumi sono oggetti `Output[T]` — wrapped values che si risolvono solo dopo l'`apply`. Non sono stringhe normali: vanno usati con `pulumi.Output.all()` o `.apply()`.
+Gli **Output** sono valori che dipendono dall'esecuzione (es. ARN, IP, URL). In Pulumi sono oggetti `Output[T]` — wrapped values che si risolvono solo dopo l'`apply`. Non sono stringhe normali: vanno usati con `pulumi.Output.all()` o `.apply()`. *Perché*: il valore esiste solo dopo che il provider ha creato la risorsa; l'`Output` porta con sé anche le dipendenze, così il motore costruisce il grafo e ordina creazione/distruzione correttamente. Per le sole interpolazioni di stringa esiste `pulumi.Output.concat()` / `Output.format()`.
 
 ```python
 # Corretto: usare .apply() per trasformare un Output
@@ -200,7 +202,7 @@ network = VpcWithSubnets("production", cidr="10.0.0.0/16")
 ```bash
 # Installare Pulumi CLI
 # Windows (winget)
-winget install pulumi
+winget install Pulumi.Pulumi
 
 # macOS
 brew install pulumi/tap/pulumi
@@ -389,7 +391,11 @@ subnet = aws.ec2.Subnet("app-subnet",
 L'**Automation API** permette di incorporare Pulumi in programmi Python/TypeScript come libreria, senza la CLI interattiva. Utile per pipeline CI, tool interni, o platform engineering:
 
 ```python
-from pulumi.automation import create_or_select_stack, LocalWorkspace
+from pulumi.automation import (
+    ConfigValue,
+    LocalWorkspaceOptions,
+    create_or_select_stack,
+)
 
 def deploy(stack_name: str, config: dict):
     stack = create_or_select_stack(
@@ -434,31 +440,39 @@ infra/
 
 Il vantaggio principale di Pulumi rispetto a Terraform è la possibilità di **unit test nativi**:
 
+I test unitari usano i **mock** del runtime (`pulumi.runtime.set_mocks`): il programma gira senza engine né provider reali, quindi nessuna risorsa viene creata. I mock vanno registrati **prima** di importare il modulo che dichiara le risorse.
+
 ```python
 # tests/test_infrastructure.py
 import unittest
 import pulumi
 
+
+class Mocks(pulumi.runtime.Mocks):
+    def new_resource(self, args: pulumi.runtime.MockResourceArgs):
+        return [args.name + "_id", args.inputs]
+
+    def call(self, args: pulumi.runtime.MockCallArgs):
+        return {}
+
+
+pulumi.runtime.set_mocks(Mocks(), preview=False)
+
+import infra  # modulo con le risorse (dopo set_mocks)
+
+
 class TestInfrastructure(unittest.TestCase):
     @pulumi.runtime.test
-    def test_bucket_is_private(self):
-        """Il bucket S3 deve essere privato"""
-        import __main__
+    def test_bucket_has_environment_tag(self):
+        def check_tags(tags):
+            self.assertIn("Environment", tags, "Tag Environment mancante")
 
-        def check_bucket_acl(args):
-            bucket, acl = args
-            self.assertEqual(acl, "private",
-                "Bucket deve essere privato, non pubblico")
-
-        return pulumi.Output.all(
-            __main__.bucket.id,
-            __main__.bucket.acl
-        ).apply(check_bucket_acl)
+        return infra.bucket.tags.apply(check_tags)
 ```
 
 ```bash
 # Eseguire i test senza creare risorse reali
-PULUMI_TEST_MODE=true python -m pytest tests/
+python -m pytest tests/
 ```
 
 ### Gestione Secrets
