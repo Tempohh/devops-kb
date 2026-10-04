@@ -9725,7 +9725,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24820,7 +24820,7 @@
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Custom Mode in produzione</p>
-<p>Usare sempre <strong>Custom Mode</strong> in produzione. Auto Mode crea subnet con range CIDR fissi in tutte le regioni, rendendo impossibile personalizzare l'addressing e causando problemi di overlap quando si aggiungono VPC Peering o connessioni on-premises. Una volta creato un VPC in Auto Mode non è convertibile in Custom Mode — serve ricreare la rete.</p>
+<p>Usare sempre <strong>Custom Mode</strong> in produzione. Auto Mode crea subnet con range CIDR fissi in tutte le regioni, rendendo impossibile personalizzare l'addressing e causando problemi di overlap quando si aggiungono VPC Peering o connessioni on-premises. Un VPC Auto Mode può essere convertito in Custom Mode (<code>gcloud compute networks update my-vpc --switch-to-custom-subnet-mode</code>), ma la conversione è <strong>one-way</strong> e irreversibile: le subnet auto-create restano con i range <code>/20</code> fissi, che vanno poi rimpiazzati se confliggono. Per produzione è più pulito partire direttamente in Custom Mode.</p>
 </div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Creare VPC in Custom Mode</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>networks<span class="w"> </span>create<span class="w"> </span>my-vpc<span class="w"> </span><span class="se">\</span>
@@ -24881,8 +24881,8 @@
 </tr>
 <tr>
 <td>Limite</td>
-<td>Max 100 service project per host</td>
-<td>Peering non transitivo</td>
+<td>Fino a 1000 service project per host (quota, verificare)</td>
+<td>Peering non transitivo, max 25 peering per VPC (quota default)</td>
 </tr>
 <tr>
 <td>Uso ideale</td>
@@ -24929,15 +24929,14 @@
 </span></code></pre></div>
 <p>Si abilita a livello di subnet con il flag <code>--enable-private-ip-google-access</code> (mostrato sopra) oppure via Console. Non richiede configurazione aggiuntiva sulle VM.</p>
 <h3 id="cloud-nat">Cloud NAT<a class="headerlink" href="#cloud-nat" title="Permanent link">&para;</a></h3>
-<p>Cloud NAT fornisce connettività <strong>outbound verso internet</strong> per VM senza IP pubblico. È un NAT managed, scalabile automaticamente, che non introduce un singolo punto di failure (non è una VM NAT).</p>
+<p>Cloud NAT fornisce connettività <strong>outbound verso internet</strong> per VM senza IP pubblico. È un NAT managed e software-defined (implementato nello stack di rete Andromeda, non in una VM né in un proxy): non introduce un singolo punto di failure né colli di bottiglia di banda. Il <strong>Cloud Router</strong> serve solo come contenitore di configurazione (control plane); i pacchetti non lo attraversano.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>VM (10.10.0.5, no IP pubblico)
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  ↓
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>Cloud Router (europe-west1)
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>  ↓ (traduzione SNAT a livello di rete virtuale)
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>Cloud NAT (config nel Cloud Router europe-west1; IP pubblico pool: 34.90.x.x)
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>  ↓
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>Cloud NAT (IP pubblico NAT pool: 34.90.x.x)
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>  ↓
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>Internet (server esterno vede IP NAT, non IP privato VM)
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>Internet (server esterno vede IP NAT, non IP privato VM)
 </span></code></pre></div>
+<p>Solo connessioni <strong>in uscita</strong> (e relative risposte): Cloud NAT non permette connessioni inbound avviate da internet. Ogni IP NAT offre 64.512 porte, condivise tra le VM in base a <code>--min-ports-per-vm</code>: con molte connessioni verso la stessa destinazione si arriva a esaurimento porte (<code>OUT_OF_RESOURCES</code>).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Step 1: creare Cloud Router (prerequisito per Cloud NAT)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>routers<span class="w"> </span>create<span class="w"> </span>router-europe-west1<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--network<span class="o">=</span>my-vpc<span class="w"> </span><span class="se">\</span>
@@ -24968,10 +24967,10 @@
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Log Cloud NAT per troubleshooting</p>
-<p>Abilitare i log NAT (<code>--enable-logging</code>) è essenziale per il debug. I log vengono scritti in Cloud Logging e mostrano ogni connessione NAT con IP sorgente, destinazione, porta, e tipo di operazione (ALLOCATED/DROPPED). Utile quando si investigano connessioni rifiutate da sistemi esterni o esaurimento porte NAT.</p>
+<p>Abilitare i log NAT (<code>--enable-logging</code>) è essenziale per il debug. I log vengono scritti in Cloud Logging e mostrano ogni connessione NAT con IP sorgente, destinazione, porta, e stato di allocazione (<code>OK</code>/<code>DROPPED</code>). Utile quando si investigano connessioni rifiutate da sistemi esterni o esaurimento porte NAT.</p>
 </div>
 <h3 id="private-service-connect-psc">Private Service Connect (PSC)<a class="headerlink" href="#private-service-connect-psc" title="Permanent link">&para;</a></h3>
-<p>PSC è l'evoluzione di VPC Peering per accedere a <strong>servizi GCP managed</strong> (Cloud SQL, Memorystore, Vertex AI, ecc.) e a <strong>servizi di terze parti</strong> tramite endpoint IP privato nel proprio VPC.</p>
+<p>PSC è l'alternativa moderna a VPC Peering / Private Services Access per accedere a <strong>servizi GCP managed</strong> (Cloud SQL, ecc.) e a <strong>servizi di terze parti</strong> tramite un endpoint IP privato nel proprio VPC. A differenza del peering non richiede range IP non sovrapposti tra consumer e producer, e non crea connettività di rete completa tra i due VPC: espone solo il singolo servizio. Non tutti i servizi managed supportano PSC (alcuni usano ancora Private Services Access): verificare per servizio.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>VPC aziendale (10.10.0.0/16)
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>├── subnet-app (10.10.1.0/24)
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>│   └── VM applicativa
@@ -24991,7 +24990,8 @@
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">  </span>--region<span class="o">=</span>europe-west1<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">  </span>--network<span class="o">=</span>my-vpc<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">  </span>--address<span class="o">=</span>psc-sql-endpoint<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">  </span>--target-service-attachment<span class="o">=</span>SERVICE_ATTACHMENT_URI
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">  </span>--load-balancing-scheme<span class="o">=</span><span class="s2">""</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">  </span>--target-service-attachment<span class="o">=</span>SERVICE_ATTACHMENT_URI
 </span></code></pre></div>
 <hr />
 <h2 id="firewall-rules">Firewall Rules<a class="headerlink" href="#firewall-rules" title="Permanent link">&para;</a></h2>
@@ -25012,39 +25012,49 @@
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>├── Source/Destination: range CIDR | tag | SA
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>└── Protocol/Port: tcp:80,443 | udp:53 | icmp | all
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Regola ingress basata su service account (best practice)</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>create<span class="w"> </span>allow-lb-to-app<span class="w"> </span><span class="se">\</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Regola ingress basata su service account (best practice): tier web -&gt; tier app</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>create<span class="w"> </span>allow-web-to-app<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--network<span class="o">=</span>my-vpc<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>--direction<span class="o">=</span>INGRESS<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span>--priority<span class="o">=</span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>--action<span class="o">=</span>ALLOW<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span>--rules<span class="o">=</span>tcp:8080<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span>--source-service-accounts<span class="o">=</span>lb-sa@PROJECT.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span>--source-service-accounts<span class="o">=</span>web-sa@PROJECT.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span>--target-service-accounts<span class="o">=</span>app-sa@PROJECT.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">  </span>--description<span class="o">=</span><span class="s2">"Load balancer → App backend"</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">  </span>--description<span class="o">=</span><span class="s2">"Web tier → App backend"</span>
 </span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># Regola ingress basata su tag (meno sicura ma più semplice)</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>create<span class="w"> </span>allow-ssh-iap<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">  </span>--network<span class="o">=</span>my-vpc<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">  </span>--direction<span class="o">=</span>INGRESS<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">  </span>--priority<span class="o">=</span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># Traffico da Cloud Load Balancing / health check: i LB NON hanno service account,</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="c1"># vanno ammessi per range IP (senza questa regola i backend risultano UNHEALTHY)</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>create<span class="w"> </span>allow-lb-health-checks<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">  </span>--network<span class="o">=</span>my-vpc<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">  </span>--direction<span class="o">=</span>INGRESS<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">  </span>--action<span class="o">=</span>ALLOW<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">  </span>--rules<span class="o">=</span>tcp:22<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="w">  </span>--source-ranges<span class="o">=</span><span class="m">35</span>.235.240.0/20<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="w">  </span>--target-tags<span class="o">=</span>ssh-allowed<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="w">  </span>--description<span class="o">=</span><span class="s2">"SSH via IAP (range IP IAP tunneling)"</span>
-</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a>
-</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="c1"># Listare regole filtrando per VPC</span>
-</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="w">  </span>--filter<span class="o">=</span><span class="s2">"network=my-vpc"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="w">  </span>--format<span class="o">=</span><span class="s2">"table(name,direction,priority,sourceRanges,allowed,targetTags,targetServiceAccounts)"</span>
-</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a>
-</span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="c1"># Descrivere regola specifica</span>
-</span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>describe<span class="w"> </span>allow-lb-to-app
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">  </span>--rules<span class="o">=</span>tcp:8080<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="w">  </span>--source-ranges<span class="o">=</span><span class="m">130</span>.211.0.0/22,35.191.0.0/16<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="w">  </span>--target-service-accounts<span class="o">=</span>app-sa@PROJECT.iam.gserviceaccount.com
+</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a>
+</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="c1"># Regola ingress basata su tag (meno sicura ma più semplice)</span>
+</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>create<span class="w"> </span>allow-ssh-iap<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a><span class="w">  </span>--network<span class="o">=</span>my-vpc<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="w">  </span>--direction<span class="o">=</span>INGRESS<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="w">  </span>--priority<span class="o">=</span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="w">  </span>--action<span class="o">=</span>ALLOW<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="w">  </span>--rules<span class="o">=</span>tcp:22<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a><span class="w">  </span>--source-ranges<span class="o">=</span><span class="m">35</span>.235.240.0/20<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-30"><a id="__codelineno-10-30" name="__codelineno-10-30" href="#__codelineno-10-30"></a><span class="w">  </span>--target-tags<span class="o">=</span>ssh-allowed<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-31"><a id="__codelineno-10-31" name="__codelineno-10-31" href="#__codelineno-10-31"></a><span class="w">  </span>--description<span class="o">=</span><span class="s2">"SSH via IAP (range IP IAP tunneling)"</span>
+</span><span id="__span-10-32"><a id="__codelineno-10-32" name="__codelineno-10-32" href="#__codelineno-10-32"></a>
+</span><span id="__span-10-33"><a id="__codelineno-10-33" name="__codelineno-10-33" href="#__codelineno-10-33"></a><span class="c1"># Listare regole filtrando per VPC</span>
+</span><span id="__span-10-34"><a id="__codelineno-10-34" name="__codelineno-10-34" href="#__codelineno-10-34"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-35"><a id="__codelineno-10-35" name="__codelineno-10-35" href="#__codelineno-10-35"></a><span class="w">  </span>--filter<span class="o">=</span><span class="s2">"network=my-vpc"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-36"><a id="__codelineno-10-36" name="__codelineno-10-36" href="#__codelineno-10-36"></a><span class="w">  </span>--format<span class="o">=</span><span class="s2">"table(name,direction,priority,sourceRanges,allowed,targetTags,targetServiceAccounts)"</span>
+</span><span id="__span-10-37"><a id="__codelineno-10-37" name="__codelineno-10-37" href="#__codelineno-10-37"></a>
+</span><span id="__span-10-38"><a id="__codelineno-10-38" name="__codelineno-10-38" href="#__codelineno-10-38"></a><span class="c1"># Descrivere regola specifica</span>
+</span><span id="__span-10-39"><a id="__codelineno-10-39" name="__codelineno-10-39" href="#__codelineno-10-39"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-rules<span class="w"> </span>describe<span class="w"> </span>allow-lb-to-app
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Tag-based firewall: rischio sicurezza</p>
-<p>Le <strong>network tag</strong> sono attributi stringa assegnabili da chiunque abbia <code>roles/compute.instanceAdmin</code>. Un utente malevolo con tale ruolo può aggiungere tag a una VM e bypassare regole firewall. Preferire sempre <strong>firewall rules basate su service account</strong> in ambienti di produzione: il SA deve essere esplicitamente assegnato alla VM e richiede <code>roles/iam.serviceAccountUser</code>.</p>
+<p>Le <strong>network tag</strong> sono attributi stringa assegnabili da chiunque abbia <code>roles/compute.instanceAdmin</code>. Un utente malevolo con tale ruolo può aggiungere tag a una VM e bypassare regole firewall. Preferire sempre <strong>firewall rules basate su service account</strong> in ambienti di produzione: il SA deve essere esplicitamente assegnato alla VM e richiede <code>roles/iam.serviceAccountUser</code>. Alternativa moderna: i <strong>secure tags</strong> (tag IAM-governed, usabili nelle Firewall Policy) che combinano la flessibilità dei tag con un controllo di accesso IAM.</p>
 </div>
 <h3 id="firewall-rules-vs-firewall-policy">Firewall Rules vs Firewall Policy<a class="headerlink" href="#firewall-rules-vs-firewall-policy" title="Permanent link">&para;</a></h3>
 <table>
@@ -25059,7 +25069,7 @@
 <tr>
 <td>Scope</td>
 <td>Singolo VPC</td>
-<td>Organizzazione, folder, VPC</td>
+<td>Organizzazione, folder (gerarchica) oppure VPC/regione (network firewall policy)</td>
 </tr>
 <tr>
 <td>Gestione</td>
@@ -25069,7 +25079,7 @@
 <tr>
 <td>Delegation</td>
 <td>No</td>
-<td>Sì (ereditarietà gerarchica)</td>
+<td>Sì (gerarchica: <code>goto_next</code> delega ai livelli inferiori)</td>
 </tr>
 <tr>
 <td>Stateful</td>
@@ -25093,26 +25103,27 @@
 </tr>
 </tbody>
 </table>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Creare Firewall Policy a livello organizzazione</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-policies<span class="w"> </span>create<span class="w"> </span>org-baseline-policy<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--short-name<span class="o">=</span>org-baseline<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--organization<span class="o">=</span>ORG_ID
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># Aggiungere regola alla policy</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-policies<span class="w"> </span>rules<span class="w"> </span>create<span class="w"> </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span>--firewall-policy<span class="o">=</span>POLICY_ID<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span>--organization<span class="o">=</span>ORG_ID<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">  </span>--direction<span class="o">=</span>INGRESS<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">  </span>--action<span class="o">=</span>allow<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">  </span>--layer4-configs<span class="o">=</span>tcp:443<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span>--src-ip-ranges<span class="o">=</span><span class="m">0</span>.0.0.0/0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>--description<span class="o">=</span><span class="s2">"Allow HTTPS inbound"</span>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1"># Associare la policy a un VPC</span>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-policies<span class="w"> </span>associations<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">  </span>--firewall-policy<span class="o">=</span>POLICY_ID<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">  </span>--network<span class="o">=</span>projects/PROJECT/global/networks/my-vpc<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">  </span>--organization<span class="o">=</span>ORG_ID
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Firewall Policy GERARCHICA (organizzazione/folder). Per policy a livello VPC si usa</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># invece `gcloud compute network-firewall-policies ...` (global/regional network policy).</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-policies<span class="w"> </span>create<span class="w"> </span>org-baseline-policy<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--short-name<span class="o">=</span>org-baseline<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--organization<span class="o">=</span>ORG_ID
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Aggiungere regola alla policy</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-policies<span class="w"> </span>rules<span class="w"> </span>create<span class="w"> </span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span>--firewall-policy<span class="o">=</span>POLICY_ID<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">  </span>--organization<span class="o">=</span>ORG_ID<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">  </span>--direction<span class="o">=</span>INGRESS<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">  </span>--action<span class="o">=</span>allow<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span>--layer4-configs<span class="o">=</span>tcp:443<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>--src-ip-ranges<span class="o">=</span><span class="m">0</span>.0.0.0/0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">  </span>--description<span class="o">=</span><span class="s2">"Allow HTTPS inbound"</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="c1"># Associare la policy all'organizzazione (si applica a tutti i VPC sotto di essa;</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="c1"># per un folder usare --folder=FOLDER_ID)</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>firewall-policies<span class="w"> </span>associations<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">  </span>--firewall-policy<span class="o">=</span>POLICY_ID<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">  </span>--organization<span class="o">=</span>ORG_ID
 </span></code></pre></div>
 <hr />
 <h2 id="load-balancing-su-gcp-tassonomia">Load Balancing su GCP — Tassonomia<a class="headerlink" href="#load-balancing-su-gcp-tassonomia" title="Permanent link">&para;</a></h2>
@@ -25120,17 +25131,21 @@
 <h3 id="panoramica-tipi">Panoramica Tipi<a class="headerlink" href="#panoramica-tipi" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>Cloud Load Balancing
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>│
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>├── Application LB (Layer 7 — HTTP/S)
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>├── Application LB (Layer 7 — HTTP/S, proxy)
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>│   ├── Global External ALB   → traffico internet globale, anycast, Cloud Armor
 </span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>│   ├── Regional External ALB → traffico internet regionale
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>│   └── Regional Internal ALB → traffico interno GKE/VM (istio-less mesh)
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>│
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>├── Network LB (Layer 4 — TCP/UDP/SSL)
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>│   ├── Global External NLB   → pass-through, IP anycast globale
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>│   ├── Regional External NLB → pass-through, IP statico regionale
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>│   └── Regional Internal NLB → ILB pass-through per traffico interno
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>│   ├── Regional Internal ALB → traffico interno (VM, GKE), richiede proxy-only subnet
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>│   └── Cross-region Internal ALB → interno, multi-regione
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>│
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>├── Proxy Network LB (Layer 4 — TCP/SSL, proxy)
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>│   ├── Global External proxy NLB   → TCP con terminazione, IP anycast globale
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>│   ├── Regional External / Internal proxy NLB
 </span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>│
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>└── [deprecati: Classic HTTP LB, TCP/UDP legacy ILB]
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>├── Passthrough Network LB (Layer 4 — TCP/UDP/ICMP, pass-through, solo regionale)
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>│   ├── External passthrough NLB → IP statico regionale, preserva IP client
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>│   └── Internal passthrough NLB → traffico interno
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>│
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>└── [legacy: Classic Application LB — da migrare ai nuovi ALB]
 </span></code></pre></div>
 <table>
 <thead>
@@ -25165,18 +25180,25 @@
 <td>Microservizi interni, GKE</td>
 </tr>
 <tr>
-<td>Global External NLB</td>
-<td>TCP/UDP</td>
+<td>Global External proxy NLB</td>
+<td>TCP (anche TLS)</td>
 <td>Globale</td>
 <td>Sì</td>
-<td>Gaming, IoT, VoIP globale</td>
+<td>Protocolli TCP non-HTTP globali</td>
 </tr>
 <tr>
-<td>Regional Internal NLB</td>
+<td>External passthrough NLB</td>
+<td>TCP/UDP</td>
+<td>Regionale</td>
+<td>Sì</td>
+<td>Gaming, VoIP, UDP, IP client preservato</td>
+</tr>
+<tr>
+<td>Internal passthrough NLB</td>
 <td>TCP/UDP</td>
 <td>Regionale</td>
 <td>No</td>
-<td>Database, servizi TCP interni</td>
+<td>Database, servizi TCP/UDP interni</td>
 </tr>
 </tbody>
 </table>
@@ -25213,6 +25235,10 @@
 </span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># NEG per GKE (creato automaticamente dal GKE Ingress controller)</span>
 </span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="c1"># Configurazione via annotation sull'Ingress:</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Ingress vs Gateway API</p>
+<p>Per nuovi cluster GKE, Google raccomanda la <strong>Gateway API</strong> (<code>gke-l7-global-external-managed</code>, <code>gke-l7-rilb</code>) al posto di Ingress: più espressiva (routing per header, traffic splitting) e con ruoli separati infra/app. Anche l'annotation <code>kubernetes.io/ingress.class</code> è la forma legacy: oggi si preferisce <code>spec.ingressClassName: gce</code>. L'Ingress interno (<code>gce-internal</code>) richiede una <strong>proxy-only subnet</strong> nella regione.</p>
+</div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Ingress GKE con GCE Ingress class (Global ALB)</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">networking.k8s.io/v1</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Ingress</span>
@@ -25264,37 +25290,43 @@
 </span><span id="__span-15-49"><a id="__codelineno-15-49" name="__codelineno-15-49" href="#__codelineno-15-49"></a><span class="w">            </span><span class="nt">port</span><span class="p">:</span>
 </span><span id="__span-15-50"><a id="__codelineno-15-50" name="__codelineno-15-50" href="#__codelineno-15-50"></a><span class="w">              </span><span class="nt">number</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8080</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Backend Service via gcloud</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>backend-services<span class="w"> </span>create<span class="w"> </span>api-backend<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>--protocol<span class="o">=</span>HTTP<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span>--port-name<span class="o">=</span>http<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">  </span>--health-checks<span class="o">=</span>api-health-check<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span>--global
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1"># Health Check</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>health-checks<span class="w"> </span>create<span class="w"> </span>http<span class="w"> </span>api-health-check<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">  </span>--request-path<span class="o">=</span>/healthz<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">  </span>--port<span class="o">=</span><span class="m">8080</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">  </span>--check-interval<span class="o">=</span>10s<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="w">  </span>--timeout<span class="o">=</span>5s<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="w">  </span>--healthy-threshold<span class="o">=</span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="w">  </span>--unhealthy-threshold<span class="o">=</span><span class="m">3</span>
-</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>
-</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="c1"># URL Map</span>
-</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>url-maps<span class="w"> </span>create<span class="w"> </span>my-url-map<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="w">  </span>--default-service<span class="o">=</span>api-backend
-</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a>
-</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="c1"># Path matcher</span>
-</span><span id="__span-16-22"><a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>url-maps<span class="w"> </span>add-path-matcher<span class="w"> </span>my-url-map<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-23"><a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="w">  </span>--path-matcher-name<span class="o">=</span>path-matcher<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-24"><a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a><span class="w">  </span>--default-service<span class="o">=</span>api-backend<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-25"><a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a><span class="w">  </span>--path-rules<span class="o">=</span>/api/*<span class="o">=</span>api-backend,/static/*<span class="o">=</span>static-backend
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Backend Service via gcloud (EXTERNAL_MANAGED = Global External ALB moderno;</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1"># il default EXTERNAL crea un Classic ALB)</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>backend-services<span class="w"> </span>create<span class="w"> </span>api-backend<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span>--load-balancing-scheme<span class="o">=</span>EXTERNAL_MANAGED<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">  </span>--protocol<span class="o">=</span>HTTP<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span>--port-name<span class="o">=</span>http<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">  </span>--health-checks<span class="o">=</span>api-health-check<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">  </span>--global
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="c1"># Health Check</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>health-checks<span class="w"> </span>create<span class="w"> </span>http<span class="w"> </span>api-health-check<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">  </span>--request-path<span class="o">=</span>/healthz<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="w">  </span>--port<span class="o">=</span><span class="m">8080</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a><span class="w">  </span>--check-interval<span class="o">=</span>10s<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="w">  </span>--timeout<span class="o">=</span>5s<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="w">  </span>--healthy-threshold<span class="o">=</span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="w">  </span>--unhealthy-threshold<span class="o">=</span><span class="m">3</span>
+</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a>
+</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="c1"># URL Map</span>
+</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>url-maps<span class="w"> </span>create<span class="w"> </span>my-url-map<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="w">  </span>--default-service<span class="o">=</span>api-backend
+</span><span id="__span-16-22"><a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a>
+</span><span id="__span-16-23"><a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="c1"># Path matcher (static-backend è un Backend Bucket: usa --backend-bucket-path-rules)</span>
+</span><span id="__span-16-24"><a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>url-maps<span class="w"> </span>add-path-matcher<span class="w"> </span>my-url-map<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-25"><a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a><span class="w">  </span>--path-matcher-name<span class="o">=</span>path-matcher<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-26"><a id="__codelineno-16-26" name="__codelineno-16-26" href="#__codelineno-16-26"></a><span class="w">  </span>--default-service<span class="o">=</span>api-backend<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-27"><a id="__codelineno-16-27" name="__codelineno-16-27" href="#__codelineno-16-27"></a><span class="w">  </span>--path-rules<span class="o">=</span>/api/*<span class="o">=</span>api-backend<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-28"><a id="__codelineno-16-28" name="__codelineno-16-28" href="#__codelineno-16-28"></a><span class="w">  </span>--backend-bucket-path-rules<span class="o">=</span>/static/*<span class="o">=</span>static-backend
+</span><span id="__span-16-29"><a id="__codelineno-16-29" name="__codelineno-16-29" href="#__codelineno-16-29"></a>
+</span><span id="__span-16-30"><a id="__codelineno-16-30" name="__codelineno-16-30" href="#__codelineno-16-30"></a><span class="c1"># Restano da creare (omessi): target-https-proxy (con certificato) e forwarding-rule</span>
+</span><span id="__span-16-31"><a id="__codelineno-16-31" name="__codelineno-16-31" href="#__codelineno-16-31"></a><span class="c1"># globale con --load-balancing-scheme=EXTERNAL_MANAGED che puntano all'URL map</span>
 </span></code></pre></div>
 <hr />
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
 <p class="admonition-title">Pianificazione CIDR: pensare in anticipo</p>
-<p>Definire i range CIDR con spazio di crescita <strong>prima</strong> di creare il primo VPC. In GCP i range di subnet possono essere espansi (mai ridotti) ma non è possibile cambiare il range principale. Schema tipico enterprise: <code>/16</code> per VPC, <code>/20</code> per subnet per-regione (4094 IP), <code>/16-/22</code> per secondary ranges GKE (pods/services).</p>
+<p>Definire i range CIDR con spazio di crescita <strong>prima</strong> di creare il primo VPC. In GCP i range di subnet possono essere espansi (mai ridotti) ma non è possibile cambiare il range principale. Un VPC GCP non ha un CIDR proprio (solo le subnet lo hanno). Schema tipico enterprise: un blocco <code>/16</code> pianificato per ambiente, <code>/20</code> per subnet per-regione (4092 IP utilizzabili: 4 sono riservati), <code>/16-/22</code> per secondary ranges GKE (pods/services).</p>
 </div>
 <ul>
 <li><strong>Mai usare Auto Mode in produzione</strong> — impossibile personalizzare CIDR, problemi certi con peering</li>
@@ -25361,24 +25393,26 @@
 <p><strong>Causa comune:</strong> Priority errata (regola DENY più prioritaria), tag non applicato alla VM, SA sbagliato, direzione errata (INGRESS vs EGRESS).</p>
 <p><strong>Soluzione:</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Usare Connectivity Tests — strumento di diagnosi managed GCP</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>gcloud<span class="w"> </span>network-connectivity<span class="w"> </span>tests<span class="w"> </span>create<span class="w"> </span>test-vm-to-vm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span>--source-ip<span class="o">=</span><span class="m">10</span>.10.0.5<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span>--destination-ip<span class="o">=</span><span class="m">10</span>.20.0.8<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">  </span>--protocol<span class="o">=</span>TCP<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">  </span>--destination-port<span class="o">=</span><span class="m">8080</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">  </span>--project<span class="o">=</span>my-project
-</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># Controllare i risultati</span>
-</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>gcloud<span class="w"> </span>network-connectivity<span class="w"> </span>tests<span class="w"> </span>describe<span class="w"> </span>test-vm-to-vm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="w">  </span>--format<span class="o">=</span><span class="s2">"get(reachabilityDetails)"</span>
-</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>
-</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="c1"># Verificare quale firewall rule si applica effettivamente alla VM</span>
-</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>instances<span class="w"> </span>describe<span class="w"> </span>my-vm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="w">  </span>--zone<span class="o">=</span>europe-west1-b<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-16"><a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a><span class="w">  </span>--format<span class="o">=</span><span class="s2">"get(networkInterfaces[0].network,tags.items,serviceAccounts[0].email)"</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>gcloud<span class="w"> </span>network-management<span class="w"> </span>connectivity-tests<span class="w"> </span>create<span class="w"> </span>test-vm-to-vm<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span>--source-ip-address<span class="o">=</span><span class="m">10</span>.10.0.5<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span>--source-network<span class="o">=</span>projects/my-project/global/networks/my-vpc<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">  </span>--destination-ip-address<span class="o">=</span><span class="m">10</span>.20.0.8<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">  </span>--destination-network<span class="o">=</span>projects/my-project/global/networks/my-vpc<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">  </span>--protocol<span class="o">=</span>TCP<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="w">  </span>--destination-port<span class="o">=</span><span class="m">8080</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="w">  </span>--project<span class="o">=</span>my-project
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="c1"># Controllare i risultati (indica anche la firewall rule che blocca)</span>
+</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>gcloud<span class="w"> </span>network-management<span class="w"> </span>connectivity-tests<span class="w"> </span>describe<span class="w"> </span>test-vm-to-vm<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="w">  </span>--format<span class="o">=</span><span class="s2">"get(reachabilityDetails)"</span>
+</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a>
+</span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="c1"># Verificare quale firewall rule si applica effettivamente alla VM</span>
+</span><span id="__span-20-16"><a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>instances<span class="w"> </span>describe<span class="w"> </span>my-vm<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-17"><a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a><span class="w">  </span>--zone<span class="o">=</span>europe-west1-b<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-18"><a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a><span class="w">  </span>--format<span class="o">=</span><span class="s2">"get(networkInterfaces[0].network,tags.items,serviceAccounts[0].email)"</span>
 </span></code></pre></div></p>
 <h3 id="symptom-load-balancer-restituisce-502503-intermittenti">Symptom: Load balancer restituisce 502/503 intermittenti<a class="headerlink" href="#symptom-load-balancer-restituisce-502503-intermittenti" title="Permanent link">&para;</a></h3>
-<p><strong>Causa:</strong> Health check fallisce su alcuni backend (configurazione errata, app non risponde sul path/porta dell'health check), oppure timeout Backend Service troppo basso.</p>
+<p><strong>Causa:</strong> Health check fallisce su alcuni backend (app non risponde sul path/porta dell'health check; <strong>firewall che non ammette i range dei probe/LB <code>130.211.0.0/22</code> e <code>35.191.0.0/16</code></strong> — causa più frequente, vedi regola sopra), timeout Backend Service troppo basso, oppure il backend chiude le connessioni keep-alive prima del LB (il timeout keep-alive del server deve superare quello del LB, es. &gt;600s per ALB esterno: tipico 502 intermittente).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Verificare stato backend nel Backend Service</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>backend-services<span class="w"> </span>get-health<span class="w"> </span>api-backend<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span>--global<span class="w"> </span><span class="se">\</span>
@@ -25393,14 +25427,13 @@
 </span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a><span class="w">  </span>--global
 </span></code></pre></div>
 <h3 id="firewall-insights-regole-non-usate">Firewall Insights — Regole non Usate<a class="headerlink" href="#firewall-insights-regole-non-usate" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Firewall Insights identifica regole mai utilizzate (richiede abilitazione API)</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>gcloud<span class="w"> </span>services<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>firewallinsights.googleapis.com
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># Le insight sono visibili in Console → Network Security → Firewall Insights</span>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="c1"># Via API:</span>
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>gcloud<span class="w"> </span>beta<span class="w"> </span>network-management<span class="w"> </span>firewall-insights<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="w">  </span>--filter<span class="o">=</span><span class="s2">"insightType=SHADOWED_FIREWALL_RULE"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="w">  </span>--location<span class="o">=</span>global
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Firewall Insights identifica regole shadowed/mai usate. Richiede Firewall Rules Logging</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># attivo sulle regole analizzate. Visibile in Console → Network Intelligence Center.</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># Via Recommender API (insight type: regole shadowed):</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>gcloud<span class="w"> </span>recommender<span class="w"> </span>insights<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="w">  </span>--insight-type<span class="o">=</span>google.compute.firewall.Insight<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="w">  </span>--location<span class="o">=</span>global<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="w">  </span>--project<span class="o">=</span>my-project
 </span></code></pre></div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>

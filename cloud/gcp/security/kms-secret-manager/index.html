@@ -9734,7 +9734,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -9759,7 +9759,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25393,8 +25393,8 @@
 </span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>        <span class="n">request</span><span class="o">=</span><span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="n">key_name</span><span class="p">,</span> <span class="s2">"plaintext"</span><span class="p">:</span> <span class="n">dek</span><span class="p">}</span>
 </span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>    <span class="p">)</span>
 </span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>
-</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>    <span class="c1"># 4. Pulire la DEK in chiaro dalla memoria</span>
-</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>    <span class="n">dek</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\x00</span><span class="s2">"</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">dek</span><span class="p">)</span>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>    <span class="c1"># 4. Rilasciare il riferimento alla DEK (best effort: i bytes Python sono</span>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>    <span class="c1">#    immutabili, non si può azzerare davvero la memoria)</span>
 </span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a>    <span class="k">del</span> <span class="n">dek</span>
 </span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>
 </span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a>    <span class="k">return</span> <span class="p">{</span>
@@ -25414,9 +25414,8 @@
 </span><span id="__span-6-43"><a id="__codelineno-6-43" name="__codelineno-6-43" href="#__codelineno-6-43"></a>    <span class="n">nonce</span><span class="p">,</span> <span class="n">ciphertext</span> <span class="o">=</span> <span class="n">encrypted_data</span><span class="p">[:</span><span class="mi">12</span><span class="p">],</span> <span class="n">encrypted_data</span><span class="p">[</span><span class="mi">12</span><span class="p">:]</span>
 </span><span id="__span-6-44"><a id="__codelineno-6-44" name="__codelineno-6-44" href="#__codelineno-6-44"></a>    <span class="n">plaintext</span> <span class="o">=</span> <span class="n">aesgcm</span><span class="o">.</span><span class="n">decrypt</span><span class="p">(</span><span class="n">nonce</span><span class="p">,</span> <span class="n">ciphertext</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
 </span><span id="__span-6-45"><a id="__codelineno-6-45" name="__codelineno-6-45" href="#__codelineno-6-45"></a>
-</span><span id="__span-6-46"><a id="__codelineno-6-46" name="__codelineno-6-46" href="#__codelineno-6-46"></a>    <span class="n">dek</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\x00</span><span class="s2">"</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">dek</span><span class="p">)</span>
-</span><span id="__span-6-47"><a id="__codelineno-6-47" name="__codelineno-6-47" href="#__codelineno-6-47"></a>    <span class="k">del</span> <span class="n">dek</span>
-</span><span id="__span-6-48"><a id="__codelineno-6-48" name="__codelineno-6-48" href="#__codelineno-6-48"></a>    <span class="k">return</span> <span class="n">plaintext</span>
+</span><span id="__span-6-46"><a id="__codelineno-6-46" name="__codelineno-6-46" href="#__codelineno-6-46"></a>    <span class="k">del</span> <span class="n">dek</span>
+</span><span id="__span-6-47"><a id="__codelineno-6-47" name="__codelineno-6-47" href="#__codelineno-6-47"></a>    <span class="k">return</span> <span class="n">plaintext</span>
 </span></code></pre></div>
 <h3 id="abilitare-cmek-su-un-servizio-gcp-esempio-gcs">Abilitare CMEK su un Servizio GCP (esempio GCS)<a class="headerlink" href="#abilitare-cmek-su-un-servizio-gcp-esempio-gcs" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># 1. Concedere al service agent GCS il permesso sulla chiave</span>
@@ -25450,31 +25449,40 @@
 </span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">    </span>--replication-policy<span class="o">=</span><span class="s2">"user-managed"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">    </span>--locations<span class="o">=</span><span class="s2">"europe-west1,europe-west3"</span>
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># Secret cifrato con CMEK invece della chiave Google-managed di default</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"MySecurePassword123!"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>gcloud<span class="w"> </span>secrets<span class="w"> </span>create<span class="w"> </span>prod-db-password-cmek<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">    </span>--data-file<span class="o">=</span>-<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">    </span>--replication-policy<span class="o">=</span><span class="s2">"user-managed"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">    </span>--locations<span class="o">=</span><span class="s2">"europe-west8"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">    </span>--kms-key-name<span class="o">=</span><span class="s2">"projects/my-project-id/locations/europe-west8/keyRings/prod-keyring/cryptoKeys/app-encryption-key"</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="c1"># ── AGGIUNGERE UNA NUOVA VERSION (rotazione manuale) ─────────────────</span>
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"NewSecurePassword456!"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>gcloud<span class="w"> </span>secrets<span class="w"> </span>versions<span class="w"> </span>add<span class="w"> </span>prod-db-password<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">    </span>--data-file<span class="o">=</span>-
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># Secret cifrato con CMEK invece della chiave Google-managed di default.</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1"># Con replica automatic la chiave KMS deve stare in location `global`;</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="c1"># --kms-key-name NON è valido con replica user-managed.</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="c1"># Prerequisito: service agent Secret Manager</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="c1"># (service-PROJECT_NUMBER@gcp-sa-secretmanager.iam.gserviceaccount.com)</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="c1"># con roles/cloudkms.cryptoKeyEncrypterDecrypter sulla chiave.</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"MySecurePassword123!"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>gcloud<span class="w"> </span>secrets<span class="w"> </span>create<span class="w"> </span>prod-db-password-cmek<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">    </span>--data-file<span class="o">=</span>-<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">    </span>--replication-policy<span class="o">=</span><span class="s2">"automatic"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">    </span>--kms-key-name<span class="o">=</span><span class="s2">"projects/my-project-id/locations/global/keyRings/prod-keyring-global/cryptoKeys/secrets-key"</span>
 </span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="c1"># Listare le version</span>
-</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>gcloud<span class="w"> </span>secrets<span class="w"> </span>versions<span class="w"> </span>list<span class="w"> </span>prod-db-password
-</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a>
-</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="c1"># Leggere la version specifica (preferito in produzione)</span>
-</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>gcloud<span class="w"> </span>secrets<span class="w"> </span>versions<span class="w"> </span>access<span class="w"> </span><span class="m">3</span><span class="w"> </span>--secret<span class="o">=</span>prod-db-password
-</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a>
-</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="c1"># Leggere l'ultima version attiva (solo per sviluppo/test)</span>
-</span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a>gcloud<span class="w"> </span>secrets<span class="w"> </span>versions<span class="w"> </span>access<span class="w"> </span>latest<span class="w"> </span>--secret<span class="o">=</span>prod-db-password
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="c1"># CMEK + user-managed: una chiave per ogni location, via file di policy</span>
+</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="c1"># (replication.json: {"userManaged":{"replicas":[{"location":"europe-west8",</span>
+</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="c1">#   "customerManagedEncryption":{"kmsKeyName":"projects/.../locations/europe-west8/keyRings/.../cryptoKeys/..."}}]}})</span>
+</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="c1"># gcloud secrets create prod-db-password-eu-cmek --data-file=- --replication-policy-file=replication.json</span>
+</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a>
+</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a><span class="c1"># ── AGGIUNGERE UNA NUOVA VERSION (rotazione manuale) ─────────────────</span>
+</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="nb">echo</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"NewSecurePassword456!"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>gcloud<span class="w"> </span>secrets<span class="w"> </span>versions<span class="w"> </span>add<span class="w"> </span>prod-db-password<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a><span class="w">    </span>--data-file<span class="o">=</span>-
 </span><span id="__span-8-33"><a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a>
-</span><span id="__span-8-34"><a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a><span class="c1"># Disabilitare una version compromessa (reversibile)</span>
-</span><span id="__span-8-35"><a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a>gcloud<span class="w"> </span>secrets<span class="w"> </span>versions<span class="w"> </span>disable<span class="w"> </span><span class="m">2</span><span class="w"> </span>--secret<span class="o">=</span>prod-db-password
+</span><span id="__span-8-34"><a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a><span class="c1"># Listare le version</span>
+</span><span id="__span-8-35"><a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a>gcloud<span class="w"> </span>secrets<span class="w"> </span>versions<span class="w"> </span>list<span class="w"> </span>prod-db-password
 </span><span id="__span-8-36"><a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a>
-</span><span id="__span-8-37"><a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a><span class="c1"># Distruggere definitivamente una version (irreversibile)</span>
-</span><span id="__span-8-38"><a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a>gcloud<span class="w"> </span>secrets<span class="w"> </span>versions<span class="w"> </span>destroy<span class="w"> </span><span class="m">1</span><span class="w"> </span>--secret<span class="o">=</span>prod-db-password
+</span><span id="__span-8-37"><a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a><span class="c1"># Leggere la version specifica (preferito in produzione)</span>
+</span><span id="__span-8-38"><a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a>gcloud<span class="w"> </span>secrets<span class="w"> </span>versions<span class="w"> </span>access<span class="w"> </span><span class="m">3</span><span class="w"> </span>--secret<span class="o">=</span>prod-db-password
+</span><span id="__span-8-39"><a id="__codelineno-8-39" name="__codelineno-8-39" href="#__codelineno-8-39"></a>
+</span><span id="__span-8-40"><a id="__codelineno-8-40" name="__codelineno-8-40" href="#__codelineno-8-40"></a><span class="c1"># Leggere l'ultima version attiva (solo per sviluppo/test)</span>
+</span><span id="__span-8-41"><a id="__codelineno-8-41" name="__codelineno-8-41" href="#__codelineno-8-41"></a>gcloud<span class="w"> </span>secrets<span class="w"> </span>versions<span class="w"> </span>access<span class="w"> </span>latest<span class="w"> </span>--secret<span class="o">=</span>prod-db-password
+</span><span id="__span-8-42"><a id="__codelineno-8-42" name="__codelineno-8-42" href="#__codelineno-8-42"></a>
+</span><span id="__span-8-43"><a id="__codelineno-8-43" name="__codelineno-8-43" href="#__codelineno-8-43"></a><span class="c1"># Disabilitare una version compromessa (reversibile)</span>
+</span><span id="__span-8-44"><a id="__codelineno-8-44" name="__codelineno-8-44" href="#__codelineno-8-44"></a>gcloud<span class="w"> </span>secrets<span class="w"> </span>versions<span class="w"> </span>disable<span class="w"> </span><span class="m">2</span><span class="w"> </span>--secret<span class="o">=</span>prod-db-password
+</span><span id="__span-8-45"><a id="__codelineno-8-45" name="__codelineno-8-45" href="#__codelineno-8-45"></a>
+</span><span id="__span-8-46"><a id="__codelineno-8-46" name="__codelineno-8-46" href="#__codelineno-8-46"></a><span class="c1"># Distruggere definitivamente una version (irreversibile)</span>
+</span><span id="__span-8-47"><a id="__codelineno-8-47" name="__codelineno-8-47" href="#__codelineno-8-47"></a>gcloud<span class="w"> </span>secrets<span class="w"> </span>versions<span class="w"> </span>destroy<span class="w"> </span><span class="m">1</span><span class="w"> </span>--secret<span class="o">=</span>prod-db-password
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># ── IAM BINDING MINIMO SU UN SECRET ──────────────────────────────────</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>gcloud<span class="w"> </span>secrets<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>prod-db-password<span class="w"> </span><span class="se">\</span>
@@ -25495,7 +25503,7 @@
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">  </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcp</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span><span class="nt">parameters</span><span class="p">:</span>
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span><span class="nt">secrets</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">      </span><span class="no">- resourceName: "projects/my-project-id/secrets/prod-db-password/versions/latest"</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">      </span><span class="no">- resourceName: "projects/my-project-id/secrets/prod-db-password/versions/2"   # version fissata (non latest) in produzione</span>
 </span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">        </span><span class="no">path: "db-password"</span>
 </span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">      </span><span class="no">- resourceName: "projects/my-project-id/secrets/prod-api-key/versions/3"</span>
 </span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">        </span><span class="no">path: "api-key"</span>
@@ -25620,7 +25628,7 @@
 </span></code></pre></div></p>
 <div class="admonition warning">
 <p class="admonition-title">DESTROYED è irreversibile</p>
-<p>A differenza di <code>DISABLED</code>, una Key Version in stato <code>DESTROYED</code> elimina il materiale crittografico in modo permanente dopo un periodo di grazia configurabile (default 24h, fino a 30 giorni). Qualsiasi dato cifrato solo con quella version diventa definitivamente irrecuperabile ("crypto-shredding").</p>
+<p>A differenza di <code>DISABLED</code>, una Key Version in stato <code>DESTROYED</code> elimina il materiale crittografico in modo permanente. La distruzione passa prima per <code>DESTROY_SCHEDULED</code> (ripristinabile con <code>gcloud kms keys versions restore</code>) per un periodo di grazia fissato alla creazione della Crypto Key (<code>--destroy-scheduled-duration</code>, default 30 giorni, minimo 24h, non modificabile dopo). Scaduto il periodo, qualsiasi dato cifrato solo con quella version diventa definitivamente irrecuperabile ("crypto-shredding").</p>
 </div>
 <h3 id="scenario-4-csi-driver-non-monta-il-secret-nel-pod">Scenario 4 — CSI Driver non monta il secret nel Pod<a class="headerlink" href="#scenario-4-csi-driver-non-monta-il-secret-nel-pod" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il Pod resta in <code>ContainerCreating</code> con evento <code>FailedMount: MountVolume.SetUp failed ... rpc error: PermissionDenied</code>.</p>
@@ -25663,7 +25671,7 @@
 </details>
 <details class="info">
 <summary>AWS KMS e Secrets Manager — Confronto</summary>
-<p>AWS espone concetti equivalenti (CMK, envelope encryption, rotazione, Secrets Manager con rotazione automatica via Lambda). La differenza principale: AWS Secrets Manager supporta rotazione automatica nativa per RDS/Redshift/DocumentDB, GCP Secret Manager è versioning-only (la rotazione va orchestrata esternamente, es. con Cloud Scheduler + Cloud Functions, o delegata a Vault).</p>
+<p>AWS espone concetti equivalenti (CMK, envelope encryption, rotazione, Secrets Manager con rotazione automatica via Lambda). La differenza principale: AWS Secrets Manager supporta rotazione automatica nativa per RDS/Redshift/DocumentDB. GCP Secret Manager non ruota i valori da solo: offre solo uno schedule di rotazione (<code>--rotation-period</code>, <code>--next-rotation-time</code>) che pubblica una notifica su un topic Pub/Sub; la logica che genera la nuova version (<code>gcloud secrets versions add</code>) va scritta da te, es. con Cloud Run functions in ascolto sul topic, o delegata a Vault.</p>
 <p><strong>Approfondimento completo →</strong> <a href="../../../aws/security/kms-secrets/">AWS KMS, Secrets Manager, ACM</a></p>
 </details>
 <hr />
