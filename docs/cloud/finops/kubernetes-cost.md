@@ -7,9 +7,10 @@ search_keywords: [Kubernetes cost, Kubernetes cost management, OpenCost, Kubecos
 parent: cloud/finops/_index
 related: [cloud/finops/fondamentali, containers/kubernetes/resource-management, monitoring/tools/prometheus]
 official_docs: https://www.opencost.io/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-04-04
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Kubernetes Cost Management — OpenCost e Kubecost
@@ -32,7 +33,10 @@ Nei cluster Kubernetes multi-team, la **cloud bill è aggregata**: il provider c
 - Cluster di sviluppo/test con costi trascurabili rispetto alla produzione
 
 !!! note "OpenCost vs Kubecost"
-    **OpenCost** è il progetto CNCF open source, standard e gratuito — ideale per organizzazioni con stack Prometheus già esistente. **Kubecost** nasce da OpenCost e aggiunge funzionalità enterprise (UI avanzata, anomaly detection, budget alerts, multi-cluster). Per la maggior parte delle organizzazioni, OpenCost copre l'80% dei casi d'uso senza costo di licenza.
+    **OpenCost** è il progetto CNCF open source (incubating), standard e gratuito — ideale per organizzazioni con stack Prometheus già esistente. Nasce da Kubecost, che ne ha donato il motore di allocazione alla CNCF (2022); **Kubecost** (oggi di proprietà IBM, tramite Apptio) lo usa come base e aggiunge funzionalità commerciali (UI avanzata, savings engine, budget alerts, multi-cluster, riconciliazione con la fattura reale). Per molte organizzazioni OpenCost basta per allocation e showback senza costo di licenza. <!-- REVIEW: verificare stato CNCF (incubating), proprietà IBM e limiti attuali del tier gratuito Kubecost -->
+
+!!! note "Termini"
+    **PVC** = PersistentVolumeClaim (richiesta di storage); **P95** = 95° percentile (valore sotto cui sta il 95% delle misure, ignora i picchi estremi); **OOMKill** = container terminato dal kernel per memoria esaurita.
 
 ---
 
@@ -47,10 +51,10 @@ OpenCost e Kubecost usano due metriche fondamentali:
 | Metrica | Definizione | Quando si applica |
 |---------|-------------|-------------------|
 | **Cost by request** | Costo proporzionale alle `resources.requests` dichiarate | Risorse prenotate ma non usate |
-| **Cost by usage** | Costo proporzionale all'utilizzo effettivo (P95) | Risorse effettivamente consumate |
-| **Idle cost** | Costo delle risorse prenotate ma non utilizzate | Over-provisioning e nodi sottoutilizzati |
+| **Cost by usage** | Costo proporzionale all'utilizzo effettivo medio nella finestra | Risorse effettivamente consumate |
+| **Idle cost** | Capacità dei nodi non allocata a nessun workload | Over-provisioning e nodi sottoutilizzati |
 
-Il modello di default è **cost by request**: il team paga ciò che ha richiesto, indipendentemente dall'utilizzo reale. Questo crea incentivi a fare rightsizing corretto delle requests.
+Il modello di default di OpenCost per CPU e RAM è il **massimo tra request e usage** (`max(request, usage)`): il team paga almeno ciò che ha prenotato (lo scheduler gli ha sottratto quella capacità), e di più se consuma oltre la request. Questo crea incentivi a fare rightsizing corretto delle requests. L'**idle** è esposto a parte e può essere ripartito (shared) sui workload o mostrato come voce separata.
 
 ### Costi Nascosti in Kubernetes
 
@@ -85,27 +89,25 @@ La progressione consigliata: iniziare con showback per 3-6 mesi (crea consapevol
 │                   Kubernetes Cluster                  │
 │                                                       │
 │  ┌─────────────┐    ┌─────────────────────────────┐  │
-│  │  OpenCost   │───▶│       Prometheus              │  │
-│  │  Exporter   │    │  (metriche costo aggregate)  │  │
-│  │  :9003      │    └──────────────┬──────────────┘  │
-│  └──────┬──────┘                   │                  │
+│  │  OpenCost   │◀───│       Prometheus              │  │
+│  │  :9003 API  │───▶│  (usage storico + scrape      │  │
+│  │  :9003 /metrics│  │   metriche di costo)         │  │
+│  └──────┬──────┘    └──────────────┬──────────────┘  │
 │         │                          ▼                  │
 │         │                 ┌──────────────┐            │
 │         │                 │   Grafana    │            │
 │         │                 │  Dashboard   │            │
 │         │                 └──────────────┘            │
-│         │                                             │
 │         ▼                                             │
-│  Cloud Provider API                                   │
-│  (AWS Cost API / GCP Billing / Azure Cost Mgmt)       │
+│  Pricing cloud provider (listini / billing API)       │
 └─────────────────────────────────────────────────────┘
 ```
 
 OpenCost funziona in due step:
-1. **Resource allocation**: legge `kube-state-metrics` e `cadvisor` per sapere quante risorse ogni pod ha richiesto e usato
-2. **Cost mapping**: chiama le API del cloud provider per ottenere il prezzo corrente di CPU/memoria/storage sul tipo di istanza dei nodi
+1. **Resource allocation**: legge dalle API Kubernetes lo stato di nodi/pod/PVC e interroga Prometheus (metriche `cadvisor` e `kube-state-metrics`) per sapere quante risorse ogni pod ha richiesto e usato
+2. **Cost mapping**: ottiene il prezzo di CPU/memoria/storage dal listino del cloud provider in base al tipo di istanza dei nodi (oppure da prezzi custom configurati a mano)
 
-Il risultato è esposto via API REST e via metriche Prometheus.
+Il risultato è esposto via API REST e via metriche Prometheus (scrapate da Prometheus stesso).
 
 ### Kubecost — Architettura Estesa
 
@@ -137,18 +139,24 @@ helm install opencost opencost/opencost \
 kubectl get pods -n opencost
 ```
 
-Per configurare il cloud provider (es. AWS):
+Per configurare il cloud provider (es. AWS) con IAM Roles for Service Accounts (IRSA):
 
+<!-- REVIEW: verificare chiavi values del chart opencost (serviceAccount.annotations, opencost.exporter.*) e permessi IAM necessari per prezzi/Cloud Costs -->
 ```yaml
-# values.yaml — OpenCost con AWS pricing
+# values.yaml — OpenCost su EKS con IRSA
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT:role/opencost-role"
 opencost:
   exporter:
-    cloudProviderApiKey: ""   # non necessario per AWS se si usa IAM role
-    aws:
-      # IAM role con permessi Cost Explorer Read
-      serviceAccount:
-        annotations:
-          eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT:role/opencost-role"
+    defaultClusterId: "my-cluster"
+  prometheus:
+    internal:
+      enabled: true
+      serviceName: prometheus-operated
+      namespaceName: monitoring
+      port: 9090
   ui:
     enabled: true
     ingress:
@@ -165,14 +173,14 @@ opencost:
 L'API REST di OpenCost è il modo programmatico per estrarre dati di costo:
 
 ```bash
-# Costo aggregato per namespace — ultimi 7 giorni
-curl "http://opencost.opencost.svc:9003/allocation?window=7d&aggregate=namespace&accumulate=false"
+# Costo aggregato per namespace — ultimi 7 giorni, un risultato per giorno
+curl "http://opencost.opencost.svc:9003/allocation/compute?window=7d&aggregate=namespace&accumulate=false"
 
-# Costo aggregato per label "team" — ultimo mese
-curl "http://opencost.opencost.svc:9003/allocation?window=month&aggregate=label:team&accumulate=true"
+# Costo aggregato per label "team" — mese corrente, un solo totale
+curl "http://opencost.opencost.svc:9003/allocation/compute?window=month&aggregate=label:team&accumulate=true"
 
 # Costo per deployment — con breakdown CPU/memoria/storage
-curl "http://opencost.opencost.svc:9003/allocation?window=7d&aggregate=deployment&accumulate=true&step=1d"
+curl "http://opencost.opencost.svc:9003/allocation/compute?window=7d&aggregate=deployment&accumulate=true"
 
 # Response example (JSON):
 # {
@@ -202,7 +210,8 @@ helm install cost-analyzer kubecost/cost-analyzer \
   --create-namespace \
   --set global.prometheus.enabled=false \
   --set global.prometheus.fqdn="http://prometheus-operated.monitoring.svc:9090" \
-  --set kubecostToken="FREE"  # tier gratuito — rimuovere per enterprise
+  --set kubecostToken="TOKEN_DA_KUBECOST_IO"  # token del tier gratuito (registrazione su kubecost.com); con licenza enterprise usare quello della licenza
+# <!-- REVIEW: verificare modalità attuale di attivazione tier gratuito e chiavi values (chart cost-analyzer 2.x/3.x) -->
 
 # Con Prometheus bundled (setup rapido per test)
 helm install cost-analyzer kubecost/cost-analyzer \
@@ -212,33 +221,27 @@ helm install cost-analyzer kubecost/cost-analyzer \
 
 ### Configurazione Kubecost — Budget Alert per Namespace
 
+Gli alert si definiscono nei values Helm del chart (non in un ConfigMap creato a mano, che Kubecost non legge):
+
+<!-- REVIEW: verificare path e schema esatti degli alert nei values (global.notifications.alertConfigs vs kubecostProductConfigs) e nome campo webhook Slack -->
 ```yaml
-# kubecost-budget-alert.yaml — ConfigMap per alert budget
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: kubecost-budget-alert
-  namespace: kubecost
-data:
-  alerts.yaml: |
-    alerts:
-      - type: budget
-        threshold: 1000            # $1000/mese
-        window: month
-        aggregation: namespace
-        filter: "namespace:payments"
-        slackWebhookAddress: "https://hooks.slack.com/services/..."
-      - type: budget
-        threshold: 500
-        window: month
-        aggregation: namespace
-        filter: "namespace:staging"
-        slackWebhookAddress: "https://hooks.slack.com/services/..."
-      - type: spendChange
-        relativeThreshold: 0.20   # alert se +20% rispetto settimana precedente
-        window: week
-        aggregation: label:team
-        slackWebhookAddress: "https://hooks.slack.com/services/..."
+# values.yaml — alert budget Kubecost
+global:
+  notifications:
+    alertConfigs:
+      enabled: true
+      alerts:
+        - type: budget
+          threshold: 1000            # $1000/mese
+          window: month
+          aggregation: namespace
+          filter: "payments"
+          slackWebhookUrl: "https://hooks.slack.com/services/..."
+        - type: spendChange
+          relativeThreshold: 0.20    # alert se +20% rispetto al periodo precedente
+          window: 7d
+          aggregation: label:team
+          slackWebhookUrl: "https://hooks.slack.com/services/..."
 ```
 
 ### Tagging Workload per Cost Allocation
@@ -321,7 +324,7 @@ done
 echo "Label check OK"
 ```
 
-Alternativa più robusta: usare un **OPA/Gatekeeper policy** che nega il deploy se le label obbligatorie mancano:
+Alternativa più robusta: usare un **OPA/Gatekeeper policy** (admission controller che valida le risorse al momento della creazione) che nega il deploy se le label obbligatorie mancano. Richiede la `ConstraintTemplate` `K8sRequiredLabels` (dalla libreria Gatekeeper) già installata; il constraint sotto controlla le label sull'oggetto Deployment, non sul pod template, quindi aggiungere le stesse label anche in `spec.template.metadata.labels`, che è dove OpenCost le legge sui pod:
 
 ```yaml
 # gatekeeper-required-labels.yaml
@@ -348,12 +351,13 @@ Over-provisioning è la fonte principale di costo evitabile in Kubernetes. Il wo
 1. **Baseline**: raccogliere dati di utilizzo per almeno 7 giorni (meglio 30)
 2. **Query Kubecost API** per raccomandazioni rightsizing:
 
+<!-- REVIEW: verificare endpoint attuale (/model/savings/requestSizingV2?) e parametri (algorithmCPU, targetCPUUtilization…) nella Savings API Kubecost -->
 ```bash
 # Raccomandazioni rightsizing — target utilization 80%
-curl "http://cost-analyzer.kubecost.svc:9090/savings/requestSizing?window=30d&targetUtilization=0.8"
+curl "http://cost-analyzer.kubecost.svc:9090/model/savings/requestSizing?window=30d&targetUtilization=0.8"
 
 # Filtrare per namespace specifico
-curl "http://cost-analyzer.kubecost.svc:9090/savings/requestSizing?window=30d&targetUtilization=0.8&filterNamespaces=payments"
+curl "http://cost-analyzer.kubecost.svc:9090/model/savings/requestSizing?window=30d&targetUtilization=0.8&filterNamespaces=payments"
 
 # Output: per ogni container, requests consigliate vs attuali
 # {
@@ -372,7 +376,7 @@ curl "http://cost-analyzer.kubecost.svc:9090/savings/requestSizing?window=30d&ta
 
 ### Metriche Prometheus per Cost Monitoring
 
-OpenCost espone metriche Prometheus che permettono di costruire alert custom:
+OpenCost espone metriche Prometheus (`container_cpu_allocation`, `container_memory_allocation_bytes`, `node_cpu_hourly_cost`, `node_ram_hourly_cost`, `pv_hourly_cost`…) che permettono di costruire alert custom. Nota: sono senza prefisso `opencost_`; il nome esatto va verificato con `curl :9003/metrics`. <!-- REVIEW: verificare nomi metriche sulla versione OpenCost in uso -->
 
 ```yaml
 # prometheus-cost-alerts.yaml
@@ -380,13 +384,14 @@ groups:
   - name: kubernetes-cost
     interval: 1h
     rules:
-      # Alert se il costo mensile stimato del namespace supera soglia
+      # Alert se il costo mensile stimato (solo CPU) del namespace supera soglia
+      # core allocati × costo orario per core del nodo × ~730 ore/mese
       - alert: NamespaceMonthlyCostHigh
         expr: |
           sum by (namespace) (
-            opencost_container_cpu_allocation_hours * on(node) group_left()
-            opencost_node_cpu_hourly_cost
-          ) * 720 > 1000
+            container_cpu_allocation * on(node) group_left()
+            node_cpu_hourly_cost
+          ) * 730 > 1000
         for: 2h
         labels:
           severity: warning
@@ -412,10 +417,10 @@ groups:
 L'obiettivo finale di FinOps per Kubernetes è calcolare il costo per unità di business:
 
 ```bash
-# Script Python per calcolare costo per richiesta API
+# Script shell (curl + jq + bc) per calcolare costo per richiesta API
 # Combina dati OpenCost (costo namespace) con Prometheus (request rate)
 
-NAMESPACE_COST=$(curl -s "http://opencost:9003/allocation?window=1d&aggregate=namespace&accumulate=true" \
+NAMESPACE_COST=$(curl -s "http://opencost:9003/allocation/compute?window=1d&aggregate=namespace&accumulate=true" \
   | jq '.data[0]["payments"].totalCost')
 
 REQUEST_COUNT=$(curl -s "http://prometheus:9090/api/v1/query?query=sum(increase(http_requests_total{namespace='payments'}[1d]))" \
@@ -440,10 +445,9 @@ echo "Costo per richiesta API: $(echo "$NAMESPACE_COST / $REQUEST_COUNT" | bc -l
 # Verificare i log del pod OpenCost
 kubectl logs -n opencost deployment/opencost -c opencost
 
-# Cercare errori di autenticazione cloud provider
-# Common errors:
-# "Error fetching AWS pricing: NoCredentialProviders"
-# "Failed to get GCP pricing: permission denied"
+# Cercare errori di autenticazione/pricing verso il cloud provider
+# (messaggi indicativi, il testo esatto varia per versione):
+# "NoCredentialProviders", "permission denied"
 
 # Per AWS: verificare che il ServiceAccount abbia il role IAM corretto
 kubectl describe sa opencost -n opencost
@@ -452,33 +456,31 @@ kubectl describe sa opencost -n opencost
 # Per GCP: verificare Workload Identity
 kubectl get sa opencost -n opencost -o yaml | grep annotations
 
-# Fallback: usare custom pricing manuale
-helm upgrade opencost opencost/opencost \
-  --set opencost.exporter.defaultClusterId="my-cluster" \
-  --set opencost.exporter.cloudCostEnabled=false \
-  # Senza cloud API, usa prezzi on-demand di default
+# Verificare anche che Prometheus sia raggiungibile da OpenCost:
+# senza metriche di usage tutti i costi risultano 0
+kubectl logs -n opencost deployment/opencost -c opencost | grep -i prometheus
+
+# Fallback: prezzi custom manuali (chart opencost; verificare chiavi nella versione in uso)
+helm upgrade opencost opencost/opencost -n opencost --reuse-values \
+  --set opencost.customPricing.enabled=true \
+  --set opencost.customPricing.costModel.CPU=0.031 \
+  --set opencost.customPricing.costModel.RAM=0.004
 ```
 
 ### Kubecost mostra costi diversi da OpenCost per lo stesso namespace
 
 **Sintomo:** i due tool mostrano valori significativamente diversi per lo stesso namespace nello stesso periodo.
 
-**Causa:** differenze nel modello di allocation (request-based vs usage-based) o nel prezzo usato.
+**Causa:** tipicamente (1) Kubecost riconcilia i prezzi con la fattura reale del provider (sconti, Savings Plans, spot) mentre OpenCost usa i listini on-demand o i prezzi custom; (2) diversa ripartizione dei costi idle/shared; (3) finestra temporale o timezone diverse; (4) endpoint Prometheus diversi.
 
 **Soluzione:**
 ```bash
-# Verificare quale modello usa ciascuno
-# OpenCost default: request-based
-# Kubecost default: può variare — verificare nella UI Settings > Allocation
-
-# Per allineare: configurare entrambi su request-based
-# In Kubecost values.yaml:
-kubecostProductConfigs:
-  defaultModelType: "request"  # o "usage"
-
-# Verificare anche che usino lo stesso endpoint Prometheus
-kubectl get cm -n kubecost kubecost-cost-analyzer-frontend-config -o yaml
+# Confrontare con gli stessi parametri: stessa window, idle/shared nello stesso stato
+# Verificare che usino lo stesso Prometheus
+kubectl get cm -n kubecost -o yaml | grep -i prometheus
+kubectl logs -n opencost deployment/opencost -c opencost | grep -i prometheus
 ```
+Confrontare poi il prezzo orario per nodo nelle due UI: se differisce, la causa è il pricing, non l'allocation.
 
 ### Alert budget non arrivano su Slack
 
@@ -486,8 +488,8 @@ kubectl get cm -n kubecost kubecost-cost-analyzer-frontend-config -o yaml
 
 **Diagnosi:**
 ```bash
-# Verificare che il ConfigMap degli alert sia montato correttamente
-kubectl describe deployment -n kubecost cost-analyzer | grep -A5 "Mounts"
+# Verificare che gli alert siano presenti nella configurazione applicata
+helm get values cost-analyzer -n kubecost | grep -A10 -i alert
 
 # Verificare i log del cost-analyzer per errori webhook
 kubectl logs -n kubecost deployment/cost-analyzer | grep -i "slack\|webhook\|alert"
@@ -498,7 +500,7 @@ curl -X POST -H 'Content-type: application/json' \
   "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
 ```
 
-**Causa comune:** il ConfigMap non viene ricaricato dopo la modifica — fare rolling restart:
+**Causa comune:** i values Helm non sono stati applicati o il pod non ha ricaricato la configurazione — fare `helm upgrade` e poi rolling restart:
 ```bash
 kubectl rollout restart deployment/cost-analyzer -n kubecost
 ```
