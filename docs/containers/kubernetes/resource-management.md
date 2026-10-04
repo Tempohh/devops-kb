@@ -7,7 +7,7 @@ search_keywords: [kubernetes requests limits, QoS classes kubernetes, LimitRange
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/autoscaling, containers/kubernetes/scheduling-avanzato, containers/kubernetes/workloads]
 official_docs: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -390,8 +390,7 @@ Il CPU throttling è invisibile ma degrada le performance. Il limit è una **quo
 
 ### Novità: resize in-place e risorse a livello di pod
 
-<!-- REVIEW: verificare stato corrente (versione di GA) di In-Place Pod Resize (KEP-1287) e Pod-level resources (KEP-2837) su kubernetes.io -->
-Storicamente cambiare requests/limits richiedeva ricreare il pod. Le versioni recenti di Kubernetes introducono il **resize in-place** (`kubectl patch pod ... --subresource resize`, beta dalla 1.33) che modifica le risorse di un container senza riavviarlo (con `resizePolicy` per scegliere se serve il restart), e le **pod-level resources** (`spec.resources`) per condividere un budget tra container. Controllare la versione del cluster e i feature gate prima di usarli; abilitano anche VPA in modalità `InPlaceOrRecreate` (vedi [Autoscaling](./autoscaling.md)).
+Storicamente cambiare requests/limits richiedeva ricreare il pod. Kubernetes offre ora il **resize in-place** (`kubectl patch pod ... --subresource resize`, KEP-1287: alpha 1.27, beta 1.33, **stable/GA dalla 1.35**) che modifica le risorse di un container senza riavviarlo (con `resizePolicy` per scegliere se serve il restart), e le **pod-level resources** (`spec.resources`, KEP-2837, feature gate `PodLevelResources`: **beta dalla 1.34**, attivo di default, non ancora GA) per condividere un budget tra container. Il resize in-place delle pod-level resources ha un gate separato (`InPlacePodLevelResourcesVerticalScaling`, alpha). Su cluster più vecchi controllare versione e feature gate prima di usarli; abilitano anche VPA in modalità `InPlaceOrRecreate` (vedi [Autoscaling](./autoscaling.md)).
 
 ---
 
