@@ -7,9 +7,10 @@ search_keywords: [Azure Key Vault, segreti password connection string, chiavi RS
 parent: cloud/azure/security/_index
 related: [cloud/azure/compute/app-service-functions, cloud/azure/compute/aks-containers, cloud/azure/database/azure-sql]
 official_docs: https://learn.microsoft.com/azure/key-vault/
-status: complete
+status: needs-review
 difficulty: intermediate
 last_updated: 2026-03-29
+last_verified: 2026-10-04
 ---
 
 # Azure Key Vault
@@ -28,7 +29,7 @@ Azure Key Vault è il servizio centralizzato per la gestione sicura di segreti, 
 | SKU | Protezione Chiavi | FIPS Level | Use Case |
 |---|---|---|---|
 | **Standard** | Software-protected | FIPS 140-2 Level 1 | La maggior parte dei workload |
-| **Premium** | HSM-protected (opzione) | FIPS 140-2 Level 2 | Chiavi critiche, compliance normativa |
+| **Premium** | HSM-protected (opzione) | FIPS 140-2 Level 2 <!-- REVIEW: verificare livello FIPS Premium (Microsoft cita HSM validati FIPS 140-3 Level 3) --> | Chiavi critiche, compliance normativa |
 | **Managed HSM** | Dedicated HSM | FIPS 140-2 Level 3 | Istituzioni finanziarie, settore regolamentato, massima sicurezza |
 
 ## Creare Key Vault
@@ -48,7 +49,7 @@ az keyvault create \
   --enable-soft-delete true \
   --soft-delete-retention-days 90 \
   --enable-purge-protection true \
-  --public-network-access Disabled
+  --public-network-access Disabled   # accesso solo via Private Endpoint (vedi sotto); da CLI fuori VNet le operazioni data-plane falliranno
 
 # Per chiavi HSM-protected (Premium)
 az keyvault create \
@@ -59,6 +60,9 @@ az keyvault create \
   --enable-rbac-authorization true \
   --enable-purge-protection true
 ```
+
+!!! note "Soft-delete sempre attivo"
+    Dal 2025 il soft-delete è obbligatorio su tutti i vault e non può più essere disabilitato: `--enable-soft-delete` è di fatto ridondante. Retention configurabile 7–90 giorni (default 90), fissata alla creazione.
 
 !!! warning "Purge Protection Irreversibile"
     Una volta abilitata la purge protection (`--enable-purge-protection true`), non può essere disabilitata. I segreti eliminati (soft-delete) non possono essere eliminati permanentemente prima dei 90 giorni di retention. Abilita sempre in produzione per proteggere da eliminazioni accidentali o maligne.
@@ -97,7 +101,7 @@ az keyvault secret list-versions \
   --name "db-connection-string" \
   --output table
 
-# Disabilitare versione specifica (soft-delete)
+# Disabilitare una versione specifica (non la elimina, la rende non utilizzabile)
 az keyvault secret set-attributes \
   --vault-name $KV_NAME \
   --name "db-connection-string" \
@@ -152,6 +156,9 @@ az keyvault key backup \
 az keyvault key restore \
   --vault-name $KV_NAME \
   --file signing-key-backup.blob
+
+# Rotation policy nativa delle chiavi (rinnovo automatico, senza Function)
+az keyvault key rotation-policy update   --vault-name $KV_NAME   --name "signing-key"   --value '{"lifetimeActions":[{"trigger":{"timeAfterCreate":"P90D"},"action":{"type":"Rotate"}}],"attributes":{"expiryTime":"P180D"}}'
 
 # Importare chiave esistente
 az keyvault key import \
@@ -284,6 +291,9 @@ az role assignment create \
 
 ## Network Rules e Private Endpoint
 
+!!! warning "Due modelli alternativi"
+    Con `--public-network-access Disabled` l'unico accesso è il **Private Endpoint**: le network rules (subnet/IP) non hanno effetto. Le network rules funzionano solo con public access `Enabled` + `--default-action Deny` (firewall con service endpoint). Scegli uno dei due modelli; in produzione è preferibile il Private Endpoint.
+
 ```bash
 # Aggiungere regola network per subnet VNet specifica
 az keyvault network-rule add \
@@ -315,7 +325,7 @@ az network private-endpoint create \
   --group-ids vault \
   --connection-name conn-keyvault-prod
 
-# DNS zona privata per Key Vault
+# DNS zona privata per Key Vault (la zona va anche collegata al PE con un dns-zone-group)
 az network private-dns zone create \
   --resource-group $RG \
   --name "privatelink.vaultcore.azure.net"
@@ -326,6 +336,8 @@ az network private-dns link vnet create \
   --name link-vnet-prod \
   --virtual-network vnet-prod \
   --registration-enabled false
+
+az network private-endpoint dns-zone-group create   --resource-group $RG   --endpoint-name pep-keyvault-prod   --name default   --private-dns-zone "privatelink.vaultcore.azure.net"   --zone-name vaultcore
 ```
 
 ## Key Vault References per App Service / Functions
@@ -355,7 +367,7 @@ az webapp config appsettings list \
 ```
 
 !!! tip "Auto-refresh dei Key Vault References"
-    Quando il segreto viene aggiornato in Key Vault, l'App Service/Functions aggiorna automaticamente il valore **senza necessità di redeploy**. Il refresh avviene entro 24 ore, o immediatamente riavviando l'app.
+    Se la reference **non specifica la versione** (URI che termina con `/secrets/nome/`), l'App Service rilegge il valore periodicamente (entro 24 ore) **senza redeploy**; riavviare l'app forza una nuova lettura. Una reference con versione fissata non segue mai le nuove versioni: usala solo per pinning deliberato.
 
 ## Rotation Automatica con EventGrid + Functions
 
@@ -378,7 +390,8 @@ def secret_rotation(event: func.EventGridEvent):
     """
     event_data = event.get_json()
     secret_name = event_data.get("ObjectName")
-    vault_url = event_data.get("VaultUrl")
+    # Il payload Key Vault espone VaultName (non l'URL)
+    vault_url = f"https://{event_data.get('VaultName')}.vault.azure.net/"
 
     logging.info(f"Rotating secret: {secret_name} in vault: {vault_url}")
 
@@ -454,15 +467,16 @@ from azure.keyvault.secrets import SecretClient
 from azure.keyvault.keys import KeyClient
 from azure.keyvault.certificates import CertificateClient
 from azure.identity import DefaultAzureCredential
+from datetime import datetime, timezone
 
 # DefaultAzureCredential prova in ordine:
 # 1. EnvironmentCredential (AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)
 # 2. WorkloadIdentityCredential (AKS Workload Identity)
 # 3. ManagedIdentityCredential (VM, App Service, Functions)
-# 4. SharedTokenCacheCredential
-# 5. VisualStudioCodeCredential
-# 6. AzureCliCredential (az login)
-# 7. AzurePowerShellCredential
+# 4. Credenziali di sviluppo: VisualStudioCode, AzureCli (az login),
+#    AzurePowerShell, AzureDeveloperCli (azd) — l'elenco varia con la versione di azure-identity
+# In produzione preferire ManagedIdentityCredential/WorkloadIdentityCredential esplicite:
+# la catena rende il debug meno deterministico e aggiunge latenza.
 
 VAULT_URL = "https://kv-prod-myapp-2026.vault.azure.net/"
 credential = DefaultAzureCredential()
@@ -510,14 +524,15 @@ print(f"Signature valid: {verify_result.is_valid}")
 - Separa Key Vault per ambiente: `kv-dev-*`, `kv-staging-*`, `kv-prod-*`
 - Imposta sempre `--public-network-access Disabled` in produzione + Private Endpoint
 - Usa il **principio del minimo privilegio**: assegna `Key Vault Secrets User` (read-only) alle app, `Secrets Officer` solo dove necessario write
-- Non mettere Key Vault in una subscription condivisa con altri tenant: ogni subscription di produzione deve avere il suo Key Vault
+- Un vault per applicazione/ambiente/region: limita il blast radius (le quote di throttling sono per vault) e permette RBAC mirato
+- Abilita i diagnostic settings (AuditEvent) verso Log Analytics per tracciare ogni accesso
 - Configura notifiche EventGrid per `SecretNearExpiry` per rotation proattiva
 
 ## Troubleshooting
 
 ### Scenario 1 — Access Denied (403) da Managed Identity
 
-**Sintomo:** L'applicazione riceve `403 Forbidden` o `ForbiddenByPolicy` quando tenta di leggere un segreto.
+**Sintomo:** L'applicazione riceve `403 Forbidden` (`ForbiddenByRbac` con RBAC, `ForbiddenByPolicy` con Access Policies) quando tenta di leggere un segreto.
 
 **Causa:** La Managed Identity non ha un Role Assignment sul Key Vault, oppure il RBAC non è abilitato e si usa ancora Access Policies senza aggiornamento.
 
@@ -584,6 +599,9 @@ az webapp config appsettings list \
   --query "[?contains(value, 'KeyVault')]" \
   --output table
 
+# Nota: con identità User-Assigned va indicata esplicitamente la proprietà keyVaultReferenceIdentity
+# dell'app, altrimenti le reference usano la System-Assigned.
+
 # 4. Forzare refresh riavviando l'app
 az webapp restart \
   --resource-group rg-webapp-prod \
@@ -641,7 +659,8 @@ az keyvault show \
   --query "properties.networkAcls" \
   --output json
 
-# 2. Aggiungere la subnet del caller alle network rules
+# 2. Se public access è Disabled: serve il Private Endpoint (le network rules non bastano).
+#    Se è Enabled + default-action Deny: aggiungere la subnet del caller (richiede service endpoint Microsoft.KeyVault)
 az keyvault network-rule add \
   --resource-group $RG \
   --name $KV_NAME \
