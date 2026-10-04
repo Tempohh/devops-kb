@@ -7,9 +7,10 @@ search_keywords: [terraform ci/cd, terraform pipeline, atlantis terraform, githu
 parent: iac/terraform/_index
 related: [iac/terraform/fondamentali, iac/terraform/state-management, iac/terraform/testing, iac/terraform/moduli, ci-cd/pipeline, ci-cd/github-actions/workflow-avanzati]
 official_docs: https://developer.hashicorp.com/terraform/tutorials/automation/github-actions
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-04-04
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Terraform — Workflow CI/CD e Collaborazione in Team
@@ -69,6 +70,9 @@ Developer modifica .tf
 | **Costo** | Infrastruttura propria | Incluso nei minuti GitHub Actions |
 | **Ideale per** | Team IaC-first, mono-repo infra | Team già su GitHub Actions, setup più semplice |
 
+!!! note "Alternativa gestita: HCP Terraform"
+    HCP Terraform (ex Terraform Cloud) offre run remoti, state locking, approvazioni e policy (Sentinel/OPA) come servizio, senza gestire Atlantis o pipeline custom. Per chi usa OpenTofu, esistono alternative open come Atlantis, Spacelift, env0 o Terrateam.
+
 ## Architettura / Come Funziona
 
 ### Architettura Atlantis
@@ -102,29 +106,26 @@ Developer modifica .tf
 ### Architettura GitHub Actions (Plan su PR, Apply su Main)
 
 ```
-PR aperta/aggiornata
-        │
-        ▼
-┌───────────────────────────────────────┐
-│  Job: plan                             │
-│  - terraform init                      │
-│  - terraform plan -out=tfplan          │
-│  - upload artifact tfplan              │
-│  - commento PR con output piano        │
-└───────────────────────────────────────┘
-        │ merge su main
-        ▼
-┌───────────────────────────────────────┐
-│  Job: apply                            │
-│  environment: production              │
-│  (richiede approvazione manuale)      │
-│  - download artifact tfplan           │
-│  - terraform apply tfplan             │
-└───────────────────────────────────────┘
+PR aperta/aggiornata                     merge su main (push)
+        |                                        |
+        v                                        v
++---------------------------+        +---------------------------+
+|  Job: plan (su PR)        |        |  Job: plan (su main)      |
+|  - init / fmt / validate  |        |  - terraform plan -out    |
+|  - terraform plan         |        |  - upload artifact tfplan |
+|  - commento PR con piano  |        +-------------+-------------+
++---------------------------+                      v
+   (review + approvazione PR)          +---------------------------+
+                                       |  Job: apply               |
+                                       |  environment: production  |
+                                       |  (approvazione manuale)   |
+                                       |  - download artifact      |
+                                       |  - terraform apply tfplan |
+                                       +---------------------------+
 ```
 
-!!! note "Artifact tfplan: stessa versione garantita"
-    Passare il file `tfplan` binario dal job `plan` al job `apply` garantisce che venga applicato esattamente il piano revisionato — non un nuovo piano che potrebbe differire se nel frattempo qualcosa è cambiato.
+!!! note "Artifact tfplan: apply del piano che l'approvatore ha visto"
+    Passare il `tfplan` binario dal job `plan` al job `apply` *dello stesso run* garantisce che l'apply esegua esattamente il piano mostrato al reviewer dell'environment, non un nuovo piano. Il piano della PR serve alla code review ma **non** viene riusato: dopo il merge lo state o il codice possono essere cambiati (e gli artifact non sono condivisi tra run diversi). Se tra plan e apply lo state cambia, Terraform rifiuta il piano con `Saved plan is stale`.
 
 ## Configurazione & Pratica
 
@@ -148,8 +149,8 @@ orgAllowlist: "github.com/myorg/*"
 
 github:
   user: atlantis-bot
-  token: "ghp_xxxxx"          # GitHub token del bot
-  secret: "webhook-secret"    # Secret del webhook
+  token: "ghp_xxxxx"          # Solo per demo: in produzione usa un Secret K8s (chart: vcsSecretName)
+  secret: "webhook-secret"    # o External Secrets; mai token committati in values.yaml
 
 repoConfig: |
   repos:
@@ -266,16 +267,21 @@ permissions:
   id-token: write        # Per OIDC (federazione identità)
 
 env:
-  TF_VERSION: "1.7.5"
+  TF_VERSION: "1.7.5"    # Esempio: fissa la versione che usi davvero e aggiornala con Renovate/Dependabot
   AWS_REGION: "eu-west-1"
   WORKING_DIR: "infra/app"
 
+# Un solo run alla volta per l'infra: evita apply concorrenti e contention sul lock.
+# cancel-in-progress: false perché interrompere un apply a metà corrompe/blocca lo state.
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  # ── Job 1: Plan su Pull Request ────────────────────────────
+  # ── Job 1: Plan (su PR per la review, su main per l'apply) ─
   plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     defaults:
       run:
         working-directory: ${{ env.WORKING_DIR }}
@@ -310,13 +316,15 @@ jobs:
 
       # Commenta il piano sulla PR
       - name: Comment Plan on PR
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         env:
           PLAN_STDOUT: ${{ steps.plan.outputs.stdout }}
           PLAN_STDERR: ${{ steps.plan.outputs.stderr }}
         with:
           script: |
-            const planOutput = process.env.PLAN_STDOUT || process.env.PLAN_STDERR;
+            // I commenti GitHub hanno un limite di 65536 caratteri: tronca i piani enormi
+            const planOutput = (process.env.PLAN_STDOUT || process.env.PLAN_STDERR).slice(0, 60000);
             const status = '${{ steps.plan.outcome }}' === 'success' ? '✅' : '❌';
             const body = `#### Terraform Plan ${status}
             <details><summary>Mostra piano completo</summary>
@@ -350,8 +358,12 @@ jobs:
           retention-days: 5
 
   # ── Job 2: Apply su Merge in Main ──────────────────────────
+  # Il piano usato qui è quello generato dal job `plan` dello STESSO run (push su main):
+  # gli artifact non sono condivisi tra run diversi, e lo sha del merge commit differisce
+  # da quello della PR. L'approvazione dell'environment arriva dopo il plan, prima dell'apply.
   apply:
     name: Terraform Apply
+    needs: plan
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production      # Richiede approvazione manuale in GitHub
@@ -388,9 +400,9 @@ jobs:
 
 ### 4. OIDC — Autenticazione Senza Credenziali Statiche
 
-```yaml
-# AWS: configurazione del trust policy per GitHub Actions
-# Permette al workflow del repo specifico di assumere il ruolo IAM
+```json
+// AWS: trust policy del ruolo IAM per GitHub Actions
+// Permette ai workflow del repo specificato di assumere il ruolo
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -414,6 +426,9 @@ jobs:
 }
 ```
 
+!!! warning "Restringi il claim `sub`"
+    `repo:myorg/myrepo:*` consente a **qualsiasi** branch, PR o workflow del repo di assumere il ruolo: una PR malevola potrebbe avere accesso in scrittura all'infra. Usa ruoli separati: uno read-only per i plan su PR (`repo:myorg/myrepo:pull_request`) e uno con permessi di apply vincolato all'environment (`repo:myorg/myrepo:environment:production`) o al branch (`repo:myorg/myrepo:ref:refs/heads/main`).
+
 ```yaml
 # GCP: Workload Identity Federation (equivalente OIDC)
 # In GitHub Actions:
@@ -432,6 +447,7 @@ jobs:
 ```bash
 # Pattern A: workspace Terraform
 # Dev → Staging → Prod tramite workspace separati
+# (comandi mostrati per chiarezza: in CI li esegue la pipeline, non un umano dal locale)
 terraform workspace select dev
 terraform plan -var-file=envs/dev.tfvars -out=tfplan-dev
 terraform apply tfplan-dev
@@ -498,12 +514,15 @@ jobs:
   detect-drift:
     name: Detect Drift in Production
     runs-on: ubuntu-latest
-    environment: production
+    # NON usare `environment: production` con required reviewers: il job schedulato
+    # resterebbe in attesa di approvazione. Usa un ruolo IAM read-only dedicato al plan.
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false   # output/exit code del binario senza wrapper
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -520,9 +539,12 @@ jobs:
         working-directory: infra/prod
         run: |
           # Exit code: 0 = no changes, 1 = error, 2 = drift rilevato
-          terraform plan -detailed-exitcode -no-color \
+          # Lo shell di default di Actions usa `-e` e pipefail: disattivali per leggere l'exit code.
+          # $? dopo una pipe sarebbe quello di `tee`, non di terraform: serve PIPESTATUS.
+          set +e
+          terraform plan -detailed-exitcode -no-color -input=false \
             -var-file=prod.tfvars 2>&1 | tee drift-output.txt
-          echo "exitcode=$?" >> $GITHUB_OUTPUT
+          echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
         continue-on-error: true
 
       # Alert su Slack se drift rilevato (exit code 2)
@@ -564,7 +586,7 @@ remote_state {
     key            = "${path_relative_to_include()}/terraform.tfstate"
     region         = "eu-west-1"
     encrypt        = true
-    dynamodb_table = "terraform-locks"
+    dynamodb_table = "terraform-locks"   # Legacy: da Terraform 1.10 il lock nativo S3 (use_lockfile = true) rende DynamoDB superfluo
   }
 }
 
@@ -591,16 +613,19 @@ inputs = {
 ```
 
 ```bash
-# Comandi Terragrunt multi-modulo
+# Comandi Terragrunt multi-modulo (CLI redesign: `run --all`, flag senza prefisso --terragrunt-)
 # Plan su tutti i moduli nella directory (rispetta dipendenze)
-terragrunt run-all plan --terragrunt-working-dir infra/prod
+terragrunt run --all --working-dir infra/prod plan
 
-# Apply su tutti i moduli in sequenza (dep-aware)
-terragrunt run-all apply --terragrunt-working-dir infra/prod
+# Apply su tutti i moduli in ordine di dipendenza
+terragrunt run --all --working-dir infra/prod apply
 
-# Solo moduli con modifiche
-terragrunt run-all plan --terragrunt-modules-that-include networking
+# Sintassi legacy (deprecata nelle release recenti, ancora vista in molti esempi):
+# terragrunt run-all plan --terragrunt-working-dir infra/prod
 ```
+
+!!! note "Versione di Terragrunt"
+    `run-all` e i flag `--terragrunt-*` sono stati deprecati a favore di `run --all` e dei flag corti. Se la tua versione è più vecchia, usa la sintassi legacy; verifica con `terragrunt --version` e `terragrunt run --help`.
 
 ## Best Practices
 
@@ -644,10 +669,10 @@ protection_rules:
     protected_branches: true   # Solo da branch protetti (main)
 ```
 
-```hcl
-# Politica IAM minima per il ruolo CI/CD
+```json
+// Politica IAM minima per il ruolo CI/CD
 # Il ruolo CI deve avere SOLO i permessi necessari per il proprio ambiente
-# Esempio: ruolo per gestire solo EC2 in un account dedicato
+// Esempio: ruolo per gestire solo EC2 in un account dedicato
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -670,6 +695,11 @@ protection_rules:
       "Effect": "Allow",
       "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
       "Resource": "arn:aws:s3:::myorg-terraform-state/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::myorg-terraform-state"
     },
     {
       "Effect": "Allow",
@@ -712,9 +742,9 @@ AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
 ### Problema: Il plan artifact non è compatibile con l'apply (versione diversa)
 
-**Sintomo:** `terraform apply tfplan` fallisce con `Error: The current configuration does not match the plan that was saved`.
+**Sintomo:** `terraform apply tfplan` fallisce con errori tipo `Saved plan is stale` (state cambiato dopo il plan) o con incompatibilità di versione/provider (`Failed to load plan`, lock file diverso).
 
-**Causa:** Il piano binario `tfplan` contiene snapshot del provider e dei moduli. Se il job `apply` usa una versione Terraform o provider diversa dal job `plan`, il piano è invalidato.
+**Causa:** Il piano binario `tfplan` è legato alla versione di Terraform, ai provider (`.terraform.lock.hcl`) e allo state su cui è stato calcolato. Se il job `apply` usa versioni diverse o lo state è cambiato nel frattempo (altro apply, drift), il piano è invalidato. Il job `apply` deve inoltre eseguire `terraform init` nella stessa directory.
 
 **Soluzione:**
 ```yaml
@@ -770,11 +800,8 @@ atlantis plan -d infra/networking -w prod
 
 **Soluzione:**
 ```bash
-# Visualizza le informazioni del lock attuale
-terraform force-unlock --help
-
-# Ottieni il Lock ID dall'errore o dal backend
-# Per S3 + DynamoDB:
+# Il Lock ID è riportato nel messaggio d'errore ("ID: ...").
+# Se serve cercarlo nel backend S3 + DynamoDB:
 aws dynamodb scan \
   --table-name terraform-locks \
   --filter-expression "LockID = :id" \
@@ -782,10 +809,12 @@ aws dynamodb scan \
 
 # Sblocca forzatamente (solo se sei sicuro che nessun apply sia in corso)
 terraform force-unlock <LOCK_ID>
+```
 
-# Prevenzione: configura timeout nel CI
+```yaml
+# Prevenzione: timeout nel CI (con pipeline serializzate via `concurrency`)
 - name: Terraform Apply
-  timeout-minutes: 30        # GitHub Actions termina il job dopo 30 min
+  timeout-minutes: 30        # GitHub Actions termina lo step dopo 30 min
   run: terraform apply -auto-approve tfplan
 ```
 
