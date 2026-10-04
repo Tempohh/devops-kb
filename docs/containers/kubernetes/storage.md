@@ -7,9 +7,10 @@ search_keywords: [kubernetes persistent volume, PVC PV kubernetes, StorageClass 
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/workloads, containers/kubernetes/scheduling-avanzato]
 official_docs: https://kubernetes.io/docs/concepts/storage/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Kubernetes Storage
@@ -39,7 +40,7 @@ Kubernetes Storage Model
   | capacity: 50Gi                |
   | accessModes: [RWO]            |
   | persistentVolumeReclaimPolicy:|
-  |   Retain/Delete/Recycle       |
+  |   Retain | Delete             |
   | storageClassName: gp3         |
   | volumeMode: Filesystem/Block  |
   | csi:                         |
@@ -71,14 +72,14 @@ Kubernetes Storage Model
 | `ReadWriteOnce` | RWO | Montabile in R/W da UN SOLO nodo |
 | `ReadOnlyMany` | ROX | Montabile in R da MOLTI nodi |
 | `ReadWriteMany` | RWX | Montabile in R/W da molti nodi (NFS, CephFS, Azure Files) |
-| `ReadWriteOncePod` | RWOP | Montabile in R/W da UN SOLO pod (Kubernetes 1.22+) |
+| `ReadWriteOncePod` | RWOP | Montabile in R/W da UN SOLO pod (alpha 1.22, GA 1.29; solo driver CSI). Garantisce che due pod sullo stesso nodo non scrivano insieme: RWO limita i *nodi*, non i pod |
 
 ```
 AccessMode e Storage Backend
 
   EBS (AWS): solo RWO (block device, un attaccamento per volta)
   EFS (AWS): RWX (filesystem condiviso NFS-based)
-  GCE PD: solo RWO
+  GCE PD: RWO (ROX in sola lettura)
   Azure Disk: solo RWO
   Azure Files: RWX
   CephRBD: RWO
@@ -112,7 +113,7 @@ reclaimPolicy: Retain  # Delete = cancella il volume al PVC delete (pericoloso i
 allowVolumeExpansion: true
 volumeBindingMode: WaitForFirstConsumer  # non provisionare fino a quando il pod non viene schedulato (importante per AZ awareness)
 mountOptions:
-  - discard    # TRIM support per gp3 (risparmia spazio/costo)
+  - discard    # invia TRIM al device alla cancellazione dei blocchi (opzionale; può impattare le prestazioni I/O)
 ```
 
 ```yaml
@@ -166,7 +167,8 @@ spec:
     fsType: ext4
     volumeAttributes:
       partition: ""
-  # Node affinity per local volumes:
+  # Node affinity: vincola il PV a una zona. Con il CSI EBS il driver lo imposta da solo
+  # nei PV dinamici; va dichiarato a mano solo per PV statici:
   nodeAffinity:
     required:
       nodeSelectorTerms:
@@ -211,16 +213,18 @@ kubectl describe pvc postgres-data -n production
 # Espansione del volume (storageClass deve allowVolumeExpansion: true)
 kubectl patch pvc postgres-data -n production \
     -p '{"spec": {"resources": {"requests": {"storage": "200Gi"}}}}'
-# → crea una request di expansion → CSI driver ridimensiona il volume
-# → Per ext4/xfs: redimensionamento automatico al prossimo pod restart
-# → In place (senza restart) se il CSI lo supporta
+# → il CSI driver ridimensiona il volume (ControllerExpandVolume)
+# → Online expansion (GA da 1.24): se il driver lo supporta, il kubelet espande
+#   il filesystem (ext4/xfs) a pod in esecuzione, senza restart
+# → Altrimenti il PVC resta in FileSystemResizePending fino al restart del pod
+# → Solo aumento: ridurre un PVC non è supportato
 ```
 
 ---
 
 ## CSI — Container Storage Interface
 
-**CSI** è lo standard per implementare driver di storage per Kubernetes. Sostituisce i volume plugin in-tree (EBS, GCEPersistentDisk, ecc.).
+**CSI** è lo standard per implementare driver di storage per Kubernetes. Sostituisce i volume plugin in-tree (EBS, GCEPersistentDisk, ecc.), rimossi dal core di Kubernetes (es. `awsElasticBlockStore` rimosso in 1.27): oggi serve il driver CSI installato, altrimenti i PVC restano `Pending`. Il **perché**: il codice dei vendor esce dal ciclo di rilascio di Kubernetes e i driver si aggiornano in modo indipendente.
 
 ```
 CSI Architecture
@@ -228,7 +232,7 @@ CSI Architecture
   kubelet                    CSI Driver (Pod nel cluster)
   +----------+              +----------------------------------+
   |          |  gRPC        |  CSI Controller Plugin          |
-  | node-    |<------------>|  (DeploymenSet / StatefulSet)   |
+  | node-    |<------------>|  (Deployment / StatefulSet)   |
   | driver-  |              |  CreateVolume()                 |
   | registrar|              |  DeleteVolume()                 |
   |          |              |  ControllerPublishVolume()      |
@@ -261,6 +265,9 @@ CSI Architecture
 
 ## Volume Snapshots
 
+!!! note "Prerequisiti"
+    `VolumeSnapshot` non è incluso nel core: servono i CRD `snapshot.storage.k8s.io` e lo `snapshot-controller` (esterni, installati dal distributore o da `kubernetes-csi/external-snapshotter`), più il sidecar `csi-snapshotter` nel driver. Senza di essi i manifest sotto vengono rifiutati.
+
 ```yaml
 # VolumeSnapshotClass
 apiVersion: snapshot.storage.k8s.io/v1
@@ -270,7 +277,7 @@ metadata:
 driver: ebs.csi.aws.com
 deletionPolicy: Delete   # Delete | Retain
 parameters:
-  tagSpecification_1: "kubernetes:true"
+  tagSpecification_1: "kubernetes=true"   # formato key=value
 
 ---
 # VolumeSnapshot — crea uno snapshot da un PVC
@@ -306,10 +313,10 @@ spec:
 
 ---
 
-## Volume Populators e Data Sources
+## Clonazione PVC e Data Sources
 
 ```yaml
-# PVC clonata da un'altra PVC (stesso StorageClass, stesso namespace)
+# PVC clonata da un'altra PVC (stesso StorageClass, stesso namespace; il driver CSI deve supportare il clone)
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -341,12 +348,20 @@ kubectl get pvc -n production
 # Per eliminare manualmente (DESTRUCTIVE)
 kubectl delete pvc data-postgres-0 data-postgres-1 data-postgres-2
 
+# Dal 1.32 (GA) si può cambiare il comportamento con persistentVolumeClaimRetentionPolicy:
+#   spec.persistentVolumeClaimRetentionPolicy:
+#     whenDeleted: Retain | Delete   # alla cancellazione dello StatefulSet
+#     whenScaled:  Retain | Delete   # allo scale-down (default Retain per entrambi)
+# Con Delete i PVC vengono rimossi insieme ai pod: attenzione se reclaimPolicy è Delete (dati persi).
+
 # Per mantenere i dati ma eliminare il StatefulSet e ricrearlo:
 kubectl delete statefulset postgres --cascade=orphan
 # → elimina solo il StatefulSet object, i pod rimangono
 # → i PVC rimangono
 # → rideployando lo StatefulSet, i pod riutilizzano i PVC esistenti
 ```
+
+I **Volume Populators** (`dataSourceRef`) generalizzano `dataSource`: permettono di popolare un PVC da una CRD arbitraria (es. backup, immagine). Vedi la documentazione ufficiale.
 
 ---
 
@@ -426,7 +441,7 @@ kubectl get pods -n kube-system -l app=ebs-csi-node -o wide
 # Deve esserci un pod su ogni nodo
 
 # In caso di Multi-Attach error (volume ancora legato al vecchio nodo):
-# Attendi che k8s rilevi il nodo come NotReady (default ~5 min)
+# Se il nodo è spento/non raggiungibile, l'attach controller forza il detach dopo ~6 min (maxWaitForUnmountDuration)
 # Oppure verifica e forza il detach tramite cloud console (es. AWS EC2 → Volumes)
 
 # Verifica lo stato del VolumeAttachment
@@ -440,7 +455,7 @@ kubectl describe volumeattachment <nome>
 
 **Sintomo:** Dopo il patch del PVC la `CAPACITY` non aumenta, oppure il PVC mostra `FileSystemResizePending` ma il filesystem nel pod è ancora alla dimensione originale.
 
-**Causa:** La StorageClass non ha `allowVolumeExpansion: true`, oppure il CSI ha ridimensionato il volume ma il filesystem necessita di un restart del pod per essere ridimensionato in-pod.
+**Causa:** La StorageClass non ha `allowVolumeExpansion: true`, oppure il CSI ha ridimensionato il volume ma il driver non supporta l'online expansion, quindi il filesystem viene ridimensionato solo al restart del pod.
 
 **Soluzione:**
 ```bash
@@ -486,6 +501,13 @@ kubectl get pv <nome-pv>
 
 !!! warning "Attenzione"
     Prima di eseguire `patch claimRef: null`, verifica che i dati nel PV non siano necessari o siano già stati salvati. L'operazione non cancella i dati, ma consente il loro sovrascrittura da parte di un nuovo PVC.
+
+---
+
+## Evoluzione recente
+
+- **VolumeAttributesClass** (GA in 1.34): modifica parametri del volume (es. IOPS/throughput EBS) su un PVC esistente senza ricrearlo, via `spec.volumeAttributesClassName`. Richiede il supporto del driver CSI.
+- **`Recycle`** come `persistentVolumeReclaimPolicy` è deprecato: usare `Retain` o `Delete` (+ provisioning dinamico).
 
 ---
 
