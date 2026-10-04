@@ -11180,7 +11180,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -11205,7 +11205,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -12095,7 +12095,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12130,7 +12130,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24727,8 +24727,12 @@
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>      ├── network operator              → gestisce OVN-Kubernetes CNI
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>      ├── authentication operator       → gestisce OAuth server
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>      ├── cloud-credential operator     → gestisce credenziali cloud
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>      └── ... (50+ cluster operators)
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>      └── ... (~30-40 cluster operators, dipende dalla versione)
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Versioni negli esempi</p>
+<p>Le versioni (4.14/4.15) negli output sono <strong>esempi illustrativi</strong>. Verificare le versioni supportate e i canali nel <a href="https://access.redhat.com/support/policy/updates/openshift">Red Hat OpenShift Life Cycle</a> e nell'Update Graph.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Vedi lo stato di tutti i Cluster Operators</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>oc<span class="w"> </span>get<span class="w"> </span>clusteroperators
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># NAME                                       VERSION   AVAILABLE   PROGRESSING   DEGRADED</span>
@@ -24786,8 +24790,13 @@
 </span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>oc<span class="w"> </span>get<span class="w"> </span>clusterversion<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>channel
 </span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># channel: stable-4.15</span>
 </span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="c1"># Cambia canale (es. per upgrade a versione major)</span>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>oc<span class="w"> </span>patch<span class="w"> </span>clusterversion/version<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"channel":"stable-4.15"}}'</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="c1"># Cambia canale: per passare a una nuova minor (es. 4.15 → 4.16) va prima</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="c1"># cambiato il canale (i canali sono per minor: stable-4.16), poi si avvia l'upgrade</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>oc<span class="w"> </span>adm<span class="w"> </span>upgrade<span class="w"> </span>channel<span class="w"> </span>stable-4.16
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="c1"># equivalente: oc patch clusterversion/version --type=merge -p '{"spec":{"channel":"stable-4.16"}}'</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="c1"># Upgrade disponibili sul canale corrente</span>
+</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>oc<span class="w"> </span>adm<span class="w"> </span>upgrade
 </span></code></pre></div>
 <hr />
 <h2 id="machine-config-operator-mco-gestione-os-dei-nodi">Machine Config Operator (MCO) — Gestione OS dei Nodi<a class="headerlink" href="#machine-config-operator-mco-gestione-os-dei-nodi" title="Permanent link">&para;</a></h2>
@@ -24844,11 +24853,13 @@
 </span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="w">            </span><span class="no">ExecStart=/usr/local/bin/custom-daemon</span>
 </span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="w">            </span><span class="no">[Install]</span>
 </span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="w">            </span><span class="no">WantedBy=multi-user.target</span>
-</span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="w">  </span><span class="nt">kernelArguments</span><span class="p">:</span>
-</span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="w">    </span><span class="nt">add</span><span class="p">:</span>
-</span><span id="__span-5-32"><a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"net.ipv4.ip_forward=1"</span>
-</span><span id="__span-5-33"><a id="__codelineno-5-33" name="__codelineno-5-33" href="#__codelineno-5-33"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"vm.max_map_count=262144"</span>
+</span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="w">  </span><span class="nt">kernelArguments</span><span class="p">:</span><span class="w">           </span><span class="c1"># solo vere kernel command-line arguments</span>
+</span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nosmt</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Sysctl ≠ kernel arguments</p>
+<p><code>kernelArguments</code> modifica la <strong>command line del kernel</strong> (boot params come <code>nosmt</code>, <code>hugepagesz=1G</code>). Parametri <code>sysctl</code> come <code>vm.max_map_count</code> o <code>net.ipv4.ip_forward</code> NON vanno lì: si scrivono con un file in <code>/etc/sysctl.d/</code> (sezione <code>storage.files</code> della stessa MachineConfig) oppure, per tuning di nodo, con il Node Tuning Operator (<code>Tuned</code>). Ogni MachineConfig che cambia file/kernel args causa <strong>drain + reboot</strong> dei nodi del pool: raggruppare le modifiche e usare <code>paused</code> per controllare la finestra.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Stato MachineConfigPool</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>oc<span class="w"> </span>get<span class="w"> </span>mcp
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># NAME     CONFIG                   UPDATED   UPDATING   DEGRADED</span>
@@ -24864,7 +24875,11 @@
 </span></code></pre></div>
 <hr />
 <h2 id="machine-api-gestione-dei-nodi-come-cattle">Machine API — Gestione dei Nodi come Cattle<a class="headerlink" href="#machine-api-gestione-dei-nodi-come-cattle" title="Permanent link">&para;</a></h2>
-<p>Il <strong>Machine API</strong> permette di gestire i nodi infrastrutturali come oggetti Kubernetes, su cloud e on-premise.</p>
+<p>Il <strong>Machine API</strong> permette di gestire i nodi infrastrutturali come oggetti Kubernetes, su cloud e on-premise (provider: AWS, Azure, GCP, vSphere, bare metal via Metal3, ecc.). Il Machine API Operator riconcilia <code>MachineSet</code> → <code>Machine</code> → istanza cloud; il <code>MachineHealthCheck</code> sostituisce automaticamente le macchine non sane.</p>
+<div class="admonition note">
+<p class="admonition-title">Hosted control plane e Cluster API</p>
+<p>Nei cluster con <strong>Hosted Control Plane</strong> (HyperShift, base di ROSA HCP / ARO HCP) il control plane gira come pod su un cluster di gestione e i worker sono gestiti da <code>NodePool</code>, non da MachineSet/MCO classici. <!-- REVIEW: verificare stato migrazione Machine API → Cluster API (CAPI) nelle versioni OCP 4.2x correnti --></p>
+</div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># MachineSet — definisce un gruppo di macchine identiche (come ReplicaSet per nodi)</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">machine.openshift.io/v1beta1</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MachineSet</span>
@@ -24882,7 +24897,7 @@
 </span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">      </span><span class="nt">providerSpec</span><span class="p">:</span>
 </span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">        </span><span class="nt">value</span><span class="p">:</span>
 </span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">          </span><span class="c1"># AWS provider config</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">          </span><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">awsproviderconfig.openshift.io/v1beta1</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">          </span><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">machine.openshift.io/v1beta1</span>
 </span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">          </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AWSMachineProviderConfig</span>
 </span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">          </span><span class="nt">ami</span><span class="p">:</span>
 </span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">            </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ami-0abc123def456789</span><span class="w">  </span><span class="c1"># RHCOS AMI</span>
@@ -24928,18 +24943,19 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># OpenShift gestisce etcd tramite l'etcd operator</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>oc<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>openshift-etcd
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># NAME                                          READY   STATUS</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># etcd-master-0.cluster.internal               4/4     Running</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># etcd-master-0.cluster.internal               4/4     Running   (n. container varia con la versione)</span>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># etcd-master-1.cluster.internal               4/4     Running</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># etcd-master-2.cluster.internal               4/4     Running</span>
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># Backup etcd (via job)</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>oc<span class="w"> </span>debug<span class="w"> </span>node/master-0.cluster.internal<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">    </span>chroot<span class="w"> </span>/host<span class="w"> </span>/usr/local/bin/cluster-backup.sh<span class="w"> </span>/var/home/core/assets/backup/
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1"># Verifica stato etcd</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>oc<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>openshift-etcd<span class="w"> </span>etcd-master-0<span class="w"> </span>-c<span class="w"> </span>etcd<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">    </span>etcdctl<span class="w"> </span>endpoint<span class="w"> </span>health<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">    </span>--endpoints<span class="o">=</span>https://master-0:2379,https://master-1:2379,https://master-2:2379
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># Backup etcd (eseguire su UN solo control plane node; produce snapshot + static pod resources.</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1"># Conservarlo FUORI dal cluster. Utile solo per restore dello stesso cluster/versione)</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>oc<span class="w"> </span>debug<span class="w"> </span>node/master-0.cluster.internal<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">    </span>chroot<span class="w"> </span>/host<span class="w"> </span>/usr/local/bin/cluster-backup.sh<span class="w"> </span>/var/home/core/assets/backup/
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="c1"># Verifica stato etcd</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>oc<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>openshift-etcd<span class="w"> </span>etcd-master-0<span class="w"> </span>-c<span class="w"> </span>etcd<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">    </span>etcdctl<span class="w"> </span>endpoint<span class="w"> </span>health<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span>--endpoints<span class="o">=</span>https://master-0:2379,https://master-1:2379,https://master-2:2379
 </span></code></pre></div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -24958,7 +24974,7 @@
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>oc<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>openshift-ingress-operator
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>oc<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>openshift-ingress-operator<span class="w"> </span>deployment/ingress-operator<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span>
 </span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># Forzare la riconciliazione dell'operator (rimuovere la cache)</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># Riavviare il pod dell'operator (ultima risorsa, dopo aver letto i log: il Deployment lo ricrea e riparte la riconciliazione)</span>
 </span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>oc<span class="w"> </span>delete<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>openshift-ingress-operator<span class="w"> </span>-l<span class="w"> </span><span class="nv">name</span><span class="o">=</span>ingress-operator
 </span></code></pre></div>
 <hr />
@@ -24980,8 +24996,11 @@
 </span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>oc<span class="w"> </span>debug<span class="w"> </span>node/&lt;nome-nodo&gt;
 </span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>chroot<span class="w"> </span>/host<span class="w"> </span>journalctl<span class="w"> </span>-u<span class="w"> </span>kubelet<span class="w"> </span>--since<span class="w"> </span><span class="s2">"30 minutes ago"</span>
 </span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="c1"># Sbloccare forzatamente (solo se sicuro)</span>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>oc<span class="w"> </span>adm<span class="w"> </span>uncordon<span class="w"> </span>&lt;nome-nodo&gt;
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="c1"># Sbloccare forzatamente (solo se sicuro): MCO ri-cordona il nodo se l'update è ancora pendente.</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1"># Meglio risolvere la causa (PDB, pod bloccato) o mettere in pausa il pool (spec.paused=true)</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>oc<span class="w"> </span>adm<span class="w"> </span>uncordon<span class="w"> </span>&lt;nome-nodo&gt;
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="c1"># Il log dell'agent MCO sul nodo mostra il motivo del blocco</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>oc<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>openshift-machine-config-operator<span class="w"> </span>ds/machine-config-daemon<span class="w"> </span>-c<span class="w"> </span>machine-config-daemon<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-upgrade-del-cluster-bloccato-cvo">Scenario 3 — Upgrade del cluster bloccato (CVO)<a class="headerlink" href="#scenario-3-upgrade-del-cluster-bloccato-cvo" title="Permanent link">&para;</a></h3>
@@ -25004,10 +25023,12 @@
 </span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>
 </span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="c1"># Verificare lo stato della macchina sul cloud provider</span>
 </span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>oc<span class="w"> </span>get<span class="w"> </span>machines<span class="w"> </span>-n<span class="w"> </span>openshift-machine-api<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>Running
-</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>
-</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="c1"># In caso di upgrade fallito, annullare e tornare alla versione precedente</span>
-</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>oc<span class="w"> </span>adm<span class="w"> </span>upgrade<span class="w"> </span>--allow-not-recommended<span class="w"> </span>--to<span class="o">=</span>&lt;versione-precedente&gt;
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Nessun rollback/downgrade supportato</p>
+<p>OpenShift <strong>non supporta il downgrade</strong> di un cluster (i CRD, lo schema etcd e i nodi RHCOS sono già migrati). Non esiste un <code>--to=&lt;versione-precedente&gt;</code> valido. Opzioni: correggere la causa e lasciare proseguire l'upgrade, oppure — come ultima risorsa, con supporto Red Hat — restore da backup etcd. Per questo sono essenziali: backup etcd pre-upgrade, canali <code>stable</code>, e <code>oc adm upgrade</code> che mostra solo i percorsi raccomandati (<code>--allow-not-recommended</code> è per versioni con rischi noti, non per il rollback). <!-- REVIEW: verificare se le versioni OCP correnti introducono rollback supportato per z-stream --></p>
+</div>
+<p>Per sospendere gli aggiornamenti dei worker mantenendo il control plane aggiornato si usa <code>oc patch mcp/worker -p '{"spec":{"paused":true}}'</code> (vedi sezione MCO), per periodi brevi: i certificati kubelet possono scadere se il pool resta in pausa a lungo.</p>
 <hr />
 <h3 id="scenario-4-machine-api-nodi-non-vengono-provisionati">Scenario 4 — Machine API: nodi non vengono provisionati<a class="headerlink" href="#scenario-4-machine-api-nodi-non-vengono-provisionati" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Un MachineSet ha <code>replicas</code> aumentate ma le nuove <code>Machine</code> rimangono in fase <code>Provisioning</code> o <code>Failed</code> indefinitamente.</p>
