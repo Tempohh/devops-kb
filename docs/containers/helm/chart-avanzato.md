@@ -65,9 +65,12 @@ dependencies:
 !!! note "Versioni e repository Bitnami"
     Le versioni (`13.x.x`, `17.x.x`) e il repository Bitnami sono esempi illustrativi: i major dei chart
     Bitnami sono molto avanti. Bitnami ha inoltre ridotto il catalogo gratuito di immagini/chart (2025) e
-    distribuisce i chart anche via OCI (`oci://registry-1.docker.io/bitnamicharts`). Per produzione fissare
-    una versione esatta e valutare mirror interno o alternative (operator, chart mantenuti dal vendor).
-    <!-- REVIEW: verificare stato attuale catalogo Bitnami (charts.bitnami.com, immagini bitnamilegacy) e major correnti di postgresql/redis -->
+    distribuisce i chart anche via OCI (`oci://registry-1.docker.io/bitnamicharts`). Da agosto-settembre 2025
+    le immagini Debian storiche sono state spostate da `docker.io/bitnami` a `docker.io/bitnamilegacy`
+    (non più aggiornate, uso a proprio rischio); le nuove immagini hardened sono a pagamento (Bitnami Secure
+    Images). Per produzione fissare una versione esatta e valutare mirror interno o alternative (operator,
+    chart mantenuti dal vendor).
+    <!-- CURRENCY: major correnti di postgresql/redis e disponibilità di charts.bitnami.com non verificati (2026-10) -->
 
 ```bash
 # Scaricare le dipendenze in charts/ (scrive anche Chart.lock: committarlo per build riproducibili)
@@ -196,8 +199,7 @@ affinity: {}
     - `include "nome" .` restituisce una **stringa** pipabile (`| nindent 4`, `| sha256sum`); l'azione `template` stampa direttamente e non è pipabile. Per questo si usa sempre `include`.
     - `nindent N` aggiunge un a-capo e indenta di N spazi: YAML è sensibile all'indentazione e il testo multi-riga di `toYaml` va riallineato. `{{-` rimuove spazi/a-capo a sinistra per evitare righe vuote.
     - Dentro `range`/`with` il punto `.` cambia contesto: `$` punta sempre alla radice (`$.Values`, `$.Release`). Un named template riceve solo il contesto passato (`.` o `$`).
-    - Helm 4 (rilasciato nel 2025) mantiene `apiVersion: v2` e la sintassi dei template; cambiano soprattutto apply (server-side apply di default), plugin e alcuni flag (es. `--force` → `--force-replace`).
-      <!-- REVIEW: verificare dettagli Helm 4 (SSA di default, --force-replace, plugin WASM) su helm.sh/docs -->
+    - Helm 4 (rilasciato a novembre 2025) mantiene `apiVersion: v2` e la sintassi dei template; cambiano soprattutto apply, plugin e alcuni flag. Server-side apply è il default per i **nuovi** install (le release esistenti migrate da Helm 3 restano in client-side apply salvo override); `--force` è rinominato `--force-replace` (il vecchio resta con warning di deprecazione); i plugin WASM sono opzionali (quelli eseguibili continuano a funzionare); i post-renderer richiedono il nome di un plugin, non un path.
 
 Il file `templates/_helpers.tpl` contiene template riutilizzabili (prefix `_`, non generano output diretto).
 
@@ -771,7 +773,7 @@ kubectl describe pod -n <namespace> -l job-name=<release>-pre-upgrade-migration
 
 **Causa:** Il template ha modificato i `selectorLabels` (campo immutabile nei Deployment) oppure ha cambiato il nome di una risorsa, creando una nuova risorsa invece di aggiornare quella esistente.
 
-**Soluzione:** Il Deployment va eliminato e ricreato. `--force` (in Helm 3 sostituisce la risorsa con PUT) **non** aggira l'immutabilità di `spec.selector`: l'API server rifiuta comunque la modifica. `--force` serve per altri conflitti di patch. Per le risorse con un campo immutabile da cambiare: eliminare la risorsa (downtime breve) e rieseguire l'upgrade; per evitarlo, non modificare mai `selectorLabels`.
+**Soluzione:** Il Deployment va eliminato e ricreato. `--force` (in Helm 4 rinominato `--force-replace`; in Helm 3 sostituisce la risorsa con PUT) **non** aggira l'immutabilità di `spec.selector`: l'API server rifiuta comunque la modifica. `--force` serve per altri conflitti di patch. Per le risorse con un campo immutabile da cambiare: eliminare la risorsa (downtime breve) e rieseguire l'upgrade; per evitarlo, non modificare mai `selectorLabels`.
 
 ```bash
 # Vedere il diff tra la release corrente e il nuovo chart
