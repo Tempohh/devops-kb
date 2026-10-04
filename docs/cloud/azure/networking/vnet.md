@@ -7,7 +7,7 @@ search_keywords: [Azure VNet, Virtual Network Azure, subnet Azure, NSG Network S
 parent: cloud/azure/networking/_index
 related: [cloud/azure/networking/load-balancing, cloud/azure/networking/connettivita, cloud/azure/security/_index]
 official_docs: https://learn.microsoft.com/azure/virtual-network/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-03-29
 last_verified: 2026-10-04
@@ -501,9 +501,11 @@ az network nic list-effective-nsg \
 ```
 
 !!! warning "NSG flow logs in dismissione"
-    Microsoft ha bloccato la creazione di nuovi **NSG flow logs** (da giugno 2025) e ne annuncia il ritiro a settembre 2027:
+    Microsoft ha bloccato la creazione di nuovi **NSG flow logs** (da giugno 2025) e li ritira il **30 settembre 2027**:
     migrare ai **VNet flow logs**, che coprono l'intera VNet/subnet/NIC senza dipendere dal singolo NSG.
-    <!-- REVIEW: verificare date esatte di ritiro NSG flow logs su learn.microsoft.com/azure/network-watcher/nsg-flow-logs-migrate -->
+    Dopo il ritiro Azure elimina le risorse NSG flow log esistenti e non supporta più traffic analytics su di esse;
+    i record già scritti su Storage restano secondo la retention configurata.
+    Per la migrazione: Network Watcher → *Migrate flow logs* (script PowerShell) oppure Azure Policy built-in.
 
 !!! tip "Alternativa a più VNet: Azure Virtual Network Manager"
     Per molte VNet (hub-spoke su larga scala) **Azure Virtual Network Manager** gestisce centralmente connectivity
