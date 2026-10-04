@@ -7,9 +7,10 @@ search_keywords: [dockerfile best practices, multi-stage build docker, buildkit 
 parent: containers/docker/_index
 related: [containers/docker/sicurezza, containers/registry/_index, containers/docker/architettura-interna]
 official_docs: https://docs.docker.com/reference/dockerfile/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Dockerfile Avanzato
@@ -37,9 +38,10 @@ docker buildx build \
 **Sintassi frontend BuildKit:**
 
 ```dockerfile
-# syntax=docker/dockerfile:1.6
-# Questa riga abilita features avanzate dell'ultima versione
-FROM ubuntu:22.04
+# syntax=docker/dockerfile:1
+# ":1" segue l'ultima release stabile 1.x del frontend (fix e feature senza pin al minor);
+# per build riproducibili al bit si pinna anche il digest: docker/dockerfile:1@sha256:...
+FROM ubuntu:24.04
 ```
 
 ---
@@ -49,7 +51,7 @@ FROM ubuntu:22.04
 I **multi-stage build** separano la fase di compilazione da quella di runtime, producendo immagini finali minimali senza tool di build.
 
 ```dockerfile
-# syntax=docker/dockerfile:1.6
+# syntax=docker/dockerfile:1
 
 # ──────────────────────────────────────────────────────────
 # STAGE 1: deps — installa solo le dipendenze (cacheable)
@@ -77,8 +79,8 @@ COPY --from=deps /root/.local /root/.local
 COPY src/ ./src/
 COPY pyproject.toml setup.cfg ./
 
-# Compila wheel (se necessario) o prepara il bundle
-RUN pip install --no-cache-dir --no-deps -e .
+# Pre-compila il bytecode: lo stage finale copia solo src/ e le dipendenze
+RUN python -m compileall -q src
 
 # ──────────────────────────────────────────────────────────
 # STAGE 3: runtime — immagine finale minimale
@@ -114,8 +116,14 @@ CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "
 **Multi-stage per Go (immagine ~10MB finale):**
 
 ```dockerfile
-# syntax=docker/dockerfile:1.6
-FROM golang:1.22-alpine AS builder
+# syntax=docker/dockerfile:1
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
+
+# Valorizzati da buildx per ogni piattaforma target (cross-compile nativo, senza QEMU)
+ARG TARGETOS
+ARG TARGETARCH
+# Alpine non ha git e .git è in .dockerignore: la versione si passa da fuori
+ARG VERSION=dev
 
 # Caching delle dipendenze Go separate dal build
 WORKDIR /app
@@ -128,9 +136,9 @@ COPY . .
 
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build \
-        -ldflags="-w -s -X main.version=$(git describe --tags --always)" \
+        -ldflags="-w -s -X main.version=${VERSION}" \
         -o /app/server \
         ./cmd/server
 
@@ -149,7 +157,7 @@ COPY --from=builder /etc/passwd /etc/passwd
 # Il binario compilato staticamente
 COPY --from=builder /app/server /server
 
-# Utente non-root (UID 65534 = nobody in alpine)
+# Utente non-root (UID 65534 = nobody; con /etc/passwd copiato risolve anche il nome)
 USER 65534
 
 ENTRYPOINT ["/server"]
@@ -162,7 +170,7 @@ ENTRYPOINT ["/server"]
 BuildKit introduce i **cache mount** che persistono la cache tra build successivi, evitando di riscaricare dipendenze ogni volta.
 
 ```dockerfile
-# syntax=docker/dockerfile:1.6
+# syntax=docker/dockerfile:1
 
 # ── Python: cache pip ──────────────────────────────────
 FROM python:3.12-slim
@@ -170,13 +178,13 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install fastapi uvicorn[standard] sqlalchemy psycopg2-binary
 
 # ── Node.js: cache npm ────────────────────────────────
-FROM node:20-alpine
+FROM node:24-alpine
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline
 
 # ── Go: cache moduli e build cache ───────────────────
-FROM golang:1.22
+FROM golang:1.25
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go build ./...
@@ -187,18 +195,26 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn dependency:go-offline
 
 # ── Apt: cache packages (evita re-fetch dello stesso apt index) ──
-FROM ubuntu:22.04
+FROM ubuntu:24.04
+# Le immagini Debian/Ubuntu hanno docker-clean che svuota la cache dopo ogni apt:
+# va disattivato, altrimenti il cache mount resta vuoto
+RUN rm -f /etc/apt/apt.conf.d/docker-clean && \
+    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+# NIENTE "rm -rf /var/lib/apt/lists/*" qui: cancellerebbe il contenuto del mount.
+# I mount non finiscono nel layer, quindi non serve ripulire.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-        build-essential libpq-dev && \
-    rm -rf /var/lib/apt/lists/*
+        build-essential libpq-dev
 ```
+
+!!! note "Il cache mount non è nel layer"
+    Il contenuto di `--mount=type=cache` vive nella cache del builder, **non** nell'immagine finale: velocizza il build ma non riduce la dimensione. Su runner CI effimeri la cache è persa a ogni job, salvo export esplicito (`--cache-to type=gha` / `type=registry`).
 
 **Build Secrets — Credenziali sicure senza leak:**
 
 ```dockerfile
-# syntax=docker/dockerfile:1.6
+# syntax=docker/dockerfile:1
 
 FROM python:3.12-slim
 
@@ -209,15 +225,17 @@ RUN --mount=type=secret,id=pypi_token \
         private-package
 
 # Clona repository privato durante il build
+RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
 RUN --mount=type=ssh \
     git clone git@github.com:company/private-lib.git /app/private-lib
+# (serve un'immagine con git + openssh-client; python:slim non li include)
 ```
 
 ```bash
 # Build con secrets
 docker buildx build \
-    --secret id=pypi_token,src=~/.pypi_token \
-    --ssh default=$SSH_AUTH_SOCK \
+    --secret id=pypi_token,src=${HOME}/.pypi_token \
+    --ssh default \
     .
 ```
 
@@ -268,10 +286,12 @@ docker build --build-arg CACHEBUST=$(date +%s) .
 
 ```dockerfile
 # Forza invalidazione di un singolo layer
+# Un ARG diverso dal precedente invalida la cache da qui in poi
 ARG CACHEBUST=1
-RUN --mount=type=cache,id=fetch-deps,target=/cache \
-    CACHEBUST=${CACHEBUST} fetch-latest-deps.sh
+RUN fetch-latest-deps.sh
 ```
+
+Alternative più mirate: `docker build --no-cache-filter <stage>` (ignora la cache di un solo stage) o `--no-cache` (tutto).
 
 ---
 
@@ -300,11 +320,14 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 
 | Base Image | Dimensione | Vulnerabilità CVE (tipico) | Shell |
 |------------|-----------|---------------------------|-------|
-| ubuntu:22.04 | ~80MB | 20-50 | ✓ |
+| ubuntu:24.04 | ~80MB | 20-50 | ✓ |
 | debian:slim | ~50MB | 15-30 | ✓ |
-| alpine:3.19 | ~7MB | 2-5 | ✓ ash |
+| alpine:3.x | ~7MB | 2-5 | ✓ ash |
 | distroless/static | ~2MB | 0-2 | ✗ |
 | scratch | 0MB | 0 | ✗ |
+
+!!! note "Valori indicativi"
+    Dimensioni e conteggi CVE sono ordini di grandezza e variano nel tempo e con lo scanner: misurare sulla propria immagine (`trivy image`, `grype`). Per il debug di immagini senza shell esistono i tag `:debug` di distroless (con busybox) e gli ephemeral container.
 
 ```dockerfile
 # ── scratch: solo per binari statici (Go, Rust) ─────────
@@ -321,7 +344,7 @@ ENTRYPOINT ["/binary"]
 ## Best Practices — Checklist Completa
 
 ```dockerfile
-# syntax=docker/dockerfile:1.6
+# syntax=docker/dockerfile:1
 
 # ✓ 1. Versione specifica dell'immagine base (no "latest")
 FROM python:3.12.3-slim-bookworm AS base
@@ -349,8 +372,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && \
     apt-get install -y --no-install-recommends \
         libpq5=15.* \
-        curl=7.88.* && \
-    rm -rf /var/lib/apt/lists/*
+        curl=7.88.*
+# (con cache mount niente rm di /var/lib/apt/lists: vedi sezione cache mount;
+#  senza cache mount: un solo RUN che termina con rm -rf /var/lib/apt/lists/*)
 
 WORKDIR /app
 
@@ -402,7 +426,7 @@ ADD . /app
 COPY . .
 RUN pip install ...  # invalida cache ad ogni cambio di codice
 
-# ✗ Doppio shell form (non riceve SIGTERM)
+# ✗ Shell form (il PID 1 è /bin/sh, che di norma non inoltra SIGTERM)
 CMD "python server.py"     # eseguito come: /bin/sh -c "python server.py"
 # Corretto: exec form
 CMD ["python", "server.py"]  # riceve SIGTERM direttamente
@@ -432,6 +456,7 @@ node_modules/
 __pycache__/
 *.pyc
 .venv/
+# vendor/: togliere dall'ignore se Go usa `go mod vendor` nel build
 vendor/
 
 # Output di build
@@ -480,12 +505,42 @@ docker buildx build \
     --tag registry.company.com/app:1.0.0 \
     --tag registry.company.com/app:latest \
     --push \
-    --provenance=true \       # SLSA provenance attestation
-    --sbom=true \             # SBOM attestation
+    --provenance=mode=max \
+    --sbom=true \
     .
+# --provenance = attestation SLSA; --sbom = attestation SBOM (non usare commenti
+# dopo il "\": spezzerebbero la riga di comando)
 
 # Verifica il manifest multi-platform
 docker buildx imagetools inspect registry.company.com/app:1.0.0
+```
+
+---
+
+## Funzionalità Dockerfile Moderne
+
+```dockerfile
+# syntax=docker/dockerfile:1
+
+# Heredoc: script multi-riga in un solo layer, senza catene di &&
+RUN <<EOF
+set -e
+apt-get update
+apt-get install -y --no-install-recommends ca-certificates
+EOF
+
+# COPY --link: il layer è indipendente dai precedenti, quindi non si invalida
+# se cambia lo stage/base sottostante (cache e push più efficienti)
+COPY --link --from=builder /app/server /server
+```
+
+**`ARG` vs `ENV`:** `ARG` esiste solo durante il build (non nel container a runtime) ma compare in `docker history`: **mai** per segreti (usare `--mount=type=secret`). `ENV` persiste nell'immagine e nel container. Un `ARG` dichiarato prima di `FROM` è visibile solo in `FROM`; va ridichiarato nello stage per usarlo.
+
+**`COPY` vs `ADD`:** `COPY` copia e basta; `ADD` aggiunge download da URL e auto-estrazione di tar locali, comportamenti impliciti da evitare tranne in casi mirati.
+
+```bash
+# Lint del Dockerfile con le build checks integrate (buildx)
+docker buildx build --check .
 ```
 
 ---
@@ -494,7 +549,7 @@ docker buildx imagetools inspect registry.company.com/app:1.0.0
 
 ### Scenario 1 — La cache BuildKit non viene riutilizzata tra build
 
-**Sintomo:** Ogni `docker build` reinstalla le dipendenze da zero anche se `requirements.txt` / `package.json` non è cambiato. Il log mostra `[no cache]` su layer che dovrebbero essere cached.
+**Sintomo:** Ogni `docker build` reinstalla le dipendenze da zero anche se `requirements.txt` / `package.json` non è cambiato. Il log `--progress=plain` mostra gli step `RUN` eseguiti (senza `CACHED`) su layer che dovrebbero essere cached.
 
 **Causa:** Le cause più comuni sono: (a) il build context include file che cambiano spesso e vengono copiati troppo presto con `COPY . .`; (b) si usa un builder diverso tra run (ad es. `docker build` vs `docker buildx build --builder custom`); (c) i `--mount=type=cache` sono condivisi con `id` diversi.
 
@@ -502,7 +557,7 @@ docker buildx imagetools inspect registry.company.com/app:1.0.0
 
 ```bash
 # Ispeziona quali layer vengono invalidati
-docker build --progress=plain . 2>&1 | grep -E "(CACHED|no cache|RUN)"
+docker build --progress=plain . 2>&1 | grep -E "(CACHED|RUN)"
 
 # Verifica builder attivo
 docker buildx ls
@@ -575,7 +630,7 @@ docker buildx imagetools inspect registry.company.com/app:1.0.0
 
 ### Scenario 4 — Build lento per build context troppo grande
 
-**Sintomo:** Il trasferimento del build context impiega decine di secondi prima che inizi il primo step. Il log mostra `Sending build context to Docker daemon  500MB`.
+**Sintomo:** Il trasferimento del build context impiega decine di secondi prima che inizi il primo step. Il log mostra `transferring context: 500MB` (BuildKit; il vecchio builder: `Sending build context to Docker daemon  500MB`).
 
 **Causa:** Manca o è incompleto il file `.dockerignore`. Cartelle come `node_modules/`, `.git/`, `dist/`, file di test o binari compilati vengono inclusi nel context anche se non usati nel Dockerfile.
 
