@@ -7,9 +7,10 @@ search_keywords: [kubernetes pod spec, kubernetes deployment rolling update, sta
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/scheduling-avanzato, containers/kubernetes/storage, containers/kubernetes/sicurezza]
 official_docs: https://kubernetes.io/docs/concepts/workloads/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Kubernetes Workloads
@@ -154,7 +155,9 @@ spec:
             command: ["/bin/sh", "-c", "sleep 5; /app/graceful-shutdown.sh"]
             # Dà tempo al load balancer di rimuovere il pod dagli endpoint
 
-    # ── Sidecar Container ────────────────────────────────────────
+    # ── Sidecar Container (classico) ─────────────────────────────
+    # Container "normale": parte insieme a `api` e non ha ordine di avvio/stop garantito.
+    # Per sidecar con lifecycle corretto vedi "Native Sidecar Containers" sotto.
     - name: log-forwarder
       image: fluent/fluent-bit:2.2
       resources:
@@ -198,6 +201,25 @@ spec:
   dnsPolicy: ClusterFirst
   restartPolicy: Always                # Always | OnFailure | Never
 ```
+
+### Native Sidecar Containers
+
+Un sidecar come container normale ha due problemi: può partire *dopo* l'app (che perde i primi log/richieste verso un proxy non pronto) e **impedisce ai Job di terminare** (il Pod resta `Running` finché il sidecar non esce). I **native sidecar** (GA dalla 1.33) risolvono entrambi: sono `initContainers` con `restartPolicy: Always`.
+
+```yaml
+spec:
+  initContainers:
+    - name: log-forwarder
+      image: fluent/fluent-bit:2.2
+      restartPolicy: Always      # lo rende un sidecar: resta in esecuzione, non blocca la sequenza init
+      startupProbe:              # il container successivo parte solo quando questa passa
+        httpGet: {path: /api/v1/health, port: 2020}
+  containers:
+    - name: api
+      image: registry.company.com/api:1.0.0
+```
+
+Meccanismo: parte in ordine con gli altri init container, ma kubelet non attende che termini (solo che sia *started*, o che la `startupProbe` passi); viene riavviato se crasha; allo shutdown è terminato **dopo** i container principali, in ordine inverso. Un Job completa quando finiscono i container principali, anche se il sidecar è ancora attivo. Tipici usi: service mesh proxy (Envoy/Istio), log shipper, agent di auth.
 
 ---
 
@@ -356,16 +378,27 @@ spec:
 Scale Down: postgres da 3 a 2 pod
 
   Passo 1: postgres-2 viene terminato (ordine inverso)
-           Il suo PVC postgres-data-2 NON viene cancellato
-           (reclaimPolicy = Retain per i PVC dei StatefulSet)
+           Il suo PVC data-postgres-2 NON viene cancellato
+           (default di persistentVolumeClaimRetentionPolicy: Retain)
 
   Passo 2 (opzionale): postgres-1 termina
-           PVC postgres-data-1 rimane
+           PVC data-postgres-1 rimane
 
   Scale up da 2 a 3:
-  Il nuovo postgres-2 trova il suo PVC postgres-data-2 esistente
+  Il nuovo postgres-2 trova il suo PVC data-postgres-2 esistente
   → Monta lo stesso storage → nessuna perdita di dati
 ```
+
+Il nome del PVC è `<volumeClaimTemplate>-<statefulset>-<ordinal>` (qui `data-postgres-2`). La sua sorte è governata da `persistentVolumeClaimRetentionPolicy` (GA da 1.32), **non** dalla `reclaimPolicy` del PV (che decide cosa succede al volume *dopo* la cancellazione del PVC):
+
+```yaml
+spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain   # Retain (default) | Delete — cancellazione dello StatefulSet
+    whenScaled: Delete    # Retain (default) | Delete — scale down; utile per cache/dati ricostruibili
+```
+
+Per i database lasciare `Retain`: `Delete` cancella i dati insieme al pod.
 
 ---
 
@@ -510,8 +543,10 @@ Kubernetes assegna una classe QoS a ogni Pod in base ai resource requests/limits
 ```
 QoS Classes — Priority di Eviction (OOM)
 
-  GUARANTEED (mai evicted per memoria, solo se il nodo è in crisis totale):
-  → requests.cpu == limits.cpu  E  requests.memory == limits.memory
+  GUARANTEED (ultimi a essere evicted/OOM-killed; kubelet li tocca solo se
+  il nodo non ha altro da sacrificare):
+  → OGNI container ha requests.cpu == limits.cpu  E  requests.memory == limits.memory
+    (sidecar e init container inclusi: uno solo "sbagliato" declassa il Pod)
   resources:
     requests:  {cpu: "500m", memory: "256Mi"}
     limits:    {cpu: "500m", memory: "256Mi"}  ← identici
@@ -528,6 +563,9 @@ QoS Classes — Priority di Eviction (OOM)
 
   Raccomandazione: GUARANTEED per DB/stateful, BURSTABLE per app standard
 ```
+
+!!! note "La classe non è l'unico criterio"
+    Sotto node-pressure eviction il kubelet ordina i Pod anche per **quanto l'uso supera i requests** (e per priority): un Burstable che usa molto più dei suoi requests viene evicted prima di uno che resta sotto. Il kernel OOM killer usa invece `oom_score_adj`, derivato dalla QoS class (Guaranteed -997, BestEffort 1000, Burstable in mezzo, proporzionale ai requests).
 
 ---
 
