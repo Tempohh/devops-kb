@@ -7,7 +7,7 @@ search_keywords: [asp.net core, aspnet core 8, dotnet 8, dotnet 9, c#, csharp, m
 parent: dev/linguaggi/_index
 related: [dev/linguaggi/java-spring-boot, dev/linguaggi/java-quarkus]
 official_docs: https://learn.microsoft.com/en-us/aspnet/core/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -664,12 +664,13 @@ app.MapControllers();                   // REST endpoint coesistono
 
 ### .NET Aspire — Orchestrazione Locale
 
-.NET Aspire è lo stack per sviluppo locale di applicazioni distribuite: orchestra localmente i servizi, configura dipendenze (DB, Redis, Kafka) e inietta connection string automaticamente. L'AppHost è un orchestratore di sviluppo, non un runtime di produzione.
-
-<!-- REVIEW: verificare nome corrente (da Aspire 13 il prodotto è "Aspire", senza ".NET"), sintassi AppHost e stato dei publisher di deploy (Kubernetes/Docker Compose) -->
+Aspire (fino alla 9.x "**.NET Aspire**"; da **Aspire 13**, nov 2025, il prodotto è semplicemente "Aspire", piattaforma multi-linguaggio con Python e JavaScript first-class; richiede .NET 10 SDK) è lo stack per sviluppo locale di applicazioni distribuite: orchestra localmente i servizi, configura dipendenze (DB, Redis, Kafka) e inietta connection string automaticamente. L'AppHost è un orchestratore di sviluppo, non un runtime di produzione.
 
 !!! note "Nota"
-    Gli snippet sotto seguono l'API Aspire 8/9. Le versioni più recenti hanno rinominato il prodotto e aggiunto la generazione di manifest di deploy: controllare la documentazione ufficiale prima di adottarli.
+    Gli snippet sotto usano l'API `DistributedApplication`/`AddProject`/`WithReference`, invariata in Aspire 13. Cambia il `.csproj` dell'AppHost: `<Project Sdk="Aspire.AppHost.Sdk/13.0.0">` include già `Aspire.Hosting.AppHost`, senza `<Sdk Name=...>` né `PackageReference` espliciti. Breaking change 13.0: `Aspire.Hosting.NodeJs` → `Aspire.Hosting.JavaScript`, `AddNpmApp` → `AddJavaScriptApp`, i publishing callback sono sostituiti da pipeline step (`aspire do`).
+
+!!! info "Publisher di deploy"
+    Il pacchetto `Aspire.Hosting.Kubernetes` (`AddKubernetesEnvironment()`) è GA: `aspire publish` genera Helm chart, `aspire deploy` fa il deploy sul cluster corrente via `helm upgrade --install` (richiede Helm sul PATH). `aspire publish` può emettere anche un file Docker Compose dallo stesso modello. Resta valido che l'AppHost non è il runtime di produzione.
 
 ```csharp
 // AppHost/Program.cs — AppHost Aspire (progetto separato)
@@ -1042,7 +1043,7 @@ ASP.NET Core 8+ è il runtime C# di riferimento in questa KB — si integra con 
 
 - [ASP.NET Core Documentation](https://learn.microsoft.com/en-us/aspnet/core/)
 - [Minimal APIs in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/)
-- [.NET Aspire Documentation](https://learn.microsoft.com/en-us/dotnet/aspire/)
+- [Aspire Documentation](https://aspire.dev/) (ex .NET Aspire)
 - [Health checks in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/health-checks)
 - [gRPC services with ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/grpc/)
 - [.NET Generic Host](https://learn.microsoft.com/en-us/dotnet/core/extensions/generic-host)
