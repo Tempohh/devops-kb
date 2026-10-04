@@ -7,9 +7,10 @@ search_keywords: [terraform modules, moduli terraform, riuso iac, terraform regi
 parent: iac/terraform/_index
 related: [iac/terraform/fondamentali, iac/terraform/state-management]
 official_docs: https://developer.hashicorp.com/terraform/language/modules
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Terraform — Moduli
@@ -26,7 +27,7 @@ I **moduli** sono il meccanismo di astrazione e riuso di Terraform: permettono d
 
 ### Anatomia di un Modulo
 
-Un modulo ben strutturato contiene tre file fondamentali:
+Un modulo ben strutturato (convenzione *Standard Module Structure*) contiene almeno tre file; Terraform li legge tutti allo stesso modo, la suddivisione serve solo alla leggibilità:
 
 | File | Scopo |
 |------|-------|
@@ -68,6 +69,9 @@ module "lambda" {
 
 !!! warning "Versioning obbligatorio per moduli remoti"
     Usare sempre il parametro `version` (Registry) o `?ref=` (Git) per fissare la versione. Un modulo non versionato può cambiare comportamento in modo silenzioso dopo un `terraform init -upgrade`.
+
+!!! note "Vincoli di versione"
+    `~> 5.0` (*pessimistic constraint*) accetta `>= 5.0, < 6.0`: patch e minor sì, major no (le major introducono breaking change). `~> 5.1.2` accetta solo patch `5.1.x`. Il parametro `version` funziona **solo** con Registry; per Git/S3 la versione è nel `ref`/URL. La versione esatta risolta viene registrata in `.terraform/modules/modules.json` (non nel lock file, che copre solo i provider).
 
 ## Architettura / Come Funziona
 
@@ -241,7 +245,7 @@ resource "aws_eks_cluster" "main" {
 # Modulo ufficiale AWS VPC — uno dei più usati
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 5.1"
+  version = "~> 5.1" # <!-- REVIEW: verificare se la major corrente è 6.x e le variazioni di input -->
 
   name = "prod-vpc"
   cidr = "10.0.0.0/16"
@@ -263,10 +267,10 @@ module "vpc" {
 # Modulo EKS
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.0"
+  version = "~> 20.0" # <!-- REVIEW: verificare major corrente (v21 rinomina input, es. name/kubernetes_version) -->
 
   cluster_name    = "prod-eks"
-  cluster_version = "1.29"
+  cluster_version = "1.33" # usare una versione Kubernetes ancora supportata da EKS
 
   vpc_id                         = module.vpc.vpc_id
   subnet_ids                     = module.vpc.private_subnets
@@ -286,7 +290,7 @@ module "eks" {
 ### Istanze Multiple dello Stesso Modulo
 
 ```hcl
-# Stesso modulo, ambienti diversi — with count
+# Stesso modulo, più istanze — con count (indici numerici: rimuovere un elemento intermedio ricrea i successivi)
 module "app" {
   count  = var.environment == "prod" ? 3 : 1
   source = "./modules/app-server"
@@ -295,7 +299,7 @@ module "app" {
   environment = var.environment
 }
 
-# With for_each — raccomandato per istanze denominate
+# for_each — raccomandato: le istanze sono indicizzate per chiave (module.service["backend"]), quindi stabili
 module "service" {
   for_each = {
     frontend = { port = 80,  replicas = 3 }
@@ -441,10 +445,22 @@ data "aws_ami" "amazon_linux" {
   owners      = ["amazon"]
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    values = ["al2023-ami-2023.*-x86_64"] # Amazon Linux 2 è a fine supporto: usare AL2023
   }
 }
 ```
+
+### Provider dentro i moduli
+
+Un modulo **riusabile** non deve contenere blocchi `provider {}`: dichiara solo `required_providers` e eredita la configurazione dal chiamante (implicitamente o via `providers = {}`). Un `provider` dentro il modulo lo rende non utilizzabile con `count`/`for_each`/`depends_on` e rende impossibile rimuoverlo senza prima distruggere le sue risorse (il provider sparisce dalla config mentre lo state lo richiede).
+
+### Output sensitive e state
+
+`sensitive = true` oscura il valore in CLI e log, ma il valore resta **in chiaro nello state**. Proteggere lo state (backend cifrato, accesso ristretto) — vedi [State Management](./state-management.md).
+
+### Testare i moduli
+
+Da Terraform 1.6 esiste `terraform test` (file `*.tftest.hcl`): esegue `plan`/`apply` su un modulo con input di prova e verifica le `assert`; con `command = plan` non crea risorse. In alternativa, `terraform validate` + `tflint` in CI per i controlli statici.
 
 ## Troubleshooting
 
@@ -470,9 +486,22 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = ">= 4.0"
-      # Necessario se il modulo è chiamato con providers = {}
+      # Necessario se il modulo si aspetta provider con alias
       configuration_aliases = [aws.primary, aws.secondary]
     }
+  }
+}
+```
+
+Il chiamante mappa poi gli alias del modulo sui propri provider:
+
+```hcl
+module "replica" {
+  source = "./modules/replicated-bucket"
+
+  providers = {
+    aws.primary   = aws.eu
+    aws.secondary = aws.us
   }
 }
 ```
@@ -491,9 +520,20 @@ module "vpc" {
   source = "./modules/vpc"
 }
 
-# Aggiornare lo state senza distruggere la risorsa:
+# Aggiornare lo state senza distruggere la risorsa (approccio imperativo):
 terraform state mv aws_vpc.main module.vpc.aws_vpc.this
 ```
+
+Approccio dichiarativo (Terraform ≥ 1.1, preferibile: è versionato, rivedibile in PR e vale per tutti gli state/workspace che usano il modulo):
+
+```hcl
+moved {
+  from = aws_vpc.main
+  to   = module.vpc.aws_vpc.this
+}
+```
+
+Il `plan` mostra poi "has moved to" invece di destroy/create. Il blocco `moved` può restare nel codice finché esistono state non ancora migrati.
 
 ## Relazioni
 
