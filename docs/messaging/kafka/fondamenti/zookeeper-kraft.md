@@ -7,7 +7,7 @@ search_keywords: [kafka zookeeper, kafka kraft, kip-500, kafka metadata, control
 parent: messaging/kafka/fondamenti
 related: [messaging/kafka/fondamenti/broker-cluster, messaging/kafka/fondamenti/architettura, messaging/kafka/fondamenti/topics-partizioni]
 official_docs: https://kafka.apache.org/documentation/#kraft
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -307,6 +307,7 @@ kafka-broker-api-versions.sh --bootstrap-server localhost:9092 | head -5
 
 # Stato della migrazione: metrica JMX sul controller attivo
 #   kafka.controller:type=KafkaController,name=ZkMigrationState
+#   valori: 2=PRE_MIGRATION, 1=MIGRATION, 3=POST_MIGRATION
 
 # Stato del quorum e lag dei controller
 kafka-metadata-quorum.sh \
@@ -314,10 +315,11 @@ kafka-metadata-quorum.sh \
   describe --replication
 
 # In caso di blocco: non riavviare i broker a caso —
-# seguire la KRaft Migration Guide ufficiale (ogni fase è reversibile solo fino al punto indicato)
+# seguire la KRaft Migration Guide ufficiale (ogni fase è reversibile fino alla finalizzazione)
 ```
 
-<!-- REVIEW: verificare nome esatto metrica ZkMigrationState e punto di non ritorno della migrazione sulla doc ufficiale -->
+!!! danger "Punto di non ritorno"
+    Finché i controller sono in migration mode (`zookeeper.metadata.migration.enable=true`) si può tornare a ZooKeeper. Il rollback diventa impossibile con la **finalizzazione**: rimozione di `zookeeper.metadata.migration.enable` dai controller KRaft (riavvio uno alla volta) dopo che tutti i broker sono in KRaft. Prima di finalizzare conviene attendere qualche giorno per validare il cluster.
 
 !!! warning "Nessun upgrade diretto 3.x ZooKeeper → 4.x"
     Kafka 4.0 non contiene più il codice ZooKeeper e non sa migrare. Un cluster ZooKeeper va portato a 3.9, migrato a KRaft, e solo dopo aggiornato a 4.x.
