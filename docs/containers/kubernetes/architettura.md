@@ -7,9 +7,10 @@ search_keywords: [kubernetes architecture deep dive, kubernetes control plane co
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/workloads, containers/kubernetes/operators-crd]
 official_docs: https://kubernetes.io/docs/concepts/overview/components/
-status: complete
+status: needs-review
 difficulty: expert
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Architettura Kubernetes
@@ -39,7 +40,7 @@ Kubernetes Architecture
   |        |                           +--------------+       |
   |        |                                                   |
   |        |               cloud-controller-manager           |
-  |        |               (solo su cloud managed)            |
+  |        |               (solo con integrazione cloud)      |
   +--------+---------------------------------------------------+
            |  HTTPS (6443)
   WORKER NODES
@@ -81,28 +82,39 @@ Request Lifecycle — kubectl apply -f deployment.yaml
 
     |
     v
-  3. ADMISSION CONTROLLERS — È valido?
-     Mutating Admission Webhooks (prima): modificano l'oggetto
+  3. MUTATING ADMISSION — Va modificato/completato?
+     Modificano l'oggetto (eseguiti in serie):
        - DefaultStorageClass (aggiunge storageClass di default)
-       - MutatingAdmissionWebhook (custom webhooks)
-       - NamespaceLifecycle, LimitRanger
-     Validating Admission Webhooks (dopo): validano (non modificano)
-       - ValidatingAdmissionWebhook (OPA Gatekeeper, Kyverno)
-       - ResourceQuota, PodSecurity
+       - MutatingAdmissionWebhook (webhook custom, es. sidecar injection)
+       - MutatingAdmissionPolicy (CEL, senza webhook) <!-- REVIEW: verificare versione/stato GA di MutatingAdmissionPolicy -->
+       <!-- REVIEW: verificare che kernel >= 5.13 sia il requisito attuale di kube-proxy nftables -->
+       <!-- REVIEW: verificare che KMS v2 sia stabile dalla 1.29 -->
+       <!-- REVIEW: verificare che il restore con etcdctl sia deprecato da etcd 3.6 -->
+       <!-- (marker non renderizzati; il lifecycle li passa a currency) -->
+       - NamespaceLifecycle, LimitRanger, ServiceAccount
 
     |
     v
   4. OBJECT SCHEMA VALIDATION — È ben formato?
      Validation tramite OpenAPI schema per ogni GVK (Group/Version/Kind)
+     (dopo le mutazioni: valida l'oggetto finale, non quello inviato)
 
     |
     v
-  5. PERSIST TO etcd
-     Oggetto serializzato (protobuf) scritto in etcd
+  5. VALIDATING ADMISSION — È consentito dalle policy?
+     Validano, non modificano (eseguiti in parallelo):
+       - ValidatingAdmissionWebhook (OPA Gatekeeper, Kyverno)
+       - ValidatingAdmissionPolicy (CEL in-process, GA dalla 1.30)
+       - ResourceQuota, PodSecurity
 
     |
     v
-  6. RESPONSE all'utente
+  6. PERSIST TO etcd
+     Oggetto serializzato (protobuf per le risorse built-in, JSON per i CRD) scritto in etcd
+
+    |
+    v
+  7. RESPONSE all'utente
 
   (In parallelo: controllers e scheduler watchano le modifiche via Watch API)
 ```
@@ -155,7 +167,9 @@ etcd Raft Cluster (3 nodi)
   5 nodi → quorum = 3 → tollera 2 failure
 
   Raccomandazione: 3 nodi per prod, 5 nodi per alta disponibilità critica
-                  mai 2, mai 4 (solo peggiorano il quorum)
+                  numero pari (2, 4) da evitare: 4 nodi → quorum = 3 → tollera
+                  comunque 1 solo failure (come 3), ma con più nodi che possono
+                  rompersi e più traffico di replica. 2 nodi: quorum = 2, zero tolleranza.
 ```
 
 **Struttura dei dati in etcd:**
@@ -168,8 +182,10 @@ ETCDCTL_API=3 etcdctl \
     --cert=/etc/kubernetes/pki/etcd/server.crt \
     --key=/etc/kubernetes/pki/etcd/server.key \
     get /registry/pods/default/my-pod -w json | jq
+# Nota: key e value sono base64 nel JSON e il value dei built-in è protobuf
+# (non leggibile in chiaro). Per ispezionare usare kubectl o auger.
 
-# Tutti i pods in etcd
+# Tutti i pods in etcd (stessi flag --endpoints/--cacert/--cert/--key)
 etcdctl get /registry/pods/ --prefix --keys-only
 
 # Struttura key:
@@ -178,25 +194,34 @@ etcdctl get /registry/pods/ --prefix --keys-only
 # /registry/deployments/production/api-server
 # /registry/secrets/kube-system/bootstrap-token-xxx
 
-# Backup etcd (CRITICO in produzione)
+# Backup etcd (CRITICO in produzione; servono gli stessi flag di connessione/TLS)
 etcdctl snapshot save /backup/etcd-snapshot-$(date +%Y%m%d).db
 
-# Restore (cluster down)
-etcdctl snapshot restore /backup/etcd-snapshot.db \
+# Restore (cluster down). Da etcd 3.6 `etcdctl snapshot restore` è deprecato:
+# usare `etcdutl`, che opera sul file offline senza contattare un server.
+# Su un cluster multi-nodo il restore va eseguito su OGNI membro, con
+# --initial-cluster elencante tutti i membri e il proprio --name.
+etcdutl snapshot restore /backup/etcd-snapshot.db \
     --name etcd-1 \
     --initial-cluster etcd-1=https://10.0.0.1:2380 \
     --initial-cluster-token etcd-cluster-1 \
     --initial-advertise-peer-urls https://10.0.0.1:2380 \
     --data-dir /var/lib/etcd-restore
 
-# Encrypt secrets in etcd (best practice)
-# /etc/kubernetes/encryption-config.yaml:
+# Encrypt secrets at rest in etcd (best practice)
+# /etc/kubernetes/encryption-config.yaml, passato con
+# --encryption-provider-config=... all'API server:
+# apiVersion: apiserver.config.k8s.io/v1
+# kind: EncryptionConfiguration
 # resources:
 #   - resources: ["secrets"]
 #     providers:
-#       - aescbc:
+#       - aescbc:                  # chiave statica sul disco del control plane
 #           keys: [{name: key1, secret: <base64-32-bytes>}]
-#       - identity: {}
+#       - identity: {}             # ultimo: permette di leggere i dati ancora in chiaro
+# Preferibile: provider `kms` v2 (envelope encryption, chiave nel KMS esterno;
+# v2 stabile dalla 1.29). Dopo il cambio, riscrivere i Secret esistenti:
+#   kubectl get secrets -A -o json | kubectl replace -f -
 ```
 
 ---
@@ -237,7 +262,8 @@ Scheduling Pipeline — Fasi
        |
        v
   3. BINDING
-     scheduler scrive .spec.nodeName nel Pod → API server → etcd
+     scheduler crea un oggetto Binding (subresource pods/binding) → l'API server
+     imposta .spec.nodeName nel Pod → etcd
      kubelet del nodo target vede il Pod assegnato e lo avvia
 ```
 
@@ -298,13 +324,15 @@ Reconciliation Loop Pattern
   Esempi:
   Deployment Controller:
     desired: 3 replicas nginx:1.25
-    actual: 2 running, 1 failed
-    action: create new Pod con nginx:1.25
+    actual: il ReplicaSet figlio ha 2 Pod ready su 3
+    action: il ReplicaSet controller crea un nuovo Pod
+            (il Deployment controller gestisce i ReplicaSet, es. nei rollout)
 
   Node Controller:
     desired: nodo online e sano
-    actual: nodo non risponde da 5 minuti
-    action: taint node + evict pods
+    actual: nessun heartbeat da node-monitor-grace-period (default 40s)
+    action: Ready=Unknown + taint node.kubernetes.io/unreachable;
+            i Pod vengono evicted dopo tolerationSeconds (default 300s)
 ```
 
 **Meccanismo Watch — Efficienza O(1) per evento:**
@@ -375,7 +403,8 @@ journalctl -u kubelet --since "10m ago" | grep -i error
 kubectl get pods --field-selector spec.nodeName=worker-1
 
 # Kubelet API (porta 10250) — vari endpoint
-# Requires cert: --kubelet-certificate-authority e --kubelet-client-*
+# Richiede authn/authz verso il kubelet (default: webhook authn + authz,
+# anonymous disabilitato): serve un client cert o un token con RBAC su nodes/proxy
 curl --cacert ca.crt --cert kubelet.crt --key kubelet.key \
     https://worker-1:10250/pods | jq '.items[].metadata.name'
 
@@ -408,29 +437,39 @@ kube-proxy — Modalità iptables
   KUBE-SEP-A (DNAT verso il pod):
   -A KUBE-SEP-A -p tcp -j DNAT --to-destination 10.244.1.5:8080
 
-  Problema iptables: O(n) per ogni nuova connessione se ci sono molti Service
+  Problema iptables: le regole sono una lista lineare, attraversata O(n) per ogni
+  nuova connessione (e riscritta per intero a ogni aggiornamento)
   → Performance degradata con 10.000+ Service
 
-kube-proxy — Modalità IPVS (raccomandato per cluster grandi):
+kube-proxy — Modalità nftables (raccomandata su Linux, GA dalla 1.33):
+  Stessa logica di Service → endpoint, ma con mappe/set nftables: lookup
+  O(1) dei Service e aggiornamenti incrementali delle regole.
+  Richiede kernel >= 5.13. Verifica: nft list ruleset | grep kube-proxy
+
+kube-proxy — Modalità IPVS (DEPRECATA dalla 1.35, rimozione futura):
   IPVS (IP Virtual Server) opera nel kernel con hash table O(1):
   ipvsadm -Ln:
   TCP  10.96.0.1:80 rr         ← round-robin
     -> 10.244.1.5:8080         weight 1
     -> 10.244.2.7:8080         weight 1
     -> 10.244.3.2:8080         weight 1
+  Per cluster esistenti in IPVS: pianificare la migrazione a nftables.
+
+Alternativa: CNI con replacement di kube-proxy (es. Cilium eBPF kube-proxy
+replacement) → kube-proxy non viene installato.
 ```
 
 ```bash
 # Verifica modalità kube-proxy
 kubectl get configmap kube-proxy -n kube-system -o yaml | grep mode
 
-# Cambia a IPVS mode
+# Cambia modalità (kubeadm)
 kubectl edit configmap kube-proxy -n kube-system
-# mode: "ipvs"
-# ipvs:
-#   scheduler: "rr"          # round-robin | wrr | lc | wlc | sh
+# mode: "nftables"             # iptables | nftables | ipvs (deprecato)
+# Poi riavvia i Pod: il ConfigMap non viene riletto a caldo
+kubectl rollout restart daemonset kube-proxy -n kube-system
 
-# Verifica regole IPVS
+# Verifica regole IPVS (solo se in modalità ipvs)
 ipvsadm -Ln | head -30
 
 # Debug Service routing
@@ -496,6 +535,8 @@ sudo openssl x509 -in /etc/kubernetes/pki/apiserver.crt -noout -dates
 # Rinnovo certificati con kubeadm
 sudo kubeadm certs check-expiration
 sudo kubeadm certs renew all
+# Poi riavvia i pod statici del control plane (es. sposta e ripristina i manifest
+# in /etc/kubernetes/manifests, o riavvia kubelet) per caricare i nuovi cert
 
 # Se HA: verifica health di tutti gli endpoint
 for ip in 10.0.0.1 10.0.0.2 10.0.0.3; do
@@ -527,8 +568,8 @@ kubectl get nodes -o custom-columns=NAME:.metadata.name,TAINTS:.spec.taints
 # Verifica se il PVC è Bound
 kubectl get pvc -n <namespace>
 
-# Simula scheduling senza eseguire (dry-run)
-kubectl debug node/<node-name> --image=busybox -- sleep 1
+# Eventi recenti dello scheduler (FailedScheduling con motivo per nodo)
+kubectl get events -n <namespace> --field-selector reason=FailedScheduling
 ```
 
 ---
@@ -553,12 +594,15 @@ ETCDCTL_API=3 etcdctl \
 # Lista dei membri e loro stato
 etcdctl member list -w table
 
-# Se un nodo è irrecuperabile: rimuovilo e riaggiungi
+# Se un nodo è irrecuperabile ma il quorum ESISTE ancora: rimuovilo e riaggiungi
+# (member remove/add sono scritture Raft: senza quorum falliscono)
 etcdctl member remove <member-id>
 etcdctl member add etcd-new --peer-urls=https://10.0.0.4:2380
+# il nuovo nodo parte con --initial-cluster-state=existing e data-dir vuota
 
-# Restore da snapshot (caso estremo — cluster completamente down)
-etcdctl snapshot restore /backup/etcd-snapshot.db \
+# Quorum PERSO (es. 2 nodi su 3 irrecuperabili): restore da snapshot
+# (caso estremo, perdi le scritture successive allo snapshot)
+etcdutl snapshot restore /backup/etcd-snapshot.db \
   --name etcd-1 \
   --initial-cluster "etcd-1=https://10.0.0.1:2380" \
   --initial-cluster-token etcd-cluster-1 \
