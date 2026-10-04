@@ -7,7 +7,7 @@ search_keywords: [kafka consumer group, consumer group kafka, rebalancing, rebal
 parent: messaging/kafka/fondamenti
 related: [messaging/kafka/fondamenti/consumatori, messaging/kafka/fondamenti/topics-partizioni, messaging/kafka/fondamenti/architettura, messaging/kafka/fondamenti/broker-cluster]
 official_docs: https://kafka.apache.org/documentation/#intro_consumers
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -101,7 +101,7 @@ Vantaggio: i consumer che non cambiano assegnazione continuano a consumare duran
 
 ### Nuovo Protocollo Consumer (KIP-848)
 
-Da Kafka 4.0 il nuovo protocollo di rebalancing **KIP-848** è GA (`group.protocol=consumer` lato client). La logica passa dal client (group leader) al **Group Coordinator** sul broker: i rebalance sono incrementali per costruzione, senza barriera globale "stop the world", e gli assignor sono configurati lato broker (`group.consumer.assignors`, default `uniform` e `range`) invece di `partition.assignment.strategy`. Il default resta il protocollo `classic` (descritto in questa pagina) finché non si abilita esplicitamente il nuovo. <!-- REVIEW: verificare default group.protocol e proprietà (session.timeout.ms/heartbeat lato broker) nella versione Kafka corrente -->
+Da Kafka 4.0 il nuovo protocollo di rebalancing **KIP-848** è GA (`group.protocol=consumer` lato client). La logica passa dal client (group leader) al **Group Coordinator** sul broker: i rebalance sono incrementali per costruzione, senza barriera globale "stop the world", e gli assignor sono configurati lato broker (`group.consumer.assignors`, default `uniform` e `range`) invece di `partition.assignment.strategy`. Il default resta il protocollo `classic` (descritto in questa pagina) finché non si abilita esplicitamente il nuovo (`group.protocol` default `classic`, verificato su Kafka 4.2). Con `group.protocol=consumer` le proprietà client `session.timeout.ms`, `heartbeat.interval.ms` e `partition.assignment.strategy` non sono supportate: i timeout sono governati dai config broker `group.consumer.session.timeout.ms` (default 45000) e `group.consumer.heartbeat.interval.ms` (default 5000), mentre l'assignor si sceglie con `group.remote.assignor` (default `null`: il coordinator usa il primo di `group.consumer.assignors`).
 
 ## Architettura / Come Funziona
 
