@@ -7,21 +7,26 @@ search_keywords: [opentofu, open tofu, tofu, terraform fork, bsl, business sourc
 parent: iac/terraform/_index
 related: [iac/terraform/fondamentali, iac/terraform/state-management, iac/terraform/ci-cd, iac/terraform/moduli]
 official_docs: https://opentofu.org/docs/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-04-04
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # OpenTofu
 
 ## Panoramica
 
-OpenTofu è il fork open-source di Terraform, mantenuto dalla **Linux Foundation** (sotto l'ombrello della CNCF) a partire da settembre 2023. Nasce in risposta al cambio di licenza di HashiCorp: nell'agosto 2023 Terraform è passato dalla **MPL 2.0** (Mozilla Public License, licenza open source permissiva) alla **BSL 1.1** (Business Source License), che limita l'uso commerciale da parte di terze parti concorrenti di HashiCorp. Il progetto ha raggiunto la **General Availability con la v1.6 in gennaio 2024** ed è ora una scelta consolidata per chi necessita di IaC completamente open source senza vincoli di licensing.
+OpenTofu è il fork open-source di Terraform, ospitato dalla **Linux Foundation** a partire da settembre 2023 (accettato come progetto CNCF Sandbox nel 2025). Nasce in risposta al cambio di licenza di HashiCorp: nell'agosto 2023 Terraform è passato dalla **MPL 2.0** (Mozilla Public License, licenza open source permissiva) alla **BSL 1.1** (Business Source License), che limita l'uso commerciale da parte di terze parti concorrenti di HashiCorp. Il progetto ha raggiunto la **General Availability con la v1.6 in gennaio 2024** ed è ora una scelta consolidata per chi necessita di IaC completamente open source senza vincoli di licensing.
 
 OpenTofu è un **drop-in replacement** di Terraform fino alla v1.5.x: gli stessi file `.tf`, gli stessi provider, gli stessi state file — nessuna modifica al codice esistente per la migrazione base. Le versioni successive di OpenTofu aggiungono feature non presenti in Terraform (in particolare la **state encryption nativa**) e divergono progressivamente.
 
 !!! note "Versioni di riferimento"
-    Questa documentazione fa riferimento a OpenTofu **v1.8.x** (LTS). Verificare sempre le release notes per le versioni più recenti.
+    Gli esempi usano OpenTofu **v1.8.x** come baseline. Le release successive (1.9, 1.10 con supporto LTS, ecc.) sono retrocompatibili con questi esempi; verificare sempre le release notes e usare l'ultima versione stabile per nuovi progetti.
+    <!-- REVIEW: verificare ultima versione stabile/LTS di OpenTofu e aggiornare i numeri di versione negli esempi (installazione, CI, pinning) -->
+
+!!! note "Estensione `.tofu`"
+    Da OpenTofu 1.8 i file possono avere estensione `.tofu` invece di `.tf`: se esistono entrambi con lo stesso nome, OpenTofu carica solo `.tofu`. Utile per mantenere codice che sfrutta feature esclusive senza rompere la compatibilità con Terraform sullo stesso repository.
 
 ## Concetti Chiave
 
@@ -30,10 +35,10 @@ OpenTofu è un **drop-in replacement** di Terraform fino alla v1.5.x: gli stessi
 | Data | Evento |
 |------|--------|
 | Agosto 2023 | HashiCorp annuncia il cambio di licenza Terraform: da MPL 2.0 a BSL 1.1 |
-| Settembre 2023 | La community lancia il fork sotto la CNCF/Linux Foundation come "OpenTofu" |
+| Settembre 2023 | La community lancia il fork (inizialmente "OpenTF") e lo dona alla Linux Foundation, che lo rinomina "OpenTofu" |
 | Dicembre 2023 | OpenTofu v1.6.0-rc1 — prima release candidate |
 | Gennaio 2024 | **OpenTofu v1.6.0 GA** — il fork è stabile e production-ready |
-| 2024–2025 | Feature divergenti rispetto a Terraform: state encryption, early evaluation, improved testing |
+| 2024–2025 | Feature divergenti rispetto a Terraform: state encryption (1.7), early evaluation (1.8), `.tofu` files; ingresso in CNCF Sandbox (2025) |
 
 La BSL 1.1 impedisce l'utilizzo di Terraform per costruire prodotti o servizi che competono con HashiCorp (es. una piattaforma IaC-as-a-service). Per chi usa Terraform internamente senza rivendita, il cambio di licenza ha impatto limitato. Per i vendor e le organizzazioni con compliance open-source obbligatoria, OpenTofu è la risposta diretta.
 
@@ -74,7 +79,7 @@ Files .tf  ──▶  OpenTofu Core  ──▶  Provider Plugin  ──▶  Clou
                       │
                       ▼
                 State Backend          ◀── State Encryption (feature esclusiva)
-              (locale / S3 / GCS       AES-GCM o PBKDF2
+              (locale / S3 / GCS       key provider + metodo AES-GCM
                Azure Blob / Consul)
 ```
 
@@ -221,7 +226,7 @@ terraform {
 ```
 
 !!! tip "registry.opentofu.org vs registry.terraform.io"
-    OpenTofu risolve automaticamente i provider da entrambi i registry. Non è necessario cambiare i `source` dei provider per la migrazione. `registry.opentofu.org` è il registry ufficiale di OpenTofu ed è un mirror aggiornato dei provider principali.
+    I `source` senza hostname (es. `hashicorp/aws`) vengono risolti da OpenTofu su `registry.opentofu.org`, non su `registry.terraform.io`: non serve cambiarli per la migrazione. Non c'è fallback automatico tra i due registry; per usare l'altro bisogna indicare l'hostname completo nel `source`. Il lock file generato da Terraform contiene hash riferiti a `registry.terraform.io`, quindi `tofu init` aggiunge le voci per il nuovo registry.
 
 ### State Encryption (Feature Esclusiva OpenTofu)
 
@@ -262,6 +267,7 @@ terraform {
     key_provider "aws_kms" "main" {
       kms_key_id = "arn:aws:kms:eu-west-1:123456789:key/my-key-id"
       region     = "eu-west-1"
+      key_spec   = "AES_256"  # obbligatorio: tipo di data key generata da KMS
 
       # Credenziali via environment variables (AWS_ACCESS_KEY_ID, etc.)
       # oppure IAM role se su EC2/ECS/Lambda
@@ -288,8 +294,11 @@ tofu plan
 tofu apply -var="state_passphrase=$(vault kv get -field=passphrase secret/tofu)"
 ```
 
+!!! tip "Config via `TF_ENCRYPTION`"
+    Il blocco `encryption` può essere fornito anche tramite la variabile d'ambiente `TF_ENCRYPTION` (stessa sintassi HCL): permette di tenere la configurazione, chiavi comprese, fuori dal repository (es. iniettata dalla CI). La passphrase PBKDF2 deve avere almeno 16 caratteri.
+
 !!! warning "Backup obbligatorio prima di abilitare l'encryption"
-    Una volta abilitata con `enforced = true`, OpenTofu rifiuta di leggere state in chiaro. Fare sempre un backup del state file prima di migrare all'encryption. Per migrare uno state esistente: abilitare prima senza `enforced`, eseguire `tofu apply`, poi aggiungere `enforced`.
+    Con `enforced = true` OpenTofu rifiuta di leggere state in chiaro. Fare sempre un backup del state file prima di migrare. Per migrare uno state esistente si usa un `fallback` sul metodo `unencrypted` (vedi Best Practices): il primo `tofu apply` legge il vecchio state in chiaro e lo riscrive cifrato; poi si rimuove il fallback e si aggiunge `enforced`.
 
 ### Comandi OpenTofu
 
@@ -494,12 +503,16 @@ Tutti i principali tool dell'ecosistema Terraform supportano OpenTofu:
 | Tool | Supporto OpenTofu | Note |
 |------|-------------------|------|
 | **Terragrunt** | ✅ Completo | `terraform_binary = "tofu"` in `terragrunt.hcl` |
-| **Atlantis** | ✅ Completo | `--tofu-bin` flag o config YAML |
+| **Atlantis** | ✅ Completo | `terraform_distribution: opentofu` nel progetto (o flag server `--tf-distribution`) |
 | **Infracost** | ✅ Completo | `--terraform-binary tofu` |
 | **tflint** | ✅ Completo | Nessuna modifica richiesta |
 | **checkov** | ✅ Completo | Nessuna modifica richiesta |
 | **terraform-docs** | ✅ Completo | Nessuna modifica richiesta |
 | **pre-commit hooks** | ✅ Completo | Sostituire `terraform_` con `tofu_` negli hook |
+
+!!! warning "Locking S3: `dynamodb_table` in via di deprecazione"
+    Negli esempi sotto `dynamodb_table` resta per compatibilità con le baseline 1.8. Le versioni recenti di OpenTofu (1.10+) supportano il locking nativo S3 con `use_lockfile = true` (lock file condizionale nel bucket, senza DynamoDB) e considerano `dynamodb_table` deprecato.
+    <!-- REVIEW: verificare versione minima di OpenTofu per use_lockfile e stato deprecazione dynamodb_table; aggiornare gli esempi backend s3 -->
 
 ```hcl
 # terragrunt.hcl — configurare OpenTofu come binary
@@ -523,6 +536,7 @@ version: 3
 projects:
   - name: my-project
     dir: infra/
+    terraform_distribution: opentofu
     terraform_version: v1.8.0
     workflow: opentofu
 
@@ -560,18 +574,25 @@ workflows:
 ### Abilitare State Encryption Gradualmente
 
 ```hcl
-# Step 1: abilitare senza enforced (primo apply migra lo state)
+# Step 1: metodo "unencrypted" come fallback — il primo apply legge lo state
+# in chiaro e lo riscrive cifrato con aes_gcm
+method "unencrypted" "migrate" {}
+
 state {
-  method   = method.aes_gcm.my_method
-  # enforced = true  # non ancora!
+  method = method.aes_gcm.my_method
+  fallback {
+    method = method.unencrypted.migrate
+  }
 }
 
-# Step 2: dopo il primo apply, abilitare enforced
+# Step 2: dopo il primo apply, rimuovere il fallback e abilitare enforced
 state {
   method   = method.aes_gcm.my_method
   enforced = true
 }
 ```
+
+Lo stesso meccanismo `fallback` serve per la **rotazione delle chiavi**: il nuovo metodo è quello principale, il vecchio resta come fallback finché lo state non è stato riscritto.
 
 ### Gestione della Passphrase con Variabili d'Ambiente
 
@@ -618,15 +639,16 @@ tofuenv list
 
 ```bash
 # Sintomo
-# Error: Unable to decrypt state: state is not encrypted
+# Errore di decrypt/lettura dello state che segnala dati non cifrati
+# (il testo esatto varia con la versione)
 
 # Causa
-# enforced = true ma lo state è ancora in chiaro (non è stato migrato)
+# enforced = true (o nessun fallback) ma lo state è ancora in chiaro (non migrato)
 
 # Soluzione
-# 1. Rimuovere temporaneamente enforced = true
+# 1. Rimuovere enforced = true e aggiungere un fallback sul metodo "unencrypted"
 # 2. Eseguire tofu apply (migra lo state → lo cifra)
-# 3. Riaggiungere enforced = true
+# 3. Rimuovere il fallback e riaggiungere enforced = true
 tofu apply  # migra lo state
 # Poi aggiungere enforced = true e fare un altro apply
 ```
