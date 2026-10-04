@@ -7,7 +7,7 @@ search_keywords: [kafka connect sink, sink connector kafka, elasticsearch sink k
 parent: messaging/kafka/kafka-connect
 related: [messaging/kafka/kafka-connect/source-connectors, messaging/kafka/kafka-connect/debezium-cdc, messaging/kafka/fondamenti/broker-cluster]
 official_docs: https://kafka.apache.org/documentation/#connect
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -151,7 +151,7 @@ curl -X POST http://localhost:8083/connectors \
 
 ### HTTP Sink Connector (open source)
 
-<!-- REVIEW: verificare nomi proprietà del connector clescot (http.url, http.headers, ecc.) sulla doc ufficiale; le property potrebbero avere prefisso `config.<nome>.` -->
+Il connector `clescot/kafka-connect-http` **non** prende URL, metodo e header dalla configurazione: li legge da ogni record Kafka, il cui value deve essere una struttura `HttpRequest` (campi `url`, `method`, `headers`, `bodyAsString`, ecc.). Il formato testato è JSON Schema (Avro e Protobuf previsti ma senza garanzie). La configurazione del connector contiene solo le impostazioni del client HTTP, con prefissi gerarchici `config.default.` / `config.<id>.`.
 
 ```bash
 curl -X POST http://localhost:8083/connectors \
@@ -160,14 +160,18 @@ curl -X POST http://localhost:8083/connectors \
     "name": "http-webhook-sink",
     "config": {
       "connector.class": "io.github.clescot.kafka.connect.http.sink.HttpSinkConnector",
-      "http.url": "https://api.example.com/webhooks/orders",
-      "http.request.method": "POST",
-      "http.headers": "Content-Type:application/json,Authorization:Bearer ${env:API_TOKEN}",
-      "topics": "orders",
-      "tasks.max": "3"
+      "topics": "http-requests",
+      "tasks.max": "3",
+      "value.converter": "io.confluent.connect.json.JsonSchemaConverter",
+      "value.converter.schema.registry.url": "http://schema-registry:8081",
+      "config.default.retries": "3",
+      "config.default.retry.delay.in.ms": "2000"
     }
   }'
 ```
+
+!!! note "Messaggio in ingresso"
+    Un producer (o una SMT/Streams) deve costruire il record `HttpRequest` con URL e payload di destinazione. Per un webhook con payload fisso esistono alternative commerciali (es. Confluent HTTP Sink) che configurano l'URL nel connector. Riferimento: [kafka-connect-http](https://github.com/clescot/kafka-connect-http).
 
 ### Gestione errori e DLQ
 
