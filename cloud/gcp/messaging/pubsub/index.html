@@ -9000,7 +9000,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -9035,7 +9035,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -9872,7 +9872,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -9897,7 +9897,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10030,6 +10030,17 @@
     <span class="md-ellipsis">
       
         Cloud Storage Subscription
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#subscription-filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscription Filter
       
     </span>
   </a>
@@ -24769,6 +24780,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#subscription-filter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscription Filter
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -25188,10 +25210,10 @@
 <h1 id="cloud-pubsub">Cloud Pub/Sub<a class="headerlink" href="#cloud-pubsub" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
 <p>Cloud Pub/Sub è il servizio di <strong>messaggistica asincrona fully managed</strong> di Google Cloud. Implementa il pattern publisher/subscriber: i producer pubblicano messaggi su un <strong>topic</strong> e i consumer li ricevono tramite <strong>subscription</strong>, senza che i due lati si conoscano o siano online contemporaneamente. È il backbone della messaggistica asincrona su GCP.</p>
-<p>A differenza di Kafka, Pub/Sub è completamente serverless: non ci sono broker, partizioni o cluster da gestire. La scalabilità è automatica e globale — Pub/Sub è <strong>multi-region by default</strong>, replicando i messaggi su più datacenter senza configurazione aggiuntiva.</p>
+<p>A differenza di Kafka, Pub/Sub è completamente serverless: non ci sono broker, partizioni o cluster da gestire. La scalabilità è automatica e il servizio è <strong>globale</strong>: il publisher si connette all'endpoint più vicino e i messaggi sono replicati su più zone senza configurazione. Per default i messaggi sono salvati nella regione più vicina al publisher; se serve vincolare la residenza dei dati si imposta una <strong>message storage policy</strong> sul topic (<code>--message-storage-policy-allowed-regions</code>).</p>
 <p><strong>Quando usare Pub/Sub:</strong>
 - Disaccoppiare microservizi produttori di eventi dai consumer
-- Triggerare Cloud Run o Cloud Functions su eventi asincroni (equivalente SQS→Lambda)
+- Triggerare Cloud Run o Cloud Run functions (ex Cloud Functions) su eventi asincroni (equivalente SQS→Lambda)
 - Pipeline di streaming verso Dataflow, BigQuery, o Cloud Storage
 - Fan-out: un evento deve essere processato da più sistemi indipendenti
 - Ingestione di dati da dispositivi IoT o log ad alto volume</p>
@@ -25249,7 +25271,7 @@
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Exactly-once delivery</p>
-<p>Abilitabile per subscription con <code>--enable-exactly-once-delivery</code>. Pub/Sub garantisce che il messaggio venga consegnato esattamente una volta all'interno della finestra di retention, ma riduce il throughput massimo. Usarlo solo quando l'idempotenza nel consumer non è implementabile.</p>
+<p>Abilitabile per subscription con <code>--enable-exactly-once-delivery</code>. Vale <strong>solo per pull/StreamingPull</strong> (non per push né export subscription) e la garanzia è <strong>regionale</strong>: un messaggio ACKato con successo non viene riconsegnato, ma l'ACK può fallire e va verificato (nelle client library, <code>ack_with_response()</code>). Aumenta la latenza e riduce il throughput. Non rende idempotenti gli effetti collaterali del consumer: usarlo solo quando l'idempotenza non è implementabile.</p>
 </div>
 <hr />
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
@@ -25277,7 +25299,12 @@
 </span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>   (GKE, Compute)                  (invocato da Pub/Sub)
 </span></code></pre></div>
 <h3 id="retention-e-delivery">Retention e Delivery<a class="headerlink" href="#retention-e-delivery" title="Permanent link">&para;</a></h3>
-<p>I messaggi vengono conservati nel topic per la durata di retention configurata (default <strong>7 giorni</strong>, min 10 min, max 31 giorni). La subscription ha il suo puntatore di avanzamento: un messaggio non ACK viene riconsegnato dopo l'<code>ackDeadline</code> (default 10s, max 600s).</p>
+<p>Esistono due retention distinte:</p>
+<ul>
+<li><strong>Subscription</strong> (<code>message-retention-duration</code>): i messaggi non ACK sono conservati per default <strong>7 giorni</strong> (min 10 min, max 31 giorni); oltre, vengono eliminati. I messaggi ACK sono rimossi subito, salvo <code>--retain-acked-messages</code>.</li>
+<li><strong>Topic</strong> (<code>--message-retention-duration</code>): <strong>disattivata per default</strong>. Se abilitata (max 31 giorni) il topic conserva i messaggi anche dopo l'ACK di tutte le subscription, permettendo il replay (seek) e il backfill di subscription nuove.</li>
+</ul>
+<p>Ogni subscription ha il suo puntatore di avanzamento: un messaggio non ACK viene riconsegnato dopo l'<code>ackDeadline</code> (default 10s, max 600s).</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Timeline messaggio in Pub/Sub:
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>T+0   Publisher → publish(msg)
@@ -25288,7 +25315,7 @@
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>      O
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>T+5   Consumer elabora → ACK → msg rimosso dalla subscription
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>T+7d  Topic retention scade → msg eliminato dal topic
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>T+7d  Se mai ACK: retention della subscription scade → msg eliminato
 </span></code></pre></div>
 <hr />
 <h2 id="tipi-di-subscription">Tipi di Subscription<a class="headerlink" href="#tipi-di-subscription" title="Permanent link">&para;</a></h2>
@@ -25297,20 +25324,24 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Creare una pull subscription</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span>--topic<span class="o">=</span>my-topic<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span>--ack-deadline<span class="o">=</span><span class="m">60</span><span class="w"> </span><span class="se">\ </span><span class="w">                     </span><span class="c1"># secondi prima della riconsegna</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span>--message-retention-duration<span class="o">=</span>7d<span class="w"> </span><span class="se">\ </span><span class="w">        </span><span class="c1"># quanti giorni trattenere msg non ACK</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span>--max-delivery-attempts<span class="o">=</span><span class="m">5</span><span class="w"> </span><span class="se">\ </span><span class="w">             </span><span class="c1"># prima di mandare al Dead Letter Topic</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span>--ack-deadline<span class="o">=</span><span class="m">60</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span>--message-retention-duration<span class="o">=</span>7d<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span>--max-delivery-attempts<span class="o">=</span><span class="m">5</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span>--dead-letter-topic<span class="o">=</span>my-topic-dlq<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span>--expiration-period<span class="o">=</span>never<span class="w">                 </span><span class="c1"># la subscription non scade</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Pull manuale (fino a 10 messaggi per chiamata)</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>pull<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span>--limit<span class="o">=</span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span>--auto-ack<span class="w">       </span><span class="c1"># ACK automatico (solo per test — in produzione ACK manuale)</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Pull senza auto-ack (riceve i messaggi senza confermarli)</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>pull<span class="w"> </span>my-pull-sub<span class="w"> </span>--limit<span class="o">=</span><span class="m">5</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="c1"># L'output include il receipt handle (ACK ID) da usare per confermare</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span>--expiration-period<span class="o">=</span>never
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># ack-deadline: secondi prima della riconsegna</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># message-retention-duration: quanto trattenere i msg non ACK</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># max-delivery-attempts: tentativi (5-100) prima del Dead Letter Topic</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># expiration-period=never: senza, la subscription inattiva per 31 giorni viene eliminata</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="c1"># Pull manuale (fino a 10 messaggi per chiamata)</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>pull<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span>--limit<span class="o">=</span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span>--auto-ack<span class="w">       </span><span class="c1"># ACK automatico (solo per test — in produzione ACK manuale)</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># Pull senza auto-ack (riceve i messaggi senza confermarli)</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>pull<span class="w"> </span>my-pull-sub<span class="w"> </span>--limit<span class="o">=</span><span class="m">5</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="c1"># L'output include il receipt handle (ACK ID) da usare per confermare</span>
 </span></code></pre></div>
 <p><strong>StreamingPull (gRPC bidirezionale)</strong> — per throughput elevato. Il consumer apre una connessione gRPC persistente e riceve messaggi in streaming. Raccomandato per tutte le implementazioni in produzione. Supportato dalle client library ufficiali:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Python — consumer con StreamingPull (client library GCP)</span>
@@ -25378,12 +25409,13 @@
 </span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:pubsub-invoker@my-project.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/run.invoker"</span>
 </span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="c1"># Dare al SA di Pub/Sub il permesso di creare token</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="c1"># (necessario per push con autenticazione OIDC)</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="c1"># Solo per service agent Pub/Sub creati prima di aprile 2021: concedere</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="c1"># il permesso di creare token OIDC. I progetti recenti lo hanno già.</span>
 </span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:service-PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/iam.serviceAccountTokenCreator"</span>
 </span></code></pre></div>
+<p>Pub/Sub firma un token <strong>OIDC</strong> (OpenID Connect, JWT) a nome del Service Account (SA) indicato e lo invia nell'header <code>Authorization</code>: Cloud Run lo valida e verifica <code>roles/run.invoker</code>. Senza <code>--push-auth-service-account</code> la richiesta è anonima e Cloud Run risponde 403.</p>
 <p>Il payload che arriva all'endpoint push ha questo formato:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
@@ -25428,7 +25460,7 @@
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Timeout push subscription</p>
-<p>Pub/Sub considera un messaggio non ACK se l'endpoint risponde con status 5xx o non risponde entro l'<code>ackDeadline</code>. Impostare <code>ackDeadline</code> coerente con il tempo di elaborazione del Cloud Run handler. Il retry usa backoff esponenziale.</p>
+<p>Pub/Sub considera un messaggio non ACK se l'endpoint risponde con status 5xx o non risponde entro l'<code>ackDeadline</code>. Impostare <code>ackDeadline</code> coerente con il tempo di elaborazione del Cloud Run handler. Per default il retry è <strong>immediato</strong> (nessun backoff): per evitare di martellare un endpoint in difficoltà configurare la retry policy con <code>--min-retry-delay=10s --max-retry-delay=600s</code> (exponential backoff).</p>
 </div>
 <h3 id="bigquery-subscription">BigQuery Subscription<a class="headerlink" href="#bigquery-subscription" title="Permanent link">&para;</a></h3>
 <p>Scrive i messaggi direttamente su una tabella BigQuery <strong>senza codice consumer</strong>. Pub/Sub gestisce la conversione e l'ingestion.</p>
@@ -25441,13 +25473,17 @@
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>my-bq-sub<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span>--topic<span class="o">=</span>my-topic<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span>--bigquery-table<span class="o">=</span>my-project:my_dataset.pubsub_events<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span>--write-metadata<span class="w"> </span><span class="se">\ </span><span class="w">      </span><span class="c1"># include message_id, publish_time, subscription_name</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span>--drop-unknown-fields<span class="w">    </span><span class="c1"># ignora attributi non presenti nello schema BQ</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># Il SA di Pub/Sub deve avere permessi su BQ</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:service-PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/bigquery.dataEditor"</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span>--write-metadata
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1"># write-metadata: aggiunge message_id, publish_time, subscription_name, attributes</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># Con --use-topic-schema o --use-table-schema i campi del messaggio sono mappati</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># sulle colonne; --drop-unknown-fields scarta i campi assenti dalla tabella.</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="c1"># Senza schema, il payload finisce nella colonna "data".</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="c1"># Il SA di Pub/Sub deve avere permessi su BQ (meglio a livello dataset che di progetto)</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>bq<span class="w"> </span>add-iam-policy-binding<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:service-PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/bigquery.dataEditor"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">    </span>my-project:my_dataset.pubsub_events
 </span></code></pre></div>
 <h3 id="cloud-storage-subscription">Cloud Storage Subscription<a class="headerlink" href="#cloud-storage-subscription" title="Permanent link">&para;</a></h3>
 <p>Scrive i messaggi su un bucket GCS come file, raggruppati per intervallo temporale o dimensione.</p>
@@ -25457,107 +25493,122 @@
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>--cloud-storage-bucket<span class="o">=</span>my-archive-bucket<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span>--cloud-storage-file-prefix<span class="o">=</span>events/<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span>--cloud-storage-file-suffix<span class="o">=</span>.json<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span>--cloud-storage-max-bytes<span class="o">=</span><span class="m">100000000</span><span class="w"> </span><span class="se">\ </span><span class="w">  </span><span class="c1"># 100 MB per file</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span>--cloud-storage-max-duration<span class="o">=</span>600s<span class="w">        </span><span class="c1"># o ogni 10 minuti, il primo che scatta</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span>--cloud-storage-max-bytes<span class="o">=</span><span class="m">100000000</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span>--cloud-storage-max-duration<span class="o">=</span>600s
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># max-bytes: 100 MB per file; max-duration: o ogni 10 minuti, il primo che scatta</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># Il SA di Pub/Sub deve poter scrivere sul bucket</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>gcloud<span class="w"> </span>storage<span class="w"> </span>buckets<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>gs://my-archive-bucket<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:service-PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/storage.objectCreator"</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>gcloud<span class="w"> </span>storage<span class="w"> </span>buckets<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>gs://my-archive-bucket<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:service-PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/storage.legacyBucketReader"</span>
+</span></code></pre></div>
+<h3 id="subscription-filter">Subscription Filter<a class="headerlink" href="#subscription-filter" title="Permanent link">&para;</a></h3>
+<p>Una subscription può ricevere solo i messaggi che soddisfano un filtro sugli <code>attributes</code>, evitando consumer che scartano a mano. Il filtro è <strong>immutabile</strong> dopo la creazione e i messaggi esclusi sono ACKati automaticamente (non costano consegna).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>orders-eu-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">    </span>--topic<span class="o">=</span>order-events<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span>--message-filter<span class="o">=</span><span class="s1">'attributes.region = "eu" AND hasPrefix(attributes.eventType, "order.")'</span>
 </span></code></pre></div>
 <hr />
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="gestione-topic-e-subscription">Gestione Topic e Subscription<a class="headerlink" href="#gestione-topic-e-subscription" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Creare topic</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>create<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span>--message-retention-duration<span class="o">=</span>7d<span class="w">    </span><span class="c1"># retention del topic (default 7d, max 31d)</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Creare topic con schema (validazione messaggi)</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>schemas<span class="w"> </span>create<span class="w"> </span>user-event-schema<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span>--type<span class="o">=</span>AVRO<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span>--definition-file<span class="o">=</span>schema.avsc
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>create<span class="w"> </span>my-typed-topic<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">    </span>--schema<span class="o">=</span>user-event-schema<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">    </span>--message-encoding<span class="o">=</span>JSON
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="c1"># Pubblicare messaggi</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>publish<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span>--message<span class="o">=</span><span class="s1">'{"event":"user.created","userId":"123"}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">    </span>--attribute<span class="o">=</span><span class="s2">"eventType=user.created,region=eu"</span>
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="c1"># Pubblicare batch di messaggi (via SDK — gcloud non supporta batch nativo)</span>
-</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="c1"># Usare client library con batch settings per produzione</span>
-</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>
-</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="c1"># Listare topic e subscription</span>
-</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>list
-</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>list
-</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>describe<span class="w"> </span>my-pull-sub
-</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a>
-</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="c1"># Eliminare subscription/topic</span>
-</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>delete<span class="w"> </span>my-pull-sub
-</span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>delete<span class="w"> </span>my-topic<span class="w">   </span><span class="c1"># elimina anche tutte le subscription</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Creare topic</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>create<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span>--message-retention-duration<span class="o">=</span>7d<span class="w">    </span><span class="c1"># retention del topic (opzionale, default disattivata, max 31d)</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># Creare topic con schema (validazione messaggi)</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>schemas<span class="w"> </span>create<span class="w"> </span>user-event-schema<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span>--type<span class="o">=</span>AVRO<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span>--definition-file<span class="o">=</span>schema.avsc
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>create<span class="w"> </span>my-typed-topic<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">    </span>--schema<span class="o">=</span>user-event-schema<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">    </span>--message-encoding<span class="o">=</span>JSON
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="c1"># Pubblicare messaggi</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>publish<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">    </span>--message<span class="o">=</span><span class="s1">'{"event":"user.created","userId":"123"}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">    </span>--attribute<span class="o">=</span><span class="s2">"eventType=user.created,region=eu"</span>
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>
+</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="c1"># Pubblicare batch di messaggi (via SDK — gcloud non supporta batch nativo)</span>
+</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="c1"># Usare client library con batch settings per produzione</span>
+</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a>
+</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="c1"># Listare topic e subscription</span>
+</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>list
+</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>list
+</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>describe<span class="w"> </span>my-pull-sub
+</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a>
+</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="c1"># Eliminare subscription/topic</span>
+</span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>delete<span class="w"> </span>my-pull-sub
+</span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>delete<span class="w"> </span>my-topic<span class="w">   </span><span class="c1"># le subscription NON vengono eliminate: restano "detached" (topic _deleted-topic_) e non ricevono più messaggi</span>
 </span></code></pre></div>
 <h3 id="dead-letter-topic">Dead Letter Topic<a class="headerlink" href="#dead-letter-topic" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Creare il Dead Letter Topic</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>create<span class="w"> </span>my-topic-dlq
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Creare subscription per leggere i messaggi falliti dalla DLQ</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>my-topic-dlq-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span>--topic<span class="o">=</span>my-topic-dlq
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># Configurare DLT sulla subscription principale</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>modify-config<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span>--dead-letter-topic<span class="o">=</span>my-topic-dlq<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">    </span>--max-delivery-attempts<span class="o">=</span><span class="m">5</span><span class="w">    </span><span class="c1"># dopo 5 tentativi → DLQ</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="c1"># Il SA di Pub/Sub deve avere permessi su topic e subscription DLQ</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="nv">PROJECT_NUMBER</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>projects<span class="w"> </span>describe<span class="w"> </span>my-project<span class="w"> </span>--format<span class="o">=</span><span class="s2">"value(projectNumber)"</span><span class="k">)</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="nv">PUBSUB_SA</span><span class="o">=</span><span class="s2">"service-</span><span class="si">${</span><span class="nv">PROJECT_NUMBER</span><span class="si">}</span><span class="s2">@gcp-sa-pubsub.iam.gserviceaccount.com"</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-topic-dlq<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:</span><span class="si">${</span><span class="nv">PUBSUB_SA</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.publisher"</span>
-</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a>
-</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:</span><span class="si">${</span><span class="nv">PUBSUB_SA</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.subscriber"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Creare il Dead Letter Topic</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>create<span class="w"> </span>my-topic-dlq
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Creare subscription per leggere i messaggi falliti dalla DLQ</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>my-topic-dlq-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span>--topic<span class="o">=</span>my-topic-dlq
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Configurare DLT sulla subscription principale</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>update<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">    </span>--dead-letter-topic<span class="o">=</span>my-topic-dlq<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">    </span>--max-delivery-attempts<span class="o">=</span><span class="m">5</span><span class="w">    </span><span class="c1"># dopo 5 tentativi → DLQ</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="c1"># Il SA di Pub/Sub deve avere permessi su topic e subscription DLQ</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="nv">PROJECT_NUMBER</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>projects<span class="w"> </span>describe<span class="w"> </span>my-project<span class="w"> </span>--format<span class="o">=</span><span class="s2">"value(projectNumber)"</span><span class="k">)</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="nv">PUBSUB_SA</span><span class="o">=</span><span class="s2">"service-</span><span class="si">${</span><span class="nv">PROJECT_NUMBER</span><span class="si">}</span><span class="s2">@gcp-sa-pubsub.iam.gserviceaccount.com"</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-topic-dlq<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:</span><span class="si">${</span><span class="nv">PUBSUB_SA</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.publisher"</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:</span><span class="si">${</span><span class="nv">PUBSUB_SA</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.subscriber"</span>
 </span></code></pre></div>
 <h3 id="message-ordering">Message Ordering<a class="headerlink" href="#message-ordering" title="Permanent link">&para;</a></h3>
 <p>Per default, Pub/Sub non garantisce l'ordine di consegna. Abilitando l'ordering, messaggi con lo stesso <code>orderingKey</code> vengono consegnati in ordine:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Creare subscription con ordering abilitato</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>my-ordered-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span>--topic<span class="o">=</span>my-topic<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span>--enable-message-ordering
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># Publicare con ordering key (tutti i msg con stesso key → in ordine)</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>publish<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">    </span>--message<span class="o">=</span><span class="s1">'{"orderId":"ORD-001","step":1}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">    </span>--ordering-key<span class="o">=</span><span class="s2">"customer-456"</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>publish<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">    </span>--message<span class="o">=</span><span class="s1">'{"orderId":"ORD-001","step":2}'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">    </span>--ordering-key<span class="o">=</span><span class="s2">"customer-456"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Creare subscription con ordering abilitato</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>my-ordered-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span>--topic<span class="o">=</span>my-topic<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span>--enable-message-ordering
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># Publicare con ordering key (tutti i msg con stesso key → in ordine)</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>publish<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">    </span>--message<span class="o">=</span><span class="s1">'{"orderId":"ORD-001","step":1}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">    </span>--ordering-key<span class="o">=</span><span class="s2">"customer-456"</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>publish<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">    </span>--message<span class="o">=</span><span class="s1">'{"orderId":"ORD-001","step":2}'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">    </span>--ordering-key<span class="o">=</span><span class="s2">"customer-456"</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Ordering e parallelismo</p>
 <p>Con ordering abilitato, messaggi con lo stesso <code>orderingKey</code> non possono essere processati in parallelo — sono sequenziali per design. Usare ordering key granulare (es. <code>userId</code> o <code>orderId</code>) per mantenere parallelismo tra chiavi diverse. Se un messaggio fallisce e va in retry, Pub/Sub sospende la consegna per quella ordering key finché il messaggio non viene ACK.</p>
 </div>
 <h3 id="snapshot-e-seek-replay">Snapshot e Seek — Replay<a class="headerlink" href="#snapshot-e-seek-replay" title="Permanent link">&para;</a></h3>
-<p>Pub/Sub permette di <strong>tornare indietro</strong> nella timeline dei messaggi tramite seek:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Creare uno snapshot del checkpoint attuale</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>snapshots<span class="w"> </span>create<span class="w"> </span>my-snapshot<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span>--subscription<span class="o">=</span>my-pull-sub
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># Tornare al checkpoint dello snapshot (replay tutti i messaggi da quel punto)</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>seek<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">    </span>--snapshot<span class="o">=</span>my-snapshot
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># Seek a un timestamp specifico (es. 30 minuti fa)</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>seek<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">    </span>--time<span class="o">=</span><span class="s2">"2026-03-31T10:00:00Z"</span>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="c1"># Seek al futuro (scartare tutti i messaggi non ancora ACK)</span>
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>seek<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="w">    </span>--time<span class="o">=</span><span class="s2">"2099-01-01T00:00:00Z"</span>
-</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>
-</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="c1"># Listare snapshot disponibili</span>
-</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>snapshots<span class="w"> </span>list
+<p>Pub/Sub permette di <strong>tornare indietro</strong> nella timeline dei messaggi tramite seek. Il replay di messaggi già ACK richiede che siano ancora conservati: subscription con <code>--retain-acked-messages</code> oppure retention sul topic. Uno snapshot conserva i messaggi non ACK al momento della creazione e scade con il più vecchio di essi (max 7 giorni).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Creare uno snapshot del checkpoint attuale</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>snapshots<span class="w"> </span>create<span class="w"> </span>my-snapshot<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span>--subscription<span class="o">=</span>my-pull-sub
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># Tornare al checkpoint dello snapshot (replay tutti i messaggi da quel punto)</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>seek<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span>--snapshot<span class="o">=</span>my-snapshot
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="c1"># Seek a un timestamp specifico (es. 30 minuti fa)</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>seek<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">    </span>--time<span class="o">=</span><span class="s2">"2026-03-31T10:00:00Z"</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="c1"># Seek al futuro (scartare tutti i messaggi non ancora ACK)</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>seek<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="w">    </span>--time<span class="o">=</span><span class="s2">"2099-01-01T00:00:00Z"</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="c1"># Listare snapshot disponibili</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>snapshots<span class="w"> </span>list
 </span></code></pre></div>
 <hr />
 <h2 id="iam-su-pubsub">IAM su Pub/Sub<a class="headerlink" href="#iam-su-pubsub" title="Permanent link">&para;</a></h2>
@@ -25598,45 +25649,49 @@
 </tr>
 </tbody>
 </table>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Publisher: solo permesso di pubblicare su un topic specifico</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:producer-sa@my-project.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.publisher"</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1"># Subscriber: solo permesso di leggere da una subscription specifica</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:consumer-sa@my-project.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.subscriber"</span>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="c1"># Verificare policy IAM attive su un topic</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>get-iam-policy<span class="w"> </span>my-topic
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="c1"># Verificare policy IAM attive su una subscription</span>
-</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>get-iam-policy<span class="w"> </span>my-pull-sub
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Publisher: solo permesso di pubblicare su un topic specifico</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:producer-sa@my-project.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.publisher"</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># Subscriber: solo permesso di leggere da una subscription specifica</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:consumer-sa@my-project.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.subscriber"</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="c1"># Verificare policy IAM attive su un topic</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>get-iam-policy<span class="w"> </span>my-topic
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="c1"># Verificare policy IAM attive su una subscription</span>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>get-iam-policy<span class="w"> </span>my-pull-sub
 </span></code></pre></div>
 <h3 id="workload-identity-per-gke">Workload Identity per GKE<a class="headerlink" href="#workload-identity-per-gke" title="Permanent link">&para;</a></h3>
 <p>Per consumer su GKE, usare Workload Identity anziché export di chiavi JSON:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Prerequisito: GKE con Workload Identity abilitato</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># Creare Service Account GCP</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>create<span class="w"> </span>pubsub-consumer-sa<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span>--display-name<span class="o">=</span><span class="s2">"Pub/Sub Consumer SA"</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># Dare al SA GCP il permesso di subscriber</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:pubsub-consumer-sa@my-project.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.subscriber"</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="c1"># Collegare SA GCP al Kubernetes Service Account</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>add-iam-policy-binding<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">    </span>pubsub-consumer-sa@my-project.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/iam.workloadIdentityUser"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:my-project.svc.id.goog[my-namespace/my-ksa]"</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="c1"># Annotare il Kubernetes Service Account</span>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a>kubectl<span class="w"> </span>annotate<span class="w"> </span>serviceaccount<span class="w"> </span>my-ksa<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">    </span>--namespace<span class="w"> </span>my-namespace<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="w">    </span>iam.gke.io/gcp-service-account<span class="o">=</span>pubsub-consumer-sa@my-project.iam.gserviceaccount.com
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Prerequisito: GKE con Workload Identity abilitato</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># Creare Service Account GCP</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>create<span class="w"> </span>pubsub-consumer-sa<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span>--display-name<span class="o">=</span><span class="s2">"Pub/Sub Consumer SA"</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="c1"># Dare al SA GCP il permesso di subscriber</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:pubsub-consumer-sa@my-project.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.subscriber"</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="c1"># Collegare SA GCP al Kubernetes Service Account</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>add-iam-policy-binding<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">    </span>pubsub-consumer-sa@my-project.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/iam.workloadIdentityUser"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:my-project.svc.id.goog[my-namespace/my-ksa]"</span>
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="c1"># Annotare il Kubernetes Service Account</span>
+</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a>kubectl<span class="w"> </span>annotate<span class="w"> </span>serviceaccount<span class="w"> </span>my-ksa<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-19"><a id="__codelineno-15-19" name="__codelineno-15-19" href="#__codelineno-15-19"></a><span class="w">    </span>--namespace<span class="w"> </span>my-namespace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-15-20"><a id="__codelineno-15-20" name="__codelineno-15-20" href="#__codelineno-15-20"></a><span class="w">    </span>iam.gke.io/gcp-service-account<span class="o">=</span>pubsub-consumer-sa@my-project.iam.gserviceaccount.com
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Workload Identity Federation for GKE</p>
+<p>Alternativa moderna al binding <code>workloadIdentityUser</code>: concedere il ruolo Pub/Sub direttamente al principal del KSA (<code>principal://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/my-project.svc.id.goog/subject/ns/my-namespace/sa/my-ksa</code>), senza SA GCP intermedio.</p>
+</div>
 <div class="admonition tip">
 <p class="admonition-title">Principio del minimo privilegio</p>
 <p>Un publisher non deve avere <code>roles/pubsub.subscriber</code> e viceversa. Creare SA separati per producer e consumer, ciascuno con binding sul topic o sulla subscription specifica — non sul progetto intero. Questo limita l'impatto in caso di compromissione.</p>
@@ -25645,76 +25700,73 @@
 <h2 id="pattern-di-integrazione">Pattern di Integrazione<a class="headerlink" href="#pattern-di-integrazione" title="Permanent link">&para;</a></h2>
 <h3 id="pubsub-cloud-run-trigger-serverless">Pub/Sub → Cloud Run (Trigger Serverless)<a class="headerlink" href="#pubsub-cloud-run-trigger-serverless" title="Permanent link">&para;</a></h3>
 <p>Pattern equivalente a SQS→Lambda su AWS: un messaggio in Pub/Sub triggera un'istanza Cloud Run.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Opzione 1: Push subscription verso Cloud Run</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># (vedere sezione Push Subscription sopra)</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># Opzione 2: Eventarc (trigger Cloud Run da eventi Pub/Sub)</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>gcloud<span class="w"> </span>eventarc<span class="w"> </span>triggers<span class="w"> </span>create<span class="w"> </span>my-trigger<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">    </span>--location<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">    </span>--service-account<span class="o">=</span>eventarc-sa@my-project.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">    </span>--destination-run-service<span class="o">=</span>my-cloud-run-service<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">    </span>--destination-run-region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">    </span>--event-filters<span class="o">=</span><span class="s2">"type=google.cloud.pubsub.topic.v1.messagePublished"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">    </span>--transport-topic<span class="o">=</span>my-topic
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Opzione 1: Push subscription verso Cloud Run</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1"># (vedere sezione Push Subscription sopra)</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Opzione 2: Eventarc (trigger Cloud Run da eventi Pub/Sub)</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>gcloud<span class="w"> </span>eventarc<span class="w"> </span>triggers<span class="w"> </span>create<span class="w"> </span>my-trigger<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">    </span>--location<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">    </span>--service-account<span class="o">=</span>eventarc-sa@my-project.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">    </span>--destination-run-service<span class="o">=</span>my-cloud-run-service<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">    </span>--destination-run-region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">    </span>--event-filters<span class="o">=</span><span class="s2">"type=google.cloud.pubsub.topic.v1.messagePublished"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">    </span>--transport-topic<span class="o">=</span>my-topic
 </span></code></pre></div>
 <h3 id="fan-out-un-topic-piu-consumer">Fan-Out: Un Topic, Più Consumer<a class="headerlink" href="#fan-out-un-topic-piu-consumer" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># 1 topic → 3 subscription indipendenti → 3 consumer diversi</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>create<span class="w"> </span>order-events
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Consumer 1: servizio inventory (pull)</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>inventory-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">    </span>--topic<span class="o">=</span>order-events<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">    </span>--ack-deadline<span class="o">=</span><span class="m">30</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1"># Consumer 2: servizio notifiche (push → Cloud Run)</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>notifications-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">    </span>--topic<span class="o">=</span>order-events<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">    </span>--push-endpoint<span class="o">=</span>https://notifications-xxxx.a.run.app/events<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="w">    </span>--push-auth-service-account<span class="o">=</span>pubsub-push-sa@my-project.iam.gserviceaccount.com
-</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>
-</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="c1"># Consumer 3: analytics diretta su BigQuery</span>
-</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>analytics-bq-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a><span class="w">    </span>--topic<span class="o">=</span>order-events<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="w">    </span>--bigquery-table<span class="o">=</span>my-project:analytics.order_events<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="w">    </span>--write-metadata
-</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a>
-</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="c1"># Pubblicare un ordine → arriva a tutti e 3 i consumer automaticamente</span>
-</span><span id="__span-16-22"><a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>publish<span class="w"> </span>order-events<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-16-23"><a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a><span class="w">    </span>--message<span class="o">=</span><span class="s1">'{"orderId":"ORD-999","amount":299.99,"customerId":"CUST-123"}'</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># 1 topic → 3 subscription indipendenti → 3 consumer diversi</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>create<span class="w"> </span>order-events
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Consumer 1: servizio inventory (pull)</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>inventory-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">    </span>--topic<span class="o">=</span>order-events<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">    </span>--ack-deadline<span class="o">=</span><span class="m">30</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="c1"># Consumer 2: servizio notifiche (push → Cloud Run)</span>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>notifications-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="w">    </span>--topic<span class="o">=</span>order-events<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="w">    </span>--push-endpoint<span class="o">=</span>https://notifications-xxxx.a.run.app/events<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="w">    </span>--push-auth-service-account<span class="o">=</span>pubsub-push-sa@my-project.iam.gserviceaccount.com
+</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>
+</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="c1"># Consumer 3: analytics diretta su BigQuery</span>
+</span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>create<span class="w"> </span>analytics-bq-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-17"><a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a><span class="w">    </span>--topic<span class="o">=</span>order-events<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-18"><a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a><span class="w">    </span>--bigquery-table<span class="o">=</span>my-project:analytics.order_events<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-19"><a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a><span class="w">    </span>--write-metadata
+</span><span id="__span-17-20"><a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a>
+</span><span id="__span-17-21"><a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a><span class="c1"># Pubblicare un ordine → arriva a tutti e 3 i consumer automaticamente</span>
+</span><span id="__span-17-22"><a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>publish<span class="w"> </span>order-events<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-23"><a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a><span class="w">    </span>--message<span class="o">=</span><span class="s1">'{"orderId":"ORD-999","amount":299.99,"customerId":"CUST-123"}'</span>
 </span></code></pre></div>
 <h3 id="pubsub-dataflow-stream-processing">Pub/Sub → Dataflow (Stream Processing)<a class="headerlink" href="#pubsub-dataflow-stream-processing" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Template Dataflow per Pub/Sub → BigQuery con trasformazioni</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>gcloud<span class="w"> </span>dataflow<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>run<span class="w"> </span>pubsub-to-bq<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span>--gcs-location<span class="o">=</span>gs://dataflow-templates/latest/PubSub_to_BigQuery<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span>--parameters<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="nv">inputTopic</span><span class="o">=</span>projects/my-project/topics/my-topic,<span class="se">\</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="nv">outputTableSpec</span><span class="o">=</span>my-project:my_dataset.output_table,<span class="se">\</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="nv">outputDeadletterTable</span><span class="o">=</span>my-project:my_dataset.errors
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Template Google-provided per Pub/Sub → BigQuery (verificare nome/versione</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># aggiornati nel catalogo template Dataflow; per nuovi job valutare i Flex Template)</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>gcloud<span class="w"> </span>dataflow<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>run<span class="w"> </span>pubsub-to-bq<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">    </span>--gcs-location<span class="o">=</span>gs://dataflow-templates/latest/PubSub_to_BigQuery<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">    </span>--parameters<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="nv">inputTopic</span><span class="o">=</span>projects/my-project/topics/my-topic,<span class="se">\</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="nv">outputTableSpec</span><span class="o">=</span>my-project:my_dataset.output_table,<span class="se">\</span>
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="nv">outputDeadletterTable</span><span class="o">=</span>my-project:my_dataset.errors
 </span></code></pre></div>
 <hr />
 <h2 id="monitoring-e-observability">Monitoring e Observability<a class="headerlink" href="#monitoring-e-observability" title="Permanent link">&para;</a></h2>
 <h3 id="metriche-chiave">Metriche Chiave<a class="headerlink" href="#metriche-chiave" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Visualizzare le metriche principali di una subscription</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>gcloud<span class="w"> </span>monitoring<span class="w"> </span>metrics<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span>--filter<span class="o">=</span><span class="s2">"metric.type:pubsub.googleapis.com/subscription"</span>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="c1"># Le metriche più importanti (via Cloud Monitoring / Metrics Explorer):</span>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="c1"># subscription/num_undelivered_messages     — messaggi in attesa di ACK (backlog)</span>
-</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="c1"># subscription/oldest_unacked_message_age   — età del messaggio più vecchio non ACK (CRITICA)</span>
-</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="c1"># subscription/num_outstanding_messages     — messaggi inviati al consumer ma non ancora ACK</span>
-</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="c1"># topic/send_message_operation_count        — rate di pubblicazione</span>
-</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="c1"># subscription/pull_message_operation_count — rate di consumo</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Le metriche più importanti (via Cloud Monitoring / Metrics Explorer):</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># subscription/num_undelivered_messages     — messaggi in attesa di ACK (backlog)</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># subscription/oldest_unacked_message_age   — età del messaggio più vecchio non ACK (CRITICA)</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># subscription/num_outstanding_messages     — messaggi inviati al consumer ma non ancora ACK</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="c1"># topic/send_message_operation_count        — rate di pubblicazione</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="c1"># subscription/pull_message_operation_count — rate di consumo</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Creare alert su backlog crescente (subscription/oldest_unacked_message_age &gt; 300s)</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>gcloud<span class="w"> </span>alpha<span class="w"> </span>monitoring<span class="w"> </span>policies<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span>--notification-channels<span class="o">=</span>CHANNEL_ID<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">    </span>--display-name<span class="o">=</span><span class="s2">"Pub/Sub Consumer Lag Alert"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">    </span>--condition-display-name<span class="o">=</span><span class="s2">"Oldest unacked message age &gt; 5 min"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">    </span>--condition-filter<span class="o">=</span><span class="s1">'resource.type="pubsub_subscription" AND metric.type="pubsub.googleapis.com/subscription/oldest_unacked_message_age"'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">    </span>--condition-threshold-value<span class="o">=</span><span class="m">300</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="w">    </span>--condition-threshold-comparison<span class="o">=</span>COMPARISON_GT<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">    </span>--condition-duration<span class="o">=</span>120s
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Creare alert su backlog crescente (subscription/oldest_unacked_message_age &gt; 300s)</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>gcloud<span class="w"> </span>alpha<span class="w"> </span>monitoring<span class="w"> </span>policies<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span>--notification-channels<span class="o">=</span>CHANNEL_ID<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span>--display-name<span class="o">=</span><span class="s2">"Pub/Sub Consumer Lag Alert"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">    </span>--condition-display-name<span class="o">=</span><span class="s2">"Oldest unacked message age &gt; 5 min"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">    </span>--condition-filter<span class="o">=</span><span class="s1">'resource.type="pubsub_subscription" AND metric.type="pubsub.googleapis.com/subscription/oldest_unacked_message_age"'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">    </span>--condition-threshold-value<span class="o">=</span><span class="m">300</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="w">    </span>--condition-threshold-comparison<span class="o">=</span>COMPARISON_GT<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="w">    </span>--condition-duration<span class="o">=</span>120s
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Metrica più importante: oldest_unacked_message_age</p>
@@ -25810,138 +25862,140 @@
 <p class="admonition-title">Non ACK prima di elaborare</p>
 <p>Il pattern <code>message.ack()</code> deve essere chiamato SOLO dopo che l'elaborazione è andata a buon fine. ACK immediato all'arrivo del messaggio e poi errore = messaggio perso. Usare <code>message.nack()</code> in caso di errore per forzare la riconsegna immediata.</p>
 </div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Checklist best practices Pub/Sub:</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># [ ] Dead Letter Topic configurato su ogni subscription di produzione</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># [ ] ackDeadline &gt; max elaboration time (con margine 2x)</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># [ ] Consumer idempotenti (at-least-once delivery di default)</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># [ ] SA separati per publisher e subscriber (minimo privilegio)</span>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="c1"># [ ] Workload Identity per consumer su GKE (no service account key files)</span>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="c1"># [ ] Alert su oldest_unacked_message_age &gt; 5 min</span>
-</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="c1"># [ ] Alert su num_undelivered_messages DLT &gt; 0</span>
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># [ ] Retention topic adeguata al caso d'uso (default 7d ok per la maggior parte)</span>
-</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="c1"># [ ] StreamingPull via client library ufficiale (non pull manuale in loop)</span>
-</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="c1"># [ ] message.nack() invece di ignorare eccezioni nel callback</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Checklist best practices Pub/Sub:</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1"># [ ] Dead Letter Topic configurato su ogni subscription di produzione</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="c1"># [ ] ackDeadline &gt; max elaboration time (con margine 2x)</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># [ ] Consumer idempotenti (at-least-once delivery di default)</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="c1"># [ ] SA separati per publisher e subscriber (minimo privilegio)</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="c1"># [ ] Workload Identity per consumer su GKE (no service account key files)</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="c1"># [ ] Alert su oldest_unacked_message_age &gt; 5 min</span>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="c1"># [ ] Alert su num_undelivered_messages DLT &gt; 0</span>
+</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="c1"># [ ] Retention topic adeguata al caso d'uso (default 7d ok per la maggior parte)</span>
+</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="c1"># [ ] StreamingPull via client library ufficiale (non pull manuale in loop)</span>
+</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a><span class="c1"># [ ] message.nack() invece di ignorare eccezioni nel callback</span>
 </span></code></pre></div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <p><strong>Problema: Backlog cresce — <code>num_undelivered_messages</code> sale continuamente</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Sintomo: la metrica subscription/num_undelivered_messages aumenta nel tempo</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1"># o subscription/oldest_unacked_message_age supera minuti/ore</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="c1"># Causa: il consumer è lento o bloccato, oppure non sta scalando abbastanza</span>
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="c1"># Diagnosi 1: verificare se il consumer sta girando</span>
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>describe<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">    </span>--format<span class="o">=</span><span class="s2">"table(name,pushConfig,ackDeadlineSeconds)"</span>
-</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>
-</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="c1"># Diagnosi 2: controllare il rate di consumo vs produzione nelle ultime 1h</span>
-</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="c1"># Via Metrics Explorer su Cloud Monitoring:</span>
-</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a><span class="c1"># - topic/send_message_operation_count (produzione)</span>
-</span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a><span class="c1"># - subscription/pull_message_operation_count (consumo)</span>
-</span><span id="__span-21-13"><a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a><span class="c1"># Se produzione &gt;&gt; consumo → consumer troppo lento</span>
-</span><span id="__span-21-14"><a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a>
-</span><span id="__span-21-15"><a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a><span class="c1"># Soluzione 1: aumentare parallelismo nel consumer</span>
-</span><span id="__span-21-16"><a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a><span class="c1"># Per GKE: aumentare replicas del deployment consumer</span>
-</span><span id="__span-21-17"><a id="__codelineno-21-17" name="__codelineno-21-17" href="#__codelineno-21-17"></a>kubectl<span class="w"> </span>scale<span class="w"> </span>deployment<span class="w"> </span>pubsub-consumer<span class="w"> </span>--replicas<span class="o">=</span><span class="m">10</span>
-</span><span id="__span-21-18"><a id="__codelineno-21-18" name="__codelineno-21-18" href="#__codelineno-21-18"></a>
-</span><span id="__span-21-19"><a id="__codelineno-21-19" name="__codelineno-21-19" href="#__codelineno-21-19"></a><span class="c1"># Soluzione 2: aumentare flow control nella client library</span>
-</span><span id="__span-21-20"><a id="__codelineno-21-20" name="__codelineno-21-20" href="#__codelineno-21-20"></a><span class="c1"># flow_control = FlowControl(max_messages=500)  # più messaggi in parallelo</span>
-</span><span id="__span-21-21"><a id="__codelineno-21-21" name="__codelineno-21-21" href="#__codelineno-21-21"></a>
-</span><span id="__span-21-22"><a id="__codelineno-21-22" name="__codelineno-21-22" href="#__codelineno-21-22"></a><span class="c1"># Soluzione 3: seek al futuro per scartare il backlog accumulato (DISTRUTTIVO)</span>
-</span><span id="__span-21-23"><a id="__codelineno-21-23" name="__codelineno-21-23" href="#__codelineno-21-23"></a><span class="c1"># Usare SOLO se i messaggi nel backlog non hanno più valore</span>
-</span><span id="__span-21-24"><a id="__codelineno-21-24" name="__codelineno-21-24" href="#__codelineno-21-24"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>seek<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-25"><a id="__codelineno-21-25" name="__codelineno-21-25" href="#__codelineno-21-25"></a><span class="w">    </span>--time<span class="o">=</span><span class="s2">"</span><span class="k">$(</span>date<span class="w"> </span>-u<span class="w"> </span>+%Y-%m-%dT%H:%M:%SZ<span class="k">)</span><span class="s2">"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Sintomo: la metrica subscription/num_undelivered_messages aumenta nel tempo</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># o subscription/oldest_unacked_message_age supera minuti/ore</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># Causa: il consumer è lento o bloccato, oppure non sta scalando abbastanza</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="c1"># Diagnosi 1: verificare se il consumer sta girando</span>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>describe<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="w">    </span>--format<span class="o">=</span><span class="s2">"table(name,pushConfig,ackDeadlineSeconds)"</span>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="c1"># Diagnosi 2: controllare il rate di consumo vs produzione nelle ultime 1h</span>
+</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="c1"># Via Metrics Explorer su Cloud Monitoring:</span>
+</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a><span class="c1"># - topic/send_message_operation_count (produzione)</span>
+</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a><span class="c1"># - subscription/pull_message_operation_count (consumo)</span>
+</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a><span class="c1"># Se produzione &gt;&gt; consumo → consumer troppo lento</span>
+</span><span id="__span-22-14"><a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a>
+</span><span id="__span-22-15"><a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a><span class="c1"># Soluzione 1: aumentare parallelismo nel consumer</span>
+</span><span id="__span-22-16"><a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a><span class="c1"># Per GKE: aumentare replicas del deployment consumer</span>
+</span><span id="__span-22-17"><a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a>kubectl<span class="w"> </span>scale<span class="w"> </span>deployment<span class="w"> </span>pubsub-consumer<span class="w"> </span>--replicas<span class="o">=</span><span class="m">10</span>
+</span><span id="__span-22-18"><a id="__codelineno-22-18" name="__codelineno-22-18" href="#__codelineno-22-18"></a>
+</span><span id="__span-22-19"><a id="__codelineno-22-19" name="__codelineno-22-19" href="#__codelineno-22-19"></a><span class="c1"># Soluzione 2: aumentare flow control nella client library</span>
+</span><span id="__span-22-20"><a id="__codelineno-22-20" name="__codelineno-22-20" href="#__codelineno-22-20"></a><span class="c1"># flow_control = FlowControl(max_messages=500)  # più messaggi in parallelo</span>
+</span><span id="__span-22-21"><a id="__codelineno-22-21" name="__codelineno-22-21" href="#__codelineno-22-21"></a>
+</span><span id="__span-22-22"><a id="__codelineno-22-22" name="__codelineno-22-22" href="#__codelineno-22-22"></a><span class="c1"># Soluzione 3: seek al futuro per scartare il backlog accumulato (DISTRUTTIVO)</span>
+</span><span id="__span-22-23"><a id="__codelineno-22-23" name="__codelineno-22-23" href="#__codelineno-22-23"></a><span class="c1"># Usare SOLO se i messaggi nel backlog non hanno più valore</span>
+</span><span id="__span-22-24"><a id="__codelineno-22-24" name="__codelineno-22-24" href="#__codelineno-22-24"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>seek<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-25"><a id="__codelineno-22-25" name="__codelineno-22-25" href="#__codelineno-22-25"></a><span class="w">    </span>--time<span class="o">=</span><span class="s2">"</span><span class="k">$(</span>date<span class="w"> </span>-u<span class="w"> </span>+%Y-%m-%dT%H:%M:%SZ<span class="k">)</span><span class="s2">"</span>
 </span></code></pre></div>
 <hr />
 <p><strong>Problema: Push subscription — Cloud Run riceve 403 Forbidden su ogni messaggio</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Sintomo: il push endpoint risponde 403, Pub/Sub non consegna i messaggi</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># Causa: il SA usato per la push subscription non ha roles/run.invoker</span>
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># oppure il SA del sistema Pub/Sub non ha il permesso di creare token OIDC</span>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="c1"># Diagnosi: verificare il SA configurato sulla subscription</span>
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>describe<span class="w"> </span>my-push-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="w">    </span>--format<span class="o">=</span><span class="s2">"value(pushConfig.oidcToken.serviceAccountEmail)"</span>
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>
-</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="c1"># Soluzione 1: dare roles/run.invoker al SA della push subscription</span>
-</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>gcloud<span class="w"> </span>run<span class="w"> </span>services<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-service<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:pubsub-invoker@my-project.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/run.invoker"</span>
-</span><span id="__span-22-14"><a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a>
-</span><span id="__span-22-15"><a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a><span class="c1"># Soluzione 2: autorizzare il SA Pub/Sub a creare token OIDC</span>
-</span><span id="__span-22-16"><a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a><span class="nv">PROJECT_NUMBER</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>projects<span class="w"> </span>describe<span class="w"> </span>my-project<span class="w"> </span>--format<span class="o">=</span><span class="s2">"value(projectNumber)"</span><span class="k">)</span>
-</span><span id="__span-22-17"><a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-18"><a id="__codelineno-22-18" name="__codelineno-22-18" href="#__codelineno-22-18"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:service-</span><span class="si">${</span><span class="nv">PROJECT_NUMBER</span><span class="si">}</span><span class="s2">@gcp-sa-pubsub.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-19"><a id="__codelineno-22-19" name="__codelineno-22-19" href="#__codelineno-22-19"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/iam.serviceAccountTokenCreator"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Sintomo: il push endpoint risponde 403, Pub/Sub non consegna i messaggi</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># Causa: il SA usato per la push subscription non ha roles/run.invoker</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># oppure il SA del sistema Pub/Sub non ha il permesso di creare token OIDC</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="c1"># Diagnosi: verificare il SA configurato sulla subscription</span>
+</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>describe<span class="w"> </span>my-push-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="w">    </span>--format<span class="o">=</span><span class="s2">"value(pushConfig.oidcToken.serviceAccountEmail)"</span>
+</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>
+</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="c1"># Soluzione 1: dare roles/run.invoker al SA della push subscription</span>
+</span><span id="__span-23-10"><a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>gcloud<span class="w"> </span>run<span class="w"> </span>services<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-service<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-23-11"><a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-23-12"><a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:pubsub-invoker@my-project.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-23-13"><a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/run.invoker"</span>
+</span><span id="__span-23-14"><a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a>
+</span><span id="__span-23-15"><a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a><span class="c1"># Soluzione 2: autorizzare il SA Pub/Sub a creare token OIDC</span>
+</span><span id="__span-23-16"><a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a><span class="nv">PROJECT_NUMBER</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>projects<span class="w"> </span>describe<span class="w"> </span>my-project<span class="w"> </span>--format<span class="o">=</span><span class="s2">"value(projectNumber)"</span><span class="k">)</span>
+</span><span id="__span-23-17"><a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-23-18"><a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:service-</span><span class="si">${</span><span class="nv">PROJECT_NUMBER</span><span class="si">}</span><span class="s2">@gcp-sa-pubsub.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-23-19"><a id="__codelineno-23-19" name="__codelineno-23-19" href="#__codelineno-23-19"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/iam.serviceAccountTokenCreator"</span>
 </span></code></pre></div>
 <hr />
 <p><strong>Problema: Messaggi con ordering key bloccati — nuovi messaggi non arrivano</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Sintomo: con message ordering abilitato, i messaggi con una certa ordering key</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># smettono di essere consegnati anche se ci sono nuovi messaggi pubblicati</span>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># Causa: un messaggio precedente con quella ordering key è in stato di retry</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="c1"># Pub/Sub non consegna messaggi successivi finché il precedente non è ACK</span>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>
-</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="c1"># Diagnosi: verificare se ci sono messaggi non ACK per quella ordering key</span>
-</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>describe<span class="w"> </span>my-ordered-sub
-</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>
-</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="c1"># Soluzione: identificare il messaggio bloccato (nel log del consumer)</span>
-</span><span id="__span-23-10"><a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a><span class="c1"># e decidere: fixare il consumer oppure fare seek per saltare il messaggio problematico</span>
-</span><span id="__span-23-11"><a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a>
-</span><span id="__span-23-12"><a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a><span class="c1"># Seek al timestamp del primo messaggio problematico (salta i messaggi bloccati)</span>
-</span><span id="__span-23-13"><a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>seek<span class="w"> </span>my-ordered-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-14"><a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a><span class="w">    </span>--time<span class="o">=</span><span class="s2">"2026-03-31T10:30:00Z"</span>
-</span><span id="__span-23-15"><a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a>
-</span><span id="__span-23-16"><a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a><span class="c1"># Oppure: seek allo snapshot precedente al problema</span>
-</span><span id="__span-23-17"><a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>seek<span class="w"> </span>my-ordered-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-23-18"><a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a><span class="w">    </span>--snapshot<span class="o">=</span>pre-incident-snapshot
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Sintomo: con message ordering abilitato, i messaggi con una certa ordering key</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># smettono di essere consegnati anche se ci sono nuovi messaggi pubblicati</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># Causa: un messaggio precedente con quella ordering key è in stato di retry</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># Pub/Sub non consegna messaggi successivi finché il precedente non è ACK</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="c1"># Diagnosi: verificare se ci sono messaggi non ACK per quella ordering key</span>
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>describe<span class="w"> </span>my-ordered-sub
+</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>
+</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="c1"># Soluzione: identificare il messaggio bloccato (nel log del consumer)</span>
+</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="c1"># e decidere: fixare il consumer, configurare un Dead Letter Topic</span>
+</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="c1"># oppure fare seek per saltare il messaggio problematico</span>
+</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>
+</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="c1"># Seek a un timestamp SUCCESSIVO al messaggio problematico (i messaggi precedenti</span>
+</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a><span class="c1"># al timestamp sono considerati ACK; un timestamp precedente li riconsegnerebbe)</span>
+</span><span id="__span-24-15"><a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>seek<span class="w"> </span>my-ordered-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-16"><a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a><span class="w">    </span>--time<span class="o">=</span><span class="s2">"2026-03-31T10:30:00Z"</span>
+</span><span id="__span-24-17"><a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a>
+</span><span id="__span-24-18"><a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a><span class="c1"># Oppure: seek allo snapshot precedente al problema</span>
+</span><span id="__span-24-19"><a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>seek<span class="w"> </span>my-ordered-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-24-20"><a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a><span class="w">    </span>--snapshot<span class="o">=</span>pre-incident-snapshot
 </span></code></pre></div>
 <hr />
 <p><strong>Problema: Dead Letter Topic non riceve messaggi anche dopo molti retry</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Sintomo: i messaggi continuano a essere riconsegnati ma non vanno in DLQ</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># anche dopo aver superato max-delivery-attempts</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># Causa: il SA di Pub/Sub non ha i permessi corretti su DLT o subscription</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="c1"># Diagnosi: verificare la configurazione DLT</span>
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>describe<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="w">    </span>--format<span class="o">=</span><span class="s2">"value(deadLetterPolicy)"</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>
-</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="c1"># Ottenere il SA del sistema Pub/Sub</span>
-</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="nv">PROJECT_NUMBER</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>projects<span class="w"> </span>describe<span class="w"> </span>my-project<span class="w"> </span>--format<span class="o">=</span><span class="s2">"value(projectNumber)"</span><span class="k">)</span>
-</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="nv">PUBSUB_SA</span><span class="o">=</span><span class="s2">"service-</span><span class="si">${</span><span class="nv">PROJECT_NUMBER</span><span class="si">}</span><span class="s2">@gcp-sa-pubsub.iam.gserviceaccount.com"</span>
-</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>
-</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="c1"># Verificare i permessi del SA Pub/Sub</span>
-</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>get-iam-policy<span class="w"> </span>my-topic-dlq<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"</span><span class="nv">$PUBSUB_SA</span><span class="s2">"</span>
-</span><span id="__span-24-15"><a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>get-iam-policy<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"</span><span class="nv">$PUBSUB_SA</span><span class="s2">"</span>
-</span><span id="__span-24-16"><a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a>
-</span><span id="__span-24-17"><a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a><span class="c1"># Soluzione: aggiungere i permessi mancanti</span>
-</span><span id="__span-24-18"><a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-topic-dlq<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-24-19"><a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:</span><span class="si">${</span><span class="nv">PUBSUB_SA</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-24-20"><a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.publisher"</span>
-</span><span id="__span-24-21"><a id="__codelineno-24-21" name="__codelineno-24-21" href="#__codelineno-24-21"></a>
-</span><span id="__span-24-22"><a id="__codelineno-24-22" name="__codelineno-24-22" href="#__codelineno-24-22"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-24-23"><a id="__codelineno-24-23" name="__codelineno-24-23" href="#__codelineno-24-23"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:</span><span class="si">${</span><span class="nv">PUBSUB_SA</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-24-24"><a id="__codelineno-24-24" name="__codelineno-24-24" href="#__codelineno-24-24"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.subscriber"</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Sintomo: i messaggi continuano a essere riconsegnati ma non vanno in DLQ</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="c1"># anche dopo aver superato max-delivery-attempts</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="c1"># Causa: il SA di Pub/Sub non ha i permessi corretti su DLT o subscription</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="c1"># Diagnosi: verificare la configurazione DLT</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>describe<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">    </span>--format<span class="o">=</span><span class="s2">"value(deadLetterPolicy)"</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="c1"># Ottenere il SA del sistema Pub/Sub</span>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="nv">PROJECT_NUMBER</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>projects<span class="w"> </span>describe<span class="w"> </span>my-project<span class="w"> </span>--format<span class="o">=</span><span class="s2">"value(projectNumber)"</span><span class="k">)</span>
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="nv">PUBSUB_SA</span><span class="o">=</span><span class="s2">"service-</span><span class="si">${</span><span class="nv">PROJECT_NUMBER</span><span class="si">}</span><span class="s2">@gcp-sa-pubsub.iam.gserviceaccount.com"</span>
+</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>
+</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a><span class="c1"># Verificare i permessi del SA Pub/Sub</span>
+</span><span id="__span-25-14"><a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>get-iam-policy<span class="w"> </span>my-topic-dlq<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"</span><span class="nv">$PUBSUB_SA</span><span class="s2">"</span>
+</span><span id="__span-25-15"><a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>get-iam-policy<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"</span><span class="nv">$PUBSUB_SA</span><span class="s2">"</span>
+</span><span id="__span-25-16"><a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a>
+</span><span id="__span-25-17"><a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a><span class="c1"># Soluzione: aggiungere i permessi mancanti</span>
+</span><span id="__span-25-18"><a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>topics<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-topic-dlq<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-19"><a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:</span><span class="si">${</span><span class="nv">PUBSUB_SA</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-20"><a id="__codelineno-25-20" name="__codelineno-25-20" href="#__codelineno-25-20"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.publisher"</span>
+</span><span id="__span-25-21"><a id="__codelineno-25-21" name="__codelineno-25-21" href="#__codelineno-25-21"></a>
+</span><span id="__span-25-22"><a id="__codelineno-25-22" name="__codelineno-25-22" href="#__codelineno-25-22"></a>gcloud<span class="w"> </span>pubsub<span class="w"> </span>subscriptions<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-pull-sub<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-23"><a id="__codelineno-25-23" name="__codelineno-25-23" href="#__codelineno-25-23"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:</span><span class="si">${</span><span class="nv">PUBSUB_SA</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-24"><a id="__codelineno-25-24" name="__codelineno-25-24" href="#__codelineno-25-24"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/pubsub.subscriber"</span>
 </span></code></pre></div>
 <hr />
 <p><strong>Problema: BigQuery subscription — messaggi non arrivano nella tabella BQ</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Sintomo: la subscription è creata ma la tabella BQ rimane vuota</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="c1"># Causa più comune: schema incompatibile o permessi mancanti del SA Pub/Sub su BQ</span>
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># Diagnosi 1: verificare i permessi del SA su BigQuery</span>
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="nv">PROJECT_NUMBER</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>projects<span class="w"> </span>describe<span class="w"> </span>my-project<span class="w"> </span>--format<span class="o">=</span><span class="s2">"value(projectNumber)"</span><span class="k">)</span>
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="nv">PUBSUB_SA</span><span class="o">=</span><span class="s2">"service-</span><span class="si">${</span><span class="nv">PROJECT_NUMBER</span><span class="si">}</span><span class="s2">@gcp-sa-pubsub.iam.gserviceaccount.com"</span>
-</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>bq<span class="w"> </span>show<span class="w"> </span>--format<span class="o">=</span>prettyjson<span class="w"> </span>my-project:my_dataset<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"</span><span class="nv">$PUBSUB_SA</span><span class="s2">"</span>
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>
-</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="c1"># Soluzione 1: aggiungere dataEditor al SA Pub/Sub</span>
-</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:</span><span class="si">${</span><span class="nv">PUBSUB_SA</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/bigquery.dataEditor"</span>
-</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a>
-</span><span id="__span-25-14"><a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a><span class="c1"># Diagnosi 2: verificare che la tabella abbia le colonne richieste</span>
-</span><span id="__span-25-15"><a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a>bq<span class="w"> </span>show<span class="w"> </span>my-project:my_dataset.pubsub_events
-</span><span id="__span-25-16"><a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a>
-</span><span id="__span-25-17"><a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a><span class="c1"># Colonne richieste per BigQuery subscription con --write-metadata:</span>
-</span><span id="__span-25-18"><a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a><span class="c1"># data BYTES, attributes STRING, message_id STRING,</span>
-</span><span id="__span-25-19"><a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a><span class="c1"># publish_time TIMESTAMP, subscription_name STRING</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Sintomo: la subscription è creata ma la tabella BQ rimane vuota</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># Causa più comune: schema incompatibile o permessi mancanti del SA Pub/Sub su BQ</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="c1"># Diagnosi 1: verificare i permessi del SA su BigQuery</span>
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="nv">PROJECT_NUMBER</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>projects<span class="w"> </span>describe<span class="w"> </span>my-project<span class="w"> </span>--format<span class="o">=</span><span class="s2">"value(projectNumber)"</span><span class="k">)</span>
+</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="nv">PUBSUB_SA</span><span class="o">=</span><span class="s2">"service-</span><span class="si">${</span><span class="nv">PROJECT_NUMBER</span><span class="si">}</span><span class="s2">@gcp-sa-pubsub.iam.gserviceaccount.com"</span>
+</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>bq<span class="w"> </span>show<span class="w"> </span>--format<span class="o">=</span>prettyjson<span class="w"> </span>my-project:my_dataset<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"</span><span class="nv">$PUBSUB_SA</span><span class="s2">"</span>
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>
+</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="c1"># Soluzione 1: aggiungere dataEditor al SA Pub/Sub</span>
+</span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:</span><span class="si">${</span><span class="nv">PUBSUB_SA</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/bigquery.dataEditor"</span>
+</span><span id="__span-26-13"><a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a>
+</span><span id="__span-26-14"><a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a><span class="c1"># Diagnosi 2: verificare che la tabella abbia le colonne richieste</span>
+</span><span id="__span-26-15"><a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a>bq<span class="w"> </span>show<span class="w"> </span>my-project:my_dataset.pubsub_events
+</span><span id="__span-26-16"><a id="__codelineno-26-16" name="__codelineno-26-16" href="#__codelineno-26-16"></a>
+</span><span id="__span-26-17"><a id="__codelineno-26-17" name="__codelineno-26-17" href="#__codelineno-26-17"></a><span class="c1"># Colonne richieste per BigQuery subscription con --write-metadata:</span>
+</span><span id="__span-26-18"><a id="__codelineno-26-18" name="__codelineno-26-18" href="#__codelineno-26-18"></a><span class="c1"># data BYTES, attributes STRING, message_id STRING,</span>
+</span><span id="__span-26-19"><a id="__codelineno-26-19" name="__codelineno-26-19" href="#__codelineno-26-19"></a><span class="c1"># publish_time TIMESTAMP, subscription_name STRING</span>
 </span></code></pre></div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>

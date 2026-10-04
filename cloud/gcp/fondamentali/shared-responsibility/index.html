@@ -9009,7 +9009,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -9034,7 +9034,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -9327,7 +9327,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10155,7 +10155,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25360,15 +25360,25 @@
 </span></code></pre></div>
 <h3 id="security-command-center">Security Command Center<a class="headerlink" href="#security-command-center" title="Permanent link">&para;</a></h3>
 <p><strong>Security Command Center (SCC)</strong> è lo strumento centralizzato di GCP per monitorare il posture di sicurezza e rilevare misconfigurazioni — il cliente è responsabile di abilitarlo e agire sui findings.</p>
+<div class="admonition note">
+<p class="admonition-title">Tier SCC e API v1/v2</p>
+<p>Tier attuali: <strong>Standard</strong> (gratuito, posture base solo Google Cloud), <strong>Premium</strong> (pay-as-you-go o subscription, attack path, threat detection, multicloud AWS/Azure) ed <strong>Enterprise</strong> (CNAPP multicloud, deprecato: shutdown 21/05/2027, migrazione automatica a Premium). Il tier Standard-Legacy non è più attivabile da nuove organizzazioni. Nel comando <code>gcloud scc findings list</code>, <code>--location</code> ha default <code>global</code> e, se omesso, la richiesta va all'API <strong>v1</strong>; per usare l'API <strong>v2</strong> specificare <code>--location</code> esplicitamente. <code>--source</code> ha default <code>-</code> (tutte le sorgenti).</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Listare i security findings attivi nel progetto</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>gcloud<span class="w"> </span>scc<span class="w"> </span>findings<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span>--organization<span class="o">=</span>ORGANIZATION_ID<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span>--filter<span class="o">=</span><span class="s2">"state=ACTIVE AND severity=HIGH"</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Listare le misconfigurazioni rilevate da Security Health Analytics</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Stessa query via API v2 (location esplicita)</span>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>gcloud<span class="w"> </span>scc<span class="w"> </span>findings<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span>--organization<span class="o">=</span>ORGANIZATION_ID<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span>--filter<span class="o">=</span><span class="s2">"category=PUBLIC_BUCKET_ACL OR category=OPEN_FIREWALL"</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span>--location<span class="o">=</span>global<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span>--filter<span class="o">=</span><span class="s2">"state=ACTIVE AND severity=HIGH"</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="c1"># Listare le misconfigurazioni rilevate da Security Health Analytics</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>gcloud<span class="w"> </span>scc<span class="w"> </span>findings<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span>--organization<span class="o">=</span>ORGANIZATION_ID<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">    </span>--filter<span class="o">=</span><span class="s2">"category=PUBLIC_BUCKET_ACL OR category=OPEN_FIREWALL"</span>
 </span></code></pre></div>
 <hr />
 <h2 id="compliance-e-certificazioni-gcp">Compliance e Certificazioni GCP<a class="headerlink" href="#compliance-e-certificazioni-gcp" title="Permanent link">&para;</a></h2>
@@ -25587,7 +25597,7 @@
 <p>Contrariamente ad S3 (dove il blocco pubblico è ora di default), in GCP è il cliente a dover configurare IAM correttamente. Abilitare <strong>Uniform Bucket-Level Access</strong> ed evitare <code>allUsers</code>/<code>allAuthenticatedUsers</code> nei binding IAM, a meno di non gestire contenuto pubblico intenzionalmente.</p>
 </div>
 <ul>
-<li><strong>Abilitare Security Command Center</strong> per ricevere findings di misconfiguration automatici <!-- REVIEW: verificare tier SCC attuali (Standard/Premium/Enterprise) e sintassi <code>gcloud scc findings list</code> (v2, parametro --source/--location) --></li>
+<li><strong>Abilitare Security Command Center</strong> per ricevere findings di misconfiguration automatici (tier <strong>Standard</strong> gratuito con funzioni base; <strong>Premium</strong> a pagamento con attack path e threat detection; il tier <strong>Enterprise</strong> è deprecato, chiusura prevista il 21 maggio 2027 con migrazione automatica a Premium)</li>
 <li><strong>Nota GKE Standard</strong>: Google fornisce il Control Plane e le immagini dei nodi, ma l'upgrade dei nodi segue il release channel/maintenance window scelti dal cliente; su Autopilot l'onere è quasi interamente di Google</li>
 <li><strong>Usare VPC Service Controls</strong> per creare perimetri di sicurezza attorno ai servizi managed (previene data exfiltration)</li>
 <li><strong>Configurare Organization Policy</strong> per limitare regioni, tipi di macchine, e comportamenti non conformi</li>
