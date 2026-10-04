@@ -12296,7 +12296,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12340,7 +12340,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12365,7 +12365,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12667,6 +12667,28 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relazioni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relazioni
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#riferimenti" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Riferimenti
+      
+    </span>
+  </a>
   
 </li>
       
@@ -13997,7 +14019,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24872,6 +24894,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#relazioni" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relazioni
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#riferimenti" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Riferimenti
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -25013,8 +25057,12 @@
 <p>Prima dello sharding, esaurire le alternative: ottimizzare query e indici, aggiungere read replicas, connection pooling, vertical scaling, table partitioning locale. Lo sharding aumenta la complessità operativa in modo non lineare.</p>
 </div>
 <h2 id="partitioning-vs-sharding">Partitioning vs Sharding<a class="headerlink" href="#partitioning-vs-sharding" title="Permanent link">&para;</a></h2>
-<p><strong>Partitioning</strong> (o sharding verticale): dividere una tabella in più segmenti sullo <strong>stesso nodo</strong>. Vedi <a href="../../sql-avanzato/partitioning/">Partitioning SQL</a>. Migliora le performance di query e manutenzione ma non scala oltre il singolo server.</p>
-<p><strong>Sharding</strong> (o partitioning orizzontale): distribuire i dati su <strong>nodi diversi</strong>. Scala sia il volume che il throughput.</p>
+<p><strong>Partitioning</strong>: dividere una tabella in più segmenti (per righe) sullo <strong>stesso nodo</strong>. Vedi <a href="../../sql-avanzato/partitioning/">Partitioning SQL</a>. Migliora le performance di query e manutenzione (partition pruning, drop veloce di dati vecchi) ma non scala oltre il singolo server.</p>
+<p><strong>Sharding</strong>: distribuire i dati (per righe) su <strong>nodi diversi</strong>. Scala sia il volume che il throughput di scrittura, perché ogni nodo gestisce solo la propria porzione.</p>
+<div class="admonition note">
+<p class="admonition-title">Orizzontale vs verticale</p>
+<p>Sia partitioning che sharding sono <strong>orizzontali</strong> (si dividono le righe). Il partitioning <strong>verticale</strong> è un'altra cosa: separa le <em>colonne</em> di una tabella (es. colonne rare o BLOB in una tabella a parte) o interi domini in database distinti (database-per-service).</p>
+</div>
 <hr />
 <h2 id="strategie-di-sharding">Strategie di Sharding<a class="headerlink" href="#strategie-di-sharding" title="Permanent link">&para;</a></h2>
 <h3 id="range-sharding">Range Sharding<a class="headerlink" href="#range-sharding" title="Permanent link">&para;</a></h3>
@@ -25026,10 +25074,10 @@
 <p><strong>Vantaggio</strong>: le range query sulla shard key sono efficienti (vanno su pochi shard contigui). Utile per time-series (shard per data).</p>
 <p><strong>Svantaggio critico: hotspot</strong>. Se la shard key ha un pattern di accesso non uniforme — es. i nuovi utenti (ID alti) sono più attivi — un singolo shard riceve la maggior parte del traffico.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Range sharding su created_at:
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>Shard 1: Jan-Mar 2022  → quasi inattivo
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>Shard 2: Apr-Jun 2022  → quasi inattivo
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>Shard 3: Jul-Sep 2022  → quasi inattivo
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>Shard 4: Oct-Dec 2024  → 95% del traffico (dati recenti)
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>Shard 1: Jan-Jun 2023  → quasi inattivo
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>Shard 2: Jul-Dec 2023  → quasi inattivo
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>Shard 3: Jan-Jun 2024  → quasi inattivo
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>Shard 4: Jul-Dec 2024  → 95% del traffico (dati recenti)
 </span></code></pre></div>
 <h3 id="hash-sharding">Hash Sharding<a class="headerlink" href="#hash-sharding" title="Permanent link">&para;</a></h3>
 <p>Applica una funzione hash alla shard key per determinare lo shard di destinazione:</p>
@@ -25040,6 +25088,10 @@
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">shard_id</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="mi">67890</span><span class="p">)</span> <span class="o">%</span> <span class="mi">4</span>  <span class="err">→</span> <span class="n">shard</span> <span class="mi">0</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">shard_id</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="mi">11111</span><span class="p">)</span> <span class="o">%</span> <span class="mi">4</span>  <span class="err">→</span> <span class="n">shard</span> <span class="mi">3</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Il modulo non scala con il numero di shard</p>
+<p>Con <code>hash(k) % N</code>, passare da N a N+1 cambia lo shard di quasi <strong>tutte</strong> le chiavi (circa N/(N+1)): un resharding diventa una migrazione quasi totale. Per questo i sistemi reali usano consistent hashing o un numero elevato di slot/chunk fissi (es. 16384 hash slot in Redis Cluster) assegnati ai nodi. Nota: la funzione <code>hash()</code> built-in di Python non è stabile tra processi (randomizzazione); in produzione usare un hash deterministico (murmur3, xxhash, CRC).</p>
+</div>
 <p><strong>Vantaggio</strong>: distribuzione uniforme del carico — nessun hotspot per shard key con buona distribuzione.</p>
 <p><strong>Svantaggio</strong>: le range query diventano scatter-gather (devono interrogare tutti gli shard):</p>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1">-- Query range su hash-sharded table:</span>
@@ -25058,7 +25110,7 @@
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>  Solo le chiavi che erano assegnate a Nodo 3 nel range di Nodo 4 vengono spostate
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  → Spostamento minimo dei dati (1/N delle chiavi, con N nodi)
 </span></code></pre></div>
-<p>Usato da: Amazon DynamoDB (consistent hashing interno), Apache Cassandra (virtual nodes), Redis Cluster.</p>
+<p>Usato da: Apache Cassandra (token ring con virtual nodes), Dynamo (paper originale di Amazon, da cui deriva il modello; DynamoDB gestisce oggi il partizionamento in modo interno e trasparente). <strong>Redis Cluster</strong> non usa un ring vero e proprio: divide lo spazio in 16384 <em>hash slot</em> (<code>CRC16(key) mod 16384</code>) assegnati ai nodi, e lo resharding sposta slot interi. MongoDB usa invece chunk (range o hash) gestiti dal balancer.</p>
 <h3 id="directory-sharding">Directory Sharding<a class="headerlink" href="#directory-sharding" title="Permanent link">&para;</a></h3>
 <p>Una lookup table centralizzata mappa ogni chiave (o range) allo shard corretto:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Directory:
@@ -25070,7 +25122,7 @@
 <p><strong>Svantaggio</strong>: la directory è un single point of failure e un collo di bottiglia — ogni query deve prima consultare la directory. Richiede caching aggressivo.</p>
 <hr />
 <h2 id="scelta-della-shard-key-la-decisione-piu-critica">Scelta della Shard Key — La Decisione più Critica<a class="headerlink" href="#scelta-della-shard-key-la-decisione-piu-critica" title="Permanent link">&para;</a></h2>
-<p>La shard key è (quasi) permanente. Cambiarla richiede di riscrivere tutti i dati — un'operazione costosa e rischiosa.</p>
+<p>La shard key è (quasi) permanente. Cambiarla richiede di riscrivere tutti i dati — un'operazione costosa e rischiosa. Alcuni sistemi oggi la rendono fattibile online (MongoDB ≥ 5.0 <code>reshardCollection</code>, ≥ 4.4 <code>refineCollectionShardKey</code> per aggiungere suffissi), ma resta una copia completa del dataset: costo, tempo e carico aggiuntivo restano elevati.</p>
 <h3 id="criteri-di-valutazione">Criteri di valutazione<a class="headerlink" href="#criteri-di-valutazione" title="Permanent link">&para;</a></h3>
 <p><strong>1. Cardinalità</strong>: deve avere abbastanza valori distinti per distribuire su tutti gli shard. <code>user_id</code> (milioni di valori) ✓. <code>country</code> (200 valori) ✗.</p>
 <p><strong>2. Distribuzione</strong>: i valori devono essere distribuiti uniformemente. <code>user_id</code> con accesso uniforme ✓. <code>created_at</code> con accesso concentrato sui dati recenti ✗.</p>
@@ -25113,8 +25165,8 @@
 - Accettare che alcune operazioni siano "best-effort" con compensazione</p>
 <h3 id="secondary-indexes-su-database-shardati">Secondary Indexes su Database Shardati<a class="headerlink" href="#secondary-indexes-su-database-shardati" title="Permanent link">&para;</a></h3>
 <p>Gli indici secondari su sistemi shardati hanno due implementazioni:</p>
-<p><strong>Local secondary index</strong> (es. DynamoDB LSI, Cassandra): l'indice è sullo stesso shard dei dati. Query su indice secondario = scatter-gather su tutti gli shard.</p>
-<p><strong>Global secondary index</strong> (es. DynamoDB GSI, Vitess): l'indice ha la sua distribuzione indipendente. Query su indice secondario = 1 lookup. Costo: write amplification (ogni write aggiorna anche l'indice su un shard diverso, con eventual consistency).</p>
+<p><strong>Local (document-partitioned) index</strong> (es. indici secondari di Cassandra, MongoDB): ogni shard indicizza solo i propri dati. Scrittura economica (un solo shard), ma una query sull'indice senza shard key = scatter-gather su tutti gli shard. Nota: il DynamoDB LSI è un caso diverso — condivide la partition key della tabella e si interroga sempre dentro una singola partition.</p>
+<p><strong>Global (term-partitioned) index</strong> (es. DynamoDB GSI, lookup Vindex di Vitess): l'indice è distribuito indipendentemente dai dati, per valore indicizzato. Query su indice secondario = 1 lookup mirato. Costo: write amplification (ogni write aggiorna anche l'indice, su uno shard diverso). In DynamoDB il GSI è aggiornato in modo asincrono (eventual consistency); in Vitess il lookup Vindex è mantenuto nella stessa transazione/flusso di scrittura, con costo di una scrittura cross-shard.</p>
 <hr />
 <h2 id="resharding-la-sfida-operativa">Resharding — La Sfida Operativa<a class="headerlink" href="#resharding-la-sfida-operativa" title="Permanent link">&para;</a></h2>
 <p>Quando un shard cresce troppo o il carico è sbilanciato, è necessario fare resharding:</p>
@@ -25130,46 +25182,55 @@
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>  Shard 3:  5%  carico, 50GB
 </span></code></pre></div>
 <p>Il resharding richiede:
-1. Copiare i dati nel nuovo shard mantenendo entrambi in sync (doppia scrittura)
-2. Aggiornare la routing table
-3. Fermare le scritture sull'intervallo migrato (breve maintenance window) o usare CDC
-4. Verificare la consistenza
-5. Rimuovere i dati dal vecchio shard</p>
-<p><strong>Vitess</strong> (usato da YouTube, GitHub, Slack) automatizza il resharding orizzontale di MySQL con resharding online e senza downtime.</p>
+1. Copia snapshot dei dati dai vecchi ai nuovi shard (il vecchio shard continua a servire traffico)
+2. Sincronizzazione continua delle modifiche successive allo snapshot tramite CDC (Change Data Capture: lettura di binlog/WAL/oplog). Alternativa meno robusta: doppia scrittura applicativa, soggetta a divergenze
+3. Verifica di consistenza (diff dei dati tra sorgente e destinazione)
+4. Cutover: breve blocco delle scritture, aggiornamento della routing table, switch del traffico (con possibilità di reverse replication per il rollback)
+5. Rimozione dei dati dal vecchio shard</p>
+<p><strong>Vitess</strong> (usato da YouTube, Slack, GitHub per parti dell'infrastruttura) automatizza questo flusso su MySQL con i workflow <code>Reshard</code>/<code>MoveTables</code> basati su VReplication, con cutover di pochi secondi. Nei database sharded nativi (MongoDB, Cassandra, CockroachDB, TiDB, YugabyteDB, Spanner) lo split/rebalance dei chunk/range è invece continuo e gestito dal sistema.</p>
+<div class="admonition tip">
+<p class="admonition-title">Alternative con auto-sharding (NewSQL)</p>
+<p>I sistemi <em>distributed SQL</em> (CockroachDB, YugabyteDB, TiDB, Google Spanner) frammentano automaticamente i dati in range e li ribilanciano, con transazioni ACID distribuite. Eliminano gran parte del lavoro manuale di sharding applicativo, a fronte di latenza di commit più alta per le scritture cross-range e di un modello operativo diverso dal PostgreSQL/MySQL "classico".</p>
+</div>
 <hr />
 <h2 id="implementazioni-pratiche">Implementazioni Pratiche<a class="headerlink" href="#implementazioni-pratiche" title="Permanent link">&para;</a></h2>
 <h3 id="mongodb-sharding">MongoDB Sharding<a class="headerlink" href="#mongodb-sharding" title="Permanent link">&para;</a></h3>
 <p>MongoDB implementa sharding nativo con un cluster coordinator:</p>
-<div class="language-javascript highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1">// Abilita sharding sul database</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nx">sh</span><span class="p">.</span><span class="nx">enableSharding</span><span class="p">(</span><span class="s2">"myapp"</span><span class="p">)</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1">// Shard sulla collection ordini usando hashed shard key</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="nx">sh</span><span class="p">.</span><span class="nx">shardCollection</span><span class="p">(</span><span class="s2">"myapp.ordini"</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="s2">"tenant_id"</span><span class="o">:</span><span class="w"> </span><span class="s2">"hashed"</span><span class="w"> </span><span class="p">})</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1">// Verifica distribuzione</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="nx">db</span><span class="p">.</span><span class="nx">ordini</span><span class="p">.</span><span class="nx">getShardDistribution</span><span class="p">()</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="c1">// Output:</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="c1">// Shard shard0000: 33.2% degli chunk</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1">// Shard shard0001: 33.5% degli chunk</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1">// Shard shard0002: 33.3% degli chunk</span>
+<div class="language-javascript highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1">// Shard sulla collection ordini usando hashed shard key</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1">// (da MongoDB 6.0 sh.enableSharding() non è più necessario: shardCollection basta)</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nx">sh</span><span class="p">.</span><span class="nx">shardCollection</span><span class="p">(</span><span class="s2">"myapp.ordini"</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="s2">"tenant_id"</span><span class="o">:</span><span class="w"> </span><span class="s2">"hashed"</span><span class="w"> </span><span class="p">})</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1">// Verifica distribuzione di dati e documenti per shard</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="nx">db</span><span class="p">.</span><span class="nx">ordini</span><span class="p">.</span><span class="nx">getShardDistribution</span><span class="p">()</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1">// Cambiare shard key online (MongoDB ≥ 5.0): copia completa della collection</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="nx">db</span><span class="p">.</span><span class="nx">adminCommand</span><span class="p">({</span><span class="w"> </span><span class="nx">reshardCollection</span><span class="o">:</span><span class="w"> </span><span class="s2">"myapp.ordini"</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="s2">"tenant_id"</span><span class="o">:</span><span class="w"> </span><span class="mf">1</span><span class="p">,</span><span class="w"> </span><span class="s2">"created_at"</span><span class="o">:</span><span class="w"> </span><span class="mf">1</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">})</span>
 </span></code></pre></div>
+<p>Il <strong>balancer</strong> sposta automaticamente i chunk tra shard per equalizzare la distribuzione. Una hashed shard key evita hotspot da chiavi monotone ma rende le range query scatter-gather.</p>
 <h3 id="citus-postgresql-sharding">Citus (PostgreSQL Sharding)<a class="headerlink" href="#citus-postgresql-sharding" title="Permanent link">&para;</a></h3>
 <p>Citus è un'estensione PostgreSQL che aggiunge sharding trasparente:</p>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">-- Installa estensione</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">-- Installa estensione (richiede shared_preload_libraries = 'citus' e riavvio)</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">EXTENSION</span><span class="w"> </span><span class="n">citus</span><span class="p">;</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1">-- Crea tabella distribuita</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1">-- Crea tabella distribuita (hash sharding sulla distribution column)</span>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">create_distributed_table</span><span class="p">(</span><span class="s1">'ordini'</span><span class="p">,</span><span class="w"> </span><span class="s1">'tenant_id'</span><span class="p">);</span>
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1">-- Le query rimangono SQL standard</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="k">SELECT</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">),</span><span class="w"> </span><span class="k">SUM</span><span class="p">(</span><span class="n">importo</span><span class="p">)</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="k">FROM</span><span class="w"> </span><span class="n">ordini</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">tenant_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'acme'</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">status</span><span class="p">;</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="c1">-- → routing automatico al shard corretto</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1">-- Tabelle di piccole dimensioni replicate su tutti i nodi (per join locali)</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">create_reference_table</span><span class="p">(</span><span class="s1">'paesi'</span><span class="p">);</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1">-- Dopo aver aggiunto worker: ribilanciare gli shard</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">citus_rebalance_start</span><span class="p">();</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="c1">-- Le query rimangono SQL standard</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="k">SELECT</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">),</span><span class="w"> </span><span class="k">SUM</span><span class="p">(</span><span class="n">importo</span><span class="p">)</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="k">FROM</span><span class="w"> </span><span class="n">ordini</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">tenant_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'acme'</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">status</span><span class="p">;</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="c1">-- → routing automatico al shard corretto</span>
 </span></code></pre></div>
+<p>Le tabelle <strong>co-locate</strong> (stessa distribution column, <code>colocate_with</code>) permettono join e transazioni locali a un singolo shard. Citus è open source ed è la base di Azure Cosmos DB for PostgreSQL; dalla 12 supporta anche lo <em>schema-based sharding</em> (un tenant = uno schema).</p>
 <h3 id="dynamodb-partitioning">DynamoDB Partitioning<a class="headerlink" href="#dynamodb-partitioning" title="Permanent link">&para;</a></h3>
-<p>DynamoDB gestisce il sharding automaticamente (transparent partitioning) basandosi sulla partition key. Il limite è <strong>3000 RCU e 1000 WCU per partition</strong>.</p>
+<p>DynamoDB gestisce il sharding automaticamente (transparent partitioning) basandosi sulla partition key. Il limite è <strong>3000 RCU e 1000 WCU per partition</strong> (e ~10 GB per partition). L'<em>adaptive capacity</em> e lo split automatico per throughput mitigano gli hotspot, ma una singola partition key resta vincolata a questi limiti: una chiave molto "calda" va comunque distribuita.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Evitare hot partitions in DynamoDB</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># Pattern: aggiungere un suffisso random alla partition key</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
@@ -25198,17 +25259,19 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># MongoDB: verificare distribuzione degli chunk</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>mongosh<span class="w"> </span>--eval<span class="w"> </span><span class="s2">"db.ordini.getShardDistribution()"</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># DynamoDB: monitorare consumed capacity per partition</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>aws<span class="w"> </span>cloudwatch<span class="w"> </span>get-metric-statistics<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span>--namespace<span class="w"> </span>AWS/DynamoDB<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">  </span>--metric-name<span class="w"> </span>ConsumedWriteCapacityUnits<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span>--dimensions<span class="w"> </span><span class="nv">Name</span><span class="o">=</span>TableName,Value<span class="o">=</span>ordini<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">  </span>--period<span class="w"> </span><span class="m">60</span><span class="w"> </span>--statistics<span class="w"> </span>Sum<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">  </span>--start-time<span class="w"> </span><span class="m">2024</span>-01-01T00:00:00Z<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">  </span>--end-time<span class="w"> </span><span class="m">2024</span>-01-01T01:00:00Z
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="c1"># Vitess: ispezionare distribuzione tablet</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>vtctlclient<span class="w"> </span>GetShard<span class="w"> </span>ks/0
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># DynamoDB: consumo a livello di tabella (per le chiavi più calde usare</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># CloudWatch Contributor Insights for DynamoDB)</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>aws<span class="w"> </span>cloudwatch<span class="w"> </span>get-metric-statistics<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">  </span>--namespace<span class="w"> </span>AWS/DynamoDB<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span>--metric-name<span class="w"> </span>ConsumedWriteCapacityUnits<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">  </span>--dimensions<span class="w"> </span><span class="nv">Name</span><span class="o">=</span>TableName,Value<span class="o">=</span>ordini<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">  </span>--period<span class="w"> </span><span class="m">60</span><span class="w"> </span>--statistics<span class="w"> </span>Sum<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">  </span>--start-time<span class="w"> </span><span class="m">2024</span>-01-01T00:00:00Z<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="w">  </span>--end-time<span class="w"> </span><span class="m">2024</span>-01-01T01:00:00Z
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="c1"># Vitess: elenco shard e stato del keyspace</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>vtctldclient<span class="w"> </span>GetShard<span class="w"> </span>ks/-80
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>vtctldclient<span class="w"> </span>GetKeyspace<span class="w"> </span>ks
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-scatter-gather-con-latenza-inaccettabile">Scenario 2 — Scatter-Gather con latenza inaccettabile<a class="headerlink" href="#scenario-2-scatter-gather-con-latenza-inaccettabile" title="Permanent link">&para;</a></h3>
@@ -25231,48 +25294,57 @@
 <hr />
 <h3 id="scenario-3-resharding-bloccato-o-dati-inconsistenti-post-migrazione">Scenario 3 — Resharding bloccato o dati inconsistenti post-migrazione<a class="headerlink" href="#scenario-3-resharding-bloccato-o-dati-inconsistenti-post-migrazione" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo</strong>: dopo un resharding, alcune query restituiscono risultati mancanti o duplicati. Oppure il processo di migrazione non avanza.</p>
-<p><strong>Causa</strong>: mancata sincronizzazione tra la doppia scrittura (vecchio e nuovo shard) e l'aggiornamento della routing table. Race condition durante il cutover.</p>
-<p><strong>Soluzione</strong>: usare un periodo di doppia scrittura verificato, validare la count dei record prima del cutover, e usare CDC (Change Data Capture) per garantire la sync.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Vitess: monitorare stato resharding</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>vtctlclient<span class="w"> </span>VReplicationExec<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span>&lt;tablet-alias&gt;<span class="w"> </span><span class="s2">"select * from _vt.vreplication"</span>
+<p><strong>Causa</strong>: replica CDC in ritardo o interrotta, oppure cutover eseguito prima che la sincronizzazione fosse completa; routing table aggiornata in modo non atomico (race condition durante il cutover); con doppia scrittura applicativa, divergenza tra le due copie.</p>
+<p><strong>Soluzione</strong>: monitorare il lag di replica, eseguire un diff dei dati prima del cutover e usare un tool che gestisca CDC e switch del traffico in modo coordinato (nessuna doppia scrittura manuale).</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Vitess (vtctldclient; vtctlclient è deprecato): stato del workflow di resharding</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>vtctldclient<span class="w"> </span>Reshard<span class="w"> </span>--target-keyspace<span class="w"> </span>ks<span class="w"> </span>--workflow<span class="w"> </span>reshard1<span class="w"> </span>show
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>vtctldclient<span class="w"> </span>Reshard<span class="w"> </span>--target-keyspace<span class="w"> </span>ks<span class="w"> </span>--workflow<span class="w"> </span>reshard1<span class="w"> </span>status
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1"># Verificare che i dati siano in sync prima del cutover</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="c1"># (confronto count su vecchio vs nuovo shard)</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>vtctlclient<span class="w"> </span>VDiff<span class="w"> </span>&lt;keyspace&gt;/&lt;workflow&gt;
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1"># Verifica che i dati coincidano prima del cutover</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>vtctldclient<span class="w"> </span>VDiff<span class="w"> </span>--target-keyspace<span class="w"> </span>ks<span class="w"> </span>--workflow<span class="w"> </span>reshard1<span class="w"> </span>create
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>vtctldclient<span class="w"> </span>VDiff<span class="w"> </span>--target-keyspace<span class="w"> </span>ks<span class="w"> </span>--workflow<span class="w"> </span>reshard1<span class="w"> </span>show<span class="w"> </span>last
 </span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="c1"># In caso di errore, rollback al vecchio shard</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>vtctlclient<span class="w"> </span>CancelResharding<span class="w"> </span>&lt;keyspace&gt;
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="c1"># MongoDB: stato della migrazione chunk</span>
-</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>mongosh<span class="w"> </span>--eval<span class="w"> </span><span class="s2">"sh.status()"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"currently running"</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="c1"># Cutover; se qualcosa va storto, reverse-traffic o cancel (prima di complete)</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>vtctldclient<span class="w"> </span>Reshard<span class="w"> </span>--target-keyspace<span class="w"> </span>ks<span class="w"> </span>--workflow<span class="w"> </span>reshard1<span class="w"> </span>switchtraffic
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>vtctldclient<span class="w"> </span>Reshard<span class="w"> </span>--target-keyspace<span class="w"> </span>ks<span class="w"> </span>--workflow<span class="w"> </span>reshard1<span class="w"> </span>reversetraffic
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>vtctldclient<span class="w"> </span>Reshard<span class="w"> </span>--target-keyspace<span class="w"> </span>ks<span class="w"> </span>--workflow<span class="w"> </span>reshard1<span class="w"> </span>cancel
+</span></code></pre></div>
+<div class="language-javascript highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1">// MongoDB: stato di balancer e migrazioni di chunk</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nx">sh</span><span class="p">.</span><span class="nx">status</span><span class="p">()</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="nx">sh</span><span class="p">.</span><span class="nx">isBalancerRunning</span><span class="p">()</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1">// reshardCollection in corso:</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="nx">db</span><span class="p">.</span><span class="nx">getSiblingDB</span><span class="p">(</span><span class="s2">"admin"</span><span class="p">).</span><span class="nx">aggregate</span><span class="p">([{</span><span class="w"> </span><span class="nx">$currentOp</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">allUsers</span><span class="o">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nx">localOps</span><span class="o">:</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">$match</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">type</span><span class="o">:</span><span class="w"> </span><span class="s2">"op"</span><span class="p">,</span><span class="w"> </span><span class="s2">"originatingCommand.reshardCollection"</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">$exists</span><span class="o">:</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}])</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-transazione-cross-shard-fallita-parzialmente">Scenario 4 — Transazione cross-shard fallita parzialmente<a class="headerlink" href="#scenario-4-transazione-cross-shard-fallita-parzialmente" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo</strong>: un'operazione che aggiorna dati su più shard lascia il sistema in uno stato inconsistente (una parte eseguita, l'altra no).</p>
 <p><strong>Causa</strong>: assenza di coordinamento transazionale distribuito. Il 2PC non è supportato dal middleware, oppure uno shard è temporaneamente irraggiungibile.</p>
 <p><strong>Soluzione</strong>: implementare il pattern Saga con compensating transactions, oppure ridisegnare il modello dati per collocare i dati correlati sullo stesso shard.</p>
-<p>```python</p>
-<h1 id="saga-pattern-con-compensating-transaction">Saga pattern con compensating transaction<a class="headerlink" href="#saga-pattern-con-compensating-transaction" title="Permanent link">&para;</a></h1>
-<p>def trasferisci_ordine(order_id, from_tenant, to_tenant):
-    try:
-        # Step 1: aggiorna shard del tenant sorgente
-        shard_from.execute(
-            "UPDATE ordini SET tenant_id = %s WHERE id = %s",
-            (to_tenant, order_id)
-        )
-        # Step 2: aggiorna shard del tenant destinazione
-        shard_to.execute(
-            "INSERT INTO ordini_log VALUES (%s, %s, NOW())",
-            (order_id, to_tenant)
-        )
-    except Exception as e:
-        # Compensating transaction: annulla step 1
-        shard_from.execute(
-            "UPDATE ordini SET tenant_id = %s WHERE id = %s",
-            (from_tenant, order_id)
-        )
-        raise</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Saga pattern con compensating transaction</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">trasferisci_ordine</span><span class="p">(</span><span class="n">order_id</span><span class="p">,</span> <span class="n">from_tenant</span><span class="p">,</span> <span class="n">to_tenant</span><span class="p">):</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="n">step1_done</span> <span class="o">=</span> <span class="kc">False</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>        <span class="c1"># Step 1: aggiorna shard del tenant sorgente</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>        <span class="n">shard_from</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>            <span class="s2">"UPDATE ordini SET tenant_id = </span><span class="si">%s</span><span class="s2"> WHERE id = </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>            <span class="p">(</span><span class="n">to_tenant</span><span class="p">,</span> <span class="n">order_id</span><span class="p">)</span>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>        <span class="p">)</span>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>        <span class="n">step1_done</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>        <span class="c1"># Step 2: aggiorna shard del tenant destinazione</span>
+</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>        <span class="n">shard_to</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>            <span class="s2">"INSERT INTO ordini_log VALUES (</span><span class="si">%s</span><span class="s2">, </span><span class="si">%s</span><span class="s2">, NOW())"</span><span class="p">,</span>
+</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>            <span class="p">(</span><span class="n">order_id</span><span class="p">,</span> <span class="n">to_tenant</span><span class="p">)</span>
+</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>        <span class="p">)</span>
+</span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+</span><span id="__span-17-17"><a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a>        <span class="c1"># Compensating transaction: annulla step 1 solo se è stato eseguito.</span>
+</span><span id="__span-17-18"><a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>        <span class="c1"># Deve essere idempotente e ritentabile (anche la compensazione può fallire).</span>
+</span><span id="__span-17-19"><a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a>        <span class="k">if</span> <span class="n">step1_done</span><span class="p">:</span>
+</span><span id="__span-17-20"><a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a>            <span class="n">shard_from</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+</span><span id="__span-17-21"><a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a>                <span class="s2">"UPDATE ordini SET tenant_id = </span><span class="si">%s</span><span class="s2"> WHERE id = </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span>
+</span><span id="__span-17-22"><a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a>                <span class="p">(</span><span class="n">from_tenant</span><span class="p">,</span> <span class="n">order_id</span><span class="p">)</span>
+</span><span id="__span-17-23"><a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a>            <span class="p">)</span>
+</span><span id="__span-17-24"><a id="__codelineno-17-24" name="__codelineno-17-24" href="#__codelineno-17-24"></a>        <span class="k">raise</span>
+</span></code></pre></div>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
 <summary>Partitioning SQL — Partizionamento locale</summary>
@@ -25283,6 +25355,11 @@
 <summary>Cassandra — Sharding nativo con consistent hashing</summary>
 <p>Come Cassandra distribuisce i dati con virtual nodes.</p>
 <p><strong>Approfondimento →</strong> <a href="../../nosql/cassandra/">Cassandra</a></p>
+</details>
+<details class="info">
+<summary>MongoDB — Sharded cluster</summary>
+<p>Architettura mongos/config server/shard, chunk e balancer.</p>
+<p><strong>Approfondimento →</strong> <a href="../../nosql/mongodb/">MongoDB</a></p>
 </details>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>

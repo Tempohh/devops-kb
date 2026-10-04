@@ -12296,7 +12296,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12331,7 +12331,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13660,7 +13660,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24605,7 +24605,7 @@
 <ul>
 <li><strong>Migration idempotente</strong>: può essere eseguita più volte senza produrre errori o doppi effetti (es. <code>CREATE TABLE IF NOT EXISTS</code>). Fondamentale quando le migration girano da init container Kubernetes che può ripartire dopo un crash parziale — vedi <a href="../../../dev/integrazioni/database-patterns/">Database Patterns — Init Container</a>.</li>
 <li><strong>Locking</strong>: meccanismo che impedisce a due processi di applicare la stessa migration in parallelo (es. due pod che partono contemporaneamente). Senza locking, una migration <code>ADD COLUMN</code> può essere tentata due volte in race e fallire con errori inconsistenti tra i pod.</li>
-<li><strong>Drift detection</strong>: rilevare che lo schema reale del database si è discostato da quello atteso (es. una modifica manuale fatta a mano da un DBA in produzione, non passata dal tool). Solo gli strumenti declarativi con introspection nativa (Atlas) lo fanno in automatico; con Flyway/golang-migrate serve tooling esterno o disciplina operativa.</li>
+<li><strong>Drift detection</strong>: rilevare che lo schema reale del database si è discostato da quello atteso (es. una modifica manuale fatta a mano da un DBA in produzione, non passata dal tool). Atlas lo fa nativamente (introspection + diff semantico); Liquibase lo copre manualmente via <code>diff</code>; con Flyway Community/golang-migrate serve tooling esterno o disciplina operativa.</li>
 <li><strong>Rollback (migration "down")</strong>: la capacità di annullare una migration applicata. È il punto di maggiore trade-off tra i tool, approfondito sotto.</li>
 </ul>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
@@ -24614,7 +24614,7 @@
 <li>Una tabella di controllo nel database stesso (es. <code>flyway_schema_history</code>, <code>schema_migrations</code>, <code>atlas_schema_revisions</code>) registra quali migration sono state applicate, con checksum e timestamp.</li>
 <li>All'avvio, il tool confronta i file di migration presenti con le righe della tabella di controllo.</li>
 <li>Applica solo le migration mancanti, in ordine di versione, ciascuna dentro una transazione (dove il DB lo supporta — DDL transazionale è nativo in PostgreSQL, non in MySQL).</li>
-<li>Se una migration fallisce a metà, lo stato viene marcato come "failed" (Flyway) o la transazione viene rollbackata (PostgreSQL) — MySQL invece può lasciare uno stato parziale perché molte DDL fanno commit implicito.</li>
+<li>Se una migration fallisce a metà, su PostgreSQL la transazione viene rollbackata e lo schema resta pulito — MySQL invece può lasciare uno stato parziale perché molte DDL fanno commit implicito. In quel caso Flyway registra la riga come <code>failed</code> (da sistemare con <code>flyway repair</code> dopo aver ripulito a mano lo schema) e golang-migrate marca il database <strong>dirty</strong>, rifiutando ulteriori <code>up</code> finché non si corregge lo schema e si usa <code>migrate force &lt;versione&gt;</code>.</li>
 </ol>
 <p>Atlas inverte il flusso: non parte dai file storici ma calcola sempre il diff tra <strong>stato desiderato</strong> (schema HCL/SQL dichiarato) e <strong>stato reale</strong> (introspezione live del database), poi genera il piano di migrazione al volo. Questo elimina la deriva tra "quello che pensiamo sia lo schema" e "quello che è davvero" — ma richiede più fiducia nel motore di diffing per DDL complesse (rename ambigui, split di colonne).</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Versioned (Flyway / golang-migrate)
@@ -24627,7 +24627,7 @@
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Locking non è garantito ovunque</p>
-<p>Flyway usa un lock a livello di tabella di controllo (advisory lock su PostgreSQL) di default. golang-migrate NON ha locking robusto su tutti i backend — su alcuni driver due processi paralleli possono correre in race. Se le migration girano da più pod contemporaneamente (rolling deploy con più repliche che partono insieme), verificare esplicitamente il comportamento di lock del tool scelto o serializzare l'esecuzione con un init container unico / Kubernetes Job con <code>parallelism: 1</code>.</p>
+<p>Flyway usa un lock a livello di tabella di controllo (advisory lock su PostgreSQL) di default. golang-migrate implementa il lock per driver (es. advisory lock su PostgreSQL, <code>GET_LOCK</code> su MySQL) ma non in modo uniforme su tutti i backend — dove manca, due processi paralleli possono correre in race. Se le migration girano da più pod contemporaneamente (rolling deploy con più repliche che partono insieme), verificare esplicitamente il comportamento di lock del tool scelto o serializzare l'esecuzione con un init container unico / Kubernetes Job con <code>parallelism: 1</code>.</p>
 </div>
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <p>Stessa modifica — <strong>aggiungere una colonna NOT NULL con default</strong> su una tabella <code>users</code> — espressa nei tre tool.</p>
@@ -24644,13 +24644,16 @@
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Verifica stato senza applicare</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>flyway<span class="w"> </span>-url<span class="o">=</span>jdbc:postgresql://localhost:5432/app<span class="w"> </span>info
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Rollback: SOLO in Flyway Teams (a pagamento) con `flyway undo`</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Rollback: SOLO in edizione a pagamento (Teams/Enterprise) con `flyway undo`</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># In Community: si scrive una nuova migration V5 che fa DROP COLUMN o inverte</span>
 </span></code></pre></div>
 <div class="language-ini highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># flyway.conf</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="na">flyway.url</span><span class="o">=</span><span class="s">jdbc:postgresql://localhost:5432/app</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="na">flyway.locations</span><span class="o">=</span><span class="s">filesystem:./sql/migrations</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="na">flyway.baselineOnMigrate</span><span class="o">=</span><span class="s">true</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># baselineOnMigrate: serve SOLO per adottare Flyway su un DB già popolato</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># (crea la baseline alla prima esecuzione). Su DB nuovi lasciarlo false:</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># con true, un DB non vuoto senza history verrebbe "adottato" senza errori.</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="na">flyway.baselineOnMigrate</span><span class="o">=</span><span class="s">true</span>
 </span></code></pre></div>
 <h3 id="liquibase-changelog-con-modalita-diff-opzionale">Liquibase (changelog, con modalità diff opzionale)<a class="headerlink" href="#liquibase-changelog-con-modalita-diff-opzionale" title="Permanent link">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># changelog/004-add-status-to-users.yaml</span>
@@ -24679,32 +24682,36 @@
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Rollback dell'ultimo changeset applicato — supportato nativamente</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># SE il rollback è stato dichiarato esplicitamente nel changeset (come sopra)</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>liquibase<span class="w"> </span>rollback-one-changeset<span class="w"> </span>--changeset-id<span class="o">=</span><span class="m">004</span>-add-status<span class="w"> </span>--changeset-author<span class="o">=</span>andrea
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Modalità diff (stato-based, opzionale): genera un changelog dal confronto</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># tra due database o tra un database e uno schema di riferimento</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>liquibase<span class="w"> </span>diff-changelog<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>--reference-url<span class="o">=</span>jdbc:postgresql://localhost/app_target<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span>--url<span class="o">=</span>jdbc:postgresql://localhost/app_current<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">  </span>--changelog-file<span class="o">=</span>changelog/005-generated-diff.yaml
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>liquibase<span class="w"> </span>--changelog-file<span class="o">=</span>changelog/db.changelog-master.yaml<span class="w"> </span>rollback-count<span class="w"> </span><span class="m">1</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># (rollback-one-changeset esiste solo in edizione Pro; in Community usare</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1">#  rollback-count N, rollback --tag=X oppure rollback-to-date)</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># Modalità diff (stato-based, opzionale): genera un changelog dal confronto</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1"># tra due database o tra un database e uno schema di riferimento</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>liquibase<span class="w"> </span>diff-changelog<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">  </span>--reference-url<span class="o">=</span>jdbc:postgresql://localhost/app_target<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">  </span>--url<span class="o">=</span>jdbc:postgresql://localhost/app_current<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span>--changelog-file<span class="o">=</span>changelog/005-generated-diff.yaml
 </span></code></pre></div>
 <h3 id="atlas-declarative-drift-detection-nativo">Atlas (declarative, drift detection nativo)<a class="headerlink" href="#atlas-declarative-drift-detection-nativo" title="Permanent link">&para;</a></h3>
 <div class="language-hcl highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># schema.hcl — stato DESIDERATO, non uno script incrementale</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="err">table</span><span class="w"> </span><span class="s2">"users"</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="na">schema</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">schema.public</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="err">column</span><span class="w"> </span><span class="s2">"id"</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="na">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">int</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="nb">identity</span><span class="w"> </span><span class="p">{}</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span><span class="err">column</span><span class="w"> </span><span class="s2">"status"</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="na">type</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="err">varchar</span><span class="p">(</span><span class="m">20</span><span class="p">)</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="na">null</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="no">false</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="na">default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"active"</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span><span class="nb">primary_key</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="na">columns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="nv">column.id</span><span class="p">]</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span><span class="p">}</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="p">}</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="err">schema</span><span class="w"> </span><span class="s2">"public"</span><span class="w"> </span><span class="p">{}</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="err">table</span><span class="w"> </span><span class="s2">"users"</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span><span class="na">schema</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">schema.public</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span><span class="err">column</span><span class="w"> </span><span class="s2">"id"</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="na">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">int</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="nb">identity</span><span class="w"> </span><span class="p">{}</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">  </span><span class="err">column</span><span class="w"> </span><span class="s2">"status"</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="na">type</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="err">varchar</span><span class="p">(</span><span class="m">20</span><span class="p">)</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span><span class="na">null</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="no">false</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span><span class="na">default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"active"</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span><span class="nb">primary_key</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">    </span><span class="na">columns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="nv">column.id</span><span class="p">]</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">  </span><span class="p">}</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="p">}</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Atlas calcola il diff tra schema.hcl e lo stato reale del DB, genera il piano</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>atlas<span class="w"> </span>schema<span class="w"> </span>apply<span class="w"> </span><span class="se">\</span>
@@ -24717,13 +24724,15 @@
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span>--url<span class="w"> </span><span class="s2">"postgres://app:***@localhost:5432/app?sslmode=disable"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span>--to<span class="w"> </span><span class="s2">"file://schema.hcl"</span>
 </span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># Drift detection: confronta lo stato reale con l'ultima versione tracciata</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>atlas<span class="w"> </span>schema<span class="w"> </span>inspect<span class="w"> </span>--url<span class="w"> </span><span class="s2">"postgres://app:***@localhost:5432/app"</span><span class="w"> </span>&gt;<span class="w"> </span>current.hcl
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>diff<span class="w"> </span>current.hcl<span class="w"> </span>schema.hcl<span class="w">   </span><span class="c1"># differenze = drift, es. modifiche manuali non tracciate</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="c1"># "Rollback" in Atlas = riapplicare uno schema.hcl precedente (versionato in git)</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>git<span class="w"> </span>checkout<span class="w"> </span>HEAD~1<span class="w"> </span>--<span class="w"> </span>schema.hcl
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>atlas<span class="w"> </span>schema<span class="w"> </span>apply<span class="w"> </span>--url<span class="w"> </span><span class="s2">"postgres://..."</span><span class="w"> </span>--to<span class="w"> </span><span class="s2">"file://schema.hcl"</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># Drift detection: diff semantico tra stato reale e schema dichiarato</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># (output vuoto / "Schemas are synced" = nessun drift)</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>atlas<span class="w"> </span>schema<span class="w"> </span>diff<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">  </span>--from<span class="w"> </span><span class="s2">"postgres://app:***@localhost:5432/app?sslmode=disable"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">  </span>--to<span class="w"> </span><span class="s2">"file://schema.hcl"</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="c1"># "Rollback" in Atlas = riapplicare uno schema.hcl precedente (versionato in git)</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>git<span class="w"> </span>checkout<span class="w"> </span>HEAD~1<span class="w"> </span>--<span class="w"> </span>schema.hcl
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>atlas<span class="w"> </span>schema<span class="w"> </span>apply<span class="w"> </span>--url<span class="w"> </span><span class="s2">"postgres://..."</span><span class="w"> </span>--to<span class="w"> </span><span class="s2">"file://schema.hcl"</span>
 </span></code></pre></div>
 <h3 id="golang-migrate-versioned-minimale-multi-driver">golang-migrate (versioned, minimale, multi-driver)<a class="headerlink" href="#golang-migrate-versioned-minimale-multi-driver" title="Permanent link">&para;</a></h3>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">-- migrations/000004_add_status_to_users.up.sql</span>
@@ -24747,21 +24756,22 @@
 <ul>
 <li><strong>Migration additive prima, distruttive dopo (expand &amp; contract)</strong>: per zero-downtime, separare "aggiungi colonna nullable" (deploy 1) da "rendi NOT NULL e rimuovi la vecchia colonna" (deploy successivo, dopo che tutto il traffico usa la nuova colonna). Questo evita che un vecchio pod, ancora in rolling update, scriva contro uno schema che non conosce.</li>
 <li><strong>Mai modificare una migration già applicata in produzione</strong>: se un file versioned cambia dopo essere stato eseguito, il checksum non corrisponde più e Flyway/golang-migrate falliscono (comportamento corretto, non un bug da bypassare con <code>repair</code> senza capire perché).</li>
-<li><strong>Serializzare l'esecuzione in Kubernetes</strong>: init container con <code>replicas: 1</code> implicito nel Job, oppure lock applicativo esplicito (advisory lock PostgreSQL) se più pod potrebbero partire in parallelo — vedi <a href="../../../dev/integrazioni/database-patterns/">Database Patterns</a>.</li>
+<li><strong>Serializzare l'esecuzione in Kubernetes</strong>: eseguire le migration in un singolo <code>Job</code> (<code>completions: 1</code>, <code>parallelism: 1</code>) prima del rollout, oppure usare un lock applicativo esplicito (advisory lock PostgreSQL) se più pod potrebbero partire in parallelo — vedi <a href="../../../dev/integrazioni/database-patterns/">Database Patterns</a>.</li>
+<li><strong>DDL a basso impatto di lock (PostgreSQL)</strong>: <code>ALTER TABLE</code> richiede <code>ACCESS EXCLUSIVE</code> e si accoda dietro query lunghe, bloccando tutte le successive. Impostare <code>SET lock_timeout = '5s'</code> nella migration per fallire in fretta invece di bloccare il traffico. <code>SET NOT NULL</code> su tabelle grandi fa una scansione completa sotto lock: da PG 12 aggiungere prima <code>CHECK (col IS NOT NULL) NOT VALID</code>, poi <code>VALIDATE CONSTRAINT</code> (lock leggero), poi <code>SET NOT NULL</code> (che riusa il check). Un <code>ADD COLUMN ... DEFAULT &lt;costante&gt;</code> è invece solo metadata da PG 11.</li>
 <li><strong>Committare <code>schema.hcl</code> (Atlas) o le directory <code>migrations/</code> in git insieme al codice applicativo</strong>: la versione dello schema deve essere tracciabile allo stesso commit del codice che la richiede.</li>
 </ul>
 <div class="admonition tip">
 <p class="admonition-title">Scegliere in base al rollback che serve davvero</p>
-<p>Se il rollback automatico è un requisito hard (compliance, cambio frequente di piani), Liquibase con rollback dichiarati esplicitamente o Flyway Teams sono le uniche opzioni pronte all'uso senza scrivere script "down" a mano. Se il team è disciplinato nello scrivere <code>.down.sql</code> per ogni migration, golang-migrate è la scelta più leggera. Se serve drift detection continuo su ambienti dove qualcuno potrebbe intervenire manualmente sul DB, solo Atlas lo copre nativamente.</p>
+<p>Se il rollback automatico è un requisito hard (compliance, cambio frequente di piani), Liquibase con rollback dichiarati esplicitamente o Flyway a pagamento (Teams/Enterprise) sono le uniche opzioni pronte all'uso senza scrivere script "down" a mano. Se il team è disciplinato nello scrivere <code>.down.sql</code> per ogni migration, golang-migrate è la scelta più leggera. Se serve drift detection continuo su ambienti dove qualcuno potrebbe intervenire manualmente sul DB, solo Atlas lo copre nativamente.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Flyway Community non fa rollback automatico</p>
-<p>È il trade-off più sottovalutato: un team che sceglie Flyway (community, gratuito) assumendo di poter fare <code>flyway undo</code> come con Liquibase scopre solo in un incidente che quel comando è a pagamento (Teams edition). Il piano di rollback per Flyway Community è sempre "scrivi e applica una nuova migration forward che inverte l'effetto" — va progettato PRIMA, non improvvisato durante un incidente.</p>
+<p>È il trade-off più sottovalutato: un team che sceglie Flyway (community, gratuito) assumendo di poter fare <code>flyway undo</code> come con Liquibase scopre solo in un incidente che quel comando è a pagamento (edizione Teams nella documentazione del comando; il sito Redgate oggi promuove Community ed Enterprise, con undo script generati automaticamente — verificare il nome dell'edizione sul proprio contratto). Il piano di rollback per Flyway Community è sempre "scrivi e applica una nuova migration forward che inverte l'effetto" — va progettato PRIMA, non improvvisato durante un incidente.</p>
 </div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-due-pod-applicano-la-stessa-migration-in-parallelo-race-condition">Scenario 1 — Due pod applicano la stessa migration in parallelo (race condition)<a class="headerlink" href="#scenario-1-due-pod-applicano-la-stessa-migration-in-parallelo-race-condition" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo</strong>: errore <code>duplicate column</code> o <code>relation already exists</code> durante un rolling deploy con più repliche, migration falliscono in modo intermittente.</p>
-<p><strong>Causa</strong>: più init container/pod partono nella stessa finestra temporale e tentano di applicare le migration pendenti senza lock effettivo (tipico con golang-migrate su driver che non implementano advisory lock).</p>
+<p><strong>Causa</strong>: più init container/pod partono nella stessa finestra temporale e tentano di applicare le migration pendenti senza lock effettivo (tipico con golang-migrate su driver senza lock, o con tool/script custom che non ne usano).</p>
 <p><strong>Soluzione</strong>: spostare l'esecuzione della migration in un <code>Job</code> Kubernetes dedicato con <code>completions: 1</code>, eseguito come step separato prima del rollout del Deployment, invece che in ogni init container di ogni pod.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">batch/v1</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Job</span>
@@ -24788,8 +24798,10 @@
 <p><strong>Sintomo</strong>: un DBA ha eseguito manualmente un <code>ALTER TABLE</code> in produzione per un fix urgente; la prossima migration applicata da golang-migrate o Flyway non fallisce, ma lo schema risultante è inconsistente con gli altri ambienti.</p>
 <p><strong>Causa</strong>: i tool versioned non fanno introspection dello stato reale — si fidano ciecamente della tabella di controllo, non verificano che lo schema corrisponda a quanto atteso.</p>
 <p><strong>Soluzione</strong>: con Atlas, eseguire <code>atlas schema inspect</code> periodicamente (o in CI) e confrontare con lo schema dichiarato per rilevare drift; con Flyway/golang-migrate, introdurre un controllo esterno (script di introspection schedulato) perché il drift detection non è nativo.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>atlas<span class="w"> </span>schema<span class="w"> </span>inspect<span class="w"> </span>--url<span class="w"> </span><span class="s2">"postgres://app:***@prod-host:5432/app"</span><span class="w"> </span>&gt;<span class="w"> </span>/tmp/prod-actual.hcl
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>diff<span class="w"> </span>/tmp/prod-actual.hcl<span class="w"> </span>schema.hcl<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"no drift"</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">"DRIFT RILEVATO"</span>
+<p>Il <code>diff</code> testuale tra output di <code>inspect</code> e <code>schema.hcl</code> genera falsi positivi (ordine/formattazione): usare il diff semantico di Atlas.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>atlas<span class="w"> </span>schema<span class="w"> </span>diff<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>--from<span class="w"> </span><span class="s2">"postgres://app:***@prod-host:5432/app?sslmode=disable"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>--to<span class="w"> </span><span class="s2">"file://schema.hcl"</span>
 </span></code></pre></div>
 <h3 id="scenario-4-migration-not-null-fallisce-su-tabella-con-dati-esistenti">Scenario 4 — Migration NOT NULL fallisce su tabella con dati esistenti<a class="headerlink" href="#scenario-4-migration-not-null-fallisce-su-tabella-con-dati-esistenti" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo</strong>: <code>ALTER TABLE users ADD COLUMN status VARCHAR(20) NOT NULL</code> fallisce con <code>column "status" contains null values</code> (o equivalente) su una tabella già popolata, indipendentemente dal tool usato.</p>
