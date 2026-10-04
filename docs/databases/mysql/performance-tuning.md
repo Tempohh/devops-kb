@@ -6,10 +6,11 @@ tags: [mysql, mariadb, innodb, performance, explain, optimizer, indici, tuning]
 search_keywords: [mysql explain, explain format json, explain analyze mysql, optimizer trace, possible_keys, key_len, using filesort, using temporary, using index, clustered index innodb, secondary index lookup, nested loop join mysql, hash join mysql, innodb buffer pool tuning, adaptive hash index, slow query log, pt-query-digest, percona toolkit, covering index mysql, index merge, sys schema, performance_schema, query optimization mysql, innodb_buffer_pool_size]
 parent: databases/mysql/_index
 related: [databases/sql-avanzato/query-optimizer, databases/fondamentali/indici, databases/mysql/architettura-replicazione]
-official_docs: https://dev.mysql.com/doc/refman/8.0/en/optimization.html
-status: complete
+official_docs: https://dev.mysql.com/doc/refman/8.4/en/optimization.html
+status: reviewed
 difficulty: advanced
-last_updated: 2026-09-27
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # MySQL — Performance Tuning e Query Optimizer
@@ -17,6 +18,9 @@ last_updated: 2026-09-27
 ## Panoramica
 
 Questa pagina copre come diagnosticare e risolvere query lente su MySQL/MariaDB con InnoDB: lettura di `EXPLAIN` e `EXPLAIN FORMAT=JSON`, ispezione delle decisioni del planner con `optimizer_trace`, differenze tra clustered index (PK) e indici secondari, algoritmi di join disponibili (nested loop, hash join da 8.0.18), tuning del buffer pool InnoDB e triage con slow query log / `pt-query-digest`. Il modello di costo e gli strumenti di analisi di MySQL sono strutturalmente diversi da Postgres — vedi [Query Optimizer e EXPLAIN](../sql-avanzato/query-optimizer.md) per il confronto lato Postgres — perché l'ottimizzatore InnoDB ragiona su un clustered index invece che su un heap indipendente dagli indici. Non copre architettura InnoDB o replicazione, già trattate in [Architettura e Replicazione](architettura-replicazione.md).
+
+!!! note "Versioni: 8.0 è EOL, riferirsi a 8.4 LTS"
+    MySQL 8.0 ha raggiunto l'end of life ad aprile 2026; la release LTS corrente è **8.4** (link `official_docs` aggiornato). Tutto ciò che riguarda `EXPLAIN`, hash join e `optimizer_trace` vale invariato in 8.4. Cambiano alcuni default (es. `innodb_adaptive_hash_index`, vedi sezione buffer pool). MariaDB ha un optimizer diverso: non ha `EXPLAIN ANALYZE` in formato ad albero come MySQL, usa `ANALYZE FORMAT=JSON`.
 
 ## Concetti Chiave
 
@@ -26,7 +30,7 @@ Questa pagina copre come diagnosticare e risolvere query lente su MySQL/MariaDB 
 - **Clustered index è la tabella**: in InnoDB i dati sono fisicamente ordinati per Primary Key (o da una PK implicita a 6 byte se non dichiarata — da evitare sempre). Non esiste un heap separato come in Postgres.
 - **Secondary index lookup a due passi**: un indice secondario contiene il valore della PK, non un puntatore fisico alla riga. Una query che filtra su un indice secondario e recupera colonne non coperte richiede un secondo accesso al clustered index per ogni riga trovata ("bookmark lookup").
 - **`rows` in EXPLAIN è una stima, non un conteggio**: rappresenta quante righe l'optimizer *si aspetta* di esaminare per ottenere il risultato, basata su statistiche degli indici — non il numero di righe restituite.
-- **`filtered`**: percentuale stimata di righe che sopravvivono ai filtri aggiuntivi dopo l'accesso via indice. `rows × filtered / 100` = stima righe effettivamente processate dal nodo successivo del piano.
+- **`filtered`** (colonna dell'`EXPLAIN` tabellare, omessa dall'esempio sotto per leggibilità): percentuale stimata di righe che sopravvivono ai filtri aggiuntivi dopo l'accesso via indice. `rows × filtered / 100` = stima righe effettivamente processate dal nodo successivo del piano.
 - **Extra è dove si nascondono i problemi**: `Using filesort` (ordinamento non risolto da un indice), `Using temporary` (tabella temporanea per GROUP BY/DISTINCT), `Using index` (covering index, nessun accesso al clustered index) sono i segnali più diagnostici dell'intero output.
 
 ## Architettura / Come Funziona
@@ -61,11 +65,11 @@ LIMIT 20;
 | `key_len` | Byte dell'indice effettivamente usati — utile per capire se un indice composito è sfruttato parzialmente |
 | `ref` | Colonna o costante confrontata con l'indice |
 | `rows` | Stima righe esaminate (non restituite) |
-| `filtered` | % stimata di righe sopravvissute ai filtri extra (visibile con `EXPLAIN FORMAT=TREE` o `EXTENDED`) |
+| `filtered` | % stimata di righe sopravvissute ai filtri extra (colonna sempre presente in 8.0+; non mostrata nell'esempio sopra) |
 | `Extra` | Informazioni critiche: `Using filesort`, `Using temporary`, `Using index`, `Using index condition` |
 
 !!! warning "`type: ALL` su tabelle grandi è quasi sempre un problema"
-    A differenza di Postgres, dove un Seq Scan può essere la scelta corretta anche su tabelle grandi (>20-30% di righe lette), su InnoDB un `type: ALL` in produzione va quasi sempre indagato: il costo del full scan è dominato dal fatto che le pagine potrebbero non essere in buffer pool, a differenza di un ambiente Postgres ben tarato con `effective_cache_size`.
+    Su una tabella grande `type: ALL` va sempre indagato: su InnoDB un full scan scorre l'intero clustered index e, se il working set non sta nel buffer pool, genera letture da disco ed evizioni che penalizzano anche le altre query. Può comunque essere la scelta giusta quando la query legge una frazione elevata della tabella (indice poco selettivo: vedi Scenario 1) — come su Postgres, la domanda è se il piano è quello atteso, non se contiene uno scan.
 
 ### EXPLAIN FORMAT=JSON — Dettaglio Completo
 
@@ -122,7 +126,7 @@ LIMIT 20\G
 }
 ```
 
-`cost_info.query_cost` è il numero che l'optimizer usa per confrontare piani alternativi — analogo concettuale al `cost` di Postgres, ma calibrato su costanti diverse (`optimizer_switch`, `mysql.server_cost`, `mysql.engine_cost`).
+`cost_info.query_cost` è il numero che l'optimizer usa per confrontare piani alternativi — analogo concettuale al `cost` di Postgres, ma calibrato su costanti diverse (tabelle `mysql.server_cost` e `mysql.engine_cost`, modificabili; `optimizer_switch` governa invece quali strategie sono ammesse).
 
 ### EXPLAIN ANALYZE — Numeri Reali (MySQL 8.0.18+)
 
@@ -234,9 +238,9 @@ WHERE o.stato = 'spedito';
 # my.cnf — parametri buffer pool per throughput OLTP
 [mysqld]
 innodb_buffer_pool_size = 24G           # 70-80% RAM su istanza dedicata; deve contenere il working set
-innodb_buffer_pool_instances = 16       # 1 istanza per GB fino a un massimo pratico di 16-32; riduce mutex contention
+innodb_buffer_pool_instances = 16       # Riduce mutex contention; default calcolato (1 se pool <= 1GB, altrimenti dipende da pool/chunk e CPU, max 64). Impostare a mano solo se serve
 innodb_buffer_pool_chunk_size = 128M    # innodb_buffer_pool_size deve essere multiplo di instances*chunk_size
-innodb_adaptive_hash_index = ON         # Hash index automatico su pagine "calde" — vedi warning sotto
+innodb_adaptive_hash_index = OFF        # Default OFF da 8.4 (ON in 8.0): riattivare solo se misurato un beneficio — vedi warning sotto
 innodb_stats_persistent = ON            # Statistiche persistenti su disco invece che ricalcolate ad ogni restart
 innodb_stats_persistent_sample_pages = 128  # Più campioni = stime più precise, più costo su ANALYZE TABLE
 ```
@@ -264,7 +268,7 @@ SHOW ENGINE INNODB STATUS\G
 ```
 
 !!! warning "Adaptive Hash Index può peggiorare le performance sotto certi workload"
-    L'Adaptive Hash Index (AHI) costruisce automaticamente una hash table in-memory per le pagine più accedute, utile per lookup puntuali ripetuti. Su workload con molte query concorrenti che competono per il lock dell'AHI (`btr_search_latch`), o con pattern di accesso molto variabili (nessuna pagina "calda" stabile), l'AHI diventa overhead puro. Se `SHOW ENGINE INNODB STATUS` mostra un hit rate basso per l'AHI insieme a contention visibile, disabilitarlo e misurare: `SET GLOBAL innodb_adaptive_hash_index = OFF;` (richiede test A/B, non è una scelta universale).
+    Dalla 8.4 l'AHI è **disattivato di default** (in 8.0 era ON), perché in molti workload è overhead. L'Adaptive Hash Index (AHI) costruisce automaticamente una hash table in-memory per le pagine più accedute, utile per lookup puntuali ripetuti. Su workload con molte query concorrenti che competono per il lock dell'AHI (`btr_search_latch`), o con pattern di accesso molto variabili (nessuna pagina "calda" stabile), l'AHI diventa overhead puro. Se `SHOW ENGINE INNODB STATUS` mostra un hit rate basso per l'AHI insieme a contention visibile, su 8.0 disabilitarlo e misurare: `SET GLOBAL innodb_adaptive_hash_index = OFF;` (richiede test A/B, non è una scelta universale); su 8.4 attivarlo solo se un test A/B mostra beneficio su lookup puntuali ripetuti.
 
 ### Slow Query Log e pt-query-digest
 
@@ -275,6 +279,8 @@ slow_query_log = ON
 slow_query_log_file = /var/log/mysql/slow.log
 long_query_time = 1                    # Soglia in secondi
 log_queries_not_using_indexes = ON     # Logga anche query veloci ma senza indice (utile per triage preventivo)
+log_throttle_queries_not_using_indexes = 60  # Max 60 di queste righe al minuto: evita di inondare il log
+min_examined_row_limit = 1000          # Ignora query che esaminano poche righe
 ```
 
 ```bash
@@ -290,8 +296,9 @@ pt-query-digest /var/log/mysql/slow.log > digest_report.txt
 pt-query-digest --since '2026-09-27 00:00:00' --until '2026-09-27 06:00:00' \
   /var/log/mysql/slow.log
 
-# Analizzare direttamente da performance_schema invece che dal file di log
-pt-query-digest --processlist h=localhost,u=monitor_user,p=password
+# Campionare SHOW FULL PROCESSLIST invece di leggere un file (cattura solo le query in esecuzione
+# al momento del poll: preferire lo slow log). Evitare la password in riga di comando: usare ~/.my.cnf
+pt-query-digest --processlist h=localhost,u=monitor_user
 ```
 
 !!! tip "log_queries_not_using_indexes va acceso solo temporaneamente"
@@ -315,7 +322,9 @@ EXPLAIN SELECT * FROM ordini WHERE stato = 'spedito' OR cliente_id = 42;
 ```
 
 ```sql
--- Verificare indici inutilizzati (candidati alla rimozione — riducono write cost)
+-- Verificare indici inutilizzati (candidati alla rimozione — riducono write cost).
+-- ATTENZIONE: i contatori si azzerano al restart; valutare dopo un ciclo di business completo.
+-- Equivalente pronto: SELECT * FROM sys.schema_unused_indexes;
 SELECT
     object_schema, object_name, index_name
 FROM performance_schema.table_io_waits_summary_by_index_usage
@@ -327,7 +336,7 @@ ORDER BY object_schema, object_name;
 
 ## Best Practices
 
-- **Preferire pochi indici compositi ben scelti a molti indici singola-colonna**: ogni indice aggiuntivo raddoppia il costo di scrittura su InnoDB (mantenimento clustered + secondario), più che su Postgres dove tutti gli indici hanno lo stesso costo relativo all'heap.
+- **Preferire pochi indici compositi ben scelti a molti indici singola-colonna**: ogni indice aggiuntivo va aggiornato a ogni INSERT/DELETE (e UPDATE delle colonne indicizzate) e occupa buffer pool; un indice composito (a, b) serve anche le query sul solo prefisso `a`, rendendo ridondante un indice separato su `a`.
 - **`EXPLAIN FORMAT=JSON` per capire il costo reale**, non solo `EXPLAIN` tabellare — la vista tradizionale nasconde `cost_info` per nodo.
 - **Usare `optimizer_trace` solo per query specifiche in debug**, mai abilitato globalmente per l'overhead.
 - **Monitorare `log_queries_not_using_indexes` a finestre**, non permanentemente.
@@ -355,9 +364,12 @@ SHOW INDEX FROM ordini WHERE Key_name = 'idx_stato_data';
 ANALYZE TABLE ordini;
 
 -- 3. Verificare mismatch di tipo (causa comune e silenziosa)
--- Se cliente_id è INT ma la query filtra con stringa:
-EXPLAIN SELECT * FROM ordini WHERE cliente_id = '42';  -- conversione implicita, indice ignorato
-EXPLAIN SELECT * FROM ordini WHERE cliente_id = 42;    -- corretto
+-- Colonna stringa (es. codice VARCHAR) confrontata con un numero: MySQL converte
+-- OGNI valore della colonna in numero, quindi l'indice non è utilizzabile
+EXPLAIN SELECT * FROM ordini WHERE codice = 42;    -- type: ALL (conversione implicita)
+EXPLAIN SELECT * FROM ordini WHERE codice = '42';  -- corretto
+-- (il caso inverso, colonna INT confrontata con '42', usa l'indice: è la costante a essere convertita.
+--  Problemi analoghi: join tra colonne con charset/collation diversi, funzioni sulla colonna indicizzata)
 
 -- 4. Forzare l'uso dell'indice per confermare il sospetto (solo debug)
 EXPLAIN SELECT * FROM ordini FORCE INDEX (idx_stato_data) WHERE stato = 'spedito';
@@ -381,7 +393,7 @@ EXPLAIN SELECT id, totale FROM ordini
 WHERE stato = 'spedito'
 ORDER BY totale DESC
 LIMIT 20;
--- Extra: Using index condition  ← filesort eliminato
+-- Extra senza 'Using filesort'  ← l'ordinamento è fornito dall'indice
 
 -- 2. Se il filesort è inevitabile (ordinamento su colonna non indicizzabile),
 --    aumentare sort_buffer_size per la sessione
@@ -434,7 +446,8 @@ WHERE o.stato = 'spedito';
 -- 1. Se una stima è accettabile (dashboard, capacity planning), usare le statistiche
 SELECT TABLE_ROWS FROM information_schema.TABLES
 WHERE TABLE_SCHEMA = 'mydb' AND TABLE_NAME = 'ordini';
--- Approssimato, aggiornato da ANALYZE TABLE o automaticamente
+-- Approssimato; in 8.0+ i valori sono in cache per information_schema_stats_expiry (default 86400s):
+-- per dati freschi eseguire ANALYZE TABLE o SET SESSION information_schema_stats_expiry = 0
 
 -- 2. Se serve un conteggio esatto e frequente, mantenere un contatore applicativo
 --    (tabella separata aggiornata via trigger o transazione) invece di COUNT(*) ripetuto
