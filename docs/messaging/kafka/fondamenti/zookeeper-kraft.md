@@ -7,18 +7,19 @@ search_keywords: [kafka zookeeper, kafka kraft, kip-500, kafka metadata, control
 parent: messaging/kafka/fondamenti
 related: [messaging/kafka/fondamenti/broker-cluster, messaging/kafka/fondamenti/architettura, messaging/kafka/fondamenti/topics-partizioni]
 official_docs: https://kafka.apache.org/documentation/#kraft
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # ZooKeeper e KRaft
 
 ## Panoramica
 
-Storicamente Apache Kafka dipendeva da **Apache ZooKeeper** per gestire i metadati del cluster: lista dei broker, configurazione dei topic, elezioni del controller. Dalla versione 3.3+, **KRaft** (Kafka Raft) è il nuovo protocollo interno che elimina questa dipendenza esterna, rendendo Kafka un sistema autonomo e semplificando drasticamente l'architettura operativa.
+Storicamente Apache Kafka dipendeva da **Apache ZooKeeper** per gestire i metadati del cluster: lista dei broker, configurazione dei topic, elezioni del controller. Dalla versione 3.3 **KRaft** (Kafka Raft, definito da KIP-500: *Kafka Improvement Proposal*, il documento di design con cui la community Kafka propone modifiche) è il protocollo interno che elimina questa dipendenza esterna, rendendo Kafka un sistema autonomo e semplificando drasticamente l'architettura operativa.
 
-**ZooKeeper** rimane supportato nelle versioni attuali per compatibilità, ma è ufficialmente **deprecato** e sarà rimosso nelle versioni future. **Tutte le nuove installazioni dovrebbero usare KRaft.**
+**ZooKeeper è stato rimosso in Kafka 4.0** (marzo 2025): le versioni 4.x girano **solo** in modalità KRaft. Un cluster ancora su ZooKeeper deve prima migrare (passando da 3.9, vedi timeline) e solo dopo aggiornare a 4.x. **Tutte le nuove installazioni usano KRaft.**
 
 ## Concetti Chiave
 
@@ -33,18 +34,19 @@ Storicamente Apache Kafka dipendeva da **Apache ZooKeeper** per gestire i metada
 
 **Limiti dell'architettura ZooKeeper:**
 - Dipendenza operativa esterna (cluster ZooKeeper separato da mantenere)
-- Scalabilità limitata: lo stato è in memoria in ZooKeeper (~200K partizioni max)
-- Failover del controller lento (il nuovo controller deve leggere tutto lo stato da ZooKeeper)
+- Scalabilità limitata: lo stato è in ZooKeeper e il controller deve caricarlo per intero (nella pratica ~200K partizioni per cluster come ordine di grandezza)
+- Failover del controller lento (il nuovo controller deve rileggere tutto lo stato da ZooKeeper, tempo proporzionale al numero di partizioni)
 - Doppia complessità operativa: aggiornamenti, monitoring, sicurezza di due sistemi
 
 ### KRaft (architettura moderna)
 
 **Cosa cambia con KRaft:**
 - I metadati sono gestiti da un **quorum di controller** interni a Kafka
-- I controller usano il **protocollo Raft** (simile a etcd/Consul) per consenso distribuito
-- Il **metadata log** è un topic Kafka interno (`@metadata`) replicato tra i controller
-- Il failover del controller è in millisecondi (il follower ha già lo stato aggiornato)
-- Supporta milioni di partizioni per cluster
+- I controller usano il **protocollo Raft** (simile a etcd/Consul) per consenso distribuito: un leader scrive su un log replicato e una modifica è valida quando la maggioranza (quorum) dei controller l'ha persistita
+- Il **metadata log** è un log interno a partizione singola (topic `__cluster_metadata`) replicato tra i controller; ogni modifica ai metadati (topic, partizioni, ACL, config) è un record in questo log
+- Il failover del controller è rapido (tipicamente sotto il secondo): i follower hanno già lo stato in memoria, non serve ricaricarlo
+- Scala a un numero di partizioni molto maggiore (ordine dei milioni per cluster)
+- Con quorum di N controller si tollerano `(N-1)/2` guasti: 3 controller → 1 guasto, 5 → 2. Usare sempre un numero **dispari** (un quorum pari non aumenta la tolleranza)
 
 **Ruoli in KRaft:**
 
@@ -62,8 +64,8 @@ Storicamente Apache Kafka dipendeva da **Apache ZooKeeper** per gestire i metada
 flowchart TB
     subgraph ZK["Architettura ZooKeeper (Legacy)"]
         direction LR
-        ZK1["ZooKeeper\nEnsemble"]
-        KB1["Kafka Broker 1\n(Controller)"]
+        ZK1["ZooKeeper<br/>Ensemble"]
+        KB1["Kafka Broker 1<br/>(Controller)"]
         KB2[Kafka Broker 2]
         KB3[Kafka Broker 3]
         ZK1 <--> KB1
@@ -73,15 +75,15 @@ flowchart TB
 
     subgraph KR["Architettura KRaft (Moderna)"]
         direction LR
-        KC1["Kafka Controller 1\n(Active)"]
+        KC1["Kafka Controller 1<br/>(Active)"]
         KC2[Kafka Controller 2]
         KC3[Kafka Controller 3]
         KB4[Kafka Broker 1]
         KB5[Kafka Broker 2]
         KC1 <-->|Raft| KC2
         KC1 <-->|Raft| KC3
-        KC1 --> KB4
-        KC1 --> KB5
+        KB4 -->|heartbeat + fetch metadata| KC1
+        KB5 -->|heartbeat + fetch metadata| KC1
     end
 ```
 
@@ -89,9 +91,9 @@ flowchart TB
 
 1. Il **quorum di controller** elegge un **active controller** tramite Raft
 2. L'active controller gestisce tutte le decisioni sui metadati (elezione leader partizioni, creazione topic, ecc.)
-3. I broker si registrano con l'active controller tramite heartbeat
-4. Lo stato dei metadati viene replicato nei controller follower via metadata log
-5. Se l'active controller muore → elezione Raft in pochi millisecondi → il nuovo active ha già lo stato completo
+3. I broker si registrano con l'active controller e gli inviano heartbeat periodici (se mancano, il broker è considerato morto e le sue leadership vengono riassegnate)
+4. Lo stato dei metadati viene replicato nei controller follower via metadata log; i broker **leggono** (fetch) il metadata log dai controller e tengono una copia locale, invece di ricevere push come con ZooKeeper
+5. Se l'active controller muore → nuova elezione Raft → il nuovo active ha già lo stato completo, senza ricaricarlo
 
 ## Configurazione & Pratica
 
@@ -155,10 +157,9 @@ log.dirs=/data/kafka-logs
 ### Docker Compose KRaft (single-node)
 
 ```yaml
-version: '3.8'
 services:
   kafka:
-    image: apache/kafka:3.9.0
+    image: apache/kafka:4.0.0
     hostname: broker
     container_name: kafka-kraft
     ports:
@@ -175,6 +176,9 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
 ```
+
+!!! note "Quorum statico vs dinamico"
+    `controller.quorum.voters` definisce un quorum **statico**: aggiungere o sostituire un controller richiede di riconfigurare e riavviare tutti i nodi. Dalla 3.9 (KIP-853) esiste il quorum **dinamico**: si usa `controller.quorum.bootstrap.servers` al posto di `voters` e si gestiscono i membri con `kafka-metadata-quorum.sh add-controller` / `remove-controller`. Un cluster nato con quorum statico non si converte automaticamente: verificare la documentazione della versione in uso.
 
 ### Verificare lo stato del quorum KRaft
 
@@ -195,7 +199,7 @@ kafka-metadata-quorum.sh \
 ## Best Practices
 
 !!! tip "Usare sempre KRaft per nuove installazioni"
-    ZooKeeper è deprecato a partire da Kafka 3.5 e sarà rimosso in una versione futura. Non iniziare nuovi progetti con ZooKeeper.
+    ZooKeeper è deprecato dalla 3.5 e rimosso dalla 4.0. Non esiste più alcuna alternativa a KRaft nelle versioni correnti.
 
 !!! tip "Separare controller e broker in produzione"
     In produzione, usare nodi dedicati come controller (3 controller per quorum) e nodi separati come broker. Il combined mode (`broker,controller`) è appropriato solo per sviluppo.
@@ -207,10 +211,12 @@ kafka-metadata-quorum.sh \
 
 | Versione Kafka | Stato ZooKeeper |
 |---------------|-----------------|
-| 2.8 - 3.2 | KRaft in Early Access |
-| 3.3+ | KRaft production-ready, ZooKeeper deprecato |
-| 3.5+ | Deprecation warnings attivi |
-| 4.0 (roadmap) | Rimozione ZooKeeper |
+| 2.8 - 3.2 | KRaft in Early Access / preview |
+| 3.3 | KRaft production-ready per nuovi cluster |
+| 3.4 | Migrazione ZooKeeper → KRaft disponibile (early access, poi stabile) |
+| 3.5 | ZooKeeper ufficialmente deprecato |
+| 3.9 | Ultima versione con ZooKeeper: **ponte obbligato** per migrare |
+| 4.0+ | ZooKeeper rimosso, solo KRaft |
 
 ## Troubleshooting
 
@@ -220,7 +226,7 @@ kafka-metadata-quorum.sh \
 
 **Causa:** La directory `log.dirs` contiene già un metadata log da una precedente inizializzazione (anche fallita o di un cluster diverso).
 
-**Soluzione:** Pulire la directory e riformattare, oppure usare `--ignore-formatted` se si vuole riutilizzare uno stato esistente.
+**Soluzione:** Se la directory è di test, pulirla e riformattare. Se invece contiene dati da conservare **non cancellarla**: `--ignore-formatted` fa saltare il format per le directory già formattate (utile negli script idempotenti) senza toccarne il contenuto. Se il `cluster.id` della directory differisce da quello passato, il nodo non partirà: usare l'ID originale.
 
 ```bash
 # Opzione 1: pulire e riformattare
@@ -229,7 +235,7 @@ kafka-storage.sh format \
   --config /opt/kafka/config/kraft/server.properties \
   --cluster-id "$KAFKA_CLUSTER_ID"
 
-# Opzione 2: forzare ignorando lo stato esistente
+# Opzione 2: non formattare se già formattato (non cancella nulla)
 kafka-storage.sh format \
   --config /opt/kafka/config/kraft/server.properties \
   --cluster-id "$KAFKA_CLUSTER_ID" \
@@ -244,12 +250,12 @@ kafka-storage.sh format \
 
 **Causa:** Il quorum Raft non riesce a eleggere un active controller. Cause tipiche: `controller.quorum.voters` configurato in modo inconsistente tra i nodi, porta 9093 non raggiungibile, o cluster ID diverso tra i controller.
 
-**Soluzione:** Verificare configurazione e connettività del quorum.
+**Soluzione:** Verificare configurazione e connettività del quorum. Se nessun broker è attivo, `--bootstrap-server` non funziona: interrogare direttamente un controller con `--bootstrap-controller` (dalla 3.7, KIP-919).
 
 ```bash
-# Verificare che il quorum sia raggiungibile
+# Verificare lo stato del quorum interrogando un controller
 kafka-metadata-quorum.sh \
-  --bootstrap-server localhost:9092 \
+  --bootstrap-controller ctrl1:9093 \
   describe --status
 
 # Controllare i log del controller per errori Raft
@@ -289,27 +295,32 @@ telnet ctrl1 9093
 
 ### Scenario 4 — Migrazione da ZooKeeper a KRaft fallisce o si blocca
 
-**Sintomo:** Il processo di migrazione si blocca in fase `MIGRATION` o il cluster diventa irraggiungibile dopo il roll del first controller.
+**Sintomo:** Il processo di migrazione resta fermo prima di completare la copia dei metadati (stato `MIGRATION` non raggiunto) o i broker non si registrano ai nuovi controller.
 
-**Causa:** La migrazione ZK→KRaft è un processo in più fasi; un cluster ID mismatch, un broker non aggiornato alla versione compatibile, o un metadata snapshot incompleto possono bloccarla.
+**Causa:** La migrazione ZK→KRaft è un processo in più fasi (si avviano i controller KRaft con la migrazione abilitata, si riavviano i broker in modalità migrazione, si copiano i metadati, poi si passano i broker a KRaft puro). Cause tipiche: cluster ID dei controller diverso da quello del cluster ZooKeeper, broker non alla stessa versione/`inter.broker.protocol.version` richiesta, configurazione ZooKeeper mancante sui controller.
 
-**Soluzione:** Verificare lo stato della migrazione e i prerequisiti.
+**Soluzione:** Migrare **sempre su 3.9** (o almeno ≥ 3.4) *prima* di aggiornare a 4.x, e verificare lo stato.
 
 ```bash
-# Controllare la versione Kafka (richiede >= 3.4 per migrazione stabile)
+# Versione delle API supportate dai broker
 kafka-broker-api-versions.sh --bootstrap-server localhost:9092 | head -5
 
-# Verificare lo stato della migrazione tramite ZooKeeper
-zookeeper-shell.sh localhost:2181 get /controller_epoch
+# Stato della migrazione: metrica JMX sul controller attivo
+#   kafka.controller:type=KafkaController,name=ZkMigrationState
 
-# Monitorare il metadata log durante la migrazione
+# Stato del quorum e lag dei controller
 kafka-metadata-quorum.sh \
   --bootstrap-server localhost:9092 \
   describe --replication
 
-# In caso di blocco: non riavviare i broker manualmente —
-# consultare la KRaft Migration Guide ufficiale prima di intervenire
+# In caso di blocco: non riavviare i broker a caso —
+# seguire la KRaft Migration Guide ufficiale (ogni fase è reversibile solo fino al punto indicato)
 ```
+
+<!-- REVIEW: verificare nome esatto metrica ZkMigrationState e punto di non ritorno della migrazione sulla doc ufficiale -->
+
+!!! warning "Nessun upgrade diretto 3.x ZooKeeper → 4.x"
+    Kafka 4.0 non contiene più il codice ZooKeeper e non sa migrare. Un cluster ZooKeeper va portato a 3.9, migrato a KRaft, e solo dopo aggiornato a 4.x.
 
 ## Riferimenti
 
