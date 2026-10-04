@@ -8119,7 +8119,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -8144,7 +8144,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25411,8 +25411,8 @@
 </span></code></pre></div>
 <h2 id="workbooks">Workbooks<a class="headerlink" href="#workbooks" title="Permanent link">&para;</a></h2>
 <p>I Workbooks Azure Monitor sono dashboard interattivi parametrizzati che combinano query KQL con visualizzazioni.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Creare workbook personalizzato (richiede JSON di definizione; estensione application-insights)</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># &lt;!-- REVIEW: verificare sintassi/parametri di `az monitor app-insights workbook create` nella versione corrente dell'estensione --&gt;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Creare workbook personalizzato (richiede JSON di definizione; estensione application-insights,</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># installata al primo uso). --name deve essere un UUID; --kind accetta solo "shared".</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>az<span class="w"> </span>monitor<span class="w"> </span>app-insights<span class="w"> </span>workbook<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span>--name<span class="w"> </span><span class="s2">"</span><span class="k">$(</span>uuidgen<span class="k">)</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
@@ -25430,21 +25430,29 @@
 - <strong>Microsoft Entra ID Sign-ins</strong> (ex Azure AD): analisi pattern di accesso
 - <strong>AKS</strong>: node health, pod metrics, cluster overview</p>
 <h2 id="azure-monitor-for-vms-vm-insights">Azure Monitor for VMs (VM Insights)<a class="headerlink" href="#azure-monitor-for-vms-vm-insights" title="Permanent link">&para;</a></h2>
-<p>VM Insights abilita monitoring avanzato per VM: performance chart e dependency map. Oggi si basa su AMA + una DCR dedicata (creata dal portale con "Enable" in VM Insights); il <strong>Dependency Agent</strong> è opzionale e serve solo alla funzione <em>Map</em> (tabella <code>VMConnection</code>), non alle performance.</p>
-<!-- REVIEW: verificare lo stato di ritiro del Dependency Agent e la raccomandazione Microsoft attuale per la dependency map -->
-
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Dependency Agent (solo per la Map; richiede AMA già installato)</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>az<span class="w"> </span>vm<span class="w"> </span>extension<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--vm-name<span class="w"> </span>my-vm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--name<span class="w"> </span>DependencyAgentLinux<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span>--publisher<span class="w"> </span>Microsoft.Azure.Monitoring.DependencyAgent<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span>--enable-auto-upgrade<span class="w"> </span><span class="nb">true</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="c1"># Query per dependency map (VM Insights)</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="c1"># VMConnection table mostra connessioni TCP tra processi</span>
+<p>VM Insights abilita monitoring avanzato per VM: performance chart e (legacy) dependency map. Oggi si basa su AMA + una DCR dedicata (creata dal portale con "Enable" in VM Insights); il monitoring delle performance non dipende dal Dependency Agent.</p>
+<div class="admonition warning">
+<p class="admonition-title">Dependency Agent e VM Insights Map: deprecati, ritiro 30 giugno 2028</p>
+<p>Il <strong>Dependency Agent</strong> e la funzione <em>Map</em> (tab Map, workbook <em>Connections Overview</em>, Service Map API) sono deprecati e <strong>ritirati il 30 giugno 2028</strong>. Dal 30 settembre 2025 non si possono onboardare nuove VM dal portale e Microsoft raccomanda di <strong>non installarlo su nuovi sistemi</strong>. I dati già ingeriti (<code>VMComputer</code>, <code>VMProcess</code>, <code>VMConnection</code>, <code>VMBoundPort</code>) restano nel workspace secondo la retention. Alternative indicate da Microsoft: soluzioni di terze parti dal Marketplace (categoria monitoring &amp; diagnostics); per l'inventario, AMA + <em>Change Tracking and Inventory</em>. Su Azure Advisor la raccomandazione <em>Migrate from Dependency Agent and VM Insights Map</em> elenca le VM interessate.</p>
+</div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># SOLO per offboarding/riferimento: Dependency Agent già presente (richiede AMA).</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Non usare per nuove installazioni. Rimozione:</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>az<span class="w"> </span>vm<span class="w"> </span>extension<span class="w"> </span>delete<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--vm-name<span class="w"> </span>my-vm<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span>--name<span class="w"> </span>DependencyAgentLinux
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Installazione (sconsigliata, legacy)</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>az<span class="w"> </span>vm<span class="w"> </span>extension<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">  </span>--vm-name<span class="w"> </span>my-vm<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">  </span>--name<span class="w"> </span>DependencyAgentLinux<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span>--publisher<span class="w"> </span>Microsoft.Azure.Monitoring.DependencyAgent<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>--enable-auto-upgrade<span class="w"> </span><span class="nb">true</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1"># Dati storici della Map (VM Insights): la tabella VMConnection mostra connessioni TCP tra processi</span>
 </span></code></pre></div>
-<div class="language-kql highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c">// VM Connections: processi che accettano connessioni</span>
+<div class="language-kql highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c">// VM Connections (dati storici del Dependency Agent): processi che accettano connessioni</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">VMConnection</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">TimeGenerated</span><span class="w"> </span><span class="p">&gt;</span><span class="w"> </span><span class="n">ago</span><span class="p">(</span><span class="mi">1</span><span class="n">h</span><span class="p">)</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">Direction</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"inbound"</span>
