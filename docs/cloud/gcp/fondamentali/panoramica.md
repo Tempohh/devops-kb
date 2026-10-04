@@ -7,9 +7,10 @@ search_keywords: [GCP panoramica, Google Cloud overview, progetto Google Cloud, 
 parent: cloud/gcp/fondamentali/_index
 related: [cloud/aws/fondamentali/global-infrastructure, cloud/azure/fondamentali/global-infrastructure, cloud/aws/fondamentali/billing-pricing]
 official_docs: https://cloud.google.com/docs/overview
-status: complete
+status: reviewed
 difficulty: beginner
-last_updated: 2026-03-25
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Panoramica GCP
@@ -33,7 +34,7 @@ Google Cloud Platform (GCP) è il cloud provider di Google, lanciato nel 2008 co
 
 ## Gerarchia delle Risorse
 
-GCP organizza le risorse in una **gerarchia a 4 livelli** obbligatoria. Comprenderla è fondamentale perché policy IAM e billing ereditano in cascata dall'alto verso il basso.
+GCP organizza le risorse in una **gerarchia a 4 livelli** (Organization → Folder → Project → Resource). Solo Project e Resource sono sempre presenti: Organization e Folder sono opzionali (un account Gmail personale crea project senza Organization). Comprenderla è fondamentale perché policy IAM e Organization Policy ereditano in cascata dall'alto verso il basso.
 
 ```
 Organization  (es. "example.com")
@@ -104,7 +105,7 @@ Geography (es. Europe)
 
 | Regione | Sede | Zone |
 |---------|------|------|
-| `europe-west1` | Belgio | 4 |
+| `europe-west1` | Belgio | 3 |
 | `europe-west2` | Londra | 3 |
 | `europe-west3` | Francoforte | 3 |
 | `europe-west4` | Olanda | 3 |
@@ -118,8 +119,8 @@ Geography (es. Europe)
 - Unità di isolamento guasti all'interno di una regione
 - Ogni zona ha alimentazione, raffreddamento e networking indipendenti
 - Risorse **zonali**: VM (Compute Engine), Persistent Disk, GKE Node Pool
-- Risorse **regionali**: Cloud SQL con HA, GKE cluster (control plane regionale)
-- Risorse **globali**: Cloud Storage bucket, IAM, VPC network, immagini
+- Risorse **regionali**: Cloud SQL con HA, GKE cluster regionale (control plane replicato su 3 zone), subnet VPC
+- Risorse **globali**: VPC network, IAM, immagini, global load balancer. I bucket Cloud Storage hanno un namespace globale ma risiedono in una location (regione, dual-region o multi-region) scelta alla creazione
 
 ```bash
 # Listare le regioni disponibili
@@ -169,7 +170,7 @@ serviceAccount:deploy@myproject.iam.gserviceaccount.com
 | **Service Account** | Identità per applicazioni/VM, non per persone |
 | **Google Group** | Gruppo di account Google — gestione semplificata |
 | **Google Workspace Domain** | Tutti gli utenti di un dominio Workspace |
-| **Cloud Identity Domain** | Come Workspace ma senza le app G Suite |
+| **Cloud Identity Domain** | Come Workspace ma senza le app Workspace (Gmail, Drive…) |
 | `allUsers` | Chiunque (incluso non autenticato) — usare con estrema cautela |
 | `allAuthenticatedUsers` | Qualsiasi account Google autenticato |
 
@@ -177,7 +178,7 @@ serviceAccount:deploy@myproject.iam.gserviceaccount.com
 
 | Tipo | Descrizione | Esempi |
 |------|-------------|--------|
-| **Primitive** (legacy) | Owner, Editor, Viewer — troppo permissivi | Da evitare in produzione |
+| **Basic** (ex primitive) | Owner, Editor, Viewer — troppo permissivi | Da evitare in produzione |
 | **Predefined** | Ruoli granulari gestiti da Google | `roles/storage.objectViewer`, `roles/container.developer` |
 | **Custom** | Ruoli creati dall'utente con permessi specifici | Solo permessi strettamente necessari |
 
@@ -225,7 +226,7 @@ gcloud storage buckets add-iam-policy-binding gs://my-bucket \
 ```
 
 !!! warning "Chiavi JSON dei Service Account"
-    Le chiavi JSON sono credenziali a lungo termine — se compromesse danno accesso completo. Preferire **Workload Identity Federation** (per CI/CD esterni) o **service account impersonation** (per accesso temporaneo). Le VM su GCP non hanno bisogno di chiavi JSON: usare il metadata server con service account assegnato all'istanza.
+    Le chiavi JSON sono credenziali a lungo termine — se compromesse danno accesso completo. Dal 2024 le Organization nuove applicano di default la Organization Policy `iam.disableServiceAccountKeyCreation`, che blocca la creazione di chiavi: è il comportamento voluto, non un errore da aggirare. Preferire **Workload Identity Federation** (per CI/CD esterni) o **service account impersonation** (per accesso temporaneo). Le VM su GCP non hanno bisogno di chiavi JSON: usare il metadata server con service account assegnato all'istanza.
 
 !!! tip "Principio del Minimo Privilegio"
     Assegnare sempre i ruoli **predefined** più granulari, non ruoli primitivi (Editor/Owner). Assegnare i ruoli al livello più basso della gerarchia (risorsa > project > folder > organization).
@@ -235,7 +236,7 @@ gcloud storage buckets add-iam-policy-binding gs://my-bucket \
 Le policy IAM si **accumulano** scendendo nella gerarchia — non si sovrascrivono:
 
 ```
-Organization  →  policy: bob=Billing Admin
+Organization  →  policy: bob=Billing Account Admin
   └── Folder  →  policy: alice=Folder Admin
       └── Project  →  policy: charlie=Compute Admin
           └── Resource  →  policy: dave=Storage Object Viewer
@@ -244,8 +245,8 @@ Risultato per charlie sul project:
   charlie ha Compute Admin (dal project) + eventuali ruoli ereditati da folder e org
 ```
 
-!!! warning "Non si può negare con IAM standard"
-    IAM in GCP è additivo: si possono solo *aggiungere* permessi, non *negare* permessi già concessi a un livello superiore. Per restrizioni esplicite usare **Organization Policy** (es. bloccare creazione di risorse in certe regioni).
+!!! warning "Le allow policy sono additive"
+    Le **allow policy** (i binding visti sopra) possono solo *aggiungere* permessi: non si revoca da un livello inferiore un ruolo concesso più in alto. Per negare esplicitamente esistono le **IAM deny policy** (hanno precedenza sulle allow, si attaccano a org/folder/project) e le **Principal Access Boundary**. Per vincolare le *risorse* (non i principal, es. bloccare regioni non ammesse) usare **Organization Policy**.
 
 ---
 
@@ -267,7 +268,7 @@ Billing Account  (es. "Fatturazione Principale")
 - Entità che raccoglie e paga le fatture
 - Un billing account può coprire N progetti
 - Un project ha esattamente 1 billing account attivo (o nessuno → servizi bloccati)
-- In un'Organization: il **Billing Admin** a livello org gestisce i billing account
+- In un'Organization: il ruolo **Billing Account Administrator** (`roles/billing.admin`) gestisce i billing account
 
 ```bash
 # Listare i billing account accessibili
@@ -287,11 +288,14 @@ GCP applica un modello **pay-as-you-go** con diversi meccanismi di sconto:
 
 | Meccanismo | Descrizione | Sconto |
 |-----------|-------------|--------|
-| **Sustained Use Discounts (SUD)** | Sconto automatico per VM usate >25% del mese | Fino a 30% |
-| **Committed Use Discounts (CUD)** | Impegno 1 o 3 anni | Fino a 57% (1yr) / 70% (3yr) |
-| **Preemptible / Spot VM** | VM interrompibili con breve preavviso | Fino a 91% |
-| **Free Tier** | Risorse sempre gratuite entro limiti | f1-micro, 5GB Cloud Storage, ecc. |
+| **Sustained Use Discounts (SUD)** | Sconto automatico per VM usate >25% del mese; solo famiglie legacy (N1, N2, C2…), **non** E2 né le serie più recenti | Fino a 30% (N1), 20% (N2/C2) |
+| **Committed Use Discounts (CUD)** | Impegno 1 o 3 anni (resource-based o spend-based/flexible) | Circa 37% (1yr) / 55% (3yr); fino a 70% per memory-optimized |
+| **Spot VM** | VM interrompibili con breve preavviso (successore delle Preemptible, senza limite di 24h) | Fino a 91% |
+| **Free Tier** | Risorse sempre gratuite entro limiti | 1 e2-micro, 5GB Cloud Storage, ecc. |
 | **Free Trial** | $300 crediti per 90 giorni ai nuovi account | — |
+
+!!! note "Verificare gli sconti"
+    Percentuali e famiglie di VM idonee cambiano nel tempo e variano per macchina e regione: confermare sempre su [VM pricing](https://cloud.google.com/compute/vm-instance-pricing) e [CUD](https://cloud.google.com/docs/cuds).
 
 ```bash
 # Stimare i costi con il pricing calculator (via browser)
@@ -299,9 +303,7 @@ GCP applica un modello **pay-as-you-go** con diversi meccanismi di sconto:
 
 # Esportare i dati di billing su BigQuery per analisi
 # (configurare nella console Billing > Billing export)
-
-# Vedere il riepilogo costi del project corrente via API
-gcloud billing accounts get-spot-price-info --help
+# Il costo effettivo si interroga poi con SQL sulla tabella esportata
 ```
 
 ### Budget e Alert
@@ -318,7 +320,7 @@ gcloud billing budgets create \
 ```
 
 !!! tip "Free Tier GCP"
-    GCP offre un **Always Free** tier con limiti mensili: 1 f1-micro VM (us-east1/us-west1/us-central1), 30GB HDD, 5GB Cloud Storage (us region), 1GB Cloud Functions invocations. Ideale per lab e sviluppo leggero.
+    GCP offre un **Always Free** tier con limiti mensili: 1 VM e2-micro (solo us-west1/us-central1/us-east1), 30GB di standard persistent disk, 5GB Cloud Storage (stesse regioni US), 2M invocazioni Cloud Run functions. Ideale per lab e sviluppo leggero. I limiti cambiano: verificare su [Free Tier](https://cloud.google.com/free).
 
 ---
 
@@ -439,9 +441,10 @@ gcloud cloud-shell ssh
 
 # Cloud Shell fornisce:
 # - 5GB di storage persistente su /home
-# - VM e2-micro effimera (ricreata a ogni sessione se non usata)
+# - VM effimera (reciclata dopo inattività; solo /home persiste)
 # - gcloud autenticato con l'account della console
-# - 50h/settimana gratuite (poi tariffazione standard VM)
+# - quota gratuita di 50h/settimana: esaurita, la sessione resta
+#   bloccata fino al reset (Cloud Shell non si paga a consumo)
 ```
 
 ---
@@ -503,8 +506,13 @@ gcloud projects get-iam-policy my-project-id \
     --filter="bindings.members:user:me@example.com" \
     --format="table(bindings.role)"
 
-# Verificare quale permesso specifico manca
-gcloud iam list-testable-permissions //cloudresourcemanager.googleapis.com/projects/my-project-id
+# Nota: il filtro sopra mostra solo i binding diretti, non quelli ereditati
+# da folder/org né via gruppi. Per spiegare un singolo accesso negato
+# usare Policy Troubleshooter (considera ereditarietà, gruppi, deny policy):
+gcloud policy-troubleshoot iam \
+    //cloudresourcemanager.googleapis.com/projects/my-project-id \
+    --principal-email=me@example.com \
+    --permission=compute.instances.list
 ```
 
 **Problema: "Billing account not set" — project bloccato**
@@ -545,7 +553,7 @@ gcloud compute project-info describe --project=my-project-id
     | GKE | EKS | Kubernetes managed |
     | Cloud Storage | S3 | Object storage |
     | BigQuery | Redshift + Athena | Data warehouse |
-    | Cloud Run | AWS Fargate | Container serverless |
+    | Cloud Run | AWS App Runner / Fargate | Container serverless (Cloud Run scala a zero e si paga a richiesta) |
 
     **Approfondimento →** [AWS Fondamentali](../../aws/fondamentali/_index.md)
 
@@ -557,7 +565,7 @@ gcloud compute project-info describe --project=my-project-id
     | IAM Service Account | Managed Identity | Identità per workload |
     | GKE | AKS | Kubernetes managed |
     | Cloud Storage | Azure Blob Storage | Object storage |
-    | BigQuery | Azure Synapse Analytics | Data warehouse |
+    | BigQuery | Azure Synapse Analytics / Microsoft Fabric | Data warehouse |
 
     **Approfondimento →** [Azure Fondamentali](../../azure/fondamentali/_index.md)
 
