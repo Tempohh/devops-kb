@@ -7,9 +7,10 @@ search_keywords: [database failover, automatic failover, patroni failover, postg
 parent: databases/replicazione-ha/_index
 related: [databases/replicazione-ha/strategie-replica, databases/postgresql/replicazione, databases/replicazione-ha/backup-pitr]
 official_docs: https://patroni.readthedocs.io/en/latest/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Failover e Recovery
@@ -28,9 +29,16 @@ Senza un sistema di failover automatico, il DBA deve:
 
 **Tempo totale: 15-60 minuti** — inaccettabile per la maggior parte delle applicazioni.
 
+!!! note "Acronimi usati in questa pagina"
+    - **RTO** (Recovery Time Objective): tempo massimo tollerato di indisponibilità.
+    - **RPO** (Recovery Point Objective): quantità massima di dati persi tollerata (0 = nessuna perdita, richiede replica sincrona).
+    - **DCS** (Distributed Configuration Store): store con consenso (etcd, Consul, ZooKeeper, API di Kubernetes) dove Patroni tiene lock leader e configurazione.
+    - **LSN** (Log Sequence Number): posizione nel WAL; confrontando gli LSN si capisce quale standby è più avanzata.
+    - **TTL** (Time To Live): durata del lock leader; se non rinnovato entro il TTL, il lock scade.
+
 ## Patroni — Failover Automatico
 
-[Patroni](https://patroni.readthedocs.io/) è il tool standard per gestire cluster PostgreSQL con failover automatico. Usa un **distributed lock** (etcd, Consul, ZooKeeper) per prevenire lo split-brain: solo il nodo che detiene il lock può essere primary.
+[Patroni](https://patroni.readthedocs.io/) è il tool standard per gestire cluster PostgreSQL con failover automatico. Usa un **distributed lock** (etcd, Consul, ZooKeeper) per prevenire lo split-brain: solo il nodo che detiene il lock può essere primary. Su Kubernetes Patroni può usare direttamente le API del cluster come DCS (nessun etcd dedicato); alternative con filosofia simile: `repmgr`, `pg_auto_failover`, operatori come CloudNativePG.
 
 ### Architettura
 
@@ -53,8 +61,10 @@ Flusso failover:
 2. Node 2 e 3 rilevono il lock libero
 3. Elezione: vince il nodo con replica più avanzata (pg_wal_lsn_diff)
 4. Il vincitore prende il lock e promuove il proprio PostgreSQL
-5. Gli altri nodi si riconnettono al nuovo primary (pg_basebackup se necessario)
+5. Gli altri nodi si riconnettono al nuovo primary (pg_rewind se abilitato, altrimenti pg_basebackup)
 ```
+
+Perché funziona: il lock vive nel DCS, che ha consenso (Raft in etcd), quindi due nodi non possono mai possederlo insieme. Il primary che non riesce a rinnovarlo entro `ttl` si **auto-demota** (riavvia PostgreSQL in sola lettura) prima che altri possano prendere il lock.
 
 ### Configurazione
 
@@ -68,15 +78,19 @@ restapi:
   listen: 0.0.0.0:8008
   connect_address: 10.0.1.10:8008
 
-etcd:
+# etcd3 = API v3 (la v2, sezione "etcd:", è rimossa da etcd 3.6)
+etcd3:
   hosts: etcd1:2379,etcd2:2379,etcd3:2379
 
 bootstrap:
   dcs:
     ttl: 30                         # TTL del lock — se il primary non rinnova entro 30s → failover
     loop_wait: 10                   # Frequenza controllo (ogni 10s)
-    retry_timeout: 30
+    retry_timeout: 10               # vincolo: loop_wait + 2*retry_timeout <= ttl
     maximum_lag_on_failover: 1048576  # 1MB — non eleggere standby con lag > 1MB
+    synchronous_mode: true          # Patroni gestisce synchronous_standby_names (RPO=0); false = async
+    postgresql:
+      use_pg_rewind: true           # richiede data-checksums o wal_log_hints
 
   initdb:
     - encoding: UTF8
@@ -101,9 +115,9 @@ postgresql:
     wal_level: replica
     max_wal_senders: 10
     wal_keep_size: 1GB
-    # Sync commit — 'on' per RPO=0, 'off' per massima performance
+    # NON impostare synchronous_standby_names a mano: con synchronous_mode
+    # lo gestisce Patroni (viene sovrascritto)
     synchronous_commit: "on"
-    synchronous_standby_names: "ANY 1 (*)"   # sincrono con qualsiasi 1 standby
     # Performance
     shared_buffers: 4GB
     max_connections: 200
@@ -127,14 +141,15 @@ patronictl -c /etc/patroni.yml list
 # | pg-node-3 | 10.0.1.12 | Replica| running | 1 |
 
 # Switchover pianificato (graceful, senza perdita dati)
+# (--master è deprecato in favore di --leader nelle versioni recenti di patronictl)
 patronictl -c /etc/patroni.yml switchover postgres-cluster \
-    --master pg-node-1 \
+    --leader pg-node-1 \
     --candidate pg-node-2 \
     --scheduled now
 
 # Failover manuale forzato (quando il primary è irraggiungibile)
 patronictl -c /etc/patroni.yml failover postgres-cluster \
-    --master pg-node-1 \
+    --leader pg-node-1 \
     --candidate pg-node-2 \
     --force
 
@@ -166,6 +181,15 @@ GET /replica → 200 = questo nodo è una replica
 
 ```
 # haproxy.cfg
+defaults
+    mode tcp
+    timeout connect 5s
+    timeout client  30m
+    timeout server  30m
+    # on-marked-down shutdown-sessions: chiude le sessioni verso il nodo
+    # declassato, altrimenti le app restano connesse all'ex-primary
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
+
 frontend postgres_write
     bind *:5432
     default_backend pg_primary
@@ -199,7 +223,7 @@ Primary (AZ-A) ──── sincrona ──── Standby (AZ-B)
 
 Failover automatico in 60-120s:
 1. RDS rileva primary irraggiungibile
-2. Promuove la standby (stessa AZ-B)
+2. Promuove la standby (AZ-B)
 3. Aggiorna il DNS del CNAME endpoint → punta alla nuova primary
 4. Le connessioni esistenti vengono droppate → l'app deve riconnettersi
 
@@ -207,8 +231,12 @@ RTO: 1-2 minuti (DNS TTL + promozione)
 RPO: 0 (replica sincrona)
 ```
 
+!!! note "Multi-AZ DB cluster"
+    La variante *Multi-AZ DB cluster* (1 writer + 2 standby leggibili, replica semi-sincrona) ha failover tipicamente più rapido (decine di secondi) rispetto alla Multi-AZ instance. Verificare i valori correnti nella documentazione AWS.
+
 ```python
 # Gestire il reconnect automatico nell'app
+from contextlib import closing
 import psycopg2
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -217,8 +245,9 @@ from tenacity import retry, stop_after_attempt, wait_exponential
     wait=wait_exponential(multiplier=1, min=2, max=30)
 )
 def execute_with_retry(query, params=None):
-    with psycopg2.connect(RDS_ENDPOINT) as conn:
-        with conn.cursor() as cur:
+    # "with conn" gestisce solo la transazione: closing() chiude la connessione
+    with closing(psycopg2.connect(RDS_ENDPOINT)) as conn:
+        with conn, conn.cursor() as cur:
             cur.execute(query, params)
             return cur.fetchall()
 ```
@@ -235,7 +264,8 @@ Failover cross-region (promozione secondario a primary):
   1. Distacca il cluster secondario dal primary
   2. Promuove il cluster secondario a standalone writer
   3. L'app aggiorna il connection string
-  RTO: ~1 minuto, RPO: < 1 secondo (lag tipico)
+  RTO: nell'ordine dei minuti, RPO: tipicamente < 1 secondo (dipende dal lag al momento del guasto)
+  Per eventi pianificati usare lo switchover/managed failover di Aurora Global (nessuna perdita dati)
 ```
 
 ---
@@ -245,10 +275,12 @@ Failover cross-region (promozione secondario a primary):
 Dopo un failover, il nodo originale (ex-primary) deve essere reintegrato come standby. Non assumere mai che torni automaticamente come primary — il nuovo primary ha continuato a ricevere write.
 
 ```bash
-# Con Patroni — reinizializza l'ex-primary come standby del nuovo primary
+# Con use_pg_rewind: true l'ex-primary si riallinea DA SOLO al riavvio
+# (pg_rewind riavvolge i WAL divergenti: rapido, non copia l'intero data dir).
+# Se pg_rewind fallisce o non è abilitato, reinizializza come standby:
 patronictl -c /etc/patroni.yml reinit postgres-cluster pg-node-1
 
-# Patroni esegue pg_basebackup dal nuovo primary e riconfigura come standby
+# reinit esegue pg_basebackup dal nuovo primary e riconfigura come standby
 # Poi verifica che la replica sia in sync e lo aggiunge al cluster
 
 # ATTENZIONE: il reinit cancella tutti i dati locali del nodo!
@@ -274,10 +306,13 @@ Scenario split-brain:
 
 Prevenzione con Patroni + distributed lock:
   - Solo chi detiene il lock su etcd può essere primary
-  - Se A perde la connessione a etcd → rilascia il lock → smette di accettare write
-  - B prende il lock → si promuove
+  - Se A non riesce a rinnovare il lock su etcd → si auto-demota (PostgreSQL riavviato in read-only)
+  - Scaduto il TTL, B prende il lock → si promuove
   - A, se ripristinato, non può ridiventare primary senza lock
 ```
+
+!!! warning "Se muore Patroni ma non PostgreSQL"
+    L'auto-demozione la esegue il processo Patroni. Se Patroni si blocca (o la VM si congela) mentre PostgreSQL continua a girare, il vecchio primary può accettare write oltre la scadenza del lock. Mitigazione: abilitare il **watchdog** (`watchdog.mode: required` in `patroni.yml`, device `/dev/watchdog`), che riavvia il nodo se Patroni non lo "accarezza" in tempo.
 
 ---
 
@@ -286,8 +321,10 @@ Prevenzione con Patroni + distributed lock:
 Testare il failover in produzione (o staging) è **obbligatorio** — non scoprire i problemi durante un'emergenza reale:
 
 ```bash
-# Test 1: Simulazione crash del primary (SIGKILL — no graceful shutdown)
-kill -9 $(pidof postgres)   # sul nodo primary
+# Test 1: Crash dell'intero nodo primary (no graceful shutdown)
+echo b | sudo tee /proc/sysrq-trigger   # reboot immediato (o spegni la VM dal hypervisor)
+# NB: un semplice "kill -9" di postgres NON è un buon test di failover: Patroni
+# lo riavvia in locale e il leader resta lo stesso se rientra nei tempi.
 
 # Test 2: Partizione di rete (iptables)
 iptables -A INPUT -s <etcd-ip> -j DROP    # nodo non può comunicare con etcd
@@ -302,7 +339,8 @@ iptables -A OUTPUT -d <etcd-ip> -j DROP   # → dopo TTL, Patroni rilascia il lo
 # Ripristino test
 iptables -D INPUT -s <etcd-ip> -j DROP
 iptables -D OUTPUT -d <etcd-ip> -j DROP
-patronictl reinit postgres-cluster <ex-primary-node>
+# L'ex-primary di solito rientra da solo (pg_rewind); reinit solo se resta in errore:
+patronictl -c /etc/patroni.yml list
 ```
 
 **Metriche da misurare in ogni test:**
@@ -319,7 +357,7 @@ patronictl reinit postgres-cluster <ex-primary-node>
 
 **Causa:** Il TTL del lock etcd non è ancora scaduto, oppure i nodi etcd sono irraggiungibili e Patroni non può acquisire il lock. In entrambi i casi nessun nodo può diventare leader.
 
-**Soluzione:** Verificare lo stato di etcd e ridurre il TTL se troppo conservativo.
+**Soluzione:** Verificare lo stato di etcd e ridurre il TTL se troppo conservativo. Senza quorum etcd (es. 2 nodi su 3 down) il failover è impossibile per design: ripristinare prima etcd.
 
 ```bash
 # Verifica health etcd
@@ -331,12 +369,14 @@ etcdctl --endpoints=etcd1:2379 get /db/postgres-cluster/leader
 
 # Forza il failover manualmente (se etcd è raggiungibile)
 patronictl -c /etc/patroni.yml failover postgres-cluster \
-    --master pg-node-1 \
+    --leader pg-node-1 \
     --candidate pg-node-2 \
     --force
 
-# Ridurre TTL nella configurazione DCS (richiede restart Patroni)
-# bootstrap.dcs.ttl: 20   (default 30 — abbassare con cautela)
+# Ridurre il TTL: configurazione dinamica nel DCS, nessun restart
+# (bootstrap.dcs vale solo al primo avvio del cluster)
+patronictl -c /etc/patroni.yml edit-config -s ttl=20 -s loop_wait=8 -s retry_timeout=6 --force
+# default ttl 30 — abbassare con cautela: troppo basso = failover spurii su picchi di latenza
 ```
 
 ---
@@ -386,11 +426,10 @@ echo "show servers state" | socat stdio /run/haproxy/admin.sock
 curl -s http://pg-node-2:8008/primary   # deve rispondere 200
 curl -s http://pg-node-1:8008/primary   # deve rispondere 503 (ex-primary)
 
-# Se usi PgBouncer: verifica che abbia applicato il nuovo primary
-psql -p 6432 -U pgbouncer pgbouncer -c "SHOW POOLS;"
-
-# Ricarica configurazione PgBouncer senza downtime
-psql -p 6432 -U pgbouncer pgbouncer -c "RELOAD;"
+# Se usi PgBouncer: deve puntare a HAProxy/VIP, non a un nodo fisso.
+# Le connessioni server già aperte verso l'ex-primary vanno chiuse:
+psql -p 6432 -U pgbouncer pgbouncer -c "SHOW SERVERS;"
+psql -p 6432 -U pgbouncer pgbouncer -c "RECONNECT;"   # le chiude a fine uso; RELOAD rilegge solo la config
 
 # Test connessione diretta al nuovo primary
 psql -h pg-node-2 -U postgres -c "SELECT pg_is_in_recovery();"  # deve restituire 'f'
@@ -402,7 +441,7 @@ psql -h pg-node-2 -U postgres -c "SELECT pg_is_in_recovery();"  # deve restituir
 
 **Sintomo:** `patronictl list` mostra alternanza continua del leader. I log riportano `promoted` e poi `demoted` in rapida successione. Il cluster non raggiunge uno stato stabile.
 
-**Causa:** Il nodo promosso ha un lag superiore a `maximum_lag_on_failover` oppure `pg_rewind` non è abilitato e le timeline divergono ad ogni promozione. Può anche essere causato da clock drift tra i nodi che invalida il TTL del lock.
+**Causa:** Parametri troppo aggressivi (`ttl`/`loop_wait`/`retry_timeout`) rispetto alla latenza reale di rete o di etcd: il leader non riesce a rinnovare il lock in tempo e si auto-demota. Aggravanti: `pg_rewind` non abilitato (le timeline divergono a ogni promozione), standby con lag oltre `maximum_lag_on_failover` (nessun candidato idoneo), disco/CPU saturi sul primary. Un clock non sincronizzato crea confusione nei log e nelle metriche, ma il TTL è misurato dal DCS.
 
 **Soluzione:** Mettere in pausa Patroni, diagnosticare il nodo problematico, correggere la configurazione e riprendere.
 
@@ -436,6 +475,6 @@ patronictl -c /etc/patroni.yml resume postgres-cluster
 ## Riferimenti
 
 - [Patroni Documentation](https://patroni.readthedocs.io/)
-- [Zalando — Patroni on Kubernetes](https://github.com/zalando/patroni)
+- [Patroni — repository GitHub](https://github.com/patroni/patroni)
 - [AWS RDS Failover](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html)
 - [PostgreSQL — pg_promote()](https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-RECOVERY-CONTROL)
