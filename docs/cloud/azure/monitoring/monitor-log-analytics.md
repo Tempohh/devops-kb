@@ -7,7 +7,7 @@ search_keywords: [Azure Monitor metrics logs traces, Log Analytics Workspace KQL
 parent: cloud/azure/monitoring/_index
 related: [cloud/azure/compute/virtual-machines, cloud/azure/compute/aks-containers, cloud/azure/security/defender-sentinel, cloud/azure/monitoring/application-insights]
 official_docs: https://learn.microsoft.com/azure/azure-monitor/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -420,8 +420,8 @@ az monitor action-group update \
 I Workbooks Azure Monitor sono dashboard interattivi parametrizzati che combinano query KQL con visualizzazioni.
 
 ```bash
-# Creare workbook personalizzato (richiede JSON di definizione; estensione application-insights)
-# <!-- REVIEW: verificare sintassi/parametri di `az monitor app-insights workbook create` nella versione corrente dell'estensione -->
+# Creare workbook personalizzato (richiede JSON di definizione; estensione application-insights,
+# installata al primo uso). --name deve essere un UUID; --kind accetta solo "shared".
 az monitor app-insights workbook create \
   --resource-group $RG \
   --name "$(uuidgen)" \
@@ -443,11 +443,20 @@ Workbook predefiniti utili:
 
 ## Azure Monitor for VMs (VM Insights)
 
-VM Insights abilita monitoring avanzato per VM: performance chart e dependency map. Oggi si basa su AMA + una DCR dedicata (creata dal portale con "Enable" in VM Insights); il **Dependency Agent** è opzionale e serve solo alla funzione *Map* (tabella `VMConnection`), non alle performance.
-<!-- REVIEW: verificare lo stato di ritiro del Dependency Agent e la raccomandazione Microsoft attuale per la dependency map -->
+VM Insights abilita monitoring avanzato per VM: performance chart e (legacy) dependency map. Oggi si basa su AMA + una DCR dedicata (creata dal portale con "Enable" in VM Insights); il monitoring delle performance non dipende dal Dependency Agent.
+
+!!! warning "Dependency Agent e VM Insights Map: deprecati, ritiro 30 giugno 2028"
+    Il **Dependency Agent** e la funzione *Map* (tab Map, workbook *Connections Overview*, Service Map API) sono deprecati e **ritirati il 30 giugno 2028**. Dal 30 settembre 2025 non si possono onboardare nuove VM dal portale e Microsoft raccomanda di **non installarlo su nuovi sistemi**. I dati già ingeriti (`VMComputer`, `VMProcess`, `VMConnection`, `VMBoundPort`) restano nel workspace secondo la retention. Alternative indicate da Microsoft: soluzioni di terze parti dal Marketplace (categoria monitoring & diagnostics); per l'inventario, AMA + *Change Tracking and Inventory*. Su Azure Advisor la raccomandazione *Migrate from Dependency Agent and VM Insights Map* elenca le VM interessate.
 
 ```bash
-# Dependency Agent (solo per la Map; richiede AMA già installato)
+# SOLO per offboarding/riferimento: Dependency Agent già presente (richiede AMA).
+# Non usare per nuove installazioni. Rimozione:
+az vm extension delete \
+  --resource-group $RG \
+  --vm-name my-vm \
+  --name DependencyAgentLinux
+
+# Installazione (sconsigliata, legacy)
 az vm extension set \
   --resource-group $RG \
   --vm-name my-vm \
@@ -455,12 +464,11 @@ az vm extension set \
   --publisher Microsoft.Azure.Monitoring.DependencyAgent \
   --enable-auto-upgrade true
 
-# Query per dependency map (VM Insights)
-# VMConnection table mostra connessioni TCP tra processi
+# Dati storici della Map (VM Insights): la tabella VMConnection mostra connessioni TCP tra processi
 ```
 
 ```kql
-// VM Connections: processi che accettano connessioni
+// VM Connections (dati storici del Dependency Agent): processi che accettano connessioni
 VMConnection
 | where TimeGenerated > ago(1h)
 | where Direction == "inbound"
