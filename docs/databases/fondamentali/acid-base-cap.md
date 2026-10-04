@@ -7,7 +7,8 @@ search_keywords: [acid properties, atomicity consistency isolation durability, b
 parent: databases/fondamentali/_index
 related: [databases/fondamentali/transazioni-concorrenza, databases/nosql/cassandra, databases/nosql/mongodb]
 official_docs: https://martin.kleppmann.com/2015/05/11/please-stop-calling-databases-cp-or-ap.html
-status: complete
+status: reviewed
+last_verified: 2026-10-04
 difficulty: intermediate
 last_updated: 2026-03-29
 ---
@@ -33,11 +34,11 @@ BEGIN;
 COMMIT;  -- Entrambe o nessuna
 ```
 
-**Implementazione**: i database usano un **WAL (Write-Ahead Log)** — ogni modifica viene scritta sul log prima di essere applicata alle pagine dati. In caso di crash durante una transazione, il database usa il WAL per fare rollback al riavvio.
+**Implementazione**: i database usano un **WAL (Write-Ahead Log)** — ogni modifica viene scritta sul log prima di essere applicata alle pagine dati. In caso di crash il database rigioca il WAL al riavvio (redo) e scarta le transazioni non committate: nei motori con undo log (MySQL InnoDB, Oracle) le annulla esplicitamente; in PostgreSQL (MVCC) le versioni di riga non committate restano semplicemente invisibili.
 
 ### Consistency — Invarianti Garantite
 
-La transizione tra stati del database deve rispettare tutte le vincoli di integrità definiti (constraint, foreign key, check). Questo è diverso dalla "consistency" nel CAP theorem — qui si parla di invarianti dello schema, non di coerenza tra repliche.
+La transizione tra stati del database deve rispettare tutti i vincoli di integrità definiti (constraint, foreign key, check). Questo è diverso dalla "consistency" nel CAP theorem — qui si parla di invarianti dello schema, non di coerenza tra repliche.
 
 !!! warning "La C più fraintesa"
     La Consistency in ACID è responsabilità parziale del database (enforcing constraints) e parziale dell'applicazione (business rules). Un database può essere ACID e permettere ugualmente inconsistenze applicative se i constraint non sono definiti correttamente.
@@ -114,9 +115,9 @@ ELSE (normale operazione): scegli tra Latency e Consistency
 |---------|-----------|---------|------|
 | DynamoDB | PA | EL | Eventual consistency di default |
 | Cassandra | PA | EL | Consistency level configurabile |
-| MongoDB | PC | EC | Single-doc ACID, replica lag |
+| MongoDB | PC | EC | Write/read concern configurabili; transazioni multi-documento da 4.0 |
 | PostgreSQL | PC | EC | Replica synchronous/async |
-| Zookeeper | PC | EC | CP strict, alta latenza in lettura |
+| Zookeeper | PC | EC | Scritture linearizzabili via leader; letture locali (veloci, ma possibili stale senza `sync`) |
 | CockroachDB | PC | EC | Distributed SQL, Raft consensus |
 | Spanner | PC | EC | TrueTime, strong consistency globale |
 
@@ -141,7 +142,7 @@ Linearizability → Serializability → Snapshot → Causal → Eventual
 | **Linearizability** | Ogni operazione sembra istantanea, ordine real-time rispettato | Raft/Paxos, Zookeeper |
 | **Serializability** | L'esecuzione è equivalente a una seriale — può non riflettere ordine fisico | 2PL (Two-Phase Locking), MVCC (Multi-Version Concurrency Control) + SSI (Serializable Snapshot Isolation) |
 | **Snapshot Isolation** | Ogni transazione vede uno snapshot coerente al suo inizio | MVCC (PostgreSQL, Oracle) |
-| **Causal Consistency** | Le operazioni causalmente correlate sono viste nell'ordine corretto | Vector clocks (DynamoDB streams) |
+| **Causal Consistency** | Le operazioni causalmente correlate sono viste nell'ordine corretto | Vector clocks / sessioni causali (MongoDB causal consistency, Dynamo originale) |
 | **Eventual Consistency** | Converge, ma nessuna garanzia sull'ordine o il timing | Cassandra (ONE), DNS |
 
 ---
@@ -166,7 +167,7 @@ Coordinator                 Partecipante A     Partecipante B
 **Il problema del 2PC**: se il coordinator cade dopo aver ricevuto tutti i YES ma prima di inviare COMMIT, i partecipanti restano bloccati in uno stato incerto. È un protocollo bloccante.
 
 **Alternative moderne:**
-- **Saga pattern**: serie di transazioni locali con compensazioni (vedi Kafka)
+- **Saga pattern**: serie di transazioni locali con compensazioni (orchestrate o coreografate via eventi, es. su Kafka)
 - **Optimistic concurrency control**: versioning senza lock, retry su conflitto
 - **Raft/Paxos consensus**: per sistemi come CockroachDB e Spanner
 
@@ -181,8 +182,9 @@ Coordinator                 Partecipante A     Partecipante B
 **Soluzione**: Usare un consistency level più forte per le letture critiche, o applicare read-your-writes routing verso la replica primaria.
 
 ```cql
--- Cassandra: aumentare consistency level per letture critiche
-SELECT * FROM ordini WHERE id = 123 USING CONSISTENCY QUORUM;
+-- Cassandra (cqlsh): il consistency level è di sessione/driver, non una clausola CQL
+CONSISTENCY QUORUM;
+SELECT * FROM ordini WHERE id = 123;
 
 -- DynamoDB: forzare strong consistent read
 aws dynamodb get-item \
@@ -202,7 +204,8 @@ aws dynamodb get-item \
 **Soluzione**: Risolvere manualmente la transazione in-doubt dopo aver verificato lo stato su tutti i nodi, oppure abilitare il recovery automatico del coordinator.
 
 ```sql
--- PostgreSQL: visualizzare transazioni in-doubt (prepared)
+-- PostgreSQL: richiede max_prepared_transactions > 0 (default 0: PREPARE TRANSACTION disabilitato)
+-- Visualizzare transazioni in-doubt (prepared)
 SELECT gid, prepared, owner, database FROM pg_prepared_xacts;
 
 -- Completare o annullare manualmente
@@ -246,12 +249,13 @@ WHERE id = 1 AND version = 5;  -- fallisce se versione cambiata nel frattempo
 **Soluzione**: Verificare e ripristinare la configurazione di durabilità. In PostgreSQL, `synchronous_commit=off` è accettabile solo per operazioni non critiche (bulk import, log analytics).
 
 ```bash
--- Verificare configurazione PostgreSQL
+# Verificare configurazione PostgreSQL
 psql -c "SHOW synchronous_commit;"
 psql -c "SHOW fsync;"
 
--- Verificare a livello di sessione o transazione
-psql -c "SET synchronous_commit = on;"
+# Ripristinare il valore globale (un SET in un psql -c vale solo per quella sessione)
+psql -c "ALTER SYSTEM SET synchronous_commit = on;"
+psql -c "SELECT pg_reload_conf();"
 
 # Nel file postgresql.conf — valori sicuri per produzione:
 # fsync = on
