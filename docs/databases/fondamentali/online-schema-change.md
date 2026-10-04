@@ -7,9 +7,10 @@ search_keywords: [online schema change, OSC, zero downtime DDL, ddl senza downti
 parent: databases/fondamentali/_index
 related: [databases/fondamentali/schema-migrations, databases/fondamentali/indici, databases/fondamentali/transazioni-concorrenza, databases/postgresql/mvcc-vacuum, databases/mysql/architettura-replicazione, databases/postgresql/major-version-upgrade]
 official_docs: https://www.postgresql.org/docs/current/sql-altertable.html
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Online Schema Change — DDL senza downtime
@@ -43,6 +44,9 @@ Non serve per tabelle piccole (< qualche milione di righe, DDL < 1 s) dove un lo
 | Rinominare colonna | metadata, ma rompe il codice → expand/contract | `INSTANT`/`INPLACE`, ma rompe il codice → expand/contract |
 | Recuperare bloat / riscrivere | `pg_repack` | OSC (`ALTER TABLE t ENGINE=InnoDB` via gh-ost) |
 
+!!! note "MySQL 8.0 è a fine vita"
+    MySQL 8.0 ha raggiunto l'EOL ad aprile 2026: per nuove installazioni usa la LTS **8.4** (o 9.x innovation). Gli algoritmi `INSTANT`/`INPLACE`/`COPY` descritti qui valgono invariati in 8.4; la colonna "MySQL 8.0" della tabella va letta come "MySQL 8.x".
+
 ## Architettura / Come Funziona
 
 ### Lock queue in PostgreSQL
@@ -60,7 +64,7 @@ La difesa è un `lock_timeout` breve: l'ALTER rinuncia dopo pochi secondi e il t
 
 ### Metadata lock in MySQL
 
-In MySQL ogni statement acquisisce un **metadata lock (MDL)** sulle tabelle che tocca, e lo tiene fino a fine transazione. L'`ALTER TABLE` richiede un MDL esclusivo all'inizio e alla fine (anche per DDL "online"): se una transazione lunga ha già un MDL condiviso, l'ALTER attende e tutte le query successive si accodano — stesso meccanismo di PostgreSQL, stesso sintomo (`Waiting for table metadata lock`).
+In MySQL ogni statement acquisisce un **metadata lock (MDL)** sulle tabelle che tocca, e lo tiene fino a fine transazione. L'`ALTER TABLE` parte con un MDL condiviso *upgradabile* e lo promuove a **esclusivo** al commit finale (anche per DDL "online"; con `COPY`/`INPLACE` con rebuild l'attesa si ripete nelle fasi di inizio e fine): se una transazione lunga ha già un MDL condiviso, l'ALTER attende e tutte le query successive si accodano — stesso meccanismo di PostgreSQL, stesso sintomo (`Waiting for table metadata lock`).
 
 ### Algoritmi di ALTER in MySQL (InnoDB)
 
@@ -157,7 +161,7 @@ DROP INDEX CONCURRENTLY IF EXISTS idx_orders_customer_id;
 CREATE INDEX CONCURRENTLY idx_orders_customer_id ON orders (customer_id);
 ```
 
-Nei tool di migration va disabilitata la transazione implicita: in Flyway `executeInTransaction=false` (file `.conf` di script o header `-- flyway:executeInTransaction=false`); in golang-migrate usare una migration con una sola istruzione senza `BEGIN`; in Liquibase `runInTransaction="false"` sul changeSet.
+Nei tool di migration va disabilitata la transazione implicita: in Flyway `executeInTransaction=false` (nel file di configurazione dello script, es. `V7__idx.sql.conf`, o globale); in golang-migrate usare una migration con una sola istruzione senza `BEGIN`; in Liquibase `runInTransaction="false"` sul changeSet.
 
 ### PostgreSQL: vincoli con NOT VALID
 
@@ -360,8 +364,14 @@ Ogni passo è reversibile fino al punto 4; il rollback del codice non incontra m
 ALTER TABLE users ADD COLUMN full_name text;
 CREATE OR REPLACE FUNCTION users_sync_name() RETURNS trigger AS $$
 BEGIN
-  NEW.full_name := COALESCE(NEW.full_name, NEW.name);
-  NEW.name      := COALESCE(NEW.name, NEW.full_name);
+  IF TG_OP = 'INSERT' THEN
+    NEW.full_name := COALESCE(NEW.full_name, NEW.name);
+    NEW.name      := COALESCE(NEW.name, NEW.full_name);
+  ELSIF NEW.name IS DISTINCT FROM OLD.name THEN
+    NEW.full_name := NEW.name;        -- il codice vecchio ha cambiato name
+  ELSIF NEW.full_name IS DISTINCT FROM OLD.full_name THEN
+    NEW.name := NEW.full_name;        -- il codice nuovo ha cambiato full_name
+  END IF;
   RETURN NEW;
 END $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_users_sync_name BEFORE INSERT OR UPDATE ON users
@@ -376,7 +386,7 @@ Una singola `UPDATE users SET full_name = name` su 300 milioni di righe genera u
 -- PostgreSQL: un batch (da ripetere finché rowcount = 0). Commit per ogni batch.
 WITH batch AS (
   SELECT id FROM users
-  WHERE full_name IS NULL
+  WHERE full_name IS NULL AND name IS NOT NULL   -- senza il filtro su name, le righe con name NULL ricorrono all'infinito
   ORDER BY id
   LIMIT 5000
   FOR UPDATE SKIP LOCKED
@@ -390,7 +400,7 @@ FROM batch WHERE u.id = batch.id;
 # backfill.sh — batch + pausa adattiva sul replica lag (PostgreSQL)
 while :; do
   n=$(psql "$DATABASE_URL" -Atc "
-    WITH b AS (SELECT id FROM users WHERE full_name IS NULL ORDER BY id LIMIT 5000 FOR UPDATE SKIP LOCKED),
+    WITH b AS (SELECT id FROM users WHERE full_name IS NULL AND name IS NOT NULL ORDER BY id LIMIT 5000 FOR UPDATE SKIP LOCKED),
          u AS (UPDATE users x SET full_name = x.name FROM b WHERE x.id = b.id RETURNING 1)
     SELECT count(*) FROM u;")
   [ "$n" -eq 0 ] && break
