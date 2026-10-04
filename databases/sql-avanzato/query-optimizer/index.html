@@ -12476,7 +12476,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12520,7 +12520,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12545,7 +12545,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12983,7 +12983,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13884,7 +13884,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -15061,7 +15061,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -25228,8 +25228,8 @@
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>                           (actual time=43.200..44.800 rows=4987 loops=1)
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>              Group Key: u.id
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>              Batches: 1  Memory Usage: 897kB
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>              -&gt;  Hash Left Join  (cost=310.00..912.50 rows=15000 width=16)
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>                                  (actual time=8.500..38.200 rows=15000 loops=1)
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>              -&gt;  Hash Right Join  (cost=310.00..912.50 rows=15000 width=16)
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>                                   (actual time=8.500..38.200 rows=15000 loops=1)
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>                    Hash Cond: (o.utente_id = u.id)
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>                    -&gt;  Seq Scan on ordini o  (cost=0.00..450.00 rows=30000 width=8)
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>                                              (actual time=0.100..15.000 rows=30000 loops=1)
@@ -25280,6 +25280,18 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Hash Right Join nell'esempio</p>
+<p>Nell'esempio <code>utenti</code> è il lato preservato del <code>LEFT JOIN</code> ma è anche il lato piccolo da mettere in hash: il planner usa quindi <code>Hash Right Join</code> (hash sul lato preservato, probe con <code>ordini</code>). <code>Hash Left Join</code> si avrebbe hashando <code>ordini</code>.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">loops &gt; 1</p>
+<p><code>actual time</code> e <code>actual rows</code> sono <strong>medie per singola esecuzione</strong> del nodo: il totale reale è <code>valore × loops</code>. Tipico dell'inner side di un Nested Loop, dove un <code>actual time=0.05</code> con <code>loops=100000</code> pesa 5 s.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">BUFFERS di default</p>
+<p>Da PostgreSQL 18 <code>EXPLAIN ANALYZE</code> include <code>BUFFERS</code> automaticamente; nelle versioni precedenti va richiesto esplicitamente come negli esempi.</p>
+</div>
 <p><strong>Il segnale di allarme principale</strong>: grande discrepanza tra <code>rows=stima</code> e <code>actual rows=reali</code>. Significa che le statistiche sono outdated o che la distribuzione dei dati è non uniforme.</p>
 <hr />
 <h2 id="tipi-di-scan">Tipi di Scan<a class="headerlink" href="#tipi-di-scan" title="Permanent link">&para;</a></h2>
@@ -25319,7 +25331,7 @@
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>  -&gt;  Hash                        ← build side (lato piccolo)
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        -&gt;  Seq Scan on utenti u
 </span></code></pre></div>
-<p><code>work_mem</code> determina quanto memoria può usare l'hash table. Se non basta, usa disk (batches &gt; 1 nell'output = spill to disk).</p>
+<p><code>work_mem</code> (moltiplicato per <code>hash_mem_multiplier</code>, PostgreSQL 13+) determina quanto memoria può usare l'hash table. Se non basta, il join procede a "batch" su file temporanei: <code>Batches: N</code> con N &gt; 1 sul nodo <code>Hash</code> = spill su disco.</p>
 <h3 id="merge-join">Merge Join<a class="headerlink" href="#merge-join" title="Permanent link">&para;</a></h3>
 <p>Richiede entrambi i lati ordinati sulla join key. Efficiente quando i dati sono già ordinati (es. da un indice).</p>
 <hr />
@@ -25343,8 +25355,8 @@
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1">-- "WHERE citta = 'Milano' AND nazione = 'Italia'" → stima indipendente</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1">-- ma praticamente tutti i milanesi hanno nazione=Italia</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1">-- PostgreSQL 14+: statistiche multicolonna</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">STATISTICS</span><span class="w"> </span><span class="n">stat_citta_nazione</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">citta</span><span class="p">,</span><span class="w"> </span><span class="n">nazione</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">indirizzi</span><span class="p">;</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1">-- Statistiche estese (PostgreSQL 10+; kind `mcv` da 12, su espressioni da 14)</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">STATISTICS</span><span class="w"> </span><span class="n">stat_citta_nazione</span><span class="w"> </span><span class="p">(</span><span class="n">dependencies</span><span class="p">,</span><span class="w"> </span><span class="n">ndistinct</span><span class="p">,</span><span class="w"> </span><span class="n">mcv</span><span class="p">)</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">citta</span><span class="p">,</span><span class="w"> </span><span class="n">nazione</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">indirizzi</span><span class="p">;</span>
 </span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="k">ANALYZE</span><span class="w"> </span><span class="n">indirizzi</span><span class="p">;</span>
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
 </span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1">-- Verifica le extended statistics</span>
@@ -25369,7 +25381,7 @@
 <hr />
 <h2 id="strumenti-di-diagnosi">Strumenti di Diagnosi<a class="headerlink" href="#strumenti-di-diagnosi" title="Permanent link">&para;</a></h2>
 <h3 id="pg_stat_statements">pg_stat_statements<a class="headerlink" href="#pg_stat_statements" title="Permanent link">&para;</a></h3>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">-- Abilita estensione</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">-- Prerequisito: shared_preload_libraries = 'pg_stat_statements' (richiede restart)</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">EXTENSION</span><span class="w"> </span><span class="n">pg_stat_statements</span><span class="p">;</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1">-- Query più lente (per total_exec_time)</span>
@@ -25384,24 +25396,32 @@
 </span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">total_exec_time</span><span class="w"> </span><span class="k">DESC</span>
 </span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="k">LIMIT</span><span class="w"> </span><span class="mi">20</span><span class="p">;</span>
 </span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1">-- Query con stima righe peggiore</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1">-- Query con più I/O da disco (candidate a indici mancanti o working set &gt; shared_buffers)</span>
 </span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="k">SELECT</span>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">    </span><span class="n">query</span><span class="p">,</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">    </span><span class="k">left</span><span class="p">(</span><span class="n">query</span><span class="p">,</span><span class="w"> </span><span class="mi">100</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">query</span><span class="p">,</span>
 </span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">    </span><span class="n">calls</span><span class="p">,</span>
-</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">    </span><span class="k">rows</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">calls</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">avg_rows</span><span class="p">,</span>
-</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">    </span><span class="c1">-- rows_examined / rows_returned è un proxy del costo</span>
-</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_statements</span>
-</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">calls</span><span class="w"> </span><span class="k">DESC</span><span class="p">;</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">    </span><span class="n">shared_blks_read</span><span class="p">,</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">    </span><span class="n">shared_blks_hit</span><span class="p">,</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="w">    </span><span class="n">round</span><span class="p">(</span><span class="mi">100</span><span class="p">.</span><span class="mi">0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">shared_blks_hit</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="k">nullif</span><span class="p">(</span><span class="n">shared_blks_hit</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">shared_blks_read</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">),</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">hit_pct</span>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_statements</span>
+</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">shared_blks_read</span><span class="w"> </span><span class="k">DESC</span>
+</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="k">LIMIT</span><span class="w"> </span><span class="mi">20</span><span class="p">;</span>
 </span></code></pre></div>
+<p><code>pg_stat_statements</code> dice <strong>quali</strong> query pesano ma non mostra il piano: per quello si usa <code>EXPLAIN</code> sulla query isolata o <code>auto_explain</code>.</p>
 <h3 id="auto_explain">auto_explain<a class="headerlink" href="#auto_explain" title="Permanent link">&para;</a></h3>
 <p>Logga automaticamente i piani delle query lente:</p>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1">-- In postgresql.conf o ALTER SYSTEM:</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">shared_preload_libraries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'auto_explain'</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">auto_explain</span><span class="p">.</span><span class="n">log_min_duration</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'1s'</span><span class="w">    </span><span class="c1">-- Log query &gt; 1 secondo</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">auto_explain</span><span class="p">.</span><span class="n">log_analyze</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">true</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">auto_explain</span><span class="p">.</span><span class="n">log_buffers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">true</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="n">auto_explain</span><span class="p">.</span><span class="n">log_nested_statements</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">true</span>
+<div class="language-ini highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># postgresql.conf (shared_preload_libraries richiede restart;</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># in alternativa session_preload_libraries = 'auto_explain' si applica alle nuove sessioni)</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="na">shared_preload_libraries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'auto_explain'</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="na">auto_explain.log_min_duration</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'1s'</span><span class="w">    </span><span class="c1"># Log query &gt; 1 secondo</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="na">auto_explain.log_analyze</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span><span class="w">         </span><span class="c1"># Costo: timing per nodo su ogni query -&gt; overhead</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="na">auto_explain.log_buffers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="na">auto_explain.log_nested_statements</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Overhead di log_analyze</p>
+<p>Con <code>log_analyze = true</code> il timing per nodo viene misurato su <strong>tutte</strong> le query, non solo su quelle loggate. Su carichi ad alto QPS valutare <code>auto_explain.log_timing = off</code> o <code>auto_explain.sample_rate</code>.</p>
+</div>
 <hr />
 <h2 id="interventi-correttivi">Interventi Correttivi<a class="headerlink" href="#interventi-correttivi" title="Permanent link">&para;</a></h2>
 <h3 id="1-aggiornare-le-statistiche">1. Aggiornare le Statistiche<a class="headerlink" href="#1-aggiornare-le-statistiche" title="Permanent link">&para;</a></h3>
@@ -25418,13 +25438,14 @@
 </span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="k">SET</span><span class="w"> </span><span class="n">work_mem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'256MB'</span><span class="p">;</span><span class="w">  </span><span class="c1">-- Solo per questa sessione</span>
 </span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">ANALYZE</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="p">...;</span>
 </span></code></pre></div>
+<p>PostgreSQL non ha hint nativi (scelta voluta): chi li richiede usa l'estensione <code>pg_hint_plan</code>. Meglio correggere statistiche e costi che forzare piani, perché un hint resta valido anche quando i dati cambiano e rendono il piano forzato peggiore.</p>
 <h3 id="3-indice-mancante">3. Indice Mancante<a class="headerlink" href="#3-indice-mancante" title="Permanent link">&para;</a></h3>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1">-- EXPLAIN mostra un Seq Scan su una tabella grande con filtro selettivo</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1">-- → creare l'indice appropriato (vedi sezione Indici)</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">CONCURRENTLY</span><span class="w"> </span><span class="n">idx_ordini_status_data</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">ordini</span><span class="p">(</span><span class="n">status</span><span class="p">,</span><span class="w"> </span><span class="n">created_at</span><span class="w"> </span><span class="k">DESC</span><span class="p">);</span>
 </span></code></pre></div>
 <h3 id="4-aumentare-work_mem">4. Aumentare work_mem<a class="headerlink" href="#4-aumentare-work_mem" title="Permanent link">&para;</a></h3>
-<p>Se <code>EXPLAIN ANALYZE</code> mostra <code>Batches: N</code> (N &gt; 1) in un hash join o <code>Sort Method: external merge Disk</code>, aumentare <code>work_mem</code>:</p>
+<p>Se <code>EXPLAIN ANALYZE</code> mostra <code>Batches: N</code> (N &gt; 1) su un nodo <code>Hash</code> o <code>Sort Method: external merge Disk</code>, aumentare <code>work_mem</code>. Il limite si applica <strong>per nodo</strong> (sort/hash) e per sessione, non per query:</p>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1">-- In postgresql.conf</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">work_mem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'64MB'</span><span class="w">  </span><span class="c1">-- Default 4MB — spesso troppo basso</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
@@ -25462,7 +25483,7 @@
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">ordini</span><span class="w"> </span><span class="k">ALTER</span><span class="w"> </span><span class="k">COLUMN</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="k">STATISTICS</span><span class="w"> </span><span class="mi">500</span><span class="p">;</span>
 </span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="k">ANALYZE</span><span class="w"> </span><span class="n">ordini</span><span class="p">;</span>
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="c1">-- 2. Per correlazioni tra più colonne (PostgreSQL 14+)</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="c1">-- 2. Per correlazioni tra più colonne (extended statistics, PostgreSQL 10+)</span>
 </span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">STATISTICS</span><span class="w"> </span><span class="n">stat_col1_col2</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">col1</span><span class="p">,</span><span class="w"> </span><span class="n">col2</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">tabella</span><span class="p">;</span>
 </span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="k">ANALYZE</span><span class="w"> </span><span class="n">tabella</span><span class="p">;</span>
 </span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>

@@ -12476,7 +12476,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12511,7 +12511,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12555,7 +12555,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12580,7 +12580,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13711,7 +13711,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14888,7 +14888,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24892,17 +24892,20 @@
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span><span class="k">FOR</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="s1">'2024-02-01'</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="p">(</span><span class="s1">'2024-03-01'</span><span class="p">);</span>
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="c1">-- ... una per ogni mese ...</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1">-- Partizione default: cattura righe non coperte da nessuna altra partizione</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi_default</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">    </span><span class="n">PARTITION</span><span class="w"> </span><span class="k">OF</span><span class="w"> </span><span class="n">log_eventi</span><span class="w"> </span><span class="k">DEFAULT</span><span class="p">;</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="c1">-- Nota: i bound su TIMESTAMPTZ sono letterali interpretati nel fuso della sessione</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1">-- (TimeZone). Usare un fuso esplicito, es. '2024-01-01 00:00:00+00', per non avere</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="c1">-- confini diversi tra sessioni/ambienti.</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="c1">-- Partizione default: cattura righe non coperte da nessuna altra partizione</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi_default</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">    </span><span class="n">PARTITION</span><span class="w"> </span><span class="k">OF</span><span class="w"> </span><span class="n">log_eventi</span><span class="w"> </span><span class="k">DEFAULT</span><span class="p">;</span>
 </span></code></pre></div>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">-- Il planner usa solo la partizione corretta (partition pruning)</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">log_eventi</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="k">WHERE</span><span class="w"> </span><span class="k">timestamp</span><span class="w"> </span><span class="k">BETWEEN</span><span class="w"> </span><span class="s1">'2024-01-15'</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="s1">'2024-01-20'</span><span class="p">;</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1">-- → Index Scan on log_eventi_2024_01 (solo questa partizione!)</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1">-- → log_eventi_2024_02, _03, ecc. sono skippate completamente</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1">-- → le altre partizioni non compaiono nel piano: sono escluse in fase di planning</span>
 </span></code></pre></div>
 <h3 id="list-partitioning">List Partitioning<a class="headerlink" href="#list-partitioning" title="Permanent link">&para;</a></h3>
 <p>Per colonne con un set discreto di valori (es. region, tenant, status):</p>
@@ -24934,40 +24937,56 @@
 </span></code></pre></div>
 <hr />
 <h2 id="indici-e-partizioni">Indici e Partizioni<a class="headerlink" href="#indici-e-partizioni" title="Permanent link">&para;</a></h2>
-<p>Gli indici si creano separatamente su ogni partizione (ma PostgreSQL li crea automaticamente sulle partizioni figlie quando si crea l'indice sulla tabella padre):</p>
+<p>Un indice creato sulla tabella padre è un indice <em>partizionato</em>: PostgreSQL crea un indice equivalente su ogni partizione esistente e su quelle future. Non esiste un indice globale su tutte le partizioni: ogni partizione ha il proprio indice locale.</p>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1">-- Indice sulla tabella padre → creato automaticamente su tutte le partizioni</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="n">idx_log_servizio</span><span class="w"> </span><span class="k">ON</span><span class="w"> </span><span class="n">log_eventi</span><span class="w"> </span><span class="p">(</span><span class="n">servizio</span><span class="p">);</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1">-- Crea automaticamente:</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1">--   idx_log_eventi_2024_01_servizio</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1">--   idx_log_eventi_2024_02_servizio</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1">--   ...</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="c1">-- Index only scan funziona su partizioni individuali</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="n">servizio</span><span class="p">,</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="k">FROM</span><span class="w"> </span><span class="n">log_eventi</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="k">WHERE</span><span class="w"> </span><span class="k">timestamp</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="s1">'2024-01-01'</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">servizio</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'api-gateway'</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">servizio</span><span class="p">;</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="c1">-- → Index Only Scan on log_eventi_2024_01, _2024_02, ... (solo partizioni recenti)</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1">-- Crea automaticamente un indice per partizione, con nome generato</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1">-- (es. log_eventi_2024_01_servizio_idx)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1">-- Index only scan funziona su partizioni individuali</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="k">SELECT</span><span class="w"> </span><span class="n">servizio</span><span class="p">,</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="k">FROM</span><span class="w"> </span><span class="n">log_eventi</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="k">WHERE</span><span class="w"> </span><span class="k">timestamp</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="s1">'2024-01-01'</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">servizio</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'api-gateway'</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">servizio</span><span class="p">;</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="c1">-- → Index Only Scan on log_eventi_2024_01, _2024_02, ... (solo partizioni recenti)</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Vincoli UNIQUE / PRIMARY KEY</p>
+<p>Poiché non esiste un indice globale, ogni <code>PRIMARY KEY</code> o <code>UNIQUE</code> su una tabella partizionata <strong>deve includere tutte le colonne della partition key</strong> (es. <code>PRIMARY KEY (id, timestamp)</code>). L'unicità di <code>id</code> da solo non è garantibile tra partizioni diverse. Se serve, va assicurata a livello applicativo (es. UUID/sequence).</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Indici su tabelle grandi senza bloccare le scritture</p>
+<p><code>CREATE INDEX CONCURRENTLY</code> non è supportato sulla tabella padre. Procedura: <code>CREATE INDEX ... ON ONLY log_eventi (servizio)</code> (indice invalido, nessun build), poi <code>CREATE INDEX CONCURRENTLY</code> su ogni partizione e infine <code>ALTER INDEX idx_padre ATTACH PARTITION idx_figlia</code>. Il padre diventa valido quando tutte le partizioni sono collegate.</p>
+</div>
 <hr />
 <h2 id="lifecycle-management-aggiungere-e-rimuovere-partizioni">Lifecycle Management — Aggiungere e Rimuovere Partizioni<a class="headerlink" href="#lifecycle-management-aggiungere-e-rimuovere-partizioni" title="Permanent link">&para;</a></h2>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1">-- Aggiungere una nuova partizione (operazione fast, nessun lock sulla tabella)</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1">-- Aggiungere una nuova partizione (veloce: lock leggero sul padre, non blocca letture/scritture)</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi_2025_01</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="n">PARTITION</span><span class="w"> </span><span class="k">OF</span><span class="w"> </span><span class="n">log_eventi</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="k">FOR</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="s1">'2025-01-01'</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="p">(</span><span class="s1">'2025-02-01'</span><span class="p">);</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1">-- Eliminare una partizione intera (istantaneo, no bloat, no VACUUM necessario)</span>
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="k">DROP</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi_2022_01</span><span class="p">;</span><span class="w">  </span><span class="c1">-- Elimina tutti i dati di quel mese in O(1)</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1">-- Detach una partizione (separa dalla tabella padre, diventa tabella indipendente)</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi</span><span class="w"> </span><span class="n">DETACH</span><span class="w"> </span><span class="n">PARTITION</span><span class="w"> </span><span class="n">log_eventi_2022_01</span><span class="p">;</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1">-- Ora log_eventi_2022_01 è una tabella normale — puoi archiviarla su storage più lento</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1">-- Attach una tabella esistente come partizione</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi</span><span class="w"> </span><span class="n">ATTACH</span><span class="w"> </span><span class="n">PARTITION</span><span class="w"> </span><span class="n">log_eventi_2025_03</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">    </span><span class="k">FOR</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="s1">'2025-03-01'</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="p">(</span><span class="s1">'2025-04-01'</span><span class="p">);</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1">-- (richiede ACCESS EXCLUSIVE sulla partizione e un lock anche sul padre: brevissimo, ma</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1">--  attende le query in corso)</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1">-- Detach una partizione (separa dalla tabella padre, diventa tabella indipendente)</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi</span><span class="w"> </span><span class="n">DETACH</span><span class="w"> </span><span class="n">PARTITION</span><span class="w"> </span><span class="n">log_eventi_2022_01</span><span class="p">;</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="c1">-- Ora log_eventi_2022_01 è una tabella normale — puoi archiviarla su storage più lento</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="c1">-- PG 14+: DETACH senza lock ACCESS EXCLUSIVE sul padre (non utilizzabile in una transazione</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="c1">-- esplicita né se esiste una partizione DEFAULT)</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi</span><span class="w"> </span><span class="n">DETACH</span><span class="w"> </span><span class="n">PARTITION</span><span class="w"> </span><span class="n">log_eventi_2022_01</span><span class="w"> </span><span class="n">CONCURRENTLY</span><span class="p">;</span>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="c1">-- Attach una tabella esistente come partizione</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi</span><span class="w"> </span><span class="n">ATTACH</span><span class="w"> </span><span class="n">PARTITION</span><span class="w"> </span><span class="n">log_eventi_2025_03</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">    </span><span class="k">FOR</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="s1">'2025-03-01'</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="p">(</span><span class="s1">'2025-04-01'</span><span class="p">);</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Partizione DEFAULT e ATTACH/CREATE</p>
+<p>Creare o collegare una nuova partizione richiede di scansionare la partizione DEFAULT per verificare che non contenga righe che rientrerebbero nel nuovo range (con lock ACCESS EXCLUSIVE sulla DEFAULT). Se la DEFAULT cresce, questa operazione diventa lenta e fallisce se contiene righe in conflitto. Usare la DEFAULT come rete di sicurezza e monitorarla (deve restare vuota), non come contenitore.</p>
+</div>
 <p><strong>Pattern archiving</strong>: invece di DELETE su milioni di righe (lento, genera WAL), fare DETACH e poi DROP o dump su storage S3/cold.</p>
 <hr />
 <h2 id="pg_partman-gestione-automatica-delle-partizioni">pg_partman — Gestione Automatica delle Partizioni<a class="headerlink" href="#pg_partman-gestione-automatica-delle-partizioni" title="Permanent link">&para;</a></h2>
@@ -24980,7 +24999,7 @@
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="n">p_parent_table</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="s1">'public.log_eventi'</span><span class="p">,</span>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="n">p_control</span><span class="w">      </span><span class="o">=&gt;</span><span class="w"> </span><span class="s1">'timestamp'</span><span class="p">,</span>
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">    </span><span class="n">p_type</span><span class="w">         </span><span class="o">=&gt;</span><span class="w"> </span><span class="s1">'range'</span><span class="p">,</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="n">p_interval</span><span class="w">     </span><span class="o">=&gt;</span><span class="w"> </span><span class="s1">'monthly'</span><span class="p">,</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">    </span><span class="n">p_interval</span><span class="w">     </span><span class="o">=&gt;</span><span class="w"> </span><span class="s1">'1 month'</span><span class="p">,</span>
 </span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="n">p_premake</span><span class="w">      </span><span class="o">=&gt;</span><span class="w"> </span><span class="mi">3</span><span class="w">          </span><span class="c1">-- Crea 3 partizioni future in anticipo</span>
 </span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="p">);</span>
 </span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
@@ -24990,8 +25009,9 @@
 </span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">    </span><span class="n">retention_keep_table</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">false</span><span class="w">  </span><span class="c1">-- DROP invece di DETACH</span>
 </span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">parent_table</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'public.log_eventi'</span><span class="p">;</span>
 </span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="c1">-- Chiama periodicamente (es. da cron ogni ora)</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="c1">-- Chiama periodicamente (es. da pg_cron ogni ora)</span>
 </span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">partman</span><span class="p">.</span><span class="n">run_maintenance</span><span class="p">();</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="c1">-- In alternativa la procedure partman.run_maintenance_proc() (commit per tabella, meno lock lunghi)</span>
 </span></code></pre></div>
 <hr />
 <h2 id="partitioning-e-query-cross-partition">Partitioning e Query Cross-Partition<a class="headerlink" href="#partitioning-e-query-cross-partition" title="Permanent link">&para;</a></h2>
@@ -25003,10 +25023,10 @@
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1">-- INEFFICIENTE: nessun filtro sulla partition key</span>
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="k">SELECT</span><span class="w"> </span><span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">log_eventi</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">livello</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'ERROR'</span><span class="p">;</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1">-- → scansiona TUTTE le partizioni in parallelo (o in sequenza)</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1">-- → considera un indice globale o una tabella summary separata</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1">-- → scansiona TUTTE le partizioni (con il proprio indice locale, se esiste)</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1">-- → considera un filtro aggiuntivo sulla partition key o una tabella summary separata</span>
 </span></code></pre></div>
-<p><strong>Parallel query su partizioni</strong>: PostgreSQL può eseguire query multi-partizione in parallelo se <code>max_parallel_workers_per_gather &gt; 0</code>. Utile per query analytics.</p>
+<p><strong>Parallel query su partizioni</strong>: PostgreSQL può eseguire query multi-partizione in parallelo se <code>max_parallel_workers_per_gather &gt; 0</code>. Utile per query analytics. Per JOIN e aggregazioni tra tabelle partizionate allo stesso modo esistono <code>enable_partitionwise_join</code> e <code>enable_partitionwise_aggregate</code> (default <code>off</code> perché aumentano il costo di planning): valutarli per workload analitici.</p>
 <hr />
 <h2 id="partitioning-vs-sharding-quando-usare-quale">Partitioning vs Sharding — Quando usare quale<a class="headerlink" href="#partitioning-vs-sharding-quando-usare-quale" title="Permanent link">&para;</a></h2>
 <table>
@@ -25053,7 +25073,7 @@
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-partition-pruning-non-avviene-query-scansiona-tutte-le-partizioni">Scenario 1 — Partition pruning non avviene (query scansiona tutte le partizioni)<a class="headerlink" href="#scenario-1-partition-pruning-non-avviene-query-scansiona-tutte-le-partizioni" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>EXPLAIN</code> mostra che la query tocca tutte le partizioni anche con filtro sulla partition key.</p>
-<p><strong>Causa:</strong> Il filtro non è abbastanza selettivo per il planner, oppure si usa una funzione sulla colonna (es. <code>DATE(timestamp) = '2024-01-01'</code>) che impedisce il pruning, oppure <code>enable_partition_pruning = off</code>.</p>
+<p><strong>Causa:</strong> Manca un filtro sulla partition key, oppure si usa una funzione/cast sulla colonna (es. <code>DATE(timestamp) = '2024-01-01'</code>) che impedisce di confrontarla con i bound, oppure <code>enable_partition_pruning = off</code>.</p>
 <p><strong>Soluzione:</strong>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">-- Verifica che partition pruning sia abilitato</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">SHOW</span><span class="w"> </span><span class="n">enable_partition_pruning</span><span class="p">;</span><span class="w">  </span><span class="c1">-- deve essere 'on'</span>
@@ -25069,7 +25089,8 @@
 </span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1">-- Verifica con EXPLAIN</span>
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="k">EXPLAIN</span><span class="w"> </span><span class="p">(</span><span class="k">ANALYZE</span><span class="p">,</span><span class="w"> </span><span class="n">BUFFERS</span><span class="p">)</span>
 </span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">log_eventi</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="k">timestamp</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="s1">'2024-01-15'</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="k">timestamp</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="s1">'2024-01-16'</span><span class="p">;</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1">-- Cerca "Partitions: 1 out of N" o "Rows Removed by Partition Pruning"</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1">-- Nel piano devono comparire solo le partizioni attese. Con parametri (prepared statement,</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="c1">-- subquery) il pruning avviene a runtime: cerca "Subplans Removed: N"</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="scenario-2-insert-fallisce-con-no-partition-of-relation-found-for-row">Scenario 2 — INSERT fallisce con "no partition of relation found for row"<a class="headerlink" href="#scenario-2-insert-fallisce-con-no-partition-of-relation-found-for-row" title="Permanent link">&para;</a></h3>
@@ -25096,11 +25117,11 @@
 </span></code></pre></div></p>
 <hr />
 <h3 id="scenario-3-attach-partition-lento-o-causa-lock-eccessivo">Scenario 3 — ATTACH PARTITION lento o causa lock eccessivo<a class="headerlink" href="#scenario-3-attach-partition-lento-o-causa-lock-eccessivo" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> <code>ALTER TABLE ... ATTACH PARTITION</code> blocca la tabella padre per minuti su tabelle grandi.</p>
-<p><strong>Causa:</strong> PostgreSQL esegue una scansione full della nuova tabella per verificare che tutte le righe rispettino i vincoli della partizione. Su tabelle da milioni di righe il lock è prolungato.</p>
+<p><strong>Sintomo:</strong> <code>ALTER TABLE ... ATTACH PARTITION</code> resta in esecuzione per minuti su tabelle grandi, tenendo lock sulla nuova tabella (e sulla DEFAULT, se presente).</p>
+<p><strong>Causa:</strong> PostgreSQL esegue una scansione full della tabella da collegare per verificare che tutte le righe rispettino i bound, tenendo <code>ACCESS EXCLUSIVE</code> su di essa (dal PG 12 sul padre basta <code>SHARE UPDATE EXCLUSIVE</code>, quindi letture/scritture sul padre continuano). La scansione è saltata se esiste già un CHECK constraint validato equivalente ai bound.</p>
 <p><strong>Soluzione:</strong>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1">-- Tecnica per ATTACH senza lock prolungato:</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1">-- 1. Aggiungere un CHECK constraint PRIMA dell'attach (non richiede scansione al momento dell'attach)</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1">-- 1. Aggiungere un CHECK constraint equivalente ai bound PRIMA dell'attach</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi_2025_03</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="k">ADD</span><span class="w"> </span><span class="k">CONSTRAINT</span><span class="w"> </span><span class="n">chk_ts</span><span class="w"> </span><span class="k">CHECK</span><span class="w"> </span><span class="p">(</span>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">        </span><span class="k">timestamp</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="s1">'2025-03-01'</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="k">timestamp</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="s1">'2025-04-01'</span>
@@ -25109,18 +25130,19 @@
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1">-- 2. Validare il constraint in background (richiede solo ShareUpdateExclusiveLock)</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi_2025_03</span><span class="w"> </span><span class="n">VALIDATE</span><span class="w"> </span><span class="k">CONSTRAINT</span><span class="w"> </span><span class="n">chk_ts</span><span class="p">;</span>
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1">-- 3. Ora l'ATTACH è quasi istantaneo (il constraint è già verificato)</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi</span><span class="w"> </span><span class="n">ATTACH</span><span class="w"> </span><span class="n">PARTITION</span><span class="w"> </span><span class="n">log_eventi_2025_03</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">    </span><span class="k">FOR</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="s1">'2025-03-01'</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="p">(</span><span class="s1">'2025-04-01'</span><span class="p">);</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="c1">-- Verifica partizioni attive</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="k">SELECT</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">pg_inherits</span>
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">inhparent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'log_eventi'</span><span class="p">::</span><span class="n">regclass</span><span class="p">;</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1">-- 3. Ora l'ATTACH salta la scansione (il constraint è già validato)</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1">--    Se esiste una partizione DEFAULT, viene comunque scansionata (vedi warning sopra)</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">log_eventi</span><span class="w"> </span><span class="n">ATTACH</span><span class="w"> </span><span class="n">PARTITION</span><span class="w"> </span><span class="n">log_eventi_2025_03</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">    </span><span class="k">FOR</span><span class="w"> </span><span class="k">VALUES</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="p">(</span><span class="s1">'2025-03-01'</span><span class="p">)</span><span class="w"> </span><span class="k">TO</span><span class="w"> </span><span class="p">(</span><span class="s1">'2025-04-01'</span><span class="p">);</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="c1">-- Verifica partizioni attive</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="k">SELECT</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">pg_inherits</span>
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">inhparent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'log_eventi'</span><span class="p">::</span><span class="n">regclass</span><span class="p">;</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="scenario-4-pg_partman-non-crea-le-partizioni-future">Scenario 4 — pg_partman non crea le partizioni future<a class="headerlink" href="#scenario-4-pg_partman-non-crea-le-partizioni-future" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Le partizioni future non vengono create automaticamente; INSERT fallisce con errore "no partition found".</p>
-<p><strong>Causa:</strong> <code>partman.run_maintenance()</code> non viene eseguito dalla cron job, oppure <code>p_premake</code> è troppo basso, oppure l'estensione pg_cron non è configurata.</p>
+<p><strong>Causa:</strong> <code>partman.run_maintenance()</code> non viene eseguito da nessuno scheduler (pg_cron o cron esterno), oppure <code>premake</code> è troppo basso rispetto all'intervallo tra due run, oppure il job gira su un database sbagliato (pg_cron esegue nel DB indicato in <code>cron.database_name</code>).</p>
 <p><strong>Soluzione:</strong>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">-- Verifica la configurazione corrente</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">partman</span><span class="p">.</span><span class="n">part_config</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">parent_table</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'public.log_eventi'</span><span class="p">;</span>
@@ -25140,8 +25162,9 @@
 </span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">cron</span><span class="p">.</span><span class="n">schedule</span><span class="p">(</span><span class="s1">'partman-maintenance'</span><span class="p">,</span><span class="w"> </span><span class="s1">'0 * * * *'</span><span class="p">,</span>
 </span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">    </span><span class="s1">'SELECT partman.run_maintenance()'</span><span class="p">);</span>
 </span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>
-</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="c1">-- Controlla eventuali errori nel log di pg_partman</span>
-</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">partman</span><span class="p">.</span><span class="n">part_config_sub</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">sub_parent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'public.log_eventi'</span><span class="p">;</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="c1">-- Controlla l'esito delle esecuzioni pg_cron (richiede pg_cron 1.4+)</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">status</span><span class="p">,</span><span class="w"> </span><span class="n">return_message</span><span class="p">,</span><span class="w"> </span><span class="n">start_time</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">cron</span><span class="p">.</span><span class="n">job_run_details</span>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">command</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">'%run_maintenance%'</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">start_time</span><span class="w"> </span><span class="k">DESC</span><span class="w"> </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">5</span><span class="p">;</span>
 </span></code></pre></div></p>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>

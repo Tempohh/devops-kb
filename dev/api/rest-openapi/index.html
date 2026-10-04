@@ -12467,7 +12467,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12502,7 +12502,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12537,7 +12537,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13426,7 +13426,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14624,7 +14624,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -14649,7 +14649,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -25093,7 +25093,7 @@
 <h1 id="rest-api-design-openapi-3x">REST API Design &amp; OpenAPI 3.x<a class="headerlink" href="#rest-api-design-openapi-3x" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
 <p>REST (Representational State Transfer) è un'architettura per sistemi distribuiti basata su HTTP. Non è un protocollo né uno standard formale: è un insieme di vincoli architetturali che, se rispettati, producono API uniformi, scalabili e manutenibili nel tempo.</p>
-<p><strong>OpenAPI Specification (OAS)</strong> — precedentemente nota come Swagger — è il formato standard de-facto per descrivere, documentare e validare REST API. La versione 3.1 allinea lo schema a JSON Schema 2020-12 e aggiunge il supporto a webhook e <code>pathItems</code> riusabili.</p>
+<p><strong>OpenAPI Specification (OAS)</strong> — precedentemente nota come Swagger — è il formato standard de-facto per descrivere, documentare e validare REST API. La versione 3.1 allinea lo schema a JSON Schema 2020-12 e aggiunge il supporto a webhook e <code>pathItems</code> riusabili. Esistono versioni successive (3.1.1 patch di chiarimento, 3.2 con novità come il metodo <code>QUERY</code> e tag gerarchici) <!-- REVIEW: verificare feature OAS 3.2 e supporto tooling (Spectral, Redocly, generator) --> ma il tooling è più maturo su 3.0/3.1: gli esempi qui usano 3.1.</p>
 <p>Questa guida copre il design operativo di REST API e la scrittura di spec OpenAPI 3.x production-ready: si concentra su convenzioni pratiche, errori comuni, e tooling — il complemento operativo all'overview in <a href="../_index/">API Design</a>.</p>
 <hr />
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
@@ -25239,7 +25239,7 @@
 <hr />
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="error-response-rfc-7807-problem-details">Error Response — RFC 7807 Problem Details<a class="headerlink" href="#error-response-rfc-7807-problem-details" title="Permanent link">&para;</a></h3>
-<p>Lo standard RFC 7807 (Problem Details for HTTP APIs) definisce un formato JSON uniforme per gli errori:</p>
+<p>Lo standard RFC 9457 (Problem Details for HTTP APIs, che ha reso obsoleto RFC 7807 nel 2023 mantenendo lo stesso formato) definisce un JSON uniforme per gli errori, con media type <code>application/problem+json</code>. Perché: i client possono gestire gli errori in modo generico (<code>type</code> è l'identificatore stabile, <code>title</code>/<code>detail</code> sono per l'umano) invece di parsare formati ad hoc per ogni API. I campi extra (<code>errors</code>, <code>traceId</code>) sono ammessi come estensioni:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://api.example.com/errors/validation-failed"</span><span class="p">,</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Validation Failed"</span><span class="p">,</span>
@@ -25455,138 +25455,135 @@
 </span><span id="__span-6-177"><a id="__codelineno-6-177" name="__codelineno-6-177" href="#__codelineno-6-177"></a><span class="w">          </span><span class="nt">enum</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">pending</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">confirmed</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">shipped</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">delivered</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">cancelled</span><span class="p p-Indicator">]</span>
 </span><span id="__span-6-178"><a id="__codelineno-6-178" name="__codelineno-6-178" href="#__codelineno-6-178"></a><span class="w">        </span><span class="nt">total</span><span class="p">:</span>
 </span><span id="__span-6-179"><a id="__codelineno-6-179" name="__codelineno-6-179" href="#__codelineno-6-179"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">number</span>
-</span><span id="__span-6-180"><a id="__codelineno-6-180" name="__codelineno-6-180" href="#__codelineno-6-180"></a><span class="w">          </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">decimal</span>
-</span><span id="__span-6-181"><a id="__codelineno-6-181" name="__codelineno-6-181" href="#__codelineno-6-181"></a><span class="w">          </span><span class="nt">minimum</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
-</span><span id="__span-6-182"><a id="__codelineno-6-182" name="__codelineno-6-182" href="#__codelineno-6-182"></a><span class="w">        </span><span class="nt">createdAt</span><span class="p">:</span>
-</span><span id="__span-6-183"><a id="__codelineno-6-183" name="__codelineno-6-183" href="#__codelineno-6-183"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
-</span><span id="__span-6-184"><a id="__codelineno-6-184" name="__codelineno-6-184" href="#__codelineno-6-184"></a><span class="w">          </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">date-time</span>
-</span><span id="__span-6-185"><a id="__codelineno-6-185" name="__codelineno-6-185" href="#__codelineno-6-185"></a><span class="w">          </span><span class="nt">readOnly</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-6-186"><a id="__codelineno-6-186" name="__codelineno-6-186" href="#__codelineno-6-186"></a><span class="w">        </span><span class="nt">items</span><span class="p">:</span>
-</span><span id="__span-6-187"><a id="__codelineno-6-187" name="__codelineno-6-187" href="#__codelineno-6-187"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">array</span>
-</span><span id="__span-6-188"><a id="__codelineno-6-188" name="__codelineno-6-188" href="#__codelineno-6-188"></a><span class="w">          </span><span class="nt">items</span><span class="p">:</span>
-</span><span id="__span-6-189"><a id="__codelineno-6-189" name="__codelineno-6-189" href="#__codelineno-6-189"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/OrderItem"</span>
-</span><span id="__span-6-190"><a id="__codelineno-6-190" name="__codelineno-6-190" href="#__codelineno-6-190"></a>
-</span><span id="__span-6-191"><a id="__codelineno-6-191" name="__codelineno-6-191" href="#__codelineno-6-191"></a><span class="w">    </span><span class="nt">OrderItem</span><span class="p">:</span>
-</span><span id="__span-6-192"><a id="__codelineno-6-192" name="__codelineno-6-192" href="#__codelineno-6-192"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">object</span>
-</span><span id="__span-6-193"><a id="__codelineno-6-193" name="__codelineno-6-193" href="#__codelineno-6-193"></a><span class="w">      </span><span class="nt">required</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">productId</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">quantity</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">price</span><span class="p p-Indicator">]</span>
-</span><span id="__span-6-194"><a id="__codelineno-6-194" name="__codelineno-6-194" href="#__codelineno-6-194"></a><span class="w">      </span><span class="nt">properties</span><span class="p">:</span>
-</span><span id="__span-6-195"><a id="__codelineno-6-195" name="__codelineno-6-195" href="#__codelineno-6-195"></a><span class="w">        </span><span class="nt">productId</span><span class="p">:</span>
-</span><span id="__span-6-196"><a id="__codelineno-6-196" name="__codelineno-6-196" href="#__codelineno-6-196"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
-</span><span id="__span-6-197"><a id="__codelineno-6-197" name="__codelineno-6-197" href="#__codelineno-6-197"></a><span class="w">          </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uuid</span>
-</span><span id="__span-6-198"><a id="__codelineno-6-198" name="__codelineno-6-198" href="#__codelineno-6-198"></a><span class="w">        </span><span class="nt">quantity</span><span class="p">:</span>
-</span><span id="__span-6-199"><a id="__codelineno-6-199" name="__codelineno-6-199" href="#__codelineno-6-199"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
-</span><span id="__span-6-200"><a id="__codelineno-6-200" name="__codelineno-6-200" href="#__codelineno-6-200"></a><span class="w">          </span><span class="nt">minimum</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-</span><span id="__span-6-201"><a id="__codelineno-6-201" name="__codelineno-6-201" href="#__codelineno-6-201"></a><span class="w">        </span><span class="nt">price</span><span class="p">:</span>
-</span><span id="__span-6-202"><a id="__codelineno-6-202" name="__codelineno-6-202" href="#__codelineno-6-202"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">number</span>
-</span><span id="__span-6-203"><a id="__codelineno-6-203" name="__codelineno-6-203" href="#__codelineno-6-203"></a><span class="w">          </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">decimal</span>
-</span><span id="__span-6-204"><a id="__codelineno-6-204" name="__codelineno-6-204" href="#__codelineno-6-204"></a>
-</span><span id="__span-6-205"><a id="__codelineno-6-205" name="__codelineno-6-205" href="#__codelineno-6-205"></a><span class="w">    </span><span class="nt">OrderList</span><span class="p">:</span>
-</span><span id="__span-6-206"><a id="__codelineno-6-206" name="__codelineno-6-206" href="#__codelineno-6-206"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">object</span>
-</span><span id="__span-6-207"><a id="__codelineno-6-207" name="__codelineno-6-207" href="#__codelineno-6-207"></a><span class="w">      </span><span class="nt">required</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">data</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">pagination</span><span class="p p-Indicator">]</span>
-</span><span id="__span-6-208"><a id="__codelineno-6-208" name="__codelineno-6-208" href="#__codelineno-6-208"></a><span class="w">      </span><span class="nt">properties</span><span class="p">:</span>
-</span><span id="__span-6-209"><a id="__codelineno-6-209" name="__codelineno-6-209" href="#__codelineno-6-209"></a><span class="w">        </span><span class="nt">data</span><span class="p">:</span>
-</span><span id="__span-6-210"><a id="__codelineno-6-210" name="__codelineno-6-210" href="#__codelineno-6-210"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">array</span>
-</span><span id="__span-6-211"><a id="__codelineno-6-211" name="__codelineno-6-211" href="#__codelineno-6-211"></a><span class="w">          </span><span class="nt">items</span><span class="p">:</span>
-</span><span id="__span-6-212"><a id="__codelineno-6-212" name="__codelineno-6-212" href="#__codelineno-6-212"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/Order"</span>
-</span><span id="__span-6-213"><a id="__codelineno-6-213" name="__codelineno-6-213" href="#__codelineno-6-213"></a><span class="w">        </span><span class="nt">pagination</span><span class="p">:</span>
-</span><span id="__span-6-214"><a id="__codelineno-6-214" name="__codelineno-6-214" href="#__codelineno-6-214"></a><span class="w">          </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/CursorPagination"</span>
-</span><span id="__span-6-215"><a id="__codelineno-6-215" name="__codelineno-6-215" href="#__codelineno-6-215"></a>
-</span><span id="__span-6-216"><a id="__codelineno-6-216" name="__codelineno-6-216" href="#__codelineno-6-216"></a><span class="w">    </span><span class="nt">CursorPagination</span><span class="p">:</span>
-</span><span id="__span-6-217"><a id="__codelineno-6-217" name="__codelineno-6-217" href="#__codelineno-6-217"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">object</span>
-</span><span id="__span-6-218"><a id="__codelineno-6-218" name="__codelineno-6-218" href="#__codelineno-6-218"></a><span class="w">      </span><span class="nt">properties</span><span class="p">:</span>
-</span><span id="__span-6-219"><a id="__codelineno-6-219" name="__codelineno-6-219" href="#__codelineno-6-219"></a><span class="w">        </span><span class="nt">cursor</span><span class="p">:</span>
-</span><span id="__span-6-220"><a id="__codelineno-6-220" name="__codelineno-6-220" href="#__codelineno-6-220"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
-</span><span id="__span-6-221"><a id="__codelineno-6-221" name="__codelineno-6-221" href="#__codelineno-6-221"></a><span class="w">          </span><span class="nt">nullable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-6-222"><a id="__codelineno-6-222" name="__codelineno-6-222" href="#__codelineno-6-222"></a><span class="w">        </span><span class="nt">hasMore</span><span class="p">:</span>
-</span><span id="__span-6-223"><a id="__codelineno-6-223" name="__codelineno-6-223" href="#__codelineno-6-223"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">boolean</span>
-</span><span id="__span-6-224"><a id="__codelineno-6-224" name="__codelineno-6-224" href="#__codelineno-6-224"></a><span class="w">        </span><span class="nt">limit</span><span class="p">:</span>
-</span><span id="__span-6-225"><a id="__codelineno-6-225" name="__codelineno-6-225" href="#__codelineno-6-225"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
-</span><span id="__span-6-226"><a id="__codelineno-6-226" name="__codelineno-6-226" href="#__codelineno-6-226"></a>
-</span><span id="__span-6-227"><a id="__codelineno-6-227" name="__codelineno-6-227" href="#__codelineno-6-227"></a><span class="w">    </span><span class="nt">CreateOrderRequest</span><span class="p">:</span>
-</span><span id="__span-6-228"><a id="__codelineno-6-228" name="__codelineno-6-228" href="#__codelineno-6-228"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">object</span>
-</span><span id="__span-6-229"><a id="__codelineno-6-229" name="__codelineno-6-229" href="#__codelineno-6-229"></a><span class="w">      </span><span class="nt">required</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">items</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">shippingAddressId</span><span class="p p-Indicator">]</span>
-</span><span id="__span-6-230"><a id="__codelineno-6-230" name="__codelineno-6-230" href="#__codelineno-6-230"></a><span class="w">      </span><span class="nt">properties</span><span class="p">:</span>
-</span><span id="__span-6-231"><a id="__codelineno-6-231" name="__codelineno-6-231" href="#__codelineno-6-231"></a><span class="w">        </span><span class="nt">items</span><span class="p">:</span>
-</span><span id="__span-6-232"><a id="__codelineno-6-232" name="__codelineno-6-232" href="#__codelineno-6-232"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">array</span>
-</span><span id="__span-6-233"><a id="__codelineno-6-233" name="__codelineno-6-233" href="#__codelineno-6-233"></a><span class="w">          </span><span class="nt">minItems</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-</span><span id="__span-6-234"><a id="__codelineno-6-234" name="__codelineno-6-234" href="#__codelineno-6-234"></a><span class="w">          </span><span class="nt">items</span><span class="p">:</span>
-</span><span id="__span-6-235"><a id="__codelineno-6-235" name="__codelineno-6-235" href="#__codelineno-6-235"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/OrderItem"</span>
-</span><span id="__span-6-236"><a id="__codelineno-6-236" name="__codelineno-6-236" href="#__codelineno-6-236"></a><span class="w">        </span><span class="nt">shippingAddressId</span><span class="p">:</span>
+</span><span id="__span-6-180"><a id="__codelineno-6-180" name="__codelineno-6-180" href="#__codelineno-6-180"></a><span class="w">          </span><span class="nt">minimum</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+</span><span id="__span-6-181"><a id="__codelineno-6-181" name="__codelineno-6-181" href="#__codelineno-6-181"></a><span class="w">        </span><span class="nt">createdAt</span><span class="p">:</span>
+</span><span id="__span-6-182"><a id="__codelineno-6-182" name="__codelineno-6-182" href="#__codelineno-6-182"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
+</span><span id="__span-6-183"><a id="__codelineno-6-183" name="__codelineno-6-183" href="#__codelineno-6-183"></a><span class="w">          </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">date-time</span>
+</span><span id="__span-6-184"><a id="__codelineno-6-184" name="__codelineno-6-184" href="#__codelineno-6-184"></a><span class="w">          </span><span class="nt">readOnly</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-6-185"><a id="__codelineno-6-185" name="__codelineno-6-185" href="#__codelineno-6-185"></a><span class="w">        </span><span class="nt">items</span><span class="p">:</span>
+</span><span id="__span-6-186"><a id="__codelineno-6-186" name="__codelineno-6-186" href="#__codelineno-6-186"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">array</span>
+</span><span id="__span-6-187"><a id="__codelineno-6-187" name="__codelineno-6-187" href="#__codelineno-6-187"></a><span class="w">          </span><span class="nt">items</span><span class="p">:</span>
+</span><span id="__span-6-188"><a id="__codelineno-6-188" name="__codelineno-6-188" href="#__codelineno-6-188"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/OrderItem"</span>
+</span><span id="__span-6-189"><a id="__codelineno-6-189" name="__codelineno-6-189" href="#__codelineno-6-189"></a>
+</span><span id="__span-6-190"><a id="__codelineno-6-190" name="__codelineno-6-190" href="#__codelineno-6-190"></a><span class="w">    </span><span class="nt">OrderItem</span><span class="p">:</span>
+</span><span id="__span-6-191"><a id="__codelineno-6-191" name="__codelineno-6-191" href="#__codelineno-6-191"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">object</span>
+</span><span id="__span-6-192"><a id="__codelineno-6-192" name="__codelineno-6-192" href="#__codelineno-6-192"></a><span class="w">      </span><span class="nt">required</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">productId</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">quantity</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">price</span><span class="p p-Indicator">]</span>
+</span><span id="__span-6-193"><a id="__codelineno-6-193" name="__codelineno-6-193" href="#__codelineno-6-193"></a><span class="w">      </span><span class="nt">properties</span><span class="p">:</span>
+</span><span id="__span-6-194"><a id="__codelineno-6-194" name="__codelineno-6-194" href="#__codelineno-6-194"></a><span class="w">        </span><span class="nt">productId</span><span class="p">:</span>
+</span><span id="__span-6-195"><a id="__codelineno-6-195" name="__codelineno-6-195" href="#__codelineno-6-195"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
+</span><span id="__span-6-196"><a id="__codelineno-6-196" name="__codelineno-6-196" href="#__codelineno-6-196"></a><span class="w">          </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uuid</span>
+</span><span id="__span-6-197"><a id="__codelineno-6-197" name="__codelineno-6-197" href="#__codelineno-6-197"></a><span class="w">        </span><span class="nt">quantity</span><span class="p">:</span>
+</span><span id="__span-6-198"><a id="__codelineno-6-198" name="__codelineno-6-198" href="#__codelineno-6-198"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
+</span><span id="__span-6-199"><a id="__codelineno-6-199" name="__codelineno-6-199" href="#__codelineno-6-199"></a><span class="w">          </span><span class="nt">minimum</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</span><span id="__span-6-200"><a id="__codelineno-6-200" name="__codelineno-6-200" href="#__codelineno-6-200"></a><span class="w">        </span><span class="nt">price</span><span class="p">:</span>
+</span><span id="__span-6-201"><a id="__codelineno-6-201" name="__codelineno-6-201" href="#__codelineno-6-201"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">number</span><span class="w">   </span><span class="c1"># per importi esatti valutare string + pattern o interi in centesimi (evita errori float)</span>
+</span><span id="__span-6-202"><a id="__codelineno-6-202" name="__codelineno-6-202" href="#__codelineno-6-202"></a>
+</span><span id="__span-6-203"><a id="__codelineno-6-203" name="__codelineno-6-203" href="#__codelineno-6-203"></a><span class="w">    </span><span class="nt">OrderList</span><span class="p">:</span>
+</span><span id="__span-6-204"><a id="__codelineno-6-204" name="__codelineno-6-204" href="#__codelineno-6-204"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">object</span>
+</span><span id="__span-6-205"><a id="__codelineno-6-205" name="__codelineno-6-205" href="#__codelineno-6-205"></a><span class="w">      </span><span class="nt">required</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">data</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">pagination</span><span class="p p-Indicator">]</span>
+</span><span id="__span-6-206"><a id="__codelineno-6-206" name="__codelineno-6-206" href="#__codelineno-6-206"></a><span class="w">      </span><span class="nt">properties</span><span class="p">:</span>
+</span><span id="__span-6-207"><a id="__codelineno-6-207" name="__codelineno-6-207" href="#__codelineno-6-207"></a><span class="w">        </span><span class="nt">data</span><span class="p">:</span>
+</span><span id="__span-6-208"><a id="__codelineno-6-208" name="__codelineno-6-208" href="#__codelineno-6-208"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">array</span>
+</span><span id="__span-6-209"><a id="__codelineno-6-209" name="__codelineno-6-209" href="#__codelineno-6-209"></a><span class="w">          </span><span class="nt">items</span><span class="p">:</span>
+</span><span id="__span-6-210"><a id="__codelineno-6-210" name="__codelineno-6-210" href="#__codelineno-6-210"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/Order"</span>
+</span><span id="__span-6-211"><a id="__codelineno-6-211" name="__codelineno-6-211" href="#__codelineno-6-211"></a><span class="w">        </span><span class="nt">pagination</span><span class="p">:</span>
+</span><span id="__span-6-212"><a id="__codelineno-6-212" name="__codelineno-6-212" href="#__codelineno-6-212"></a><span class="w">          </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/CursorPagination"</span>
+</span><span id="__span-6-213"><a id="__codelineno-6-213" name="__codelineno-6-213" href="#__codelineno-6-213"></a>
+</span><span id="__span-6-214"><a id="__codelineno-6-214" name="__codelineno-6-214" href="#__codelineno-6-214"></a><span class="w">    </span><span class="nt">CursorPagination</span><span class="p">:</span>
+</span><span id="__span-6-215"><a id="__codelineno-6-215" name="__codelineno-6-215" href="#__codelineno-6-215"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">object</span>
+</span><span id="__span-6-216"><a id="__codelineno-6-216" name="__codelineno-6-216" href="#__codelineno-6-216"></a><span class="w">      </span><span class="nt">properties</span><span class="p">:</span>
+</span><span id="__span-6-217"><a id="__codelineno-6-217" name="__codelineno-6-217" href="#__codelineno-6-217"></a><span class="w">        </span><span class="nt">cursor</span><span class="p">:</span>
+</span><span id="__span-6-218"><a id="__codelineno-6-218" name="__codelineno-6-218" href="#__codelineno-6-218"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">string</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"null"</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># 3.1: nullable è rimosso, si usa il type array</span>
+</span><span id="__span-6-219"><a id="__codelineno-6-219" name="__codelineno-6-219" href="#__codelineno-6-219"></a><span class="w">        </span><span class="nt">hasMore</span><span class="p">:</span>
+</span><span id="__span-6-220"><a id="__codelineno-6-220" name="__codelineno-6-220" href="#__codelineno-6-220"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">boolean</span>
+</span><span id="__span-6-221"><a id="__codelineno-6-221" name="__codelineno-6-221" href="#__codelineno-6-221"></a><span class="w">        </span><span class="nt">limit</span><span class="p">:</span>
+</span><span id="__span-6-222"><a id="__codelineno-6-222" name="__codelineno-6-222" href="#__codelineno-6-222"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
+</span><span id="__span-6-223"><a id="__codelineno-6-223" name="__codelineno-6-223" href="#__codelineno-6-223"></a>
+</span><span id="__span-6-224"><a id="__codelineno-6-224" name="__codelineno-6-224" href="#__codelineno-6-224"></a><span class="w">    </span><span class="nt">CreateOrderRequest</span><span class="p">:</span>
+</span><span id="__span-6-225"><a id="__codelineno-6-225" name="__codelineno-6-225" href="#__codelineno-6-225"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">object</span>
+</span><span id="__span-6-226"><a id="__codelineno-6-226" name="__codelineno-6-226" href="#__codelineno-6-226"></a><span class="w">      </span><span class="nt">required</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">items</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">shippingAddressId</span><span class="p p-Indicator">]</span>
+</span><span id="__span-6-227"><a id="__codelineno-6-227" name="__codelineno-6-227" href="#__codelineno-6-227"></a><span class="w">      </span><span class="nt">properties</span><span class="p">:</span>
+</span><span id="__span-6-228"><a id="__codelineno-6-228" name="__codelineno-6-228" href="#__codelineno-6-228"></a><span class="w">        </span><span class="nt">items</span><span class="p">:</span>
+</span><span id="__span-6-229"><a id="__codelineno-6-229" name="__codelineno-6-229" href="#__codelineno-6-229"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">array</span>
+</span><span id="__span-6-230"><a id="__codelineno-6-230" name="__codelineno-6-230" href="#__codelineno-6-230"></a><span class="w">          </span><span class="nt">minItems</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</span><span id="__span-6-231"><a id="__codelineno-6-231" name="__codelineno-6-231" href="#__codelineno-6-231"></a><span class="w">          </span><span class="nt">items</span><span class="p">:</span>
+</span><span id="__span-6-232"><a id="__codelineno-6-232" name="__codelineno-6-232" href="#__codelineno-6-232"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/OrderItem"</span>
+</span><span id="__span-6-233"><a id="__codelineno-6-233" name="__codelineno-6-233" href="#__codelineno-6-233"></a><span class="w">        </span><span class="nt">shippingAddressId</span><span class="p">:</span>
+</span><span id="__span-6-234"><a id="__codelineno-6-234" name="__codelineno-6-234" href="#__codelineno-6-234"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
+</span><span id="__span-6-235"><a id="__codelineno-6-235" name="__codelineno-6-235" href="#__codelineno-6-235"></a><span class="w">          </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uuid</span>
+</span><span id="__span-6-236"><a id="__codelineno-6-236" name="__codelineno-6-236" href="#__codelineno-6-236"></a><span class="w">        </span><span class="nt">notes</span><span class="p">:</span>
 </span><span id="__span-6-237"><a id="__codelineno-6-237" name="__codelineno-6-237" href="#__codelineno-6-237"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
-</span><span id="__span-6-238"><a id="__codelineno-6-238" name="__codelineno-6-238" href="#__codelineno-6-238"></a><span class="w">          </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uuid</span>
-</span><span id="__span-6-239"><a id="__codelineno-6-239" name="__codelineno-6-239" href="#__codelineno-6-239"></a><span class="w">        </span><span class="nt">notes</span><span class="p">:</span>
-</span><span id="__span-6-240"><a id="__codelineno-6-240" name="__codelineno-6-240" href="#__codelineno-6-240"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
-</span><span id="__span-6-241"><a id="__codelineno-6-241" name="__codelineno-6-241" href="#__codelineno-6-241"></a><span class="w">          </span><span class="nt">maxLength</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500</span>
-</span><span id="__span-6-242"><a id="__codelineno-6-242" name="__codelineno-6-242" href="#__codelineno-6-242"></a>
-</span><span id="__span-6-243"><a id="__codelineno-6-243" name="__codelineno-6-243" href="#__codelineno-6-243"></a><span class="w">    </span><span class="nt">ProblemDetail</span><span class="p">:</span>
-</span><span id="__span-6-244"><a id="__codelineno-6-244" name="__codelineno-6-244" href="#__codelineno-6-244"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">object</span>
-</span><span id="__span-6-245"><a id="__codelineno-6-245" name="__codelineno-6-245" href="#__codelineno-6-245"></a><span class="w">      </span><span class="nt">required</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">type</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">title</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">status</span><span class="p p-Indicator">]</span>
-</span><span id="__span-6-246"><a id="__codelineno-6-246" name="__codelineno-6-246" href="#__codelineno-6-246"></a><span class="w">      </span><span class="nt">properties</span><span class="p">:</span>
-</span><span id="__span-6-247"><a id="__codelineno-6-247" name="__codelineno-6-247" href="#__codelineno-6-247"></a><span class="w">        </span><span class="nt">type</span><span class="p">:</span>
+</span><span id="__span-6-238"><a id="__codelineno-6-238" name="__codelineno-6-238" href="#__codelineno-6-238"></a><span class="w">          </span><span class="nt">maxLength</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500</span>
+</span><span id="__span-6-239"><a id="__codelineno-6-239" name="__codelineno-6-239" href="#__codelineno-6-239"></a>
+</span><span id="__span-6-240"><a id="__codelineno-6-240" name="__codelineno-6-240" href="#__codelineno-6-240"></a><span class="w">    </span><span class="nt">ProblemDetail</span><span class="p">:</span>
+</span><span id="__span-6-241"><a id="__codelineno-6-241" name="__codelineno-6-241" href="#__codelineno-6-241"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">object</span>
+</span><span id="__span-6-242"><a id="__codelineno-6-242" name="__codelineno-6-242" href="#__codelineno-6-242"></a><span class="w">      </span><span class="nt">required</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">type</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">title</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">status</span><span class="p p-Indicator">]</span>
+</span><span id="__span-6-243"><a id="__codelineno-6-243" name="__codelineno-6-243" href="#__codelineno-6-243"></a><span class="w">      </span><span class="nt">properties</span><span class="p">:</span>
+</span><span id="__span-6-244"><a id="__codelineno-6-244" name="__codelineno-6-244" href="#__codelineno-6-244"></a><span class="w">        </span><span class="nt">type</span><span class="p">:</span>
+</span><span id="__span-6-245"><a id="__codelineno-6-245" name="__codelineno-6-245" href="#__codelineno-6-245"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
+</span><span id="__span-6-246"><a id="__codelineno-6-246" name="__codelineno-6-246" href="#__codelineno-6-246"></a><span class="w">          </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uri</span>
+</span><span id="__span-6-247"><a id="__codelineno-6-247" name="__codelineno-6-247" href="#__codelineno-6-247"></a><span class="w">        </span><span class="nt">title</span><span class="p">:</span>
 </span><span id="__span-6-248"><a id="__codelineno-6-248" name="__codelineno-6-248" href="#__codelineno-6-248"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
-</span><span id="__span-6-249"><a id="__codelineno-6-249" name="__codelineno-6-249" href="#__codelineno-6-249"></a><span class="w">          </span><span class="nt">format</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">uri</span>
-</span><span id="__span-6-250"><a id="__codelineno-6-250" name="__codelineno-6-250" href="#__codelineno-6-250"></a><span class="w">        </span><span class="nt">title</span><span class="p">:</span>
-</span><span id="__span-6-251"><a id="__codelineno-6-251" name="__codelineno-6-251" href="#__codelineno-6-251"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
-</span><span id="__span-6-252"><a id="__codelineno-6-252" name="__codelineno-6-252" href="#__codelineno-6-252"></a><span class="w">        </span><span class="nt">status</span><span class="p">:</span>
-</span><span id="__span-6-253"><a id="__codelineno-6-253" name="__codelineno-6-253" href="#__codelineno-6-253"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
-</span><span id="__span-6-254"><a id="__codelineno-6-254" name="__codelineno-6-254" href="#__codelineno-6-254"></a><span class="w">        </span><span class="nt">detail</span><span class="p">:</span>
-</span><span id="__span-6-255"><a id="__codelineno-6-255" name="__codelineno-6-255" href="#__codelineno-6-255"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
-</span><span id="__span-6-256"><a id="__codelineno-6-256" name="__codelineno-6-256" href="#__codelineno-6-256"></a><span class="w">        </span><span class="nt">instance</span><span class="p">:</span>
-</span><span id="__span-6-257"><a id="__codelineno-6-257" name="__codelineno-6-257" href="#__codelineno-6-257"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
-</span><span id="__span-6-258"><a id="__codelineno-6-258" name="__codelineno-6-258" href="#__codelineno-6-258"></a><span class="w">        </span><span class="nt">traceId</span><span class="p">:</span>
-</span><span id="__span-6-259"><a id="__codelineno-6-259" name="__codelineno-6-259" href="#__codelineno-6-259"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
-</span><span id="__span-6-260"><a id="__codelineno-6-260" name="__codelineno-6-260" href="#__codelineno-6-260"></a>
-</span><span id="__span-6-261"><a id="__codelineno-6-261" name="__codelineno-6-261" href="#__codelineno-6-261"></a><span class="w">  </span><span class="nt">responses</span><span class="p">:</span>
-</span><span id="__span-6-262"><a id="__codelineno-6-262" name="__codelineno-6-262" href="#__codelineno-6-262"></a><span class="w">    </span><span class="nt">BadRequest</span><span class="p">:</span>
-</span><span id="__span-6-263"><a id="__codelineno-6-263" name="__codelineno-6-263" href="#__codelineno-6-263"></a><span class="w">      </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Request malformata o parametri invalidi</span>
-</span><span id="__span-6-264"><a id="__codelineno-6-264" name="__codelineno-6-264" href="#__codelineno-6-264"></a><span class="w">      </span><span class="nt">content</span><span class="p">:</span>
-</span><span id="__span-6-265"><a id="__codelineno-6-265" name="__codelineno-6-265" href="#__codelineno-6-265"></a><span class="w">        </span><span class="nt">application/problem+json</span><span class="p">:</span>
-</span><span id="__span-6-266"><a id="__codelineno-6-266" name="__codelineno-6-266" href="#__codelineno-6-266"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
-</span><span id="__span-6-267"><a id="__codelineno-6-267" name="__codelineno-6-267" href="#__codelineno-6-267"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/ProblemDetail"</span>
-</span><span id="__span-6-268"><a id="__codelineno-6-268" name="__codelineno-6-268" href="#__codelineno-6-268"></a><span class="w">    </span><span class="nt">Unauthorized</span><span class="p">:</span>
-</span><span id="__span-6-269"><a id="__codelineno-6-269" name="__codelineno-6-269" href="#__codelineno-6-269"></a><span class="w">      </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Token mancante o non valido</span>
-</span><span id="__span-6-270"><a id="__codelineno-6-270" name="__codelineno-6-270" href="#__codelineno-6-270"></a><span class="w">      </span><span class="nt">headers</span><span class="p">:</span>
-</span><span id="__span-6-271"><a id="__codelineno-6-271" name="__codelineno-6-271" href="#__codelineno-6-271"></a><span class="w">        </span><span class="nt">WWW-Authenticate</span><span class="p">:</span>
-</span><span id="__span-6-272"><a id="__codelineno-6-272" name="__codelineno-6-272" href="#__codelineno-6-272"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
-</span><span id="__span-6-273"><a id="__codelineno-6-273" name="__codelineno-6-273" href="#__codelineno-6-273"></a><span class="w">            </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
-</span><span id="__span-6-274"><a id="__codelineno-6-274" name="__codelineno-6-274" href="#__codelineno-6-274"></a><span class="w">            </span><span class="nt">example</span><span class="p">:</span><span class="w"> </span><span class="s">'Bearer</span><span class="nv"> </span><span class="s">realm="api.example.com"'</span>
-</span><span id="__span-6-275"><a id="__codelineno-6-275" name="__codelineno-6-275" href="#__codelineno-6-275"></a><span class="w">      </span><span class="nt">content</span><span class="p">:</span>
-</span><span id="__span-6-276"><a id="__codelineno-6-276" name="__codelineno-6-276" href="#__codelineno-6-276"></a><span class="w">        </span><span class="nt">application/problem+json</span><span class="p">:</span>
-</span><span id="__span-6-277"><a id="__codelineno-6-277" name="__codelineno-6-277" href="#__codelineno-6-277"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
-</span><span id="__span-6-278"><a id="__codelineno-6-278" name="__codelineno-6-278" href="#__codelineno-6-278"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/ProblemDetail"</span>
-</span><span id="__span-6-279"><a id="__codelineno-6-279" name="__codelineno-6-279" href="#__codelineno-6-279"></a><span class="w">    </span><span class="nt">NotFound</span><span class="p">:</span>
-</span><span id="__span-6-280"><a id="__codelineno-6-280" name="__codelineno-6-280" href="#__codelineno-6-280"></a><span class="w">      </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Risorsa non trovata</span>
-</span><span id="__span-6-281"><a id="__codelineno-6-281" name="__codelineno-6-281" href="#__codelineno-6-281"></a><span class="w">      </span><span class="nt">content</span><span class="p">:</span>
-</span><span id="__span-6-282"><a id="__codelineno-6-282" name="__codelineno-6-282" href="#__codelineno-6-282"></a><span class="w">        </span><span class="nt">application/problem+json</span><span class="p">:</span>
-</span><span id="__span-6-283"><a id="__codelineno-6-283" name="__codelineno-6-283" href="#__codelineno-6-283"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
-</span><span id="__span-6-284"><a id="__codelineno-6-284" name="__codelineno-6-284" href="#__codelineno-6-284"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/ProblemDetail"</span>
-</span><span id="__span-6-285"><a id="__codelineno-6-285" name="__codelineno-6-285" href="#__codelineno-6-285"></a><span class="w">    </span><span class="nt">UnprocessableEntity</span><span class="p">:</span>
-</span><span id="__span-6-286"><a id="__codelineno-6-286" name="__codelineno-6-286" href="#__codelineno-6-286"></a><span class="w">      </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Validazione semantica fallita</span>
-</span><span id="__span-6-287"><a id="__codelineno-6-287" name="__codelineno-6-287" href="#__codelineno-6-287"></a><span class="w">      </span><span class="nt">content</span><span class="p">:</span>
-</span><span id="__span-6-288"><a id="__codelineno-6-288" name="__codelineno-6-288" href="#__codelineno-6-288"></a><span class="w">        </span><span class="nt">application/problem+json</span><span class="p">:</span>
-</span><span id="__span-6-289"><a id="__codelineno-6-289" name="__codelineno-6-289" href="#__codelineno-6-289"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
-</span><span id="__span-6-290"><a id="__codelineno-6-290" name="__codelineno-6-290" href="#__codelineno-6-290"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/ProblemDetail"</span>
-</span><span id="__span-6-291"><a id="__codelineno-6-291" name="__codelineno-6-291" href="#__codelineno-6-291"></a><span class="w">    </span><span class="nt">TooManyRequests</span><span class="p">:</span>
-</span><span id="__span-6-292"><a id="__codelineno-6-292" name="__codelineno-6-292" href="#__codelineno-6-292"></a><span class="w">      </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Rate limit superato</span>
-</span><span id="__span-6-293"><a id="__codelineno-6-293" name="__codelineno-6-293" href="#__codelineno-6-293"></a><span class="w">      </span><span class="nt">headers</span><span class="p">:</span>
-</span><span id="__span-6-294"><a id="__codelineno-6-294" name="__codelineno-6-294" href="#__codelineno-6-294"></a><span class="w">        </span><span class="nt">Retry-After</span><span class="p">:</span>
-</span><span id="__span-6-295"><a id="__codelineno-6-295" name="__codelineno-6-295" href="#__codelineno-6-295"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
-</span><span id="__span-6-296"><a id="__codelineno-6-296" name="__codelineno-6-296" href="#__codelineno-6-296"></a><span class="w">            </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
-</span><span id="__span-6-297"><a id="__codelineno-6-297" name="__codelineno-6-297" href="#__codelineno-6-297"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secondi da attendere prima del prossimo tentativo</span>
-</span><span id="__span-6-298"><a id="__codelineno-6-298" name="__codelineno-6-298" href="#__codelineno-6-298"></a><span class="w">        </span><span class="nt">X-RateLimit-Limit</span><span class="p">:</span>
+</span><span id="__span-6-249"><a id="__codelineno-6-249" name="__codelineno-6-249" href="#__codelineno-6-249"></a><span class="w">        </span><span class="nt">status</span><span class="p">:</span>
+</span><span id="__span-6-250"><a id="__codelineno-6-250" name="__codelineno-6-250" href="#__codelineno-6-250"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
+</span><span id="__span-6-251"><a id="__codelineno-6-251" name="__codelineno-6-251" href="#__codelineno-6-251"></a><span class="w">        </span><span class="nt">detail</span><span class="p">:</span>
+</span><span id="__span-6-252"><a id="__codelineno-6-252" name="__codelineno-6-252" href="#__codelineno-6-252"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
+</span><span id="__span-6-253"><a id="__codelineno-6-253" name="__codelineno-6-253" href="#__codelineno-6-253"></a><span class="w">        </span><span class="nt">instance</span><span class="p">:</span>
+</span><span id="__span-6-254"><a id="__codelineno-6-254" name="__codelineno-6-254" href="#__codelineno-6-254"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
+</span><span id="__span-6-255"><a id="__codelineno-6-255" name="__codelineno-6-255" href="#__codelineno-6-255"></a><span class="w">        </span><span class="nt">traceId</span><span class="p">:</span>
+</span><span id="__span-6-256"><a id="__codelineno-6-256" name="__codelineno-6-256" href="#__codelineno-6-256"></a><span class="w">          </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
+</span><span id="__span-6-257"><a id="__codelineno-6-257" name="__codelineno-6-257" href="#__codelineno-6-257"></a>
+</span><span id="__span-6-258"><a id="__codelineno-6-258" name="__codelineno-6-258" href="#__codelineno-6-258"></a><span class="w">  </span><span class="nt">responses</span><span class="p">:</span>
+</span><span id="__span-6-259"><a id="__codelineno-6-259" name="__codelineno-6-259" href="#__codelineno-6-259"></a><span class="w">    </span><span class="nt">BadRequest</span><span class="p">:</span>
+</span><span id="__span-6-260"><a id="__codelineno-6-260" name="__codelineno-6-260" href="#__codelineno-6-260"></a><span class="w">      </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Request malformata o parametri invalidi</span>
+</span><span id="__span-6-261"><a id="__codelineno-6-261" name="__codelineno-6-261" href="#__codelineno-6-261"></a><span class="w">      </span><span class="nt">content</span><span class="p">:</span>
+</span><span id="__span-6-262"><a id="__codelineno-6-262" name="__codelineno-6-262" href="#__codelineno-6-262"></a><span class="w">        </span><span class="nt">application/problem+json</span><span class="p">:</span>
+</span><span id="__span-6-263"><a id="__codelineno-6-263" name="__codelineno-6-263" href="#__codelineno-6-263"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
+</span><span id="__span-6-264"><a id="__codelineno-6-264" name="__codelineno-6-264" href="#__codelineno-6-264"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/ProblemDetail"</span>
+</span><span id="__span-6-265"><a id="__codelineno-6-265" name="__codelineno-6-265" href="#__codelineno-6-265"></a><span class="w">    </span><span class="nt">Unauthorized</span><span class="p">:</span>
+</span><span id="__span-6-266"><a id="__codelineno-6-266" name="__codelineno-6-266" href="#__codelineno-6-266"></a><span class="w">      </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Token mancante o non valido</span>
+</span><span id="__span-6-267"><a id="__codelineno-6-267" name="__codelineno-6-267" href="#__codelineno-6-267"></a><span class="w">      </span><span class="nt">headers</span><span class="p">:</span>
+</span><span id="__span-6-268"><a id="__codelineno-6-268" name="__codelineno-6-268" href="#__codelineno-6-268"></a><span class="w">        </span><span class="nt">WWW-Authenticate</span><span class="p">:</span>
+</span><span id="__span-6-269"><a id="__codelineno-6-269" name="__codelineno-6-269" href="#__codelineno-6-269"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
+</span><span id="__span-6-270"><a id="__codelineno-6-270" name="__codelineno-6-270" href="#__codelineno-6-270"></a><span class="w">            </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span>
+</span><span id="__span-6-271"><a id="__codelineno-6-271" name="__codelineno-6-271" href="#__codelineno-6-271"></a><span class="w">            </span><span class="nt">example</span><span class="p">:</span><span class="w"> </span><span class="s">'Bearer</span><span class="nv"> </span><span class="s">realm="api.example.com"'</span>
+</span><span id="__span-6-272"><a id="__codelineno-6-272" name="__codelineno-6-272" href="#__codelineno-6-272"></a><span class="w">      </span><span class="nt">content</span><span class="p">:</span>
+</span><span id="__span-6-273"><a id="__codelineno-6-273" name="__codelineno-6-273" href="#__codelineno-6-273"></a><span class="w">        </span><span class="nt">application/problem+json</span><span class="p">:</span>
+</span><span id="__span-6-274"><a id="__codelineno-6-274" name="__codelineno-6-274" href="#__codelineno-6-274"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
+</span><span id="__span-6-275"><a id="__codelineno-6-275" name="__codelineno-6-275" href="#__codelineno-6-275"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/ProblemDetail"</span>
+</span><span id="__span-6-276"><a id="__codelineno-6-276" name="__codelineno-6-276" href="#__codelineno-6-276"></a><span class="w">    </span><span class="nt">NotFound</span><span class="p">:</span>
+</span><span id="__span-6-277"><a id="__codelineno-6-277" name="__codelineno-6-277" href="#__codelineno-6-277"></a><span class="w">      </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Risorsa non trovata</span>
+</span><span id="__span-6-278"><a id="__codelineno-6-278" name="__codelineno-6-278" href="#__codelineno-6-278"></a><span class="w">      </span><span class="nt">content</span><span class="p">:</span>
+</span><span id="__span-6-279"><a id="__codelineno-6-279" name="__codelineno-6-279" href="#__codelineno-6-279"></a><span class="w">        </span><span class="nt">application/problem+json</span><span class="p">:</span>
+</span><span id="__span-6-280"><a id="__codelineno-6-280" name="__codelineno-6-280" href="#__codelineno-6-280"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
+</span><span id="__span-6-281"><a id="__codelineno-6-281" name="__codelineno-6-281" href="#__codelineno-6-281"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/ProblemDetail"</span>
+</span><span id="__span-6-282"><a id="__codelineno-6-282" name="__codelineno-6-282" href="#__codelineno-6-282"></a><span class="w">    </span><span class="nt">UnprocessableEntity</span><span class="p">:</span>
+</span><span id="__span-6-283"><a id="__codelineno-6-283" name="__codelineno-6-283" href="#__codelineno-6-283"></a><span class="w">      </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Validazione semantica fallita</span>
+</span><span id="__span-6-284"><a id="__codelineno-6-284" name="__codelineno-6-284" href="#__codelineno-6-284"></a><span class="w">      </span><span class="nt">content</span><span class="p">:</span>
+</span><span id="__span-6-285"><a id="__codelineno-6-285" name="__codelineno-6-285" href="#__codelineno-6-285"></a><span class="w">        </span><span class="nt">application/problem+json</span><span class="p">:</span>
+</span><span id="__span-6-286"><a id="__codelineno-6-286" name="__codelineno-6-286" href="#__codelineno-6-286"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
+</span><span id="__span-6-287"><a id="__codelineno-6-287" name="__codelineno-6-287" href="#__codelineno-6-287"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/ProblemDetail"</span>
+</span><span id="__span-6-288"><a id="__codelineno-6-288" name="__codelineno-6-288" href="#__codelineno-6-288"></a><span class="w">    </span><span class="nt">TooManyRequests</span><span class="p">:</span>
+</span><span id="__span-6-289"><a id="__codelineno-6-289" name="__codelineno-6-289" href="#__codelineno-6-289"></a><span class="w">      </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Rate limit superato</span>
+</span><span id="__span-6-290"><a id="__codelineno-6-290" name="__codelineno-6-290" href="#__codelineno-6-290"></a><span class="w">      </span><span class="nt">headers</span><span class="p">:</span>
+</span><span id="__span-6-291"><a id="__codelineno-6-291" name="__codelineno-6-291" href="#__codelineno-6-291"></a><span class="w">        </span><span class="nt">Retry-After</span><span class="p">:</span>
+</span><span id="__span-6-292"><a id="__codelineno-6-292" name="__codelineno-6-292" href="#__codelineno-6-292"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
+</span><span id="__span-6-293"><a id="__codelineno-6-293" name="__codelineno-6-293" href="#__codelineno-6-293"></a><span class="w">            </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
+</span><span id="__span-6-294"><a id="__codelineno-6-294" name="__codelineno-6-294" href="#__codelineno-6-294"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secondi da attendere prima del prossimo tentativo</span>
+</span><span id="__span-6-295"><a id="__codelineno-6-295" name="__codelineno-6-295" href="#__codelineno-6-295"></a><span class="w">        </span><span class="nt">X-RateLimit-Limit</span><span class="p">:</span>
+</span><span id="__span-6-296"><a id="__codelineno-6-296" name="__codelineno-6-296" href="#__codelineno-6-296"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
+</span><span id="__span-6-297"><a id="__codelineno-6-297" name="__codelineno-6-297" href="#__codelineno-6-297"></a><span class="w">            </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
+</span><span id="__span-6-298"><a id="__codelineno-6-298" name="__codelineno-6-298" href="#__codelineno-6-298"></a><span class="w">        </span><span class="nt">X-RateLimit-Remaining</span><span class="p">:</span>
 </span><span id="__span-6-299"><a id="__codelineno-6-299" name="__codelineno-6-299" href="#__codelineno-6-299"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
 </span><span id="__span-6-300"><a id="__codelineno-6-300" name="__codelineno-6-300" href="#__codelineno-6-300"></a><span class="w">            </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
-</span><span id="__span-6-301"><a id="__codelineno-6-301" name="__codelineno-6-301" href="#__codelineno-6-301"></a><span class="w">        </span><span class="nt">X-RateLimit-Remaining</span><span class="p">:</span>
+</span><span id="__span-6-301"><a id="__codelineno-6-301" name="__codelineno-6-301" href="#__codelineno-6-301"></a><span class="w">        </span><span class="nt">X-RateLimit-Reset</span><span class="p">:</span>
 </span><span id="__span-6-302"><a id="__codelineno-6-302" name="__codelineno-6-302" href="#__codelineno-6-302"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
 </span><span id="__span-6-303"><a id="__codelineno-6-303" name="__codelineno-6-303" href="#__codelineno-6-303"></a><span class="w">            </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
-</span><span id="__span-6-304"><a id="__codelineno-6-304" name="__codelineno-6-304" href="#__codelineno-6-304"></a><span class="w">        </span><span class="nt">X-RateLimit-Reset</span><span class="p">:</span>
-</span><span id="__span-6-305"><a id="__codelineno-6-305" name="__codelineno-6-305" href="#__codelineno-6-305"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
-</span><span id="__span-6-306"><a id="__codelineno-6-306" name="__codelineno-6-306" href="#__codelineno-6-306"></a><span class="w">            </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">integer</span>
-</span><span id="__span-6-307"><a id="__codelineno-6-307" name="__codelineno-6-307" href="#__codelineno-6-307"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Unix timestamp del reset del limite</span>
-</span><span id="__span-6-308"><a id="__codelineno-6-308" name="__codelineno-6-308" href="#__codelineno-6-308"></a><span class="w">      </span><span class="nt">content</span><span class="p">:</span>
-</span><span id="__span-6-309"><a id="__codelineno-6-309" name="__codelineno-6-309" href="#__codelineno-6-309"></a><span class="w">        </span><span class="nt">application/problem+json</span><span class="p">:</span>
-</span><span id="__span-6-310"><a id="__codelineno-6-310" name="__codelineno-6-310" href="#__codelineno-6-310"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
-</span><span id="__span-6-311"><a id="__codelineno-6-311" name="__codelineno-6-311" href="#__codelineno-6-311"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/ProblemDetail"</span>
+</span><span id="__span-6-304"><a id="__codelineno-6-304" name="__codelineno-6-304" href="#__codelineno-6-304"></a><span class="w">          </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Unix timestamp del reset del limite</span>
+</span><span id="__span-6-305"><a id="__codelineno-6-305" name="__codelineno-6-305" href="#__codelineno-6-305"></a><span class="w">      </span><span class="nt">content</span><span class="p">:</span>
+</span><span id="__span-6-306"><a id="__codelineno-6-306" name="__codelineno-6-306" href="#__codelineno-6-306"></a><span class="w">        </span><span class="nt">application/problem+json</span><span class="p">:</span>
+</span><span id="__span-6-307"><a id="__codelineno-6-307" name="__codelineno-6-307" href="#__codelineno-6-307"></a><span class="w">          </span><span class="nt">schema</span><span class="p">:</span>
+</span><span id="__span-6-308"><a id="__codelineno-6-308" name="__codelineno-6-308" href="#__codelineno-6-308"></a><span class="w">            </span><span class="nt">$ref</span><span class="p">:</span><span class="w"> </span><span class="s">"#/components/schemas/ProblemDetail"</span>
 </span></code></pre></div>
 <h3 id="versioning-strategie-con-deprecation">Versioning — Strategie con Deprecation<a class="headerlink" href="#versioning-strategie-con-deprecation" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># 1. URL Versioning (default raccomandato per API pubbliche)</span>
@@ -25604,10 +25601,12 @@
 <div class="language-http highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="err"># Header di deprecation — da includere nelle risposte v1 dopo il rilascio di v2</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kr">HTTP</span><span class="o">/</span><span class="m">1.1</span> <span class="m">200</span> <span class="ne">OK</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="na">Content-Type</span><span class="o">:</span> <span class="l">application/json</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="na">Deprecation</span><span class="o">:</span> <span class="l">true</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="na">Sunset</span><span class="o">:</span> <span class="l">Sat, 31 Dec 2026 23:59:59 GMT</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="na">Link</span><span class="o">:</span> <span class="l">&lt;https://api.example.com/v2/orders&gt;; rel="successor-version"</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="na">Link</span><span class="o">:</span> <span class="l">&lt;https://docs.example.com/migration/v1-to-v2&gt;; rel="deprecation"</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="err">#</span> <span class="l">RFC 9745: Deprecation è una data (Structured Field, epoch secondi) = quando è diventata deprecata</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="na">Deprecation</span><span class="o">:</span> <span class="l">@1767225599</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="err">#</span> <span class="l">RFC 8594: Sunset = quando la risorsa smette di rispondere</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="na">Sunset</span><span class="o">:</span> <span class="l">Sat, 31 Dec 2026 23:59:59 GMT</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="na">Link</span><span class="o">:</span> <span class="l">&lt;https://api.example.com/v2/orders&gt;; rel="successor-version"</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="na">Link</span><span class="o">:</span> <span class="l">&lt;https://docs.example.com/migration/v1-to-v2&gt;; rel="deprecation"</span>
 </span></code></pre></div>
 <h3 id="caching-con-etag">Caching con ETag<a class="headerlink" href="#caching-con-etag" title="Permanent link">&para;</a></h3>
 <div class="language-http highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="err"># Prima richiesta — il server restituisce ETag</span>
@@ -25638,18 +25637,18 @@
 <h3 id="idempotency-key-per-post">Idempotency Key per POST<a class="headerlink" href="#idempotency-key-per-post" title="Permanent link">&para;</a></h3>
 <div class="language-http highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="err"># Il client genera un UUID prima della richiesta</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="err">POST /v1/orders</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="err">Idempotency-Key: 7f3e2a1b-9d4c-4e8f-b6a0-1c2d3e4f5g6h</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="err">Idempotency-Key: 7f3e2a1b-9d4c-4e8f-b6a0-1c2d3e4f5a6b</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="err">Content-Type: application/json</span>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="err">{ "items": [...], "shippingAddressId": "abc-123" }</span>
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="err"># Prima chiamata: ordine creato</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="kr">HTTP</span><span class="o">/</span><span class="m">1.1</span> <span class="m">201</span> <span class="ne">Created</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="na">Idempotency-Key</span><span class="o">:</span> <span class="l">7f3e2a1b-9d4c-4e8f-b6a0-1c2d3e4f5g6h</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a># Seconda chiamata con stesso Idempotency-Key (dopo timeout/retry)
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>HTTP/1.1 200 OK   ← stessa risposta della prima, nessun secondo ordine creato
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a># Seconda chiamata con stesso Idempotency-Key (dopo timeout/retry)
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>HTTP/1.1 201 Created   ← replay della risposta salvata, nessun secondo ordine creato
 </span></code></pre></div>
+<p><code>Idempotency-Key</code> non è ancora un RFC: è un draft IETF (<code>draft-ietf-httpapi-idempotency-key-header</code>), già adottato de-facto (Stripe, Adyen). Stesso key con body diverso → rispondere <code>422</code>; richiesta ancora in corso → <code>409</code>.</p>
 <div class="admonition tip">
 <p class="admonition-title">Implementazione server-side</p>
 <p>Storare la coppia <code>(idempotency_key, user_id) → response</code> in Redis con TTL 24h. Prima di processare: controllare se esiste. Questo previene double-charge in e-commerce e double-insert in generale.</p>
@@ -25673,7 +25672,7 @@
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># curl http://localhost:4010/v1/orders → risposta da example o schema faker</span>
 </span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
 </span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Rilevamento breaking changes tra versioni (usare in CI)</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>oasdiff<span class="w"> </span>breaking<span class="w"> </span>openapi-v1.yaml<span class="w"> </span>openapi-v2.yaml<span class="w"> </span>--fail-on<span class="w"> </span>ERR
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-v<span class="w"> </span><span class="s2">"</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span><span class="s2">"</span>:/specs:ro<span class="w"> </span>tufin/oasdiff<span class="w"> </span>breaking<span class="w"> </span>/specs/openapi-v1.yaml<span class="w"> </span>/specs/openapi-v2.yaml<span class="w"> </span>--fail-on<span class="w"> </span>ERR
 </span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>
 </span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="c1"># Generazione client SDK (40+ linguaggi)</span>
 </span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>:/out<span class="w"> </span>openapitools/openapi-generator-cli<span class="w"> </span>generate<span class="w"> </span><span class="se">\</span>
@@ -25721,12 +25720,13 @@
 <p><strong>Causa:</strong> Il token è valido ma scaduto, o il server valida su un JWKS endpoint diverso da quello che ha firmato il token.</p>
 <p><strong>Soluzione:</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Decodificare il JWT (senza verificare firma) per ispezionare claim</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"eyJhbGc..."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d.<span class="w"> </span>-f2<span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># Verificare: exp (scadenza), iss (issuer), aud (audience)</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># Testare la validazione del token direttamente</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>curl<span class="w"> </span>-v<span class="w"> </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span>https://api.example.com/v1/orders
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Leggere il body del 401 — deve includere WWW-Authenticate con realm</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># (JWT usa base64url: se base64 -d fallisce, sostituire -_ con +/ e aggiungere padding)</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"eyJhbGc..."</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>cut<span class="w"> </span>-d.<span class="w"> </span>-f2<span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span><span class="s1">'_-'</span><span class="w"> </span><span class="s1">'/+'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Verificare: exp (scadenza), iss (issuer), aud (audience)</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># Testare la validazione del token direttamente</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>curl<span class="w"> </span>-v<span class="w"> </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer </span><span class="nv">$TOKEN</span><span class="s2">"</span><span class="w"> </span>https://api.example.com/v1/orders
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="c1"># Leggere il body del 401 — deve includere WWW-Authenticate con realm</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="problema-cors-error-su-preflight-options">Problema: CORS error su preflight OPTIONS<a class="headerlink" href="#problema-cors-error-su-preflight-options" title="Permanent link">&para;</a></h3>
@@ -25752,10 +25752,10 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Validare la spec prima di avviare il mock</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>npx<span class="w"> </span>@stoplight/spectral-cli<span class="w"> </span>lint<span class="w"> </span>openapi.yaml
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Avviare Prism in modalità verbose per vedere gli errori</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># --errors: Prism risponde con errore (es. 422) su richieste non conformi alla spec</span>
 </span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>npx<span class="w"> </span>@stoplight/prism-cli<span class="w"> </span>mock<span class="w"> </span>openapi.yaml<span class="w"> </span>--port<span class="w"> </span><span class="m">4010</span><span class="w"> </span>--errors
 </span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># Forzare Prism a usare esempi invece di generare dal schema</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># Default: usa gli `example` della spec. -d/--dynamic genera invece dati fake dallo schema</span>
 </span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>npx<span class="w"> </span>@stoplight/prism-cli<span class="w"> </span>mock<span class="w"> </span>openapi.yaml<span class="w"> </span>--port<span class="w"> </span><span class="m">4010</span><span class="w"> </span>-d
 </span></code></pre></div></p>
 <hr />
@@ -25777,7 +25777,8 @@
 </span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="w">        </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
 </span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="w">          </span><span class="no"># Confronta spec corrente con quella su main</span>
 </span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="w">          </span><span class="no">git show origin/main:openapi.yaml &gt; openapi-main.yaml</span>
-</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="w">          </span><span class="no">npx oasdiff breaking openapi-main.yaml openapi.yaml --fail-on ERR</span>
+</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="w">          </span><span class="no">docker run --rm -v "$PWD":/specs:ro tufin/oasdiff \</span>
+</span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a><span class="w">            </span><span class="no">breaking /specs/openapi-main.yaml /specs/openapi.yaml --fail-on ERR</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="problema-rate-limiting-asimmetrico-alcuni-client-bloccati-altri-no">Problema: Rate limiting asimmetrico — alcuni client bloccati, altri no<a class="headerlink" href="#problema-rate-limiting-asimmetrico-alcuni-client-bloccati-altri-no" title="Permanent link">&para;</a></h3>
@@ -25816,13 +25817,14 @@
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://spec.openapis.org/oas/v3.1.0">OpenAPI Specification 3.1</a> — Specifica ufficiale OAS 3.1</li>
-<li><a href="https://www.rfc-editor.org/rfc/rfc7807">RFC 7807 — Problem Details</a> — Standard error response HTTP</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9457">RFC 9457 — Problem Details</a> — Standard error response HTTP (obsoleta RFC 7807)</li>
+<li><a href="https://www.rfc-editor.org/rfc/rfc9745">RFC 9745 — Deprecation Header</a> e <a href="https://www.rfc-editor.org/rfc/rfc8594">RFC 8594 — Sunset Header</a></li>
 <li><a href="https://www.rfc-editor.org/rfc/rfc8288">RFC 8288 — Web Linking</a> — Standard <code>Link</code> header per paginazione e HATEOAS</li>
 <li><a href="https://cloud.google.com/apis/design">Google API Design Guide</a> — Best practice da Google per REST API</li>
 <li><a href="https://github.com/microsoft/api-guidelines">Microsoft REST API Guidelines</a> — Linee guida REST complete con versioning e error handling</li>
 <li><a href="https://stoplight.io/open-source/spectral">Stoplight Spectral</a> — OpenAPI linter con regole customizzabili</li>
 <li><a href="https://stoplight.io/open-source/prism">Prism Mock Server</a> — Mock server da spec OpenAPI</li>
-<li><a href="https://github.com/Tufin/oasdiff">oasdiff</a> — Rilevamento breaking changes OpenAPI da CLI e CI</li>
+<li><a href="https://github.com/oasdiff/oasdiff">oasdiff</a> — Rilevamento breaking changes OpenAPI da CLI e CI</li>
 <li><a href="https://openapi-generator.tech/">openapi-generator</a> — Generazione client/server stub da OpenAPI spec</li>
 <li><a href="https://redocly.com/docs/cli/">Redocly CLI</a> — Preview docs, linting, bundling OpenAPI</li>
 </ul>

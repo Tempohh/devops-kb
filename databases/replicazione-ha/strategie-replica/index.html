@@ -12476,7 +12476,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12511,7 +12511,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12546,7 +12546,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13456,7 +13456,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13481,7 +13481,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13508,6 +13508,17 @@
     <span class="md-ellipsis">
       
         Panoramica
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#replica-fisica-vs-logica" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Replica Fisica vs Logica
       
     </span>
   </a>
@@ -14905,7 +14916,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24545,6 +24556,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#replica-fisica-vs-logica" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Replica Fisica vs Logica
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#replicazione-sincrona-vs-asincrona" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -24915,140 +24937,203 @@
 <li><strong>Topologia</strong>: come sono connessi i nodi</li>
 </ol>
 <p>Ogni scelta è un trade-off tra durabilità, performance e complessità operativa.</p>
+<h2 id="replica-fisica-vs-logica">Replica Fisica vs Logica<a class="headerlink" href="#replica-fisica-vs-logica" title="Permanent link">&para;</a></h2>
+<p><strong>WAL</strong> (Write-Ahead Log) è il journal su cui il database scrive ogni modifica prima di applicarla ai data file; è la base della replica.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Fisica (streaming)</th>
+<th>Logica</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cosa viaggia</td>
+<td>Record WAL a livello di blocco</td>
+<td>Modifiche di riga decodificate (INSERT/UPDATE/DELETE)</td>
+</tr>
+<tr>
+<td>Standby</td>
+<td>Copia binaria identica, read-only</td>
+<td>Database indipendente, scrivibile</td>
+</tr>
+<tr>
+<td>Granularità</td>
+<td>Intero cluster</td>
+<td>Per tabella (publication/subscription)</td>
+</tr>
+<tr>
+<td>Versioni</td>
+<td>Stessa major version</td>
+<td>Major version diverse → upgrade senza downtime</td>
+</tr>
+<tr>
+<td>DDL e sequence</td>
+<td>Replicati</td>
+<td><strong>Non</strong> replicati (PostgreSQL)</td>
+</tr>
+<tr>
+<td>Uso tipico</td>
+<td>HA, failover, read replica</td>
+<td>Migrazioni, CDC, consolidamento dati, replica selettiva</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Perché:</strong> la replica fisica riapplica byte-per-byte, quindi è semplice e veloce ma rigida; la logica decodifica le modifiche, quindi è flessibile ma richiede chiave primaria/<code>REPLICA IDENTITY</code> e gestione manuale dello schema.</p>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">-- PostgreSQL: replica logica di una tabella (wal_level = logical sul publisher)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">PUBLICATION</span><span class="w"> </span><span class="n">pub_ordini</span><span class="w"> </span><span class="k">FOR</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="n">ordini</span><span class="p">;</span><span class="w">                 </span><span class="c1">-- sul publisher</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">SUBSCRIPTION</span><span class="w"> </span><span class="n">sub_ordini</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="k">CONNECTION</span><span class="w"> </span><span class="s1">'host=primary dbname=app user=repl'</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="n">PUBLICATION</span><span class="w"> </span><span class="n">pub_ordini</span><span class="p">;</span><span class="w">                                       </span><span class="c1">-- sul subscriber</span>
+</span></code></pre></div>
+<hr />
 <h2 id="replicazione-sincrona-vs-asincrona">Replicazione Sincrona vs Asincrona<a class="headerlink" href="#replicazione-sincrona-vs-asincrona" title="Permanent link">&para;</a></h2>
 <h3 id="asincrona-default-in-quasi-tutti-i-database">Asincrona (default in quasi tutti i database)<a class="headerlink" href="#asincrona-default-in-quasi-tutti-i-database" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Client               Primary              Standby
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  │                     │                    │
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  │── COMMIT ──────────&gt;│                    │
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  │&lt;── OK ──────────────│                    │
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  │                     │── WAL stream ──────&gt;│
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>  │                     │   (in background)   │ applica WAL
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>  │                     │                    │
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  Commit confermato PRIMA che la standby riceva il dato
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>  → Performance massima
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  → RPO &gt; 0: se primary crasha dopo OK e prima che standby riceva → dati persi
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Client               Primary              Standby
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  │                     │                    │
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  │── COMMIT ──────────&gt;│                    │
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  │&lt;── OK ──────────────│                    │
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>  │                     │── WAL stream ──────&gt;│
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>  │                     │   (in background)   │ applica WAL
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>  │                     │                    │
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>  Commit confermato PRIMA che la standby riceva il dato
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>  → Performance massima
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>  → RPO &gt; 0: se primary crasha dopo OK e prima che standby riceva → dati persi
 </span></code></pre></div>
 <p><strong>Quando usarla:</strong>
 - Latenza di scrittura critica
 - RPO &gt; 0 accettabile (es. analytics, log, dati non critici)
 - Standby geograficamente distante (latenza rete alta)</p>
 <h3 id="sincrona">Sincrona<a class="headerlink" href="#sincrona" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Client               Primary              Standby
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>  │                     │                    │
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  │── COMMIT ──────────&gt;│── WAL ────────────&gt;│
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  │                     │&lt;── ACK ────────────│
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>  │&lt;── OK ──────────────│                    │
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>  │                     │                    │
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>  Commit confermato SOLO dopo ACK della standby
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>  → RPO = 0 (nessuna perdita di dati in failover)
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>  → Latency del commit = latency rete verso standby + ACK
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Client               Primary              Standby
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  │                     │                    │
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  │── COMMIT ──────────&gt;│── WAL ────────────&gt;│
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  │                     │&lt;── ACK ────────────│
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  │&lt;── OK ──────────────│                    │
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>  │                     │                    │
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>  Commit confermato SOLO dopo ACK della standby
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  → RPO = 0 (nessuna perdita di dati in failover)
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>  → Latency del commit = latency rete verso standby + ACK
 </span></code></pre></div>
 <p><strong>Quando usarla:</strong>
 - RPO = 0 obbligatorio (transazioni finanziarie, ordini, dati critici)
 - Standby nella stessa AZ o con latenza bassa (&lt; 5ms)</p>
 <p><strong>Costo della replica sincrona:</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Esempio: latenza rete primary→standby = 2ms
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  Commit asincrono: 1ms (solo disco locale)
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  Commit sincrono:  1ms + 2ms + 2ms (RTT) = 5ms → 5x più lento
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>Con 3 standby sincrone: il commit attende la più lenta
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>  → In produzione: 1 standby sync + N async (PostgreSQL: synchronous_standby_names)
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Esempio: latenza di rete one-way primary→standby = 2ms (RTT = 4ms)
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  Commit asincrono: 1ms (solo fsync su disco locale)
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  Commit sincrono:  1ms + 4ms (RTT: invio WAL + ACK) = 5ms → 5x più lento
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  (se la standby fa anche fsync, aggiungere il suo tempo di flush)
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>Con 3 standby che devono tutte confermare: il commit attende la più lenta
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  → In produzione: 1 standby sync + N async (PostgreSQL: synchronous_standby_names)
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">synchronous_commit conta solo con standby sincrone</p>
+<p>In PostgreSQL <code>synchronous_commit</code> (<code>off</code> / <code>local</code> / <code>remote_write</code> / <code>on</code> / <code>remote_apply</code>) decide <em>fino a dove</em> aspettare la standby, ma solo se <code>synchronous_standby_names</code> non è vuoto. Con la lista vuota la replica resta asincrona qualunque sia il valore.</p>
+</div>
 <h3 id="semi-sincrona">Semi-sincrona<a class="headerlink" href="#semi-sincrona" title="Permanent link">&para;</a></h3>
-<p>Variante: il primary attende che almeno 1 standby abbia ricevuto il WAL (non necessariamente applicato). MySQL/MariaDB chiamano questa modalità "semi-sync". PostgreSQL ha <code>remote_write</code> (WAL ricevuto) vs <code>remote_apply</code> (WAL applicato).</p>
-<div class="language-ini highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># PostgreSQL — modalità semi-sincrona</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="na">synchronous_commit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">remote_write</span><span class="w">   </span><span class="c1"># WAL ricevuto dalla standby, non ancora applicato</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># più veloce di 'on' (no fsync sulla standby)</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># più lento di 'off' (attende ACK di rete)</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># RPO: può perdere al massimo le write in transito → accettabile per molti use case</span>
+<p>Variante: il primary attende che almeno 1 standby abbia <em>ricevuto</em> il WAL (non necessariamente applicato). MySQL/MariaDB chiamano questa modalità "semi-sync" (ACK dopo la scrittura nel relay log; se nessun ACK arriva entro <code>rpl_semi_sync_source_timeout</code> il primary degrada ad async). PostgreSQL non ha una modalità "semi-sync" nominata: la gradazione è data da <code>synchronous_commit</code> — <code>remote_write</code> (WAL scritto dal SO della standby, senza fsync), <code>on</code> (WAL flushed su disco della standby), <code>remote_apply</code> (WAL applicato, le letture sulla standby vedono già il commit).</p>
+<div class="language-ini highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># PostgreSQL — livello intermedio (richiede synchronous_standby_names valorizzato)</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="na">synchronous_standby_names</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">'FIRST 1 (standby1, standby2)'</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="na">synchronous_commit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">remote_write</span><span class="w">   </span><span class="c1"># WAL ricevuto dalla standby, non ancora su disco</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># più veloce di 'on' (no fsync sulla standby)</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># più lento di 'local'/'off' (attende ACK di rete)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># RPO: perdita possibile solo se primary E standby cadono insieme prima del flush</span>
 </span></code></pre></div>
+<p>Nota: a differenza di MySQL, PostgreSQL <strong>non</strong> degrada ad async da solo: se la standby sincrona sparisce, i commit si bloccano (vedi Scenario 2).</p>
 <hr />
 <h2 id="topologie-di-replica">Topologie di Replica<a class="headerlink" href="#topologie-di-replica" title="Permanent link">&para;</a></h2>
 <h3 id="primary-n-standby-standard">Primary + N Standby (Standard)<a class="headerlink" href="#primary-n-standby-standard" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Primary ──┬── Standby 1 (sync, stessa AZ)
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>          ├── Standby 2 (async, AZ diversa)
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>          └── Standby 3 (async, regione diversa)
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>Pro: semplice, well-supported, failover automatico chiaro
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>Contro: write scalability limitata al primary
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>Uso: PostgreSQL + Patroni, MySQL + Orchestrator
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Primary ──┬── Standby 1 (sync, stessa AZ)
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>          ├── Standby 2 (async, AZ diversa)
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>          └── Standby 3 (async, regione diversa)
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>Pro: semplice, well-supported, failover automatico chiaro
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>Contro: write scalability limitata al primary
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>Uso: PostgreSQL + Patroni, MySQL + Orchestrator
 </span></code></pre></div>
 <h3 id="cascading-replication">Cascading Replication<a class="headerlink" href="#cascading-replication" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Primary ── Standby 1 ── Standby 2 ── Standby 3
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>Standby 1 replica dal Primary; Standby 2 e 3 replicano da Standby 1
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>Pro: riduce il load di WAL sul primary (un solo WAL sender)
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>Contro: lag aumenta lungo la catena; failover più complesso
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>Uso: molte standby geograficamente distribuite
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Primary ── Standby 1 ── Standby 2 ── Standby 3
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>Standby 1 replica dal Primary; Standby 2 e 3 replicano da Standby 1
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>Pro: riduce il load di WAL sul primary (un solo WAL sender)
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>Contro: lag aumenta lungo la catena; failover più complesso
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>Uso: molte standby geograficamente distribuite
 </span></code></pre></div>
 <h3 id="read-replicas-scaling-delle-letture">Read Replicas — Scaling delle Letture<a class="headerlink" href="#read-replicas-scaling-delle-letture" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>           ┌── Read Replica 1 ◄── letture app
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>Primary ───┤── Read Replica 2 ◄── letture app
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>           └── Read Replica 3 ◄── letture reporting
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>           │
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>           └── Standby HA (non esposta alle app — solo failover)
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>Pro: scala le letture orizzontalmente
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>Contro: replica lag → read stale possibili (eventual consistency)
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>Uso: AWS RDS Read Replicas, Aurora Read Replicas, GCP Cloud SQL replicas
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>           ┌── Read Replica 1 ◄── letture app
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Primary ───┤── Read Replica 2 ◄── letture app
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>           └── Read Replica 3 ◄── letture reporting
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>           │
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>           └── Standby HA (non esposta alle app — solo failover)
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>Pro: scala le letture orizzontalmente
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>Contro: replica lag → read stale possibili (eventual consistency)
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>Uso: AWS RDS Read Replicas, Aurora Read Replicas, GCP Cloud SQL replicas
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Aurora è diversa</p>
+<p>RDS e Cloud SQL replicano il log al singolo standby. Le Aurora Replicas leggono invece lo <strong>stesso storage distribuito</strong> del writer: il lag è tipicamente di decine di ms e non c'è WAL da riapplicare sulla replica.</p>
+</div>
 <p><strong>Pattern applicativo per read replicas:</strong></p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Routing automatico read/write</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">DBRouter</span><span class="p">:</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">primary</span> <span class="o">=</span> <span class="n">psycopg2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">PRIMARY_DSN</span><span class="p">)</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">replicas</span> <span class="o">=</span> <span class="p">[</span><span class="n">psycopg2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">REPLICA_DSNS</span><span class="p">]</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_replica_idx</span> <span class="o">=</span> <span class="mi">0</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">primary</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>        <span class="c1"># Round-robin tra repliche</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicas</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_replica_idx</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">replicas</span><span class="p">)]</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_replica_idx</span> <span class="o">+=</span> <span class="mi">1</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>        <span class="k">return</span> <span class="n">conn</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1"># ATTENZIONE: read-your-own-writes</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="c1"># Dopo un write, leggi dal primary per evitare read stale</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="k">def</span><span class="w"> </span><span class="nf">aggiorna_utente</span><span class="p">(</span><span class="n">user_id</span><span class="p">,</span> <span class="n">dati</span><span class="p">):</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>    <span class="k">with</span> <span class="n">db</span><span class="o">.</span><span class="n">write</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>        <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"UPDATE utenti SET ... WHERE id = </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="p">(</span><span class="n">user_id</span><span class="p">,))</span>
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>        <span class="n">conn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
-</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>    <span class="c1"># Leggi dal primary per conferma immediata</span>
-</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>    <span class="k">return</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"SELECT * FROM utenti WHERE id = </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="p">(</span><span class="n">user_id</span><span class="p">,))</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Routing automatico read/write</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">class</span><span class="w"> </span><span class="nc">DBRouter</span><span class="p">:</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">primary</span> <span class="o">=</span> <span class="n">psycopg2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">PRIMARY_DSN</span><span class="p">)</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">replicas</span> <span class="o">=</span> <span class="p">[</span><span class="n">psycopg2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">REPLICA_DSNS</span><span class="p">]</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_replica_idx</span> <span class="o">=</span> <span class="mi">0</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">primary</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>        <span class="c1"># Round-robin tra repliche</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>        <span class="n">conn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">replicas</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_replica_idx</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">replicas</span><span class="p">)]</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_replica_idx</span> <span class="o">+=</span> <span class="mi">1</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>        <span class="k">return</span> <span class="n">conn</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="c1"># ATTENZIONE: read-your-own-writes</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="c1"># Dopo un write, leggi dal primary per evitare read stale</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="k">def</span><span class="w"> </span><span class="nf">aggiorna_utente</span><span class="p">(</span><span class="n">user_id</span><span class="p">,</span> <span class="n">dati</span><span class="p">):</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>    <span class="k">with</span> <span class="n">db</span><span class="o">.</span><span class="n">write</span><span class="p">()</span> <span class="k">as</span> <span class="n">conn</span><span class="p">:</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>        <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"UPDATE utenti SET ... WHERE id = </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="p">(</span><span class="n">user_id</span><span class="p">,))</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>        <span class="n">conn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>    <span class="c1"># Leggi dal primary per conferma immediata</span>
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a>    <span class="k">return</span> <span class="n">conn</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"SELECT * FROM utenti WHERE id = </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="p">(</span><span class="n">user_id</span><span class="p">,))</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
 </span></code></pre></div>
 <h3 id="multi-master-active-active">Multi-Master (Active-Active)<a class="headerlink" href="#multi-master-active-active" title="Permanent link">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Master A ◄──────── replication ────────► Master B
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>   │                (bidirezionale)           │
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>   │ write                              write │
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>   ▼                                         ▼
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>App Server A                          App Server B
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>Entrambi i nodi accettano write contemporaneamente
+<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>Master A ◄──────── replication ────────► Master B
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>   │                (bidirezionale)           │
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>   │ write                              write │
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>   ▼                                         ▼
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>App Server A                          App Server B
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>Entrambi i nodi accettano write contemporaneamente
 </span></code></pre></div>
 <p>Il problema del multi-master è la <strong>gestione dei conflitti</strong>: se Master A e B aggiornano contemporaneamente la stessa riga, quale vince?</p>
 <p><strong>Strategie di risoluzione conflitti:</strong>
 - <strong>Last-Write-Wins (LWW)</strong>: vince il timestamp più recente. Semplice, ma può perdere write legittime
-- <strong>Application-level resolution</strong>: il conflitto viene rilevato e passato all'applicazione (es. CouchDB, Cassandra con LWT)
-- <strong>CRDT (Conflict-free Replicated Data Types)</strong>: strutture dati matematicamente prive di conflitti (contatori, set) — usati in Redis Cluster, Riak
+- <strong>Application-level resolution</strong>: il conflitto viene rilevato e passato all'applicazione (es. CouchDB: sceglie un vincitore deterministico ma conserva le revisioni in conflitto da risolvere)
+- <strong>CRDT (Conflict-free Replicated Data Types)</strong>: strutture dati matematicamente prive di conflitti (contatori, set) — usati in Riak e Redis Enterprise/Redis Cloud Active-Active (non in Redis Cluster open source, che è single-writer per shard)
 - <strong>Serializable consistency</strong>: coordinamento distribuito (2PC, Paxos) — elimina conflitti ma sacrifica disponibilità</p>
 <p><strong>Quando usare multi-master:</strong>
 - Active-active geografico obbligatorio (disaster recovery senza downtime)
 - Write throughput &gt; capacità di un singolo nodo (raro con hardware moderno)
-- Galera Cluster (MySQL), Patroni con multi-master sperimentale, CockroachDB, YugabyteDB</p>
+- Galera Cluster (MariaDB/Percona XtraDB), MySQL Group Replication in modalità multi-primary, CockroachDB, YugabyteDB (questi ultimi due: consenso Raft per range, non vero multi-master LWW)
+- PostgreSQL nativo <strong>non</strong> offre multi-master: servono estensioni/prodotti (pglogical, EDB Postgres Distributed/BDR, pgEdge). Patroni gestisce solo topologie single-primary.</p>
 <hr />
 <h2 id="rpo-e-rto-definire-i-requisiti">RPO e RTO — Definire i Requisiti<a class="headerlink" href="#rpo-e-rto-definire-i-requisiti" title="Permanent link">&para;</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>RPO (Recovery Point Objective) = quanto dato puoi perdere
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>RTO (Recovery Time Objective)  = quanto downtime puoi tollerare
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>        Write accettate                Failover
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>             │                            │
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>─────────────┼────────────────────────────┼──────────────► tempo
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>             │◄── RPO ───►│               │
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>         Ultimo backup  Crash          Servizio
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>          / replica                    ripreso
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>                              │◄── RTO ───►│
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>RPO (Recovery Point Objective) = quanto dato puoi perdere
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>RTO (Recovery Time Objective)  = quanto downtime puoi tollerare
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>        Write accettate                Failover
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>             │                            │
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>─────────────┼────────────────────────────┼──────────────► tempo
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>             │◄── RPO ───►│               │
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>         Ultimo backup  Crash          Servizio
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>          / replica                    ripreso
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>                              │◄── RTO ───►│
 </span></code></pre></div>
 <p><strong>Matrice RPO/RTO:</strong></p>
 <table>
@@ -25096,125 +25181,135 @@
 <hr />
 <h2 id="monitoring-del-lag-di-replica">Monitoring del Lag di Replica<a class="headerlink" href="#monitoring-del-lag-di-replica" title="Permanent link">&para;</a></h2>
 <p>Il lag è il ritardo tra il momento in cui un dato viene scritto sul primary e il momento in cui è disponibile sulla standby:</p>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1">-- PostgreSQL: lag su tutte le standby (dal primary)</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="k">SELECT</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="n">client_addr</span><span class="p">,</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="k">state</span><span class="p">,</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span><span class="n">sync_state</span><span class="p">,</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">sent_lsn</span><span class="p">)</span><span class="w">   </span><span class="k">AS</span><span class="w"> </span><span class="n">send_lag_bytes</span><span class="p">,</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">write_lsn</span><span class="p">)</span><span class="w">  </span><span class="k">AS</span><span class="w"> </span><span class="n">write_lag_bytes</span><span class="p">,</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">flush_lsn</span><span class="p">)</span><span class="w">  </span><span class="k">AS</span><span class="w"> </span><span class="n">flush_lag_bytes</span><span class="p">,</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">replay_lsn</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">replay_lag_bytes</span><span class="p">,</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span><span class="n">write_lag</span><span class="p">,</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">    </span><span class="n">flush_lag</span><span class="p">,</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">    </span><span class="n">replay_lag</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_replication</span><span class="p">;</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="c1">-- Dalla standby: quanti secondi di lag</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="k">SELECT</span>
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">    </span><span class="n">now</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">pg_last_xact_replay_timestamp</span><span class="p">()</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">replica_lag_seconds</span><span class="p">,</span>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">    </span><span class="n">pg_is_in_recovery</span><span class="p">()</span><span class="w">                      </span><span class="k">AS</span><span class="w"> </span><span class="n">is_standby</span><span class="p">;</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">-- PostgreSQL: lag su tutte le standby (dal primary)</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="k">SELECT</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="n">client_addr</span><span class="p">,</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="k">state</span><span class="p">,</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">    </span><span class="n">sync_state</span><span class="p">,</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">sent_lsn</span><span class="p">)</span><span class="w">   </span><span class="k">AS</span><span class="w"> </span><span class="n">send_lag_bytes</span><span class="p">,</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">    </span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">write_lsn</span><span class="p">)</span><span class="w">  </span><span class="k">AS</span><span class="w"> </span><span class="n">write_lag_bytes</span><span class="p">,</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">    </span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">flush_lsn</span><span class="p">)</span><span class="w">  </span><span class="k">AS</span><span class="w"> </span><span class="n">flush_lag_bytes</span><span class="p">,</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">    </span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">replay_lsn</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">replay_lag_bytes</span><span class="p">,</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">    </span><span class="n">write_lag</span><span class="p">,</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">    </span><span class="n">flush_lag</span><span class="p">,</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">    </span><span class="n">replay_lag</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_replication</span><span class="p">;</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="c1">-- Dalla standby: quanti secondi di lag</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="k">SELECT</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">    </span><span class="n">now</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">pg_last_xact_replay_timestamp</span><span class="p">()</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">replica_lag_seconds</span><span class="p">,</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">    </span><span class="n">pg_is_in_recovery</span><span class="p">()</span><span class="w">                      </span><span class="k">AS</span><span class="w"> </span><span class="n">is_standby</span><span class="p">;</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="c1">-- ATTENZIONE: se il primary è idle (nessuna transazione) questo valore cresce</span>
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="c1">-- senza che ci sia vero lag. Incrociare con i byte di lag (pg_stat_replication).</span>
 </span></code></pre></div>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Alert Prometheus — lag &gt; 30s</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReplicationLagHigh</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pg_replication_lag &gt; 30</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2m</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">"PostgreSQL</span><span class="nv"> </span><span class="s">replica</span><span class="nv"> </span><span class="s">lag</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$value</span><span class="nv"> </span><span class="s">}}s</span><span class="nv"> </span><span class="s">—</span><span class="nv"> </span><span class="s">rischio</span><span class="nv"> </span><span class="s">RPO</span><span class="nv"> </span><span class="s">violato"</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Alert Prometheus — lag &gt; 30s (metrica di postgres_exporter; il nome esatto</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># dipende da versione/query custom: verificare sul proprio /metrics)</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReplicationLagHigh</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pg_replication_lag_seconds &gt; 30</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span><span class="nt">for</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2m</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">    </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">"PostgreSQL</span><span class="nv"> </span><span class="s">replica</span><span class="nv"> </span><span class="s">lag</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$value</span><span class="nv"> </span><span class="s">}}s</span><span class="nv"> </span><span class="s">—</span><span class="nv"> </span><span class="s">rischio</span><span class="nv"> </span><span class="s">RPO</span><span class="nv"> </span><span class="s">violato"</span>
 </span></code></pre></div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-replica-lag-in-crescita-costante">Scenario 1 — Replica lag in crescita costante<a class="headerlink" href="#scenario-1-replica-lag-in-crescita-costante" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> <code>replica_lag_seconds</code> aumenta nel tempo; le read replica servono dati sempre più vecchi; alert <code>ReplicationLagHigh</code> continuo.</p>
 <p><strong>Causa:</strong> Il primary genera WAL più velocemente di quanto la standby riesca ad applicarlo. Cause tipiche: query pesanti sulla standby (hot standby conflict), I/O della standby saturo, standby sotto-dimensionata.</p>
 <p><strong>Soluzione:</strong>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1">-- 1. Verificare il lag corrente e lo stato di replica</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">client_addr</span><span class="p">,</span><span class="w"> </span><span class="k">state</span><span class="p">,</span><span class="w"> </span><span class="n">sync_state</span><span class="p">,</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">       </span><span class="n">replay_lag</span><span class="p">,</span><span class="w"> </span><span class="n">write_lag</span><span class="p">,</span><span class="w"> </span><span class="n">flush_lag</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_replication</span><span class="p">;</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1">-- 2. Verificare conflitti hot standby sulla standby</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pid</span><span class="p">,</span><span class="w"> </span><span class="n">wait_event_type</span><span class="p">,</span><span class="w"> </span><span class="n">wait_event</span><span class="p">,</span><span class="w"> </span><span class="n">query</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_activity</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">wait_event_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'Lock'</span><span class="p">;</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="c1">-- 3. Ridurre query analitiche pesanti sulla standby</span>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="c1">-- Oppure aumentare max_standby_streaming_delay (default 30s)</span>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="c1">-- In postgresql.conf della standby:</span>
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="c1">-- max_standby_streaming_delay = 120s</span>
-</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="c1">-- hot_standby_feedback = on   -- evita cancellazione vacum sul primary</span>
-</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>
-</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="c1">-- 4. Se la standby è I/O bound, verificare</span>
-</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_bgwriter</span><span class="p">;</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1">-- 1. Verificare il lag corrente e lo stato di replica</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">client_addr</span><span class="p">,</span><span class="w"> </span><span class="k">state</span><span class="p">,</span><span class="w"> </span><span class="n">sync_state</span><span class="p">,</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">       </span><span class="n">replay_lag</span><span class="p">,</span><span class="w"> </span><span class="n">write_lag</span><span class="p">,</span><span class="w"> </span><span class="n">flush_lag</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_replication</span><span class="p">;</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1">-- 2. Sulla standby: query lunghe e conflitti di recovery</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pid</span><span class="p">,</span><span class="w"> </span><span class="n">now</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">query_start</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">durata</span><span class="p">,</span><span class="w"> </span><span class="k">state</span><span class="p">,</span><span class="w"> </span><span class="n">query</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_activity</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="k">WHERE</span><span class="w"> </span><span class="k">state</span><span class="w"> </span><span class="o">&lt;&gt;</span><span class="w"> </span><span class="s1">'idle'</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">durata</span><span class="w"> </span><span class="k">DESC</span><span class="p">;</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">datname</span><span class="p">,</span><span class="w"> </span><span class="n">confl_snapshot</span><span class="p">,</span><span class="w"> </span><span class="n">confl_lock</span><span class="p">,</span><span class="w"> </span><span class="n">confl_bufferpin</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_database_conflicts</span><span class="p">;</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="c1">-- 3. Opzioni (postgresql.conf della standby):</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="c1">-- max_standby_streaming_delay = 120s  -- il replay aspetta le query fino a 120s:</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="c1">--                                     -- meno query cancellate, MA più lag (default 30s)</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="c1">-- hot_standby_feedback = on           -- il primary non fa VACUUM di righe ancora</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="c1">--                                     -- viste dalla standby: meno cancellazioni,</span>
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="c1">--                                     -- ma possibile bloat sul primary</span>
+</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="c1">-- In alternativa: spostare il reporting pesante su una replica dedicata.</span>
+</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a>
+</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="c1">-- 4. Se la standby è I/O bound: pg_stat_io (PostgreSQL 16+) oppure iostat/iotop sull'host</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="scenario-2-primary-bloccato-standby-sincrona-non-raggiungibile">Scenario 2 — Primary bloccato: standby sincrona non raggiungibile<a class="headerlink" href="#scenario-2-primary-bloccato-standby-sincrona-non-raggiungibile" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Tutti i COMMIT si bloccano indefinitamente. Nessun nuovo write riesce. La standby sincrona è offline o irraggiungibile dalla rete.</p>
 <p><strong>Causa:</strong> Con <code>synchronous_commit = on</code>, il primary attende l'ACK di almeno una standby sincrona. Se nessuna standby è disponibile, il commit si blocca finché non ne ritorna una.</p>
 <p><strong>Soluzione:</strong>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1">-- 1. Verificare quali standby sono connesse</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">application_name</span><span class="p">,</span><span class="w"> </span><span class="n">client_addr</span><span class="p">,</span><span class="w"> </span><span class="k">state</span><span class="p">,</span><span class="w"> </span><span class="n">sync_state</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_replication</span><span class="p">;</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1">-- 2. Fallback temporaneo: disabilitare replica sincrona</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1">-- (OPERAZIONE CRITICA: RPO &gt; 0 fino al ripristino della standby)</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">SYSTEM</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">synchronous_standby_names</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">''</span><span class="p">;</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_reload_conf</span><span class="p">();</span>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="c1">-- 3. Verificare che i commit sbloccati</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="c1">-- Poi ripristinare la standby e riabilitare:</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">SYSTEM</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">synchronous_standby_names</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'standby1'</span><span class="p">;</span>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_reload_conf</span><span class="p">();</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>
-</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="c1">-- 4. Per evitare blocchi futuri: usare FIRST 1 (ANY) invece di ALL</span>
-</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="c1">-- synchronous_standby_names = 'FIRST 1 (standby1, standby2)'</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1">-- 1. Verificare quali standby sono connesse</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">application_name</span><span class="p">,</span><span class="w"> </span><span class="n">client_addr</span><span class="p">,</span><span class="w"> </span><span class="k">state</span><span class="p">,</span><span class="w"> </span><span class="n">sync_state</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_stat_replication</span><span class="p">;</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1">-- 2. Fallback temporaneo: disabilitare replica sincrona</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1">-- (OPERAZIONE CRITICA: RPO &gt; 0 fino al ripristino della standby)</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">SYSTEM</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">synchronous_standby_names</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">''</span><span class="p">;</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_reload_conf</span><span class="p">();</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1">-- 3. Verificare che i commit sbloccati</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="c1">-- Poi ripristinare la standby e riabilitare:</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="k">ALTER</span><span class="w"> </span><span class="k">SYSTEM</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">synchronous_standby_names</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'standby1'</span><span class="p">;</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_reload_conf</span><span class="p">();</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1">-- 4. Per evitare blocchi futuri: elencare più candidate, basta che 1 risponda</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1">-- synchronous_standby_names = 'FIRST 1 (standby1, standby2)'  -- per priorità</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="c1">-- synchronous_standby_names = 'ANY 1 (standby1, standby2)'    -- quorum</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="c1">-- (con un solo nome in lista, quella standby è un single point of failure per i commit)</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="scenario-3-replica-slot-inattivo-wal-accumulation-e-disco-pieno">Scenario 3 — Replica slot inattivo: WAL accumulation e disco pieno<a class="headerlink" href="#scenario-3-replica-slot-inattivo-wal-accumulation-e-disco-pieno" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il disco del primary si riempie di file WAL. <code>pg_wal/</code> cresce senza stop. La standby associata allo slot non è connessa.</p>
 <p><strong>Causa:</strong> I replication slot garantiscono che il WAL non venga rimosso finché la standby non lo consuma. Se la standby è offline a lungo, il WAL si accumula sul primary.</p>
 <p><strong>Soluzione:</strong>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1">-- 1. Identificare gli slot inattivi e il WAL trattenuto</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">slot_name</span><span class="p">,</span><span class="w"> </span><span class="n">active</span><span class="p">,</span><span class="w"> </span><span class="n">pg_size_pretty</span><span class="p">(</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">restart_lsn</span><span class="p">)</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">wal_retained</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_replication_slots</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">wal_retained</span><span class="w"> </span><span class="k">DESC</span><span class="p">;</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="c1">-- 2. Se la standby non tornerà presto → droppare lo slot</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="c1">-- (la standby dovrà fare base backup + resync)</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_drop_replication_slot</span><span class="p">(</span><span class="s1">'nome_slot'</span><span class="p">);</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="c1">-- 3. Prevenzione: impostare un limite di WAL trattenuto</span>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="c1">-- In postgresql.conf:</span>
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="c1">-- max_slot_wal_keep_size = 10GB   -- PostgreSQL 13+</span>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1">-- Oltre questo limite lo slot viene invalidato automaticamente</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="c1">-- 4. Verificare che il WAL venga liberato dopo il drop</span>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_walfile_name</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">());</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1">-- 1. Identificare gli slot inattivi e il WAL trattenuto</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">slot_name</span><span class="p">,</span><span class="w"> </span><span class="n">active</span><span class="p">,</span><span class="w"> </span><span class="n">pg_size_pretty</span><span class="p">(</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="n">pg_wal_lsn_diff</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">(),</span><span class="w"> </span><span class="n">restart_lsn</span><span class="p">)</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">wal_retained</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="k">FROM</span><span class="w"> </span><span class="n">pg_replication_slots</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">wal_retained</span><span class="w"> </span><span class="k">DESC</span><span class="p">;</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="c1">-- 2. Se la standby non tornerà presto → droppare lo slot</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="c1">-- (la standby dovrà fare base backup + resync)</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_drop_replication_slot</span><span class="p">(</span><span class="s1">'nome_slot'</span><span class="p">);</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="c1">-- 3. Prevenzione: impostare un limite di WAL trattenuto</span>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="c1">-- In postgresql.conf:</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="c1">-- max_slot_wal_keep_size = 10GB   -- PostgreSQL 13+</span>
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="c1">-- Oltre questo limite lo slot viene invalidato automaticamente</span>
+</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>
+</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="c1">-- 4. Verificare che il WAL venga liberato dopo il drop</span>
+</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">pg_walfile_name</span><span class="p">(</span><span class="n">pg_current_wal_lsn</span><span class="p">());</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="scenario-4-split-brain-in-topologia-multi-master">Scenario 4 — Split-brain in topologia multi-master<a class="headerlink" href="#scenario-4-split-brain-in-topologia-multi-master" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> Due nodi master accettano write contemporaneamente su stesse righe. I dati divergono tra i nodi. Galera Cluster mostra <code>wsrep_cluster_size</code> &lt; quorum.</p>
-<p><strong>Causa:</strong> Partizione di rete tra i nodi master. Entrambi i lati credono di essere il primary valido (split-brain).</p>
+<p><strong>Sintomo:</strong> Dopo una partizione di rete i nodi non formano più un cluster unico. In Galera i nodi in minoranza passano a <code>wsrep_cluster_status = non-Primary</code> e rifiutano query (<code>WSREP has not yet prepared node for application use</code>); con un cluster a 2 nodi, o dopo il crash simultaneo di tutti i nodi, nessuno ha il quorum. Nei sistemi multi-master senza quorum (LWW) le righe divergono davvero.</p>
+<p><strong>Causa:</strong> Partizione di rete tra i nodi. Galera applica il quorum: la minoranza si auto-sospende invece di divergere (scelta CP del teorema CAP), quindi il rischio reale è l'<strong>indisponibilità</strong> e la necessità di un bootstrap manuale. Il vero split-brain con dati divergenti avviene in sistemi senza quorum o forzando <code>pc.bootstrap</code> su entrambi i lati.</p>
 <p><strong>Soluzione:</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># 1. Verificare stato del cluster Galera</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>mysql<span class="w"> </span>-e<span class="w"> </span><span class="s2">"SHOW STATUS LIKE 'wsrep_%';"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"cluster_size|local_state|ready"</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1"># wsrep_cluster_size deve essere &gt;= quorum (N/2 + 1)</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1"># 2. Identificare il nodo con dati più aggiornati (seqno più alto)</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>mysql<span class="w"> </span>-e<span class="w"> </span><span class="s2">"SHOW STATUS LIKE 'wsrep_last_committed';"</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="c1"># 3. Forzare il bootstrap dal nodo più aggiornato</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="c1"># Sul nodo con seqno più alto, editare /var/lib/mysql/grastate.dat:</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="c1"># safe_to_bootstrap: 1</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="c1"># Poi riavviare come bootstrap:</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>galera_new_cluster<span class="w">   </span><span class="c1"># oppure: mysqld --wsrep-new-cluster</span>
-</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>
-</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="c1"># 4. Aggiungere gli altri nodi (si sincronizzano via SST/IST)</span>
-</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a>systemctl<span class="w"> </span>start<span class="w"> </span>mysql<span class="w">   </span><span class="c1"># sui nodi secondari</span>
-</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a>
-</span><span id="__span-15-17"><a id="__codelineno-15-17" name="__codelineno-15-17" href="#__codelineno-15-17"></a><span class="c1"># 5. Prevenzione: usare numero dispari di nodi (3, 5) e un arbitro</span>
-</span><span id="__span-15-18"><a id="__codelineno-15-18" name="__codelineno-15-18" href="#__codelineno-15-18"></a><span class="c1"># per garantire sempre il quorum in caso di partizione</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># 1. Verificare stato del cluster Galera</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>mysql<span class="w"> </span>-e<span class="w"> </span><span class="s2">"SHOW STATUS LIKE 'wsrep_%';"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"cluster_size|cluster_status|local_state|ready"</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># wsrep_cluster_status deve essere Primary; cluster_size &gt;= quorum (N/2 + 1)</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Se una componente ha ancora quorum, NON fare bootstrap: i nodi rientrano da soli.</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># 2. Identificare il nodo con dati più aggiornati (seqno più alto)</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>mysql<span class="w"> </span>-e<span class="w"> </span><span class="s2">"SHOW STATUS LIKE 'wsrep_last_committed';"</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1"># 3. Forzare il bootstrap dal nodo più aggiornato</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="c1"># Sul nodo con seqno più alto, editare /var/lib/mysql/grastate.dat:</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="c1"># safe_to_bootstrap: 1</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="c1"># Poi riavviare come bootstrap:</span>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>galera_new_cluster<span class="w">   </span><span class="c1"># oppure: mysqld --wsrep-new-cluster</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="c1"># 4. Aggiungere gli altri nodi (si sincronizzano via SST/IST)</span>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>systemctl<span class="w"> </span>start<span class="w"> </span>mysql<span class="w">   </span><span class="c1"># sui nodi secondari</span>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>
+</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="c1"># 5. Prevenzione: usare numero dispari di nodi (3, 5) e un arbitro</span>
+</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a><span class="c1"># per garantire sempre il quorum in caso di partizione</span>
 </span></code></pre></div></p>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
