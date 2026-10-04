@@ -9596,7 +9596,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -9621,7 +9621,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -25168,7 +25168,7 @@
 <tr>
 <td>Limite per project</td>
 <td>N/A</td>
-<td>100 SA per project</td>
+<td>100 SA per project di default (quota, aumentabile su richiesta)</td>
 </tr>
 </tbody>
 </table>
@@ -25179,47 +25179,50 @@
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>│   ├── Email: sa-name@PROJECT_ID.iam.gserviceaccount.com
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>│   └── Uso: applicazioni custom, pipeline CI/CD, workload GKE
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>│
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>├── Google-managed SA
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>│   ├── Creati automaticamente quando si abilita un servizio GCP
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>│   ├── Email: PROJECT_NUMBER@cloudservices.gserviceaccount.com (Cloud APIs)
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>│   │         PROJECT_NUMBER-compute@developer.gserviceaccount.com (default Compute)
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>│   └── NON modificare i ruoli dei Google-managed SA — rischi di rompere il servizio
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>├── Google-managed SA (service agent)
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>│   ├── Creati e posseduti da Google; ricevono ruoli sul tuo project
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>│   ├── Email: PROJECT_NUMBER@cloudservices.gserviceaccount.com (Google APIs Service Agent)
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>│   │         service-PROJECT_NUMBER@gcp-sa-&lt;servizio&gt;.iam.gserviceaccount.com (service agent per servizio)
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>│   └── NON modificare i ruoli dei service agent — rischi di rompere il servizio
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>│
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>└── Default SA (caso speciale del Google-managed)
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    ├── "Default Compute Engine SA" — creato automaticamente con roles/editor (!)
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    ├── Tutte le VM e i Pod GKE lo usano se non si specifica diversamente
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    └── ANTI-PATTERN: mai usarlo per applicazioni → usa SA dedicati
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>└── Default SA (user-managed, creati automaticamente da alcuni servizi)
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    ├── "Default Compute Engine SA" PROJECT_NUMBER-compute@developer.gserviceaccount.com
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    ├── Storicamente creato con roles/editor (!); vedi warning sotto per le org recenti
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    ├── Tutte le VM e i Pod GKE lo usano se non si specifica diversamente
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    └── ANTI-PATTERN: mai usarlo per applicazioni → usa SA dedicati
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Default Compute SA con roles/editor</p>
-<p>Il Default Compute Service Account (<code>PROJECT_NUMBER-compute@developer.gserviceaccount.com</code>) viene creato automaticamente con <code>roles/editor</code> sul project. Qualsiasi VM o Pod GKE che lo usa può leggere/scrivere quasi tutte le risorse del project. Creare sempre SA dedicati con soli i permessi necessari.</p>
+<p>Il Default Compute Service Account (<code>PROJECT_NUMBER-compute@developer.gserviceaccount.com</code>) viene creato automaticamente quando si abilita Compute Engine, storicamente con <code>roles/editor</code> sul project. Qualsiasi VM o Pod GKE che lo usa può leggere/scrivere quasi tutte le risorse del project. Creare sempre SA dedicati con soli i permessi necessari.</p>
+<p>Le Organization create dopo maggio 2024 hanno di default il vincolo <code>iam.automaticIamGrantsForDefaultServiceAccounts</code> attivo, che <strong>non</strong> assegna più <code>roles/editor</code> ai default SA. Org e project preesistenti però conservano il grant: verificare con <code>gcloud projects get-iam-policy</code>.</p>
 </div>
 <hr />
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
 <h3 id="policy-iam-struttura">Policy IAM — Struttura<a class="headerlink" href="#policy-iam-struttura" title="Permanent link">&para;</a></h3>
 <p>Una policy IAM è una lista di <strong>binding</strong>: ogni binding associa un ruolo a una lista di member.</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">"bindings"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="p">{</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">      </span><span class="nt">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"roles/storage.objectViewer"</span><span class="p">,</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">      </span><span class="nt">"members"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">        </span><span class="s2">"serviceAccount:my-app@my-project.iam.gserviceaccount.com"</span><span class="p">,</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">        </span><span class="s2">"group:data-team@example.com"</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">      </span><span class="p">]</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="p">{</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">      </span><span class="nt">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"roles/storage.objectCreator"</span><span class="p">,</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">      </span><span class="nt">"members"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">        </span><span class="s2">"serviceAccount:uploader@my-project.iam.gserviceaccount.com"</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">      </span><span class="p">],</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">      </span><span class="nt">"condition"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">        </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Solo bucket prefix uploads/"</span><span class="p">,</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">        </span><span class="nt">"expression"</span><span class="p">:</span><span class="w"> </span><span class="s2">"resource.name.startsWith('projects/_/buckets/my-bucket/objects/uploads/')"</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">      </span><span class="p">}</span>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">  </span><span class="p">],</span>
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">  </span><span class="nt">"etag"</span><span class="p">:</span><span class="w"> </span><span class="s2">"BwX..."</span>
-</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="p">}</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">"version"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">"bindings"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="p">{</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">      </span><span class="nt">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"roles/storage.objectViewer"</span><span class="p">,</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">      </span><span class="nt">"members"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">        </span><span class="s2">"serviceAccount:my-app@my-project.iam.gserviceaccount.com"</span><span class="p">,</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">        </span><span class="s2">"group:data-team@example.com"</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">      </span><span class="p">]</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="p">{</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">      </span><span class="nt">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"roles/storage.objectCreator"</span><span class="p">,</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">      </span><span class="nt">"members"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">        </span><span class="s2">"serviceAccount:uploader@my-project.iam.gserviceaccount.com"</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">      </span><span class="p">],</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">      </span><span class="nt">"condition"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">        </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Solo bucket prefix uploads/"</span><span class="p">,</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="w">        </span><span class="nt">"expression"</span><span class="p">:</span><span class="w"> </span><span class="s2">"resource.name.startsWith('projects/_/buckets/my-bucket/objects/uploads/')"</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">      </span><span class="p">}</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="w">  </span><span class="p">],</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="w">  </span><span class="nt">"etag"</span><span class="p">:</span><span class="w"> </span><span class="s2">"BwX..."</span>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="p">}</span>
 </span></code></pre></div>
 <h3 id="flusso-di-autorizzazione">Flusso di Autorizzazione<a class="headerlink" href="#flusso-di-autorizzazione" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Richiesta API → Cloud Endpoint
@@ -25232,16 +25235,17 @@
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>  Ha un token OAuth2/OIDC valido per questo scope?                   │
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>      │ sì                                                            │ no → 401 Unauthorized
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>      ▼                                                               │
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>  Esiste una IAM policy che concede la permission                     │
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>  richiesta a questa identity su questa risorsa                       │
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>  (incluse risorse parent nella gerarchia)?                           │
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>      │ sì                                                            │ no → 403 Permission Denied
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>      ▼                                                               │
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>  Esiste una Deny policy che nega questa permission?  ───────────────┘
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>      │ no                                                            │ sì → 403 (Deny)
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>  Esiste una Deny policy che nega questa permission?                  │
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>      │ no                                                            │ sì → 403 (Deny, prevale su tutto)
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>      ▼                                                               │
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>  Esiste una IAM policy (allow) che concede la permission             │
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>  richiesta a questa identity su questa risorsa                       │
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>  (incluse risorse parent nella gerarchia)?                           │
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>      │ sì                                                            │ no → 403 Permission Denied
 </span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>      ▼
 </span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>  Richiesta Autorizzata ✓
 </span></code></pre></div>
+<p>Le <strong>Deny policy</strong> vengono valutate <em>prima</em> delle allow policy e hanno sempre la precedenza: nessun ruolo concesso le aggira. Le Org Policy sono un controllo separato, applicato sulla configurazione delle risorse.</p>
 <h3 id="workload-identity-architettura">Workload Identity — Architettura<a class="headerlink" href="#workload-identity-architettura" title="Permanent link">&para;</a></h3>
 <p><strong>Workload Identity</strong> è il meccanismo per permettere ai workload (Pod GKE, Cloud Run, Cloud Build, GitHub Actions) di ottenere credenziali GCP senza chiavi JSON.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Pod GKE
@@ -25250,12 +25254,13 @@
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>Flusso token:
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>1. Pod richiede token al metadata server GKE (http://metadata.google.internal/...)
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>2. GKE genera un token OIDC firmato per il KSA
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>3. Le librerie client GCP (ADC) scambiano il token OIDC con un access token IAM
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>4. Il token IAM è valido 1 ora, rotazione automatica
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>5. Con il token IAM il Pod chiama l'API GCP (GCS, CloudSQL, Pub/Sub...)
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>Non serve nessuna chiave JSON — zero secret da gestire
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>2. Il GKE metadata server (attivo quando il node pool è in modalità GKE_METADATA)
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>   identifica il KSA del Pod e scambia la sua identità tramite Security Token Service
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>3. Il metadata server restituisce un access token OAuth2 del GSA collegato (via binding workloadIdentityUser)
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>4. Le librerie client GCP (ADC) usano il token in modo trasparente; validità 1 ora, rinnovo automatico
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>5. Con il token il Pod chiama l'API GCP (GCS, CloudSQL, Pub/Sub...)
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>Non serve nessuna chiave JSON — zero secret da gestire
 </span></code></pre></div>
 <hr />
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
@@ -25300,10 +25305,11 @@
 </span><span id="__span-6-38"><a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a><span class="w">    </span>--format<span class="o">=</span><span class="s2">"table(bindings.role, bindings.members)"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-39"><a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a><span class="w">    </span>--filter<span class="o">=</span><span class="s2">"bindings.members:my-app-sa"</span>
 </span><span id="__span-6-40"><a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a>
-</span><span id="__span-6-41"><a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a><span class="c1"># Test esplicito: questo SA può fare questa azione?</span>
-</span><span id="__span-6-42"><a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>list-testable-permissions<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-41"><a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a><span class="c1"># Test esplicito: questo SA ha questa permission su questa risorsa? (Policy Troubleshooter)</span>
+</span><span id="__span-6-42"><a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a>gcloud<span class="w"> </span>policy-intelligence<span class="w"> </span>troubleshoot-policy<span class="w"> </span>iam<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-6-43"><a id="__codelineno-6-43" name="__codelineno-6-43" href="#__codelineno-6-43"></a><span class="w">    </span>//cloudresourcemanager.googleapis.com/projects/my-project-id<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-44"><a id="__codelineno-6-44" name="__codelineno-6-44" href="#__codelineno-6-44"></a><span class="w">    </span>--filter<span class="o">=</span><span class="s2">"name:storage"</span>
+</span><span id="__span-6-44"><a id="__codelineno-6-44" name="__codelineno-6-44" href="#__codelineno-6-44"></a><span class="w">    </span>--principal-email<span class="o">=</span>my-app-sa@my-project-id.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-45"><a id="__codelineno-6-45" name="__codelineno-6-45" href="#__codelineno-6-45"></a><span class="w">    </span>--permission<span class="o">=</span>storage.objects.get
 </span></code></pre></div>
 <h3 id="sa-keys-vs-keyless-authentication">SA Keys vs Keyless Authentication<a class="headerlink" href="#sa-keys-vs-keyless-authentication" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># ── SA KEYS (sconsigliato — solo quando keyless non è disponibile) ────</span>
@@ -25349,7 +25355,7 @@
 </span><span id="__span-7-41"><a id="__codelineno-7-41" name="__codelineno-7-41" href="#__codelineno-7-41"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"principalSet://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/attribute.repository/my-org/my-repo"</span>
 </span></code></pre></div>
 <h3 id="service-account-impersonation">Service Account Impersonation<a class="headerlink" href="#service-account-impersonation" title="Permanent link">&para;</a></h3>
-<p>L'<strong>impersonation</strong> permette di agire temporaneamente come un SA senza avere le sue chiavi. Richiede il permesso <code>roles/iam.serviceAccountTokenCreator</code> sul SA target.</p>
+<p>L'<strong>impersonation</strong> permette di agire temporaneamente come un SA senza avere le sue chiavi. Richiede il ruolo <code>roles/iam.serviceAccountTokenCreator</code> sul SA target (include <code>iam.serviceAccounts.getAccessToken</code>).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Impersonare un SA per un singolo comando</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>gcloud<span class="w"> </span>storage<span class="w"> </span>ls<span class="w"> </span>gs://my-bucket<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>--impersonate-service-account<span class="o">=</span>my-app-sa@my-project-id.iam.gserviceaccount.com
@@ -25377,42 +25383,43 @@
 </div>
 <h3 id="workload-identity-su-gke-setup-completo">Workload Identity su GKE — Setup Completo<a class="headerlink" href="#workload-identity-su-gke-setup-completo" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># ── PREREQUISITI ─────────────────────────────────────────────────────</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># 1. Abilitare Workload Identity sul cluster (flag --workload-pool alla creazione)</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>create<span class="w"> </span>my-cluster<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span>--workload-pool<span class="o">=</span>my-project-id.svc.id.goog<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="c1"># ... altri parametri</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># Su cluster esistente (richiede aggiornamento anche dei node pool)</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>update<span class="w"> </span>my-cluster<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">    </span>--workload-pool<span class="o">=</span>my-project-id.svc.id.goog<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>update<span class="w"> </span>default-pool<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">    </span>--cluster<span class="o">=</span>my-cluster<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">    </span>--workload-metadata<span class="o">=</span>GKE_METADATA<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="c1"># ── SETUP SA E BINDING ────────────────────────────────────────────────</span>
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="c1"># 2. Creare il Google Service Account (GSA)</span>
-</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>create<span class="w"> </span>my-app-gsa<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="w">    </span>--display-name<span class="o">=</span><span class="s2">"my-app GSA for Workload Identity"</span>
-</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a>
-</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="c1"># 3. Assegnare i ruoli al GSA (solo quelli necessari all'applicazione)</span>
-</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project-id<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:my-app-gsa@my-project-id.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/storage.objectViewer"</span>
-</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a>
-</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project-id<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:my-app-gsa@my-project-id.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/cloudsql.client"</span>
-</span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a>
-</span><span id="__span-9-32"><a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a><span class="c1"># 4. Creare il binding IAM che permette al KSA di impersonare il GSA</span>
-</span><span id="__span-9-33"><a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a><span class="c1"># Formato member: serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/KSA_NAME]</span>
-</span><span id="__span-9-34"><a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>add-iam-policy-binding<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-35"><a id="__codelineno-9-35" name="__codelineno-9-35" href="#__codelineno-9-35"></a><span class="w">    </span>my-app-gsa@my-project-id.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-36"><a id="__codelineno-9-36" name="__codelineno-9-36" href="#__codelineno-9-36"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/iam.workloadIdentityUser"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-37"><a id="__codelineno-9-37" name="__codelineno-9-37" href="#__codelineno-9-37"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:my-project-id.svc.id.goog[production/my-app-ksa]"</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># 1. Abilitare Workload Identity sul cluster (flag --workload-pool alla creazione).</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1">#    I cluster Autopilot lo hanno già abilitato di default.</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>create<span class="w"> </span>my-cluster<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span>--workload-pool<span class="o">=</span>my-project-id.svc.id.goog
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span><span class="c1"># ... altri parametri</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1"># Su cluster esistente (richiede aggiornamento anche dei node pool)</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>update<span class="w"> </span>my-cluster<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">    </span>--workload-pool<span class="o">=</span>my-project-id.svc.id.goog<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>update<span class="w"> </span>default-pool<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">    </span>--cluster<span class="o">=</span>my-cluster<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span>--workload-metadata<span class="o">=</span>GKE_METADATA<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">    </span>--region<span class="o">=</span>europe-west8
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="c1"># ── SETUP SA E BINDING ────────────────────────────────────────────────</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="c1"># 2. Creare il Google Service Account (GSA)</span>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>create<span class="w"> </span>my-app-gsa<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="w">    </span>--display-name<span class="o">=</span><span class="s2">"my-app GSA for Workload Identity"</span>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="c1"># 3. Assegnare i ruoli al GSA (solo quelli necessari all'applicazione)</span>
+</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project-id<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:my-app-gsa@my-project-id.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/storage.objectViewer"</span>
+</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a>
+</span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project-id<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:my-app-gsa@my-project-id.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/cloudsql.client"</span>
+</span><span id="__span-9-32"><a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a>
+</span><span id="__span-9-33"><a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a><span class="c1"># 4. Creare il binding IAM che permette al KSA di impersonare il GSA</span>
+</span><span id="__span-9-34"><a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a><span class="c1"># Formato member: serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/KSA_NAME]</span>
+</span><span id="__span-9-35"><a id="__codelineno-9-35" name="__codelineno-9-35" href="#__codelineno-9-35"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>add-iam-policy-binding<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-36"><a id="__codelineno-9-36" name="__codelineno-9-36" href="#__codelineno-9-36"></a><span class="w">    </span>my-app-gsa@my-project-id.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-37"><a id="__codelineno-9-37" name="__codelineno-9-37" href="#__codelineno-9-37"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/iam.workloadIdentityUser"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-38"><a id="__codelineno-9-38" name="__codelineno-9-38" href="#__codelineno-9-38"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:my-project-id.svc.id.goog[production/my-app-ksa]"</span>
 </span></code></pre></div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># 5. Creare il Kubernetes Service Account con l'annotazione WI</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
@@ -25467,6 +25474,12 @@
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">    </span><span class="s2">"http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email"</span>
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># Output atteso: my-app-gsa@my-project-id.iam.gserviceaccount.com</span>
 </span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Alternativa: Workload Identity Federation for GKE (senza GSA)</p>
+<p>Si possono concedere i ruoli direttamente al principal del KSA, senza creare un GSA né annotare il KSA:
+<code>principal://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/PROJECT_ID.svc.id.goog/subject/ns/NAMESPACE/sa/KSA_NAME</code>
+(o <code>principalSet://</code> con <code>/namespace/NAMESPACE</code> per un intero namespace). Meno oggetti da gestire; alcuni servizi però non supportano ancora i principal federati e richiedono il GSA.</p>
+</div>
 <hr />
 <h2 id="organization-policies">Organization Policies<a class="headerlink" href="#organization-policies" title="Permanent link">&para;</a></h2>
 <p>Le <strong>Organization Policies</strong> sono vincoli preventivi che si applicano all'intera gerarchia (Organization, Folder, Project) e impediscono configurazioni non conformi — indipendentemente dai permessi IAM. Mentre IAM controlla chi può fare cosa, le Org Policy controllano cosa si può configurare.</p>
@@ -25475,9 +25488,9 @@
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>gcloud<span class="w"> </span>org-policies<span class="w"> </span>list-available-constraints<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span>--organization<span class="o">=</span>ORGANIZATION_ID<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-40
 </span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># Vedere le policy effettive su un project (incluse quelle ereditate)</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># Vedere la policy effettiva su un project (incluse quelle ereditate)</span>
 </span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>gcloud<span class="w"> </span>org-policies<span class="w"> </span>describe<span class="w"> </span>constraints/iam.disableServiceAccountKeyCreation<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">    </span>--project<span class="o">=</span>my-project-id
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">    </span>--effective<span class="w"> </span>--project<span class="o">=</span>my-project-id
 </span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>
 </span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="c1"># ── APPLICARE UN VINCOLO (richiede roles/orgpolicy.policyAdmin) ───────</span>
 </span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="c1"># Disabilitare la creazione di chiavi SA (forza keyless auth)</span>
@@ -25497,15 +25510,16 @@
 </span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="s">  - enforce: true</span>
 </span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a><span class="s">EOF</span>
 </span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a>
-</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="c1"># Vietare risorse pubbliche (allUsers/allAuthenticatedUsers) su GCS</span>
-</span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a>gcloud<span class="w"> </span>org-policies<span class="w"> </span>set-policy<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt; 'EOF'</span>
-</span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a><span class="s">name: organizations/ORGANIZATION_ID/policies/iam.allowedPolicyMemberDomains</span>
-</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a><span class="s">spec:</span>
-</span><span id="__span-12-32"><a id="__codelineno-12-32" name="__codelineno-12-32" href="#__codelineno-12-32"></a><span class="s">  rules:</span>
-</span><span id="__span-12-33"><a id="__codelineno-12-33" name="__codelineno-12-33" href="#__codelineno-12-33"></a><span class="s">  - values:</span>
-</span><span id="__span-12-34"><a id="__codelineno-12-34" name="__codelineno-12-34" href="#__codelineno-12-34"></a><span class="s">      allowedValues:</span>
-</span><span id="__span-12-35"><a id="__codelineno-12-35" name="__codelineno-12-35" href="#__codelineno-12-35"></a><span class="s">      - "C0xxxxxxx"   # Customer ID del dominio Google Workspace</span>
-</span><span id="__span-12-36"><a id="__codelineno-12-36" name="__codelineno-12-36" href="#__codelineno-12-36"></a><span class="s">EOF</span>
+</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="c1"># Domain restricted sharing: solo identity del proprio dominio nelle policy IAM</span>
+</span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a><span class="c1"># (di fatto impedisce allUsers/allAuthenticatedUsers)</span>
+</span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a>gcloud<span class="w"> </span>org-policies<span class="w"> </span>set-policy<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt; 'EOF'</span>
+</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a><span class="s">name: organizations/ORGANIZATION_ID/policies/iam.allowedPolicyMemberDomains</span>
+</span><span id="__span-12-32"><a id="__codelineno-12-32" name="__codelineno-12-32" href="#__codelineno-12-32"></a><span class="s">spec:</span>
+</span><span id="__span-12-33"><a id="__codelineno-12-33" name="__codelineno-12-33" href="#__codelineno-12-33"></a><span class="s">  rules:</span>
+</span><span id="__span-12-34"><a id="__codelineno-12-34" name="__codelineno-12-34" href="#__codelineno-12-34"></a><span class="s">  - values:</span>
+</span><span id="__span-12-35"><a id="__codelineno-12-35" name="__codelineno-12-35" href="#__codelineno-12-35"></a><span class="s">      allowedValues:</span>
+</span><span id="__span-12-36"><a id="__codelineno-12-36" name="__codelineno-12-36" href="#__codelineno-12-36"></a><span class="s">      - "C0xxxxxxx"   # Customer ID del dominio Google Workspace</span>
+</span><span id="__span-12-37"><a id="__codelineno-12-37" name="__codelineno-12-37" href="#__codelineno-12-37"></a><span class="s">EOF</span>
 </span></code></pre></div>
 <p><strong>Vincoli più usati in DevOps:</strong></p>
 <table>
@@ -25519,7 +25533,7 @@
 <tbody>
 <tr>
 <td><code>iam.disableServiceAccountKeyCreation</code></td>
-<td>Vieta creazione chiavi JSON per SA</td>
+<td>Vieta creazione chiavi JSON per SA (attivo di default nelle org create dopo maggio 2024)</td>
 <td>Ambienti con Workload Identity disponibile</td>
 </tr>
 <tr>
@@ -25555,7 +25569,7 @@
 </tbody>
 </table>
 <div class="admonition tip">
-<p class="admonition-title">Custom Org Policy (GA dal 2024)</p>
+<p class="admonition-title">Custom Org Policy</p>
 <p>Da metà 2024 le <strong>Custom Organization Policies</strong> permettono di scrivere vincoli CEL personalizzati sulle proprietà delle risorse GCP (non solo vincoli booleani predefiniti). Esempio: imporre che tutti i bucket GCS abbiano retention lock abilitato, o che le VM abbiano un tag specifico.</p>
 </div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Esempio Custom Org Policy: tutti i bucket devono avere uniform bucket-level access</span>
@@ -25572,46 +25586,55 @@
 </span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="s">description: "Tutti i bucket GCS devono avere uniform bucket-level access abilitato"</span>
 </span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="s">EOF</span>
 </span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>gcloud<span class="w"> </span>org-policies<span class="w"> </span>set-custom-constraint<span class="w"> </span>/tmp/custom-policy.yaml
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="c1"># Il custom constraint va poi attivato con una policy (enforce: true)</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>gcloud<span class="w"> </span>org-policies<span class="w"> </span>set-policy<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt; 'EOF'</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="s">name: organizations/ORGANIZATION_ID/policies/custom.requireUniformBucketAccess</span>
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="s">spec:</span>
+</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="s">  rules:</span>
+</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a><span class="s">  - enforce: true</span>
+</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="s">EOF</span>
 </span></code></pre></div>
 <hr />
 <h2 id="iam-conditions">IAM Conditions<a class="headerlink" href="#iam-conditions" title="Permanent link">&para;</a></h2>
 <p>Le <strong>IAM Conditions</strong> aggiungono un livello di granularità alle policy IAM: un binding è valido solo se la condizione (espressa in CEL — Common Expression Language) è soddisfatta.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># ── ACCESSO TEMPORANEO CON DATE CONDITION ────────────────────────────</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># Permetti al consulente di accedere solo fino al 30 aprile 2026</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># Permetti al consulente di accedere solo fino al 31 dicembre 2026</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project-id<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"user:consultant@external.com"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/viewer"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span>--condition<span class="o">=</span><span class="s1">'expression=request.time &lt; timestamp("2026-04-30T23:59:59Z"),title=Accesso temporaneo consulente,description=Scade il 30 aprile 2026'</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span>--condition<span class="o">=</span><span class="s1">'expression=request.time &lt; timestamp("2026-12-31T23:59:59Z"),title=Accesso temporaneo consulente,description=Scade il 31 dicembre 2026'</span>
 </span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>
 </span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="c1"># ── CONDITION SU RESOURCE ATTRIBUTE ──────────────────────────────────</span>
 </span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="c1"># SA può scrivere solo nel prefisso "uploads/" del bucket</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>gcloud<span class="w"> </span>storage<span class="w"> </span>buckets<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>gs://my-bucket<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:uploader@my-project-id.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/storage.objectCreator"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">    </span>--condition<span class="o">=</span><span class="s1">'expression=resource.name.startsWith("projects/_/buckets/my-bucket/objects/uploads/"),title=Solo prefisso uploads'</span>
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># ── CONDITION SU RESOURCE TYPE ────────────────────────────────────────</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># Ruolo solo su istanze con label environment=dev (non prod)</span>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project-id<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"user:developer@example.com"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/compute.instanceAdmin.v1"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="w">    </span>--condition<span class="o">=</span><span class="s1">'expression=resource.labels["environment"] == "dev",title=Solo istanze dev'</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># (le condition su bucket GCS richiedono uniform bucket-level access)</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>gcloud<span class="w"> </span>storage<span class="w"> </span>buckets<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>gs://my-bucket<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"serviceAccount:uploader@my-project-id.iam.gserviceaccount.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/storage.objectCreator"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">    </span>--condition<span class="o">=</span><span class="s1">'expression=resource.name.startsWith("projects/_/buckets/my-bucket/objects/uploads/"),title=Solo prefisso uploads'</span>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># ── CONDITION SU RESOURCE TYPE ────────────────────────────────────────</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="c1"># Ruolo solo su istanze con label environment=dev (non prod)</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a>gcloud<span class="w"> </span>projects<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>my-project-id<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">    </span>--member<span class="o">=</span><span class="s2">"user:developer@example.com"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="w">    </span>--role<span class="o">=</span><span class="s2">"roles/compute.instanceAdmin.v1"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="w">    </span>--condition<span class="o">=</span><span class="s1">'expression=resource.labels["environment"] == "dev",title=Solo istanze dev'</span>
 </span></code></pre></div>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Esempio di policy IAM con condizione — formato JSON equivalente</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># (utile in Terraform o quando si modifica la policy completa)</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="p p-Indicator">{</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span><span class="s">"bindings"</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="p p-Indicator">[</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="p p-Indicator">{</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">      </span><span class="s">"role"</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">"roles/storage.objectAdmin"</span><span class="p p-Indicator">,</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">      </span><span class="s">"members"</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"serviceAccount:batch-sa@my-project.iam.gserviceaccount.com"</span><span class="p p-Indicator">],</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">      </span><span class="s">"condition"</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="p p-Indicator">{</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">        </span><span class="s">"title"</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">"Solo</span><span class="nv"> </span><span class="s">durante</span><span class="nv"> </span><span class="s">finestra</span><span class="nv"> </span><span class="s">di</span><span class="nv"> </span><span class="s">manutenzione"</span><span class="p p-Indicator">,</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">        </span><span class="s">"description"</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">"Accesso</span><span class="nv"> </span><span class="s">batch</span><span class="nv"> </span><span class="s">solo</span><span class="nv"> </span><span class="s">sabato</span><span class="nv"> </span><span class="s">e</span><span class="nv"> </span><span class="s">domenica</span><span class="nv"> </span><span class="s">UTC"</span><span class="p p-Indicator">,</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">        </span><span class="s">"expression"</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">"request.time.getDayOfWeek('UTC')</span><span class="nv"> </span><span class="s">==</span><span class="nv"> </span><span class="s">6</span><span class="nv"> </span><span class="s">||</span><span class="nv"> </span><span class="s">request.time.getDayOfWeek('UTC')</span><span class="nv"> </span><span class="s">==</span><span class="nv"> </span><span class="s">0"</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">      </span><span class="p p-Indicator">}</span>
-</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">    </span><span class="p p-Indicator">}</span>
-</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="w">  </span><span class="p p-Indicator">]</span>
-</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="p p-Indicator">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1">// Esempio di policy IAM con condizione (version 3 obbligatoria con le condition)</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="p">{</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="nt">"version"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span><span class="nt">"bindings"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="p">{</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">      </span><span class="nt">"role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"roles/storage.objectAdmin"</span><span class="p">,</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">      </span><span class="nt">"members"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"serviceAccount:batch-sa@my-project.iam.gserviceaccount.com"</span><span class="p">],</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">      </span><span class="nt">"condition"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">        </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Solo durante finestra di manutenzione"</span><span class="p">,</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">        </span><span class="nt">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Accesso batch solo sabato e domenica UTC"</span><span class="p">,</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">        </span><span class="nt">"expression"</span><span class="p">:</span><span class="w"> </span><span class="s2">"request.time.getDayOfWeek('UTC') == 6 || request.time.getDayOfWeek('UTC') == 0"</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">      </span><span class="p">}</span>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="w">  </span><span class="p">]</span>
+</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="p">}</span>
 </span></code></pre></div>
 <p><strong>Attributi CEL più usati nelle condizioni IAM:</strong></p>
 <table>
@@ -25626,7 +25649,7 @@
 <tr>
 <td><code>request.time</code></td>
 <td>timestamp</td>
-<td><code>request.time &lt; timestamp("2026-06-01T00:00:00Z")</code></td>
+<td><code>request.time &lt; timestamp("2027-01-01T00:00:00Z")</code></td>
 </tr>
 <tr>
 <td><code>resource.name</code></td>
@@ -25744,10 +25767,17 @@
 </span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>
 </span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="c1"># Causa 3: Org Policy che blocca (ha precedenza su IAM)</span>
 </span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a>gcloud<span class="w"> </span>org-policies<span class="w"> </span>describe<span class="w"> </span>constraints/iam.disableServiceAccountKeyCreation<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="w">    </span>--project<span class="o">=</span>my-project-id
+</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="w">    </span>--effective<span class="w"> </span>--project<span class="o">=</span>my-project-id
 </span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a>
-</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="c1"># Causa 4: Deny policy che esplicita nega (nuova feature IAM)</span>
-</span><span id="__span-18-20"><a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>policies<span class="w"> </span>list<span class="w"> </span>--attachment-point<span class="o">=</span>cloudresourcemanager.googleapis.com/projects/my-project-id
+</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="c1"># Causa 4: Deny policy che nega esplicitamente</span>
+</span><span id="__span-18-20"><a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>policies<span class="w"> </span>list<span class="w"> </span>--kind<span class="o">=</span>denypolicies<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-21"><a id="__codelineno-18-21" name="__codelineno-18-21" href="#__codelineno-18-21"></a><span class="w">    </span>--attachment-point<span class="o">=</span>cloudresourcemanager.googleapis.com/projects/my-project-id
+</span><span id="__span-18-22"><a id="__codelineno-18-22" name="__codelineno-18-22" href="#__codelineno-18-22"></a>
+</span><span id="__span-18-23"><a id="__codelineno-18-23" name="__codelineno-18-23" href="#__codelineno-18-23"></a><span class="c1"># Qualunque causa: Policy Troubleshooter indica quale policy concede/nega</span>
+</span><span id="__span-18-24"><a id="__codelineno-18-24" name="__codelineno-18-24" href="#__codelineno-18-24"></a>gcloud<span class="w"> </span>policy-intelligence<span class="w"> </span>troubleshoot-policy<span class="w"> </span>iam<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-25"><a id="__codelineno-18-25" name="__codelineno-18-25" href="#__codelineno-18-25"></a><span class="w">    </span>//cloudresourcemanager.googleapis.com/projects/my-project-id<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-26"><a id="__codelineno-18-26" name="__codelineno-18-26" href="#__codelineno-18-26"></a><span class="w">    </span>--principal-email<span class="o">=</span>my-app-sa@my-project-id.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-18-27"><a id="__codelineno-18-27" name="__codelineno-18-27" href="#__codelineno-18-27"></a><span class="w">    </span>--permission<span class="o">=</span>storage.objects.get
 </span></code></pre></div></p>
 <p><strong>Problema: Workload Identity non funziona — Pod usa il default SA invece del GSA</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Diagnosi 1: verificare l'annotazione sul KSA</span>
@@ -25778,7 +25808,7 @@
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># di "usare" il SA target del deployment</span>
 </span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># Questo permesso è necessario quando un SA deve agire come un altro SA</span>
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># Esempio: Cloud Build SA non può deployare un Cloud Run service con my-app-sa</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># Esempio: il SA usato da Cloud Build (Compute default SA o SA legacy cloudbuild, a seconda dell'età del project) non può deployare un Cloud Run service con my-app-sa</span>
 </span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="c1"># Soluzione: concedere iam.serviceAccountUser al deployer SA</span>
 </span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>add-iam-policy-binding<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="w">    </span>my-app-sa@my-project-id.iam.gserviceaccount.com<span class="w"> </span><span class="se">\</span>
@@ -25792,7 +25822,7 @@
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>
 </span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="c1"># Visualizzare la policy effettiva sul project</span>
 </span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>gcloud<span class="w"> </span>org-policies<span class="w"> </span>describe<span class="w"> </span>constraints/compute.requireShieldedVm<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">    </span>--project<span class="o">=</span>my-project-id
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">    </span>--effective<span class="w"> </span>--project<span class="o">=</span>my-project-id
 </span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>
 </span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="c1"># Opzione 1: allineare la risorsa al vincolo (preferita)</span>
 </span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="c1"># → aggiungere --shielded-secure-boot --shielded-vtpm alla creazione VM</span>
@@ -25806,20 +25836,24 @@
 </span><span id="__span-21-18"><a id="__codelineno-21-18" name="__codelineno-21-18" href="#__codelineno-21-18"></a><span class="s">EOF</span>
 </span></code></pre></div></p>
 <p><strong>Problema: SA creati ma inutilizzati accumulano chiavi — audit fallisce</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Trovare SA con chiavi non usate da più di 90 giorni</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># Usare Cloud Asset Inventory per export di massa</span>
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>gcloud<span class="w"> </span>asset<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">    </span>--project<span class="o">=</span>my-project-id<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="w">    </span>--asset-types<span class="o">=</span><span class="s2">"iam.googleapis.com/ServiceAccountKey"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="w">    </span>--output-path<span class="o">=</span><span class="s2">"gs://my-audit-bucket/iam-keys-</span><span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span><span class="s2">.json"</span>
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="c1"># Disabilitare un SA senza eliminarlo (reversibile)</span>
-</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>disable<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="w">    </span>unused-sa@my-project-id.iam.gserviceaccount.com
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Inventario di massa di tutte le chiavi SA (Cloud Asset Inventory)</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>gcloud<span class="w"> </span>asset<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">    </span>--project<span class="o">=</span>my-project-id<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">    </span>--asset-types<span class="o">=</span><span class="s2">"iam.googleapis.com/ServiceAccountKey"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="w">    </span>--output-path<span class="o">=</span><span class="s2">"gs://my-audit-bucket/iam-keys-</span><span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span><span class="s2">.json"</span>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="c1"># SA/chiavi non usate: Policy Intelligence (Service Account Insights) riporta l'ultimo utilizzo</span>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>gcloud<span class="w"> </span>recommender<span class="w"> </span>insights<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="w">    </span>--project<span class="o">=</span>my-project-id<span class="w"> </span>--location<span class="o">=</span>global<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="w">    </span>--insight-type<span class="o">=</span>google.iam.serviceAccount.Insight
 </span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>
-</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a><span class="c1"># Eliminare definitivamente un SA (irreversibile — attendere 30 giorni per undelete)</span>
-</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>delete<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a><span class="c1"># Disabilitare un SA senza eliminarlo (reversibile)</span>
+</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>disable<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-22-14"><a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a><span class="w">    </span>unused-sa@my-project-id.iam.gserviceaccount.com
+</span><span id="__span-22-15"><a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a>
+</span><span id="__span-22-16"><a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a><span class="c1"># Eliminare definitivamente un SA (recuperabile con `gcloud iam service-accounts undelete` solo entro ~30 giorni e non sempre: considerarlo irreversibile)</span>
+</span><span id="__span-22-17"><a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>service-accounts<span class="w"> </span>delete<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-22-18"><a id="__codelineno-22-18" name="__codelineno-22-18" href="#__codelineno-22-18"></a><span class="w">    </span>unused-sa@my-project-id.iam.gserviceaccount.com
 </span></code></pre></div></p>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
