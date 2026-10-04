@@ -9,7 +9,7 @@ related: [containers/kubernetes/architettura, containers/kubernetes/networking, 
 official_docs: https://kubernetes.io/docs/concepts/cluster-administration/
 status: needs-review
 difficulty: expert
-last_updated: 2026-10-03
+last_updated: 2026-10-04
 last_verified: 2026-10-04
 ---
 
@@ -102,7 +102,7 @@ clusterctl init --infrastructure aws \
 
 # Genera manifest per un nuovo workload cluster
 clusterctl generate cluster prod-eu-west-1 \
-  --kubernetes-version v1.29.0 \
+  --kubernetes-version v1.35.0 \
   --control-plane-machine-count=3 \
   --worker-machine-count=5 \
   --infrastructure aws > prod-cluster.yaml
@@ -156,7 +156,7 @@ spec:
       cluster.x-k8s.io/cluster-name: prod-eu-west-1
   template:
     spec:
-      version: v1.29.0
+      version: v1.35.0
       bootstrap:
         configRef:
           apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
@@ -171,9 +171,20 @@ spec:
 !!! warning "CAPI in produzione"
     CAPI gestisce risorse cloud reali: un errore in un MachineDeployment può terminare nodi in produzione. Verifica i manifest con `kubectl apply --dry-run=server` (validazione lato API server, a differenza di `client`) e proteggili con policy OPA/Kyverno prima di applicarli.
 
-    <!-- REVIEW: verificare versioni API CAPI — da CAPI v1.11 esiste v1beta2 per i tipi core (v1beta1 deprecata); aggiornare apiVersion e `--kubernetes-version` (v1.29 è fuori supporto) -->
-    <!-- REVIEW: manifest CAPI sono estratti parziali: mancano KubeadmControlPlane, AWSMachineTemplate, KubeadmConfigTemplate -->
-    I numeri di versione (`v1.29.0`) sono esempi: usa una versione Kubernetes ancora supportata e compatibile con il provider.
+    I numeri di versione (`v1.35.0`) sono esempi: usa una versione Kubernetes ancora supportata (a ottobre 2026: 1.35, 1.36, 1.37) e compatibile con il provider.
+
+!!! note "API v1beta2 e manifest parziali"
+    `v1beta2` è l'API corrente per i tipi core di CAPI; `v1beta1` è deprecata e non sarà più servita da CAPI v1.16 (aprile 2027). Con `v1beta2` i riferimenti (`controlPlaneRef`, `infrastructureRef`, `configRef`) usano `apiGroup` + `kind` + `name` al posto di `apiVersion`. I manifest sopra sono estratti parziali: mancano `KubeadmControlPlane`, `AWSMachineTemplate`, `KubeadmConfigTemplate`; genera il set completo con `clusterctl generate cluster`.
+    <!-- CURRENCY: formato esatto dei ref v1beta2 (apiGroup) e apiVersion dei provider bootstrap/control-plane non verificato (2026-10) -->
+
+Gli esempi sopra mostrano ancora `v1beta1` per leggibilità; con `v1beta2` i ref diventano:
+
+```yaml
+controlPlaneRef:
+  apiGroup: controlplane.cluster.x-k8s.io
+  kind: KubeadmControlPlane
+  name: prod-eu-west-1-control-plane
+```
 
 ---
 
@@ -328,7 +339,8 @@ fleet get bundledeployment -A | grep my-app
 
 !!! warning "Crossplane v2"
     Gli esempi sotto usano il modello v1 (Claim + `Composition` con `resources`/`patches` nativi, richiede anche una `CompositeResourceDefinition` non mostrata). Crossplane v2 ha rimosso patch-and-transform nativo (si usa `mode: Pipeline` con composition function, es. `function-patch-and-transform`) e i Claim a favore di XR namespaced.
-    <!-- REVIEW: verificare e riscrivere esempi Crossplane per v2 (Pipeline mode, XR namespaced, XRD) -->
+    In v2 le XR sono **namespaced** (XRD `apiextensions.crossplane.io/v2`, campo `scope` con default `Namespaced`) e anche i managed resource sono namespaced; si possono comporre risorse Kubernetes arbitrarie. Rimossi: patch-and-transform nativo, `ControllerConfig`, external secret stores, connection details delle XR. Le XR v1 e i Claim restano supportati ma deprecati.
+    <!-- CURRENCY: esempi YAML Crossplane non riscritti in forma v2 (Pipeline + function-patch-and-transform, XRD v2) — non verificati (2026-10) -->
 
 ### Architettura Crossplane
 
@@ -512,12 +524,13 @@ istioctl remote-clusters --context primary-cluster
 ```
 
 !!! note "Esempio semplificato"
-    Il setup reale richiede anche `meshID`, `clusterName`, `network` coerenti per ogni cluster, un East-West Gateway e i secret di accesso reciproco (`istioctl create-remote-secret`). Vedi la guida *Install Multicluster* di Istio. Per meno overhead (sidecar-less) esiste il multicluster di Istio Ambient.
-    <!-- REVIEW: verificare maturità Istio Ambient multicluster e completare i passi del setup primary-remote -->
+    Il setup reale richiede anche `meshID`, `clusterName`, `network` coerenti per ogni cluster, un East-West Gateway e i secret di accesso reciproco (`istioctl create-remote-secret`). Vedi la guida *Install Multicluster* di Istio. Per meno overhead (sidecar-less) esiste il multicluster di Istio Ambient: è **beta**, supporta solo multi-primary su reti diverse (primary-remote **non** supportato), i waypoint vanno sincronizzati manualmente tra cluster e gli east-west gateway ambient gestiscono solo traffico mTLS in mesh.
+    <!-- CURRENCY: passi completi del setup primary-remote sidecar non aggiunti (rimandati alla guida Istio) (2026-10) -->
 
 !!! info "Lacune note"
     Non coperti: **Karmada**, **vcluster** (virtual cluster per multi-tenancy), **Multi-Cluster Services API** (`ServiceExport`/`ServiceImport`, KEP-1645) — citati nelle keyword ma senza sezione dedicata.
-    <!-- REVIEW: aggiungere sezioni Karmada / vcluster / MCS API -->
+    La **MCS API** (gruppo `multicluster.x-k8s.io/v1alpha1`) espone un Service con `ServiceExport` e lo consuma via `ServiceImport`, raggiungibile come `<svc>.<ns>.svc.clusterset.local`; è implementata, ad esempio, da Cilium Cluster Mesh (beta).
+    <!-- CURRENCY: sezioni dedicate Karmada / vcluster ancora da scrivere (2026-10) -->
 
 
 ---
