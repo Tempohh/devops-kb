@@ -7,9 +7,10 @@ search_keywords: [kafka topic, kafka partition, offset, log append-only, replica
 parent: messaging/kafka/fondamenti
 related: [messaging/kafka/fondamenti/architettura, messaging/kafka/fondamenti/produttori, messaging/kafka/fondamenti/consumatori, messaging/kafka/fondamenti/broker-cluster]
 official_docs: https://kafka.apache.org/documentation/#intro_topics
-status: complete
+status: reviewed
 difficulty: beginner
-last_updated: 2026-02-23
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Topics e Partizioni
@@ -51,7 +52,7 @@ L'**offset** è un numero intero a 64 bit, crescente e monotono, assegnato ad og
 Ogni partizione ha esattamente:
 - **1 Leader:** il broker che riceve le scritture dei producer e serve le letture dei consumer
 - **N-1 Follower:** broker che replicano passivamente i dati dal leader
-- **ISR (In-Sync Replicas):** insieme dei follower che sono aggiornati entro un certo lag dal leader. Solo le repliche nell'ISR possono diventare leader in caso di elezione.
+- **ISR (In-Sync Replicas):** insieme dei follower che sono aggiornati dal leader: un follower esce dall'ISR se non raggiunge la fine del log del leader entro `replica.lag.time.max.ms` (default 30 s). Solo le repliche nell'ISR possono diventare leader in caso di elezione.
 
 ## Architettura / Come Funziona
 
@@ -104,8 +105,8 @@ Ogni partizione è composta da **segmenti**. Un segmento è un file `.log` a cui
 ├── 00000000000000000000.log       ← segmento che inizia dall'offset 0
 ├── 00000000000000000000.index     ← indice sparso per offset → posizione fisica
 ├── 00000000000000000000.timeindex ← indice per timestamp → offset
-├── 00000000001073741824.log       ← secondo segmento (inizia dall'offset 1073741824)
-├── 00000000001073741824.index
+├── 00000000000000368769.log       ← secondo segmento (il nome è il base offset, qui 368769)
+├── 00000000000000368769.index
 └── leader-epoch-checkpoint
 ```
 
@@ -132,9 +133,11 @@ sequenceDiagram
     Follower2->>Leader: Fetch(offset N)
     Leader-->>Follower2: Record(offset N)
     Follower2->>Follower2: Write to local log
-    Leader->>Leader: Update ISR: all replicas in sync
+    Leader->>Leader: Advance High Watermark (tutte le repliche ISR hanno offset N)
     Leader-->>Producer: ACK (offset N committed)
 ```
+
+L'**High Watermark** è l'offset più alto replicato su tutte le repliche ISR: i consumer vedono solo i record fino a quel punto, così un record non ancora replicato (e quindi perdibile in caso di failover del leader) non viene mai letto. Con `acks=all` il leader risponde al producer solo quando l'High Watermark ha superato il record **e** l'ISR contiene almeno `min.insync.replicas` repliche; altrimenti restituisce `NotEnoughReplicas`.
 
 ## Configurazione & Pratica
 
@@ -216,7 +219,9 @@ kafka-configs.sh \
 Fattori da considerare:
 1. Throughput target: partizioni_needed = throughput_MB_s / throughput_per_partition_MB_s
 2. Consumer parallelism: max_consumer_per_group = num_partitions
-3. Overhead broker: un broker regge ~4000 partizioni totali
+3. Overhead broker: ogni partizione costa file handle, memoria e tempo di failover.
+   Linea guida storica (era ZooKeeper): ~4000 partizioni per broker e ~200.000 per cluster.
+   Con KRaft i limiti del cluster sono molto più alti, ma resta valido dimensionare in base ai requisiti reali.
 
 Esempio pratico:
 - Target: 200 MB/s di ingestion
@@ -310,10 +315,27 @@ kafka-delete-records.sh \
   --offset-json-file delete-records.json
 ```
 
+## Relazioni
+
+??? info "Producer — partizionamento per chiave"
+    Il producer sceglie la partizione (hash della key o sticky/round-robin senza key): da qui dipende l'ordinamento per chiave.
+
+    **Approfondimento completo →** [Produttori](produttori.md)
+
+??? info "Consumer Groups — parallelismo"
+    Ogni partizione è assegnata a un solo consumer per gruppo: il numero di partizioni è il tetto del parallelismo.
+
+    **Approfondimento completo →** [Consumatori](consumatori.md)
+
+??? info "Broker e Cluster — leader e repliche"
+    Leader, follower ed elezione dal pool ISR sono gestiti dal controller del cluster.
+
+    **Approfondimento completo →** [Broker e Cluster](broker-cluster.md)
+
 ## Riferimenti
 
 - [Apache Kafka Documentation: Topics](https://kafka.apache.org/documentation/#intro_topics)
 - [Apache Kafka Documentation: Log](https://kafka.apache.org/documentation/#log)
-- [Kafka: The Definitive Guide — Chapter 2: Installing Kafka](https://www.oreilly.com/library/view/kafka-the-definitive/9781491936153/)
+- [Kafka: The Definitive Guide](https://www.oreilly.com/library/view/kafka-the-definitive/9781491936153/)
 - [Confluent: Kafka Topic Configuration](https://docs.confluent.io/platform/current/installation/configuration/topic-configs.html)
 - [Confluent: Kafka Log Compaction](https://developer.confluent.io/courses/architecture/compaction/)
