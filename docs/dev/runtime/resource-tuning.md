@@ -7,16 +7,25 @@ search_keywords: [resource tuning, cpu tuning container, memory tuning microserv
 parent: dev/runtime/_index
 related: [dev/runtime/jvm-tuning, containers/kubernetes/resource-management]
 official_docs: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Resource Tuning Multi-Linguaggio in Container
 
 ## Panoramica
 
-Ogni runtime ha le proprie euristiche per determinare quanti thread creare, quante goroutine schedulare, e quanta memoria pre-allocare. In un ambiente bare-metal queste euristiche leggono correttamente l'hardware disponibile; all'interno di un container Kubernetes con `cpu.limits` e `memory.limits`, la maggior parte dei runtime vede il nodo sottostante — non il container — portando a over-provisioning di thread, throttling CPU aggressivo, e OOM kill. Questo documento descrive il tuning specifico per linguaggio di **Go** (GOMAXPROCS, automaxprocs), **.NET** (ThreadPool sizing), **Node.js** (UV_THREADPOOL_SIZE, cluster mode), e **Python** (Gunicorn worker formula), con una sezione trasversale su **CPU throttling CFS**, **memory overcommit**, e **profiling in produzione** con strumenti nativi per ogni runtime.
+Ogni runtime ha le proprie euristiche per determinare quanti thread creare, quante goroutine schedulare, e quanta memoria pre-allocare. In un ambiente bare-metal queste euristiche leggono correttamente l'hardware disponibile; all'interno di un container Kubernetes con `cpu.limits` e `memory.limits`, diversi runtime (o loro versioni meno recenti) dimensionano thread e heap sul nodo sottostante — non sul container — portando a over-provisioning di thread, throttling CPU aggressivo, e OOM kill. Le versioni recenti di Go (≥1.25), .NET e Node.js sono parzialmente *container-aware*: la tabella sotto indica cosa è automatico e cosa resta da configurare. Questo documento descrive il tuning specifico per linguaggio di **Go** (GOMAXPROCS, automaxprocs), **.NET** (ThreadPool sizing), **Node.js** (UV_THREADPOOL_SIZE, cluster mode), e **Python** (Gunicorn worker formula), con una sezione trasversale su **CPU throttling CFS**, **memory overcommit**, e **profiling in produzione** con strumenti nativi per ogni runtime.
+
+| Runtime | CPU limit rispettato di default? | Da configurare comunque |
+|---|---|---|
+| Go ≥ 1.25 | Sì (GOMAXPROCS da cgroup, aggiornato dinamicamente) | `GOMEMLIMIT` |
+| Go < 1.25 | No (usa `NumCPU()` del nodo) | `automaxprocs`, `GOMEMLIMIT` |
+| .NET ≥ 3.0 | Sì (`ProcessorCount` = ceil del limit) | Thread pool min, GC heap count/limit |
+| Node.js | No per cluster/thread pool | `--max-old-space-size`, `UV_THREADPOOL_SIZE`, n. worker |
+| Python (Gunicorn) | No (`cpu_count()` = nodo) | n. worker |
 
 !!! warning "Leggere i limiti del container, non del nodo"
     Il bug più comune: il container vede 32 vCPU del nodo ma ha `cpu.limit: 500m` (0.5 core). Il runtime spawna 32 worker thread — tutti vengono throttled dal kernel CFS perché il budget CPU disponibile è 0.5 core/s ogni secondo. Il risultato è latenza alta e CPU throttle al 90%+, non insufficienza di risorse.
@@ -47,14 +56,15 @@ cat /sys/fs/cgroup/cpu/cpu.stat
 # throttle% = nr_throttled / nr_periods × 100
 # Se > 25% → il container viene throttled significativamente
 
-# Con cgroup v2 (Linux 5.8+, Kubernetes 1.25+):
+# Con cgroup v2 (default sulle distro recenti; GA in Kubernetes 1.25):
 cat /sys/fs/cgroup/cpu.stat
+# stessi campi nr_periods / nr_throttled, ma il tempo è in throttled_usec (µs)
 ```
 
 ```bash
-# Metriche Prometheus per CPU throttling (se kube-state-metrics attivo)
-# Rate di throttle per container negli ultimi 5 minuti:
-rate(container_cpu_cfs_throttled_seconds_total{container="my-service"}[5m])
+# Metriche Prometheus per CPU throttling (esposte da cAdvisor/kubelet)
+# Frazione di periodi CFS throttled per container negli ultimi 5 minuti:
+rate(container_cpu_cfs_throttled_periods_total{container="my-service"}[5m])
   / rate(container_cpu_cfs_periods_total{container="my-service"}[5m])
 
 # Alert consigliato: throttle > 25% sostenuto per >5m indica un problema reale
@@ -92,7 +102,10 @@ dmesg | grep -E "oom_kill|Out of memory"
 
 ### Il problema
 
-Go usa `GOMAXPROCS` per determinare il numero di thread OS che eseguono goroutine in parallelo. Il default (dalla Go 1.5) è `runtime.NumCPU()` — che legge il numero di vCPU del **nodo**, non del container.
+Go usa `GOMAXPROCS` per determinare il numero di thread OS che eseguono goroutine in parallelo. Fino a Go 1.24 il default (dalla Go 1.5) è `runtime.NumCPU()` — che legge il numero di vCPU del **nodo**, non del container.
+
+!!! note "Go 1.25+: GOMAXPROCS container-aware"
+    Da Go 1.25 il runtime legge il CPU bandwidth limit del cgroup (v1 e v2) e imposta `GOMAXPROCS = min(NumCPU, limit arrotondato per eccesso)`, **aggiornandolo periodicamente** se il limit cambia (es. in-place resize). Il comportamento si attiva solo se la direttiva `go` in `go.mod` è ≥ 1.25 ed è disattivato se `GOMAXPROCS` è impostato via env var o chiamando `runtime.GOMAXPROCS`. Opt-out: `GODEBUG=containermaxprocs=0,updatemaxprocs=0`. Con Go ≥ 1.25 `automaxprocs` non serve più; resta utile per Go < 1.25. Differenza: `automaxprocs` arrotonda per **difetto** (min 1), il runtime per **eccesso**.
 
 ```bash
 # In un container con cpu.limit: 500m su nodo da 16 core:
@@ -101,9 +114,9 @@ Go usa `GOMAXPROCS` per determinare il numero di thread OS che eseguono goroutin
 # 16 thread goroutine si contendono 0.5 core → throttling massiccio
 ```
 
-### automaxprocs — la soluzione ufficiale
+### automaxprocs — per Go < 1.25
 
-La libreria `automaxprocs` di Uber legge i cgroup del container e imposta automaticamente `GOMAXPROCS` al valore appropriato rispetto al `cpu.limit`:
+La libreria `automaxprocs` di Uber (non è parte della stdlib) legge i cgroup del container e imposta automaticamente `GOMAXPROCS` al valore appropriato rispetto al `cpu.limit`:
 
 ```go
 // main.go — aggiungere all'inizio di main()
@@ -170,7 +183,11 @@ spec:
 
 ```go
 // Impostazione programmatica (alternativa all'import automatico)
-import "runtime"
+import (
+    "os"
+    "runtime"
+    "strconv"
+)
 
 func init() {
     // Leggi GOMAXPROCS da env var, con fallback calcolato
@@ -181,6 +198,19 @@ func init() {
     }
 }
 ```
+
+### GOMEMLIMIT — il GC conosce il limite di memoria
+
+Il GC Go dimensiona l'heap sul solo `GOGC` (default 100: il GC parte quando l'heap raddoppia), senza sapere del `memory.limit`: un picco può superare il limite e causare OOM kill. `GOMEMLIMIT` (Go 1.19+) è un *soft limit* sul totale di memoria del runtime: il GC diventa più aggressivo avvicinandosi al valore, invece di lasciare crescere l'heap.
+
+```yaml
+env:
+  - name: GOMEMLIMIT
+    value: "230MiB"   # ~90% di limits.memory: 256Mi — margine per stack, cgo, buffer non-heap
+```
+
+!!! warning "Soft limit"
+    Se il live heap supera `GOMEMLIMIT` il GC gira in continuo (death spiral, limitato al ~50% della CPU) e l'app rallenta senza crashare. Dimensiona il limit sul working set reale, non solo sul valore del container.
 
 ### Profiling Go in produzione: pprof
 
@@ -206,7 +236,7 @@ kubectl port-forward pod/<pod-name> 6060:6060 &
 
 # CPU profile → flamegraph
 go tool pprof http://localhost:6060/debug/pprof/profile?seconds=30
-# In pprof shell: web (apre flamegraph nel browser)
+# In pprof shell: web (call graph SVG nel browser); per il flamegraph usa -http=:8080 (vedi sotto)
 
 # Heap profile (oggetti allocati)
 go tool pprof http://localhost:6060/debug/pprof/heap
@@ -232,7 +262,7 @@ kubectl cp <ns>/<pod>:/tmp/cpu.pdf ./cpu.pdf
 
 ### Il problema
 
-Il .NET Thread Pool usa due euristiche per dimensionarsi: il numero di core (per i worker thread) e la disponibilità di I/O (per gli I/O completion thread). In container Kubernetes vede i core del nodo — e spawna thread proporzionalmente, causando contention elevata con budget CPU limitato.
+Il .NET Thread Pool usa due euristiche per dimensionarsi: il numero di core (per i worker thread) e la disponibilità di I/O (per gli I/O completion thread). Dal .NET Core 3.0 `Environment.ProcessorCount` rispetta il `cpu.limit` del container (arrotondato per eccesso, es. `500m` → 1), quindi pool e GC partono già dimensionati sul limit. Il problema residuo è un altro: il pool parte con `MinThreads = ProcessorCount` e, davanti a un burst di lavoro bloccante o async mal scritto, aggiunge thread con l'algoritmo *hill-climbing* (circa 1–2 al secondo) — su limit bassi ne risultano spike di latenza dopo un burst.
 
 ### ThreadPool.SetMinThreads e SetMaxThreads
 
@@ -240,8 +270,9 @@ Il .NET Thread Pool usa due euristiche per dimensionarsi: il numero di core (per
 // Program.cs o Startup.cs — configurare il thread pool all'avvio
 using System.Threading;
 
-// Lettura dei cpu.limits dal container (cgroup)
-int cpuLimit = GetContainerCpuLimit(); // vedi helper sotto
+// ProcessorCount rispetta già il cpu.limit del container (ceil);
+// per forzare un valore: env DOTNET_PROCESSOR_COUNT
+int cpuLimit = Environment.ProcessorCount;
 
 // Worker threads: suggerita = cpuLimit * 2 (per workload I/O bound)
 // Per workload CPU-bound: uguale a cpuLimit
@@ -257,70 +288,28 @@ ThreadPool.GetMaxThreads(out int maxWorker, out int maxCompletion);
 Console.WriteLine($"ThreadPool: min={minWorker}/{minCompletion}, max={maxWorker}/{maxCompletion}");
 ```
 
-```csharp
-// Helper per leggere cpu.limit dai cgroup (cgroup v1 e v2)
-static int GetContainerCpuLimit()
-{
-    // cgroup v2 (Linux 5.8+, Kubernetes 1.25+)
-    try
-    {
-        var cgroupV2 = "/sys/fs/cgroup/cpu.max";
-        if (File.Exists(cgroupV2))
-        {
-            var content = File.ReadAllText(cgroupV2).Trim();
-            // Formato: "quota period" es "50000 100000" oppure "max 100000"
-            var parts = content.Split(' ');
-            if (parts[0] != "max" && int.TryParse(parts[0], out int quota)
-                && int.TryParse(parts[1], out int period))
-            {
-                return Math.Max((int)Math.Ceiling((double)quota / period), 1);
-            }
-        }
-    }
-    catch { /* fallback */ }
-
-    // cgroup v1
-    try
-    {
-        var quotaFile = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us";
-        var periodFile = "/sys/fs/cgroup/cpu/cpu.cfs_period_us";
-        if (File.Exists(quotaFile) && File.Exists(periodFile))
-        {
-            int quota = int.Parse(File.ReadAllText(quotaFile).Trim());
-            int period = int.Parse(File.ReadAllText(periodFile).Trim());
-            if (quota > 0)
-                return Math.Max((int)Math.Ceiling((double)quota / period), 1);
-        }
-    }
-    catch { /* fallback */ }
-
-    return Environment.ProcessorCount; // fallback
-}
-```
-
 ### Variabili d'ambiente .NET container-relevant
 
 ```yaml
 # Kubernetes Deployment — variabili d'ambiente .NET
+# ATTENZIONE: le env var DOTNET_GC* sono interpretate come valori ESADECIMALI
 env:
-  # Configurazione thread pool via env (alternativa al codice)
-  - name: DOTNET_SYSTEM_THREADING_THREADPOOL_MINTHREADS
-    value: "4"
-  - name: DOTNET_SYSTEM_THREADING_THREADPOOL_MAXTHREADS
-    value: "32"
+  # Cap esplicito dei heap GC (Server GC: 1 heap per core). "2" = 2 heap
+  - name: DOTNET_GCHeapCount
+    value: "2"
 
-  # HTTP/3 (disabilitare se non necessario — risparmia risorse)
-  - name: DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP3SUPPORT
-    value: "false"
-
-  # GC mode: Server GC (multi-threaded, throughput) vs Workstation GC (single)
-  # In container con 1 CPU: usare Workstation GC
-  - name: DOTNET_GCConservatoryMode
-    value: "1"  # Conservative GC — riduce memoria a scapito di throughput
-
-  # Heap size massima (percentuale della memoria container)
+  # Hard limit heap come percentuale della memory.limit. 0x4B = 75
+  # (con memory.limit presente il default del runtime è già 75%)
   - name: DOTNET_GCHeapHardLimitPercent
-    value: "75"  # 75% della memory.limit del container
+    value: "4B"
+
+  # Riduce il footprint a scapito del throughput (scala 0-9)
+  - name: DOTNET_GCConserveMemory
+    value: "5"
+
+  # Workstation GC invece di Server GC: meno memoria, adatto a pod con ~1 CPU
+  - name: DOTNET_gcServer
+    value: "0"
 
 resources:
   requests:
@@ -368,19 +357,16 @@ dotnet-dump analyze /tmp/dump.dmp
 ```
 
 ```bash
-# Alternativa: esportare metriche thread pool verso Prometheus
-# (con OpenTelemetry .NET SDK)
-# Aggiungere al progetto:
-# dotnet add package OpenTelemetry.Exporter.Prometheus.AspNetCore
-
-# Metriche esposte automaticamente:
-# dotnet_threadpool_thread_count
-# dotnet_threadpool_queue_length
-# dotnet_gc_collections_count{generation="gen0|gen1|gen2"}
+# Alternativa: esportare metriche runtime verso Prometheus
+# (OpenTelemetry .NET SDK + OpenTelemetry.Instrumentation.Runtime)
+dotnet add package OpenTelemetry.Instrumentation.Runtime
+dotnet add package OpenTelemetry.Exporter.Prometheus.AspNetCore
+# Espone thread pool (thread count, queue length), GC collections e heap size;
+# i nomi esatti delle metriche dipendono dalla versione del pacchetto
 ```
 
 !!! tip "Server GC vs Workstation GC in container"
-    .NET usa Server GC per default quando vede più di 1 core. Server GC crea un heap GC per core — con 32 core visti dal nodo, crea 32 heap che consumano memoria enorme. Imposta `DOTNET_GCHeapCount` uguale al numero di CPU limit (es. `"2"` per `cpu.limit: 2000m`) per evitare over-allocation.
+    Server GC crea un heap (e un thread GC dedicato) per core: più throughput, più memoria. Il numero di heap segue il `ProcessorCount` visto dal runtime, quindi il cpu.limit; con `cpu.limit` ≤ 1 o memoria stretta Workstation GC è di solito la scelta migliore. Se usi Server GC, `DOTNET_GCHeapCount` (esadecimale) mette un tetto esplicito.
 
 ---
 
@@ -400,7 +386,7 @@ Node.js è single-threaded per il JavaScript, ma usa un **thread pool libuv** pe
 # Kubernetes env var
 env:
   - name: UV_THREADPOOL_SIZE
-    value: "8"  # Regola: min(cpu.limit * 2, 128) per workload I/O
+    value: "8"  # Regola: min(cpu.limit * 2, 1024) per workload I/O
 ```
 
 ```javascript
@@ -423,8 +409,9 @@ const start = Date.now();
 const promises = Array(10).fill().map(() => bcrypt.hash('test', 10));
 Promise.all(promises).then(() => console.log(Date.now() - start, 'ms'));
 "
-# Con UV_THREADPOOL_SIZE=4 (default): ~2000ms per 10 hash
-# Con UV_THREADPOOL_SIZE=8 (2 core limit): ~1200ms per 10 hash
+# Ordine di grandezza atteso (dipende da hardware e cost factor): con 4 thread
+# 10 hash richiedono ~3 "ondate"; con 8+ thread (e CPU sufficiente) ~2.
+# Oltre il numero di core disponibili NON c'è guadagno: i thread vengono throttled.
 ```
 
 ### Cluster Mode in Kubernetes
@@ -436,7 +423,7 @@ const os = require('os');
 
 if (cluster.isPrimary) {
     // Numero di worker = cpu.limit (letto da cgroup o env var)
-    const cpuLimit = parseInt(process.env.CPU_LIMIT || os.cpus().length);
+    const cpuLimit = parseInt(process.env.CPU_LIMIT) || os.availableParallelism();
     const numWorkers = Math.max(cpuLimit, 1);
 
     console.log(`Primary ${process.pid} — spawning ${numWorkers} workers`);
@@ -492,7 +479,7 @@ spec:
 
 ### NODE_OPTIONS: --max-old-space-size
 
-Il garbage collector V8 (Node.js) non è container-aware: usa il 50% della RAM del sistema di default. Su un nodo da 64 GB, Node.js tenta di allocare 32 GB di heap anche con `memory.limit: 512Mi`.
+Il default dell'heap V8 dipende dalla memoria rilevata e dalla versione di Node.js; nelle versioni recenti il limite del cgroup viene considerato, ma il valore risultante può comunque essere troppo vicino (o oltre) al `memory.limit` perché V8 non conta buffer nativi, stack e memoria fuori heap. Impostarlo esplicitamente rende il comportamento prevedibile: il GC lavora di più *prima* del limite invece di farti raggiungere l'OOM kill.
 
 ```bash
 # Calcolo consigliato: ~70-75% di memory.limit in MB
@@ -527,22 +514,27 @@ Python (con CPython) ha il **GIL (Global Interpreter Lock)** che impedisce l'ese
 ### Formula worker Gunicorn
 
 ```bash
-# Formula standard Gunicorn:
+# Formula suggerita dalla documentazione Gunicorn (punto di partenza, worker sync):
 # workers = (2 × cpu_count) + 1
+# Perché: mentre un worker sync è bloccato su I/O, gli altri usano la CPU
 
 # Per container Kubernetes, leggere cpu.limit:
-CPU_LIMIT=$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null | awk '{print int($1/100000)}')
-# Fallback se cgroup v2 o non disponibile:
-CPU_LIMIT=${CPU_LIMIT:-$(nproc)}
+if [ -r /sys/fs/cgroup/cpu.max ]; then            # cgroup v2: "quota period" oppure "max period"
+  CPU_LIMIT=$(awk '$1=="max"{print 0; next} {print int($1/$2)}' /sys/fs/cgroup/cpu.max)
+else                                               # cgroup v1: quota = -1 se illimitato
+  CPU_LIMIT=$(awk '{print ($1>0)? int($1/100000) : 0}' /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null)
+fi
+# Senza limit (0 o vuoto) o limit < 1 CPU → minimo 1 (nproc vedrebbe i core del nodo)
+[ "${CPU_LIMIT:-0}" -lt 1 ] && CPU_LIMIT=1
 WORKERS=$((2 * CPU_LIMIT + 1))
 
 # Esempio con cpu.limit: 2000m → CPU_LIMIT=2 → WORKERS=5
-# Esempio con cpu.limit: 500m  → CPU_LIMIT=0 → (fallback) WORKERS=1
+# Esempio con cpu.limit: 500m  → CPU_LIMIT=0 → CPU_LIMIT=1 → WORKERS=3
 
 gunicorn --workers $WORKERS --bind 0.0.0.0:8000 myapp:app
 ```
 
-```bash
+```python
 # Configurazione Gunicorn completa per container (gunicorn.conf.py)
 import multiprocessing
 import os
@@ -575,7 +567,8 @@ cpu_count = get_cpu_limit()
 # Gunicorn settings
 bind = "0.0.0.0:8000"
 workers = int(os.getenv("GUNICORN_WORKERS", (2 * cpu_count) + 1))
-worker_class = os.getenv("GUNICORN_WORKER_CLASS", "sync")  # sync, gevent, uvicorn.workers.UvicornWorker
+worker_class = os.getenv("GUNICORN_WORKER_CLASS", "sync")  # sync, gevent, uvicorn_worker.UvicornWorker
+worker_tmp_dir = "/dev/shm"  # heartbeat in RAM: evita worker 'bloccati' se /tmp del container è lento (overlayfs)
 worker_connections = 1000   # per worker async (gevent/asyncio)
 timeout = 120
 keepalive = 5
@@ -604,7 +597,7 @@ spec:
             - name: GUNICORN_WORKERS
               value: "5"  # Override manuale (es. 2 CPU → 5 workers)
             - name: GUNICORN_WORKER_CLASS
-              value: "uvicorn.workers.UvicornWorker"  # per FastAPI/ASGI
+              value: "uvicorn_worker.UvicornWorker"  # per FastAPI/ASGI (pacchetto uvicorn-worker)
           resources:
             requests:
               cpu: "500m"
@@ -620,13 +613,13 @@ spec:
 |---|---|---|
 | `sync` (default) | Workload CPU-bound, Django tradizionale | nessuno |
 | `gevent` | Molte connessioni I/O-bound simultanee | `gevent` |
-| `uvicorn.workers.UvicornWorker` | FastAPI, Starlette (ASGI) | `uvicorn[standard]` |
+| `uvicorn_worker.UvicornWorker` | FastAPI, Starlette (ASGI) | `uvicorn-worker` (il vecchio `uvicorn.workers` è deprecato) |
 | `tornado` | Applicazioni Tornado | `tornado` |
 
 ```bash
 # Installare il worker class scelto
 pip install gunicorn gevent            # per worker gevent
-pip install gunicorn uvicorn[standard] # per FastAPI/ASGI
+pip install gunicorn uvicorn-worker   # per FastAPI/ASGI
 ```
 
 !!! tip "preload_app = True — risparmio memoria"
@@ -676,22 +669,23 @@ p.print_stats(20)  # top 20 funzioni per tempo cumulativo
 - Monitora goroutine count via pprof `/debug/pprof/goroutine` — goroutine leak è la causa più comune di memory leak in Go.
 
 **\.NET:**
-- Imposta sempre `DOTNET_GCHeapCount` = floor(cpu.limit) — previene la creazione di 32 heap GC su nodi con 32 core.
+- Verifica `Environment.ProcessorCount` a runtime: è la base di pool e GC. Con Server GC, valuta `DOTNET_GCHeapCount` per un tetto esplicito; ricorda che le env `DOTNET_GC*` sono esadecimali.
 - Usa `ThreadPool.SetMinThreads` per evitare il "thread pool hill-climbing" (latenza spike nei primi secondi dopo un burst di traffico).
 - Con ASP.NET Core, preferire async/await ovunque — riduce la pressione sul thread pool.
 
 **Node.js:**
 - Imposta sempre `--max-old-space-size` proporzionale al `memory.limit` del container.
 - Usa cluster mode (o PM2) per container con `cpu.limit` > 1 core.
-- Non aumentare `UV_THREADPOOL_SIZE` > 128 (limite libuv).
+- Non aumentare `UV_THREADPOOL_SIZE` > 1024 (limite libuv; era 128 nelle versioni vecchie) — in pratica resta su valori piccoli: ogni thread costa memoria e contesa CPU.
+- In Kubernetes valuta più repliche single-process invece del cluster mode: scaling, isolamento OOM e metriche per-pod sono più semplici.
 
 **Python:**
 - Usa la formula `2*CPU+1` come punto di partenza, poi aumenta se il profiling mostra worker idle.
-- Con worker gevent o uvicorn, il numero di worker può essere ridotto (es. `CPU+1`) perché ogni worker gestisce molte connessioni concorrenti.
+- Con worker gevent o uvicorn, il numero di worker può essere ridotto (es. `CPU`, o 1 per pod con scaling orizzontale) perché ogni worker gestisce molte connessioni concorrenti.
 - Evita import a livello di modulo che allocano strutture dati grandi — con `preload_app=True` vengono allocate nel master e replicate (copy-on-write) in ogni worker.
 
 !!! warning "Vertical pod autoscaling e GOMAXPROCS/workers"
-    Se usi VPA (Vertical Pod Autoscaler), i `cpu.limits` possono cambiare dinamicamente. Configurazioni hardcoded di GOMAXPROCS, worker count, o thread pool non si adatteranno. Usa sempre la lettura dinamica dai cgroup o dalla env var `resourceFieldRef` per evitare disallineamenti dopo un VPA resize.
+    Se usi VPA (Vertical Pod Autoscaler), i `cpu.limits` possono cambiare dinamicamente. Configurazioni hardcoded di GOMAXPROCS, worker count, o thread pool non si adatteranno. Le env var `resourceFieldRef` sono risolte all'avvio del container e **non** si aggiornano con un resize (anche in-place): servono un restart o una lettura periodica dei cgroup. Go ≥ 1.25 aggiorna GOMAXPROCS da solo; per gli altri runtime verifica il comportamento dopo il resize.
 
 ---
 
@@ -711,9 +705,9 @@ kubectl exec -it <pod> -- cat /proc/1/status | grep Threads
 # Se Threads >> cpu.limit × 4 → over-provisioned
 
 # 2. Per Go — verificare GOMAXPROCS
-kubectl exec -it <pod> -- sh -c 'GOMAXPROCS_CHECK=$(GOMAXPROCS=? /proc/1/exe 2>&1); echo $GOMAXPROCS_CHECK'
-# Oppure via pprof:
-curl http://localhost:6060/debug/pprof/goroutine?debug=1 | head -5
+# Il valore effettivo si vede solo dal processo: logga runtime.GOMAXPROCS(0) all'avvio
+# (automaxprocs lo logga già da solo). Intanto confronta i thread con il limit:
+kubectl exec -it <pod> -- grep -E 'Threads' /proc/1/status
 
 # 3. Aumentare cpu.limit (se il carico è legittimo)
 kubectl set resources deployment/<name> --limits=cpu=2000m
@@ -729,7 +723,7 @@ kubectl set resources deployment/<name> --limits=cpu=2000m
 
 **Sintomo:** Il pod viene OOM killed (`exit code 137`) ma `kubectl top pod` mostrava memoria < limit.
 
-**Causa:** `kubectl top` mostra la memoria RSS del processo principale, ma non conteggia: file system cache, buffer kernel, o la memoria aggregata di tutti i processi (worker Gunicorn, cluster Node.js). Il `memory.limit` del cgroup conta tutta la memoria del container.
+**Causa:** `kubectl top` mostra il *working set* (usage meno file cache inattiva), campionato a intervalli: un picco breve tra due campioni non si vede. Inoltre il `memory.limit` del cgroup conta la memoria di tutti i processi (worker Gunicorn, cluster Node.js), page cache attiva e memoria kernel del container.
 
 **Soluzione:**
 
