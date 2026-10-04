@@ -7,16 +7,20 @@ search_keywords: [terraform, iac, infrastructure as code, hcl, hashicorp, provid
 parent: iac/terraform/_index
 related: [iac/terraform/state-management, iac/terraform/moduli, iac/ansible/fondamentali, cloud/aws/compute/ec2, cloud/aws/networking/vpc]
 official_docs: https://developer.hashicorp.com/terraform/docs
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-24
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Terraform — Fondamentali
 
 ## Panoramica
 
-Terraform è lo strumento di Infrastructure as Code (IaC) open-source di HashiCorp, diventato lo standard de-facto per il provisioning dichiarativo di infrastruttura cloud. Permette di descrivere l'infrastruttura desiderata in **HCL** (HashiCorp Configuration Language) e applicarla in modo idempotente su centinaia di provider (AWS, Azure, GCP, Kubernetes, Cloudflare, Vault, etc.). Il principio fondamentale è **dichiarativo**: si descrive lo stato finale desiderato, non i passi per raggiungerlo. Terraform calcola il delta tra lo stato corrente (memorizzato nel *state file*) e lo stato desiderato, pianifica le modifiche e le applica. È lo strumento prioritario da imparare per qualsiasi DevOps o Platform Engineer.
+Terraform è lo strumento di Infrastructure as Code (IaC) di HashiCorp (oggi parte di IBM), diventato lo standard de-facto per il provisioning dichiarativo di infrastruttura cloud. Permette di descrivere l'infrastruttura desiderata in **HCL** (HashiCorp Configuration Language) e applicarla in modo idempotente su centinaia di provider (AWS, Azure, GCP, Kubernetes, Cloudflare, Vault, etc.). Il principio fondamentale è **dichiarativo**: si descrive lo stato finale desiderato, non i passi per raggiungerlo. Terraform calcola il delta tra lo stato corrente (memorizzato nel *state file*) e lo stato desiderato, pianifica le modifiche e le applica. È lo strumento prioritario da imparare per qualsiasi DevOps o Platform Engineer.
+
+!!! note "Licenza e OpenTofu"
+    Da agosto 2023 Terraform è rilasciato con licenza **BSL 1.1** (source-available, non più MPL/open-source OSI). In risposta la Linux Foundation mantiene **OpenTofu**, fork open-source (MPL 2.0) quasi del tutto compatibile con HCL, provider e state. I comandi in questa pagina valgono per entrambi sostituendo `terraform` con `tofu`; alcune feature recenti divergono tra i due.
 
 ## Concetti Chiave
 
@@ -84,7 +88,7 @@ Files .tf  ──▶  Terraform Core  ──▶  Provider Plugin  ──▶  Clo
 
 ### Terraform Core vs Provider
 
-- **Terraform Core**: motore che interpreta HCL, gestisce il DAG delle dipendenze, calcola il plan
+- **Terraform Core**: motore che interpreta HCL, gestisce il DAG (*Directed Acyclic Graph*, grafo orientato senza cicli: dà l'ordine di creazione e permette di creare in parallelo le risorse indipendenti), calcola il plan
 - **Provider**: plugin (scritto in Go) che traduce le risorse HCL in chiamate API verso il cloud/servizio target. Ogni provider è distribuito separatamente tramite il [Terraform Registry](https://registry.terraform.io/).
 
 ## Configurazione & Pratica
@@ -115,7 +119,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"  # >= 5.0.0 e < 6.0.0
+      version = "~> 6.0"  # >= 6.0.0 e < 7.0.0 (pessimistic constraint: accetta solo minor/patch)
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
@@ -128,11 +132,14 @@ terraform {
     bucket         = "my-terraform-state"
     key            = "prod/terraform.tfstate"
     region         = "eu-west-1"
-    encrypt        = true
-    dynamodb_table = "terraform-state-lock"
+    encrypt      = true
+    use_lockfile = true  # lock nativo S3 (Terraform >= 1.10), senza DynamoDB
   }
 }
 ```
+
+!!! note "Locking S3: `dynamodb_table` è deprecato"
+    Fino a Terraform 1.9 il lock richiedeva una tabella DynamoDB (`dynamodb_table`). Da 1.10 `use_lockfile = true` crea un file `.tflock` nel bucket usando scritture condizionali di S3; `dynamodb_table` è deprecato e verrà rimosso. Il bucket deve avere il versioning attivo per recuperare lo state.
 
 ### providers.tf
 
@@ -305,22 +312,32 @@ terraform apply -auto-approve
 # Distruggere tutte le risorse
 terraform destroy
 
-# Distruggere solo una risorsa specifica
-terraform destroy -target=aws_instance.web[0]
+# Distruggere solo una risorsa specifica (eccezione, non routine: -target ignora le dipendenze non incluse)
+terraform destroy -target='aws_instance.web[0]'
 
 # Vedere lo state corrente
 terraform show
 terraform state list
 
-# Importare una risorsa esistente nello state
+# Importare una risorsa esistente nello state (approccio imperativo legacy)
 terraform import aws_s3_bucket.my_bucket my-bucket-name
 
 # Rimuovere una risorsa dallo state (senza distruggerla)
-terraform state rm aws_instance.web[0]
+terraform state rm 'aws_instance.web[0]'
 
 # Output values
 terraform output web_public_ips
 ```
+
+!!! tip "Import dichiarativo (1.5+)"
+    Preferire il blocco `import {}`: è parte del codice, passa da `plan` (review prima dell'apply) e `terraform plan -generate-config-out=generated.tf` genera l'HCL della risorsa.
+
+    ```hcl
+    import {
+      to = aws_s3_bucket.my_bucket
+      id = "my-bucket-name"
+    }
+    ```
 
 ### Dipendenze: Implicite vs Esplicite
 
@@ -341,6 +358,9 @@ resource "aws_s3_bucket_policy" "logs" {
 ```
 
 ### For Each e Dynamic Blocks
+
+!!! tip "`count` vs `for_each`"
+    Con `count` le istanze sono identificate dall'indice: rimuovere `web[0]` da una lista fa slittare gli indici e Terraform distrugge/ricrea le risorse successive. Con `for_each` ogni istanza ha una chiave stabile (`each.key`), quindi si aggiunge/rimuove un elemento senza toccare gli altri. Usare `count` solo per repliche identiche o per il pattern on/off (`count = var.enabled ? 1 : 0`).
 
 ```hcl
 # for_each su map
@@ -427,6 +447,9 @@ resource "aws_db_instance" "main" {
 }
 ```
 
+!!! warning "Il segreto finisce comunque nello state"
+    `sensitive = true` nasconde il valore solo in plan/output: nello state resta in chiaro. Da Terraform 1.10/1.11 i **ephemeral resources** (es. `ephemeral "aws_secretsmanager_secret_version"`) e gli attributi **write-only** (es. `password_wo` sulle risorse che lo supportano) evitano di persistere il segreto nello state. Per RDS si può anche usare `manage_master_user_password = true`, che delega la gestione a Secrets Manager.
+
 ### Prevenire Distruzioni Accidentali
 
 ```hcl
@@ -451,11 +474,12 @@ terraform force-unlock LOCK_ID
 ### Refresh State
 
 ```bash
-# Sincronizzare lo state con la realtà del provider
-terraform refresh
-
-# Dalla v0.15+, incluso in plan/apply automaticamente
+# plan/apply fanno già il refresh dello state in automatico.
+# Per sincronizzare SOLO lo state con la realtà (senza modificare l'infra):
 terraform plan -refresh-only
+terraform apply -refresh-only   # conferma e scrive lo state
+
+# `terraform refresh` è deprecato: scrive lo state senza mostrare il diff
 ```
 
 ### Errori di Provider
