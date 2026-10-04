@@ -8930,7 +8930,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -8974,7 +8974,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -8999,7 +8999,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -9481,7 +9481,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -25388,7 +25388,7 @@
 <li>Nessun impegno — massima flessibilità</li>
 <li>Prezzo più alto per unità</li>
 </ul>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Verificare il prezzo di un machine type specifico</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Specifiche di un machine type (il prezzo NON è nell'output: usare Pricing Calculator o Cloud Billing Catalog API)</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>machine-types<span class="w"> </span>describe<span class="w"> </span>e2-standard-4<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span>--zone<span class="o">=</span>europe-west8-b
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
@@ -25399,6 +25399,7 @@
 </span></code></pre></div>
 <h3 id="sustained-use-discounts-sud-automatici">Sustained Use Discounts (SUD) — Automatici<a class="headerlink" href="#sustained-use-discounts-sud-automatici" title="Permanent link">&para;</a></h3>
 <p>I <strong>SUD</strong> sono sconti automatici che GCP applica <strong>senza azioni da parte dell'utente</strong> quando una VM viene usata per una certa percentuale del mese di fatturazione:</p>
+<p>Esempio per la famiglia <strong>N1</strong> (lo sconto massimo è il più alto):</p>
 <table>
 <thead>
 <tr>
@@ -25427,9 +25428,13 @@
 </table>
 <p><strong>Caratteristiche SUD:</strong>
 - Applicati automaticamente — nessuna configurazione necessaria
-- Valgono per: Compute Engine N1, N2, N2D, C2, C2D, M1, M2 e GKE nodi
-- <strong>Non si applicano</strong> a: E2 series, Spot VM, Preemptible VM, App Engine flexible, Cloud SQL
-- GCP calcola l'utilizzo per <strong>tipo di macchina</strong> nella stessa regione — se cambi tipo ma stai nella stessa famiglia, il contatore SUD può accumularsi</p>
+- Valgono solo per famiglie "legacy": N1 e M1/M2 (fino a ~30%), N2, N2D, C2, C2D (fino a ~20%); si applicano anche ai nodi GKE perché sono VM Compute Engine
+- <strong>Non si applicano</strong> a: E2, famiglie di nuova generazione (es. C3, N4), Spot VM, Preemptible VM, App Engine flexible, Cloud SQL</p>
+<!-- REVIEW: verificare elenco famiglie con SUD e percentuali massime su cloud.google.com/compute/docs/sustained-use-discounts -->
+<ul>
+<li>Il contatore SUD aggrega l'uso per <strong>famiglia di macchine e regione</strong> (non per singola istanza): cambiare dimensione nella stessa famiglia non azzera lo sconto</li>
+<li>GCP calcola l'utilizzo per <strong>tipo di macchina</strong> nella stessa regione — se cambi tipo ma stai nella stessa famiglia, il contatore SUD può accumularsi</li>
+</ul>
 <div class="admonition note">
 <p class="admonition-title">SUD vs Reserved Instances AWS</p>
 <p>I SUD sono molto più semplici delle Reserved Instances AWS: non c'è nulla da acquistare o configurare. Il trade-off è che il massimo sconto (30%) è inferiore alle RI AWS (fino a 72%). Per sconti maggiori, usare i CUD.</p>
@@ -25463,7 +25468,7 @@
 <tr>
 <td>vCPU memory-optimized (M1, M2)</td>
 <td>41%</td>
-<td>57%</td>
+<td>63%</td>
 </tr>
 <tr>
 <td>GPU (A100, V100)</td>
@@ -25472,6 +25477,9 @@
 </tr>
 </tbody>
 </table>
+<!-- REVIEW: verificare percentuali CUD (in particolare memory-optimized 3 anni e GPU) e la migrazione ai Compute Flexible CUD multi-price (2025-2026) -->
+
+<p>I <strong>Flexible CUD</strong> (spend-based) coprono la spesa Compute Engine su più famiglie e regioni con sconti inferiori ai resource-based, ma senza vincolo di macchina.</p>
 <p><strong>Tipi di CUD:</strong></p>
 <ul>
 <li><strong>Resource-based CUD</strong> (classico): impegno su quantità di vCPU e RAM per una region specifica. Adatto quando conosci la baseline della tua infrastruttura.</li>
@@ -25488,9 +25496,8 @@
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span>--filter<span class="o">=</span><span class="s2">"region:europe-west8"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span>--format<span class="o">=</span><span class="s2">"table(name,plan,status,startTimestamp,endTimestamp)"</span>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Verificare utilizzo dei CUD (via Billing Console o API)</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>gcloud<span class="w"> </span>billing<span class="w"> </span>accounts<span class="w"> </span>get-spending-information<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span>--billing-account<span class="o">=</span>BILLING_ACCOUNT_ID
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># L'utilizzo dei CUD si verifica in Billing Console → Committed use discounts</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1"># o nel billing export (vedi Troubleshooting, Scenario 3)</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">CUD non rimborsabili</p>
@@ -25543,18 +25550,19 @@
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span>--provisioning-model<span class="o">=</span>SPOT<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span>--instance-termination-action<span class="o">=</span>STOP
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Creare un MIG (Managed Instance Group) con Spot VM + fallback On-Demand</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>instance-templates<span class="w"> </span>create<span class="w"> </span>spot-template<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span>--machine-type<span class="o">=</span>n2-standard-4<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span>--image-family<span class="o">=</span>debian-12<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span>--image-project<span class="o">=</span>debian-cloud<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span>--provisioning-model<span class="o">=</span>SPOT<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span>--instance-termination-action<span class="o">=</span>STOP
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="c1"># Verificare le interruzioni recenti</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>gcloud<span class="w"> </span>logging<span class="w"> </span><span class="nb">read</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="s1">'resource.type="gce_instance" AND protoPayload.methodName="compute.instances.preempted"'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span>--limit<span class="o">=</span><span class="m">10</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Instance template Spot (base per un MIG; il fallback On-Demand si ottiene</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># con un secondo MIG/node pool on-demand, non con questo template)</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>instance-templates<span class="w"> </span>create<span class="w"> </span>spot-template<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span>--machine-type<span class="o">=</span>n2-standard-4<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span>--image-family<span class="o">=</span>debian-12<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span>--image-project<span class="o">=</span>debian-cloud<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span>--provisioning-model<span class="o">=</span>SPOT<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span>--instance-termination-action<span class="o">=</span>STOP
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># Verificare le interruzioni recenti</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>gcloud<span class="w"> </span>logging<span class="w"> </span><span class="nb">read</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span><span class="s1">'resource.type="gce_instance" AND protoPayload.methodName="compute.instances.preempted"'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">    </span>--limit<span class="o">=</span><span class="m">10</span>
 </span></code></pre></div>
 <p><strong>Use case ideali Spot VM:</strong>
 - Batch processing, data pipelines, ETL
@@ -25610,7 +25618,6 @@
 <thead>
 <tr>
 <th>Edition</th>
-<th>Slot minimi</th>
 <th>Fatturazione</th>
 <th>Use case</th>
 </tr>
@@ -25618,24 +25625,25 @@
 <tbody>
 <tr>
 <td><strong>Standard</strong></td>
-<td>100</td>
-<td>Oraria (baseline + autoscaling)</td>
-<td>Workload standard</td>
+<td>Slot-ora, solo autoscaling (nessun commitment)</td>
+<td>Workload standard, dev/test</td>
 </tr>
 <tr>
 <td><strong>Enterprise</strong></td>
-<td>100</td>
-<td>Oraria + features enterprise</td>
-<td>SLA, BI Engine, materialize</td>
+<td>Slot-ora (autoscaling) + commitment &#8531; anni opzionali</td>
+<td>Feature enterprise, governance, BI Engine</td>
 </tr>
 <tr>
 <td><strong>Enterprise Plus</strong></td>
-<td>500</td>
-<td>Oraria</td>
-<td>Workload mission-critical</td>
+<td>Come Enterprise</td>
+<td>Workload mission-critical, requisiti di compliance/DR avanzati</td>
 </tr>
 </tbody>
 </table>
+<p>Gli slot autoscalati sono fatturati per slot-ora con incrementi di 50 slot; una <strong>baseline</strong> opzionale riserva slot sempre attivi.</p>
+<!-- REVIEW: verificare incrementi autoscaling, minimi e feature per edition su cloud.google.com/bigquery/docs/editions-intro -->
+
+<p>Perché scegliere capacity: il costo diventa prevedibile e limitato dagli slot, invece di crescere con i byte scansionati.</p>
 <div class="admonition note">
 <p class="admonition-title">On-demand vs Slot: quando scegliere</p>
 <p><strong>On-demand</strong>: team di analisi con query ad-hoc, poche query al giorno, difficile prevedere il volume.
@@ -25683,27 +25691,28 @@
 <p>I <strong>Budget</strong> GCP permettono di impostare soglie di spesa e ricevere notifiche via email o Pub/Sub quando vengono superate.</p>
 <h3 id="creare-un-budget">Creare un Budget<a class="headerlink" href="#creare-un-budget" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Creare un budget mensile di 500€ con alert a 50%, 80%, 100%</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>gcloud<span class="w"> </span>billing<span class="w"> </span>budgets<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>--billing-account<span class="o">=</span>BILLING_ACCOUNT_ID<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>--display-name<span class="o">=</span><span class="s2">"Budget Produzione Mensile"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span>--budget-amount<span class="o">=</span>500EUR<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span>--threshold-rule<span class="o">=</span><span class="nv">percent</span><span class="o">=</span><span class="m">50</span>,basis<span class="o">=</span>CURRENT_SPEND<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span>--threshold-rule<span class="o">=</span><span class="nv">percent</span><span class="o">=</span><span class="m">80</span>,basis<span class="o">=</span>CURRENT_SPEND<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span>--threshold-rule<span class="o">=</span><span class="nv">percent</span><span class="o">=</span><span class="m">100</span>,basis<span class="o">=</span>CURRENT_SPEND<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span>--threshold-rule<span class="o">=</span><span class="nv">percent</span><span class="o">=</span><span class="m">100</span>,basis<span class="o">=</span>FORECASTED_SPEND
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># Creare un budget filtrato su un singolo project</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>gcloud<span class="w"> </span>billing<span class="w"> </span>budgets<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">    </span>--billing-account<span class="o">=</span>BILLING_ACCOUNT_ID<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">    </span>--display-name<span class="o">=</span><span class="s2">"Budget project-prod-api"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">    </span>--projects<span class="o">=</span>projects/PROJECT_NUMBER<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">    </span>--budget-amount<span class="o">=</span>200EUR<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">    </span>--threshold-rule<span class="o">=</span><span class="nv">percent</span><span class="o">=</span><span class="m">90</span>,basis<span class="o">=</span>CURRENT_SPEND
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="c1"># Listare i budget configurati</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>gcloud<span class="w"> </span>billing<span class="w"> </span>budgets<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">    </span>--billing-account<span class="o">=</span>BILLING_ACCOUNT_ID<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">    </span>--format<span class="o">=</span><span class="s2">"table(name,displayName,amount.specifiedAmount.units,amount.specifiedAmount.currencyCode)"</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1">#   (percent è una frazione: 0.5 = 50%, 1.0 = 100%)</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>gcloud<span class="w"> </span>billing<span class="w"> </span>budgets<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span>--billing-account<span class="o">=</span>BILLING_ACCOUNT_ID<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span>--display-name<span class="o">=</span><span class="s2">"Budget Produzione Mensile"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span>--budget-amount<span class="o">=</span>500EUR<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span>--threshold-rule<span class="o">=</span><span class="nv">percent</span><span class="o">=</span><span class="m">0</span>.5<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span>--threshold-rule<span class="o">=</span><span class="nv">percent</span><span class="o">=</span><span class="m">0</span>.8<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span>--threshold-rule<span class="o">=</span><span class="nv">percent</span><span class="o">=</span><span class="m">1</span>.0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span>--threshold-rule<span class="o">=</span><span class="nv">percent</span><span class="o">=</span><span class="m">1</span>.0,basis<span class="o">=</span>forecasted-spend
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># Creare un budget filtrato su un singolo project</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>gcloud<span class="w"> </span>billing<span class="w"> </span>budgets<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">    </span>--billing-account<span class="o">=</span>BILLING_ACCOUNT_ID<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">    </span>--display-name<span class="o">=</span><span class="s2">"Budget project-prod-api"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">    </span>--filter-projects<span class="o">=</span>projects/PROJECT_NUMBER<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">    </span>--budget-amount<span class="o">=</span>200EUR<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">    </span>--threshold-rule<span class="o">=</span><span class="nv">percent</span><span class="o">=</span><span class="m">0</span>.9
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="c1"># Listare i budget configurati</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>gcloud<span class="w"> </span>billing<span class="w"> </span>budgets<span class="w"> </span>list<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">    </span>--billing-account<span class="o">=</span>BILLING_ACCOUNT_ID<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">    </span>--format<span class="o">=</span><span class="s2">"table(name,displayName,amount.specifiedAmount.units,amount.specifiedAmount.currencyCode)"</span>
 </span></code></pre></div>
 <h3 id="budget-con-notifica-pubsub">Budget con Notifica Pub/Sub<a class="headerlink" href="#budget-con-notifica-pubsub" title="Permanent link">&para;</a></h3>
 <p>Per integrazioni avanzate (es. disabilitare automaticamente le risorse al superamento del budget):</p>
@@ -25713,32 +25722,36 @@
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Aggiornare il budget per notificare su Pub/Sub</span>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>gcloud<span class="w"> </span>billing<span class="w"> </span>budgets<span class="w"> </span>update<span class="w"> </span>BUDGET_ID<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span>--billing-account<span class="o">=</span>BILLING_ACCOUNT_ID<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span>--notifications-rule-pubsub-topic<span class="o">=</span>projects/PROJECT_ID/topics/billing-alerts<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span>--notifications-rule-schema-version<span class="o">=</span><span class="m">1</span>.0
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span>--notifications-rule-pubsub-topic<span class="o">=</span>projects/PROJECT_ID/topics/billing-alerts
 </span></code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Cloud Function per disabilitare la billing al superamento budget</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># (pattern comune per ambienti di sviluppo)</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">googleapiclient</span><span class="w"> </span><span class="kn">import</span> <span class="n">discovery</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">disable_billing_on_budget_exceed</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span><span class="sd">"""Disabilita billing su un project quando il budget è superato."""</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>    <span class="n">pubsub_data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">base64</span><span class="o">.</span><span class="n">b64decode</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s1">'data'</span><span class="p">])</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">'utf-8'</span><span class="p">))</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>    <span class="n">cost_amount</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">pubsub_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'costAmount'</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>    <span class="n">budget_amount</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">pubsub_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'budgetAmount'</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>    <span class="k">if</span> <span class="n">cost_amount</span> <span class="o">&gt;=</span> <span class="n">budget_amount</span><span class="p">:</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>        <span class="n">project_id</span> <span class="o">=</span> <span class="n">pubsub_data</span><span class="p">[</span><span class="s1">'projectId'</span><span class="p">]</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>        <span class="n">billing</span> <span class="o">=</span> <span class="n">discovery</span><span class="o">.</span><span class="n">build</span><span class="p">(</span><span class="s1">'cloudbilling'</span><span class="p">,</span> <span class="s1">'v1'</span><span class="p">)</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>        <span class="n">billing</span><span class="o">.</span><span class="n">projects</span><span class="p">()</span><span class="o">.</span><span class="n">updateBillingInfo</span><span class="p">(</span>
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a>            <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s1">'projects/</span><span class="si">{</span><span class="n">project_id</span><span class="si">}</span><span class="s1">'</span><span class="p">,</span>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>            <span class="n">body</span><span class="o">=</span><span class="p">{</span><span class="s1">'billingAccountName'</span><span class="p">:</span> <span class="s1">''</span><span class="p">}</span>  <span class="c1"># scollegare billing</span>
-</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a>        <span class="p">)</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">googleapiclient</span><span class="w"> </span><span class="kn">import</span> <span class="n">discovery</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># Il messaggio del budget NON contiene il project id: il budget deve essere</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># filtrato su un solo project, che la function conosce per configurazione.</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="n">PROJECT_ID</span> <span class="o">=</span> <span class="s2">"my-dev-project"</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">disable_billing_on_budget_exceed</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">    </span><span class="sd">"""Disabilita billing su un project quando il budget è superato."""</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>    <span class="n">pubsub_data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">base64</span><span class="o">.</span><span class="n">b64decode</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s1">'data'</span><span class="p">])</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">'utf-8'</span><span class="p">))</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>    <span class="n">cost_amount</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">pubsub_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'costAmount'</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>    <span class="n">budget_amount</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">pubsub_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'budgetAmount'</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a>
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>    <span class="k">if</span> <span class="n">cost_amount</span> <span class="o">&gt;=</span> <span class="n">budget_amount</span><span class="p">:</span>
+</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a>        <span class="n">project_id</span> <span class="o">=</span> <span class="n">PROJECT_ID</span>
+</span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a>        <span class="n">billing</span> <span class="o">=</span> <span class="n">discovery</span><span class="o">.</span><span class="n">build</span><span class="p">(</span><span class="s1">'cloudbilling'</span><span class="p">,</span> <span class="s1">'v1'</span><span class="p">)</span>
+</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a>        <span class="n">billing</span><span class="o">.</span><span class="n">projects</span><span class="p">()</span><span class="o">.</span><span class="n">updateBillingInfo</span><span class="p">(</span>
+</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a>            <span class="n">name</span><span class="o">=</span><span class="sa">f</span><span class="s1">'projects/</span><span class="si">{</span><span class="n">project_id</span><span class="si">}</span><span class="s1">'</span><span class="p">,</span>
+</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a>            <span class="n">body</span><span class="o">=</span><span class="p">{</span><span class="s1">'billingAccountName'</span><span class="p">:</span> <span class="s1">''</span><span class="p">}</span>  <span class="c1"># scollegare billing</span>
+</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a>        <span class="p">)</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Budget Alert ≠ Blocco automatico</p>
-<p>Per default, i budget GCP inviano solo <strong>notifiche</strong> — non bloccano automaticamente la spesa. Per bloccare automaticamente usare il pattern Pub/Sub + Cloud Function mostrato sopra. Usare con cautela in produzione.</p>
+<p>Per default, i budget GCP inviano solo <strong>notifiche</strong> — non bloccano automaticamente la spesa. Per bloccare automaticamente usare il pattern Pub/Sub + Cloud Function mostrato sopra. Usare con cautela in produzione. Le notifiche budget hanno latenza (i dati di costo arrivano con ritardo): la spesa può superare la soglia prima dello stop. Scollegare il billing non è un limite di spesa garantito.</p>
 </div>
 <hr />
 <h2 id="esportazione-billing-su-bigquery">Esportazione Billing su BigQuery<a class="headerlink" href="#esportazione-billing-su-bigquery" title="Permanent link">&para;</a></h2>
@@ -25833,10 +25846,11 @@
 </span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">    </span>--recommender<span class="o">=</span>google.compute.instance.MachineTypeRecommender<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">    </span>--format<span class="o">=</span><span class="s2">"table(name,description,stateInfo.state)"</span>
 </span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># Applicare una raccomandazione (richiede conferma manuale)</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>gcloud<span class="w"> </span>recommender<span class="w"> </span>recommendations<span class="w"> </span>mark-claimed<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">    </span>projects/PROJECT_ID/locations/europe-west8-b/recommenders/google.compute.instance.MachineTypeRecommender/recommendations/RECOMMENDATION_ID<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">    </span>--etag<span class="o">=</span>ETAG
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="c1"># Marcare una raccomandazione come "claimed" (in lavorazione): NON la applica,</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># l'intervento resta manuale. Dopo: mark-succeeded / mark-failed</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>gcloud<span class="w"> </span>recommender<span class="w"> </span>recommendations<span class="w"> </span>mark-claimed<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">    </span>projects/PROJECT_ID/locations/europe-west8-b/recommenders/google.compute.instance.MachineTypeRecommender/recommendations/RECOMMENDATION_ID<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">    </span>--etag<span class="o">=</span>ETAG
 </span></code></pre></div>
 <h3 id="labels-per-cost-allocation">Labels per Cost Allocation<a class="headerlink" href="#labels-per-cost-allocation" title="Permanent link">&para;</a></h3>
 <p>I <strong>Labels</strong> in GCP sono il meccanismo principale per attribuire i costi a team, progetti o ambienti:</p>
@@ -25855,8 +25869,8 @@
 </span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">    </span>--update-labels<span class="o">=</span><span class="nv">environment</span><span class="o">=</span>prod,team<span class="o">=</span>platform
 </span></code></pre></div>
 <div class="admonition tip">
-<p class="admonition-title">Labels obbligatori via Organization Policy</p>
-<p>Usare <strong>Organization Policy</strong> con il constraint <code>constraints/gcp.resourceLocations</code> combinato con tag obbligatori per forzare la presenza di label su tutte le risorse. Questo garantisce che ogni risorsa sia attribuita correttamente nel billing export.</p>
+<p class="admonition-title">Labels obbligatori: enforcement</p>
+<p>Non esiste un constraint built-in di Organization Policy che imponga label obbligatorie (<code>constraints/gcp.resourceLocations</code> limita solo le <strong>regioni</strong>). Opzioni: <strong>custom organization constraint</strong> (CEL) sui tipi di risorsa supportati, oppure policy-as-code in CI sul Terraform (es. OPA/Conftest, <code>google_*</code> con <code>default_labels</code> nel provider). Così ogni risorsa è attribuita nel billing export.</p>
 </div>
 <hr />
 <h2 id="free-tier-e-free-trial">Free Tier e Free Trial<a class="headerlink" href="#free-tier-e-free-trial" title="Permanent link">&para;</a></h2>
@@ -25890,7 +25904,7 @@
 </tr>
 <tr>
 <td><strong>Cloud Run</strong></td>
-<td>2M request/mese + 360K vCPU-sec</td>
+<td>2M request/mese + 180K vCPU-sec + 360K GiB-sec</td>
 </tr>
 <tr>
 <td><strong>BigQuery</strong></td>
@@ -25898,7 +25912,7 @@
 </tr>
 <tr>
 <td><strong>Cloud Build</strong></td>
-<td>120 minuti build/giorno</td>
+<td>Minuti build mensili gratuiti (e2-standard-2) <!-- REVIEW: verificare quota corrente (storicamente 120 min/giorno, poi 2.500 min/mese) --></td>
 </tr>
 <tr>
 <td><strong>Pub/Sub</strong></td>
@@ -25938,7 +25952,7 @@
 </tr>
 <tr>
 <td>Sconto con impegno</td>
-<td><strong>CUD</strong> &#8531;yr (37-57%)</td>
+<td><strong>CUD</strong> &#8531;yr (37-63%)</td>
 <td>Reserved Instances / Savings Plans (fino a 72%)</td>
 <td>Reserved VM (fino a 72%)</td>
 </tr>
@@ -25957,7 +25971,7 @@
 <tr>
 <td>Free trial</td>
 <td>$300 per 90 giorni</td>
-<td>Nessun credito (solo Free Tier)</td>
+<td>Free Plan per nuovi account (crediti fino a ~$200, 6 mesi) + Always Free <!-- REVIEW: verificare condizioni attuali AWS Free Plan --></td>
 <td>$200 per 30 giorni</td>
 </tr>
 <tr>
@@ -26073,8 +26087,8 @@
 </span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="s1">SELECT</span>
 </span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="s1">    usage_start_time,</span>
 </span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="s1">    sku.description,</span>
-</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="s1">    credits[OFFSET(0)].name AS credit_type,</span>
-</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="s1">    ROUND(SUM(credits[OFFSET(0)].amount), 4) AS credit_amount</span>
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="s1">    credit.name AS credit_type,</span>
+</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="s1">    ROUND(SUM(credit.amount), 4) AS credit_amount</span>
 </span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="s1">FROM `PROJECT_ID.billing_export.gcp_billing_export_v1_*`,</span>
 </span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="s1">UNNEST(credits) AS credit</span>
 </span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="s1">WHERE</span>
@@ -26104,7 +26118,8 @@
 </span></code></pre></div></p>
 <div class="admonition warning">
 <p class="admonition-title">Dati non persi ma servizi sospesi</p>
-<p>Quando un project perde il billing, le risorse vengono <strong>sospese</strong> (non eliminate). I dati rimangono. Dopo 30 giorni senza billing attivo, le risorse possono essere eliminate definitivamente. Ripristinare il billing prima della scadenza.</p>
+<p>Quando un project perde il billing, le risorse vengono <strong>sospese</strong> (non eliminate). I dati rimangono per un periodo limitato, ma risorse e project senza billing possono essere eliminati in via definitiva. Ripristinare il billing il prima possibile.
+<!-- REVIEW: verificare tempistiche esatte di cancellazione delle risorse dopo disabilitazione billing --></p>
 </div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>

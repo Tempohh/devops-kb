@@ -8939,7 +8939,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -8964,7 +8964,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -9268,7 +9268,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -9303,7 +9303,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24987,7 +24987,7 @@
 - Compliance normativa con requisiti specifici su provider → verificare caso per caso</p>
 <hr />
 <h2 id="gerarchia-delle-risorse">Gerarchia delle Risorse<a class="headerlink" href="#gerarchia-delle-risorse" title="Permanent link">&para;</a></h2>
-<p>GCP organizza le risorse in una <strong>gerarchia a 4 livelli</strong> obbligatoria. Comprenderla è fondamentale perché policy IAM e billing ereditano in cascata dall'alto verso il basso.</p>
+<p>GCP organizza le risorse in una <strong>gerarchia a 4 livelli</strong> (Organization → Folder → Project → Resource). Solo Project e Resource sono sempre presenti: Organization e Folder sono opzionali (un account Gmail personale crea project senza Organization). Comprenderla è fondamentale perché policy IAM e Organization Policy ereditano in cascata dall'alto verso il basso.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Organization  (es. "example.com")
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>│   └── corrisponde a un dominio Google Workspace o Cloud Identity
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│
@@ -25055,7 +25055,7 @@
 <tr>
 <td><code>europe-west1</code></td>
 <td>Belgio</td>
-<td>4</td>
+<td>3</td>
 </tr>
 <tr>
 <td><code>europe-west2</code></td>
@@ -25103,8 +25103,8 @@
 - Unità di isolamento guasti all'interno di una regione
 - Ogni zona ha alimentazione, raffreddamento e networking indipendenti
 - Risorse <strong>zonali</strong>: VM (Compute Engine), Persistent Disk, GKE Node Pool
-- Risorse <strong>regionali</strong>: Cloud SQL con HA, GKE cluster (control plane regionale)
-- Risorse <strong>globali</strong>: Cloud Storage bucket, IAM, VPC network, immagini</p>
+- Risorse <strong>regionali</strong>: Cloud SQL con HA, GKE cluster regionale (control plane replicato su 3 zone), subnet VPC
+- Risorse <strong>globali</strong>: VPC network, IAM, immagini, global load balancer. I bucket Cloud Storage hanno un namespace globale ma risiedono in una location (regione, dual-region o multi-region) scelta alla creazione</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Listare le regioni disponibili</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>gcloud<span class="w"> </span>compute<span class="w"> </span>regions<span class="w"> </span>list
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
@@ -25165,7 +25165,7 @@
 </tr>
 <tr>
 <td><strong>Cloud Identity Domain</strong></td>
-<td>Come Workspace ma senza le app G Suite</td>
+<td>Come Workspace ma senza le app Workspace (Gmail, Drive…)</td>
 </tr>
 <tr>
 <td><code>allUsers</code></td>
@@ -25188,7 +25188,7 @@
 </thead>
 <tbody>
 <tr>
-<td><strong>Primitive</strong> (legacy)</td>
+<td><strong>Basic</strong> (ex primitive)</td>
 <td>Owner, Editor, Viewer — troppo permissivi</td>
 <td>Da evitare in produzione</td>
 </tr>
@@ -25243,7 +25243,7 @@
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Chiavi JSON dei Service Account</p>
-<p>Le chiavi JSON sono credenziali a lungo termine — se compromesse danno accesso completo. Preferire <strong>Workload Identity Federation</strong> (per CI/CD esterni) o <strong>service account impersonation</strong> (per accesso temporaneo). Le VM su GCP non hanno bisogno di chiavi JSON: usare il metadata server con service account assegnato all'istanza.</p>
+<p>Le chiavi JSON sono credenziali a lungo termine — se compromesse danno accesso completo. Dal 2024 le Organization nuove applicano di default la Organization Policy <code>iam.disableServiceAccountKeyCreation</code>, che blocca la creazione di chiavi: è il comportamento voluto, non un errore da aggirare. Preferire <strong>Workload Identity Federation</strong> (per CI/CD esterni) o <strong>service account impersonation</strong> (per accesso temporaneo). Le VM su GCP non hanno bisogno di chiavi JSON: usare il metadata server con service account assegnato all'istanza.</p>
 </div>
 <div class="admonition tip">
 <p class="admonition-title">Principio del Minimo Privilegio</p>
@@ -25251,7 +25251,7 @@
 </div>
 <h3 id="ereditarieta-policy-iam">Ereditarietà Policy IAM<a class="headerlink" href="#ereditarieta-policy-iam" title="Permanent link">&para;</a></h3>
 <p>Le policy IAM si <strong>accumulano</strong> scendendo nella gerarchia — non si sovrascrivono:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Organization  →  policy: bob=Billing Admin
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Organization  →  policy: bob=Billing Account Admin
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>  └── Folder  →  policy: alice=Folder Admin
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>      └── Project  →  policy: charlie=Compute Admin
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>          └── Resource  →  policy: dave=Storage Object Viewer
@@ -25260,8 +25260,8 @@
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>  charlie ha Compute Admin (dal project) + eventuali ruoli ereditati da folder e org
 </span></code></pre></div>
 <div class="admonition warning">
-<p class="admonition-title">Non si può negare con IAM standard</p>
-<p>IAM in GCP è additivo: si possono solo <em>aggiungere</em> permessi, non <em>negare</em> permessi già concessi a un livello superiore. Per restrizioni esplicite usare <strong>Organization Policy</strong> (es. bloccare creazione di risorse in certe regioni).</p>
+<p class="admonition-title">Le allow policy sono additive</p>
+<p>Le <strong>allow policy</strong> (i binding visti sopra) possono solo <em>aggiungere</em> permessi: non si revoca da un livello inferiore un ruolo concesso più in alto. Per negare esplicitamente esistono le <strong>IAM deny policy</strong> (hanno precedenza sulle allow, si attaccano a org/folder/project) e le <strong>Principal Access Boundary</strong>. Per vincolare le <em>risorse</em> (non i principal, es. bloccare regioni non ammesse) usare <strong>Organization Policy</strong>.</p>
 </div>
 <hr />
 <h2 id="billing">Billing<a class="headerlink" href="#billing" title="Permanent link">&para;</a></h2>
@@ -25278,7 +25278,7 @@
 - Entità che raccoglie e paga le fatture
 - Un billing account può coprire N progetti
 - Un project ha esattamente 1 billing account attivo (o nessuno → servizi bloccati)
-- In un'Organization: il <strong>Billing Admin</strong> a livello org gestisce i billing account</p>
+- In un'Organization: il ruolo <strong>Billing Account Administrator</strong> (<code>roles/billing.admin</code>) gestisce i billing account</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Listare i billing account accessibili</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>gcloud<span class="w"> </span>billing<span class="w"> </span>accounts<span class="w"> </span>list
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
@@ -25302,23 +25302,23 @@
 <tbody>
 <tr>
 <td><strong>Sustained Use Discounts (SUD)</strong></td>
-<td>Sconto automatico per VM usate &gt;25% del mese</td>
-<td>Fino a 30%</td>
+<td>Sconto automatico per VM usate &gt;25% del mese; solo famiglie legacy (N1, N2, C2…), <strong>non</strong> E2 né le serie più recenti</td>
+<td>Fino a 30% (N1), 20% (N2/C2)</td>
 </tr>
 <tr>
 <td><strong>Committed Use Discounts (CUD)</strong></td>
-<td>Impegno 1 o 3 anni</td>
-<td>Fino a 57% (1yr) / 70% (3yr)</td>
+<td>Impegno 1 o 3 anni (resource-based o spend-based/flexible)</td>
+<td>Circa 37% (1yr) / 55% (3yr); fino a 70% per memory-optimized</td>
 </tr>
 <tr>
-<td><strong>Preemptible / Spot VM</strong></td>
-<td>VM interrompibili con breve preavviso</td>
+<td><strong>Spot VM</strong></td>
+<td>VM interrompibili con breve preavviso (successore delle Preemptible, senza limite di 24h)</td>
 <td>Fino a 91%</td>
 </tr>
 <tr>
 <td><strong>Free Tier</strong></td>
 <td>Risorse sempre gratuite entro limiti</td>
-<td>f1-micro, 5GB Cloud Storage, ecc.</td>
+<td>1 e2-micro, 5GB Cloud Storage, ecc.</td>
 </tr>
 <tr>
 <td><strong>Free Trial</strong></td>
@@ -25327,14 +25327,16 @@
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Verificare gli sconti</p>
+<p>Percentuali e famiglie di VM idonee cambiano nel tempo e variano per macchina e regione: confermare sempre su <a href="https://cloud.google.com/compute/vm-instance-pricing">VM pricing</a> e <a href="https://cloud.google.com/docs/cuds">CUD</a>.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Stimare i costi con il pricing calculator (via browser)</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># https://cloud.google.com/products/calculator</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Esportare i dati di billing su BigQuery per analisi</span>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># (configurare nella console Billing &gt; Billing export)</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># Vedere il riepilogo costi del project corrente via API</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>gcloud<span class="w"> </span>billing<span class="w"> </span>accounts<span class="w"> </span>get-spot-price-info<span class="w"> </span>--help
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># Il costo effettivo si interroga poi con SQL sulla tabella esportata</span>
 </span></code></pre></div>
 <h3 id="budget-e-alert">Budget e Alert<a class="headerlink" href="#budget-e-alert" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Creare un budget via CLI (richiede billing account ID)</span>
@@ -25348,7 +25350,7 @@
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Free Tier GCP</p>
-<p>GCP offre un <strong>Always Free</strong> tier con limiti mensili: 1 f1-micro VM (us-east1/us-west1/us-central1), 30GB HDD, 5GB Cloud Storage (us region), 1GB Cloud Functions invocations. Ideale per lab e sviluppo leggero.</p>
+<p>GCP offre un <strong>Always Free</strong> tier con limiti mensili: 1 VM e2-micro (solo us-west1/us-central1/us-east1), 30GB di standard persistent disk, 5GB Cloud Storage (stesse regioni US), 2M invocazioni Cloud Run functions. Ideale per lab e sviluppo leggero. I limiti cambiano: verificare su <a href="https://cloud.google.com/free">Free Tier</a>.</p>
 </div>
 <hr />
 <h2 id="google-cloud-sdk">Google Cloud SDK<a class="headerlink" href="#google-cloud-sdk" title="Permanent link">&para;</a></h2>
@@ -25452,9 +25454,10 @@
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
 </span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1"># Cloud Shell fornisce:</span>
 </span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># - 5GB di storage persistente su /home</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># - VM e2-micro effimera (ricreata a ogni sessione se non usata)</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># - VM effimera (reciclata dopo inattività; solo /home persiste)</span>
 </span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1"># - gcloud autenticato con l'account della console</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1"># - 50h/settimana gratuite (poi tariffazione standard VM)</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1"># - quota gratuita di 50h/settimana: esaurita, la sessione resta</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="c1">#   bloccata fino al reset (Cloud Shell non si paga a consumo)</span>
 </span></code></pre></div>
 <hr />
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
@@ -25510,8 +25513,13 @@
 </span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">    </span>--filter<span class="o">=</span><span class="s2">"bindings.members:user:me@example.com"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">    </span>--format<span class="o">=</span><span class="s2">"table(bindings.role)"</span>
 </span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>
-</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="c1"># Verificare quale permesso specifico manca</span>
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>gcloud<span class="w"> </span>iam<span class="w"> </span>list-testable-permissions<span class="w"> </span>//cloudresourcemanager.googleapis.com/projects/my-project-id
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="c1"># Nota: il filtro sopra mostra solo i binding diretti, non quelli ereditati</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># da folder/org né via gruppi. Per spiegare un singolo accesso negato</span>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="c1"># usare Policy Troubleshooter (considera ereditarietà, gruppi, deny policy):</span>
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>gcloud<span class="w"> </span>policy-troubleshoot<span class="w"> </span>iam<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="w">    </span>//cloudresourcemanager.googleapis.com/projects/my-project-id<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="w">    </span>--principal-email<span class="o">=</span>me@example.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="w">    </span>--permission<span class="o">=</span>compute.instances.list
 </span></code></pre></div></p>
 <p><strong>Problema: "Billing account not set" — project bloccato</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Causa: project senza billing account attivo</span>
@@ -25586,8 +25594,8 @@
 </tr>
 <tr>
 <td>Cloud Run</td>
-<td>AWS Fargate</td>
-<td>Container serverless</td>
+<td>AWS App Runner / Fargate</td>
+<td>Container serverless (Cloud Run scala a zero e si paga a richiesta)</td>
 </tr>
 </tbody>
 </table>
@@ -25631,7 +25639,7 @@
 </tr>
 <tr>
 <td>BigQuery</td>
-<td>Azure Synapse Analytics</td>
+<td>Azure Synapse Analytics / Microsoft Fabric</td>
 <td>Data warehouse</td>
 </tr>
 </tbody>
