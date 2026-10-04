@@ -7,9 +7,10 @@ search_keywords: [kustomize fondamentali, kustomize basi, kustomize overlays, ku
 parent: containers/kustomize/_index
 related: [containers/kustomize/avanzato, containers/helm/_index, containers/kubernetes/workloads, containers/openshift/gitops-pipelines]
 official_docs: https://kubectl.docs.kubernetes.io/guides/introduction/kustomize/
-status: complete
+status: reviewed
 difficulty: beginner
-last_updated: 2026-04-04
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Kustomize — Fondamentali
@@ -50,10 +51,13 @@ resources:
   - service.yaml
   - serviceaccount.yaml
 
-# Label aggiunta a TUTTE le risorse (opzionale nella base)
-commonLabels:
-  app.kubernetes.io/name: myapp
-  app.kubernetes.io/managed-by: kustomize
+# Label aggiunta a TUTTE le risorse (opzionale nella base).
+# includeSelectors: true le propaga anche a selector e pod template: farlo
+# solo qui, alla creazione, perché i selector sono immutabili (vedi Troubleshooting)
+labels:
+  - pairs:
+      app.kubernetes.io/name: myapp
+    includeSelectors: true
 ```
 
 ```yaml
@@ -112,8 +116,9 @@ images:
   - name: registry.company.com/myapp
     newTag: "1.2.0-rc1"   # override del tag immagine
 
-commonLabels:
-  environment: staging
+labels:
+  - pairs:
+      environment: staging    # solo metadata.labels, selector intatti
 
 patches:
   - path: patch-replicas.yaml
@@ -130,7 +135,7 @@ Il file `kustomization.yaml` è il punto di ingresso di ogni directory Kustomize
 - `patches`: trasformazioni da applicare
 - `images`: override dei tag immagine
 - `generators`: ConfigMap/Secret da generare
-- Trasformatori globali: `namespace`, `namePrefix`, `nameSuffix`, `commonLabels`, `commonAnnotations`
+- Trasformatori globali: `namespace`, `namePrefix`, `nameSuffix`, `labels`, `commonAnnotations` (`commonLabels` è deprecato dalla v5, vedi sotto)
 
 ---
 
@@ -255,14 +260,16 @@ images:
   - name: registry.company.com/myapp
     newTag: "latest"          # dev usa always-latest
 
-commonLabels:
-  environment: dev
+labels:
+  - pairs:
+      environment: dev
 
 patches:
   - path: patch-dev.yaml
 
-# In dev non vogliamo HPA — rimuoverlo dalla lista risorse non funziona,
-# ma possiamo sovrascrivere le repliche fissse con replicas:
+# La base include l'HPA, che in dev resta attivo (min 1). `replicas:` imposta
+# solo il valore iniziale di spec.replicas del Deployment; per escludere l'HPA
+# in dev servirebbe spostarlo in un overlay/component dedicato.
 replicas:
   - name: myapp
     count: 1
@@ -308,8 +315,9 @@ images:
   - name: registry.company.com/myapp
     newTag: "1.3.0-rc2"
 
-commonLabels:
-  environment: staging
+labels:
+  - pairs:
+      environment: staging
 
 patches:
   - path: patch-staging.yaml
@@ -356,8 +364,9 @@ images:
   - name: registry.company.com/myapp
     newTag: "1.3.0"        # tag stabile, mai digest per semplicità qui
 
-commonLabels:
-  environment: production
+labels:
+  - pairs:
+      environment: production
 
 commonAnnotations:
   deploy-date: "2026-04-04"
@@ -457,17 +466,14 @@ images:
   - name: registry.company.com/myapp
     digest: "sha256:a1b2c3d4e5f6..."
 
-  # Pattern wildcard per qualsiasi registry con stesso nome
-  - name: "*/myapp"
-    newTag: "1.3.0"
 ```
 
 ```bash
 # CI/CD: aggiornare il tag automaticamente con kustomize CLI
 IMAGE_TAG="1.3.0-sha-$(git rev-parse --short HEAD)"
 
-kustomize edit set image "registry.company.com/myapp:${IMAGE_TAG}" \
-    --kustomization overlays/production/kustomization.yaml
+# (kustomize edit opera sul kustomization.yaml della directory corrente)
+(cd overlays/production && kustomize edit set image "registry.company.com/myapp=registry.company.com/myapp:${IMAGE_TAG}")
 
 # Oppure con yq (alternativa senza kustomize CLI)
 yq -i '(.images[] | select(.name == "registry.company.com/myapp")).newTag = env(IMAGE_TAG)' \
@@ -560,12 +566,15 @@ namespace: production
 namePrefix: prod-
 # nameSuffix: -v2     # alternativa al prefix
 
-# Labels aggiunte a metadata.labels di TUTTE le risorse
-# Per Deployment/StatefulSet, aggiornate anche spec.selector e pod template labels
-commonLabels:
-  environment: production
-  team: platform
-  cost-center: "12345"
+# Labels aggiunte a metadata.labels di TUTTE le risorse.
+# `commonLabels` (deprecato dalla v5.0) toccava sempre anche selector e pod template;
+# `labels` lo fa solo con includeSelectors: true (default false = più sicuro)
+labels:
+  - pairs:
+      environment: production
+      team: platform
+      cost-center: "12345"
+    includeSelectors: false
 
 # Annotations aggiunte a metadata.annotations di TUTTE le risorse
 commonAnnotations:
@@ -581,8 +590,8 @@ replicas:
     count: 3
 ```
 
-!!! warning "commonLabels modifica anche i selectors"
-    `commonLabels` aggiunge label a `spec.selector.matchLabels` e `spec.template.metadata.labels` nei Deployment. Se un Deployment è già in esecuzione nel cluster, cambiare i selectors causa un **errore immutabile** — Kubernetes non permette di modificare selectors di Deployment esistenti. In quel caso devi eliminare e ricreare il Deployment.
+!!! warning "commonLabels (deprecato) e includeSelectors modificano anche i selectors"
+    `commonLabels` è deprecato da Kustomize v5.0 in favore di `labels` (`kustomize edit fix` migra il file). Quanto segue vale anche per `labels` con `includeSelectors: true`. `commonLabels` aggiunge label a `spec.selector.matchLabels` e `spec.template.metadata.labels` nei Deployment. Se un Deployment è già in esecuzione nel cluster, cambiare i selectors causa un **errore immutabile** — Kubernetes non permette di modificare selectors di Deployment esistenti. In quel caso devi eliminare e ricreare il Deployment.
 
 ### Workflow CI/CD
 
@@ -605,7 +614,7 @@ kustomize build "${OVERLAY_PATH}" > /tmp/manifest.yaml
 
 # 2. Validazione schema K8s (kubeconform)
 echo "--- Validating schema ---"
-kubeconform -strict -kubernetes-version 1.29.0 /tmp/manifest.yaml
+kubeconform -strict -kubernetes-version "${K8S_VERSION:-1.34.0}" /tmp/manifest.yaml   # = versione del cluster
 
 # 3. Diff rispetto allo stato attuale del cluster
 echo "--- Diff vs cluster ---"
@@ -644,8 +653,8 @@ jobs:
 
           # Aggiorna image tag
           IMAGE_TAG="${{ github.sha }}"
-          kustomize edit set image "registry.company.com/myapp=${IMAGE_TAG}" \
-              --kustomization overlays/staging/kustomization.yaml
+          (cd overlays/staging && kustomize edit set image \
+              "registry.company.com/myapp=registry.company.com/myapp:${IMAGE_TAG}")
 
           # Build e valida
           kustomize build overlays/staging | kubeconform -strict
@@ -779,7 +788,8 @@ kubectl apply -k overlays/production
 # (le annotations non modificano i selectors)
 # Nel kustomization.yaml, spostare le label problematiche in commonAnnotations
 
-# Opzione 3: usare patch per aggiungere label solo a metadata (non a selector)
+# Opzione 3: usare `labels:` con includeSelectors: false (default), oppure
+# una patch che aggiunge label solo a metadata (non a selector)
 # patch-labels.yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -835,12 +845,13 @@ spec:
 
 **Sintomo:** Dopo il build, un `ClusterRole` o `PersistentVolume` ha ricevuto il namePrefix e ora i binding non funzionano.
 
-**Causa:** `namePrefix` e `nameSuffix` vengono applicati a tutte le risorse, incluse quelle cluster-scoped come `ClusterRole`, `ClusterRoleBinding`, `Namespace`.
+**Causa:** `namePrefix` e `nameSuffix` vengono applicati a tutte le risorse, incluse quelle cluster-scoped come `ClusterRole`, `ClusterRoleBinding`, `PersistentVolume`. Kustomize riscrive i riferimenti tra risorse della stessa build (es. `roleRef`), ma non quelli verso risorse esterne alla build, che quindi si rompono.
 
 **Soluzione:**
 ```yaml
-# Usare patches per applicare prefix solo alle risorse che vogliamo
-# Oppure rimuovere namePrefix e applicare il prefix manualmente nei file
+# Opzione 1: non usare namePrefix; isolare gli ambienti con `namespace:`
+# Opzione 2: risorse cluster-scoped in una kustomization separata, senza namePrefix
+# Opzione 3: se serve il prefix, verificare che i riferimenti esterni alla build usino il nome prefissato
 
 # Alternativa: usare namespace invece di namePrefix per l'isolamento
 namespace: production   # isola le risorse namespace-scoped senza toccare cluster-scoped
@@ -850,8 +861,6 @@ namespace: production   # isola le risorse namespace-scoped senza toccare cluste
 # Verificare tutte le risorse che ricevono il prefix
 kustomize build overlays/production | grep "^  name:" | sort
 
-# Se ClusterRole ha prefix indesiderato, escluderlo con transformerconfig custom
-# (vedi containers/kustomize/avanzato.md — Transformer Config)
 ```
 
 ---
