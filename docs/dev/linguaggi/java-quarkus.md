@@ -7,7 +7,7 @@ search_keywords: [quarkus, quarkus framework, quarkus native, quarkus graalvm, n
 parent: dev/linguaggi/_index
 related: [dev/linguaggi/java-spring-boot, messaging/kafka/sviluppo/quarkus-kafka]
 official_docs: https://quarkus.io/guides/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -170,8 +170,8 @@ La killer feature di Quarkus è la **dev mode**: `mvn quarkus:dev` avvia il proc
 ```xml
 <!-- pom.xml — Quarkus BOM e dipendenze core -->
 <properties>
-    <!-- REVIEW: verificare ultima versione LTS di Quarkus (3.x) su quarkus.io/blog -->
-    <quarkus.platform.version>3.27.0</quarkus.platform.version>
+    <!-- 3.40 = LTS corrente (30/09/2026); 3.33 e 3.27 LTS in manutenzione/fine vita. 4.0 è in beta -->
+    <quarkus.platform.version>3.40.0</quarkus.platform.version>
     <compiler-plugin.version>3.13.0</compiler-plugin.version>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -831,8 +831,7 @@ quarkus.smallrye-openapi.info-version=1.0.0
 quarkus.shutdown.timeout=30S
 
 # Logging strutturato JSON: richiede l'estensione quarkus-logging-json
-# REVIEW: verificare nome property (quarkus.log.console.json.enabled nelle versioni recenti)
-%prod.quarkus.log.console.json=true
+%prod.quarkus.log.console.json.enabled=true
 
 # Connection pool sizing
 quarkus.datasource.jdbc.max-size=20
