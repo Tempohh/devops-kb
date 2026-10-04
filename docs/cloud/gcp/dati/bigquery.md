@@ -7,9 +7,10 @@ search_keywords: [BigQuery, BQ, data warehouse GCP, Google BigQuery, analytics G
 parent: cloud/gcp/dati/_index
 related: [cloud/gcp/fondamentali/panoramica, cloud/gcp/_index]
 official_docs: https://cloud.google.com/bigquery/docs
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-26
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # BigQuery
@@ -89,8 +90,8 @@ BigQuery ha due modelli di pricing incompatibili tra loro a livello di progetto:
 Si paga per TB di dati **scansionati** dalla query:
 
 ```
-Costo = TB scansionati × $6.25/TB  (marzo 2026, regione US)
-        (Europe: ~$6.25–7.50/TB a seconda della regione)
+Costo = TB scansionati × ~$6.25/TB  (regione US; le regioni EU costano di più)
+        (verificare il prezzo corrente sulla pagina pricing)
 
 Primo 1 TB/mese: gratuito
 ```
@@ -105,12 +106,15 @@ Si acquistano **slot** (unità di CPU virtuale) in numero fisso:
 Slot = unità di capacità computazionale BigQuery
        1 slot ≈ 1 vCPU BigQuery (molto semplificando)
 
-Edizioni disponibili (2024):
-  Standard:  100 slot min, $0.04/slot/hour  → pay-as-you-go
-  Enterprise: 100 slot min, sconto su impegno 1 anno
-  Enterprise Plus: 100 slot min, sconto su impegno 3 anni
-  Flex Slots: 100 slot min, impegno 60 secondi  → burst temporaneo
+Edizioni (capacity pricing, autoscaling a incrementi di 50 slot):
+  Standard:        pay-as-you-go (~$0.04/slot/hour), nessun commitment
+  Enterprise:      pay-as-you-go (~$0.06/slot/hour) o commitment 1/3 anni scontato
+  Enterprise Plus: pay-as-you-go (~$0.10/slot/hour) o commitment 1/3 anni scontato
+  (prezzi indicativi, regione US: verificare sulla pagina pricing)
 ```
+
+!!! note "Flex Slots non esistono più"
+    I Flex Slots (commitment da 60 secondi) sono stati sostituiti dalle **edizioni** con autoscaling: si definisce una *reservation* con baseline + max slot e si paga solo la capacità effettivamente scalata. Le edizioni Enterprise/Plus aggiungono feature (es. CMEK, column-level security avanzata, BigQuery ML esteso); Standard è la più limitata.
 
 **Quando preferire Slot-Based:**
 - Query frequenti e prevedibili su grandi dataset (costo fisso, non per byte)
@@ -188,7 +192,7 @@ GROUP BY user_id;
 ```
 
 !!! tip "Clustering vs Indici"
-    BigQuery non ha indici tradizionali — il clustering è il meccanismo equivalente. Le colonne cluster più efficaci sono quelle usate frequentemente in `WHERE`, `JOIN`, e `GROUP BY`. Mettere le colonne a bassa cardinalità prima (es. `paese` prima di `user_id`).
+    BigQuery non ha indici tradizionali — il clustering è il meccanismo equivalente. Le colonne cluster più efficaci sono quelle usate frequentemente in `WHERE`, `JOIN`, e `GROUP BY`. L'**ordine conta**: i dati sono ordinati per la prima colonna, poi per la seconda, ecc.; il pruning è efficace se i filtri coprono un prefisso dell'elenco (es. `paese` da solo o `paese + user_id`, ma non `user_id` da solo). Mettere per prima la colonna filtrata più spesso.
 
 ---
 
@@ -258,8 +262,9 @@ bq query \
 
 ```python
 # ── STREAMING INSERT (Python SDK) ──────────────────────────
-# Per dati in tempo reale con latenza secondi (non minuti)
-# Costo: $0.01/200MB inseriti (aggiuntivo rispetto allo storage)
+# API legacy (tabledata.insertAll) per dati in tempo reale con latenza secondi.
+# Costo: ~$0.01/200MB inseriti; la Storage Write API costa meno ed è preferibile
+# per nuovi sviluppi (vedi warning sotto).
 
 from google.cloud import bigquery
 
@@ -291,7 +296,7 @@ print(f"Caricati {job.output_rows} righe")
 ```
 
 !!! warning "Streaming Insert: limitazioni"
-    Le righe inserite via streaming **non sono immediatamente visibili** per `TABLE_DATE_RANGE` e alcune operazioni DML. Il buffer di streaming ha un ritardo di disponibilità per l'export. Per pipeline ad alta frequenza preferire **Pub/Sub → Dataflow → BigQuery** o **BigQuery Storage Write API** (più efficiente e con semantica exactly-once).
+    Le righe inserite via `insertAll` sono leggibili quasi subito, ma restano in uno *streaming buffer* per un tempo limitato: in quel periodo non sono disponibili a certe operazioni (es. copy job/export di quelle righe) e `UPDATE`/`DELETE`/`MERGE` su di esse possono essere limitati. La deduplica è solo best-effort (`insertId`). Per nuove pipeline preferire la **BigQuery Storage Write API** (stream `_default` at-least-once, o stream committed/pending per semantica exactly-once; più economica, con una quota gratuita mensile) oppure **Pub/Sub → BigQuery subscription** / **Dataflow**.
 
 ### Federated Queries (External Tables)
 
@@ -300,15 +305,18 @@ print(f"Caricati {job.output_rows} righe")
 CREATE EXTERNAL TABLE `progetto.analytics_prod.raw_logs_gcs`
 OPTIONS (
     format = 'PARQUET',
-    uris = ['gs://my-bucket/raw-logs/year=2026/month=*/day=*/*.parquet'],
+    -- ogni URI ammette un solo carattere jolly '*'
+    uris = ['gs://my-bucket/raw-logs/year=2026/*'],
     hive_partition_uri_prefix = 'gs://my-bucket/raw-logs'
 );
 
--- Query federata verso Cloud Spanner (senza export)
+-- Query federata verso Cloud Spanner (senza export).
+-- Usa una BigQuery *connection* (creata prima, con `bq mk --connection`),
+-- nella stessa location del dataset; la query interna gira su Spanner.
 SELECT s.order_id, s.amount, c.nome
 FROM EXTERNAL_QUERY(
-    'projects/my-project/locations/europe-west8/instances/my-spanner/databases/mydb',
-    'SELECT order_id, amount FROM orders WHERE status = ''PENDING'''
+    'projects/my-project/locations/eu/connections/spanner_conn',
+    'SELECT order_id, client_id, amount FROM orders WHERE status = ''PENDING'''
 ) AS s
 JOIN `progetto.analytics_prod.clienti` c ON s.client_id = c.id;
 ```
@@ -365,7 +373,9 @@ FROM ML.PREDICT(
 | `AUTOML_CLASSIFIER` / `AUTOML_REGRESSOR` | Modelli AutoML (Vertex AI sotto) |
 | `BOOSTED_TREE_CLASSIFIER` | XGBoost-based classificazione |
 | `TF_MODEL` | Import di modelli TensorFlow esistenti |
-| `LLMB` | Integrazione con modelli Gemini via Vertex AI |
+| `DNN_CLASSIFIER` / `DNN_REGRESSOR` | Reti neurali |
+| `ARIMA_PLUS` | Forecasting di serie temporali |
+| Remote model (`REMOTE WITH CONNECTION`) | Endpoint Vertex AI, es. Gemini, usati con `ML.GENERATE_TEXT` / funzioni `AI.*` |
 
 ---
 
@@ -375,11 +385,10 @@ FROM ML.PREDICT(
     Usa sempre un filtro sulla colonna di partizionamento in ogni query. Con tabelle partizionate per data, `WHERE DATE(ts) = CURRENT_DATE()` legge una sola partizione invece di tutta la storia. Il query planner mostra i byte stimati prima dell'esecuzione — verificarli sempre.
 
 !!! tip "Clustering per colonne ad alta selettività"
-    Colonne ideali per il clustering: colonne usate spesso in `WHERE` con alta cardinalità (user_id, product_id) o bassa cardinalità ma con query filtrate (paese, categoria). Mettere sempre la colonna più filtrata per prima nell'elenco CLUSTER BY.
+    Colonne ideali per il clustering: colonne usate spesso in `WHERE`, con cardinalità medio-alta (user_id, product_id) o bassa ma molto filtrata (paese, categoria). Mettere la colonna più filtrata per prima nell'elenco CLUSTER BY. Il clustering aiuta davvero su tabelle oltre ~1 GB; su tabelle piccole il beneficio è trascurabile.
 
-!!! warning "Evitare funzioni sulle colonne di partizione"
-    `WHERE ts >= TIMESTAMP('2026-01-01')` è corretto.
-    `WHERE CAST(ts AS DATE) >= '2026-01-01'` **disabilita il partition pruning** perché applica una funzione alla colonna prima del confronto. Usare `WHERE DATE(ts) >= '2026-01-01'` oppure comparare con TIMESTAMP direttamente.
+!!! warning "Il filtro di partizione deve essere costante"
+    Il pruning avviene a query-planning solo se il filtro sulla colonna di partizione è confrontato con **costanti** (o espressioni costanti come `CURRENT_DATE()`). Un filtro il cui valore deriva da una subquery o da un'altra tabella (`WHERE ts > (SELECT MAX(ts) FROM altra)`) **non** riduce i byte scansionati. Con `PARTITION BY DATE(ts)` sono ok sia `WHERE ts >= TIMESTAMP('2026-01-01')` sia `WHERE DATE(ts) >= '2026-01-01'`. Verificare sempre i byte stimati con dry run.
 
 ### Ottimizzazione Query
 
@@ -394,15 +403,14 @@ FROM `progetto.dataset.tabella_grande`
 WHERE paese = 'IT'
   AND DATE(ts) = CURRENT_DATE();  -- partition pruning
 
--- ✗ MALE: subquery non correlata rieseguita per ogni riga
-SELECT *
-FROM `progetto.dataset.ordini`
-WHERE cliente_id IN (
-    SELECT id FROM `progetto.dataset.clienti` WHERE piano = 'PREMIUM'
-);
+-- ✗ MALE: SELECT * su colonne non servite (anche con LIMIT si paga tutto)
+SELECT * FROM `progetto.dataset.ordini` LIMIT 10;
+-- ✓ BENE: per ispezionare i dati usare l'anteprima tabella (gratuita)
+--   console "Preview" oppure: bq head -n 10 progetto:dataset.ordini
 
--- ✓ BENE: JOIN esplicito (BigQuery ottimizza meglio)
-SELECT o.*
+-- IN (subquery) e JOIN sono equivalenti per l'optimizer (semi-join):
+-- scegliere in base alla leggibilità, non alla performance.
+SELECT o.id, o.importo
 FROM `progetto.dataset.ordini` o
 JOIN `progetto.dataset.clienti` c ON o.cliente_id = c.id
 WHERE c.piano = 'PREMIUM';
@@ -426,9 +434,10 @@ bq query --dry_run --use_legacy_sql=false \
     'SELECT paese, COUNT(*) FROM `progetto.dataset.eventi` GROUP BY paese'
 -- Output: "Query successfully validated. Bytes processed: 1234567890"
 
--- Impostare un limite massimo di byte per query (protezione costi)
+-- Impostare un limite massimo di byte fatturati per query (10 GB):
+-- se la stima lo supera, la query fallisce senza costi
 bq query \
-    --maximum_bytes_billed=10737418240 \  # 10 GB max
+    --maximum_bytes_billed=10737418240 \
     --use_legacy_sql=false \
     'SELECT ...'
 ```
@@ -449,14 +458,16 @@ query_job = client.query(sql, job_config=job_config)
 # roles/bigquery.admin          → accesso totale
 # roles/bigquery.dataEditor     → read/write su dati + crea tabelle
 # roles/bigquery.dataViewer     → solo lettura dati
-# roles/bigquery.jobUser        → eseguire query (+ dataViewer per leggere)
-# roles/bigquery.user           → eseguire query su dataset dove si ha accesso
+# roles/bigquery.jobUser        → eseguire job/query nel progetto (non legge dati da solo)
+# roles/bigquery.user           → come jobUser + creare dataset e listare risorse
+# Pattern tipico: jobUser a livello progetto + dataViewer sul singolo dataset
+```
 
-# Assegnare accesso a un dataset specifico (non al progetto intero)
-bq add-iam-policy-binding \
-    --member="user:analyst@example.com" \
-    --role="roles/bigquery.dataViewer" \
-    progetto:analytics_prod
+```sql
+-- Assegnare accesso a un dataset specifico (non al progetto intero)
+GRANT `roles/bigquery.dataViewer`
+ON SCHEMA `progetto.analytics_prod`
+TO "user:analyst@example.com";
 ```
 
 ```sql
@@ -466,9 +477,11 @@ ON `progetto.analytics_prod.vendite`
 GRANT TO ("group:team-italia@example.com")
 FILTER USING (paese = 'IT');
 
--- Column-Level Security: mascherare dati sensibili
--- (richiede policy tag creati in Data Catalog)
--- Le colonne con policy tag vengono mascherate per chi non ha il ruolo 'roles/datacatalog.categoryFineGrainedReader'
+-- Column-Level Security: proteggere colonne sensibili
+-- (richiede policy tag in una taxonomy di Dataplex Universal Catalog, ex Data Catalog)
+-- Senza 'roles/datacatalog.categoryFineGrainedReader' la query sulla colonna fallisce
+-- (access denied); con data masking rules (data policy + 'roles/bigquerydatapolicy.maskedReader')
+-- si ottiene invece il valore mascherato.
 ```
 
 ---
@@ -477,11 +490,12 @@ FILTER USING (paese = 'IT');
 
 **Problema: query lenta nonostante partition filter**
 ```sql
--- Causa: la colonna di partizione è TIMESTAMP ma il filtro è su DATE con CAST
--- Sbagliato:
-WHERE CAST(ts AS DATE) = '2026-03-26'
+-- Causa tipica: il filtro non è costante (es. subquery sul valore di ts)
+-- oppure manca del tutto il filtro sulla colonna di partizione.
+-- Sbagliato (nessun pruning):
+WHERE ts > (SELECT MAX(ts) FROM `progetto.dataset.altra_tabella`)
 
--- Corretto:
+-- Corretto (costanti):
 WHERE ts >= TIMESTAMP('2026-03-26')
   AND ts < TIMESTAMP('2026-03-27')
 -- oppure (se la partizione è per DATE(ts)):
@@ -493,14 +507,12 @@ WHERE DATE(ts) = '2026-03-26'
 
 **Problema: `quotaExceeded` durante streaming insert**
 ```bash
-# Causa: superato il limite di 1GB/secondo per tabella in streaming insert
-# Soluzione 1: usare BigQuery Storage Write API (limite 3GB/sec per tabella)
-# Soluzione 2: sharding su più tabelle (tabella_IT, tabella_DE, ecc.)
-# Soluzione 3: bufferizzare su Pub/Sub e usare Dataflow per batch da 100MB+
-
-# Verificare i limiti attuali del progetto
-gcloud services quota list --service=bigquery.googleapis.com \
-    --project=my-project --filter="quotaId:StreamingInsertBytes"
+# Causa: superata la quota di throughput di streaming (legacy insertAll: ordine di 1 GB/s
+# per progetto in US/EU multi-region, molto meno nelle regioni singole)
+# Soluzione 1: migrare alla BigQuery Storage Write API (quota più alta)
+# Soluzione 2: distribuire il carico su più progetti/regioni dove sensato
+# Soluzione 3: bufferizzare su Pub/Sub e usare Dataflow o batch load
+# Verificare i valori correnti in Console > IAM & Admin > Quotas (filtro: BigQuery API)
 ```
 
 **Problema: `Resources exceeded during query execution`**
@@ -510,26 +522,29 @@ gcloud services quota list --service=bigquery.googleapis.com \
 
 -- Soluzione 1: aggiungere filtri per ridurre il dataset
 -- Soluzione 2: spezzare la query in CTEs con tabelle intermedie
--- Soluzione 3: riscrivere JOIN con data skew usando hints
-SELECT /*+ BROADCAST(small_table) */
-    a.*, b.info
+-- Soluzione 3: forzare il metodo di join con join hint (sintassi BigQuery)
+SELECT a.id, b.info
 FROM `grossa_tabella` a
-JOIN `piccola_tabella` b ON a.id = b.id;
+JOIN @{JOIN_METHOD=BROADCAST} `piccola_tabella` b ON a.id = b.id;
+-- Soluzione 4: ORDER BY senza LIMIT su grandi risultati è causa frequente: rimuoverlo o limitarlo
+-- Soluzione 5: con capacity pricing, aumentare slot/max autoscaling della reservation
 ```
 
 **Problema: dataset non trovato cross-region**
 ```bash
-# Causa: query su dataset in regione diversa dalla regione di processing
-# BigQuery non permette JOIN tra dataset in regioni diverse nella stessa query
+# Causa: query che referenzia dataset in location diverse (es. US ed EU)
+# BigQuery non permette JOIN tra dataset in location diverse nella stessa query
+# ("Not found: Dataset ... was not found in location ...")
 
 # Diagnostica
 bq show --format=json progetto:dataset_a | grep location
 bq show --format=json progetto:dataset_b | grep location
 
-# Soluzione: copiare il dataset nella stessa regione
+# Soluzione: copiare i dati nella stessa location (cross-region copy)
 bq mk --dataset --location=EU progetto:dataset_b_eu
 bq cp progetto:dataset_b.tabella progetto:dataset_b_eu.tabella
-# oppure usare BigQuery Data Transfer Service per sync periodico
+# oppure usare BigQuery Data Transfer Service (dataset copy) per sync periodico;
+# il trasferimento cross-region può comportare costi di egress
 ```
 
 **Problema: costo query inaspettatamente alto**
@@ -540,10 +555,10 @@ bq query --dry_run --use_legacy_sql=false 'SELECT ...'
 
 # Verifica storico query e costi
 bq query --use_legacy_sql=false \
-    'SELECT job_id, total_bytes_processed, total_slot_ms, creation_time
+    'SELECT job_id, total_bytes_billed, total_slot_ms, creation_time
      FROM `region-eu`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
      WHERE creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)
-     ORDER BY total_bytes_processed DESC
+     ORDER BY total_bytes_billed DESC
      LIMIT 20'
 ```
 
@@ -563,7 +578,7 @@ Sorgenti dati
 BigQuery
 ├── BI / Reporting  ──► Looker, Looker Studio, Tableau, Power BI
 ├── ML              ──► BigQuery ML (in-BQ) / Vertex AI (export)
-├── Data Catalog    ──► Dataplex (governance, lineage, profiling)
+├── Governance      ──► Dataplex Universal Catalog (ex Data Catalog: lineage, profiling, policy tag)
 └── Export          ──► Cloud Storage  ──► altri sistemi
 ```
 
