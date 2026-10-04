@@ -12989,7 +12989,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -13014,7 +13014,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24915,7 +24915,7 @@
 
 <h1 id="mysql-architettura-e-replicazione">MySQL — Architettura e Replicazione<a class="headerlink" href="#mysql-architettura-e-replicazione" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>MySQL (e il suo fork community-driven MariaDB) è, insieme a PostgreSQL, l'RDBMS open source più diffuso in produzione — soprattutto nello stack LAMP/LEMP, in applicazioni web tradizionali e in molti servizi managed cloud (Amazon RDS/Aurora MySQL, Cloud SQL, Azure Database for MySQL). A differenza di PostgreSQL, MySQL è storicamente un <strong>motore multi-storage-engine</strong>: la sintassi SQL è unica ma il motore di storage sottostante (InnoDB oggi, MyISAM storicamente) determina concorrenza, transazionalità e durabilità. Questa pagina copre l'architettura interna di InnoDB (il motore di default e praticamente unico usato in produzione), i meccanismi di replicazione (binlog, GTID), le soluzioni di alta disponibilità (Group Replication, Galera Cluster) e le strategie di backup. Non copre tuning SQL generico o data modeling — per quello vedere le sezioni <a href="../../sql-avanzato/_index/">SQL Avanzato</a> e <a href="../../fondamentali/_index/">Fondamentali</a>, che sono agnostiche al motore.</p>
+<p>MySQL (e il suo fork community-driven MariaDB) è, insieme a PostgreSQL, l'RDBMS open source più diffuso in produzione — soprattutto nello stack LAMP/LEMP, in applicazioni web tradizionali e in molti servizi managed cloud (Amazon RDS/Aurora MySQL, Cloud SQL, Azure Database for MySQL). A differenza di PostgreSQL, MySQL è storicamente un <strong>motore multi-storage-engine</strong>: la sintassi SQL è unica ma il motore di storage sottostante (InnoDB oggi, MyISAM storicamente) determina concorrenza, transazionalità e durabilità. Questa pagina copre l'architettura interna di InnoDB (il motore di default e praticamente unico usato in produzione), i meccanismi di replicazione (binlog, GTID), le soluzioni di alta disponibilità (Group Replication, Galera Cluster) e le strategie di backup. Versioni: MySQL 8.0 è arrivato a end-of-life ad aprile 2026; la linea supportata per produzione è <strong>8.4 LTS</strong> (le 9.x sono release <em>innovation</em>, a vita breve). La pagina usa la sintassi 8.0.23+/8.4 e segnala dove differisce. Non copre tuning SQL generico o data modeling — per quello vedere le sezioni <a href="../../sql-avanzato/_index/">SQL Avanzato</a> e <a href="../../fondamentali/_index/">Fondamentali</a>, che sono agnostiche al motore.</p>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <div class="admonition note">
 <p class="admonition-title">InnoDB è MySQL, in produzione</p>
@@ -24970,16 +24970,17 @@
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1">-- Metriche chiave da estrarre dall'output:</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1">--   Buffer pool hit rate (deve essere &gt;99% in produzione)</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1">--   TRANSACTIONS: transazioni long-running che bloccano il purge dell'undo log</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1">--   ROW OPERATIONS: query in coda nel thread pool</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1">--   ROW OPERATIONS: query in esecuzione/in coda dentro InnoDB</span>
 </span></code></pre></div>
 <div class="language-ini highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># my.cnf — parametri InnoDB fondamentali</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">[mysqld]</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="na">innodb_buffer_pool_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">12G</span><span class="w">          </span><span class="c1"># 70-80% della RAM su istanza dedicata</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="na">innodb_buffer_pool_instances</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">8</span><span class="w">       </span><span class="c1"># Riduce contention su buffer pool grandi (&gt;1GB)</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="na">innodb_log_file_size</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">2G</span><span class="w">              </span><span class="c1"># Redo log più grande = meno checkpoint, crash recovery più lento</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="na">innodb_flush_log_at_trx_commit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">1</span><span class="w">     </span><span class="c1"># 1=fsync ad ogni commit (sicuro, default), 0/2=più veloce, rischio perdita dati</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="na">innodb_flush_method</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">O_DIRECT</span><span class="w">         </span><span class="c1"># Evita double buffering (OS cache + InnoDB buffer pool)</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="na">innodb_file_per_table</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">ON</span><span class="w">             </span><span class="c1"># Ogni tabella in un file .ibd separato (default da 5.6+)</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="na">innodb_redo_log_capacity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">2G</span><span class="w">          </span><span class="c1"># 8.0.30+: capacità totale del redo, ridimensionabile a caldo. Più grande = meno checkpoint, crash recovery più lento</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># (prima di 8.0.30: innodb_log_file_size × innodb_log_files_in_group, richiede restart; oggi deprecato)</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="na">innodb_flush_log_at_trx_commit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">1</span><span class="w">     </span><span class="c1"># 1=fsync ad ogni commit (sicuro, default), 0/2=più veloce, rischio perdita dati</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="na">innodb_flush_method</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">O_DIRECT</span><span class="w">         </span><span class="c1"># Evita double buffering (OS cache + InnoDB buffer pool)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="na">innodb_file_per_table</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">ON</span><span class="w">             </span><span class="c1"># Ogni tabella in un file .ibd separato (default da 5.6+)</span>
 </span></code></pre></div>
 <h3 id="replicazione-binary-log-based">Replicazione — Binary Log Based<a class="headerlink" href="#replicazione-binary-log-based" title="Permanent link">&para;</a></h3>
 <p>MySQL replica propagando eventi dal <strong>binary log</strong> del source (primary) verso i replica. Tre formati:</p>
@@ -24992,7 +24993,9 @@
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  CONTRO: binlog più grande su UPDATE/DELETE massivi
 </span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>MIXED: MySQL sceglie automaticamente SBR o RBR in base alla query
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>  Default consigliato in produzione: ROW (RBR) per evitare inconsistenze silenziose
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>  Compromesso, ma la scelta automatica resta meno prevedibile di ROW
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>Default dal 5.7.7: ROW. Consigliato in produzione per evitare inconsistenze silenziose
 </span></code></pre></div>
 <div class="language-ini highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># my.cnf — configurazione binlog sul source</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">[mysqld]</span>
@@ -25000,7 +25003,7 @@
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="na">log_bin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">/var/log/mysql/mysql-bin</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="na">binlog_format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">ROW</span><span class="w">                </span><span class="c1"># Deterministico — evitare STATEMENT in produzione</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="na">binlog_row_image</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">FULL</span><span class="w">            </span><span class="c1"># FULL=riga completa, MINIMAL=solo colonne cambiate (risparmio spazio)</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="na">expire_logs_days</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">7</span><span class="w">               </span><span class="c1"># Retention binlog (evita crescita illimitata del disco)</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="na">binlog_expire_logs_seconds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">604800</span><span class="w">   </span><span class="c1"># Retention 7 giorni (default 8.0: 30 giorni). expire_logs_days è deprecato e rimosso in 8.4</span>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="na">sync_binlog</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">1</span><span class="w">                    </span><span class="c1"># fsync ad ogni transazione — sicuro, costo I/O</span>
 </span></code></pre></div>
 <h3 id="gtid-global-transaction-identifier">GTID — Global Transaction Identifier<a class="headerlink" href="#gtid-global-transaction-identifier" title="Permanent link">&para;</a></h3>
@@ -25009,23 +25012,24 @@
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">[mysqld]</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="na">gtid_mode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">ON</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="na">enforce_gtid_consistency</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">ON</span><span class="w">      </span><span class="c1"># Rifiuta statement non GTID-safe (es. CREATE TABLE ... SELECT)</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="na">log_slave_updates</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">ON</span><span class="w">             </span><span class="c1"># Necessario se il replica ha a sua volta dei sub-replica</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="na">log_replica_updates</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">ON</span><span class="w">           </span><span class="c1"># Il replica scrive nel proprio binlog gli eventi applicati (necessario per sub-replica; default ON in 8.0). Nome legacy: log_slave_updates</span>
 </span></code></pre></div>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1">-- Sul REPLICA: configurare la replicazione con GTID (MySQL 8.0+)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">CHANGE</span><span class="w"> </span><span class="n">REPLICATION</span><span class="w"> </span><span class="k">SOURCE</span><span class="w"> </span><span class="k">TO</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="n">SOURCE_HOST</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'source-host'</span><span class="p">,</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="n">SOURCE_USER</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'repl_user'</span><span class="p">,</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="n">SOURCE_PASSWORD</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'strongpassword'</span><span class="p">,</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="n">SOURCE_AUTO_POSITION</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">      </span><span class="c1">-- GTID auto-position, non serve file/pos manuale</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="k">START</span><span class="w"> </span><span class="n">REPLICA</span><span class="p">;</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1">-- Stato della replica — comando principale per il troubleshooting</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="k">SHOW</span><span class="w"> </span><span class="n">REPLICA</span><span class="w"> </span><span class="n">STATUS</span><span class="err">\</span><span class="k">G</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="c1">-- Campi critici:</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1">--   Replica_IO_Running / Replica_SQL_Running: devono essere entrambi "Yes"</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1">--   Seconds_Behind_Source: lag in secondi</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="c1">--   Last_Error / Last_IO_Error / Last_SQL_Error: causa di un'eventuale interruzione</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span><span class="n">SOURCE_AUTO_POSITION</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w">      </span><span class="c1">-- GTID auto-position, non serve file/pos manuale</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="n">SOURCE_SSL</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">                </span><span class="c1">-- con caching_sha2_password (default 8.0) serve TLS, oppure GET_SOURCE_PUBLIC_KEY = 1</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="k">START</span><span class="w"> </span><span class="n">REPLICA</span><span class="p">;</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="c1">-- Stato della replica — comando principale per il troubleshooting</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="k">SHOW</span><span class="w"> </span><span class="n">REPLICA</span><span class="w"> </span><span class="n">STATUS</span><span class="err">\</span><span class="k">G</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1">-- Campi critici:</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1">--   Replica_IO_Running / Replica_SQL_Running: devono essere entrambi "Yes"</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="c1">--   Seconds_Behind_Source: lag in secondi</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="c1">--   Last_Error / Last_IO_Error / Last_SQL_Error: causa di un'eventuale interruzione</span>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Naming legacy: SLAVE vs REPLICA</p>
@@ -25049,8 +25053,9 @@
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">INSTALL</span><span class="w"> </span><span class="n">PLUGIN</span><span class="w"> </span><span class="n">rpl_semi_sync_source</span><span class="w"> </span><span class="n">SONAME</span><span class="w"> </span><span class="s1">'semisync_source.so'</span><span class="p">;</span><span class="w">  </span><span class="c1">-- sul source</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">INSTALL</span><span class="w"> </span><span class="n">PLUGIN</span><span class="w"> </span><span class="n">rpl_semi_sync_replica</span><span class="w"> </span><span class="n">SONAME</span><span class="w"> </span><span class="s1">'semisync_replica.so'</span><span class="p">;</span><span class="w"> </span><span class="c1">-- sul replica</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="k">SET</span><span class="w"> </span><span class="k">GLOBAL</span><span class="w"> </span><span class="n">rpl_semi_sync_source_enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="k">SET</span><span class="w"> </span><span class="k">GLOBAL</span><span class="w"> </span><span class="n">rpl_semi_sync_source_timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10000</span><span class="p">;</span><span class="w"> </span><span class="c1">-- ms prima di degradare ad async</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="k">SET</span><span class="w"> </span><span class="k">GLOBAL</span><span class="w"> </span><span class="n">rpl_semi_sync_source_enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">    </span><span class="c1">-- sul source</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="k">SET</span><span class="w"> </span><span class="k">GLOBAL</span><span class="w"> </span><span class="n">rpl_semi_sync_replica_enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span><span class="w">   </span><span class="c1">-- sul replica (poi riavviare l'IO thread: STOP/START REPLICA IO_THREAD)</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="k">SET</span><span class="w"> </span><span class="k">GLOBAL</span><span class="w"> </span><span class="n">rpl_semi_sync_source_timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10000</span><span class="p">;</span><span class="w"> </span><span class="c1">-- ms prima di degradare ad async</span>
 </span></code></pre></div>
 <h3 id="alta-disponibilita-group-replication-vs-galera-cluster">Alta Disponibilità — Group Replication vs Galera Cluster<a class="headerlink" href="#alta-disponibilita-group-replication-vs-galera-cluster" title="Permanent link">&para;</a></h3>
 <p>Due approcci multi-master/consensus-based, alternativi alla replica classica source→replica per failover automatico:</p>
@@ -25059,15 +25064,17 @@
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>  - Modalità single-primary (consigliata) o multi-primary
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>  - Failover automatico: il gruppo elegge un nuovo primary se quello
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>    corrente diventa irraggiungibile
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>  - Richiede almeno 3 nodi per quorum
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>Galera Cluster (MariaDB Galera / Percona XtraDB Cluster)
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>  - Certification-based replication: ogni nodo certifica le transazioni
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>    prima del commit (write-set replication)
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>  - Multi-master vero: si può scrivere su QUALSIASI nodo
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>  - Trade-off: conflitti di certificazione su hot-row contention
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>    (due nodi scrivono la stessa riga contemporaneamente → uno abortisce)
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>  - Richiede rete a bassa latenza tra i nodi (sincrono a livello di certificazione)
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>  - Richiede almeno 3 nodi per tollerare la perdita di 1 membro (maggioranza)
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>  - In produzione si usa tipicamente via InnoDB Cluster (Group Replication +
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>    MySQL Shell AdminAPI + MySQL Router per il routing) invece di orchestrarla a mano
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>Galera Cluster (MariaDB Galera / Percona XtraDB Cluster)
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>  - Certification-based replication: ogni nodo certifica le transazioni
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>    prima del commit (write-set replication)
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>  - Multi-master vero: si può scrivere su QUALSIASI nodo
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>  - Trade-off: conflitti di certificazione su hot-row contention
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>    (due nodi scrivono la stessa riga contemporaneamente → uno abortisce)
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>  - Richiede rete a bassa latenza tra i nodi (sincrono a livello di certificazione)
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Single-primary è quasi sempre la scelta giusta</p>
@@ -25095,12 +25102,14 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># mysqldump — backup LOGICO (SQL testuale, portabile tra versioni/engine)</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># PRO: leggibile, restore selettivo, funziona ovunque</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># CONTRO: lento su dataset grandi, richiede lock (o --single-transaction su InnoDB)</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>mysqldump<span class="w"> </span>--single-transaction<span class="w"> </span>--routines<span class="w"> </span>--triggers<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span>--master-data<span class="o">=</span><span class="m">2</span><span class="w"> </span>--gtid<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span>-u<span class="w"> </span>backup_user<span class="w"> </span>-p<span class="w"> </span>mydb<span class="w"> </span>&gt;<span class="w"> </span>mydb_backup.sql
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Restore</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>mysql<span class="w"> </span>-u<span class="w"> </span>root<span class="w"> </span>-p<span class="w"> </span>mydb<span class="w"> </span>&lt;<span class="w"> </span>mydb_backup.sql
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># --source-data=2 (8.0.26+; legacy --master-data, rimosso in 8.4) scrive come commento la posizione binlog;</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># --set-gtid-purged=ON include il GTID_PURGED per inizializzare un replica. (--gtid è di MariaDB, non MySQL)</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>mysqldump<span class="w"> </span>--single-transaction<span class="w"> </span>--routines<span class="w"> </span>--triggers<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">  </span>--source-data<span class="o">=</span><span class="m">2</span><span class="w"> </span>--set-gtid-purged<span class="o">=</span>ON<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">  </span>-u<span class="w"> </span>backup_user<span class="w"> </span>-p<span class="w"> </span>mydb<span class="w"> </span>&gt;<span class="w"> </span>mydb_backup.sql
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="c1"># Restore</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>mysql<span class="w"> </span>-u<span class="w"> </span>root<span class="w"> </span>-p<span class="w"> </span>mydb<span class="w"> </span>&lt;<span class="w"> </span>mydb_backup.sql
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Percona XtraBackup — backup FISICO hot (non bloccante) per InnoDB</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># PRO: veloce su dataset grandi (TB), backup incrementali, hot backup senza lock lunghi</span>
@@ -25111,7 +25120,7 @@
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1"># Prepare (applica i log delle transazioni raccolte durante il backup)</span>
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>xtrabackup<span class="w"> </span>--prepare<span class="w"> </span>--target-dir<span class="o">=</span>/backup/full
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="c1"># Restore (con il servizio MySQL fermo)</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="c1"># Restore (con il servizio MySQL fermo e datadir vuota; poi chown -R mysql:mysql sul datadir)</span>
 </span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>xtrabackup<span class="w"> </span>--copy-back<span class="w"> </span>--target-dir<span class="o">=</span>/backup/full<span class="w"> </span>--datadir<span class="o">=</span>/var/lib/mysql
 </span></code></pre></div>
 <div class="admonition tip">
@@ -25140,11 +25149,12 @@
 <li><strong>Semi-sync su almeno 1 replica</strong> per workload dove RPO=0 è un requisito (transazioni finanziarie, ordini). Async va bene per read replica pure di scaling.</li>
 <li><strong>Monitorare <code>Seconds_Behind_Source</code> con alerting</strong>, non solo controllo manuale — un replica che accumula lag silenziosamente è la causa più comune di dati stale servito da un load balancer read-only.</li>
 <li><strong>Testare il restore, non solo il backup</strong>: uno <code>xtrabackup --backup</code> che completa senza errori non garantisce un restore funzionante — validare periodicamente su un ambiente separato.</li>
+<li><strong>Replica parallela</strong>: se il lag cresce con un source molto scritto, abilitare l'applier multi-thread (<code>replica_parallel_workers</code> &gt; 1; default 4 da 8.0.27, <code>replica_parallel_type=LOGICAL_CLOCK</code>) invece di un solo SQL thread.</li>
 <li><strong>Non abilitare multi-primary</strong> (Group Replication o Galera) senza una ragione concreta — vedi tip sopra.</li>
 </ul>
 <div class="admonition warning">
 <p class="admonition-title">Attenzione al replication lag come singolo punto di failure applicativo</p>
-<p>Un pattern comune e pericoloso: applicazione scrive sul primary e legge immediatamente dopo da un read replica (per bilanciare il carico). Se il replica ha lag anche di pochi secondi, l'utente non vede il proprio dato appena scritto ("read-after-write inconsistency"). Soluzioni: leggere dal primary per un breve periodo dopo la scrittura, usare semi-sync, o instradare esplicitamente le letture critiche.</p>
+<p>Un pattern comune e pericoloso: applicazione scrive sul primary e legge immediatamente dopo da un read replica (per bilanciare il carico). Se il replica ha lag anche di pochi secondi, l'utente non vede il proprio dato appena scritto ("read-after-write inconsistency"). Soluzioni: leggere dal primary per un breve periodo dopo la scrittura, attendere sul replica il GTID della propria scrittura (<code>WAIT_FOR_EXECUTED_GTID_SET()</code>), o instradare esplicitamente le letture critiche. Semi-sync da solo <strong>non</strong> basta: l'ACK conferma la ricezione, non l'applicazione sul replica.</p>
 </div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-replica-bloccato-con-seconds_behind_source-null">Scenario 1 — Replica bloccato con <code>Seconds_Behind_Source: NULL</code><a class="headerlink" href="#scenario-1-replica-bloccato-con-seconds_behind_source-null" title="Permanent link">&para;</a></h3>
@@ -25155,20 +25165,21 @@
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">SHOW</span><span class="w"> </span><span class="n">REPLICA</span><span class="w"> </span><span class="n">STATUS</span><span class="err">\</span><span class="k">G</span>
 </span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1">-- Campo Last_SQL_Error contiene il messaggio esatto</span>
 </span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1">-- Se l'errore è recuperabile e la transazione può essere saltata (usare con cautela)</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1">-- Senza GTID: saltare un evento (usare con cautela; con gtid_mode=ON è rifiutato)</span>
 </span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="k">SET</span><span class="w"> </span><span class="k">GLOBAL</span><span class="w"> </span><span class="n">sql_replica_skip_counter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
 </span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="k">START</span><span class="w"> </span><span class="n">REPLICA</span><span class="p">;</span>
 </span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="c1">-- Con GTID attivo, saltare una transazione specifica</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="k">SET</span><span class="w"> </span><span class="n">GTID_NEXT</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'source_uuid:transaction_id'</span><span class="p">;</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="k">BEGIN</span><span class="p">;</span><span class="w"> </span><span class="k">COMMIT</span><span class="p">;</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="k">SET</span><span class="w"> </span><span class="n">GTID_NEXT</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'AUTOMATIC'</span><span class="p">;</span>
-</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="k">START</span><span class="w"> </span><span class="n">REPLICA</span><span class="p">;</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="c1">-- Con GTID attivo: iniettare una transazione vuota con il GTID problematico</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="c1">-- (STOP REPLICA prima; il GTID è in Retrieved_Gtid_Set / Last_SQL_Error)</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="k">SET</span><span class="w"> </span><span class="n">GTID_NEXT</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'source_uuid:transaction_id'</span><span class="p">;</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="k">BEGIN</span><span class="p">;</span><span class="w"> </span><span class="k">COMMIT</span><span class="p">;</span>
+</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="k">SET</span><span class="w"> </span><span class="n">GTID_NEXT</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'AUTOMATIC'</span><span class="p">;</span>
+</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="k">START</span><span class="w"> </span><span class="n">REPLICA</span><span class="p">;</span>
 </span></code></pre></div></p>
 <hr />
 <h3 id="scenario-2-disco-del-source-pieno-per-binlog-non-purgati">Scenario 2 — Disco del source pieno per binlog non purgati<a class="headerlink" href="#scenario-2-disco-del-source-pieno-per-binlog-non-purgati" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Partizione con i binlog cresce senza limite; <code>df -h</code> mostra utilizzo vicino al 100%.</p>
-<p><strong>Causa:</strong> <code>expire_logs_days</code> non configurato, oppure un replica disconnesso da tempo che impedisce la purge (con replica su semi-sync o dump thread ancora registrato).</p>
+<p><strong>Causa:</strong> retention troppo lunga (default 8.0: 30 giorni) o assente (<code>binlog_expire_logs_seconds = 0</code>, o <code>expire_logs_days</code> ignorato su 8.4), oppure volume di scritture molto alto con <code>binlog_row_image = FULL</code>. Attenzione: la purge automatica e <code>PURGE BINARY LOGS</code> <strong>non</strong> controllano se un replica ha ancora bisogno dei file — un replica in ritardo oltre la retention perde i binlog e va ricostruito.</p>
 <p><strong>Soluzione:</strong>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1">-- Verificare i binlog esistenti e la loro dimensione</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="k">SHOW</span><span class="w"> </span><span class="nb">BINARY</span><span class="w"> </span><span class="n">LOGS</span><span class="p">;</span>
@@ -25176,7 +25187,7 @@
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1">-- Purge manuale (attenzione: verificare che nessun replica ne abbia bisogno)</span>
 </span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">PURGE</span><span class="w"> </span><span class="nb">BINARY</span><span class="w"> </span><span class="n">LOGS</span><span class="w"> </span><span class="k">BEFORE</span><span class="w"> </span><span class="n">NOW</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nb">INTERVAL</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="k">DAY</span><span class="p">;</span>
 </span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1">-- Impostare retention automatica (persistente, MySQL 8.0+)</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1">-- Impostare retention automatica (persistente, MySQL 8.0+; in alternativa a my.cnf)</span>
 </span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="k">SET</span><span class="w"> </span><span class="n">PERSIST</span><span class="w"> </span><span class="n">binlog_expire_logs_seconds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">604800</span><span class="p">;</span><span class="w"> </span><span class="c1">-- 7 giorni</span>
 </span></code></pre></div></p>
 <hr />
@@ -25207,8 +25218,9 @@
 </span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>
 </span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="c1"># Se la rete è stata ripristinata, il nodo dovrebbe riunirsi automaticamente</span>
 </span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="c1"># Se il cluster INTERO ha perso quorum (es. tutti i nodi riavviati), serve</span>
-</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="c1"># bootstrap manuale da UN SOLO nodo (quello con i dati più recenti/safe)</span>
-</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>galera_new_cluster<span class="w">   </span><span class="c1"># su systemd, avvia il primo nodo come nuovo primary component</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="c1"># bootstrap manuale da UN SOLO nodo: quello con seqno più alto</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="c1"># (/var/lib/mysql/grastate.dat: safe_to_bootstrap: 1, oppure mysqld --wsrep-recover)</span>
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>galera_new_cluster<span class="w">   </span><span class="c1"># MariaDB Galera (systemd). Percona XtraDB Cluster: systemctl start mysql@bootstrap</span>
 </span></code></pre></div></p>
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
 <details class="info">
@@ -25233,9 +25245,9 @@
 </details>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="https://dev.mysql.com/doc/refman/8.0/en/replication.html">MySQL 8.0 Reference Manual — Replication</a></li>
-<li><a href="https://dev.mysql.com/doc/refman/8.0/en/innodb-storage-engine.html">MySQL 8.0 Reference Manual — InnoDB Storage Engine</a></li>
-<li><a href="https://dev.mysql.com/doc/refman/8.0/en/group-replication.html">MySQL Group Replication Documentation</a></li>
+<li><a href="https://dev.mysql.com/doc/refman/8.4/en/replication.html">MySQL 8.4 Reference Manual — Replication</a></li>
+<li><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-storage-engine.html">MySQL 8.4 Reference Manual — InnoDB Storage Engine</a></li>
+<li><a href="https://dev.mysql.com/doc/refman/8.4/en/group-replication.html">MySQL Group Replication Documentation</a></li>
 <li><a href="https://galeracluster.com/library/documentation/">Galera Cluster Documentation</a></li>
 <li><a href="https://docs.percona.com/percona-xtrabackup/latest/">Percona XtraBackup Documentation</a></li>
 <li><a href="https://mariadb.com/kb/en/replication/">MariaDB Knowledge Base — Replication</a></li>
