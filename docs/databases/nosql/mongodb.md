@@ -7,9 +7,10 @@ search_keywords: [mongodb document store, mongodb aggregation pipeline, mongodb 
 parent: databases/nosql/_index
 related: [databases/fondamentali/modelli-dati, databases/fondamentali/sharding, databases/nosql/redis]
 official_docs: https://www.mongodb.com/docs/
-status: complete
+status: needs-review
 difficulty: intermediate
 last_updated: 2026-03-29
+last_verified: 2026-10-04
 ---
 
 # MongoDB
@@ -30,7 +31,7 @@ Il modello relazionale normalizza i dati in tabelle collegate via JOIN. MongoDB 
 ```javascript
 // Documento MongoDB (BSON in memoria, JSON nell'interfaccia)
 {
-    "_id": ObjectId("65a1b2c3d4e5f6789012345"),  // ID univoco auto-generato
+    "_id": ObjectId("65a1b2c3d4e5f67890123456"),  // ID univoco auto-generato
     "titolo": "Redis per DevOps",
     "autore": {                                    // Documento embedded
         "nome": "Andrea",
@@ -61,14 +62,14 @@ Il modello relazionale normalizza i dati in tabelle collegate via JOIN. MongoDB 
 // REFERENCING — entità indipendenti, cardinalità alta, aggiornamento frequente
 // Post con commenti: 1000+ commenti → embedding non scalabile
 {
-    "_id": ObjectId("post-1"),
+    "_id": "post-1",
     "titolo": "...",
     // commenti: NON embedded — referencing via collection separata
 }
 {
     // collection: commenti
     "_id": ObjectId("..."),
-    "post_id": ObjectId("post-1"),    // foreign key manuale
+    "post_id": "post-1",    // foreign key manuale
     "testo": "...",
     "autore": "alice"
 }
@@ -183,7 +184,8 @@ db.ordini.aggregate([
 // Indice singolo
 db.articoli.createIndex({ created_at: -1 })   // -1 = descending
 
-// Indice composto (ordine importa: filtra per tag, poi ordina per data)
+// Indice composto (ordine importa; regola ESR: Equality, Sort, Range.
+// Qui: uguaglianza su tag, poi ordinamento per data)
 db.articoli.createIndex({ tag: 1, created_at: -1 })
 
 // Indice unique
@@ -238,7 +240,7 @@ rs.initiate({
 
 // Stato
 rs.status()
-rs.isMaster()   // o rs.hello() (MongoDB 5+)
+rs.hello()      // sostituisce isMaster (deprecato da 4.4.2)
 ```
 
 ```python
@@ -263,7 +265,9 @@ db.ordini.insertOne(
 )
 // w: "majority" — durabile: sopravvive al failover
 // j: true — attendere journal flush (durabilità disco)
-// w: 1 (default) — solo primary ha scritto (può essere perso in failover)
+// w: 1 — solo il primary ha scritto (può essere perso in failover).
+//   Dal 5.0 il default implicito è "majority" (non se ci sono arbiter che
+//   impediscono la maggioranza dei data-bearing node: allora resta 1). Prima del 5.0 era 1.
 
 // Read concern: quale snapshot di dati leggere
 db.ordini.find({}).readConcern("majority")
@@ -297,7 +301,8 @@ with db.ordini.watch(
 MongoDB integra lo sharding nativo tramite `mongos` router. Il shard key determina come i documenti vengono distribuiti:
 
 ```javascript
-// Abilita sharding su un database
+// Abilita sharding su un database (dal 6.0 non è più necessario: shardCollection
+// lo fa implicitamente; serve solo per scegliere il primary shard)
 sh.enableSharding("ecommerce")
 
 // Shard su hashed field (distribuzione uniforme)
@@ -309,6 +314,8 @@ sh.shardCollection("ecommerce.log_eventi", { created_at: 1 })
 // Stato dello sharding
 sh.status()
 ```
+
+Dal 5.0 la shard key si può cambiare con `reshardCollection` (online, ma costoso) e dal 4.4 raffinare con `refineCollectionShardKey`: la scelta resta comunque critica.
 
 **Scelta del shard key** (identici principi di [Sharding](../fondamentali/sharding.md)):
 - Alta cardinalità (non boolean, non enum piccolo)
@@ -322,7 +329,7 @@ sh.status()
 - **Schema design prima di tutto**: a differenza di SQL, lo schema errato in MongoDB è costoso da cambiare. Modellare in base ai pattern di accesso, non alla struttura dati
 - **Embedded per default, referencing quando necessario**: embedding → 1 lettura, referencing → 2 letture. Eccezioni: documento > 16MB (limite BSON), array che crescono senza limite, entità lette spesso da sole
 - **Write concern majority in produzione**: `w:1` rischia perdita di dati in caso di failover — non accettabile per dati critici
-- **Indice su ogni campo filtrato frequentemente**: MongoDB non ha statistiche automatiche come PostgreSQL — l'ottimizzatore dipende dagli indici. Usare `explain()` per verificare
+- **Indice su ogni campo filtrato frequentemente**: il query planner di MongoDB non usa statistiche di tabella come PostgreSQL: sceglie il piano provando gli indici candidati e cacheando il vincitore, quindi senza indice adatto fa COLLSCAN. Usare `explain()` per verificare
 - **Evitare transazioni multi-documento quando possibile**: le transazioni MongoDB hanno overhead rilevante e impattano il throughput. Se possibile, progettare per atomicità single-document
 
 ## Troubleshooting
@@ -373,14 +380,15 @@ rs.status()
 rs.printReplicationInfo()      // primary: dimensione oplog e window temporale
 rs.printSecondaryReplicationInfo()  // lag per ogni secondary
 
-// 3. Se il secondary è in RECOVERING, forzare risincronizzazione
-// Sul secondary (mongosh):
-db.adminCommand({ resync: 1 })
+// 3. Se il secondary è in RECOVERING (oplog superato, "too stale"), serve una
+// initial sync: fermare mongod sul secondary, svuotare il dbPath, riavviare.
+// Il nodo riscarica tutti i dati dal primary. (Il comando `resync` esiste solo
+// nei vecchi master/slave, NON nei replica set.)
 
-// 4. Aumentare la finestra dell'oplog se troppo piccola (richiede riavvio)
+// 4. Aumentare la finestra dell'oplog se troppo piccola 
 // mongod.conf:
 // replication:
-//   oplogSizeMB: 10240   # default: 5% del disco, minimo 990MB
+//   oplogSizeMB: 10240   # default: 5% dello spazio libero, min 990MB, max 50GB; ridimensionabile a caldo con replSetResizeOplog
 ```
 
 ---
@@ -432,6 +440,8 @@ client = MongoClient(
 
 ```javascript
 // 1. Aggiungere allowDiskUse per usare spill su disco
+// (dal 6.0 è già attivo di default via allowDiskUseByDefault; prima era obbligatorio.
+// Il limite di 100MB per stage resta: oltre, lo stage scrive su disco)
 db.ordini.aggregate(
     [
         { $match: { created_at: { $gte: ISODate("2023-01-01") } } },
@@ -457,6 +467,8 @@ db.ordini.aggregate(
 )
 // Cercare: queryPlanner.winningPlan — deve essere IXSCAN non COLLSCAN
 ```
+
+<!-- REVIEW: mancano sezioni promesse dalle search_keywords e utili a un DevOps: sicurezza (auth SCRAM/x509, RBAC, TLS, encryption at rest/Queryable Encryption), backup/restore (mongodump, snapshot, PITR), time series collection, Atlas Search, versioni correnti (8.x) e deploy su Kubernetes. Vedi proposta di follow-up. -->
 
 ## Riferimenti
 
