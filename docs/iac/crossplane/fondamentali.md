@@ -7,10 +7,10 @@ search_keywords: [crossplane, kubernetes-native iac, terraform via kubernetes, c
 parent: iac/crossplane/_index
 related: [iac/terraform/fondamentali, iac/terraform/state-management, containers/kubernetes/operators-crd, ci-cd/gitops/argocd, iac/ansible/roles-collections]
 official_docs: https://docs.crossplane.io/
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-03
-last_verified: 2026-10-03
+last_verified: 2026-10-04
 ---
 
 # Crossplane — Fondamentali
@@ -409,7 +409,7 @@ spec:
                       fmt: "%s-conn"
 ```
 
-<!-- CURRENCY: non verificato (2026-10) — patch del connection secret MR namespaced (writeConnectionSecretToRef) e securitygroup/subnet wiring omessi per brevità; controllare la reference del provider -->
+Nell'esempio il wiring tra `securitygroup`, `subnetgroup` e `rdsinstance` è omesso per brevità. Sulle MR namespaced `writeConnectionSecretToRef` accetta solo `name`: il namespace è quello dell'XR.
 
 !!! note "Connection details in v2"
     L'XR non espone più `connectionDetails`/`writeConnectionSecretToRef`. Il Secret con le credenziali lo scrive la singola MR (o una funzione, es. `function-go-templating`) nello stesso namespace dell'XR.
