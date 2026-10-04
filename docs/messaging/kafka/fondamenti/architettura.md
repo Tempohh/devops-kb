@@ -7,9 +7,10 @@ search_keywords: [kafka, apache kafka, message broker, commit log, distributed l
 parent: messaging/kafka/fondamenti
 related: [messaging/kafka/fondamenti/topics-partizioni, messaging/kafka/fondamenti/broker-cluster, messaging/kafka/fondamenti/zookeeper-kraft]
 official_docs: https://kafka.apache.org/documentation/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Architettura di Apache Kafka
@@ -34,8 +35,8 @@ Il concetto fondamentale di Kafka è il **log**: una struttura dati ordinata, ap
 | **Producer** | Client che pubblica messaggi su uno o più topic. |
 | **Consumer** | Client che legge messaggi da uno o più topic. I consumer si organizzano in **Consumer Group**. |
 | **Consumer Group** | Insieme di consumer che cooperano per leggere un topic. Ogni partizione è assegnata a un solo consumer del gruppo. |
-| **ZooKeeper / KRaft** | Sistema di coordinamento per la gestione dei metadati del cluster (elezione del controller, broker registrati, ecc.). KRaft è il sostituto moderno di ZooKeeper. |
-| **Controller** | Un broker eletto come responsabile della gestione amministrativa del cluster (elezioni leader, bilanciamento). |
+| **KRaft** (Kafka Raft) | Meccanismo di consenso integrato in Kafka per i metadati del cluster (topic, partizioni, leader, broker registrati), basato sul protocollo Raft. Dalla **versione 4.0 (marzo 2025) è l'unica modalità supportata**: ZooKeeper è stato rimosso (KIP-500). I cluster 3.x ancora su ZooKeeper vanno migrati a KRaft prima di aggiornare a 4.x. |
+| **Controller** | Nodo del quorum KRaft (3 o 5 in produzione) che gestisce metadati ed elezioni dei leader di partizione. Un controller è l'*active* (leader Raft), gli altri sono hot standby. Può essere dedicato (`process.roles=controller`) o combinato col broker (`broker,controller`, adatto solo a cluster piccoli/dev). |
 
 ### Record (Messaggio)
 
@@ -57,7 +58,7 @@ graph TB
     end
 
     subgraph "Kafka Cluster"
-        subgraph "Broker 1 (Controller)"
+        subgraph "Broker 1"
             B1T1P0[Topic orders<br/>Partition 0 - LEADER]
             B1T2P1[Topic payments<br/>Partition 1 - FOLLOWER]
         end
@@ -81,7 +82,7 @@ graph TB
     end
 
     subgraph Coordination
-        ZK[ZooKeeper / KRaft<br/>Cluster Metadata]
+        ZK[KRaft Controller Quorum<br/>Cluster Metadata]
     end
 
     P1 -->|publish| B1T1P0
@@ -108,12 +109,15 @@ graph TB
 2. **Il broker leader** scrive il record nel log della partizione sul disco (append-only).
 3. **I broker follower replicano il record**: ogni partizione ha un leader (il broker che riceve le scritture) e zero o più follower (broker che mantengono una copia aggiornata ma non servono richieste dirette). I follower recuperano i nuovi record dal leader tramite replication log fetch.
 4. **Il leader attende la conferma dalle ISR**: le ISR (In-Sync Replicas) sono l'insieme delle repliche — incluso il leader — completamente sincronizzate con il log del leader. Con `acks=all` (o `acks=-1`), il leader invia l'acknowledgment al producer solo dopo che tutte le repliche nell'ISR hanno scritto il record. Il parametro `min.insync.replicas` (tipicamente 2 su cluster con replication factor 3) definisce il numero minimo di repliche ISR che devono confermare; se scende sotto questo valore, il producer riceve `NotEnoughReplicasException`.
-5. **Il consumer esegue il loop di `poll()`**: il consumer chiama periodicamente `consumer.poll(timeout_ms)` per richiedere al broker un batch di record a partire dall'offset corrente. `poll()` è il nome del metodo dell'API Kafka (Java/Python) — non è una traduzione. Kafka usa il **pull model**: non è il broker a inviare i dati al consumer, è sempre il consumer a richiederli (pull). Questo permette ai consumer di consumare al proprio ritmo senza rischio di overflow.
+5. **Il consumer esegue il loop di `poll()`**: il consumer chiama periodicamente `consumer.poll(Duration)` (Java; nei client Python il timeout è in millisecondi) per richiedere al broker un batch di record a partire dall'offset corrente. `poll()` è il nome del metodo dell'API Kafka — non è una traduzione. Kafka usa il **pull model**: non è il broker a inviare i dati al consumer, è sempre il consumer a richiederli (pull). Questo permette ai consumer di consumare al proprio ritmo senza rischio di overflow.
 6. **Il consumer esegue il commit dell'offset**: dopo aver processato il batch, il consumer "fa il commit dell'offset" — persiste la propria posizione nel topic (es. "ho elaborato fino all'offset 1042 della partizione 0"). Kafka salva questa informazione nel topic interno `__consumer_offsets`. Al restart successivo, il consumer riprende dall'ultimo offset committato, evitando di riprocessare record già gestiti. Il commit può essere automatico (`enable.auto.commit=true`, ogni 5 secondi di default) o manuale (`consumer.commitSync()` per garanzia at-least-once, `consumer.commitAsync()` per performance).
 
 ### Garantia di Ordinamento
 
-Kafka garantisce l'ordinamento dei record **all'interno di una singola partizione**. Record con la stessa key vengono sempre scritti nella stessa partizione (tramite `hash(key) % numPartitions`), garantendo l'ordinamento per quella chiave specifica. Non esiste garanzia di ordinamento globale tra partizioni diverse.
+Kafka garantisce l'ordinamento dei record **all'interno di una singola partizione**. Record con la stessa key vengono sempre scritti nella stessa partizione (il partitioner di default calcola `murmur2(key) % numPartitions`), garantendo l'ordinamento per quella chiave specifica. Non esiste garanzia di ordinamento globale tra partizioni diverse.
+
+!!! warning "Aumentare le partizioni rompe il mapping key→partizione"
+    Poiché il modulo dipende da `numPartitions`, aggiungere partizioni a un topic esistente fa finire le stesse key in partizioni diverse: l'ordinamento per key è garantito solo entro lo stesso numero di partizioni. Dimensionare con margine fin dall'inizio.
 
 ### Retention dei Dati
 
@@ -126,34 +130,32 @@ Kafka non elimina i record dopo che un consumer li ha letti. I dati vengono elim
 
 ### Avvio Rapido con Docker Compose (KRaft mode)
 
+Immagine ufficiale Apache (`apache/kafka`), nodo singolo con ruoli combinati `broker,controller`: **solo per sviluppo locale**.
+
 ```yaml
-# docker-compose.yml - Kafka singolo nodo in KRaft mode
-version: '3.8'
+# docker-compose.yml - Kafka singolo nodo in KRaft mode (solo dev)
 services:
   kafka:
-    image: confluentinc/cp-kafka:7.6.0
-    hostname: kafka
+    image: apache/kafka:4.0.0
     container_name: kafka
     ports:
       - "9092:9092"
-      - "9101:9101"
     environment:
       KAFKA_NODE_ID: 1
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      # Con un solo broker i topic interni non possono avere RF=3 (default)
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_JMX_PORT: 9101
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
-      KAFKA_LISTENERS: 'PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,PLAINTEXT_HOST://0.0.0.0:9092'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
-      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
 ```
+
+`KAFKA_ADVERTISED_LISTENERS` è l'indirizzo che il broker comunica ai client dopo il bootstrap: deve essere raggiungibile *dal client*, non solo dal container. I comandi CLI dell'immagine sono in `/opt/kafka/bin/` (`docker exec -it kafka /opt/kafka/bin/kafka-topics.sh ...`).
 
 ### Comandi CLI Essenziali
 
@@ -186,11 +188,17 @@ kafka-console-consumer.sh \
 ### Parametri Broker Fondamentali (server.properties)
 
 ```properties
-# Identificatore unico del broker nel cluster
-broker.id=1
+# Modalità KRaft: ruoli del nodo (broker, controller o entrambi)
+process.roles=broker
+# Identificatore unico del nodo (sostituisce broker.id di ZooKeeper)
+node.id=1
+# Quorum dei controller: id@host:porta
+controller.quorum.bootstrap.servers=controller1:9093,controller2:9093,controller3:9093
+controller.listener.names=CONTROLLER
 
-# Indirizzo di ascolto
+# Indirizzi di ascolto e pubblicati ai client
 listeners=PLAINTEXT://:9092
+advertised.listeners=PLAINTEXT://broker1.example.com:9092
 
 # Cartella dove sono archiviati i log (dati)
 log.dirs=/var/kafka/logs
@@ -220,7 +228,7 @@ transaction.state.log.min.isr=2
 !!! tip "Regola Pratica per il Numero di Partizioni"
     Una formula di partenza: `max(T/P_producer, T/P_consumer)` dove `T` è il throughput target, `P_producer` è il throughput di un singolo producer e `P_consumer` è il throughput di un singolo consumer. In assenza di benchmark, iniziare con 6-12 partizioni per topic e scalare in seguito.
 
-- **Non sovra-partizionare:** ogni partizione ha un overhead (file handle, memoria, tempi di elezione leader). Un broker gestisce efficacemente fino a ~4000 partizioni.
+- **Non sovra-partizionare:** ogni partizione ha un overhead (file handle, memoria, tempi di elezione leader). La vecchia regola "~4000 partizioni per broker" valeva con ZooKeeper; con KRaft i limiti di cluster sono molto più alti, ma resta valido dimensionare in base a benchmark e a file handle/memoria disponibili.
 - **Considerare i consumer group:** il numero di partizioni limita il parallelismo massimo del gruppo. Con 6 partizioni, massimo 6 consumer attivi per gruppo.
 - **Partizioni e ordinamento:** se l'ordinamento globale è critico, usare una sola partizione (con sacrificio del parallelismo).
 
@@ -281,7 +289,7 @@ kafka-topics.sh \
   --under-replicated-partitions
 ```
 
-**Causa tipica:** un broker follower è irraggiungibile o è rimasto indietro nella replica (lag elevato rispetto al log del leader). Il follower viene rimosso dall'ISR fino a quando non si risincronizza completamente. Verificare che il broker sia operativo; una volta riavviato, recupera automaticamente i record mancanti e rientra nell'ISR.
+**Causa tipica:** un broker follower è irraggiungibile o è rimasto indietro nella replica (lag elevato rispetto al log del leader). Il leader rimuove dall'ISR un follower che non ha fatto fetch/raggiunto la fine del log entro `replica.lag.time.max.ms` (default 30 s); resta fuori fino a quando non si risincronizza completamente. Verificare che il broker sia operativo; una volta riavviato, recupera automaticamente i record mancanti e rientra nell'ISR.
 
 ## Riferimenti
 
