@@ -7,16 +7,17 @@ search_keywords: [asp.net core, aspnet core 8, dotnet 8, dotnet 9, c#, csharp, m
 parent: dev/linguaggi/_index
 related: [dev/linguaggi/java-spring-boot, dev/linguaggi/java-quarkus]
 official_docs: https://learn.microsoft.com/en-us/aspnet/core/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # ASP.NET Core 8+ per Microservizi
 
 ## Panoramica
 
-ASP.NET Core 8+ è il framework .NET per costruire microservizi, API REST e servizi gRPC pronti per Kubernetes. Con .NET 8 (LTS) e .NET 9, il framework ha consolidato due approcci per gli endpoint HTTP: **Minimal API** (introdotto in .NET 6, maturato in .NET 8) per servizi leggeri e ad alta performance, e il tradizionale **Controller pattern** (MVC) per applicazioni con logica di routing complessa. Il runtime .NET è container-aware, rispetta i limiti di CPU e memoria del cgroup, e Kestrel (il web server built-in) non ha dipendenze da IIS.
+ASP.NET Core 8+ è il framework .NET per costruire microservizi, API REST e servizi gRPC pronti per Kubernetes. Le release di riferimento sono .NET 8 (LTS, supporto fino a nov 2026), .NET 9 (STS) e **.NET 10 (LTS, nov 2025)**: per nuovi servizi partire da .NET 10; gli esempi di questa pagina usano API valide da .NET 8 in poi salvo dove indicato. Il framework ha consolidato due approcci per gli endpoint HTTP: **Minimal API** (introdotto in .NET 6, maturato in .NET 8) per servizi leggeri e ad alta performance, e il tradizionale **Controller pattern** (MVC) per applicazioni con logica di routing complessa. Il runtime .NET è container-aware, rispetta i limiti di CPU e memoria del cgroup, e Kestrel (il web server built-in) non ha dipendenze da IIS.
 
 Per il contesto Kubernetes, ASP.NET Core 8+ offre: DI container built-in con gestione dei lifetime (Singleton/Scoped/Transient), HealthChecks API nativa con endpoint separati per readiness/liveness, configurazione strutturata tramite `IConfiguration` che legge automaticamente env vars e ConfigMap, `IHostedService`/`BackgroundService` per worker asincroni, e immagini Docker ottimizzate con Chiseled Ubuntu (footprint ~80MB).
 
@@ -128,14 +129,14 @@ builder.Services.AddHttpClient<IPaymentClient, PaymentClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(10);
 });
 
-// Swagger/OpenAPI
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+// OpenAPI built-in (.NET 9+, pacchetto Microsoft.AspNetCore.OpenApi).
+// Su .NET 8 serve Swashbuckle: AddEndpointsApiExplorer() + AddSwaggerGen()
+builder.Services.AddOpenApi();
 
-// Health checks (vedi sezione dedicata)
+// Health checks (vedi sezione dedicata) — il tag "ready" decide cosa entra in /health/ready
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<OrderDbContext>()
-    .AddCheck<PaymentServiceHealthCheck>("payment-service");
+    .AddDbContextCheck<OrderDbContext>(tags: new[] { "ready" })
+    .AddCheck<PaymentServiceHealthCheck>("payment-service", tags: new[] { "ready" });
 
 var app = builder.Build();
 
@@ -144,14 +145,11 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 
 if (app.Environment.IsDevelopment())
-    app.UseSwaggerUI();
-
-app.MapSwagger();
+    app.MapOpenApi();   // documento OpenAPI esposto solo in sviluppo
 
 // --- Endpoint ---
 var ordersGroup = app.MapGroup("/orders")
-    .WithTags("Orders")
-    .WithOpenApi();
+    .WithTags("Orders");
 
 ordersGroup.MapGet("/", async (IOrderService svc, CancellationToken ct) =>
     Results.Ok(await svc.GetAllAsync(ct)));
@@ -172,8 +170,7 @@ ordersGroup.MapPost("/", async (CreateOrderRequest req, IOrderService svc, Cance
 // Health check endpoints (vedi sezione HealthChecks)
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
-    Predicate = check => check.Tags.Contains("ready"),
-    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+    Predicate = check => check.Tags.Contains("ready")
 });
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
@@ -389,6 +386,7 @@ public class KafkaConsumerWorker : BackgroundService
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnableAutoCommit = false    // Commit manuale dopo elaborazione
         };
+        // JsonDeserializer<T> è un IDeserializer<T> custom (System.Text.Json), non fornito da Confluent.Kafka
         _consumer = new ConsumerBuilder<string, OrderCreatedEvent>(consumerConfig)
             .SetValueDeserializer(new JsonDeserializer<OrderCreatedEvent>())
             .Build();
@@ -396,6 +394,10 @@ public class KafkaConsumerWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
+        // Consume() è bloccante: senza Yield() il suo primo giro bloccherebbe lo startup
+        // dell'host (gli altri hosted service e Kestrel partono dopo la parte sincrona)
+        await Task.Yield();
+
         _consumer.Subscribe("orders.created");
         _logger.LogInformation("Kafka consumer avviato");
 
@@ -443,6 +445,8 @@ builder.Services.AddHostedService<KafkaConsumerWorker>();
 
 ```csharp
 // Program.cs — Health Checks configurazione completa
+// Pacchetti NuGet: Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore (AddDbContextCheck),
+// AspNetCore.HealthChecks.Uris (AddUrlGroup), AspNetCore.HealthChecks.UI.Client (UIResponseWriter)
 builder.Services.AddHealthChecks()
     // Check Entity Framework Core DbContext
     .AddDbContextCheck<OrderDbContext>(
@@ -591,7 +595,8 @@ message StreamOrdersRequest {
 ```xml
 <!-- orders.csproj — aggiunge supporto gRPC -->
 <ItemGroup>
-    <PackageReference Include="Grpc.AspNetCore" Version="2.62.0" />
+    <PackageReference Include="Grpc.AspNetCore" Version="2.*" />  <!-- usare l'ultima 2.x stabile -->
+
     <!-- Il .proto genera automaticamente classi C# -->
     <Protobuf Include="Protos\orders.proto" GrpcServices="Server" />
 </ItemGroup>
@@ -659,7 +664,12 @@ app.MapControllers();                   // REST endpoint coesistono
 
 ### .NET Aspire — Orchestrazione Locale
 
-.NET Aspire è lo stack per sviluppo locale di applicazioni distribuite. Non va in produzione: serve per orchestrare localmente i servizi, configurare dipendenze (DB, Redis, Kafka), e iniettare connection string automaticamente.
+.NET Aspire è lo stack per sviluppo locale di applicazioni distribuite: orchestra localmente i servizi, configura dipendenze (DB, Redis, Kafka) e inietta connection string automaticamente. L'AppHost è un orchestratore di sviluppo, non un runtime di produzione.
+
+<!-- REVIEW: verificare nome corrente (da Aspire 13 il prodotto è "Aspire", senza ".NET"), sintassi AppHost e stato dei publisher di deploy (Kubernetes/Docker Compose) -->
+
+!!! note "Nota"
+    Gli snippet sotto seguono l'API Aspire 8/9. Le versioni più recenti hanno rinominato il prodotto e aggiunto la generazione di manifest di deploy: controllare la documentazione ufficiale prima di adottarli.
 
 ```csharp
 // AppHost/Program.cs — AppHost Aspire (progetto separato)
@@ -701,29 +711,33 @@ builder.AddNpgsqlDbContext<OrderDbContext>("ordersdb");
 builder.AddRedisClient("redis");
 ```
 
-!!! tip ".NET Aspire in produzione"
-    Aspire AppHost e Dashboard sono **solo per sviluppo locale**. In produzione si usa Kubernetes con le stesse variabili d'ambiente che Aspire inietta localmente. Il `builder.AddServiceDefaults()` è invece utile in produzione: configura OpenTelemetry e health checks.
+!!! tip "Aspire e produzione"
+    L'AppHost serve per lo sviluppo locale. In produzione si usa Kubernetes con le stesse variabili d'ambiente che Aspire inietta localmente. Il `builder.AddServiceDefaults()` è invece utile anche in produzione: configura OpenTelemetry, health checks e service discovery. Attenzione: gli health check di `ServiceDefaults` sono mappati (`/health`, `/alive`) solo in Development di default.
 
 ### Dockerfile Multi-Stage Ottimale
 
 ```dockerfile
 # Dockerfile — multi-stage per ASP.NET Core 8
+# SDK e runtime finale devono usare la stessa libc: Ubuntu/glibc (linux-x64), NON Alpine/musl
 # Stage 1: restore dipendenze (layer cachato separatamente)
-FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS restore
+FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy AS restore
 WORKDIR /src
 # Copia solo i file di progetto per cache efficiente
 COPY ["src/OrderService/OrderService.csproj", "src/OrderService/"]
 COPY ["src/OrderService.Core/OrderService.Core.csproj", "src/OrderService.Core/"]
+# PublishReadyToRun=true anche al restore: scarica il runtime pack necessario al publish R2R
 RUN dotnet restore "src/OrderService/OrderService.csproj" \
-    --runtime linux-musl-x64 \
-    -p:PublishReadyToRun=false
+    --runtime linux-x64 \
+    -p:PublishReadyToRun=true
 
 # Stage 2: build
 FROM restore AS build
 COPY . .
 RUN dotnet build "src/OrderService/OrderService.csproj" \
     --configuration Release \
+    --runtime linux-x64 \
     --no-restore \
+    -p:PublishReadyToRun=true \
     -p:TreatWarningsAsErrors=true
 
 # Stage 3: publish — genera artefatto ottimizzato
@@ -731,7 +745,7 @@ FROM build AS publish
 RUN dotnet publish "src/OrderService/OrderService.csproj" \
     --configuration Release \
     --no-build \
-    --runtime linux-musl-x64 \
+    --runtime linux-x64 \
     --self-contained false \
     -p:PublishReadyToRun=true \
     -p:PublishTrimmed=false \
@@ -768,7 +782,7 @@ docker-compose*
 ```
 
 !!! tip "Chiseled Images"
-    Le immagini `jammy-chiseled` di Microsoft usano Ubuntu Chiseled: nessuna shell, utente non-root di default, solo le librerie strettamente necessarie. Footprint ~80MB vs ~200MB dell'immagine standard. Preferire sempre in produzione.
+    Le immagini `jammy-chiseled` di Microsoft usano Ubuntu Chiseled: nessuna shell, utente non-root di default, solo le librerie strettamente necessarie. Footprint ~80MB vs ~200MB dell'immagine standard. Preferire sempre in produzione. Da .NET 10 i tag sono su Ubuntu 24.04 (`10.0-noble-chiseled`); `jammy` resta per .NET 8. Poiché non c'è shell, `exec` probe e `preStop: exec` non funzionano (vedi Graceful Shutdown).
 
 ---
 
@@ -800,17 +814,19 @@ builder.Host.ConfigureHostOptions(opts =>
 // quando Kubernetes invia SIGTERM → completare il lavoro in corso, poi uscire
 ```
 
+Perché il `preStop`: alla terminazione del Pod, la rimozione dagli Endpoints e l'invio di SIGTERM avvengono in parallelo; una breve attesa evita che kube-proxy/Ingress inviino ancora richieste a un processo che sta già chiudendo.
+
 ```yaml
-# Deployment — preStop hook per dare tempo a kube-proxy
+# Deployment — preStop con sleep nativo (Kubernetes 1.30+ beta, abilitato di default; GA in 1.34).
+# Funziona anche su immagini Chiseled, che non hanno /bin/sh
 lifecycle:
   preStop:
-    exec:
-      command: ["/bin/sh", "-c", "sleep 5"]
-# Con immagine Chiseled (nessuna shell), usare httpGet invece:
+    sleep:
+      seconds: 5
+# Su immagini con shell (non Chiseled) è equivalente:
 # preStop:
-#   httpGet:
-#     path: /shutdown
-#     port: 8080
+#   exec:
+#     command: ["/bin/sh", "-c", "sleep 5"]
 ```
 
 ### Logging Strutturato
@@ -836,10 +852,11 @@ _logger.LogInformation("Order {OrderId} created by {UserId}", order.Id, order.Us
 ```csharp
 // Uso corretto di HttpClient — sempre via IHttpClientFactory
 // MAI new HttpClient() direttamente (socket exhaustion)
+// Richiede il pacchetto Microsoft.Extensions.Http.Resilience (basato su Polly v8)
 builder.Services.AddHttpClient<IPaymentClient, PaymentClient>()
     .AddStandardResilienceHandler();    // .NET 8: retry, circuit breaker, timeout built-in
 
-// Oppure configurazione esplicita con Polly
+// Alternativa (al posto della precedente, non in aggiunta): pipeline esplicita
 builder.Services.AddHttpClient<IPaymentClient, PaymentClient>()
     .AddResilienceHandler("payment-pipeline", pipeline =>
     {
@@ -869,11 +886,7 @@ builder.Services.AddHttpClient<IPaymentClient, PaymentClient>()
 
 **Causa:** Un health check `tagged: ready` fallisce — tipicamente il database non è raggiungibile al primo start.
 
-**Soluzione:**
-```csharp
-// Aumenta la tolleranza per servizi lenti ad avviarsi
-// Oppure usa startupProbe per dare tempo al warmup
-```
+**Soluzione:** diagnosticare quale check fallisce (`curl` su `/health/ready` col `ResponseWriter` dettagliato) e, per servizi lenti ad avviarsi, usare una `startupProbe` che dia tempo al warmup prima che readiness/liveness comincino:
 ```yaml
 startupProbe:
   httpGet:
@@ -941,21 +954,22 @@ spec:
                   number: 8080
 ```
 
-**Causa 2:** Kestrel non abilitato per HTTP/2.
+**Causa 2:** Kestrel in cleartext (senza TLS, tipico dietro Ingress/mesh) con `Http1AndHttp2` risponde in HTTP/1.1: la negoziazione HTTP/2 via ALPN esiste solo con TLS. Senza TLS, HTTP/2 va forzato (prior knowledge) su una porta dedicata, mantenendo HTTP/1.1 per probe e REST (le probe kubelet sono HTTP/1.1).
 ```csharp
-// Program.cs — Kestrel esplicito per gRPC
+// Program.cs — porte separate: REST/health in HTTP/1.1, gRPC in HTTP/2 cleartext
 builder.WebHost.ConfigureKestrel(opts =>
 {
-    opts.ListenAnyIP(8080, listenOpts =>
-        listenOpts.Protocols = HttpProtocols.Http1AndHttp2);
+    opts.ListenAnyIP(8080, o => o.Protocols = HttpProtocols.Http1);   // REST + /health/*
+    opts.ListenAnyIP(8081, o => o.Protocols = HttpProtocols.Http2);   // gRPC
 });
+// L'Ingress gRPC punta alla porta 8081 (backend-protocol: "GRPC")
 ```
 
 ### Perdita di messaggi Kafka — BackgroundService si ferma silenziosamente
 
-**Sintomo:** Il consumer Kafka smette di elaborare messaggi senza errori nei log.
+**Sintomo:** Il consumer Kafka smette di elaborare messaggi senza errori nei log, mentre il Pod resta `Running`.
 
-**Causa:** Eccezione non gestita nel loop di `ExecuteAsync` che fa uscire il worker senza riavvio.
+**Causa:** `ExecuteAsync` termina (return/`break` inatteso) o fallisce con `BackgroundServiceExceptionBehavior.Ignore`: l'host resta vivo ma il worker non gira più. Di default (.NET 6+) un'eccezione non gestita in `ExecuteAsync` invece **ferma l'host** (`StopHost`) e il Pod va in restart — comportamento voluto, ma il crash-loop va monitorato. Nota: anche `Task.Delay(..., ct)` nel `catch` lancia durante lo shutdown.
 
 **Soluzione:**
 ```csharp
@@ -985,15 +999,15 @@ protected override async Task ExecuteAsync(CancellationToken ct)
 
 **Sintomo:** `kubectl describe pod` mostra `OOMKilled`. `kubectl top pod` mostra memoria vicina al limit.
 
-**Causa:** Il runtime .NET non libera automaticamente la memoria al GC in risposta alla pressione del container (default in .NET 8 è GC Server mode con heap large).
+**Causa:** In container con memory limit il GC applica già un hard limit all'heap (default 75% del limit), ma l'OOMKill arriva comunque se la memoria **non gestita** (thread stack, buffer nativi, librerie native, Server GC con molti core che crea un heap per core) più l'heap supera il limit. Un limit troppo stretto o pochi MB di margine bastano.
 
-**Soluzione:**
+**Soluzione:** limit realistico, meno heap GC e, se serve, un tetto esplicito. Verificare prima con `dotnet-counters`/`dotnet-gcdump` se è heap gestito o memoria nativa.
 ```dockerfile
 # Imposta GC config tramite env var nel Dockerfile o Deployment
-ENV DOTNET_GCConserveMemory=5          # 0-9: più alto = GC più aggressivo
-ENV DOTNET_GCHeapHardLimit=419430400   # 400MB limite heap esplicito
-# Oppure
-ENV DOTNET_GCHeapHardLimitPercent=75   # 75% del memory limit del container
+ENV DOTNET_gcServer=0                  # Workstation GC: meno heap/memoria per servizi piccoli
+ENV DOTNET_GCConserveMemory=5          # 0-9: più alto = compattazione più aggressiva
+ENV DOTNET_GCHeapHardLimitPercent=0x32 # heap max 50% del limit (valore ESADECIMALE: 0x32 = 50)
+# Alternativa: DOTNET_GCHeapHardLimit=0x19000000 (400MB, anch'esso esadecimale)
 ```
 ```yaml
 # Deployment — memory request/limit sempre entrambi impostati
@@ -1002,7 +1016,7 @@ resources:
     memory: "256Mi"
     cpu: "250m"
   limits:
-    memory: "512Mi"   # limit = DOTNET_GCHeapHardLimitPercent base
+    memory: "512Mi"   # base di calcolo di DOTNET_GCHeapHardLimitPercent
     cpu: "1000m"
 ```
 
