@@ -7,9 +7,10 @@ search_keywords: [openshift architecture, Cluster Version Operator, Machine Conf
 parent: containers/openshift/_index
 related: [containers/kubernetes/architettura, containers/openshift/operators-olm]
 official_docs: https://docs.openshift.com/container-platform/latest/architecture/architecture.html
-status: complete
+status: needs-review
 difficulty: expert
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Architettura OpenShift
@@ -37,8 +38,11 @@ OpenShift — Operator Hierarchy
       ├── network operator              → gestisce OVN-Kubernetes CNI
       ├── authentication operator       → gestisce OAuth server
       ├── cloud-credential operator     → gestisce credenziali cloud
-      └── ... (50+ cluster operators)
+      └── ... (~30-40 cluster operators, dipende dalla versione)
 ```
+
+!!! note "Versioni negli esempi"
+    Le versioni (4.14/4.15) negli output sono **esempi illustrativi**. Verificare le versioni supportate e i canali nel [Red Hat OpenShift Life Cycle](https://access.redhat.com/support/policy/updates/openshift) e nell'Update Graph.
 
 ```bash
 # Vedi lo stato di tutti i Cluster Operators
@@ -105,8 +109,13 @@ oc describe clusterversion version
 oc get clusterversion -o yaml | grep channel
 # channel: stable-4.15
 
-# Cambia canale (es. per upgrade a versione major)
-oc patch clusterversion/version --type=merge -p '{"spec":{"channel":"stable-4.15"}}'
+# Cambia canale: per passare a una nuova minor (es. 4.15 → 4.16) va prima
+# cambiato il canale (i canali sono per minor: stable-4.16), poi si avvia l'upgrade
+oc adm upgrade channel stable-4.16
+# equivalente: oc patch clusterversion/version --type=merge -p '{"spec":{"channel":"stable-4.16"}}'
+
+# Upgrade disponibili sul canale corrente
+oc adm upgrade
 ```
 
 ---
@@ -170,11 +179,12 @@ spec:
             ExecStart=/usr/local/bin/custom-daemon
             [Install]
             WantedBy=multi-user.target
-  kernelArguments:
-    add:
-      - "net.ipv4.ip_forward=1"
-      - "vm.max_map_count=262144"
+  kernelArguments:           # solo vere kernel command-line arguments
+    - nosmt
 ```
+
+!!! warning "Sysctl ≠ kernel arguments"
+    `kernelArguments` modifica la **command line del kernel** (boot params come `nosmt`, `hugepagesz=1G`). Parametri `sysctl` come `vm.max_map_count` o `net.ipv4.ip_forward` NON vanno lì: si scrivono con un file in `/etc/sysctl.d/` (sezione `storage.files` della stessa MachineConfig) oppure, per tuning di nodo, con il Node Tuning Operator (`Tuned`). Ogni MachineConfig che cambia file/kernel args causa **drain + reboot** dei nodi del pool: raggruppare le modifiche e usare `paused` per controllare la finestra.
 
 ```bash
 # Stato MachineConfigPool
@@ -195,7 +205,10 @@ oc get mc rendered-worker-def456 -o yaml | head -50
 
 ## Machine API — Gestione dei Nodi come Cattle
 
-Il **Machine API** permette di gestire i nodi infrastrutturali come oggetti Kubernetes, su cloud e on-premise.
+Il **Machine API** permette di gestire i nodi infrastrutturali come oggetti Kubernetes, su cloud e on-premise (provider: AWS, Azure, GCP, vSphere, bare metal via Metal3, ecc.). Il Machine API Operator riconcilia `MachineSet` → `Machine` → istanza cloud; il `MachineHealthCheck` sostituisce automaticamente le macchine non sane.
+
+!!! note "Hosted control plane e Cluster API"
+    Nei cluster con **Hosted Control Plane** (HyperShift, base di ROSA HCP / ARO HCP) il control plane gira come pod su un cluster di gestione e i worker sono gestiti da `NodePool`, non da MachineSet/MCO classici. <!-- REVIEW: verificare stato migrazione Machine API → Cluster API (CAPI) nelle versioni OCP 4.2x correnti -->
 
 ```yaml
 # MachineSet — definisce un gruppo di macchine identiche (come ReplicaSet per nodi)
@@ -215,7 +228,7 @@ spec:
       providerSpec:
         value:
           # AWS provider config
-          apiVersion: awsproviderconfig.openshift.io/v1beta1
+          apiVersion: machine.openshift.io/v1beta1
           kind: AWSMachineProviderConfig
           ami:
             id: ami-0abc123def456789  # RHCOS AMI
@@ -267,11 +280,12 @@ oc get machinehealthcheck -n openshift-machine-api
 # OpenShift gestisce etcd tramite l'etcd operator
 oc get pods -n openshift-etcd
 # NAME                                          READY   STATUS
-# etcd-master-0.cluster.internal               4/4     Running
+# etcd-master-0.cluster.internal               4/4     Running   (n. container varia con la versione)
 # etcd-master-1.cluster.internal               4/4     Running
 # etcd-master-2.cluster.internal               4/4     Running
 
-# Backup etcd (via job)
+# Backup etcd (eseguire su UN solo control plane node; produce snapshot + static pod resources.
+# Conservarlo FUORI dal cluster. Utile solo per restore dello stesso cluster/versione)
 oc debug node/master-0.cluster.internal -- \
     chroot /host /usr/local/bin/cluster-backup.sh /var/home/core/assets/backup/
 
@@ -305,7 +319,7 @@ oc describe clusteroperator <nome-operator>
 oc get pods -n openshift-ingress-operator
 oc logs -n openshift-ingress-operator deployment/ingress-operator --tail=100
 
-# Forzare la riconciliazione dell'operator (rimuovere la cache)
+# Riavviare il pod dell'operator (ultima risorsa, dopo aver letto i log: il Deployment lo ricrea e riparte la riconciliazione)
 oc delete pod -n openshift-ingress-operator -l name=ingress-operator
 ```
 
@@ -334,8 +348,11 @@ oc get pods --all-namespaces --field-selector spec.nodeName=<nome-nodo>
 oc debug node/<nome-nodo>
 chroot /host journalctl -u kubelet --since "30 minutes ago"
 
-# Sbloccare forzatamente (solo se sicuro)
+# Sbloccare forzatamente (solo se sicuro): MCO ri-cordona il nodo se l'update è ancora pendente.
+# Meglio risolvere la causa (PDB, pod bloccato) o mettere in pausa il pool (spec.paused=true)
 oc adm uncordon <nome-nodo>
+# Il log dell'agent MCO sul nodo mostra il motivo del blocco
+oc logs -n openshift-machine-config-operator ds/machine-config-daemon -c machine-config-daemon --tail=100
 ```
 
 ---
@@ -366,9 +383,12 @@ oc get machineconfigpools
 # Verificare lo stato della macchina sul cloud provider
 oc get machines -n openshift-machine-api | grep -v Running
 
-# In caso di upgrade fallito, annullare e tornare alla versione precedente
-oc adm upgrade --allow-not-recommended --to=<versione-precedente>
 ```
+
+!!! warning "Nessun rollback/downgrade supportato"
+    OpenShift **non supporta il downgrade** di un cluster (i CRD, lo schema etcd e i nodi RHCOS sono già migrati). Non esiste un `--to=<versione-precedente>` valido. Opzioni: correggere la causa e lasciare proseguire l'upgrade, oppure — come ultima risorsa, con supporto Red Hat — restore da backup etcd. Per questo sono essenziali: backup etcd pre-upgrade, canali `stable`, e `oc adm upgrade` che mostra solo i percorsi raccomandati (`--allow-not-recommended` è per versioni con rischi noti, non per il rollback). <!-- REVIEW: verificare se le versioni OCP correnti introducono rollback supportato per z-stream -->
+
+Per sospendere gli aggiornamenti dei worker mantenendo il control plane aggiornato si usa `oc patch mcp/worker -p '{"spec":{"paused":true}}'` (vedi sezione MCO), per periodi brevi: i certificati kubelet possono scadere se il pool resta in pausa a lungo.
 
 ---
 
