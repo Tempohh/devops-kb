@@ -7,9 +7,10 @@ search_keywords: [quarkus, quarkus framework, quarkus native, quarkus graalvm, n
 parent: dev/linguaggi/_index
 related: [dev/linguaggi/java-spring-boot, messaging/kafka/sviluppo/quarkus-kafka]
 official_docs: https://quarkus.io/guides/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Java Quarkus — Cloud-Native Framework
@@ -26,7 +27,7 @@ Quarkus abbraccia gli standard MicroProfile e Jakarta EE, quindi sviluppatori co
 
 ### Quarkus vs Spring Boot — Confronto Architetturale
 
-| Aspetto | Spring Boot 3.x | Quarkus (JVM) | Quarkus (Native) |
+| Aspetto | Spring Boot | Quarkus (JVM) | Quarkus (Native) |
 |---|---|---|---|
 | Startup time | ~2–5s | ~300–500ms | ~20–50ms |
 | Memory RSS (idle) | ~200–500 MB | ~150–250 MB | ~30–80 MB |
@@ -35,7 +36,7 @@ Quarkus abbraccia gli standard MicroProfile e Jakarta EE, quindi sviluppatori co
 | Build time | ~30–60s | ~60–90s | ~3–10 minuti |
 | Debug experience | Eccellente | Eccellente | Limitato |
 | Reflection arbitraria | Sì | Sì | Limitata (registrazione esplicita) |
-| Standard | Spring proprietario | CDI + MicroProfile + Jakarta EE |
+| Standard | Spring proprietario | CDI + MicroProfile + Jakarta EE | CDI + MicroProfile + Jakarta EE |
 | Ideal scenario | CRUD enterprise | Microservizi k8s | Serverless, Lambda, edge |
 
 ### Modalità di Esecuzione
@@ -69,7 +70,8 @@ Quarkus implementa le specifiche MicroProfile tramite SmallRye:
 | Specifica | Implementazione | Scopo |
 |---|---|---|
 | Health (MP Health) | SmallRye Health | Liveness/Readiness/Startup probe |
-| Metrics | SmallRye Metrics / Micrometer | Esposizione metriche Prometheus |
+| Metrics | Micrometer (`quarkus-micrometer`; SmallRye Metrics legacy) | Esposizione metriche Prometheus |
+| Telemetry | OpenTelemetry (`quarkus-opentelemetry`) | Tracing/metrics/logs distribuiti OTLP |
 | OpenAPI | SmallRye OpenAPI | Documentazione API automatica |
 | Fault Tolerance | SmallRye Fault Tolerance | Circuit breaker, retry, timeout, bulkhead |
 | Rest Client | SmallRye REST Client | Client HTTP dichiarativo |
@@ -102,8 +104,8 @@ my-quarkus-service/
 │   │       └── META-INF/resources/          # Static assets
 │   └── test/
 │       └── java/com/example/
-│           ├── OrderResourceIT.java         # @QuarkusIntegrationTest
-│           └── OrderServiceTest.java        # @QuarkusTest
+│           ├── OrderResourceNativeIT.java   # @QuarkusIntegrationTest
+│           └── OrderResourceTest.java       # @QuarkusTest
 ├── src/native-test/                         # Test specifici per native build
 ├── .mvn/
 ├── Dockerfile.jvm                           # Generato da Quarkus
@@ -150,8 +152,9 @@ La killer feature di Quarkus è la **dev mode**: `mvn quarkus:dev` avvia il proc
 │           Reload classi modificate                       │
 │           Serve la request con codice aggiornato         │
 │                                                          │
-│  Dev UI: http://localhost:8080/q/dev                     │
+│  Dev UI: http://localhost:8080/q/dev-ui                  │
 │  ├─ Lista estensioni attive                             │
+│  ├─ Dev Services (DB/Kafka in container automatici)     │
 │  ├─ Config attuale                                      │
 │  ├─ Swagger UI (OpenAPI)                                │
 │  └─ Continuous Testing panel                            │
@@ -167,7 +170,8 @@ La killer feature di Quarkus è la **dev mode**: `mvn quarkus:dev` avvia il proc
 ```xml
 <!-- pom.xml — Quarkus BOM e dipendenze core -->
 <properties>
-    <quarkus.platform.version>3.8.4</quarkus.platform.version>
+    <!-- REVIEW: verificare ultima versione LTS di Quarkus (3.x) su quarkus.io/blog -->
+    <quarkus.platform.version>3.27.0</quarkus.platform.version>
     <compiler-plugin.version>3.13.0</compiler-plugin.version>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -188,10 +192,10 @@ La killer feature di Quarkus è la **dev mode**: `mvn quarkus:dev` avvia il proc
 </dependencyManagement>
 
 <dependencies>
-    <!-- REST layer — RESTEasy Reactive (Jackson) -->
+    <!-- REST layer — Quarkus REST (ex RESTEasy Reactive, rinominato dalla 3.9) con Jackson -->
     <dependency>
         <groupId>io.quarkus</groupId>
-        <artifactId>quarkus-resteasy-reactive-jackson</artifactId>
+        <artifactId>quarkus-rest-jackson</artifactId>
     </dependency>
 
     <!-- ORM — Hibernate ORM con Panache (Active Record / Repository) -->
@@ -228,10 +232,10 @@ La killer feature di Quarkus è la **dev mode**: `mvn quarkus:dev` avvia il proc
         <artifactId>quarkus-smallrye-fault-tolerance</artifactId>
     </dependency>
 
-    <!-- REST Client reattivo -->
+    <!-- REST Client (ex rest-client-reactive) -->
     <dependency>
         <groupId>io.quarkus</groupId>
-        <artifactId>quarkus-rest-client-reactive-jackson</artifactId>
+        <artifactId>quarkus-rest-client-jackson</artifactId>
     </dependency>
 
     <!-- Kubernetes integration -->
@@ -294,7 +298,7 @@ La killer feature di Quarkus è la **dev mode**: `mvn quarkus:dev` avvia il proc
         </activation>
         <properties>
             <skipITs>false</skipITs>
-            <quarkus.package.type>native</quarkus.package.type>
+            <quarkus.native.enabled>true</quarkus.native.enabled>
         </properties>
     </profile>
 </profiles>
@@ -333,7 +337,8 @@ quarkus.micrometer.export.prometheus.path=/q/metrics
 
 # OpenAPI
 quarkus.smallrye-openapi.path=/q/openapi
-quarkus.swagger-ui.always-include=false   # Solo in dev mode (default)
+# Swagger UI solo in dev mode (default); i commenti inline NON sono supportati nei .properties
+quarkus.swagger-ui.always-include=false
 quarkus.swagger-ui.path=/q/swagger-ui
 
 # Kubernetes config — legge ConfigMap
@@ -370,9 +375,7 @@ quarkus.kubernetes.resources.limits.cpu=500m
 %dev.quarkus.datasource.password=dev
 %dev.quarkus.kubernetes-config.enabled=false
 
-# Override per test (profilo %test)
-%test.quarkus.datasource.db-kind=h2
-%test.quarkus.datasource.jdbc.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+# Test: senza url configurato, Dev Services avvia un PostgreSQL in container (Testcontainers)
 %test.quarkus.hibernate-orm.database.generation=drop-and-create
 ```
 
@@ -391,7 +394,8 @@ public class OrderResource {
     @Inject
     OrderService orderService;
 
-    // Endpoint sincrono (eseguito in worker thread automaticamente con @Blocking)
+    // Endpoint bloccante: con tipo di ritorno non reattivo gira su worker thread
+    // (@NonBlocking forza l'event loop, @Blocking forza il worker)
     @GET
     @Path("/{id}")
     public Order getOrder(@PathParam("id") Long id) {
@@ -399,13 +403,12 @@ public class OrderResource {
     }
 
     // Endpoint reattivo con Uni (Mutiny)
+    // Con hibernate-orm (bloccante) NON restituire Uni da metodi @Transactional:
+    // per DB reattivo servono hibernate-reactive-panache e @WithTransaction
     @POST
-    @Transactional
-    public Uni<Response> createOrder(CreateOrderRequest request) {
-        return orderService.createAsync(request)
-            .map(order -> Response.status(Response.Status.CREATED)
-                .entity(order)
-                .build());
+    public Response createOrder(CreateOrderRequest request) {
+        Order order = orderService.createOrder(request);
+        return Response.status(Response.Status.CREATED).entity(order).build();
     }
 
     // Stream di eventi (SSE)
@@ -476,8 +479,8 @@ public class Order extends PanacheEntity {
     public List<OrderItem> items = new ArrayList<>();
 
     // Query methods statici — definiti direttamente sull'entità
-    public static List<Order> findByUserId(String userId) {
-        return list("userId", userId);
+    public static PanacheQuery<Order> findByUserId(String userId) {
+        return find("userId", userId);   // PanacheQuery: consente .page(...).list()
     }
 
     public static List<Order> findByStatus(OrderStatus status) {
@@ -488,7 +491,7 @@ public class Order extends PanacheEntity {
         return find("status = ?1 AND createdAt < ?2", OrderStatus.PENDING, threshold);
     }
 
-    // Named query per query complesse
+    // Count con filtro
     public static long countByUserAndStatus(String userId, OrderStatus status) {
         return count("userId = ?1 AND status = ?2", userId, status);
     }
@@ -511,7 +514,7 @@ public class OrderService {
                 oi.quantity = item.quantity();
                 oi.order = order;
                 return oi;
-            }).toList();
+            }).collect(Collectors.toCollection(ArrayList::new));  // lista mutabile per Hibernate
         order.persist();        // Salva — equivale a entityManager.persist(order)
         return order;
     }
@@ -689,7 +692,8 @@ public class ExternalApiResponse {
 ```
 
 ```json
-// src/main/resources/reflection-config.json — alternativa per librerie esterne
+// src/main/resources/META-INF/native-image/com.example/order-service/reflect-config.json
+// alternativa per librerie esterne (raccolto automaticamente da native-image)
 [
   {
     "name": "com.external.library.SomeClass",
@@ -698,11 +702,6 @@ public class ExternalApiResponse {
     "allDeclaredFields": true
   }
 ]
-```
-
-```properties
-# application.properties — includi il file di config reflection
-quarkus.native.additional-build-args=-H:ReflectionConfigurationFiles=reflection-config.json
 ```
 
 ### REST Client Dichiarativo
@@ -748,12 +747,12 @@ public class OrderService {
 ### Test con @QuarkusTest
 
 ```java
-// OrderResourceIT.java — integration test con database H2
+// OrderResourceTest.java — test con Dev Services (PostgreSQL in container)
 @QuarkusTest
-class OrderResourceIT {
+class OrderResourceTest {
 
-    // Quarkus avvia l'applicazione in un thread separato per tutta la classe
-    // Per test con database reale: @QuarkusTestResource(PostgreSQLTestResource.class)
+    // Quarkus avvia l'applicazione una volta per l'intera suite di test
+    // Database reale: Dev Services avvia automaticamente il container (nessuna config)
 
     @Test
     void createOrder_validRequest_returns201() {
@@ -796,10 +795,10 @@ class OrderResourceIT {
 ```
 
 ```java
-// NativeIT.java — test eseguiti sul binario native compilato
+// OrderResourceNativeIT.java — test eseguiti sul binario native compilato
 @QuarkusIntegrationTest     // Usa il package prodotto da mvn package -Pnative
-class OrderResourceNativeIT extends OrderResourceIT {
-    // Eredita tutti i test — eseguiti contro il binary nativo
+class OrderResourceNativeIT extends OrderResourceTest {
+    // Eredita i test — eseguiti contro il binario (black-box: niente @Inject)
     // Eseguiti solo con: mvn verify -Pnative
 }
 ```
@@ -821,23 +820,19 @@ class OrderResourceNativeIT extends OrderResourceIT {
 ```properties
 # application.properties — hardening per produzione
 
-# Disabilita Swagger UI in produzione (abilitato solo in dev mode di default)
+# Swagger UI in produzione: escluso di default (solo dev mode)
 quarkus.swagger-ui.always-include=false
 
-# Non esporre dettagli health in produzione
-quarkus.smallrye-health.extensions.enabled=false
-
-# Limita l'exposure dei metadati
-quarkus.openapi.info.title=Order Service
-quarkus.openapi.info.version=1.0.0
+# Metadati OpenAPI
+quarkus.smallrye-openapi.info-title=Order Service
+quarkus.smallrye-openapi.info-version=1.0.0
 
 # Graceful shutdown
 quarkus.shutdown.timeout=30S
 
-# Logging strutturato per produzione (JSON)
-quarkus.log.console.json=true
+# Logging strutturato JSON: richiede l'estensione quarkus-logging-json
+# REVIEW: verificare nome property (quarkus.log.console.json.enabled nelle versioni recenti)
 %prod.quarkus.log.console.json=true
-%dev.quarkus.log.console.json=false
 
 # Connection pool sizing
 quarkus.datasource.jdbc.max-size=20
@@ -917,21 +912,14 @@ java -agentlib:native-image-agent=config-output-dir=src/main/resources/META-INF/
 
 **Sintomo:** `mvn quarkus:dev` è avviato ma le modifiche ai file `.java` non vengono ricaricate.
 
-**Causa:** Problema con il watching del filesystem (comune su Windows o WSL2) o file al di fuori del source path.
+**Causa:** Il reload è lazy: parte alla prima richiesta HTTP successiva alla modifica, non al salvataggio. Altre cause: file fuori dal source path del modulo, errore di compilazione precedente non risolto, filesystem watching inaffidabile (WSL2, cartelle di rete).
 
 **Soluzione:**
 ```bash
-# Forza il polling invece del native file watching
-mvn quarkus:dev -Dquarkus.dev-mode.io-thread-count=1 \
-    -Djava.nio.file.spi.DefaultFileSystemProvider=...
-
-# Oppure usa il flag per polling esplicito (più affidabile su Windows)
-mvn quarkus:dev -Dquarkus.live-reload.watched-resources=src/main/java
-```
-
-```properties
-# application.properties — aumenta il timeout live reload
-quarkus.live-reload.timeout=PT30S
+# 1. Invia una richiesta (curl localhost:8080/...) per innescare il reload
+# 2. Nel terminale di dev mode: premi 's' per forzare restart, 'r' per rieseguire i test
+# 3. Multi-modulo: avvia mvn quarkus:dev dal modulo applicativo con gli altri moduli nel reactor
+# 4. WSL2: tieni il progetto nel filesystem Linux, non in /mnt/c
 ```
 
 ### Circuit Breaker aperto in modo inatteso
@@ -964,9 +952,10 @@ public void resetCircuitBreaker() {
 ```
 
 ```properties
-# Aumenta il threshold per evitare aperture premature in ambienti instabili
-# O abbassa failureRatio se il servizio è genuinamente inaffidabile
-mp.fault.tolerance.circuitbreaker.delay=10000
+# Override a runtime dei parametri delle annotazioni (formato MicroProfile FT):
+# <classe>/<metodo>/<Annotazione>/<parametro>
+com.example.service.OrderService/processPayment/CircuitBreaker/delay=10000
+# Oppure globale: mp.fault.tolerance.global.CircuitBreaker.delay=10000
 ```
 
 ### Panache — LazyInitializationException
@@ -980,7 +969,7 @@ mp.fault.tolerance.circuitbreaker.delay=10000
 // SBAGLIATO — accesso lazy fuori da transazione
 public Order getOrderWithItems(Long id) {
     Order order = Order.findById(id);
-    return order;  // items non caricati, sesssione chiusa dopo findById
+    return order;  // items non caricati, sessione chiusa dopo findById
 }
 // Nel resource: order.items → LazyInitializationException
 
